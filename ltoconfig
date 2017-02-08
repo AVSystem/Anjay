@@ -1,0 +1,12 @@
+#!/bin/bash
+
+./devconfig \
+        --c-flags '-Os -DNDEBUG -flto' \
+        --without-dtls \
+        -D CMAKE_EXE_LINKER_FLAGS='-flto' \
+        -D CMAKE_SHARED_LINKED_FLAGS='-flto' \
+        -D CMAKE_AR="$(which gcc-ar)" \
+        -D CMAKE_RANLIB="$(which gcc-ranlib)" \
+        -D WITH_LIBRARY_SHARED=OFF \
+        -D AVS_LOG_WITH_TRACE=OFF \
+        "$@"

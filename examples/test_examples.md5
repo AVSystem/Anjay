@@ -1,0 +1,14 @@
+787d3ba46af1856c850b71002c5982e9  examples/tutorial/custom-object/read-only/src/main.c
+45f382da97579b70737a5a8151306aea  modules/security/include_public/anjay/security.h
+bf5f3e8a303ea5d357cdd5f334c1a689  examples/tutorial/custom-object/writable-multiple-fixed-transactional/src/main.c
+4cd2b4e517e8c283aa30c76d460ae753  examples/tutorial/custom-object/writable-multiple-fixed/src/main.c
+835056493d3d22a91b184a1d4d344e04  modules/server/include_public/anjay/server.h
+031b4105937c2b8544fb95070bfccf7e  examples/tutorial/custom-object/read-only-multiple-fixed/src/main.c
+10c25c7351ac85577149d5fa62532c41  examples/tutorial/BT3/src/main.c
+5eb32b591b71a507e8a5dcd274bb0ac7  modules/access_control/include_public/anjay/access_control.h
+b5536da8626a8adbec12d20d4e1fe487  examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
+073c7fc18ffdf795d6f9ff097bca7fc9  examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
+f953e664d18aa754d7520d9ccfd96b10  modules/attr_storage/include_public/anjay/attr_storage.h
+fecf8617c5dcde547523939ccc061fda  examples/tutorial/AT2/src/main.c
+e75586786efcfd094f84c81faeee121c  examples/tutorial/BT2/src/main.c
+064f4e1be1b97b486c2807e59261ce35  include_public/anjay/anjay.h

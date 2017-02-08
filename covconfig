@@ -1,0 +1,3 @@
+#!/bin/sh
+
+"`dirname "$0"`"/devconfig --c-flags "-std=c99 -D_POSIX_C_SOURCE=200809L -g -fprofile-arcs -ftest-coverage" -D CMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"

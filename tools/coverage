@@ -1,0 +1,26 @@
+#!/bin/bash
+
+PROJECT_ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"
+
+function die() {
+    echo -e "$@" >&2
+    exit 1
+}
+
+which gcovr || die "gcovr not found, exiting"
+
+pushd "$PROJECT_ROOT/build/coverage"
+    mkdir -p "$PROJECT_ROOT/build/coverage"
+    "$PROJECT_ROOT/devconfig" --c-flags "-std=c99 -D_POSIX_C_SOURCE=200809L -g -fprofile-arcs -ftest-coverage" -D CMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
+    make -j$(nproc)
+    make check
+
+    mkdir -p "$PROJECT_ROOT/coverage"
+    gcovr . --html --html-details -o "$PROJECT_ROOT/coverage/coverage.html"
+popd
+
+cat <<EOF
+
+-----
+Coverage report generated in $PROJECT_ROOT/coverage
+EOF

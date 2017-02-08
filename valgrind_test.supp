@@ -1,0 +1,52 @@
+{
+   ssl_handshake-value
+   Memcheck:Value8
+   ...
+   obj:*/libssl.so.*
+   fun:ssl_handshake
+}
+{
+   ssl_handshake-cond
+   Memcheck:Cond
+   ...
+   obj:*/libssl.so.*
+   fun:ssl_handshake
+}
+{
+   libcrypto-value
+   Memcheck:Value8
+   obj:*/libcrypto.so.*
+}
+{
+   libssl-value
+   Memcheck:Value8
+   obj:*/libssl.so.*
+}
+{
+   libcrypto-cond
+   Memcheck:Cond
+   obj:*/libcrypto.so.*
+}
+{
+   libssl-cond
+   Memcheck:Cond
+   obj:*/libssl.so.*
+}
+{
+   sendto-argument
+   Memcheck:Param
+   socketcall.sendto(msg)
+   ...
+   fun:BIO_write
+   ...
+   fun:ssl_handshake
+}
+{
+    recv
+    Memcheck:Cond
+    obj:*/vgpreload_memcheck*
+    obj:*/libssl.so.*
+    ...
+    obj:*/libssl.so.*
+    fun:receive_ssl
+}

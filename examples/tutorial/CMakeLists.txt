@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 2.8.1)
+add_subdirectory(AT1)
+add_subdirectory(AT2)
+add_subdirectory(BT1)
+add_subdirectory(BT2)
+add_subdirectory(BT3)
+add_subdirectory(custom-object)

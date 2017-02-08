@@ -1,0 +1,35 @@
+#!/bin/sh
+
+if [ -n "$*" ]; then
+    echo "chex - encode binary data from stdin as C-like hex string on stdout" >&2
+    echo "usage: $0" >&2
+    exit 1
+fi
+
+DUMP_CMD=
+
+if which od 2>&1 >/dev/null; then
+    DUMP_CMD="od -v -t x1"
+elif which hexdump 2>&1 >/dev/null; then
+    DUMP_CMD="hexdump -v -C"
+fi
+
+if ! which sed 2>&1 >/dev/null; then
+    DUMP_CMD=
+fi
+
+if [ -z "$DUMP_CMD" ]; then
+    echo "$0: 'sed' and either 'od' or 'hexdump' are required" >&2
+    exit 1
+fi
+
+# note that both od and hexdump print at most 16 bytes per line
+$DUMP_CMD | sed -n -e '
+    s/^[^ ]*//; # remove the file offset field
+    s/^\(\(  *[0-9a-fA-F][0-9a-fA-F]\)*\).*$/\1/; # retain only the hex data
+    /./p; # print only non-empty lines
+' | sed -e ' # second sed call because we need to identify "new" last line
+    s/  */\\x/g; # replace spaces with \x; note that leading spaces were there
+    s/^\(.*\)$/"\1" \\/; # add quotes and trailing backslash
+    $s/ \\$//; # remove the trailing backslash from last line
+'

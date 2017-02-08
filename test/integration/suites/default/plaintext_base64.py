@@ -1,0 +1,73 @@
+from framework.lwm2m_test import *
+from framework.test_utils import *
+from . import block_response as br
+import base64
+import itertools
+
+def test_object_bytes_generator(num_bytes):
+    """ Generates exactly the same sequences of bytes as Test Object does. """
+    return bytes(itertools.islice(itertools.cycle(range(128)), num_bytes))
+
+class Base64Test:
+    class Test(test_suite.Lwm2mSingleServerTest,
+               test_suite.Lwm2mDmOperations):
+        def setUp(self):
+            super().setUp()
+            self.create_instance(self.serv, oid=OID.Test, iid=1)
+
+class Base64DifferentLengths(Base64Test.Test):
+    def runTest(self):
+        for length in range(1, 1049):
+            self.write_resource(self.serv, oid=OID.Test, iid=1,
+                                rid=RID.Test.ResBytesSize, content=str(length),
+                                format=coap.ContentFormat.TEXT_PLAIN)
+            result = self.read_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBytes,
+                                        accept=coap.ContentFormat.TEXT_PLAIN)
+            decoded = base64.decodebytes(result.content)
+            self.assertEquals(test_object_bytes_generator(length), decoded)
+
+class Base64BlockTransfer(br.BlockResponseTest, test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        LENGTH=9001
+        self.write_resource(self.serv, oid=OID.Test, iid=1,
+                            rid=RID.Test.ResBytesSize, content=str(LENGTH),
+                            format=coap.ContentFormat.TEXT_PLAIN)
+        result = self.read_blocks(iid=1, accept=coap.ContentFormat.TEXT_PLAIN)
+        decoded = base64.decodebytes(result)
+        self.assertEquals(test_object_bytes_generator(LENGTH), decoded)
+
+class Base64ReadWrite(Base64Test.Test):
+    def runTest(self):
+        for length in range(1, 1049):
+            raw_data = test_object_bytes_generator(length)
+            b64_data = base64.encodebytes(raw_data).replace(b'\n', b'')
+
+            self.write_resource(self.serv, oid=OID.Test, iid=1,
+                                rid=RID.Test.ResRawBytes, content=b64_data,
+                                format=coap.ContentFormat.TEXT_PLAIN)
+
+            data = self.read_resource(self.serv, oid=OID.Test, iid=1,
+                                      rid=RID.Test.ResRawBytes,
+                                      accept=coap.ContentFormat.TEXT_PLAIN)
+            self.assertEquals(raw_data, base64.decodebytes(data.content))
+
+class Base64InvalidWrite(Base64Test.Test):
+    def runTest(self):
+        def write(value, expected_error_code=coap.Code.RES_INTERNAL_SERVER_ERROR):
+            self.write_resource(self.serv, oid=OID.Test, iid=1,
+                                rid=RID.Test.ResRawBytes, content=value,
+                                format=coap.ContentFormat.TEXT_PLAIN,
+                                expect_error_code=expected_error_code)
+        write(b'A=A')
+        write(b'A=AAA')
+        write(b'A AAA')
+        write(b'A\nAAA')
+        write(b'A\vAAA')
+        write(b'A\tAAA')
+        write(b'A==AAA=')
+        write(b'A')
+        write(b'AA')
+        write(b'AAA')
+        write(b'=')
+        write(b'==')
+        write(b'===')

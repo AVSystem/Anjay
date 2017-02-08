@@ -1,0 +1,87 @@
+#!/bin/bash
+
+rm -rf avs_commons/install
+rm -rf avs_commons/git/CMakeFiles
+rm -f avs_commons/git/CMakeCache.txt
+
+if [[ -d '.git' ]]; then
+    echo "Updating submodules" && git submodule update --init || exit 1
+fi
+
+C_FLAGS='-g -std=c99 -D_POSIX_C_SOURCE=200809L'
+EXTRA_C_FLAGS=
+EXTRA_FLAGS=()
+
+MODULE_DYNAMIC_LIBS='ON'
+MODULE_STATIC_LIBS='ON'
+ANJAY_VERSION=$(git rev-parse --short HEAD)
+DTLS_BACKEND="mbedtls"
+WITH_VALGRIND=ON
+
+if [[ "$ANJAY_VERSION" == "" ]]; then
+    ANJAY_VERSION="unknown"
+fi
+
+if ! which afl-gcc; then
+    if [[ -d "$HOME/tools/afl/latest" ]]; then
+        AFL_FUZZER_DIR="$HOME/tools/afl/latest"
+    fi
+fi
+
+# argument parsing
+while [ $# -gt 0 ]; do
+    case "$1" in
+        '--c-flags')
+            shift
+            C_FLAGS="$1"
+            ;;
+        '--fuzz-tests')
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DWITH_FUZZ_TESTS=ON"
+            [[ "$AFL_FUZZER_DIR" ]] && EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DAFL_FUZZER_DIR=$AFL_FUZZER_DIR"
+            ;;
+        '--with-mbedtls')
+            DTLS_BACKEND="mbedtls"
+            ;;
+        '--with-openssl')
+            DTLS_BACKEND="openssl"
+            ;;
+        '--without-dtls')
+            DTLS_BACKEND=
+            ;;
+        '--with-asan')
+            EXTRA_C_FLAGS="${EXTRA_C_FLAGS} -fsanitize=address"
+            # address sanitizer does not cooperate with valgrind
+            WITH_VALGRIND=OFF
+            ;;
+        '--tiny')
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_PK_OR_IDENTITY_SIZE=256"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_SERVER_PK_OR_IDENTITY_SIZE=256"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_SECRET_KEY_SIZE=128"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_OBSERVABLE_RESOURCE_SIZE=256"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_FLOAT_STRING_SIZE=64"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_DOUBLE_STRING_SIZE=64"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_URI_SEGMENT_SIZE=64"
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_URI_QUERY_SEGMENT_SIZE=64"
+            ;;
+        *)
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="$1"
+            ;;
+    esac
+    shift
+done
+
+rm -f CMakeCache.txt
+rm -rf CMakeFiles
+cmake -D WITH_AVS_UNIT=ON \
+      -D WITH_DEMO=ON \
+      -D WITH_EXTRA_WARNINGS=ON \
+      -D WITH_VALGRIND=${WITH_VALGRIND} \
+      -D WITH_INTEGRATION_TESTS=ON \
+      -D DTLS_BACKEND="${DTLS_BACKEND}" \
+      -D AVS_LOG_WITH_TRACE=ON \
+      -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
+      -D ANJAY_VERSION="${ANJAY_VERSION}" \
+      ${WITH_MODULE_FLAGS} \
+      "${EXTRA_FLAGS[@]}" \
+      "$@" "`dirname "$0"`" &&
+make clean

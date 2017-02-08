@@ -1,0 +1,6 @@
+add_subdirectory(multi-instance-dynamic)
+add_subdirectory(multi-instance-resources-dynamic)
+add_subdirectory(read-only)
+add_subdirectory(read-only-multiple-fixed)
+add_subdirectory(writable-multiple-fixed)
+add_subdirectory(writable-multiple-fixed-transactional)
