@@ -10,6 +10,59 @@ The project has been created and is actively maintained by [AVSystem](https://ww
 -   [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicTutorial.html)
 -   [API docs](https://AVSystem.github.io/Anjay-doc/api/)
 
+### Supported features
+
+- LwM2M Bootstrap Interface:
+    - Request
+    - Finish
+    - Write
+    - Delete
+    - Discover
+
+- LwM2M Client Registration Interface:
+    - Register
+    - Update
+    - De-register
+
+- LwM2M Device Management and Service Enablement Interface:
+    - Read
+    - Discover
+    - Write
+    - Write-Attributes
+    - Execute
+    - Create
+    - Delete
+
+- LwM2M Information Reporting Interface:
+    - Observe
+    - Notify
+    - Cancel Observation
+
+- LwM2M Security modes:
+    - DTLS with Certificates (if supported by backend TLS library)
+    - DTLS with PSK (if supported by backend TLS library)
+    - NoSec mode
+
+- Supported TLS backends:
+    - mbed TLS
+    - OpenSSL
+
+- CoAP data formats:
+    - TLV
+    - Opaque
+    - Plain Text (including base64 encoding of opaque data)
+
+- CoAP BLOCK transfers (for transferring data that does not fit in a single UDP packet):
+    - Block1 (sending / receiving requests)
+    - Block2 (sending responses)
+
+- Pre-implemented LwM2M Objects:
+    - Access Control
+    - Security
+    - Server
+
+- Stream-oriented persistence API
+
 ### About OMA LwM2M
 
 OMA LwM2M is a remote device management and telemetry protocol designed to conserve network resources. It is especially suitable for constrained wireless devices, where network communication is a major factor affecting battery life. LwM2M features secure (DTLS-encrypted) methods of remote bootstrapping, configuration and notifications over UDP or SMS.
