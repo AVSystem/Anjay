@@ -508,10 +508,10 @@ void start_server(int port, char *local_address) {
     SSL_CTX_set_cipher_list(ctx, "ALL:NULL:eNULL:aNULL");
     SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 
-    if (!SSL_CTX_use_certificate_chain_file(ctx, "certs/server-and-root.crt"))
+    if (!SSL_CTX_use_certificate_chain_file(ctx, "output/certs/server-and-root.crt"))
         printf("\nERROR: no certificate found!");
 
-    if (!SSL_CTX_use_PrivateKey_file(ctx, "certs/server.key", SSL_FILETYPE_PEM))
+    if (!SSL_CTX_use_PrivateKey_file(ctx, "output/certs/server.key", SSL_FILETYPE_PEM))
         printf("\nERROR: no private key found!");
 
     if (!SSL_CTX_check_private_key (ctx))

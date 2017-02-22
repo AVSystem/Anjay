@@ -294,12 +294,12 @@ static anjay_coap_socket_t *setup_socket(socket_type_t type,
             .data.cert = {
                 .server_cert_validation = true,
                 .trusted_certs = avs_net_trusted_cert_source_from_paths(
-                                        NULL, "certs/root.crt"),
+                                        NULL, "output/certs/root.crt"),
                 .client_cert = avs_net_client_cert_from_file(
-                                        "certs/client.crt", NULL,
+                                        "output/certs/client.crt", NULL,
                                         AVS_NET_DATA_FORMAT_PEM),
                 .client_key = avs_net_private_key_from_file(
-                                        "certs/client.key", NULL,
+                                        "output/certs/client.key", NULL,
                                         AVS_NET_DATA_FORMAT_PEM)
             }
         },

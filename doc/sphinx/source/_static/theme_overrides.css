@@ -14,10 +14,20 @@
  * limitations under the License.
  */
 
-#include <config.h>
+/**
+ * See: http://rackerlabs.github.io/docs-rackspace/tools/rtd-tables.html
+ */
 
-#include "../dm.h"
+/* override table width restrictions */
+@media screen and (min-width: 767px) {
 
-VISIBILITY_SOURCE_BEGIN
+   .wy-table-responsive table td {
+      /* !important prevents the common CSS stylesheets from overriding
+         this as on RTD they are loaded after this stylesheet */
+      white-space: normal !important;
+   }
 
-
+   .wy-table-responsive {
+      overflow: visible !important;
+   }
+}

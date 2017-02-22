@@ -33,7 +33,7 @@ extern "C" {
  * @p anjay_register_object() function.
  *
  * WARNING: After any modification of Security, Server or Access Control Object
- * by means other than LWM2M one has to execute
+ * by means other than LwM2M one has to execute
  * @ref anjay_notify_instances_changed in order to trigger necessary
  * revalidation routines of Access Control Object instances.
  *

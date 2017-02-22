@@ -62,8 +62,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
     size_t bytes_read;
     char message_finished;
     uint16_t format;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_u16(
-            stream, ANJAY_COAP_OPT_CONTENT_FORMAT, &format));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_uint(
+            stream, ANJAY_COAP_OPT_CONTENT_FORMAT, &format, sizeof(format)));
     AVS_UNIT_ASSERT_EQUAL(format, details.format);
 
     anjay_coap_opt_iterator_t optit = ANJAY_COAP_OPT_ITERATOR_EMPTY;

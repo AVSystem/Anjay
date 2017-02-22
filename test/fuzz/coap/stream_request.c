@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <config.h>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
@@ -77,6 +79,7 @@ static const avs_net_socket_v_table_t MOCK_SOCKET_VTABLE = {
     .get_remote_host    = (avs_net_socket_get_remote_host_t) success,
     .get_remote_port    = (avs_net_socket_get_remote_port_t) success,
     .get_system_socket  = (avs_net_socket_get_system_t)      success,
+    .get_errno          = (avs_net_socket_errno_t)           success,
     .receive_from       = (avs_net_socket_receive_from_t)    success,
     .send_to            = (avs_net_socket_send_to_t)         success,
     .set_opt            = (avs_net_socket_set_opt_t)         success,

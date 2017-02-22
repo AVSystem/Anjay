@@ -200,9 +200,8 @@ static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
     demo->device_obj = device_object_create(demo->iosched,
                                             cmdline_args->endpoint_name);
     demo->ext_dev_info_obj = ext_dev_info_object_create();
-    demo->firmware_update_obj =
-            firmware_update_object_create(demo->iosched,
-                                          cmdline_args->cleanup_fw_on_upgrade);
+    demo->firmware_update_obj = firmware_update_object_create(
+            demo->iosched, !cmdline_args->dont_cleanup_fw_on_upgrade);
     demo->server_obj = anjay_server_object_create();
     demo->location_obj = location_object_create();
     demo->geopoints_obj = geopoints_object_create(demo->location_obj);

@@ -29,16 +29,21 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 typedef struct {
     anjay_ssid_t ssid;
     anjay_dm_attributes_t attrs;
-} fas_attrs_t;
+} fas_default_attrs_t;
+
+typedef struct {
+    anjay_ssid_t ssid;
+    anjay_dm_resource_attributes_t attrs;
+} fas_resource_attrs_t;
 
 typedef struct {
     anjay_rid_t rid;
-    AVS_LIST(fas_attrs_t) attrs;
+    AVS_LIST(fas_resource_attrs_t) attrs;
 } fas_resource_entry_t;
 
 typedef struct {
     anjay_iid_t iid;
-    AVS_LIST(fas_attrs_t) default_attrs;
+    AVS_LIST(fas_default_attrs_t) default_attrs;
     AVS_LIST(fas_resource_entry_t) resources;
 } fas_instance_entry_t;
 
@@ -49,7 +54,7 @@ typedef struct {
     anjay_dm_object_def_t def;
     AVS_LIST(anjay_iid_t) instance_it_iids;
     void *instance_it_last_cookie;
-    AVS_LIST(fas_attrs_t) default_attrs;
+    AVS_LIST(fas_default_attrs_t) default_attrs;
     AVS_LIST(fas_instance_entry_t) instances;
 } fas_object_t;
 
@@ -86,6 +91,30 @@ remove_instance_if_empty(AVS_LIST(fas_instance_entry_t) *entry_ptr) {
     if (!(*entry_ptr)->default_attrs && !(*entry_ptr)->resources) {
         AVS_LIST_DELETE(entry_ptr);
     }
+}
+
+static inline anjay_ssid_t *get_ssid_ptr(void *generic_attrs) {
+    AVS_STATIC_ASSERT(offsetof(fas_default_attrs_t, ssid) == 0,
+                      default_attrs_ssid_offset);
+    AVS_STATIC_ASSERT(offsetof(fas_resource_attrs_t, ssid) == 0,
+                      resource_attrs_ssid_offset);
+    return (anjay_ssid_t *) generic_attrs;
+}
+
+static inline void *get_attrs_ptr(void *generic_attrs,
+                                  size_t attrs_field_offset) {
+    return (char *) generic_attrs + attrs_field_offset;
+}
+
+typedef bool is_empty_func_t(const void *attrs);
+
+static bool default_attrs_empty(const void *attrs) {
+    return _anjay_dm_attributes_empty((const anjay_dm_attributes_t *) attrs);
+}
+
+static bool resource_attrs_empty(const void *attrs) {
+    return _anjay_dm_resource_attributes_empty(
+            (const anjay_dm_resource_attributes_t *) attrs);
 }
 
 int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,

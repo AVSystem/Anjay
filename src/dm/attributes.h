@@ -22,7 +22,11 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #define _ANJAY_DM_ATTRIBS_EMPTY { \
         .min_period = ANJAY_ATTRIB_PERIOD_NONE, \
-        .max_period = ANJAY_ATTRIB_PERIOD_NONE, \
+        .max_period = ANJAY_ATTRIB_PERIOD_NONE \
+    }
+
+#define _ANJAY_RES_ATTRIBS_EMPTY { \
+        .common = _ANJAY_DM_ATTRIBS_EMPTY, \
         .greater_than = ANJAY_ATTRIB_VALUE_NONE, \
         .less_than = ANJAY_ATTRIB_VALUE_NONE, \
         .step = ANJAY_ATTRIB_VALUE_NONE \
@@ -52,7 +56,7 @@ typedef struct {
 } anjay_dm_attrs_query_details_t;
 
 /**
- * Obtains attributes for a specific LWM2M path by combining attributes from
+ * Obtains attributes for a specific LwM2M path by combining attributes from
  * different levels.
  *
  * WARNING: This function does not check whether path is valid, i.e. whether
@@ -79,22 +83,8 @@ typedef struct {
  */
 int _anjay_dm_effective_attrs(anjay_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
-                              anjay_dm_attributes_t *out);
+                              anjay_dm_resource_attributes_t *out);
 
-/**
- * Reads attributes assigned to the Resource (if *out has at least one unset
- * attribute) and combines them with *out.
- *
- * WARNING: This function does not perform any presence checks. Caller must
- * ensure this on its own.
- */
-int _anjay_dm_read_combined_resource_attrs(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj,
-        anjay_iid_t iid,
-        anjay_rid_t rid,
-        anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out);
 /**
  * Reads attributes assigned to the Instance (if *out has at least one unset
  * attribute) and combines them with *out.

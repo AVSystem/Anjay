@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import socket
 import time
 
@@ -82,6 +98,7 @@ class OfflineWithReregisterTest(test_suite.Lwm2mSingleServerTest):
         # Register shall now come
         self.assertDemoRegisters(lifetime=OfflineWithReregisterTest.LIFETIME)
 
+
 class OfflineWithSecurityObjectChange(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
         self.communicate('enter-offline')
@@ -100,12 +117,14 @@ class OfflineWithSecurityObjectChange(test_suite.Lwm2mSingleServerTest):
         self.communicate('exit-offline')
         self.assertDemoUpdatesRegistration()
 
+
 class OfflineWithReconnect(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
         self.communicate('enter-offline')
         self.serv.reset()
         self.communicate('reconnect')
         self.assertDemoUpdatesRegistration()
+
 
 class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
@@ -118,15 +137,16 @@ class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mSingleServerTest):
         self.communicate('exit-offline')
         self.assertDemoUpdatesRegistration()
 
+
 class OfflineWithObserve(test_suite.Lwm2mSingleServerTest,
                          test_suite.Lwm2mDmOperations):
     UPDATED_INSTANCES = (b'</1/1>,</2/0>,</2/1>,</2/2>,</2/3>,</2/4>,'
-                        + b'</2/5>,</2/6>,</2/7>,</2/8>,</2/9>,</2/10>,'
-                        + b'</2/11>,</2/12>,</2/13>,</2/14>,</2/15>,</2/16>,'
-                        + b'</2/17>,</2/18>,</2/19>,</2/20>,</2/21>,</2/22>,'
-                        + b'</2/23>,</3/0>,</4/0>,</5/0>,</6/0>,</7/0>,'
-                        + b'</10/0>,</11>,</1337/1>,</11111/0>,</12359/0>,</12360>,'
-                        + b'</12361/0>')
+                         + b'</2/5>,</2/6>,</2/7>,</2/8>,</2/9>,</2/10>,'
+                         + b'</2/11>,</2/12>,</2/13>,</2/14>,</2/15>,</2/16>,'
+                         + b'</2/17>,</2/18>,</2/19>,</2/20>,</2/21>,</2/22>,'
+                         + b'</2/23>,</3/0>,</4/0>,</5/0>,</6/0>,</7/0>,'
+                         + b'</10/0>,</11>,</1337/1>,</11111/0>,</12359/0>,</12360>,'
+                         + b'</12361/0>')
 
     # Explanation what's the idea:
     # 1. Set min notification period to 3 seconds.

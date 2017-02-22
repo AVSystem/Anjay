@@ -54,13 +54,13 @@ void _anjay_coap_out_setup_mtu(coap_output_buffer_t *out,
     if (backend_socket && !avs_net_socket_get_opt(backend_socket,
                                                   AVS_NET_SOCKET_OPT_INNER_MTU,
                                                   &opt_value)) {
-        coap_log(INFO, "Buffer size: %u; socket MTU: %d",
+        coap_log(DEBUG, "Buffer size: %u; socket MTU: %d",
                  (unsigned) out->buffer_capacity, opt_value.mtu);
         if (opt_value.mtu > 0) {
             out->dgram_layer_mtu = (size_t) opt_value.mtu;
         }
     } else {
-        coap_log(INFO, "Buffer size: %u; socket MTU unknown",
+        coap_log(DEBUG, "Buffer size: %u; socket MTU unknown",
                  (unsigned) out->buffer_capacity);
     }
 }

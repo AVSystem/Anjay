@@ -1,3 +1,24 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import time
+
+from framework.lwm2m_test import *
+
+
 # Setting up the CoAP stream for communication with a specific server is done
 # by calling _anjay_get_server_stream. The stream has to be released with
 # _anjay_release_server_stream before acquiring it again, or the library will
@@ -9,11 +30,6 @@
 # next attempt to use the stream.
 #
 # This test case ensures that the demo does not crash in such case.
-
-import time
-
-from framework.lwm2m_test import *
-
 
 class AccessViolationOn256ByteUri(test_suite.Lwm2mSingleServerTest):
     # overrides a method from Lwm2mTest, called from Lwm2mTest.setup_demo_with_servers()

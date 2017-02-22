@@ -51,28 +51,28 @@ static int print_attrs(avs_stream_abstract_t *stream,
     (void) ((result = print_time_attr(stream, ANJAY_ATTR_PMIN,
                                       attrs->min_period))
             || (result = print_time_attr(stream, ANJAY_ATTR_PMAX,
-                                         attrs->max_period))
-            || (result = print_double_attr(stream, ANJAY_ATTR_GT,
-                                           attrs->greater_than))
-            || (result = print_double_attr(stream, ANJAY_ATTR_LT,
-                                           attrs->less_than))
-            || (result = print_double_attr(stream, ANJAY_ATTR_ST,
-                                           attrs->step)));
+                                         attrs->max_period)));
     return result;
 }
 
 static int print_resource_attrs(avs_stream_abstract_t *stream,
                                 int32_t resource_dim,
-                                const anjay_dm_attributes_t *attrs) {
+                                const anjay_dm_resource_attributes_t *attrs) {
     int result = 0;
     if (resource_dim >= 0) {
         result = avs_stream_write_f(stream, ";dim=%" PRIu32,
                                     (uint32_t) resource_dim);
     }
-    if (result) {
-        return result;
+    if (!result) {
+        (void) ((result = print_attrs(stream, &attrs->common))
+                || (result = print_double_attr(stream, ANJAY_ATTR_GT,
+                                               attrs->greater_than))
+                || (result = print_double_attr(stream, ANJAY_ATTR_LT,
+                                               attrs->less_than))
+                || (result = print_double_attr(stream, ANJAY_ATTR_ST,
+                                               attrs->step)));
     }
-    return print_attrs(stream, attrs);
+    return result;
 }
 
 static int print_discovered_object(avs_stream_abstract_t *stream,
@@ -102,7 +102,7 @@ static int print_discovered_resource(avs_stream_abstract_t *stream,
                                      anjay_iid_t iid,
                                      anjay_rid_t rid,
                                      int32_t resource_dim,
-                                     const anjay_dm_attributes_t *attrs) {
+                                     const anjay_dm_resource_attributes_t *attrs) {
     int retval =
             avs_stream_write_f(stream, "</%" PRIu16 "/%" PRIu16 "/%" PRIu16 ">",
                                (*obj)->oid, iid, rid);
@@ -175,9 +175,10 @@ static int discover_resource(anjay_t *anjay,
         result = read_resource_dim(anjay, obj, iid, rid, &resource_dim);
     }
 
-    anjay_dm_attributes_t resource_attributes = ANJAY_DM_ATTRIBS_EMPTY;
+    anjay_dm_resource_attributes_t resource_attributes
+            = ANJAY_RES_ATTRIBS_EMPTY;
     if (hint == WITH_RESOURCE_ATTRIBS) {
-        result = _anjay_dm_read_combined_resource_attrs(
+        result = _anjay_dm_resource_read_attrs(
                 anjay, obj, iid, rid, ssid, &resource_attributes);
     } else if (hint == WITH_INHERITED_ATTRIBS) {
         anjay_dm_attrs_query_details_t details =

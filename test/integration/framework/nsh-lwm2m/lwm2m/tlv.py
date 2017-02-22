@@ -1,8 +1,25 @@
-import binascii
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import struct
+
 
 def indent(text, indent='  '):
     return indent + ('\n' + indent).join(text.split('\n'))
+
 
 class TLVType:
     def __init__(self, value):
@@ -21,23 +38,26 @@ class TLVType:
         assert len(matching) == 1
         return matching[0]
 
+
 TLVType.INSTANCE = TLVType(0)
 TLVType.RESOURCE_INSTANCE = TLVType(1)
 TLVType.MULTIPLE_RESOURCE = TLVType(2)
 TLVType.RESOURCE = TLVType(3)
 
+
 class TLVList(list):
-    """
-    A list of TLVs used as a result of TLV.parse, with a custom __str__ function
-    for convenience.
-    """
     def __str__(self):
+        """
+        A list of TLVs used as a result of TLV.parse, with a custom __str__ function
+        for convenience.
+        """
         return 'TLV (%d elements):\n\n' % len(self) + indent('\n'.join(x.full_description() for x in self))
+
 
 class TLV:
     class BytesDispenser:
         def __init__(self, data):
-            self.data = data;
+            self.data = data
             self.at = 0
 
         def take(self, n):
@@ -46,7 +66,7 @@ class TLV:
                                  % (n, len(self.data) - self.at))
 
             self.at += n
-            return self.data[self.at-n:self.at]
+            return self.data[self.at - n:self.at]
 
         def bytes_remaining(self):
             return len(self.data) - self.at
@@ -55,7 +75,7 @@ class TLV:
     def encode_int(data):
         value = int(data)
         for n, modifier in zip([8, 16, 32, 64], ['b', 'h', 'i', 'q']):
-            if -2**(n-1) <= value < 2**(n-1):
+            if -2 ** (n - 1) <= value < 2 ** (n - 1):
                 return struct.pack('>%s' % modifier, value)
 
         raise NotImplementedError("integer out of supported range")
@@ -70,7 +90,7 @@ class TLV:
 
     @staticmethod
     def make_instance(instance_id: int,
-                      content: bytes=b''):
+                      content: bytes = b''):
         """
         Creates an Object Instance TLV.
         instance_id -- ID of the Object Instance
@@ -85,13 +105,13 @@ class TLV:
         elif isinstance(content, float):
             as_float = TLV.encode_float(content)
             if struct.unpack('>f', as_float)[0] == content:
-                content = as_float # single precision is enough
+                content = as_float  # single precision is enough
             else:
                 content = TLV.encode_double(content)
         elif isinstance(content, str):
             content = content.encode('ascii')
 
-        if type(content) is not bytes:
+        if not isinstance(content, bytes):
             raise ValueError('Unsupported resource value type: ' + type(content).__name__)
 
         return content
@@ -189,24 +209,24 @@ class TLV:
         type_field = (self.tlv_type.value << 6)
 
         id_bytes = b''
-        if self.identifier < 2**8:
+        if self.identifier < 2 ** 8:
             id_bytes = struct.pack('!B', self.identifier)
         else:
-            assert self.identifier < 2**16
+            assert self.identifier < 2 ** 16
             type_field |= 0b100000
             id_bytes = struct.pack('!H', self.identifier)
 
         len_bytes = b''
         if len(data) < 8:
             type_field |= len(data)
-        elif len(data) < 2**8:
+        elif len(data) < 2 ** 8:
             type_field |= 0b01000
             len_bytes = struct.pack('!B', len(data))
-        elif len(data) < 2**16:
+        elif len(data) < 2 ** 16:
             type_field |= 0b10000
             len_bytes = struct.pack('!H', len(data))
         else:
-            assert len(data) < 2**24
+            assert len(data) < 2 ** 24
             type_field |= 0b11000
             len_bytes = struct.pack('!I', len(data))[1:]
 
@@ -248,4 +268,3 @@ class TLV:
                     % (self.identifier, len(self.value), indent('\n'.join(x.full_description() for x in self.value))))
         else:
             return str(self)
-

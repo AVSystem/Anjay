@@ -1,7 +1,24 @@
-from framework.lwm2m_test import *
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import socket
 import time
+
+from framework.lwm2m_test import *
+
 
 class EmptyTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self):
@@ -30,11 +47,11 @@ class EmptyTest(test_suite.Lwm2mSingleServerTest):
 
         # packets validation performed now, to not waste time in a let's say: critical moment
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
-                pkt0)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
+            pkt0)
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
-                pkt1)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
+            pkt1)
 
         # the device should ignore 0.00 Empty with anything other than the header
         self.serv.send(coap.Packet(type=coap.Type.ACKNOWLEDGEMENT,
@@ -54,7 +71,7 @@ class EmptyTest(test_suite.Lwm2mSingleServerTest):
 
         # device should not respond before timeout (next_timeout since receiving the re-Register)
         with self.assertRaises(socket.timeout, msg='unexpected message'):
-            print(self.serv.recv(timeout_s=next_timeout-(time.time()-reregister_send_time)))
+            print(self.serv.recv(timeout_s=next_timeout - (time.time() - reregister_send_time)))
 
         # should retry
         self.assertDemoRegisters(server=self.serv)

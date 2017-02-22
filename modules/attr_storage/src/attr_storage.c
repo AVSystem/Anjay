@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <math.h>
+#include <string.h>
 
 #include <avsystem/commons/stream/stream_membuf.h>
 
@@ -124,53 +125,68 @@ get_object(const anjay_dm_object_def_t *const *obj_ptr) {
     return AVS_CONTAINER_OF(obj_ptr, fas_object_t, def_ptr);
 }
 
-#define DEFINE_FIND_OR_CREATE(Entity, ParentType, Id) \
-static AVS_LIST(fas_##Entity##_entry_t) * \
-find_or_create_##Entity##_impl (ParentType *parent, \
-                                anjay_##Id##_t Id, \
-                                bool allow_create) { \
-    if (!parent) { \
-        return NULL; \
-    } \
-    AVS_LIST(fas_##Entity##_entry_t) *entry_ptr; \
-    AVS_LIST_FOREACH_PTR(entry_ptr, &parent->Entity##s) { \
-        if ((*entry_ptr)->Id >= Id) { \
-            break; \
-        } \
-    } \
-    if (!*entry_ptr || (*entry_ptr)->Id != Id) { \
-        if (allow_create) { \
-            AVS_LIST(fas_##Entity##_entry_t) new_entry = \
-                    AVS_LIST_NEW_ELEMENT(fas_##Entity##_entry_t); \
-            if (!new_entry) { \
-                fas_log(ERROR, "Out of memory"); \
-                return NULL; \
-            } \
-            new_entry->Id = Id; \
-            AVS_LIST_INSERT(entry_ptr, new_entry); \
-        } else { \
-            return NULL; \
-        } \
-    } \
-    return entry_ptr; \
-} \
-\
-static inline AVS_LIST(fas_##Entity##_entry_t) * \
-find_##Entity (ParentType *parent, anjay_##Id##_t Id) { \
-    return find_or_create_##Entity##_impl(parent, Id, false); \
-} \
-\
-static inline AVS_LIST(fas_##Entity##_entry_t) * \
-find_or_create_##Entity (ParentType *parent, anjay_##Id##_t Id) { \
-    return find_or_create_##Entity##_impl(parent, Id, true); \
+AVS_STATIC_ASSERT(offsetof(fas_instance_entry_t, iid) == 0,
+                  instance_iid_offset);
+AVS_STATIC_ASSERT(offsetof(fas_resource_entry_t, rid) == 0,
+                  resource_iid_offset);
+
+static AVS_LIST(void) *
+find_or_create_entry_impl(AVS_LIST(void) *children_list_ptr,
+                          size_t entry_size,
+                          uint16_t id,
+                          bool allow_create) {
+    AVS_LIST(void) *entry_ptr;
+    AVS_LIST_FOREACH_PTR(entry_ptr, children_list_ptr) {
+        if (*(uint16_t *) *entry_ptr >= id) {
+            break;
+        }
+    }
+    if (!*entry_ptr || *(uint16_t *) *entry_ptr != id) {
+        if (allow_create) {
+            AVS_LIST(void) new_entry = AVS_LIST_NEW_BUFFER(entry_size);
+            if (!new_entry) {
+                fas_log(ERROR, "Out of memory");
+                return NULL;
+            }
+            *(uint16_t *) new_entry = id;
+            AVS_LIST_INSERT(entry_ptr, new_entry);
+        } else {
+            return NULL;
+        }
+    }
+    return entry_ptr;
 }
 
-// find_or_create_instance_impl
-// find_or_create_instance
-DEFINE_FIND_OR_CREATE(instance, fas_object_t, iid)
-// find_or_create_resource_impl
-// find_or_create_resource
-DEFINE_FIND_OR_CREATE(resource, fas_instance_entry_t, rid)
+static inline
+AVS_LIST(fas_instance_entry_t) *find_instance(fas_object_t *parent,
+                                              anjay_iid_t id) {
+    return (AVS_LIST(fas_instance_entry_t) *)
+            find_or_create_entry_impl((AVS_LIST(void) *) &parent->instances,
+                                      sizeof(fas_instance_entry_t), id, false);
+}
+
+static inline
+AVS_LIST(fas_instance_entry_t) *find_or_create_instance(fas_object_t *parent,
+                                                        anjay_iid_t id) {
+    return (AVS_LIST(fas_instance_entry_t) *)
+            find_or_create_entry_impl((AVS_LIST(void) *) &parent->instances,
+                                      sizeof(fas_instance_entry_t), id, true);
+}
+
+static inline
+AVS_LIST(fas_resource_entry_t) *find_resource(fas_instance_entry_t *parent,
+                                              anjay_rid_t id) {
+    return (AVS_LIST(fas_resource_entry_t) *)
+            find_or_create_entry_impl((AVS_LIST(void) *) &parent->resources,
+                                      sizeof(fas_resource_entry_t), id, false);
+}
+
+static inline AVS_LIST(fas_resource_entry_t) *
+find_or_create_resource(fas_instance_entry_t *parent, anjay_rid_t id) {
+    return (AVS_LIST(fas_resource_entry_t) *)
+            find_or_create_entry_impl((AVS_LIST(void) *) &parent->resources,
+                                      sizeof(fas_resource_entry_t), id, true);
+}
 
 static void remove_instance(fas_object_t *obj, anjay_iid_t iid) {
     AVS_LIST(fas_instance_entry_t) *instance_ptr = find_instance(obj, iid);
@@ -229,75 +245,78 @@ query_ssid(anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid) {
 }
 
 static void remove_attrs_entry(anjay_attr_storage_t *fas,
-                               AVS_LIST(fas_attrs_t) *attrs_ptr) {
+                               AVS_LIST(void) *attrs_ptr) {
     AVS_LIST_DELETE(attrs_ptr);
     mark_modified(fas);
 }
 
 static void remove_attrs_for_server(anjay_attr_storage_t *fas,
-                                    AVS_LIST(fas_attrs_t) *attrs_ptr,
-                                    anjay_ssid_t ssid) {
+                                    AVS_LIST(void) *attrs_ptr,
+                                    void *ssid_ptr) {
+    anjay_ssid_t ssid = *(anjay_ssid_t *) ssid_ptr;
     AVS_LIST_ITERATE_PTR(attrs_ptr) {
         assert(!*AVS_LIST_NEXT_PTR(attrs_ptr)
-               || (*attrs_ptr)->ssid < (*AVS_LIST_NEXT_PTR(attrs_ptr))->ssid);
-        if ((*attrs_ptr)->ssid == ssid) {
+               || *get_ssid_ptr(*attrs_ptr)
+                        < *get_ssid_ptr(*AVS_LIST_NEXT_PTR(attrs_ptr)));
+        if (*get_ssid_ptr(*attrs_ptr) == ssid) {
             remove_attrs_entry(fas, attrs_ptr);
-            assert(!*attrs_ptr || ssid < (*attrs_ptr)->ssid);
+            assert(!*attrs_ptr || ssid < *get_ssid_ptr(*attrs_ptr));
             return;
-        } else if ((*attrs_ptr)->ssid > ssid) {
+        } else if (*get_ssid_ptr(*attrs_ptr) > ssid) {
             break;
         }
     }
 }
 
-static void
-remove_attrs_for_servers_not_on_list(anjay_attr_storage_t *fas,
-                                     AVS_LIST(fas_attrs_t) *attrs_ptr,
-                                     AVS_LIST(anjay_ssid_t) ssid) {
+static void remove_attrs_for_servers_not_on_list(anjay_attr_storage_t *fas,
+                                                 AVS_LIST(void) *attrs_ptr,
+                                                 void *ssid_list_ptr) {
+    AVS_LIST(anjay_ssid_t) ssid_ptr = *(AVS_LIST(anjay_ssid_t) *) ssid_list_ptr;
     while (*attrs_ptr) {
-        if (!ssid || (*attrs_ptr)->ssid < *ssid) {
-            remove_attrs_entry (fas, attrs_ptr);
+        if (!ssid_ptr || *get_ssid_ptr(*attrs_ptr) < *ssid_ptr) {
+            remove_attrs_entry(fas, attrs_ptr);
         } else {
-            while (ssid && (*attrs_ptr)->ssid > *ssid) {
-                ssid = AVS_LIST_NEXT(ssid);
+            while (ssid_ptr && *get_ssid_ptr(*attrs_ptr) > *ssid_ptr) {
+                ssid_ptr = AVS_LIST_NEXT(ssid_ptr);
             }
-            if (ssid && (*attrs_ptr)->ssid == *ssid) {
-                ssid = AVS_LIST_NEXT(ssid);
+            if (ssid_ptr && *get_ssid_ptr(*attrs_ptr) == *ssid_ptr) {
+                ssid_ptr = AVS_LIST_NEXT(ssid_ptr);
                 attrs_ptr = AVS_LIST_NEXT_PTR(attrs_ptr);
             }
         }
     }
 }
 
-#define DEFINE_REMOVE_SERVERS(Subject, SsidReferenceType) \
-static void remove_##Subject (anjay_attr_storage_t *fas, \
-                              SsidReferenceType ssid_ref) { \
-    AVS_LIST(fas_object_t) object; \
-    AVS_LIST_FOREACH(object, fas->objects) { \
-        remove_attrs_for_##Subject (fas, &object->default_attrs, ssid_ref); \
-        AVS_LIST(fas_instance_entry_t) *instance_ptr; \
-        AVS_LIST(fas_instance_entry_t) instance_helper; \
-        AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper, \
-                                       &object->instances) { \
-            remove_attrs_for_##Subject ( \
-                    fas, &(*instance_ptr)->default_attrs, ssid_ref); \
-            AVS_LIST(fas_resource_entry_t) *res_ptr; \
-            AVS_LIST(fas_resource_entry_t) res_helper; \
-            AVS_LIST_DELETABLE_FOREACH_PTR(res_ptr, res_helper, \
-                                           &(*instance_ptr)->resources) { \
-                remove_attrs_for_##Subject (fas, &(*res_ptr)->attrs, \
-                                                     ssid_ref); \
-                remove_resource_if_empty(res_ptr); \
-            } \
-            remove_instance_if_empty(instance_ptr); \
-        } \
-    } \
-}
+typedef void remove_attrs_func_t(anjay_attr_storage_t *fas,
+                                 AVS_LIST(void) *attrs_ptr,
+                                 void *ssid_ref_ptr);
 
-// remove_server
-DEFINE_REMOVE_SERVERS(server, anjay_ssid_t)
-// remove_servers_not_on_list
-DEFINE_REMOVE_SERVERS(servers_not_on_list, AVS_LIST(anjay_ssid_t))
+static void remove_servers(anjay_attr_storage_t *fas,
+                           remove_attrs_func_t *remove_attrs_func,
+                           void *ssid_ref) {
+    AVS_LIST(fas_object_t) object;
+    AVS_LIST_FOREACH(object, fas->objects) {
+        remove_attrs_func(fas, (AVS_LIST(void) *) &object->default_attrs,
+                          ssid_ref);
+        AVS_LIST(fas_instance_entry_t) *instance_ptr;
+        AVS_LIST(fas_instance_entry_t) instance_helper;
+        AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper,
+                                       &object->instances) {
+            remove_attrs_func(
+                    fas, (AVS_LIST(void) *) &(*instance_ptr)->default_attrs,
+                              ssid_ref);
+            AVS_LIST(fas_resource_entry_t) *res_ptr;
+            AVS_LIST(fas_resource_entry_t) res_helper;
+            AVS_LIST_DELETABLE_FOREACH_PTR(res_ptr, res_helper,
+                                           &(*instance_ptr)->resources) {
+                remove_attrs_func(fas, (AVS_LIST(void) *) &(*res_ptr)->attrs,
+                                  ssid_ref);
+                remove_resource_if_empty(res_ptr);
+            }
+            remove_instance_if_empty(instance_ptr);
+        }
+    }
+}
 
 static int compare_u16ids(const void *a, const void *b, size_t element_size) {
     assert(element_size == sizeof(uint16_t));
@@ -322,7 +341,7 @@ static int remove_servers_after_iteration(anjay_t *anjay, fas_object_t *obj) {
     }
 
     AVS_LIST_SORT(&ssids, compare_u16ids);
-    remove_servers_not_on_list(obj->fas, ssids);
+    remove_servers(obj->fas, remove_attrs_for_servers_not_on_list, &ssids);
     AVS_LIST_CLEAR(&ssids);
     return 0;
 }
@@ -352,9 +371,9 @@ static int remove_instances_after_iteration(anjay_t *anjay, fas_object_t *obj) {
     return result;
 }
 
-static void read_attrs(AVS_LIST(fas_attrs_t) attrs,
-                       anjay_ssid_t ssid,
-                       anjay_dm_attributes_t *out) {
+static void read_default_attrs(AVS_LIST(fas_default_attrs_t) attrs,
+                               anjay_ssid_t ssid,
+                               anjay_dm_attributes_t *out) {
     AVS_LIST_ITERATE(attrs) {
         if (attrs->ssid == ssid) {
             *out = attrs->attrs;
@@ -366,38 +385,64 @@ static void read_attrs(AVS_LIST(fas_attrs_t) attrs,
     *out = ANJAY_DM_ATTRIBS_EMPTY;
 }
 
-static int write_attrs(anjay_attr_storage_t *fas,
-                       AVS_LIST(fas_attrs_t) * out_attrs,
-                       anjay_ssid_t ssid,
-                       const anjay_dm_attributes_t *attrs) {
-    AVS_LIST_ITERATE_PTR(out_attrs) {
-        if ((*out_attrs)->ssid >= ssid) {
+static void read_resource_attrs(AVS_LIST(fas_resource_attrs_t) attrs,
+                                anjay_ssid_t ssid,
+                                anjay_dm_resource_attributes_t *out) {
+    AVS_LIST_ITERATE(attrs) {
+        if (attrs->ssid == ssid) {
+            *out = attrs->attrs;
+            return;
+        } else if (attrs->ssid > ssid) {
             break;
         }
     }
-    bool found = (*out_attrs && (*out_attrs)->ssid == ssid);
-    bool filled = !_anjay_dm_attributes_empty(attrs);
+    *out = ANJAY_RES_ATTRIBS_EMPTY;
+}
+
+static int write_attrs_impl(anjay_attr_storage_t *fas,
+                            AVS_LIST(void) *out_attrs,
+                            size_t element_size,
+                            size_t attrs_field_offset,
+                            size_t attrs_field_size,
+                            is_empty_func_t *is_empty_func,
+                            anjay_ssid_t ssid,
+                            const void *attrs) {
+    AVS_LIST_ITERATE_PTR(out_attrs) {
+        if (*get_ssid_ptr(*out_attrs) >= ssid) {
+            break;
+        }
+    }
+    bool found = (*out_attrs && *get_ssid_ptr(*out_attrs) == ssid);
+    bool filled = !is_empty_func(attrs);
     if (filled) {
         // writing non-empty set of attributes
         if (!found) {
             // entry does not exist, creating
-            AVS_LIST(fas_attrs_t) new_attrs = AVS_LIST_NEW_ELEMENT(fas_attrs_t);
+            AVS_LIST(void) new_attrs = AVS_LIST_NEW_BUFFER(element_size);
             if (!new_attrs) {
                 fas_log(ERROR, "Out of memory");
                 return ANJAY_ERR_INTERNAL;
             }
-            new_attrs->ssid = ssid;
+            *get_ssid_ptr(new_attrs) = ssid;
             AVS_LIST_INSERT(out_attrs, new_attrs);
         }
-        (*out_attrs)->attrs = *attrs;
+        memcpy(get_attrs_ptr(*out_attrs, attrs_field_offset), attrs,
+               attrs_field_size);
         mark_modified(fas);
     } else if (found) {
-         // entry exists, but writing EMPTY set of attributes
-         // hence - removing
-        remove_attrs_entry(fas, out_attrs);
+        // entry exists, but writing EMPTY set of attributes
+        // hence - removing
+        remove_attrs_entry(fas, (AVS_LIST(void) *) out_attrs);
     }
     return 0;
 }
+
+#define WRITE_ATTRS(Fas, OutAttrs, IsEmptyFunc, Ssid, Attrs) \
+        write_attrs_impl((Fas), (AVS_LIST(void) *) (OutAttrs), \
+                         sizeof(**(OutAttrs)), \
+                         (char *) &(*(OutAttrs))->attrs - (char *) *(OutAttrs),\
+                         sizeof((*(OutAttrs))->attrs), \
+                         (IsEmptyFunc), (Ssid), (Attrs))
 
 //// ATTRIBUTE HANDLERS ////////////////////////////////////////////////////////
 
@@ -410,7 +455,7 @@ static int object_read_default_attrs(anjay_t *anjay,
         return (*obj->backend)->object_read_default_attrs(anjay, obj->backend,
                                                           ssid, out);
     }
-    read_attrs(obj->default_attrs, ssid, out);
+    read_default_attrs(obj->default_attrs, ssid, out);
     return 0;
 }
 
@@ -423,7 +468,8 @@ static int object_write_default_attrs(anjay_t *anjay,
         return (*obj->backend)->object_write_default_attrs(anjay, obj->backend,
                                                            ssid, attrs);
     }
-    return write_attrs(obj->fas, &obj->default_attrs, ssid, attrs);
+    return WRITE_ATTRS(obj->fas, &obj->default_attrs,
+                       default_attrs_empty, ssid, attrs);
 }
 
 static int instance_read_default_attrs(anjay_t *anjay,
@@ -437,9 +483,9 @@ static int instance_read_default_attrs(anjay_t *anjay,
                 anjay, obj->backend, iid, ssid, out);
     }
     AVS_LIST(fas_instance_entry_t) *instance_ptr = find_instance(obj, iid);
-    read_attrs((instance_ptr && *instance_ptr) ? (*instance_ptr)->default_attrs
-                                               : NULL,
-               ssid, out);
+    read_default_attrs((instance_ptr && *instance_ptr)
+                               ? (*instance_ptr)->default_attrs : NULL,
+                       ssid, out);
     return 0;
 }
 
@@ -458,8 +504,8 @@ static int instance_write_default_attrs(anjay_t *anjay,
     if (!(instance_ptr && *instance_ptr)) {
         return ANJAY_ERR_INTERNAL;
     }
-    int result =
-            write_attrs(obj->fas, &(*instance_ptr)->default_attrs, ssid, attrs);
+    int result = WRITE_ATTRS(obj->fas, &(*instance_ptr)->default_attrs,
+                             default_attrs_empty, ssid, attrs);
     remove_instance_if_empty(instance_ptr);
     return result;
 }
@@ -469,7 +515,7 @@ static int resource_read_attrs(anjay_t *anjay,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
                                anjay_ssid_t ssid,
-                               anjay_dm_attributes_t *out) {
+                               anjay_dm_resource_attributes_t *out) {
     fas_object_t *obj = get_object(obj_ptr);
     if (implements_any_resource_attrs_handlers(*obj->backend)) {
         return (*obj->backend)->resource_read_attrs(
@@ -477,8 +523,9 @@ static int resource_read_attrs(anjay_t *anjay,
     }
     AVS_LIST(fas_instance_entry_t) *instance_ptr = find_instance(obj, iid);
     AVS_LIST(fas_resource_entry_t) *res_ptr =
-            find_resource(instance_ptr ? *instance_ptr : NULL, rid);
-    read_attrs((res_ptr && *res_ptr) ? (*res_ptr)->attrs : NULL, ssid, out);
+            instance_ptr ? find_resource(*instance_ptr, rid) : NULL;
+    read_resource_attrs((res_ptr && *res_ptr) ? (*res_ptr)->attrs : NULL,
+                        ssid, out);
     return 0;
 }
 
@@ -487,7 +534,7 @@ static int resource_write_attrs(anjay_t *anjay,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
                                 anjay_ssid_t ssid,
-                                const anjay_dm_attributes_t *attrs) {
+                                const anjay_dm_resource_attributes_t *attrs) {
     fas_object_t *obj = get_object(obj_ptr);
     if (implements_any_resource_attrs_handlers(*obj->backend)) {
         return (*obj->backend)->resource_write_attrs(
@@ -503,7 +550,8 @@ static int resource_write_attrs(anjay_t *anjay,
     if (!(resource_ptr && *resource_ptr)) {
         return ANJAY_ERR_INTERNAL;
     }
-    int result = write_attrs(obj->fas, &(*resource_ptr)->attrs, ssid, attrs);
+    int result = WRITE_ATTRS(obj->fas, &(*resource_ptr)->attrs,
+                             resource_attrs_empty, ssid, attrs);
     remove_resource_if_empty(resource_ptr);
     remove_instance_if_empty(instance_ptr);
     return result;
@@ -569,7 +617,7 @@ static int instance_remove(anjay_t *anjay,
     if (result == 0) {
         remove_instance(obj, iid);
         if (ssid) {
-            remove_server(obj->fas, ssid);
+            remove_servers(obj->fas, remove_attrs_for_server, &ssid);
         }
     }
     return result;

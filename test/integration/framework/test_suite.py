@@ -1,37 +1,54 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import inspect
 import os
 import re
-import sys
-import unittest
 import subprocess
-import inspect
+import sys
 import time
+import unittest
 
-from . import lwm2m
+from .asserts import Lwm2mAsserts
 from .lwm2m.server import Lwm2mServer
 from .lwm2m_test import *
 
-from .asserts import Lwm2mAsserts
 
 def read_until_match(fd, regex, timeout_s):
     import select
     out = ''
-    rlist = [ fd ]
-    xlist = [ fd ]
+    rlist = [fd]
+    xlist = [fd]
 
     start_time = time.time()
     while time.time() - start_time < timeout_s:
         match = re.search(regex, out)
         if match:
             return match
-        r,w,x = select.select(rlist, [], xlist)
+        r, w, x = select.select(rlist, [], xlist)
         if len(r) < 1: break
         buf = fd.read()
         out += buf
+
 
 def test_case_name(test_filepath):
     import re
     test_file_name = os.path.basename(test_filepath)
     return re.sub(r'\.py$', '', test_file_name)
+
 
 def ensure_dir(dir_path):
     try:
@@ -39,6 +56,7 @@ def ensure_dir(dir_path):
     except OSError:
         if not os.path.isdir(dir_path):
             raise
+
 
 class Lwm2mDmOperations(Lwm2mAsserts):
     def _perform_action(self, server, request, expected_response):
@@ -126,6 +144,7 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         req = Lwm2mWriteAttributes(Lwm2mDmOperations.make_path(oid, iid, rid), query=query)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res)
+
 
 class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     DEFAULT_MSG_TIMEOUT = 9000.0
@@ -301,8 +320,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
     def _terminate_demo(self, demo):
         cleanup_actions = [
-            (5.0,  lambda _: None), # check if the demo already stopped
-            (5.0,  lambda demo: demo.terminate()),
+            (5.0, lambda _: None),  # check if the demo already stopped
+            (5.0, lambda demo: demo.terminate()),
             (None, lambda demo: demo.kill())
         ]
 
@@ -344,6 +363,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         for serv in deregister_servers:
             self.assertDemoDeregisters(serv, *args, **kwargs)
+
 
 class SingleServerAccessor:
     @property

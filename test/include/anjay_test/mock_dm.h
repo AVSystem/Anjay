@@ -149,8 +149,13 @@ struct anjay_mock_dm_data_array_struct {
     .value = *ANJAY_MOCK_DM_ARRAY_REST__(__VA_ARGS__) \
 })
 
-void _anjay_mock_dm_assert_attributes_equal(const anjay_dm_attributes_t *a,
-                                            const anjay_dm_attributes_t *b);
+void _anjay_mock_dm_assert_common_attributes_equal(
+        const anjay_dm_attributes_t *a,
+        const anjay_dm_attributes_t *b);
+
+void _anjay_mock_dm_assert_attributes_equal(
+        const anjay_dm_resource_attributes_t *a,
+        const anjay_dm_resource_attributes_t *b);
 
 anjay_dm_object_read_default_attrs_t _anjay_mock_dm_object_read_default_attrs;
 anjay_dm_object_write_default_attrs_t _anjay_mock_dm_object_write_default_attrs;
@@ -284,13 +289,13 @@ void _anjay_mock_dm_expect_resource_read_attrs(anjay_t *anjay,
                                                anjay_rid_t rid,
                                                anjay_ssid_t ssid,
                                                int retval,
-                                               const anjay_dm_attributes_t *attrs);
+                                               const anjay_dm_resource_attributes_t *attrs);
 void _anjay_mock_dm_expect_resource_write_attrs(anjay_t *anjay,
                                                 const anjay_dm_object_def_t *const *obj_ptr,
                                                 anjay_iid_t iid,
                                                 anjay_rid_t rid,
                                                 anjay_ssid_t ssid,
-                                                const anjay_dm_attributes_t *attrs,
+                                                const anjay_dm_resource_attributes_t *attrs,
                                                 int retval);
 void _anjay_mock_dm_expect_clean(void);
 void _anjay_mock_dm_expected_commands_clear(void);

@@ -85,13 +85,12 @@ int _anjay_coap_server_setup_response(coap_server_t *server,
         return -1;
     }
 
-    if (has_error(server)) {
-        coap_log(WARNING, "setup_response called with unsent error: %s",
-                 ANJAY_COAP_CODE_STRING(server->last_error_code));
-        clear_error(server);
-    }
+    assert(!has_error(server)
+           && "setup_response called with unsent error");
+    clear_error(server);
+
     if (!_anjay_coap_out_is_reset(out)) {
-        coap_log(WARNING, "setup_response called, but out buffer not reset");
+        coap_log(TRACE, "setup_response called, but out buffer not reset");
         _anjay_coap_out_reset(out);
     }
 
@@ -129,6 +128,7 @@ static void setup_error_response(coap_server_t *server,
     };
 
     _anjay_coap_out_reset(out);
+    clear_error(server);
     int result = _anjay_coap_server_setup_response(server, out, socket,
                                                    &details);
     assert(result == 0);
@@ -199,6 +199,12 @@ err:
     return -1;
 }
 
+static inline uint32_t get_block_offset(const coap_block_info_t *block) {
+    assert(_anjay_coap_is_valid_block_size(block->size));
+
+    return block->seq_num * block->size;
+}
+
 typedef enum process_result {
     /** The message is a correct request, a basic one or the first BLOCK */
     PROCESS_INITIAL_OK,
@@ -231,7 +237,7 @@ static process_result_t process_initial_request(coap_server_t *server,
         return PROCESS_INITIAL_INVALID_REQUEST;
     }
     /**
-     * CoAP supports bidirectional block communication, but LWM2M does not have
+     * CoAP supports bidirectional block communication, but LwM2M does not have
      * any operation for which it would be useful. Therefore it's not implemented.
      */
     if (block1.valid && block2.valid) {
@@ -336,12 +342,6 @@ int _anjay_coap_server_get_or_receive_msg(coap_server_t *server,
 }
 
 #ifdef WITH_BLOCK_RECEIVE
-static uint32_t get_block_offset(const coap_block_info_t *block) {
-    assert(_anjay_coap_is_valid_block_size(block->size));
-
-    return block->seq_num * block->size;
-}
-
 static bool blocks_equal(const coap_block_info_t *a,
                          const coap_block_info_t *b) {
     assert(a->valid);

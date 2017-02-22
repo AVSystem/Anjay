@@ -140,8 +140,13 @@ static int setup_response(avs_stream_abstract_t *stream_,
         return -1;
     }
 
-    return _anjay_coap_server_setup_response(get_server(stream), &stream->out,
-                                             stream->socket, details);
+    int result;
+    if ((result = _anjay_coap_server_setup_response(get_server(stream),
+                                                    &stream->out,
+                                                    stream->socket, details))) {
+        reset(stream);
+    }
+    return result;
 }
 
 static const anjay_coap_stream_ext_t COAP_STREAM_EXT_VTABLE = {
@@ -409,8 +414,14 @@ int _anjay_coap_stream_setup_request(
         identity.token = *token;
         identity.token_size = token_size;
     }
-    return _anjay_coap_client_setup_request(get_client(stream), &stream->out,
-                                            stream->socket, details, &identity);
+
+    int result;
+    if ((result = _anjay_coap_client_setup_request(get_client(stream),
+                                                   &stream->out, stream->socket,
+                                                   details, &identity))) {
+        reset(stream);
+    }
+    return result;
 }
 
 int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream_,
@@ -457,37 +468,34 @@ int _anjay_coap_stream_get_msg_type(avs_stream_abstract_t *stream_,
     return 0;
 }
 
-#define DEFINE_GET_OPTION_UINT(Bits) \
-int _anjay_coap_stream_get_option_u##Bits (avs_stream_abstract_t *stream_, \
-                                           uint16_t option_number, \
-                                           uint##Bits##_t *out_fmt) { \
-    coap_stream_t *stream = (coap_stream_t*)stream_; \
-    assert(stream->vtable == &COAP_STREAM_VTABLE); \
-    \
-    const anjay_coap_msg_t *msg = get_or_receive_msg(stream); \
-    if (!msg) { \
-        return -1; \
-    } \
-    \
-    assert(_anjay_coap_msg_is_valid(msg)); \
-    \
-    const anjay_coap_opt_t *opt; \
-    if (_anjay_coap_msg_find_unique_opt(msg, option_number, &opt)) { \
-        if (opt) { \
-            coap_log(ERROR, "multiple instances of option %d found", \
-                     option_number); \
-            return -1; \
-        } else { \
-            coap_log(ERROR, "option %d not found", option_number); \
-            return ANJAY_COAP_OPTION_MISSING; \
-        } \
-    } \
-    \
-    return _anjay_coap_opt_u##Bits##_value(opt, out_fmt); \
-}
+int _anjay_coap_stream_get_option_uint(avs_stream_abstract_t *stream_,
+                                       uint16_t option_number,
+                                       void *out_fmt,
+                                       size_t out_fmt_size) {
+    coap_stream_t *stream = (coap_stream_t*) stream_;
+    assert(stream->vtable == &COAP_STREAM_VTABLE);
 
-DEFINE_GET_OPTION_UINT(16) // _anjay_coap_stream_get_option_u16
-DEFINE_GET_OPTION_UINT(32) // _anjay_coap_stream_get_option_u32
+    const anjay_coap_msg_t *msg = get_or_receive_msg(stream);
+    if (!msg) {
+        return -1;
+    }
+
+    assert(_anjay_coap_msg_is_valid(msg));
+
+    const anjay_coap_opt_t *opt;
+    if (_anjay_coap_msg_find_unique_opt(msg, option_number, &opt)) {
+        if (opt) {
+            coap_log(DEBUG, "multiple instances of option %d found",
+                     option_number);
+            return -1;
+        } else {
+            coap_log(TRACE, "option %d not found", option_number);
+            return ANJAY_COAP_OPTION_MISSING;
+        }
+    }
+
+    return _anjay_coap_opt_uint_value(opt, out_fmt, out_fmt_size);
+}
 
 int _anjay_coap_stream_get_option_string_it(avs_stream_abstract_t *stream_,
                                             uint16_t option_number,

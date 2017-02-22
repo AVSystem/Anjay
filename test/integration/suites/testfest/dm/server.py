@@ -1,6 +1,23 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from framework.lwm2m_test import *
 
 from .utils import DataModel, ValueValidator
+
 
 class Test551_ServerObject_QueryingTheReadableResourcesOfObject(DataModel.Test):
     def setUp(self):
@@ -26,7 +43,7 @@ class Test551_ServerObject_QueryingTheReadableResourcesOfObject(DataModel.Test):
         # 1. The server receives the status code “2.05” for READ success
         #    (done by test_read)
         # 2. The value returned by the client is admissible with regards of
-        #    LWM2M technical specification
+        #    LwM2M technical specification
         self.test_read(ResPath.Server[1].ShortServerID,    ValueValidator.integer(), coap.ContentFormat.TEXT_PLAIN)
         self.test_read(ResPath.Server[1].Lifetime,         ValueValidator.integer(), coap.ContentFormat.TEXT_PLAIN)
         self.test_read(ResPath.Server[1].DefaultMinPeriod, ValueValidator.integer(), coap.ContentFormat.TEXT_PLAIN)
@@ -63,12 +80,12 @@ class Test555_ServerObject_SettingTheWritableResources(DataModel.Test):
         self.test_write_validated(ResPath.Server[1].NotificationStoring, '1')
 
         self.test_write(ResPath.Server[1].Binding, 'UQ')
-        self.assertDemoUpdatesRegistration(lifetime=60, binding='UQ') # triggered by Binding change
+        self.assertDemoUpdatesRegistration(lifetime=60, binding='UQ')  # triggered by Binding change
         self.assertEqual(b'UQ', self.test_read(ResPath.Server[1].Binding))
 
         # TODO: ugly workaround to avoid 93s delay in queue_exec; see T858
         self.test_write(ResPath.Server[1].Binding, 'U')
-        self.assertDemoUpdatesRegistration(binding='U') # triggered by Binding change
+        self.assertDemoUpdatesRegistration(binding='U')  # triggered by Binding change
 
 
 class Test560_ServerObject_ObservationAndNotificationOfObservableResources(DataModel.Test):
@@ -96,7 +113,7 @@ class Test560_ServerObject_ObservationAndNotificationOfObservableResources(DataM
         # 1. The server has received the requested information and displays
         # the resource value to the user
         # 2. The value returned by the client is admissible with regards of
-        # LWM2M technical specification
+        # LwM2M technical specification
         # 3. The values returned by the client in each Notify are relevant
         # with regards to the threshold value, the min/max period and the
         # step
@@ -109,5 +126,3 @@ class Test560_ServerObject_ObservationAndNotificationOfObservableResources(DataM
         self.test_observe(ResPath.Server[1].NotificationStoring, ValueValidator.boolean())
         self.test_observe(ResPath.Server[1].Binding,
                           ValueValidator.from_values(b'U', b'UQ', b'S', b'SQ', b'US', b'UQS'))
-
-

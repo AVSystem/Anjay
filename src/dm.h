@@ -50,7 +50,7 @@ typedef struct {
     bool has_greater_than;
     bool has_less_than;
     bool has_step;
-    anjay_dm_attributes_t values;
+    anjay_dm_resource_attributes_t values;
 } anjay_request_attributes_t;
 
 typedef struct anjay_request_details {
@@ -187,6 +187,9 @@ static inline int _anjay_dm_map_present_result(int result) {
         return result;
     }
 }
+
+int _anjay_dm_check_if_tlv_rid_matches_uri_rid(anjay_input_ctx_t *in_ctx,
+                                               anjay_rid_t uri_rid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

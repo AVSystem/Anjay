@@ -225,7 +225,7 @@ int _anjay_dm_resource_read_attrs(anjay_t *anjay,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_ssid_t ssid,
-                                  anjay_dm_attributes_t *out) {
+                                  anjay_dm_resource_attributes_t *out) {
     anjay_log(TRACE, "resource_read_attrs /%u/%u/%u", (*obj_ptr)->oid, iid, rid);
     return CHECKED_HANDLER_CALL(obj_ptr, resource_read_attrs,
                                 anjay, obj_ptr, iid, rid, ssid, out);
@@ -236,7 +236,7 @@ int _anjay_dm_resource_write_attrs(anjay_t *anjay,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
                                    anjay_ssid_t ssid,
-                                   const anjay_dm_attributes_t *attrs) {
+                                   const anjay_dm_resource_attributes_t *attrs) {
     anjay_log(TRACE, "resource_write_attrs /%u/%u/%u", (*obj_ptr)->oid, iid, rid);
     return CHECKED_HANDLER_CALL(obj_ptr, resource_write_attrs,
                                 anjay, obj_ptr, iid, rid, ssid, attrs);

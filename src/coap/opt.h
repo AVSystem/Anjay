@@ -61,14 +61,14 @@ typedef struct anjay_coap_opt {
  */
 const uint8_t *_anjay_coap_opt_value(const anjay_coap_opt_t *opt);
 
-int _anjay_coap_opt_u8_value(const anjay_coap_opt_t *opt,
-                             uint8_t *out_value);
-int _anjay_coap_opt_u16_value(const anjay_coap_opt_t *opt,
-                              uint16_t *out_value);
-int _anjay_coap_opt_u32_value(const anjay_coap_opt_t *opt,
-                              uint32_t *out_value);
-int _anjay_coap_opt_u64_value(const anjay_coap_opt_t *opt,
-                              uint64_t *out_value);
+int _anjay_coap_opt_uint_value(const anjay_coap_opt_t *opt,
+                               void *out_value,
+                               size_t out_value_size);
+
+static inline int _anjay_coap_opt_u32_value(const anjay_coap_opt_t *opt,
+                                            uint32_t *out_value) {
+    return _anjay_coap_opt_uint_value(opt, out_value, sizeof(*out_value));
+}
 
 int _anjay_coap_opt_string_value(const anjay_coap_opt_t *opt,
                                  size_t *out_bytes_read,

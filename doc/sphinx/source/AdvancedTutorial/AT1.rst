@@ -1,3 +1,18 @@
+..
+   Copyright 2017 AVSystem <avsystem@avsystem.com>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
 Attribute storage
 =================
 
@@ -69,7 +84,7 @@ So, we can modify part of our ``main()`` function to initialize and destroy
         return result;
 
 While this may seem counter-intuitive, it is actually the intended and preferred
-flow to destroy ``attr_storage`` after ``anjay`` (i.e. the same order they were 
+flow to destroy ``attr_storage`` after ``anjay`` (i.e. the same order they were
 created). This is because when there are objects managed by the module, the
 Anjay object might access them, even during de-initialization.
 
@@ -147,7 +162,7 @@ what it is and how to create one.
 For the simple case, the ``avs_stream_file_`` family of functions may be useful.
 
 .. note:: The persistence functions shall be called after registering all the
-          LWM2M Objects in the Anjay object and fully loading the data model
+          LwM2M Objects in the Anjay object and fully loading the data model
           structure (i.e. instantiating all the Object Instances that are
           supposed to be instantiated). Otherwise, attributes stored for
           non-existent Objects or their Instances will be discarded.

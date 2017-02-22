@@ -1,10 +1,26 @@
-from framework.lwm2m_test import *
-import unittest
-import os
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import http
+import os
 import threading
 import time
-import binascii
+import unittest
+
+from framework.lwm2m_test import *
 
 from .utils import DataModel, ValueValidator
 
@@ -122,6 +138,7 @@ class FirmwareUpdateWithHttpServer:
             super().setUp()
 
             test_case = self
+
             class FirmwareRequestHandler(http.server.BaseHTTPRequestHandler):
                 def do_GET(self):
                     test_case.requests.append(self.path)
@@ -144,7 +161,6 @@ class FirmwareUpdateWithHttpServer:
 
             self.server_thread = threading.Thread(target=lambda: self.http_server.serve_forever())
             self.server_thread.start()
-
 
         def tearDown(self):
             try:
@@ -204,7 +220,7 @@ class Test772_FirmwareUpdate_ErrorCase_FirmwarePackageNotDownloaded(DataModel.Te
         # Try to perform a device firmware installation when there is no downloaded
         # firmware package
         # Preconditions:
-        #   o Device is registered at the LWM2M server
+        #   o Device is registered at the LwM2M server
         #   o Device is switched on and operational
         #   o Firmware Update is available on the Server
         #   o State (/5/0/3) is different from “2” (Downloaded)

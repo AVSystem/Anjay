@@ -37,7 +37,7 @@ typedef struct cmdline_args {
     AVS_LIST(access_entry_t) access_entries;
     int32_t inbuf_size;
     int32_t outbuf_size;
-    bool cleanup_fw_on_upgrade;
+    int dont_cleanup_fw_on_upgrade;
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

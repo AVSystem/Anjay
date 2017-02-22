@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <config.h>
+
 #include <stdint.h>
 #include <stdio.h>
 
@@ -73,6 +75,7 @@ static const avs_net_socket_v_table_t STDIN_SOCKET_VTABLE = {
     .get_local_port = (avs_net_socket_get_local_port_t)fail,
     .get_opt = stdin_get_opt,
     .set_opt = (avs_net_socket_set_opt_t)success,
+    .get_errno = (avs_net_socket_errno_t)success,
 };
 
 struct stdin_socket {

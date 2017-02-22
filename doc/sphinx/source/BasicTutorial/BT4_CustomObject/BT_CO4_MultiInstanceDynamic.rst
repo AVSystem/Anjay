@@ -1,3 +1,18 @@
+..
+   Copyright 2017 AVSystem <avsystem@avsystem.com>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
 Multi-instance writable object with dynamic number of instances
 ===============================================================
 
@@ -66,7 +81,7 @@ with success since the beginning of the project.
 
 In a previous tutorial, our Instances had hardcoded Instance IDs.  We no
 longer have such comfort, and have to be able to uniquely identify Object
-Instances. As a consequence, we will add ``anjay_iid_t iid`` field to 
+Instances. As a consequence, we will add ``anjay_iid_t iid`` field to
 ``test_instance_t``:
 
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c

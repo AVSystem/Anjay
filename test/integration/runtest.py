@@ -1,14 +1,29 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import sys
-assert sys.version_info >= (3,5), "Python < 3.5 is unsupported"
+
+assert sys.version_info >= (3, 5), "Python < 3.5 is unsupported"
 
 import unittest
 import os
 import re
 import collections
 import argparse
-import string
 import time
 import tempfile
 import shutil
@@ -18,13 +33,12 @@ from framework.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREE
 from framework.test_suite import Lwm2mTest, ensure_dir
 
 if sys.version_info[0] >= 3:
-    sys.stderr = os.fdopen(2, 'w', 1) # force line buffering
+    sys.stderr = os.fdopen(2, 'w', 1)  # force line buffering
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
-DEFAULT_DEMO_PATH = os.path.abspath(ROOT_DIR + '/../../bin')
-DEFAULT_DEMO_EXECUTABLE = 'demo'
 UNITTEST_PATH = os.path.join(ROOT_DIR, 'suites')
 DEFAULT_SUITE_REGEX = r'^default/'
+
 
 def traverse(tree, cls=None):
     if cls is None or isinstance(tree, cls):
@@ -34,6 +48,7 @@ def traverse(tree, cls=None):
         for elem in tree:
             for sub_elem in traverse(elem, cls):
                 yield sub_elem
+
 
 def discover_test_suites(test_config):
     loader = unittest.TestLoader()
@@ -102,7 +117,7 @@ def filter_tests(suite, query_regex):
         if isinstance(test, unittest.TestCase):
             name = get_test_name(test)
             if (re.search(query_regex, get_test_name(test))
-                    or re.search(query_regex, get_full_test_name(test))):
+                or re.search(query_regex, get_full_test_name(test))):
                 matching_tests.append(test)
         elif isinstance(test, unittest.TestSuite):
             if test.countTestCases() == 0:
@@ -117,6 +132,7 @@ def filter_tests(suite, query_regex):
 
     return unittest.TestSuite(matching_tests)
 
+
 def merge_directory(src, dst):
     for item in os.listdir(src):
         src_item = os.path.join(src, item)
@@ -128,13 +144,14 @@ def merge_directory(src, dst):
             ensure_dir(os.path.dirname(dst_item))
             shutil.copy2(src_item, dst_item)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--list', '-l',
                         action='store_true',
                         help='only list matching test cases, do not execute them')
     parser.add_argument('--client', '-c',
-                        type=str, default=os.path.join(DEFAULT_DEMO_PATH, DEFAULT_DEMO_EXECUTABLE),
+                        type=str, required=True,
                         help='path to the demo application to use')
     parser.add_argument('query_regex',
                         type=str, default=DEFAULT_SUITE_REGEX, nargs='?',
@@ -151,13 +168,15 @@ if __name__ == "__main__":
 
             target_logs_path = os.path.abspath(os.path.join(demo_path, '../test/integration/log'))
 
+
         def config_to_string(cfg):
             config = sorted((k, v) for k, v in cfg.__dict__.items()
-                            if not k.startswith('_')) # skip builtins
+                            if not k.startswith('_'))  # skip builtins
 
             max_key_len = max(len(k) for k, _ in config)
 
             return '\n  '.join(['Test config:'] + ['%%-%ds = %%s' % max_key_len % kv for kv in config])
+
 
         test_suites = discover_test_suites(TestConfig)
         header = '%d tests:' % test_suites.countTestCases()

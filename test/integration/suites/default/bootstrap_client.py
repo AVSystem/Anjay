@@ -1,7 +1,24 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import socket
 
-from framework.lwm2m_test import *
 from framework.lwm2m.tlv import TLV
+from framework.lwm2m_test import *
+
 
 class BootstrapClientTest(test_suite.Lwm2mTest):
     def setUp(self):
@@ -134,7 +151,7 @@ class ClientBootstrapNotSentAfterDisableWithinHoldoffTest(test_suite.Lwm2mTest):
         self.assertDemoDeregisters(self.serv)
 
         with self.assertRaises(socket.timeout, msg="the client should not send "
-                               "Request Bootstrap after disabling the server"):
+                                                   "Request Bootstrap after disabling the server"):
             self.bootstrap_server.recv(timeout_s=4)
 
         self.assertDemoRegisters(self.serv, timeout_s=2)
@@ -164,9 +181,10 @@ class ClientBootstrapBacksOffAfterErrorResponse(test_suite.Lwm2mTest):
         self.bootstrap_server.send(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_INTERNAL_SERVER_ERROR))
 
         with self.assertRaises(socket.timeout, msg="the client should not send "
-                               "Request Bootstrap immediately after receiving "
-                               "an error response"):
+                                                   "Request Bootstrap immediately after receiving "
+                                                   "an error response"):
             self.bootstrap_server.recv(timeout_s=1)
+
 
 class BootstrapNonwritableResources(test_suite.Lwm2mTest):
     def setUp(self):
@@ -174,7 +192,7 @@ class BootstrapNonwritableResources(test_suite.Lwm2mTest):
                                      bootstrap_server=True)
 
     def runTest(self):
-        pkt=self.bootstrap_server.recv()
+        pkt = self.bootstrap_server.recv()
         self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
                             pkt)
         self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
@@ -198,14 +216,14 @@ class MultipleBootstrapSecurityInstancesNotAllowed(test_suite.Lwm2mTest):
                                      bootstrap_server=True)
 
     def runTest(self):
-        pkt=self.bootstrap_server.recv()
+        pkt = self.bootstrap_server.recv()
         self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
                             pkt)
         self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
 
         # Bootstrap Server MUST NOT be allowed to create second Bootstrap Security Instance
         req = Lwm2mWrite('/0/42',
-                TLV.make_resource(RID.Security.ServerURI, 'coap://127.0.0.1:5683').serialize()
+                         TLV.make_resource(RID.Security.ServerURI, 'coap://127.0.0.1:5683').serialize()
                          + TLV.make_resource(RID.Security.Bootstrap, 1).serialize()
                          + TLV.make_resource(RID.Security.Mode, 3).serialize()
                          + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()

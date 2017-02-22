@@ -194,27 +194,25 @@ int _anjay_coap_msg_info_opt_empty(anjay_coap_msg_info_t *info,
     return _anjay_coap_msg_info_opt_opaque(info, opt_number, "", 0);
 }
 
-#define htobe8(X) (X)
-
-#define BUILDER_OPT_INT(Bits) \
-    int _anjay_coap_msg_info_opt_u##Bits(anjay_coap_msg_info_t *info, \
-                                         uint16_t opt_number, \
-                                         uint##Bits##_t value) { \
-        union { \
-            uint##Bits##_t val_net; \
-            char bytes[Bits / 8]; \
-        } converted; \
-        converted.val_net = htobe##Bits(value); \
-        size_t start = 0; \
-        while (start < sizeof(converted.bytes) && !converted.bytes[start]) { \
-            ++start; \
-        } \
-        return _anjay_coap_msg_info_opt_opaque( \
-                info, opt_number, &converted.bytes[start], \
-                (uint16_t) (sizeof(converted.bytes) - start)); \
+int _anjay_coap_msg_info_opt_uint(anjay_coap_msg_info_t *info,
+                                  uint16_t opt_number,
+                                  const void *value,
+                                  size_t value_size) {
+#if __BYTE_ORDER == __BIG_ENDIAN
+    const uint8_t *converted = (const uint8_t *) value;
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
+    uint8_t converted[value_size];
+    for (size_t i = 0; i < value_size; ++i) {
+        converted[value_size - 1 - i] = ((const uint8_t *) value)[i];
     }
-
-BUILDER_OPT_INT(8)
-BUILDER_OPT_INT(16)
-BUILDER_OPT_INT(32)
-BUILDER_OPT_INT(64)
+#else
+#error "Unsupported byte order"
+#endif
+    size_t start = 0;
+    while (start < value_size && !converted[start]) {
+        ++start;
+    }
+    return _anjay_coap_msg_info_opt_opaque(
+            info, opt_number, &converted[start],
+            (uint16_t) (value_size - start));
+}

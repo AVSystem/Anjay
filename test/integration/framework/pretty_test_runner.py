@@ -1,10 +1,25 @@
-import unittest
-import sys
-import traceback
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-import collections
-import time
 import shutil
+import sys
+import time
+import traceback
+import unittest
 
 from .test_suite import Lwm2mTest
 
@@ -14,15 +29,18 @@ COLOR_GREEN = '\033[0;32m'
 COLOR_RED = '\033[0;31m'
 COLOR_BLUE = '\033[0;34m'
 
+
 def get_test_name(test):
     if isinstance(test, Lwm2mTest):
         return test.test_name()
     return test.id()
 
+
 def get_full_test_name(test):
     if isinstance(test, Lwm2mTest):
         return test.suite_name() + '/' + test.test_name()
     return test.id()
+
 
 def get_suite_name(suite):
     suite_names = []
@@ -39,6 +57,7 @@ def get_suite_name(suite):
 
     suite_name = next(iter(suite_names))
     return next(iter(suite_names)).replace('/', '.')
+
 
 class ResultStream:
     def __init__(self, stream):
@@ -96,7 +115,7 @@ class ResultStream:
     def write_test_success(self, seconds_elapsed):
         time_color = (COLOR_GREEN if seconds_elapsed < 5.0
                       else COLOR_YELLOW if seconds_elapsed < 30.0
-                      else COLOR_RED)
+        else COLOR_RED)
 
         self._write_colored(COLOR_GREEN, 'OK ')
         self._write_colored(time_color, '(%.2fs)\n' % seconds_elapsed)
@@ -159,11 +178,11 @@ class PrettyTestResult(unittest.TestResult):
                           'Demo log: %s\n'
                           'Valgrind: %s\n'
                           '-----\n'
-                % (get_test_name(test),
-                   ''.join(traceback.format_exception(*err)),
-                   test.logs_path('console', log_root),
-                   test.logs_path('valgrind', log_root))
-                for test, err in self.errors + self.failures))
+                          % (get_test_name(test),
+                             ''.join(traceback.format_exception(*err)),
+                             test.logs_path('console', log_root),
+                             test.logs_path('valgrind', log_root))
+                          for test, err in self.errors + self.failures))
 
     @property
     def testsPassed(self):
@@ -177,6 +196,7 @@ class PrettyTestResult(unittest.TestResult):
     @property
     def testsFailed(self):
         return len(set(x[0] for x in self.failures))
+
 
 class PrettyTestRunner(unittest.TextTestRunner):
     def __init__(self, config, stream=sys.stderr):

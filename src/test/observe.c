@@ -390,13 +390,13 @@ static void expect_read_res_attrs(anjay_t *anjay,
                                   anjay_ssid_t ssid,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
-                                  const anjay_dm_attributes_t *attrs) {
+                                  const anjay_dm_resource_attributes_t *attrs) {
     _anjay_mock_dm_expect_instance_present(anjay, obj_ptr, iid, 1);
     _anjay_mock_dm_expect_resource_supported(anjay, obj_ptr, rid, 1);
     _anjay_mock_dm_expect_resource_present(anjay, obj_ptr, iid, rid, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, obj_ptr, iid, rid, ssid, 0,
                                               attrs);
-    if (!_anjay_dm_attributes_full(attrs)) {
+    if (!_anjay_dm_attributes_full(&attrs->common)) {
         _anjay_mock_dm_expect_instance_read_default_attrs(
                 anjay, obj_ptr, iid, ssid, 0, &ANJAY_DM_ATTRIBS_EMPTY);
         _anjay_mock_dm_expect_object_read_default_attrs(
@@ -418,9 +418,11 @@ static void expect_read_res(anjay_t *anjay,
 static void notify_max_period_test(const char *con_notify_ack,
                                    size_t con_notify_ack_size,
                                    size_t observe_size_after_ack) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 1,
-        .max_period = 10,
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 1,
+            .max_period = 10
+        },
         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
         .less_than = ANJAY_ATTRIB_VALUE_NONE,
         .step = ANJAY_ATTRIB_VALUE_NONE
@@ -511,9 +513,11 @@ AVS_UNIT_TEST(notify, max_period) {
 }
 
 AVS_UNIT_TEST(notify, min_period) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 10,
-        .max_period = 365 * 24 * 60 * 60, // a year
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 10,
+            .max_period = 365 * 24 * 60 * 60 // a year
+        },
         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
         .less_than = ANJAY_ATTRIB_VALUE_NONE,
         .step = ANJAY_ATTRIB_VALUE_NONE
@@ -578,9 +582,11 @@ AVS_UNIT_TEST(notify, min_period) {
 }
 
 AVS_UNIT_TEST(notify, range) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 0,
-        .max_period = 365 * 24 * 60 * 60, // a year
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 // a year
+        },
         .greater_than = 69.0,
         .less_than = 777.0,
         .step = ANJAY_ATTRIB_VALUE_NONE
@@ -671,9 +677,11 @@ AVS_UNIT_TEST(notify, range) {
 }
 
 AVS_UNIT_TEST(notify, extremes) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 0,
-        .max_period = 365 * 24 * 60 * 60, // a year
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 // a year
+        },
         .greater_than = 777.0,
         .less_than = 69.0,
         .step = ANJAY_ATTRIB_VALUE_NONE
@@ -753,9 +761,11 @@ AVS_UNIT_TEST(notify, extremes) {
 }
 
 AVS_UNIT_TEST(notify, greater_only) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 0,
-        .max_period = 365 * 24 * 60 * 60, // a year
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 // a year
+        },
         .greater_than = 69.0,
         .less_than = ANJAY_ATTRIB_VALUE_NONE,
         .step = ANJAY_ATTRIB_VALUE_NONE
@@ -815,9 +825,11 @@ AVS_UNIT_TEST(notify, greater_only) {
 }
 
 AVS_UNIT_TEST(notify, less_only) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 0,
-        .max_period = 365 * 24 * 60 * 60, // a year
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 // a year
+        },
         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
         .less_than = 777.0,
         .step = ANJAY_ATTRIB_VALUE_NONE
@@ -877,9 +889,11 @@ AVS_UNIT_TEST(notify, less_only) {
 }
 
 AVS_UNIT_TEST(notify, step) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 0,
-        .max_period = 365 * 24 * 60 * 60, // a year
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 // a year
+        },
         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
         .less_than = ANJAY_ATTRIB_VALUE_NONE,
         .step = 10.0
@@ -1070,9 +1084,11 @@ AVS_UNIT_TEST(notify, step) {
 }
 
 AVS_UNIT_TEST(notify, multiple_formats) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 1,
-        .max_period = 10,
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 1,
+            .max_period = 10
+        },
         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
         .less_than = ANJAY_ATTRIB_VALUE_NONE,
         .step = ANJAY_ATTRIB_VALUE_NONE

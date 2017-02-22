@@ -517,13 +517,18 @@ static int dm_read_or_observe(anjay_t *anjay,
     }
 }
 
+static inline bool resource_specific_request_attrs_empty(
+        const anjay_request_attributes_t *attrs) {
+    return !attrs->has_greater_than
+            && !attrs->has_less_than
+            && !attrs->has_step;
+}
+
 static inline bool
 request_attrs_empty(const anjay_request_attributes_t *attrs) {
     return !attrs->has_min_period
             && !attrs->has_max_period
-            && !attrs->has_greater_than
-            && !attrs->has_less_than
-            && !attrs->has_step;
+            && resource_specific_request_attrs_empty(attrs);
 }
 
 #ifdef WITH_DISCOVER
@@ -648,7 +653,8 @@ static int dm_write(anjay_t *anjay,
                     const anjay_dm_object_def_t *const *obj,
                     const anjay_dm_write_args_t *args,
                     anjay_input_ctx_t *in_ctx,
-                    anjay_request_action_t action) {
+                    anjay_request_action_t action,
+                    uint16_t content_format) {
     anjay_log(DEBUG, "Write %s", ANJAY_DEBUG_MAKE_PATH(args));
     if (!args->has_iid) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -668,8 +674,17 @@ static int dm_write(anjay_t *anjay,
         }
 
         if (args->has_rid) {
-            retval = write_resource(anjay, obj, args->iid, args->rid,
-                                    in_ctx, &notify_queue);
+            const uint16_t format =
+                    _anjay_translate_legacy_content_format(content_format);
+            if (format == ANJAY_COAP_FORMAT_TLV) {
+                retval = _anjay_dm_check_if_tlv_rid_matches_uri_rid(in_ctx,
+                                                                    args->rid);
+            }
+
+            if (!retval) {
+                retval = write_resource(anjay, obj, args->iid, args->rid,
+                                        in_ctx, &notify_queue);
+            }
         } else {
             if (action != ANJAY_ACTION_WRITE_UPDATE) {
                 retval = _anjay_dm_instance_reset(anjay, obj, args->iid);
@@ -688,13 +703,13 @@ static int dm_write(anjay_t *anjay,
     return retval;
 }
 
-static void update_attrs(anjay_dm_attributes_t *attrs_ptr,
+static void update_attrs(anjay_dm_resource_attributes_t *attrs_ptr,
                          const anjay_request_attributes_t *request_attrs) {
     if (request_attrs->has_min_period) {
-        attrs_ptr->min_period = request_attrs->values.min_period;
+        attrs_ptr->common.min_period = request_attrs->values.common.min_period;
     }
     if (request_attrs->has_max_period) {
-        attrs_ptr->max_period = request_attrs->values.max_period;
+        attrs_ptr->common.max_period = request_attrs->values.common.max_period;
     }
     if (request_attrs->has_greater_than) {
         attrs_ptr->greater_than = request_attrs->values.greater_than;
@@ -713,7 +728,7 @@ static int dm_write_resource_attrs(anjay_t *anjay,
                                    anjay_rid_t rid,
                                    anjay_ssid_t ssid,
                                    const anjay_request_attributes_t *attributes) {
-    anjay_dm_attributes_t attrs = ANJAY_DM_ATTRIBS_EMPTY;
+    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
     int result = ensure_resource_present(anjay, obj, iid, rid);
 
     if (!result) {
@@ -733,13 +748,13 @@ static int dm_write_instance_attrs(anjay_t *anjay,
                                    anjay_iid_t iid,
                                    anjay_ssid_t ssid,
                                    const anjay_request_attributes_t *attributes) {
-    anjay_dm_attributes_t attrs = ANJAY_DM_ATTRIBS_EMPTY;
+    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
     int result = _anjay_dm_read_combined_instance_attrs(anjay, obj, iid, ssid,
-                                                        &attrs);
+                                                        &attrs.common);
     if (!result) {
         update_attrs(&attrs, attributes);
         result = _anjay_dm_instance_write_default_attrs(anjay, obj, iid, ssid,
-                                                        &attrs);
+                                                        &attrs.common);
     }
     return result;
 }
@@ -748,11 +763,13 @@ static int dm_write_object_attrs(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj,
                                  anjay_ssid_t ssid,
                                  const anjay_request_attributes_t *attributes) {
-    anjay_dm_attributes_t attrs = ANJAY_DM_ATTRIBS_EMPTY;
-    int result = _anjay_dm_read_combined_object_attrs(anjay, obj, ssid, &attrs);
+    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
+    int result = _anjay_dm_read_combined_object_attrs(anjay, obj, ssid,
+                                                      &attrs.common);
     if (!result) {
         update_attrs(&attrs, attributes);
-        result = _anjay_dm_object_write_default_attrs(anjay, obj, ssid, &attrs);
+        result = _anjay_dm_object_write_default_attrs(anjay, obj, ssid,
+                                                      &attrs.common);
     }
     return result;
 }
@@ -763,6 +780,10 @@ static int dm_write_attributes(anjay_t *anjay,
     anjay_log(DEBUG, "Write Attributes %s", ANJAY_DEBUG_MAKE_PATH(details));
     if (request_attrs_empty(&details->attributes)) {
         return 0;
+    }
+    if (!details->has_rid
+            && !resource_specific_request_attrs_empty(&details->attributes)) {
+        return ANJAY_ERR_BAD_REQUEST;
     }
     int result;
     if (details->has_iid) {
@@ -1003,19 +1024,31 @@ static int dm_cancel_observe(anjay_t *anjay,
     return 0;
 }
 
+int _anjay_dm_check_if_tlv_rid_matches_uri_rid(anjay_input_ctx_t *in_ctx,
+                                               anjay_rid_t uri_rid) {
+    anjay_id_type_t type;
+    uint16_t id;
+    int retval = _anjay_input_get_id(in_ctx, &type, &id);
+
+    if (!retval && type == ANJAY_ID_RID && uri_rid == id) {
+        return 0;
+    }
+    return retval ? retval : ANJAY_ERR_BAD_REQUEST;
+}
+
 static int invoke_transactional_action(anjay_t *anjay,
                                        const anjay_dm_object_def_t *const *obj,
                                        const anjay_request_details_t *details,
                                        anjay_input_ctx_t *in_ctx,
                                        avs_stream_abstract_t *stream) {
     _anjay_dm_transaction_begin(anjay);
-    int retval;
+    int retval = 0;
     switch (details->action) {
     case ANJAY_ACTION_WRITE:
     case ANJAY_ACTION_WRITE_UPDATE:
         assert(in_ctx);
         retval = dm_write(anjay, obj, &DETAILS_TO_DM_WRITE_ARGS(details),
-                          in_ctx, details->action);
+                          in_ctx, details->action, details->content_format);
         break;
     case ANJAY_ACTION_CREATE:
         assert(in_ctx);

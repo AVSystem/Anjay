@@ -1,5 +1,23 @@
-from framework.lwm2m_test import *
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import socket
+
+from framework.lwm2m_test import *
+
 
 class BufferSizeTest:
     class Base(test_suite.Lwm2mSingleServerTest,
@@ -12,14 +30,16 @@ class BufferSizeTest:
                                          extra_cmdline_args=extra_args.split(),
                                          auto_register=auto_register)
 
+
 class SmallInputBufferAndManyOptions(BufferSizeTest.Base):
     def setUp(self):
         super().setUp(inbuf_size=46)
 
     def runTest(self):
         self.create_instance(self.serv, oid=1337, iid=1)
+
         def make_optionlist(size):
-            return [ coap.Option.URI_QUERY('%d' % i) for i in range(size) ]
+            return [coap.Option.URI_QUERY('%d' % i) for i in range(size)]
 
         pkt = Lwm2mWrite('/1337/1/6', options=make_optionlist(128), content=b'32')
         self.serv.send(pkt)
@@ -30,6 +50,7 @@ class SmallInputBufferAndManyOptions(BufferSizeTest.Base):
         pkt = Lwm2mWrite('/1337/1/6', options=make_optionlist(2), content=b'32')
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.serv.recv(timeout_s=1))
+
 
 class OutputBufferTooSmallButDemoDoesntCrash(BufferSizeTest.Base):
     def setUp(self):
@@ -43,9 +64,10 @@ class OutputBufferTooSmallButDemoDoesntCrash(BufferSizeTest.Base):
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=3)
 
+
 class OutputBufferTooSmallToHoldEndpoint(BufferSizeTest.Base):
     def setUp(self):
-        super().setUp(outbuf_size=128, auto_register=False, endpoint="F"*125)
+        super().setUp(outbuf_size=128, auto_register=False, endpoint="F" * 125)
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)
@@ -53,6 +75,7 @@ class OutputBufferTooSmallToHoldEndpoint(BufferSizeTest.Base):
     def runTest(self):
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=3)
+
 
 class OutputBufferCannotHoldPayloadMarker(BufferSizeTest.Base):
     def setUp(self):
@@ -85,7 +108,7 @@ class OutputBufferCannotHoldPayloadMarker(BufferSizeTest.Base):
         # 1. Write all headers to the message.
         # 2. Attempt to write a payload marker.
         # 3. Make it crash, as anjay asserted (2.) must always be possible.
-        super().setUp(endpoint="F"*128, outbuf_size=169, auto_register=False)
+        super().setUp(endpoint="F" * 128, outbuf_size=169, auto_register=False)
 
     def tearDown(self):
         super().tearDown(auto_deregister=True)
@@ -93,10 +116,11 @@ class OutputBufferCannotHoldPayloadMarker(BufferSizeTest.Base):
     def runTest(self):
         from . import register as r
         r.BlockRegister().Test()(self.serv)
+
 
 class OutputBufferAbleToHoldPayloadMarkerBeginsBlockTransfer(BufferSizeTest.Base):
     def setUp(self):
-        super().setUp(endpoint="F"*128, outbuf_size=170, auto_register=False)
+        super().setUp(endpoint="F" * 128, outbuf_size=170, auto_register=False)
 
     def tearDown(self):
         super().tearDown(auto_deregister=True)
@@ -104,6 +128,7 @@ class OutputBufferAbleToHoldPayloadMarkerBeginsBlockTransfer(BufferSizeTest.Base
     def runTest(self):
         from . import register as r
         r.BlockRegister().Test()(self.serv)
+
 
 class ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize(BufferSizeTest.Base):
     def setUp(self):
@@ -130,6 +155,7 @@ class ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize(BufferSizeTest.Ba
     def runTest(self):
         self.assertDemoRegisters(location='/rd')
 
+
 class InputBufferSizeTooSmallToHoldRegisterResponse(BufferSizeTest.Base):
     def setUp(self):
         # see calculation in ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize
@@ -142,8 +168,8 @@ class InputBufferSizeTooSmallToHoldRegisterResponse(BufferSizeTest.Base):
     def runTest(self):
         req = self.serv.recv()
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400)),
-                req)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400)),
+            req)
         self.serv.send(Lwm2mCreated.matching(req)(location='/rd'))
 
         # client should not be able to read the whole packet, considering
@@ -151,9 +177,8 @@ class InputBufferSizeTooSmallToHoldRegisterResponse(BufferSizeTest.Base):
         self.serv.reset()
         req = self.serv.recv(timeout_s=5)
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400)),
-                req)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400)),
+            req)
         # send a response the client is able to hold inside its buffer
         # to break synchronous wait and make demo terminate cleanly
         self.serv.send(Lwm2mReset.matching(req)())
-

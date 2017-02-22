@@ -27,15 +27,11 @@
 VISIBILITY_SOURCE_BEGIN
 
 const anjay_dm_attributes_t ANJAY_DM_ATTRIBS_EMPTY = _ANJAY_DM_ATTRIBS_EMPTY;
+const anjay_dm_resource_attributes_t ANJAY_RES_ATTRIBS_EMPTY =
+        _ANJAY_RES_ATTRIBS_EMPTY;
 
 static inline void combine_period(time_t *out, time_t other) {
     if (*out < 0) {
-        *out = other;
-    }
-}
-
-static inline void combine_value(double *out, double other) {
-    if (isnan(*out)) {
         *out = other;
     }
 }
@@ -44,9 +40,6 @@ static inline void combine_attrs(anjay_dm_attributes_t *out,
                                  const anjay_dm_attributes_t *other) {
     combine_period(&out->min_period, other->min_period);
     combine_period(&out->max_period, other->max_period);
-    combine_value(&out->greater_than, other->greater_than);
-    combine_value(&out->less_than, other->less_than);
-    combine_value(&out->step, other->step);
 }
 
 #define TIME_MAX (sizeof(time_t) == 8 ? INT64_MAX : INT32_MAX)
@@ -120,25 +113,6 @@ int _anjay_dm_read_combined_server_attrs(anjay_t *anjay,
     return 0;
 }
 
-int _anjay_dm_read_combined_resource_attrs(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj,
-        anjay_iid_t iid,
-        anjay_rid_t rid,
-        anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out) {
-    if (!_anjay_dm_attributes_full(out)) {
-        anjay_dm_attributes_t resattrs = ANJAY_DM_ATTRIBS_EMPTY;
-        int result = _anjay_dm_resource_read_attrs(anjay, obj, iid, rid, ssid,
-                                                   &resattrs);
-        if (result) {
-            return result;
-        }
-        combine_attrs(out, &resattrs);
-    }
-    return 0;
-}
-
 int _anjay_dm_read_combined_instance_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj,
@@ -176,7 +150,12 @@ int _anjay_dm_read_combined_object_attrs(
 
 bool _anjay_dm_attributes_empty(const anjay_dm_attributes_t *attrs) {
     return attrs->min_period < 0
-            && attrs->max_period < 0
+            && attrs->max_period < 0;
+}
+
+bool _anjay_dm_resource_attributes_empty(
+        const anjay_dm_resource_attributes_t *attrs) {
+    return _anjay_dm_attributes_empty(&attrs->common)
             && isnan(attrs->greater_than)
             && isnan(attrs->less_than)
             && isnan(attrs->step);
@@ -184,24 +163,21 @@ bool _anjay_dm_attributes_empty(const anjay_dm_attributes_t *attrs) {
 
 bool _anjay_dm_attributes_full(const anjay_dm_attributes_t *attrs) {
     return attrs->min_period >= 0
-            && attrs->max_period >= 0
-            && !isnan(attrs->greater_than)
-            && !isnan(attrs->less_than)
-            && !isnan(attrs->step);
+            && attrs->max_period >= 0;
 }
 
 int _anjay_dm_effective_attrs(anjay_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
-                              anjay_dm_attributes_t *out) {
+                              anjay_dm_resource_attributes_t *out) {
     int result = 0;
     assert(query->rid <= UINT16_MAX);
     assert(!(query->iid == ANJAY_IID_INVALID && query->rid >= 0));
-    *out = ANJAY_DM_ATTRIBS_EMPTY;
+    *out = ANJAY_RES_ATTRIBS_EMPTY;
 
     if (query->rid >= 0) {
-        result = _anjay_dm_read_combined_resource_attrs(
-                anjay, query->obj, query->iid, (anjay_rid_t) query->rid,
-                query->ssid, out);
+        result = _anjay_dm_resource_read_attrs(anjay, query->obj, query->iid,
+                                               (anjay_rid_t) query->rid,
+                                               query->ssid, out);
         if (result) {
             return result;
         }
@@ -209,15 +185,17 @@ int _anjay_dm_effective_attrs(anjay_t *anjay,
 
     if (query->iid != ANJAY_IID_INVALID) {
         result = _anjay_dm_read_combined_instance_attrs(
-                anjay, query->obj, query->iid, query->ssid, out);
+                anjay, query->obj, query->iid, query->ssid, &out->common);
         if (result) {
             return result;
         }
     }
 
-    result = _anjay_dm_read_combined_object_attrs(anjay, query->obj, query->ssid, out);
+    result = _anjay_dm_read_combined_object_attrs(
+            anjay, query->obj, query->ssid, &out->common);
     if (!result && query->with_server_level_attrs) {
-        return _anjay_dm_read_combined_server_attrs(anjay, query->ssid, out);
+        return _anjay_dm_read_combined_server_attrs(anjay, query->ssid,
+                                                    &out->common);
     }
     return result;
 }

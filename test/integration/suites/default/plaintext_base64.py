@@ -1,12 +1,32 @@
-from framework.lwm2m_test import *
-from framework.test_utils import *
-from . import block_response as br
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import base64
 import itertools
+
+from framework.lwm2m_test import *
+from framework.test_utils import *
+
+from . import block_response as br
+
 
 def test_object_bytes_generator(num_bytes):
     """ Generates exactly the same sequences of bytes as Test Object does. """
     return bytes(itertools.islice(itertools.cycle(range(128)), num_bytes))
+
 
 class Base64Test:
     class Test(test_suite.Lwm2mSingleServerTest,
@@ -14,6 +34,7 @@ class Base64Test:
         def setUp(self):
             super().setUp()
             self.create_instance(self.serv, oid=OID.Test, iid=1)
+
 
 class Base64DifferentLengths(Base64Test.Test):
     def runTest(self):
@@ -26,15 +47,17 @@ class Base64DifferentLengths(Base64Test.Test):
             decoded = base64.decodebytes(result.content)
             self.assertEquals(test_object_bytes_generator(length), decoded)
 
+
 class Base64BlockTransfer(br.BlockResponseTest, test_suite.Lwm2mDmOperations):
     def runTest(self):
-        LENGTH=9001
+        LENGTH = 9001
         self.write_resource(self.serv, oid=OID.Test, iid=1,
                             rid=RID.Test.ResBytesSize, content=str(LENGTH),
                             format=coap.ContentFormat.TEXT_PLAIN)
         result = self.read_blocks(iid=1, accept=coap.ContentFormat.TEXT_PLAIN)
         decoded = base64.decodebytes(result)
         self.assertEquals(test_object_bytes_generator(LENGTH), decoded)
+
 
 class Base64ReadWrite(Base64Test.Test):
     def runTest(self):
@@ -51,6 +74,7 @@ class Base64ReadWrite(Base64Test.Test):
                                       accept=coap.ContentFormat.TEXT_PLAIN)
             self.assertEquals(raw_data, base64.decodebytes(data.content))
 
+
 class Base64InvalidWrite(Base64Test.Test):
     def runTest(self):
         def write(value, expected_error_code=coap.Code.RES_INTERNAL_SERVER_ERROR):
@@ -58,6 +82,7 @@ class Base64InvalidWrite(Base64Test.Test):
                                 rid=RID.Test.ResRawBytes, content=value,
                                 format=coap.ContentFormat.TEXT_PLAIN,
                                 expect_error_code=expected_error_code)
+
         write(b'A=A')
         write(b'A=AAA')
         write(b'A AAA')

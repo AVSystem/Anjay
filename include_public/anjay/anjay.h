@@ -45,7 +45,9 @@ typedef struct anjay_configuration {
      * left at 0 - in that case, connection with each server will use a freshly
      * generated ephemeral port number. */
     uint16_t udp_listen_port;
-    /** DTLS version to use for communication */
+    /** DTLS version to use for communication. AVS_NET_SSL_VERSION_DEFAULT will
+     * be automatically mapped to AVS_NET_SSL_VERSION_TLSv1_2, which is the
+     * version mandated by LwM2M specification. */
     avs_net_ssl_version_t dtls_version;
 
     /** Maximum size of a single incoming CoAP message. Decreasing this value
@@ -127,7 +129,8 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay);
  * @param anjay        Anjay object to operate on.
  * @param ready_socket A socket to read the message from.
  *
- * @returns 0 on success, a negative value in case of error.
+ * @returns 0 on success, a negative value in case of error. Note that it
+ *          includes non-fatal errors, such as receiving a malformed packet.
  */
 int anjay_serve(anjay_t *anjay,
                 avs_net_abstract_socket_t *ready_socket);
@@ -643,14 +646,19 @@ int anjay_get_array_index(anjay_input_ctx_t *array_ctx,
 
 typedef struct anjay_dm_object_def_struct anjay_dm_object_def_t;
 
-/** Object/Object Instance/Resource Attributes */
+/** Object/Object Instance Attributes */
 typedef struct {
-    time_t min_period;   //< Minimum Period as defined by LwM2M spec
-    time_t max_period;   //< Maximum Period as defined by LwM2M spec
+    time_t min_period; //< Minimum Period as defined by LwM2M spec
+    time_t max_period; //< Maximum Period as defined by LwM2M spec
+} anjay_dm_attributes_t;
+
+/** Resource attributes. */
+typedef struct {
+    anjay_dm_attributes_t common; //< Attributes shared with Objects/Object Instances
     double greater_than; //< Greater Than attribute as defined by LwM2M spec
     double less_than;    //< Less Than attribute as defined by LwM2M spec
     double step;         //< Step attribute as defined by LwM2M spec
-} anjay_dm_attributes_t;
+} anjay_dm_resource_attributes_t;
 
 /** A value indicating that the Min/Max Period attribute is not set */
 #define ANJAY_ATTRIB_PERIOD_NONE (-1)
@@ -659,9 +667,13 @@ typedef struct {
  * is not set */
 #define ANJAY_ATTRIB_VALUE_NONE (NAN)
 
-/** Convenience Object/Object Instance/Resource attributes constant, filled with
+/** Convenience Object/Object Instance attributes constant, filled with
  * "attribute not set" values */
 extern const anjay_dm_attributes_t ANJAY_DM_ATTRIBS_EMPTY;
+
+/** Convenience Resource attributes constant, filled with
+ * "attribute not set" values */
+extern const anjay_dm_resource_attributes_t ANJAY_RES_ATTRIBS_EMPTY;
 
 /**
  * A handler that returns default attribute values set for the Object.
@@ -1151,7 +1163,7 @@ typedef int anjay_dm_resource_read_attrs_t(anjay_t *anjay,
                                            anjay_iid_t iid,
                                            anjay_rid_t rid,
                                            anjay_ssid_t ssid,
-                                           anjay_dm_attributes_t *out);
+                                           anjay_dm_resource_attributes_t *out);
 
 /**
  * A handler that sets attributes for given Resource.
@@ -1176,7 +1188,7 @@ typedef int anjay_dm_resource_write_attrs_t(anjay_t *anjay,
                                             anjay_iid_t iid,
                                             anjay_rid_t rid,
                                             anjay_ssid_t ssid,
-                                            const anjay_dm_attributes_t *attrs);
+                                            const anjay_dm_resource_attributes_t *attrs);
 
 /**
  * A handler that is called while registering an object with @ref anjay_register_object,

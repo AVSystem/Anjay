@@ -25,7 +25,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #ifdef WITH_DISCOVER
 /**
- * Performs LWM2M Discover operation on specified Object:
+ * Performs LwM2M Discover operation on specified Object:
  *  - lists all attributes assigned to the Object (for specified Server)
  *  - lists all Object Instances,
  *  - lists all present Resources for each Object Instance.
@@ -42,7 +42,7 @@ int _anjay_discover_object(anjay_t *anjay,
                            avs_stream_abstract_t *stream);
 
 /**
- * Performs LWM2M Discover operation on Object Instance:
+ * Performs LwM2M Discover operation on Object Instance:
  *  - lists all attributes assigned to the Object Instance
  *  - lists all present Resources and their attributes for the specified Server
  *    (these are not inherited from upper levels).
@@ -61,7 +61,7 @@ int _anjay_discover_instance(anjay_t *anjay,
                              avs_stream_abstract_t *stream);
 
 /**
- * Performs LWM2M Discover operation on Resource:
+ * Performs LwM2M Discover operation on Resource:
  *  - lists all attributes assigned to this Resource
  *
  * @param anjay     ANJAY object to operate on.
@@ -81,7 +81,7 @@ int _anjay_discover_resource(anjay_t *anjay,
 
 #ifdef WITH_BOOTSTRAP
 /**
- * Performs LWM2M Bootstrap Discover operation on the specified Object @p obj.
+ * Performs LwM2M Bootstrap Discover operation on the specified Object @p obj.
  *
  * @param anjay     ANJAY object to operate on.
  * @param obj       Object on which Discover is issued.
@@ -92,7 +92,7 @@ int _anjay_bootstrap_discover_object(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj,
                                      avs_stream_abstract_t *stream);
 /**
- * Performs LWM2M Bootstrap Discover operation on the entire data model.
+ * Performs LwM2M Bootstrap Discover operation on the entire data model.
  *
  * @param anjay     ANJAY object to operate on.
  * @param stream    Stream where results will be written.

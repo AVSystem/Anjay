@@ -1,3 +1,17 @@
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 if(WITH_VALGRIND)
     if(NOT VALGRIND)
         message(WARNING "WITH_VALGRIND is on, but VALGRIND variable is empty. Valgrind will be DISABLED in integration tests!")
@@ -16,6 +30,7 @@ endif()
 set(DEFAULT_TEST_SUITE "default")
 set(INTEGRATION_TEST_SUITE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/suites")
 set(INTEGRATION_TEST_PREFIX "test_demo_")
+set(PYMBEDTLS_MODULE_DIR ${ANJAY_BUILD_OUTPUT_DIR}/pymbedtls)
 
 file(GLOB_RECURSE DEMO_TESTS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/suites "${INTEGRATION_TEST_SUITE_ROOT}/*.py")
 list(SORT DEMO_TESTS)
@@ -28,17 +43,22 @@ foreach(DEMO_TEST ${DEMO_TESTS})
         add_test(${INTEGRATION_TEST_PREFIX}${DEMO_TEST}
                  ${CMAKE_CURRENT_SOURCE_DIR}/runtest.py "^${DEMO_TEST}\\\$"
                                                         --client=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo)
+
+        # Tell python tests where to look for pymbedtls*.so
+        set_property(TEST ${INTEGRATION_TEST_PREFIX}${DEMO_TEST}
+                     APPEND PROPERTY ENVIRONMENT "PYTHONPATH=${PYMBEDTLS_MODULE_DIR}")
+
         add_valgrind(${INTEGRATION_TEST_PREFIX}${DEMO_TEST})
     endif()
 endforeach()
 
 set(NSH_LWM2M_DIR "${CMAKE_CURRENT_SOURCE_DIR}/framework/nsh-lwm2m")
 
-if(NOT MBEDTLS_LIB_MBEDTLS)
+if(NOT MBEDTLS_LIBRARY)
     message(FATAL_ERROR "mbed TLS is required for integration tests")
 endif()
 find_package(PythonInterp 3)
-if(NOT PYTHONINTERP_FOUND OR PYTHON_MINOR_VERSION LESS 5)
+if(NOT PYTHONINTERP_FOUND OR PYTHON_VERSION_MINOR LESS 5)
     message(FATAL_ERROR "Python >=3.5 is required for integration tests")
 endif()
 find_package(PythonLibs "${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
@@ -51,7 +71,8 @@ if(NOT BOOST_PYTHON3_LIBRARY)
     message(FATAL_ERROR "boost_python for Python 3 is required for integration tests")
 endif()
 
-add_custom_target(pymbedtls COMMAND python3 "${NSH_LWM2M_DIR}/pymbedtls/setup.py" install --install-lib "${NSH_LWM2M_DIR}/lwm2m/coap")
+add_custom_target(pymbedtls COMMAND
+                  python3 "${NSH_LWM2M_DIR}/pymbedtls/setup.py" install --install-lib ${PYMBEDTLS_MODULE_DIR})
 
 execute_process(COMMAND nproc OUTPUT_VARIABLE NPROC OUTPUT_STRIP_TRAILING_WHITESPACE)
 

@@ -167,7 +167,7 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
                                                1); \
         _anjay_mock_dm_expect_resource_read_attrs( \
                 anjay, &OBJ, Iid, (anjay_rid_t) Rid, Ssid, 0, \
-                &ANJAY_DM_ATTRIBS_EMPTY); \
+                &ANJAY_RES_ATTRIBS_EMPTY); \
     } \
     _anjay_mock_dm_expect_instance_read_default_attrs( \
             anjay, &OBJ, Iid, Ssid, 0, &ANJAY_DM_ATTRIBS_EMPTY); \

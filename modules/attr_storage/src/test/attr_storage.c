@@ -701,76 +701,52 @@ AVS_UNIT_TEST(attr_storage, write_object_default_attrs_proxy) {
             anjay, &OBJ, 42,
             &(const anjay_dm_attributes_t) {
                 .min_period = 43,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             }, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->object_write_default_attrs(
             anjay, WRAPPED_OBJ, 42,
             &(const anjay_dm_attributes_t) {
                 .min_period = 43,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             }));
 
     _anjay_mock_dm_expect_object_write_default_attrs(
             anjay, &OBJ, 7,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 77,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 77
             }, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->object_write_default_attrs(
             anjay, WRAPPED_OBJ, 7,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 77,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 77
             }));
 
     _anjay_mock_dm_expect_object_write_default_attrs(
             anjay, &OBJ, 8,
             &(const anjay_dm_attributes_t) {
                 .min_period = 88,
-                .max_period = 888,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 888
             }, -8888);
     AVS_UNIT_ASSERT_EQUAL((*WRAPPED_OBJ)->object_write_default_attrs(
             anjay, WRAPPED_OBJ, 8,
             &(const anjay_dm_attributes_t) {
                 .min_period = 88,
-                .max_period = 888,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 888
             }), -8888);
 
     _anjay_mock_dm_expect_object_write_default_attrs(
             anjay, &OBJ, 9,
             &(const anjay_dm_attributes_t) {
                 .min_period = 4,
-                .max_period = 99,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 99
             }, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->object_write_default_attrs(
             anjay, WRAPPED_OBJ, 9,
             &(const anjay_dm_attributes_t) {
                 .min_period = 4,
-                .max_period = 99,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 99
             }));
 
     _anjay_mock_dm_expect_object_write_default_attrs(
@@ -798,10 +774,7 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
             anjay, WRAPPED_OBJ2, 42,
             &(const anjay_dm_attributes_t) {
                 .min_period = 43,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
@@ -809,10 +782,7 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
             anjay, WRAPPED_OBJ2, 7,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 77,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 77
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
@@ -824,10 +794,7 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
             anjay, WRAPPED_OBJ2, 9,
             &(const anjay_dm_attributes_t) {
                 .min_period = 4,
-                .max_period = 99,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 99
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
@@ -842,10 +809,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(
             _anjay_attr_storage_find_object(fas, 69)->default_attrs), 2);
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             _anjay_attr_storage_find_object(fas, 69)->default_attrs,
             test_default_attrs(7, ANJAY_ATTRIB_PERIOD_NONE, 77));
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             AVS_LIST_NEXT(
                     _anjay_attr_storage_find_object(fas, 69)->default_attrs),
             test_default_attrs(42, 43, ANJAY_ATTRIB_PERIOD_NONE));
@@ -860,20 +827,14 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs,
                                       (&(const anjay_dm_attributes_t) {
                                           .min_period = 43,
-                                          .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                                          .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .step = ANJAY_ATTRIB_VALUE_NONE
+                                          .max_period = ANJAY_ATTRIB_PERIOD_NONE
                                       }), sizeof(attrs));
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->object_read_default_attrs(
             anjay, WRAPPED_OBJ2, 7, &attrs));
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs,
                                       (&(const anjay_dm_attributes_t) {
                                           .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                                          .max_period = 77,
-                                          .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .step = ANJAY_ATTRIB_VALUE_NONE
+                                          .max_period = 77
                                       }), sizeof(attrs));
     AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(fas));
     DM_ATTR_STORAGE_TEST_FINISH;
@@ -997,10 +958,7 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
             anjay, WRAPPED_OBJ2, 3, 2,
             &(const anjay_dm_attributes_t) {
                 .min_period = 4,
-                .max_period = 9,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 9
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
@@ -1008,10 +966,7 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
             anjay, WRAPPED_OBJ2, 3, 5,
             &(const anjay_dm_attributes_t) {
                 .min_period = 7,
-                .max_period = 15,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 15
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
@@ -1019,10 +974,7 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
             anjay, WRAPPED_OBJ2, 9, 5,
             &(const anjay_dm_attributes_t) {
                 .min_period = 1,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
@@ -1030,10 +982,7 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
             anjay, WRAPPED_OBJ2, 14, 5,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 10,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 10
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
@@ -1073,20 +1022,14 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs,
                                       (&(const anjay_dm_attributes_t) {
                                           .min_period = 4,
-                                          .max_period = 9,
-                                          .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .step = ANJAY_ATTRIB_VALUE_NONE
+                                          .max_period = 9
                                       }), sizeof(attrs));
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->instance_read_default_attrs(
             anjay, WRAPPED_OBJ2, 3, 5, &attrs));
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs,
                                       (&(const anjay_dm_attributes_t) {
                                           .min_period = 7,
-                                          .max_period = 15,
-                                          .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .step = ANJAY_ATTRIB_VALUE_NONE
+                                          .max_period = 15
                                       }), sizeof(attrs));
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->instance_read_default_attrs(
             anjay, WRAPPED_OBJ2, 9, 5, &attrs));
@@ -1097,10 +1040,7 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs,
                                       (&(const anjay_dm_attributes_t) {
                                           .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                                          .max_period = 10,
-                                          .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                                          .step = ANJAY_ATTRIB_VALUE_NONE
+                                          .max_period = 10
                                       }), sizeof(attrs));
 
     AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(fas));
@@ -1110,24 +1050,26 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
 AVS_UNIT_TEST(attr_storage, read_resource_attrs_proxy) {
     DM_ATTR_STORAGE_TEST_INIT;
 
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 5, 6, 4, 0,
-                                              &ANJAY_DM_ATTRIBS_EMPTY);
+                                              &ANJAY_RES_ATTRIBS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->resource_read_attrs(
             anjay, WRAPPED_OBJ, 5, 6, 4, &attrs));
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_DM_ATTRIBS_EMPTY,
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_RES_ATTRIBS_EMPTY,
                                       sizeof(attrs));
 
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 5, 7, 42, -413,
-                                              &ANJAY_DM_ATTRIBS_EMPTY);
+                                              &ANJAY_RES_ATTRIBS_EMPTY);
     AVS_UNIT_ASSERT_EQUAL((*WRAPPED_OBJ)->resource_read_attrs(
             anjay, WRAPPED_OBJ, 5, 7, 42, &attrs), -413);
 
     _anjay_mock_dm_expect_resource_read_attrs(
             anjay, &OBJ, 7, 17, 4, 0,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 77,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    .max_period = 77
+                },
                 .greater_than = 44.0,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = .5
@@ -1136,9 +1078,11 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs_proxy) {
             anjay, WRAPPED_OBJ, 7, 17, 4, &attrs));
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(
             &attrs,
-            (&(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 77,
+            (&(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    .max_period = 77
+                },
                 .greater_than = 44.0,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = .5
@@ -1152,18 +1096,22 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
 
     _anjay_mock_dm_expect_resource_write_attrs(
             anjay, &OBJ, 4, 9, 42,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 43,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 43,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = 13.0,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
             }, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->resource_write_attrs(
             anjay, WRAPPED_OBJ, 4, 9, 42,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 43,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 43,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = 13.0,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -1171,18 +1119,22 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
 
     _anjay_mock_dm_expect_resource_write_attrs(
             anjay, &OBJ, 4, 111, 7,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 77,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    .max_period = 77
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
             }, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->resource_write_attrs(
             anjay, WRAPPED_OBJ, 4, 111, 7,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 77,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    .max_period = 77,
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -1190,18 +1142,22 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
 
     _anjay_mock_dm_expect_resource_write_attrs(
             anjay, &OBJ, 8, 9, 7,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = 0.8,
                 .less_than = 8.8,
                 .step = 88.8
             }, -8888);
     AVS_UNIT_ASSERT_EQUAL((*WRAPPED_OBJ)->resource_write_attrs(
             anjay, WRAPPED_OBJ, 8, 9, 7,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = 0.8,
                 .less_than = 8.8,
                 .step = 88.8
@@ -1209,32 +1165,36 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
 
     _anjay_mock_dm_expect_resource_write_attrs(
             anjay, &OBJ, 9, 23, 4,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 4,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 4,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = 99.0,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE,
             }, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->resource_write_attrs(
             anjay, WRAPPED_OBJ, 9, 23, 4,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 4,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 4,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = 99.0,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE,
             }));
 
     _anjay_mock_dm_expect_resource_write_attrs(
-            anjay, &OBJ, 9, 23, 4, &ANJAY_DM_ATTRIBS_EMPTY, 0);
+            anjay, &OBJ, 9, 23, 4, &ANJAY_RES_ATTRIBS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->resource_write_attrs(
-            anjay, WRAPPED_OBJ, 9, 23, 4, &ANJAY_DM_ATTRIBS_EMPTY));
+            anjay, WRAPPED_OBJ, 9, 23, 4, &ANJAY_RES_ATTRIBS_EMPTY));
 
     _anjay_mock_dm_expect_resource_write_attrs(
-            anjay, &OBJ, 11, 11, 11, &ANJAY_DM_ATTRIBS_EMPTY, 0);
+            anjay, &OBJ, 11, 11, 11, &ANJAY_RES_ATTRIBS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ)->resource_write_attrs(
-            anjay, WRAPPED_OBJ, 11, 11, 11, &ANJAY_DM_ATTRIBS_EMPTY));
+            anjay, WRAPPED_OBJ, 11, 11, 11, &ANJAY_RES_ATTRIBS_EMPTY));
 
     AVS_UNIT_ASSERT_NULL(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs);
@@ -1255,28 +1215,30 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs) {
                             NULL),
                     NULL));
 
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_read_attrs(
             anjay, WRAPPED_OBJ2, 3, 1, 42, &attrs));
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs,
-            (&(const anjay_dm_attributes_t) {
-                .min_period = 1,
-                .max_period = 2,
+            (&(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 1,
+                    .max_period = 2
+                },
                 .greater_than = 3.0,
                 .less_than = 4.0,
                 .step = 5.0
             }), sizeof(attrs));
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_read_attrs(
             anjay, WRAPPED_OBJ2, 3, 1, 4, &attrs));
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_DM_ATTRIBS_EMPTY,
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_RES_ATTRIBS_EMPTY,
                                       sizeof(attrs));
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_read_attrs(
             anjay, WRAPPED_OBJ2, 3, 2, 4, &attrs));
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_DM_ATTRIBS_EMPTY,
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_RES_ATTRIBS_EMPTY,
                                       sizeof(attrs));
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_read_attrs(
             anjay, WRAPPED_OBJ2, 2, 2, 4, &attrs));
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_DM_ATTRIBS_EMPTY,
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &ANJAY_RES_ATTRIBS_EMPTY,
                                       sizeof(attrs));
 
     AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(fas));
@@ -1288,15 +1250,17 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
     AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(fas));
 
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
-            anjay, WRAPPED_OBJ2, 2, 5, 3, &ANJAY_DM_ATTRIBS_EMPTY));
+            anjay, WRAPPED_OBJ2, 2, 5, 3, &ANJAY_RES_ATTRIBS_EMPTY));
     // nothing actually changed
     AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(fas));
     AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_find_object(fas, 69)->instances);
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
             anjay, WRAPPED_OBJ2, 2, 3, 1,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 1,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 1,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = 34.0,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -1323,9 +1287,11 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
 
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
             anjay, WRAPPED_OBJ2, 2, 5, 3,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 4,
-                .max_period = 5,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 4,
+                    .max_period = 5
+                },
                 .greater_than = 6.0,
                 .less_than = 7.0,
                 .step = 8.0
@@ -1334,9 +1300,11 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
     fas->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
             anjay, WRAPPED_OBJ2, 2, 3, 5,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 9,
-                .max_period = 10,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 9,
+                    .max_period = 10
+                },
                 .greater_than = 11.0,
                 .less_than = 22.0,
                 .step = 33.0
@@ -1370,19 +1338,16 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
             anjay, WRAPPED_OBJ2, 2, 4,
             &(const anjay_dm_attributes_t) {
                 .min_period = 4,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             }));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
-            anjay, WRAPPED_OBJ2, 2, 3, 5, &ANJAY_DM_ATTRIBS_EMPTY));
+            anjay, WRAPPED_OBJ2, 2, 3, 5, &ANJAY_RES_ATTRIBS_EMPTY));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
-            anjay, WRAPPED_OBJ2, 2, 3, 1, &ANJAY_DM_ATTRIBS_EMPTY));
+            anjay, WRAPPED_OBJ2, 2, 3, 1, &ANJAY_RES_ATTRIBS_EMPTY));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
 
@@ -1403,7 +1368,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     NULL));
 
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
-            anjay, WRAPPED_OBJ2, 2, 5, 3, &ANJAY_DM_ATTRIBS_EMPTY));
+            anjay, WRAPPED_OBJ2, 2, 5, 3, &ANJAY_RES_ATTRIBS_EMPTY));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
 
@@ -1421,9 +1386,11 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
 
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
             anjay, WRAPPED_OBJ2, 2, 3, 5,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 9,
-                .max_period = 10,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 9,
+                    .max_period = 10
+                },
                 .greater_than = 11.0,
                 .less_than = 22.0,
                 .step = 33.0
@@ -1450,7 +1417,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     NULL));
 
     AVS_UNIT_ASSERT_SUCCESS((*WRAPPED_OBJ2)->resource_write_attrs(
-            anjay, WRAPPED_OBJ2, 2, 3, 5, &ANJAY_DM_ATTRIBS_EMPTY));
+            anjay, WRAPPED_OBJ2, 2, 3, 5, &ANJAY_RES_ATTRIBS_EMPTY));
     AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(fas));
     fas->modified_since_persist = false;
     AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_find_object(fas, 69)->instances);
@@ -1558,7 +1525,7 @@ AVS_UNIT_TEST(attr_storage, ssid_it) {
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs), 1);
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs,
             test_default_attrs(2, 5, 6));
     AVS_UNIT_ASSERT_EQUAL(
@@ -1613,7 +1580,7 @@ AVS_UNIT_TEST(attr_storage, ssid_it) {
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs), 1);
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs,
             test_default_attrs(2, 5, 6));
     AVS_UNIT_ASSERT_EQUAL(
@@ -1686,7 +1653,7 @@ AVS_UNIT_TEST(attr_storage, ssid_remove) {
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs), 1);
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs,
             test_default_attrs(4, 7, 8));
     AVS_UNIT_ASSERT_EQUAL(
@@ -1742,7 +1709,7 @@ AVS_UNIT_TEST(attr_storage, ssid_remove) {
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs), 1);
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             _anjay_attr_storage_find_object(fas, 42)->default_attrs,
             test_default_attrs(4, 7, 8));
     AVS_UNIT_ASSERT_EQUAL(

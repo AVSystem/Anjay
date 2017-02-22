@@ -28,7 +28,7 @@ extern "C" {
 typedef struct {
     /** Resource: Short Server ID */
     anjay_ssid_t ssid;
-    /** Resource: LWM2M Server URI */
+    /** Resource: LwM2M Server URI */
     const char *server_uri;
     /** Resource: Bootstrap Server */
     bool bootstrap_server;

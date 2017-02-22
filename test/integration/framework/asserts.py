@@ -1,8 +1,23 @@
-from .lwm2m.coap.utils import hexlify_nonprintable
-from .lwm2m.messages import *
-from .test_utils import DEMO_ENDPOINT_NAME, DEMO_LWM2M_VERSION
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from typing import Optional
+
+from .lwm2m.messages import *
+from .test_utils import DEMO_ENDPOINT_NAME, DEMO_LWM2M_VERSION
 
 
 class Lwm2mAsserts:
@@ -12,18 +27,18 @@ class Lwm2mAsserts:
         /0/1/2. The PATH may contain 1-3 16bit integer segments.
         """
         self.assertEqual(b'/'[0], path[0],
-                         ('LWM2M path %s does not start with /'
+                         ('LwM2M path %s does not start with /'
                           % (hexlify_nonprintable(path),)))
 
         segments = path[1:].split(b'/')
         if len(segments) > 3:
-            self.fail(('LWM2M path too long (expected at most 3 segments): %s'
+            self.fail(('LwM2M path too long (expected at most 3 segments): %s'
                        % (hexlify_nonprintable(path),)))
 
         for segment in segments:
             try:
                 self.assertTrue(0 <= int(segment.decode('ascii')) <= 2 ** 16 - 1,
-                                ('LWM2M path segment not in range [0, 65535] '
+                                ('LwM2M path segment not in range [0, 65535] '
                                  'in path %s' % (hexlify_nonprintable(path),)))
             except (ValueError, UnicodeDecodeError):
                 self.fail('segment %s is not an integer in link: %s'
@@ -34,7 +49,7 @@ class Lwm2mAsserts:
         """
         Convenience assert that checks if a byte-string LINK_LIST is in a CoRE
         Link format https://tools.ietf.org/html/rfc6690 and all links are
-        valid LWM2M paths.
+        valid LwM2M paths.
         """
         if link_list == b'':
             self.fail('empty link list')
@@ -103,11 +118,11 @@ class Lwm2mAsserts:
     def assertDemoUpdatesRegistration(self,
                                       server=None,
                                       location=DEFAULT_REGISTER_ENDPOINT,
-                                      lifetime: Optional[int]=None,
-                                      binding: Optional[str]=None,
-                                      sms_number: Optional[str]=None,
-                                      content: bytes=b'',
-                                      timeout_s: float=1):
+                                      lifetime: Optional[int] = None,
+                                      binding: Optional[str] = None,
+                                      sms_number: Optional[str] = None,
+                                      content: bytes = b'',
+                                      timeout_s: float = 1):
         serv = server or self.serv
 
         query_args = (([('lt', lifetime)] if lifetime is not None else [])

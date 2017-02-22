@@ -39,11 +39,8 @@ AVS_UNIT_MOCK_CREATE(_anjay_coap_stream_get_code)
 AVS_UNIT_MOCK_CREATE(_anjay_coap_stream_get_msg_type)
 #define _anjay_coap_stream_get_msg_type(...) AVS_UNIT_MOCK_WRAPPER(_anjay_coap_stream_get_msg_type)(__VA_ARGS__)
 
-AVS_UNIT_MOCK_CREATE(_anjay_coap_stream_get_option_u16)
-#define _anjay_coap_stream_get_option_u16(...) AVS_UNIT_MOCK_WRAPPER(_anjay_coap_stream_get_option_u16)(__VA_ARGS__)
-
-AVS_UNIT_MOCK_CREATE(_anjay_coap_stream_get_option_u32)
-#define _anjay_coap_stream_get_option_u32(...) AVS_UNIT_MOCK_WRAPPER(_anjay_coap_stream_get_option_u32)(__VA_ARGS__)
+AVS_UNIT_MOCK_CREATE(_anjay_coap_stream_get_option_uint)
+#define _anjay_coap_stream_get_option_uint(...) AVS_UNIT_MOCK_WRAPPER(_anjay_coap_stream_get_option_uint)(__VA_ARGS__)
 
 AVS_UNIT_MOCK_CREATE(_anjay_coap_stream_get_option_string_it)
 #define _anjay_coap_stream_get_option_string_it(...) AVS_UNIT_MOCK_WRAPPER(_anjay_coap_stream_get_option_string_it)(__VA_ARGS__)

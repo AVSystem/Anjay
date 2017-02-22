@@ -38,7 +38,14 @@ static int handle_dm_attributes(anjay_persistence_context_t *ctx,
                                 anjay_dm_attributes_t *attrs) {
     int retval;
     (void) ((retval = anjay_persistence_time(ctx, &attrs->min_period))
-            || (retval = anjay_persistence_time(ctx, &attrs->max_period))
+            || (retval = anjay_persistence_time(ctx, &attrs->max_period)));
+    return retval;
+}
+
+static int handle_resource_attributes(anjay_persistence_context_t *ctx,
+                                      anjay_dm_resource_attributes_t *attrs) {
+    int retval;
+    (void) ((retval = handle_dm_attributes(ctx, &attrs->common))
             || (retval = anjay_persistence_double(ctx, &attrs->greater_than))
             || (retval = anjay_persistence_double(ctx, &attrs->less_than))
             || (retval = anjay_persistence_double(ctx, &attrs->step)));
@@ -46,7 +53,7 @@ static int handle_dm_attributes(anjay_persistence_context_t *ctx,
 }
 
 static int handle_default_attrs(anjay_persistence_context_t *ctx, void *attrs_) {
-    fas_attrs_t *attrs = (fas_attrs_t *) attrs_;
+    fas_default_attrs_t *attrs = (fas_default_attrs_t *) attrs_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &attrs->ssid))
             || (retval = handle_dm_attributes(ctx, &attrs->attrs)));
@@ -54,10 +61,10 @@ static int handle_default_attrs(anjay_persistence_context_t *ctx, void *attrs_) 
 }
 
 static int handle_resource_attrs(anjay_persistence_context_t *ctx, void *attrs_) {
-    fas_attrs_t *attrs = (fas_attrs_t *) attrs_;
+    fas_resource_attrs_t *attrs = (fas_resource_attrs_t *) attrs_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &attrs->ssid))
-            || (retval = handle_dm_attributes(ctx, &attrs->attrs)));
+            || (retval = handle_resource_attributes(ctx, &attrs->attrs)));
     return retval;
 }
 
@@ -115,15 +122,17 @@ static int stream_at_end(avs_stream_abstract_t *in) {
     return result < 0 ? result : -1;
 }
 
-static bool is_attribute_list_sane(AVS_LIST(fas_attrs_t) attrs_list) {
+static bool is_attrs_list_sane(AVS_LIST(void) attrs_list,
+                               size_t attrs_field_offset,
+                               is_empty_func_t *is_empty_func) {
     int32_t last_ssid = -1;
-    AVS_LIST(fas_attrs_t) attrs;
+    AVS_LIST(void) attrs;
     AVS_LIST_FOREACH(attrs, attrs_list) {
-        if (attrs->ssid <= last_ssid
-                || _anjay_dm_attributes_empty(&attrs->attrs)) {
+        if (*get_ssid_ptr(attrs) <= last_ssid
+                || is_empty_func(get_attrs_ptr(attrs, attrs_field_offset))) {
             return false;
         }
-        last_ssid = attrs->ssid;
+        last_ssid = *get_ssid_ptr(attrs);
     }
     return true;
 }
@@ -136,7 +145,9 @@ static bool is_resources_list_sane(AVS_LIST(fas_resource_entry_t) resources) {
             return false;
         }
         last_rid = resource->rid;
-        if (!is_attribute_list_sane(resource->attrs)) {
+        if (!is_attrs_list_sane(resource->attrs,
+                                offsetof(fas_resource_attrs_t, attrs),
+                                resource_attrs_empty)) {
             return false;
         }
     }
@@ -151,7 +162,9 @@ static bool is_instances_list_sane(AVS_LIST(fas_instance_entry_t) instances) {
             return false;
         }
         last_iid = instance->iid;
-        if (!is_attribute_list_sane(instance->default_attrs)
+        if (!is_attrs_list_sane(instance->default_attrs,
+                                offsetof(fas_default_attrs_t, attrs),
+                                default_attrs_empty)
                 || !is_resources_list_sane(instance->resources)) {
             return false;
         }
@@ -160,7 +173,9 @@ static bool is_instances_list_sane(AVS_LIST(fas_instance_entry_t) instances) {
 }
 
 static bool is_object_sane(fas_object_t *object) {
-    return is_attribute_list_sane(object->default_attrs)
+    return is_attrs_list_sane(object->default_attrs,
+                              offsetof(fas_default_attrs_t, attrs),
+                              default_attrs_empty)
             && is_instances_list_sane(object->instances);
 }
 
@@ -277,7 +292,17 @@ static int restore_objects(anjay_attr_storage_t *attr_storage,
 
 //// PUBLIC FUNCTIONS //////////////////////////////////////////////////////////
 
-static const char MAGIC[] = { 'F', 'A', 'S', '\1' };
+/**
+ * NOTE: The last byte is supposed to be a version number.
+ *
+ * Known versions are:
+ * - 0: used in development versions and currently
+ * - 1: briefly used and released as part of Anjay 1.0.0, when the attributes
+ *   were temporarily unified (i.e., Objects could have lt/gt/st attributes)
+ *
+ * Thus, if you ever need to bump the version number, change it to \2.
+ */
+static const char MAGIC[] = { 'F', 'A', 'S', '\0' };
 
 int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *out) {

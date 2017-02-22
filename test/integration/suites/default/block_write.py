@@ -1,7 +1,23 @@
-from framework.lwm2m_test import *
-import unittest
-import binascii
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
+import unittest
+
+from framework.lwm2m_test import *
 
 msg_id_generator = SequentialMsgIdGenerator(42)
 
@@ -11,12 +27,15 @@ A_LOT_OF_STUFF = random_stuff(A_LOT)
 A_LITTLE = 32
 A_LITTLE_STUFF = random_stuff(A_LITTLE)
 
+
 def equal_chunk_splitter(chunk_size):
     def split(data):
         return ((idx, chunk_size, chunk)
-                for idx, chunk in enumerate(data[i:i+chunk_size]
+                for idx, chunk in enumerate(data[i:i + chunk_size]
                                             for i in range(0, len(data), chunk_size)))
+
     return split
+
 
 def packets_from_chunks(chunks, process_options=None, path='/5/0/0'):
     for idx, (seq_num, chunk_size, chunk) in enumerate(chunks):
@@ -24,7 +43,7 @@ def packets_from_chunks(chunks, process_options=None, path='/5/0/0'):
 
         options = (uri_path_to_options(path)
                    + [coap.Option.CONTENT_FORMAT(coap.ContentFormat.APPLICATION_OCTET_STREAM),
-                   coap.Option.BLOCK1(seq_num=seq_num, has_more=has_more, block_size=chunk_size)])
+                      coap.Option.BLOCK1(seq_num=seq_num, has_more=has_more, block_size=chunk_size)])
 
         if process_options is not None:
             options = process_options(options, idx)
@@ -35,6 +54,7 @@ def packets_from_chunks(chunks, process_options=None, path='/5/0/0'):
                           msg_id=next(msg_id_generator),
                           options=options,
                           content=chunk)
+
 
 class BlockTest(test_suite.Lwm2mSingleServerTest):
     def block_init_file(self):
@@ -80,6 +100,7 @@ class BlockTest(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
         pass
 
+
 class BlockIncompleteTest(BlockTest):
     def runTest(self):
         # incomplete BLOCK should be rejected
@@ -122,16 +143,19 @@ class BlockIncompleteTest(BlockTest):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
                             self.serv.recv())
 
+
 class BlockSizesTest(BlockTest):
     def runTest(self):
         # multiple chunk sizes: min/max/something in between
         for chunk_size in (16, 256, 1024):
             self.block_send(A_LOT_OF_STUFF, equal_chunk_splitter(chunk_size))
 
+
 class BlockSingleChunkTest(BlockTest):
     def runTest(self):
         # single-chunk block
-        self.block_send(A_LITTLE_STUFF, equal_chunk_splitter(chunk_size=len(A_LITTLE_STUFF)*2))
+        self.block_send(A_LITTLE_STUFF, equal_chunk_splitter(chunk_size=len(A_LITTLE_STUFF) * 2))
+
 
 class BlockVariableChunkSizeTest(BlockTest):
     def runTest(self):
@@ -143,7 +167,7 @@ class BlockVariableChunkSizeTest(BlockTest):
                 idx = 0
                 i = 0
                 while i < len(data):
-                    yield idx, chunk_size, data[i:i+chunk_size]
+                    yield idx, chunk_size, data[i:i + chunk_size]
 
                     i += chunk_size
                     idx += 1
@@ -170,7 +194,7 @@ class BlockVariableChunkSizeTest(BlockTest):
                 idx += 1
 
                 while i < len(data):
-                    yield idx, chunk_size, data[i:i+chunk_size]
+                    yield idx, chunk_size, data[i:i + chunk_size]
 
                     i += chunk_size
                     idx += 1
@@ -195,7 +219,7 @@ class BlockVariableChunkSizeTest(BlockTest):
 
                 while i < len(data):
                     for _ in range(max_size // chunk_size):
-                        yield idx, chunk_size, data[i:i+chunk_size]
+                        yield idx, chunk_size, data[i:i + chunk_size]
 
                         i += chunk_size
                         idx += 1
@@ -212,16 +236,14 @@ class BlockVariableChunkSizeTest(BlockTest):
 
             return split
 
-
         # variable chunk size
         self.block_send(A_LOT_OF_STUFF, shrinking_chunk_splitter(initial_chunk_size=1024))
         self.block_send(A_LOT_OF_STUFF, growing_chunk_splitter(initial_chunk_size=16))
         self.block_send(A_LOT_OF_STUFF, alternating_size_chunk_splitter(sizes=[32, 512, 256, 1024, 64]))
 
+
 class BlockNonFirstTest(BlockTest):
     def runTest(self):
-        import socket
-
         data = A_LOT_OF_STUFF
         splitter = equal_chunk_splitter(1024)
 
@@ -234,9 +256,9 @@ class BlockNonFirstTest(BlockTest):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(request)(coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
                             self.serv.recv())
 
+
 class BlockBrokenStreamTest(BlockTest):
     def runTest(self):
-        import socket
 
         data = A_LOT_OF_STUFF
         splitter = equal_chunk_splitter(1024)
@@ -275,8 +297,10 @@ class BlockBrokenStreamTest(BlockTest):
         self.serv.send(second_request)
         self.assertIsSuccessResponse(self.serv.recv(), second_request)
 
+
 def block2_adder(options, idx):
-    return options + [ coap.Option.BLOCK2(seq_num=0, has_more=0, block_size=16) ]
+    return options + [coap.Option.BLOCK2(seq_num=0, has_more=0, block_size=16)]
+
 
 class BlockBidirectionalFailure(BlockTest):
     def runTest(self):
@@ -286,6 +310,7 @@ class BlockBidirectionalFailure(BlockTest):
         self.serv.send(request)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(request)(coap.Code.RES_BAD_OPTION),
                             self.serv.recv())
+
 
 class BlockMostlyUnidirectionalWithSmallSurprise(BlockTest):
     def runTest(self):
@@ -315,15 +340,16 @@ class BlockMostlyUnidirectionalWithSmallSurprise(BlockTest):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_BAD_OPTION),
                             self.serv.recv())
 
+
 class BlockDuplicate(BlockTest):
     def runTest(self):
         pkt1 = Lwm2mWrite('/5/0/0', b'x' * 16,
                           format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
-                          options=[ coap.Option.BLOCK1(0, 1, 16) ])
+                          options=[coap.Option.BLOCK1(0, 1, 16)])
 
         pkt2 = Lwm2mWrite('/5/0/0', b'x' * 16,
                           format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
-                          options=[ coap.Option.BLOCK1(1, 0, 16) ])
+                          options=[coap.Option.BLOCK1(1, 0, 16)])
 
         self.serv.send(pkt1)
         response1 = self.serv.recv()
@@ -344,7 +370,7 @@ class BlockBadBlock1SizeInTheMiddleOfTransfer(BlockTest):
         for _ in range(num_correct_blocks):
             pkt = Lwm2mWrite('/5/0/0', b'x' * 16,
                              format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
-                             options=[ coap.Option.BLOCK1(seq_num, 1, 16) ])
+                             options=[coap.Option.BLOCK1(seq_num, 1, 16)])
             self.serv.send(pkt)
             self.assertMsgEqual(Lwm2mContinue.matching(pkt)(), self.serv.recv())
 
@@ -352,13 +378,14 @@ class BlockBadBlock1SizeInTheMiddleOfTransfer(BlockTest):
 
         invalid_pkt = Lwm2mWrite('/5/0/0', b'x' * 16,
                                  format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
-                                 options=[ coap.Option.BLOCK1(seq_num, 1, 2048) ])
+                                 options=[coap.Option.BLOCK1(seq_num, 1, 2048)])
         self.serv.send(invalid_pkt)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(invalid_pkt)(code=coap.Code.RES_BAD_REQUEST),
                             self.serv.recv())
 
         # an invalid block aborts the block transfer; De-Register should work
         # fine here
+
 
 class MessageInTheMiddleOfBlockTransfer:
     class Test(BlockTest):
@@ -383,6 +410,7 @@ class MessageInTheMiddleOfBlockTransfer:
                 response = self.serv.recv()
                 self.assertIsSuccessResponse(response, request)
 
+
 class CoAPPingInTheMiddleOfBlockTransfer(MessageInTheMiddleOfBlockTransfer.Test):
     def runTest(self):
         req = Lwm2mEmpty(type=coap.Type.CONFIRMABLE)
@@ -390,12 +418,14 @@ class CoAPPingInTheMiddleOfBlockTransfer(MessageInTheMiddleOfBlockTransfer.Test)
         res = Lwm2mReset.matching(req)()
         self.test_with_message(req, res)
 
+
 class ConfirmableRequestInTheMiddleOfBlockTransfer(MessageInTheMiddleOfBlockTransfer.Test):
     def runTest(self):
         req = Lwm2mRead('/3/0/0')
         req.fill_placeholders()
         res = Lwm2mReset.matching(req)()
         self.test_with_message(req, res)
+
 
 class NonConfirmableRequestInTheMiddleOfBlockTransfer(MessageInTheMiddleOfBlockTransfer.Test):
     def runTest(self):

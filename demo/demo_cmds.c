@@ -220,9 +220,9 @@ struct cmd_handler_def {
 { (name), sizeof(name) - 1, (func), (args), (help) }
 static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("send-update", "[ssid=0]",
-                cmd_send_update, "Sends Update messages to LWM2M servers"),
+                cmd_send_update, "Sends Update messages to LwM2M servers"),
     CMD_HANDLER("reconnect", "", cmd_reconnect,
-                "Reconnects to LWM2M servers and sends Update messages"),
+                "Reconnects to LwM2M servers and sends Update messages"),
     CMD_HANDLER("set-fw-package-path", "", cmd_set_fw_package_path,
                 "Sets the path where the firmware package will be saved when "
                 "Write /5/0/0 is performed"),
@@ -230,10 +230,10 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 cmd_open_location_csv,
                 "Opens a CSV file and starts using it for location information"),
     CMD_HANDLER("add-server", "uri",
-                cmd_add_server, "Adds another LWM2M Server to connect to"),
+                cmd_add_server, "Adds another LwM2M Server to connect to"),
     CMD_HANDLER("trim-servers", "number",
                 cmd_trim_servers,
-                "Remove LWM2M Servers with specified ID and higher"),
+                "Remove LwM2M Servers with specified ID and higher"),
     CMD_HANDLER("socket-count", "", cmd_socket_count,
                 "Display number of server sockets currently registered"),
     CMD_HANDLER("get-port", "index", cmd_get_port,
@@ -295,7 +295,7 @@ static void cmd_help(anjay_demo_t *demo, const char *args_string) {
     (void)args_string;
 
     puts("---");
-    puts("LWM2M Demo client");
+    puts("LwM2M Demo client");
     puts("Available commands:");
     for (size_t idx = 0; idx < ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
         const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[idx];

@@ -70,7 +70,7 @@ static int tlv_get_some_bytes(anjay_input_ctx_t *ctx_,
     }
     if (!(*out_message_finished = (ctx->bytes_read == ctx->length))
             && stream_finished) {
-        return -1;
+        return ANJAY_ERR_BAD_REQUEST;
     }
     return 0;
 }
@@ -189,7 +189,7 @@ static int tlv_get_objlnk(anjay_input_ctx_t *ctx,
     if (retval) {
         return retval;
     } else if (bytes_read != 4) {
-        return -1;
+        return ANJAY_ERR_BAD_REQUEST;
     }
     *out_oid = ntohs(raw[0]);
     *out_iid = ntohs(raw[1]);

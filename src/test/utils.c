@@ -22,6 +22,41 @@
 
 #include <avsystem/commons/unit/test.h>
 
+AVS_UNIT_TEST(parse_url, invalid_protocol_terminator) {
+    anjay_url_t parsed_url;
+
+    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url("http:/acs.avsystem.com",
+                                            &parsed_url));
+}
+
+AVS_UNIT_TEST(parse_url, protocol_name_too_long) {
+    anjay_url_t parsed_url;
+
+#define SIZE (ANJAY_MAX_URL_HOSTNAME_SIZE + 1)
+    char url[SIZE] = {
+        [0 ... SIZE - 5] = 'A',
+        [SIZE - 4] = ':',
+        [SIZE - 3] = '/',
+        [SIZE - 2] = '/',
+        [SIZE - 1] = '\0',
+    };
+#undef SIZE
+
+    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(url, &parsed_url));
+}
+
+AVS_UNIT_TEST(parse_url, square_bracket_enclosed_host_address_too_long) {
+    anjay_url_t parsed_url;
+
+    char url[ANJAY_MAX_URL_HOSTNAME_SIZE + sizeof("http://[]") + 1] = "http://[";
+    memset(url + sizeof("http://[") - 1,
+           'A',
+           sizeof(url) - sizeof("http://[") - 1);
+    url[sizeof(url) - 2] = ']';
+
+    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(url, &parsed_url));
+}
+
 AVS_UNIT_TEST(parse_url, without_credentials_port_and_path) {
     anjay_url_t parsed_url;
 
@@ -242,6 +277,17 @@ AVS_UNIT_TEST(parse_url, hostname_length) {
     hostname[ANJAY_MAX_URL_HOSTNAME_SIZE] = '\0';
     sprintf(url, "http://%s", hostname);
     AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(url, &parsed_url));
+}
+
+AVS_UNIT_TEST(snprintf, no_space_for_terminating_nullbyte) {
+    char buf[3];
+    ssize_t result = _anjay_snprintf(buf, sizeof(buf), "%s", "foo");
+    AVS_UNIT_ASSERT_TRUE(result < 0);
+}
+
+AVS_UNIT_TEST(binding_mode_from_str, unsupported_binding_mode) {
+    AVS_UNIT_ASSERT_EQUAL(ANJAY_BINDING_NONE,
+                          anjay_binding_mode_from_str("☃"));
 }
 
 AVS_UNIT_TEST(time, time_from_ms) {

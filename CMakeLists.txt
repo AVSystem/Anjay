@@ -1,21 +1,38 @@
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 cmake_minimum_required(VERSION 2.8.8)
 
 option(WITH_FUZZ_TESTS "Compile fuzz tests using the AFL fuzzer" OFF)
 if(WITH_FUZZ_TESTS)
     if(AFL_FUZZER_DIR)
         set(CMAKE_C_COMPILER "${AFL_FUZZER_DIR}/afl-gcc")
+        set(AFL_FUZZ_EXECUTABLE "${AFL_FUZZER_DIR}/afl-fuzz")
     else()
         set(CMAKE_C_COMPILER "afl-gcc")
+        set(AFL_FUZZ_EXECUTABLE "afl-fuzz")
     endif()
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.0.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "##version##" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/lib")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/lib")
 
 # new policy in CMake 2.8.12 for link interface
 if(NOT CMAKE_VERSION VERSION_LESS "2.8.12")
@@ -45,8 +62,8 @@ option(WITH_LIBRARY_SHARED "Compile Anjay as shared library" ON)
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
 option(WITH_BLOCK_RECEIVE "Enable support for receiving CoAP BLOCK transfers" ON)
 option(WITH_BLOCK_SEND "Enable support for sending data in CoAP BLOCK mode" ON)
-option(WITH_BOOTSTRAP "Enable LWM2M Bootstrap Interface support" ON)
-option(WITH_DISCOVER "Enable support for LWM2M Discover operation" ON)
+option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
+option(WITH_DISCOVER "Enable support for LwM2M Discover operation" ON)
 option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe)" ON)
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
@@ -127,7 +144,6 @@ set(CORE_SOURCES
     src/io/tlv_out.c
     src/dm.c
     src/dm/attributes.c
-    src/dm/common.c
     src/dm/execute.c
     src/dm/handlers.c
     src/dm/query.c
@@ -384,9 +400,10 @@ anjay_emit_deps(${PROJECT_NAME}_static ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
 if(WITH_DEMO)
     find_program(OPENSSL_EXECUTABLE openssl)
     if(OPENSSL_EXECUTABLE)
-        if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/demo/ssl_key.h")
+        if(NOT EXISTS "${ANJAY_BUILD_OUTPUT_DIR}/certs/client.crt.der")
             execute_process(COMMAND
                             "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-certs.sh"
+                            "${ANJAY_BUILD_OUTPUT_DIR}/certs"
                             RESULT_VARIABLE RES)
             if(NOT ${RES} EQUAL 0)
                 message(FATAL_ERROR "could not generate SSL certificates")
@@ -418,13 +435,13 @@ macro(add_anjay_test NAME)
                  "-Wno-pedantic -Wno-overlength-strings")
 
     if(VALGRIND)
-        set(VALGRIND_LOG ${VALGRIND} --log-file=VALGRIND.${NAME}.log)
+        set(VALGRIND_LOG ${VALGRIND} --log-file=${ANJAY_BUILD_OUTPUT_DIR}/VALGRIND.${NAME}.log)
     else()
         set(VALGRIND_LOG)
     endif()
 
     add_test(NAME ${NAME}_test
-             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
              COMMAND ${VALGRIND_LOG} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME}_test)
 
     add_custom_target(${NAME}_check COMMAND ${CMAKE_CTEST_COMMAND} -R "^${NAME}_test$$" -V DEPENDS ${NAME}_test)
@@ -513,11 +530,11 @@ if(WITH_FUZZ_TESTS)
         message(STATUS "Adding fuzz test target: fuzz_${FUZZ_TEST_NAME}: ${${FUZZ_TEST_ARG_LIST_NAME}}")
         add_custom_target(fuzz_${FUZZ_TEST_NAME}
                           COMMAND mkdir -p "${FUZZ_TEST_FINDINGS_DIR}"
-                          COMMAND "${AFL_FUZZER_DIR}/afl-fuzz" -i "${FUZZ_TEST_CASE_DIR}"
-                                                               -o "${FUZZ_TEST_FINDINGS_DIR}"
-                                                               -t ${AFL_FUZZ_TIMEOUT_MS}
-                                                               "${${FUZZ_TEST_ARG_LIST_NAME}}"
-                                                               WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test/fuzz")
+                          COMMAND "${AFL_FUZZ_EXECUTABLE}" -i "${FUZZ_TEST_CASE_DIR}"
+                                                           -o "${FUZZ_TEST_FINDINGS_DIR}"
+                                                           -t ${AFL_FUZZ_TIMEOUT_MS}
+                                                           "${${FUZZ_TEST_ARG_LIST_NAME}}"
+                                                           WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test/fuzz")
     endforeach()
 endif()
 
@@ -532,13 +549,14 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source/conf.py.in")
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sphinx.cmake)
 
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source/conf.py.in
-                   ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source/conf.py
+                   ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/conf.py
                    @ONLY)
     add_custom_target(doc_sphinx
                       COMMAND ${SPHINX_BUILD_EXECUTABLE}
                               -b html
+                              -c ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx
                               ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source
-                              ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/build/html
+                              ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/html
                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
 
     add_dependencies(doc doc_sphinx)
@@ -547,8 +565,9 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source/conf.py.in")
     add_test(NAME test_examples
              COMMAND ${SPHINX_BUILD_EXECUTABLE}
                      -Q -b snippet_source_lint
+                     -c ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx
                      ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source
-                     ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/build/lint
+                     ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/lint
              WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
 endif()
 
@@ -560,12 +579,14 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in")
     # semicolon-separated strings
     string(REPLACE ";" " " DOXYGEN_INPUT_PATHS "${DOXYGEN_INPUT_PATHS}")
 
+    set(DOXYGEN_OUTPUT_DIR ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen)
+
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in
-                   ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
+                   ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen/Doxyfile
                    @ONLY)
 
     add_custom_target(doc_doxygen
-                      COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
+                      COMMAND ${DOXYGEN_EXECUTABLE} ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen/Doxyfile
                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 
@@ -577,32 +598,32 @@ endif()
 
 ################# EXAMPLES #####################################################
 
-set(TUTORIALS_BUILD_DIR "${CMAKE_BINARY_DIR}/examples/build")
-set(TUTORIALS_ANJAY_BUILD_DIR "${TUTORIALS_BUILD_DIR}/anjay-build")
-set(TUTORIALS_ANJAY_INSTALL_DIR "${TUTORIALS_BUILD_DIR}/anjay")
+set(ANJAY_EXAMPLES_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/examples/build")
+set(ANJAY_TUTORIALS_ANJAY_BUILD_DIR "${ANJAY_EXAMPLES_BUILD_DIR}/anjay-build")
+set(ANJAY_TUTORIALS_ANJAY_INSTALL_DIR "${ANJAY_EXAMPLES_BUILD_DIR}/anjay")
 
 add_custom_target(examples)
 add_custom_command(TARGET examples
-                   COMMAND ${CMAKE_COMMAND} -E make_directory "${TUTORIALS_BUILD_DIR}"
-                   COMMAND ${CMAKE_COMMAND} -E make_directory "${TUTORIALS_ANJAY_INSTALL_DIR}"
-                   COMMAND ${CMAKE_COMMAND} -E make_directory "${TUTORIALS_ANJAY_BUILD_DIR}")
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "${ANJAY_EXAMPLES_BUILD_DIR}"
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "${ANJAY_TUTORIALS_ANJAY_BUILD_DIR}")
 
 add_custom_command(TARGET examples
                    COMMAND ${CMAKE_COMMAND}
                         -H${CMAKE_CURRENT_SOURCE_DIR}
                         -B.
-                        -DCMAKE_INSTALL_PREFIX="${TUTORIALS_ANJAY_INSTALL_DIR}"
+                        -DCMAKE_INSTALL_PREFIX="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j$(nproc)
-                   WORKING_DIRECTORY ${TUTORIALS_ANJAY_BUILD_DIR})
+                   WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})
 
 add_custom_command(TARGET examples
                    COMMAND ${CMAKE_COMMAND}
                         -H${CMAKE_CURRENT_SOURCE_DIR}/examples/tutorial/
                         -B.
-                        -DCMAKE_PREFIX_PATH="${TUTORIALS_ANJAY_INSTALL_DIR}"
+                        -DCMAKE_PREFIX_PATH="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
                    COMMAND ${CMAKE_COMMAND} --build . -- -j$(nproc)
-                   WORKING_DIRECTORY "${TUTORIALS_BUILD_DIR}")
+                   WORKING_DIRECTORY "${ANJAY_EXAMPLES_BUILD_DIR}")
 
 add_dependencies(check examples)
 
@@ -631,14 +652,14 @@ endforeach()
 
 # install CMake package
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/anjay-config.cmake.in
-               ${CMAKE_CURRENT_BINARY_DIR}/cmake/${PROJECT_NAME}-config.cmake
+               ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-config.cmake
                @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/anjay-version.cmake.in
-               ${CMAKE_CURRENT_BINARY_DIR}/cmake/${PROJECT_NAME}-version.cmake
+               ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-version.cmake
                @ONLY)
 
 install(EXPORT ${PROJECT_NAME}-targets DESTINATION ${LIB_INSTALL_DIR}/${PROJECT_NAME})
 install(FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/cmake/${PROJECT_NAME}-config.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/cmake/${PROJECT_NAME}-version.cmake
+        ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-config.cmake
+        ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-version.cmake
         DESTINATION ${LIB_INSTALL_DIR}/${PROJECT_NAME})

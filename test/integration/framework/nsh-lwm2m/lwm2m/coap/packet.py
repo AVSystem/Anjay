@@ -1,10 +1,27 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import operator
 import struct
 
-from .type import *
-from .code import *
-from .option import *
-from .utils import *
+from .code import Code
+from .option import Option
+from .type import Type
+from .utils import hexlify, hexlify_nonprintable
+
 
 class Placeholder:
     def __init__(self, name):
@@ -25,11 +42,11 @@ class Placeholder:
     def __iter__(self):
         return iter([])
 
-"""
-A special value that may be used as msg_id, token, options or content to
-indicate that any value is acceptable when comparing it to another message.
-"""
+
+# A special value that may be used as msg_id, token, options or content to
+# indicate that any value is acceptable when comparing it to another message.
 ANY = Placeholder('ANY')
+
 
 class SequentialMsgIdGenerator:
     def __init__(self, start_id):
@@ -39,29 +56,34 @@ class SequentialMsgIdGenerator:
         return self.next()
 
     def next(self):
-        self.curr_id = (self.curr_id + 1) % 2**16
+        self.curr_id = (self.curr_id + 1) % 2 ** 16
         return self.curr_id
 
+
 _ID_GENERATOR = SequentialMsgIdGenerator(0x1337)
+
 
 class RandomTokenGenerator:
     def __next__(self):
         return self.next()
 
-    def next(self):
+    @staticmethod
+    def next():
         with open('/dev/urandom', 'rb') as f:
             return f.read(8)
 
+
 _TOKEN_GENERATOR = RandomTokenGenerator()
 
+
 class Packet(object):
-    def __init__(self, type, code, msg_id, token, options=[], content=b'', version=1):
+    def __init__(self, type, code, msg_id, token, options=None, content=b'', version=1):
         self.version = version
         self.type = type
         self.code = code
         self.msg_id = msg_id
         self.token = token
-        self.options = sorted(options, key=operator.attrgetter('number')) if options is not ANY else ANY
+        self.options = sorted(options or [], key=operator.attrgetter('number')) if options is not ANY else ANY
         self.content = content
 
     def __repr__(self):
@@ -97,7 +119,7 @@ class Packet(object):
             raise ValueError("invalid CoAP token length: %d, expected <= 8" % token_length)
 
         at = 4
-        token = packet[at:at+token_length]
+        token = packet[at:at + token_length]
         at += token_length
 
         options = []
@@ -105,7 +127,7 @@ class Packet(object):
 
         while at < len(packet):
             if packet[at] == 0xFF:
-                content = packet[at+1:]
+                content = packet[at + 1:]
                 if not content:
                     raise ValueError('payload marker at end of packet is invalid')
                 at = len(packet)
@@ -143,10 +165,13 @@ class Packet(object):
             serialized_opts.append(o.serialize(prev_opt_number))
             prev_opt_number = o.number
 
-        return (struct.pack('!BBH', (self.version << 6) | (self.type.value << 4) | (len(self.token) & 0xF), self.code.as_byte(), self.msg_id)
-                + self.token
-                + b''.join(serialized_opts)
-                + content)
+        return (
+            struct.pack('!BBH', (self.version << 6) | (self.type.value << 4) | (len(self.token) & 0xF),
+                        self.code.as_byte(),
+                        self.msg_id)
+            + self.token
+            + b''.join(serialized_opts)
+            + content)
 
     def get_options(self, type):
         return [o for o in self.options if o.number == type.number]

@@ -27,7 +27,7 @@ extern "C" {
 
 /**
  * Anjay Attribute Storage object that may be used to handle attribute setting
- * for any LWM2M entities.
+ * for any LwM2M entities.
  */
 typedef struct anjay_attr_storage_struct anjay_attr_storage_t;
 
@@ -45,7 +45,7 @@ anjay_attr_storage_t *anjay_attr_storage_new(anjay_t *anjay);
  * Cleans up all resources and releases the Anjay Attribute Storage object,
  * also discarding any stored attributes.
  *
- * NOTE: It shall not be called before releasing all references to LWM2M Objects
+ * NOTE: It shall not be called before releasing all references to LwM2M Objects
  * wrapped in this object - likely not before calling @ref anjay_delete.
  *
  * @param attr_storage Anjay Attribute Storage object to delete.
@@ -53,10 +53,10 @@ anjay_attr_storage_t *anjay_attr_storage_new(anjay_t *anjay);
 void anjay_attr_storage_delete(anjay_attr_storage_t *attr_storage);
 
 /**
- * Registers an LWM2M Object in the Attribute Storage, making it possible to
+ * Registers an LwM2M Object in the Attribute Storage, making it possible to
  * automatically manage attributes for it, its instances and resources.
  *
- * In accordance to the LWM2M specification, there are three levels on which
+ * In accordance to the LwM2M specification, there are three levels on which
  * attributes may be stored:
  *
  * - Resource level (@ref anjay_dm_resource_read_attrs_t,
@@ -79,7 +79,7 @@ void anjay_attr_storage_delete(anjay_attr_storage_t *attr_storage);
  * passed to @ref anjay_register_object. The pointer will remain valid until
  * a call to @ref anjay_attr_storage_delete.
  *
- * @returns A wrapped LWM2M object definition, or NULL in case of error.
+ * @returns A wrapped LwM2M object definition, or NULL in case of error.
  */
 const anjay_dm_object_def_t *const *
 anjay_attr_storage_wrap_object(anjay_attr_storage_t *attr_storage,

@@ -86,13 +86,26 @@ int _anjay_coap_stream_get_msg_type(avs_stream_abstract_t *stream,
                                     anjay_coap_msg_type_t *out_type);
 
 /** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
-int _anjay_coap_stream_get_option_u16(avs_stream_abstract_t *stream,
-                                      uint16_t option_number,
-                                      uint16_t *out_value);
+int _anjay_coap_stream_get_option_uint(avs_stream_abstract_t *stream,
+                                       uint16_t option_number,
+                                       void *out_value,
+                                       size_t out_value_size);
 /** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
-int _anjay_coap_stream_get_option_u32(avs_stream_abstract_t *stream,
-                                      uint16_t option_number,
-                                      uint32_t *out_value);
+static inline int
+_anjay_coap_stream_get_option_u16(avs_stream_abstract_t *stream,
+                                  uint16_t option_number,
+                                  uint16_t *out_value) {
+    return _anjay_coap_stream_get_option_uint(stream, option_number,
+                                              out_value, sizeof(*out_value));
+}
+/** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
+static inline int
+_anjay_coap_stream_get_option_u32(avs_stream_abstract_t *stream,
+                                  uint16_t option_number,
+                                  uint32_t *out_value) {
+    return _anjay_coap_stream_get_option_uint(stream, option_number,
+                                              out_value, sizeof(*out_value));
+}
 /** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
 int _anjay_coap_stream_get_option_string_it(avs_stream_abstract_t *stream,
                                             uint16_t option_number,

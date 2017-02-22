@@ -1,7 +1,22 @@
-import binascii
-import struct
-import enum
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+import binascii
+import enum
+import struct
 from typing import Optional
 
 
@@ -11,11 +26,12 @@ class FirmwareUpdateForcedError(enum.IntEnum):
     OutOfMemory = 1
     FailedUpdate = 2
 
+
 def make_firmware_package(binary: bytes,
-                          magic: bytes=b'ANJAY_FW',
-                          crc: Optional[int]=None,
-                          force_error: FirmwareUpdateForcedError=FirmwareUpdateForcedError.NoError,
-                          version: int=1):
+                          magic: bytes = b'ANJAY_FW',
+                          crc: Optional[int] = None,
+                          force_error: FirmwareUpdateForcedError = FirmwareUpdateForcedError.NoError,
+                          version: int = 1):
     assert len(magic) == 8
 
     if crc is None:
@@ -26,7 +42,6 @@ def make_firmware_package(binary: bytes,
 
 
 if __name__ == '__main__':
-    import sys
     import argparse
 
     parser = argparse.ArgumentParser(description='Create firmware package from executable.')

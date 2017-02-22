@@ -1,11 +1,25 @@
-from framework.lwm2m_test import *
-from framework.lwm2m.tlv import TLV
-import math
-import unittest
-import time
-import socket
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from typing import Optional
+import math
+import socket
+import time
+import unittest
+
+from framework.lwm2m_test import *
 
 
 class BasicClientBlockRequest:
@@ -13,10 +27,9 @@ class BasicClientBlockRequest:
         def __init__(self, test_method_name):
             super().__init__(test_method_name)
 
-            self.A_LOT = 256 # arbitratry, big enough to trigger block-wise Update
-            self.block_size = 1024 # maximum possible block size
+            self.A_LOT = 256  # arbitratry, big enough to trigger block-wise Update
+            self.block_size = 1024  # maximum possible block size
             self.expected_payload_size = None
-
 
         def setUp(self):
             super().setUp()
@@ -25,16 +38,14 @@ class BasicClientBlockRequest:
             self.test_object_instances_str = b','.join(b'</1337/%d>' % x for x in range(1, self.A_LOT + 1))
             self.expected_payload_size = (len(self.ac_object_instances_str)
                                           + len(self.test_object_instances_str)
-                                          + 250) # estimated size of other objects
+                                          + 250)  # estimated size of other objects
             self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
-
 
             for _ in range(self.A_LOT):
                 req = Lwm2mCreate('/1337')
                 self.serv.send(req)
                 self.assertMsgEqual(Lwm2mCreated.matching(req)(),
                                     self.serv.recv())
-
 
         def recv(self):
             """
@@ -87,9 +98,10 @@ class BasicClientBlockRequest:
                 send_ack(response)
 
                 wait_for_more = (block_opt.has_more() if seq_num_end is None
-                                                      else expected_seq_num < seq_num_end)
+                                 else expected_seq_num < seq_num_end)
 
             return payload
+
 
 class ClientBlockRequest:
     class Test(BasicClientBlockRequest.Test):
@@ -99,11 +111,9 @@ class ClientBlockRequest:
             self.expected_payload_size = None
             self.expected_num_blocks = None
 
-
         def set_block_size(self, new_block_size):
             self.block_size = new_block_size
             self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
-
 
         def setUp(self):
             super().setUp()
@@ -276,6 +286,7 @@ class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test):
 #    we do not expect retransmitted block.
 ICMP_ERROR_RESPONSE_SLEEP_SECODNS = 4
 
+
 class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test):
     def runTest(self):
         listen_port = self.serv.get_listen_port()
@@ -416,7 +427,7 @@ class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test):
         req = self.block_recv_next(expected_seq_num=(self.expected_num_blocks // 2))
 
         # Reset with mismatched msg_id should be ignored
-        self.serv.send(Lwm2mReset(msg_id=(req.msg_id+1)))
+        self.serv.send(Lwm2mReset(msg_id=(req.msg_id + 1)))
 
         # transfer should continue after receiving the correct response
         self.serv.send(Lwm2mContinue.matching(req)(options=req.get_options(coap.Option.BLOCK1)))

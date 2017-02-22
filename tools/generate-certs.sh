@@ -1,4 +1,18 @@
 #!/bin/bash
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 set -e
 
@@ -8,8 +22,12 @@ KEYSTORE_PASSWORD=endPass
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 TOOLS_DIR="$SCRIPT_DIR"
-CLIENT_KEY_HEADER="$ROOT_DIR/demo/ssl_key.h"
-CERTS_DIR="$ROOT_DIR/certs"
+
+if [[ "$#" < 1 ]]; then
+    CERTS_DIR="$(pwd)/certs"
+else
+    CERTS_DIR="$1"
+fi
 
 if [[ -d "$CERTS_DIR" ]]; then
     echo "WARNING: $CERTS_DIR already exists, its contents will be removed"
@@ -34,7 +52,9 @@ for NAME in client server; do
     echo "* generating $NAME cert - done"
 done
 
-"$TOOLS_DIR/import-certs.sh" --key client.key --cert client.crt --out "$CLIENT_KEY_HEADER"
+openssl pkcs8 -topk8 -in client.key -inform pem -outform der \
+    -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client.key.der
+openssl x509 -in client.crt -outform der > client.crt.der
 
 if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ]; then
     echo ''

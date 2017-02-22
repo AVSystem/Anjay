@@ -536,6 +536,23 @@ AVS_UNIT_TEST(dm_write, resource_invalid_format) {
     DM_TEST_FINISH;
 }
 
+AVS_UNIT_TEST(dm_write, resource_with_mismatched_tlv_rid) {
+    DM_TEST_INIT;
+    static const char REQUEST[] =
+            "\x40\x03\xFA\x3E" // CoAP header
+            "\xB2" "42" // OID
+            "\x03" "514" // IID
+            "\x01" "4" // RID
+            "\x12\x42\x42" // Content-Format TLV
+            "\xFF"
+            "\xc5\x05" // mismatched resource id, RID Uri-Path was 4 but in the payload it is 5
+            "Hello";
+    avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
 AVS_UNIT_TEST(dm_write, instance) {
     DM_TEST_INIT;
     static const char REQUEST[] =
@@ -1213,11 +1230,13 @@ AVS_UNIT_TEST(dm_write_attributes, resource) {
     _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 514, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 514, 4, 77, 0,
-                                              &ANJAY_DM_ATTRIBS_EMPTY);
+                                              &ANJAY_RES_ATTRIBS_EMPTY);
     _anjay_mock_dm_expect_resource_write_attrs(anjay, &OBJ, 514, 4, 77,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 42,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 42,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = 0.7
@@ -1241,10 +1260,7 @@ AVS_UNIT_TEST(dm_write_attributes, instance) {
     _anjay_mock_dm_expect_instance_write_default_attrs(anjay, &OBJ, 77, 42,
             &(const anjay_dm_attributes_t) {
                 .min_period = 69,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             }, 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -1263,10 +1279,7 @@ AVS_UNIT_TEST(dm_write_attributes, object) {
     _anjay_mock_dm_expect_object_write_default_attrs(anjay, &OBJ, 666,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 514,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 514
             }, 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -1320,9 +1333,11 @@ AVS_UNIT_TEST(dm_discover, resource) {
     _anjay_mock_dm_expect_resource_dim(anjay, &OBJ, 69, 4,
                                        ANJAY_DM_DIM_INVALID);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 7, 0,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 514,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    .max_period = 514
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = 6.46,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -1331,19 +1346,13 @@ AVS_UNIT_TEST(dm_discover, resource) {
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 7, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             });
 
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 7, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 10,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             });
 
     DM_TEST_EXPECT_RESPONSE(mocksocks[0],
@@ -1368,18 +1377,15 @@ AVS_UNIT_TEST(dm_discover, resource_multiple_servers) {
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_dim(anjay, &OBJ, 69, 4, 54);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 34, 0,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 10,
-                .max_period = 514,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 10,
+                    .max_period = 514
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = 6.46,
                 .step = ANJAY_ATTRIB_VALUE_NONE
             });
-    _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 34, 0,
-                                                      &ANJAY_DM_ATTRIBS_EMPTY);
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 34, 0,
-                                                    &ANJAY_DM_ATTRIBS_EMPTY);
-
     DM_TEST_EXPECT_RESPONSE(mocksocks[0],
             "\x60\x45\xfa\x3e" // CoAP header
             "\xc1\x28" // Content-Format: application/link-format
@@ -1402,10 +1408,7 @@ AVS_UNIT_TEST(dm_discover, instance) {
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 514, 69, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 666,
-                .max_period = 777,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 777
             });
 
     for (anjay_rid_t rid = 0; rid < OBJ->rid_bound; rid++) {
@@ -1415,10 +1418,10 @@ AVS_UNIT_TEST(dm_discover, instance) {
         } else {
             _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, rid, 1);
             _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 514, rid, 1);
-            anjay_dm_attributes_t attrs;
-            memset(&attrs, 0, sizeof(anjay_dm_attributes_t));
-            attrs.max_period = ANJAY_ATTRIB_PERIOD_NONE;
-            attrs.min_period = ANJAY_ATTRIB_PERIOD_NONE;
+            anjay_dm_resource_attributes_t attrs;
+            memset(&attrs, 0, sizeof(attrs));
+            attrs.common.max_period = ANJAY_ATTRIB_PERIOD_NONE;
+            attrs.common.min_period = ANJAY_ATTRIB_PERIOD_NONE;
             attrs.greater_than = (double)rid;
             attrs.less_than = ANJAY_ATTRIB_VALUE_NONE;
             attrs.step = ANJAY_ATTRIB_VALUE_NONE;
@@ -1449,10 +1452,7 @@ AVS_UNIT_TEST(dm_discover, instance_multiple_servers) {
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 514, 69, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 666,
-                .max_period = 777,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 777
             });
 
     for (anjay_rid_t rid = 0; rid < OBJ->rid_bound; rid++) {
@@ -1462,10 +1462,10 @@ AVS_UNIT_TEST(dm_discover, instance_multiple_servers) {
         } else {
             _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, rid, 1);
             _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 514, rid, 1);
-            anjay_dm_attributes_t attrs;
-            memset(&attrs, 0, sizeof(anjay_dm_attributes_t));
-            attrs.max_period = ANJAY_ATTRIB_PERIOD_NONE;
-            attrs.min_period = ANJAY_ATTRIB_PERIOD_NONE;
+            anjay_dm_resource_attributes_t attrs;
+            memset(&attrs, 0, sizeof(attrs));
+            attrs.common.max_period = ANJAY_ATTRIB_PERIOD_NONE;
+            attrs.common.min_period = ANJAY_ATTRIB_PERIOD_NONE;
             attrs.greater_than = (double)rid;
             attrs.less_than = ANJAY_ATTRIB_VALUE_NONE;
             attrs.step = ANJAY_ATTRIB_VALUE_NONE;
@@ -1495,10 +1495,7 @@ AVS_UNIT_TEST(dm_discover, object) {
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 2, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 514,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 514
             });
 
     int presence[][7] = {
@@ -1536,10 +1533,7 @@ AVS_UNIT_TEST(dm_discover, object_multiple_servers) {
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 2, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 514,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 514
             });
 
     int presence[][7] = {
@@ -1584,7 +1578,7 @@ AVS_UNIT_TEST(dm_discover, error) {
                                        ANJAY_DM_DIM_INVALID);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 7,
                                               ANJAY_ERR_CONFLICT,
-                                              &ANJAY_DM_ATTRIBS_EMPTY);
+                                              &ANJAY_RES_ATTRIBS_EMPTY);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x89\xfa\x3e");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
@@ -1604,7 +1598,7 @@ AVS_UNIT_TEST(dm_discover, multiple_servers_empty) {
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_dim(anjay, &OBJ, 69, 4, ANJAY_DM_DIM_INVALID);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 34, 0,
-                                              &ANJAY_DM_ATTRIBS_EMPTY);
+                                              &ANJAY_RES_ATTRIBS_EMPTY);
     _anjay_mock_dm_expect_instance_read_default_attrs(
             anjay, &OBJ, 69, 34, 0, &ANJAY_DM_ATTRIBS_EMPTY);
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 34, 0,
@@ -1917,46 +1911,45 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
     // Cancel Observe does not call any handlers, so it does not fail
 }
 
-static const anjay_dm_attrs_query_details_t DM_EFFECTIVE_ATTRS_STANDARD_QUERY =
-    (anjay_dm_attrs_query_details_t) {
-        .obj = &OBJ,
-        .iid = 69,
-        .rid = 4,
-        .ssid = 1,
-        .with_server_level_attrs = true
-    };
+static const anjay_dm_attrs_query_details_t DM_EFFECTIVE_ATTRS_STANDARD_QUERY = {
+    .obj = &OBJ,
+    .iid = 69,
+    .rid = 4,
+    .ssid = 1,
+    .with_server_level_attrs = true
+};
 
 AVS_UNIT_TEST(dm_effective_attrs, resource_full) {
     DM_TEST_INIT;
     (void) mocksocks;
-    static const anjay_dm_attributes_t RES_ATTRS = {
-        .min_period = 14,
-        .max_period = 42,
+    static const anjay_dm_resource_attributes_t RES_ATTRS = {
+        .common = {
+            .min_period = 14,
+            .max_period = 42
+        },
         .greater_than = 77.2,
         .less_than = ANJAY_ATTRIB_VALUE_NONE,
         .step = ANJAY_ATTRIB_VALUE_NONE
     };
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 1, 0,
                                               &RES_ATTRS);
-    _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 1, 0,
-                                                      &ANJAY_DM_ATTRIBS_EMPTY);
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 1, 0,
-                                                    &ANJAY_DM_ATTRIBS_EMPTY);
 
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
             anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(&attrs, &RES_ATTRS);
     DM_TEST_FINISH;
 }
 
-AVS_UNIT_TEST(dm_effective_attrs, fallback_to_instance_and_then_to_object) {
+AVS_UNIT_TEST(dm_effective_attrs, fallback_to_instance) {
     DM_TEST_INIT;
     (void) mocksocks;
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 1, 0,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 14,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 14,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -1964,30 +1957,20 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_instance_and_then_to_object) {
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 1, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 514,
-                .max_period = 42,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 42
             });
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 34, 0,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = 10.0
-            });
-
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
             anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 14,
-                .max_period = 42,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 14,
+                    .max_period = 42
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = 10.0
+                .step = ANJAY_ATTRIB_VALUE_NONE
             });
     DM_TEST_FINISH;
 }
@@ -1996,9 +1979,8 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_object) {
     DM_TEST_INIT;
     (void) mocksocks;
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 1, 0,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = ANJAY_DM_ATTRIBS_EMPTY,
                 .greater_than = 43.7,
                 .less_than = 17.3,
                 .step = 6.9
@@ -2006,26 +1988,22 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_object) {
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 1, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_period = 777,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 777
             });
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 1, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 514,
-                .max_period = 69,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 69
             });
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
             anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 514,
-                .max_period = 777,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 514,
+                    .max_period = 777
+                },
                 .greater_than = 43.7,
                 .less_than = 17.3,
                 .step = 6.9
@@ -2037,16 +2015,13 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_server) {
     DM_TEST_INIT;
     (void) mocksocks;
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 1, 0,
-                                              &ANJAY_DM_ATTRIBS_EMPTY);
+                                              &ANJAY_RES_ATTRIBS_EMPTY);
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 1, 0,
                                                       &ANJAY_DM_ATTRIBS_EMPTY);
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 1, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 4,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = ANJAY_ATTRIB_PERIOD_NONE
             });
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0, 1);
     _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER,
@@ -2063,13 +2038,15 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_server) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_DEFAULT_PMAX, 0,
                                         ANJAY_MOCK_DM_INT(0, 42));
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
             anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 4,
-                .max_period = 42,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 4,
+                    .max_period = 42
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -2081,7 +2058,7 @@ AVS_UNIT_TEST(dm_effective_attrs, resource_fail) {
     DM_TEST_INIT;
     (void) mocksocks;
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 1, -1, NULL);
-    anjay_dm_attributes_t attrs = ANJAY_DM_ATTRIBS_EMPTY;
+    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
     AVS_UNIT_ASSERT_FAILED(_anjay_dm_effective_attrs(
             anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     DM_TEST_FINISH;
@@ -2093,21 +2070,18 @@ AVS_UNIT_TEST(dm_effective_attrs, for_instance) {
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 1, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 9,
-                .max_period = 77,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 77
             });
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 1, 0,
-                                                    &ANJAY_DM_ATTRIBS_EMPTY);
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
     _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 9,
-                .max_period = 77,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 9,
+                    .max_period = 77
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -2120,7 +2094,7 @@ AVS_UNIT_TEST(dm_effective_attrs, instance_fail) {
     (void) mocksocks;
     _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 1, -1,
                                                       NULL);
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     AVS_UNIT_ASSERT_FAILED(_anjay_dm_effective_attrs(anjay, &details, &attrs));
@@ -2133,20 +2107,19 @@ AVS_UNIT_TEST(dm_effective_attrs, for_object) {
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 1, 0,
             &(const anjay_dm_attributes_t) {
                 .min_period = 6,
-                .max_period = 54,
-                .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                .step = ANJAY_ATTRIB_VALUE_NONE
+                .max_period = 54
             });
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     details.iid = ANJAY_IID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
     _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 6,
-                .max_period = 54,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 6,
+                    .max_period = 54
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -2158,7 +2131,7 @@ AVS_UNIT_TEST(dm_effective_attrs, object_fail) {
     DM_TEST_INIT;
     (void) mocksocks;
     _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 1, -1, NULL);
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     details.iid = ANJAY_IID_INVALID;
@@ -2193,15 +2166,17 @@ AVS_UNIT_TEST(dm_effective_attrs, server_default) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_DEFAULT_PMAX, 0,
                                         ANJAY_MOCK_DM_INT(0, 404));
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     details.iid = ANJAY_IID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
    _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = 0,
-                .max_period = 404,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = 0,
+                    .max_period = 404
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -2216,15 +2191,17 @@ AVS_UNIT_TEST(dm_effective_attrs, no_server) {
                                                     &ANJAY_DM_ATTRIBS_EMPTY);
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0,
                                       ANJAY_IID_INVALID);
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     details.iid = ANJAY_IID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
    _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_DM_DEFAULT_PMIN_VALUE,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_DM_DEFAULT_PMIN_VALUE,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -2255,15 +2232,17 @@ AVS_UNIT_TEST(dm_effective_attrs, no_resources) {
                                              ANJAY_DM_RID_SERVER_DEFAULT_PMAX, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 1,
                                            ANJAY_DM_RID_SERVER_DEFAULT_PMAX, 0);
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     details.iid = ANJAY_IID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
    _anjay_mock_dm_assert_attributes_equal(&attrs,
-            &(const anjay_dm_attributes_t) {
-                .min_period = ANJAY_DM_DEFAULT_PMIN_VALUE,
-                .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+            &(const anjay_dm_resource_attributes_t) {
+                .common = {
+                    .min_period = ANJAY_DM_DEFAULT_PMIN_VALUE,
+                    .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                },
                 .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                 .less_than = ANJAY_ATTRIB_VALUE_NONE,
                 .step = ANJAY_ATTRIB_VALUE_NONE
@@ -2298,7 +2277,7 @@ AVS_UNIT_TEST(dm_effective_attrs, read_error) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_DEFAULT_PMAX, -1,
                                         ANJAY_MOCK_DM_NONE);
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     details.iid = ANJAY_IID_INVALID;
@@ -2333,7 +2312,7 @@ AVS_UNIT_TEST(dm_effective_attrs, read_invalid) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_DEFAULT_PMAX, 0,
                                         ANJAY_MOCK_DM_INT(0, -1));
-    anjay_dm_attributes_t attrs;
+    anjay_dm_resource_attributes_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = -1;
     details.iid = ANJAY_IID_INVALID;

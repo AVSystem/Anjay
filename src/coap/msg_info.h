@@ -221,18 +221,24 @@ int _anjay_coap_msg_info_opt_empty(anjay_coap_msg_info_t *info,
  *
  * See @ref _anjay_coap_msg_info_opt_opaque for more info.
  */
-int _anjay_coap_msg_info_opt_u8(anjay_coap_msg_info_t *info,
-                                uint16_t opt_number,
-                                uint8_t value);
-int _anjay_coap_msg_info_opt_u16(anjay_coap_msg_info_t *info,
-                                 uint16_t opt_number,
-                                 uint16_t value);
-int _anjay_coap_msg_info_opt_u32(anjay_coap_msg_info_t *info,
-                                 uint16_t opt_number,
-                                 uint32_t value);
-int _anjay_coap_msg_info_opt_u64(anjay_coap_msg_info_t *info,
-                                 uint16_t opt_number,
-                                 uint64_t value);
+int _anjay_coap_msg_info_opt_uint(anjay_coap_msg_info_t *info,
+                                  uint16_t opt_number,
+                                  const void *value,
+                                  size_t value_size);
+
+static inline int _anjay_coap_msg_info_opt_u16(anjay_coap_msg_info_t *info,
+                                               uint16_t opt_number,
+                                               uint16_t value) {
+    return _anjay_coap_msg_info_opt_uint(info, opt_number,
+                                         &value, sizeof(value));
+}
+
+static inline int _anjay_coap_msg_info_opt_u32(anjay_coap_msg_info_t *info,
+                                               uint16_t opt_number,
+                                               uint32_t value) {
+    return _anjay_coap_msg_info_opt_uint(info, opt_number,
+                                         &value, sizeof(value));
+}
 
 VISIBILITY_PRIVATE_HEADER_END
 

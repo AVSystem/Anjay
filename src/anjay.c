@@ -47,6 +47,9 @@ VISIBILITY_SOURCE_BEGIN
 static int init(anjay_t *anjay,
                 const anjay_configuration_t *config) {
     anjay->dtls_version = config->dtls_version;
+    if (anjay->dtls_version == AVS_NET_SSL_VERSION_DEFAULT) {
+        anjay->dtls_version = AVS_NET_SSL_VERSION_TLSv1_2;
+    }
 
     anjay->endpoint_name = config->endpoint_name;
     if (!anjay->endpoint_name) {
@@ -180,10 +183,10 @@ static int parse_attribute(anjay_request_attributes_t *out_attrs,
 
     if (!strcmp(key, ANJAY_ATTR_PMIN)) {
         result = parse_nullable_time(value, &out_attrs->has_min_period,
-                                     &out_attrs->values.min_period);
+                                     &out_attrs->values.common.min_period);
     } else if (!strcmp(key, ANJAY_ATTR_PMAX)) {
         result = parse_nullable_time(value, &out_attrs->has_max_period,
-                                     &out_attrs->values.max_period);
+                                     &out_attrs->values.common.max_period);
     } else if (!strcmp(key, ANJAY_ATTR_GT)) {
         result = parse_nullable_double(value, &out_attrs->has_greater_than,
                                        &out_attrs->values.greater_than);
@@ -203,7 +206,7 @@ static int parse_attributes(avs_stream_abstract_t *stream,
                             anjay_request_attributes_t *out_attrs) {
     anjay_coap_opt_iterator_t it = ANJAY_COAP_OPT_ITERATOR_EMPTY;
     memset(out_attrs, 0, sizeof(*out_attrs));
-    out_attrs->values = ANJAY_DM_ATTRIBS_EMPTY;
+    out_attrs->values = ANJAY_RES_ATTRIBS_EMPTY;
 
     char buffer[ANJAY_MAX_URI_QUERY_SEGMENT_SIZE];
     size_t attr_size;
@@ -315,7 +318,7 @@ static int get_msg_action(anjay_coap_msg_type_t msg_type,
     }
 
     if (!result) {
-        anjay_log(DEBUG, "LWM2M action: %s", action_to_string(*out_action));
+        anjay_log(DEBUG, "LwM2M action: %s", action_to_string(*out_action));
     }
     return result;
 }
@@ -332,8 +335,9 @@ static int parse_action(avs_stream_abstract_t *stream,
     anjay_log(DEBUG, "CoAP method: %s",
               ANJAY_COAP_CODE_STRING(inout_details->request_code));
 
-    if (_anjay_coap_stream_get_option_u16(stream, ANJAY_COAP_OPT_ACCEPT,
-                                          &inout_details->requested_format)) {
+    if (_anjay_coap_stream_get_option_uint(
+            stream, ANJAY_COAP_OPT_ACCEPT, &inout_details->requested_format,
+            sizeof(inout_details->requested_format))) {
         inout_details->requested_format = ANJAY_COAP_FORMAT_NONE;
     }
 
@@ -468,9 +472,8 @@ static int parse_request_uri(avs_stream_abstract_t *stream,
 static int parse_observe(avs_stream_abstract_t *stream,
                          anjay_coap_observe_t *out) {
     uint32_t raw_value;
-    int retval = _anjay_coap_stream_get_option_u32(stream,
-                                                   ANJAY_COAP_OPT_OBSERVE,
-                                                   &raw_value);
+    int retval = _anjay_coap_stream_get_option_uint(
+            stream, ANJAY_COAP_OPT_OBSERVE, &raw_value, sizeof(raw_value));
     if (retval == ANJAY_COAP_OPTION_MISSING) {
         *out = ANJAY_COAP_OBSERVE_NONE;
         return 0;

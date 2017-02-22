@@ -173,12 +173,12 @@ AVS_UNIT_TEST(coap_builder, option_multiple_ints) {
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[21], 0);
 
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_u8 (&info, 0, 0x10));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_u16(&info, 0, 0x2120));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_u32(&info, 0, 0x43424140));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_u64(&info, 0, 0x8786858483828180));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_u64(&info, 0, 0xFF));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_u64(&info, 0, 0));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_uint(&info, 0, &(uint8_t)  { 0x10 },               1));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_uint(&info, 0, &(uint16_t) { 0x2120 },             2));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_uint(&info, 0, &(uint32_t) { 0x43424140 },         4));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_uint(&info, 0, &(uint64_t) { 0x8786858483828180 }, 8));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_uint(&info, 0, &(uint64_t) { 0xFF },               8));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_uint(&info, 0, &(uint64_t) { 0 },                  8));
 
     size_t storage_size = _anjay_coap_msg_info_get_storage_size(&info);
     void *storage = malloc(storage_size);

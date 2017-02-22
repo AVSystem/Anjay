@@ -1,3 +1,4 @@
+add_subdirectory(bootstrap-awareness)
 add_subdirectory(multi-instance-dynamic)
 add_subdirectory(multi-instance-resources-dynamic)
 add_subdirectory(read-only)

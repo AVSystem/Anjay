@@ -1,4 +1,4 @@
-# Anjay LWM2M library [<img align="right" height="50px" src="https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSoiMy6rnzARUEdR0OjHmPGxTeiAMLBFlUYwIB9baWYWmuUwTbo">](http://www.avsystem.com/)
+# Anjay LwM2M library [<img align="right" height="50px" src="https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSoiMy6rnzARUEdR0OjHmPGxTeiAMLBFlUYwIB9baWYWmuUwTbo">](http://www.avsystem.com/)
 
 ## What is Anjay?
 
@@ -73,7 +73,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 
 ### "One"-liner for Ubuntu 16.04 LTS
 
-To install all necessary packages, compile Anjay demo client and connect it to a local LWM2M server listening on default 5683 port:
+To install all necessary packages, compile Anjay demo client and connect it to a local LwM2M server listening on default 5683 port:
 
 ``` sh
 sudo apt-get install git build-essential gcc cmake libmbedtls-dev \
@@ -82,7 +82,7 @@ sudo apt-get install git build-essential gcc cmake libmbedtls-dev \
     && git submodule update --init \
     && cmake . \
     && make -j$(nproc) \
-    && ./bin/demo --server-uri coap://127.0.0.1:5683
+    && ./output/bin/demo --server-uri coap://127.0.0.1:5683
 ```
 
 ### Dependencies
@@ -112,7 +112,7 @@ To compile the library and demo application:
 cmake . && make -j$(nproc)
 ```
 
-Compiled executables, including demo client, can be found in bin subdirectory.
+Compiled executables, including demo client, can be found in output/bin subdirectory.
 
 For a detailed guide on configuring and compiling the project (including cross-compiling), see [Compiling client applications](https://AVSystem.github.io/Anjay-doc/Compiling_client_applications.html).
 
@@ -120,10 +120,10 @@ To start the demo client:
 
 ``` sh
 # uses plain CoAP
-./bin/demo --server-uri coap://127.0.0.1:5683
+./output/bin/demo --server-uri coap://127.0.0.1:5683
 
 # uses DTLS in PSK mode, with PSK identity "foo" and secret key "bar" (hex-encoded)
-./bin/demo --server-uri coaps://127.0.0.1:5684 --security-mode psk --identity 666f6f --key 626172
+./output/bin/demo --server-uri coaps://127.0.0.1:5684 --security-mode psk --identity 666f6f --key 626172
 ```
 
 **NOTE**: When establishing a DTLS connection, the URI MUST use "coaps://". In NoSec mode (default), the URI MUST use "<coap://>".

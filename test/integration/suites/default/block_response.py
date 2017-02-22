@@ -1,11 +1,29 @@
-from framework.lwm2m_test import *
-from framework.lwm2m.tlv import TLV
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
+
+from framework.lwm2m.tlv import TLV
+from framework.lwm2m_test import *
 
 TEST_OBJECT_OID = 1337
 TEST_OBJECT_RES_BYTES = 5
 TEST_OBJECT_RES_BYTES_SIZE = 6
 TEST_OBJECT_RES_BYTES_BURST = 7
+
 
 class BlockResponseTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self, bytes_size=9001):
@@ -50,8 +68,8 @@ class BlockResponseTest(test_suite.Lwm2mSingleServerTest):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), response);
 
     def read_bytes(self, iid, seq_num=None, block_size=None, options_modifier=None, accept=None):
-        opts = [coap.Option.BLOCK2(seq_num=seq_num,has_more=0,block_size=block_size)] \
-                if seq_num is not None and block_size else []
+        opts = [coap.Option.BLOCK2(seq_num=seq_num, has_more=0, block_size=block_size)] \
+            if seq_num is not None and block_size else []
         if options_modifier is not None:
             opts = options_modifier(opts)
 
@@ -72,6 +90,7 @@ class BlockResponseTest(test_suite.Lwm2mSingleServerTest):
                 break
         return data
 
+
 class BlockResponseFirstRequestIsNotBlock(BlockResponseTest):
     def setUp(self):
         super(BlockResponseFirstRequestIsNotBlock, self).setUp(bytes_size=9025)
@@ -81,6 +100,7 @@ class BlockResponseFirstRequestIsNotBlock(BlockResponseTest):
         self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
         # Currently we have to read this till the end
         self.read_blocks(iid=1)
+
 
 class BlockResponseFirstRequestIsBlock(BlockResponseTest):
     def runTest(self):
@@ -92,6 +112,7 @@ class BlockResponseFirstRequestIsBlock(BlockResponseTest):
         response = self.read_bytes(iid=1, seq_num=0, block_size=1024)
         self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
         self.read_blocks(iid=1)
+
 
 class BlockResponseSizeNegotiation(BlockResponseTest):
     def runTest(self):
@@ -113,6 +134,7 @@ class BlockResponseSizeNegotiation(BlockResponseTest):
 
         third_payload = self.read_blocks(iid=1, block_size=32)
         self.assertEqual(data, third_payload)
+
 
 class BlockResponseSizeRenegotiation(BlockResponseTest):
     def runTest(self):
@@ -140,6 +162,7 @@ class BlockResponseSizeRenegotiation(BlockResponseTest):
 
         self.read_blocks(iid=1, block_size=16)
 
+
 class BlockResponseSizeRenegotiationInTheMiddleOfTransfer(BlockResponseTest):
     def runTest(self):
         response = self.read_bytes(iid=1, seq_num=None, block_size=None)
@@ -152,6 +175,7 @@ class BlockResponseSizeRenegotiationInTheMiddleOfTransfer(BlockResponseTest):
         self.assertEqual(coap.Code.RES_BAD_REQUEST, response.code)
 
         self.read_blocks(iid=1, block_size=1024)
+
 
 class BlockResponseInvalidSizeDuringRenegotation(BlockResponseTest):
     def runTest(self):
@@ -172,6 +196,7 @@ class BlockResponseInvalidSizeDuringRenegotation(BlockResponseTest):
         self.assertIsInstance(response, Lwm2mErrorResponse)
         self.assertEqual(response.code, coap.Code.RES_BAD_REQUEST)
 
+
 class BlockResponseBadBlock2SizeInTheMiddleOfTransfer(BlockResponseTest):
     def runTest(self):
         first_invalid_seq_num = 4
@@ -185,18 +210,20 @@ class BlockResponseBadBlock2SizeInTheMiddleOfTransfer(BlockResponseTest):
 
         # should abort the transfer
 
+
 class BlockResponseBadBlock1(BlockResponseTest):
     def runTest(self):
         def opts_modifier(opts):
-            return opts + [ coap.Option.BLOCK1(0,0,16) ]
+            return opts + [coap.Option.BLOCK1(0, 0, 16)]
 
         response = self.read_bytes(iid=1, seq_num=0, block_size=512)
         self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=512)
         response = self.read_bytes(iid=1, seq_num=1, block_size=512,
-                                  options_modifier=opts_modifier)
+                                   options_modifier=opts_modifier)
 
         # should abort the transfer
         self.assertEqual(response.code, coap.Code.RES_BAD_OPTION)
+
 
 class BlockResponseBiggerBlockSizeThanData(BlockResponseTest):
     def setUp(self):
@@ -206,9 +233,11 @@ class BlockResponseBiggerBlockSizeThanData(BlockResponseTest):
         response = self.read_bytes(iid=1, seq_num=0, block_size=1024)
         self.assertBlockResponse(response, seq_num=0, has_more=0, block_size=1024)
 
+
 # Tests different rates at which anjay's stream buffers are filled
 class BlockResponseDifferentBursts(BlockResponseTest):
     BYTES_AMOUNT = 9001
+
     def setUp(self):
         super().setUp(bytes_size=BlockResponseDifferentBursts.BYTES_AMOUNT)
 

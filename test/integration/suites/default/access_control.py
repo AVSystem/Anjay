@@ -1,13 +1,30 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from framework.lwm2m.tlv import TLVType
+from framework.lwm2m_test import *
+
+from . import bootstrap_server
+
 # In the following test suite we assume that self.servers[0] has SSID=1, and
 # self.servers[1] has SSID=2. Current implementation of the demo guarantees
 # that at least.
 #
 # Also SSID=2 is the master, and SSID=1 is his slave, it can do things allowed
 # only by SSID=2, and this test set shall check that this is indeed the case.
-
-from framework.lwm2m.tlv import TLVType
-from framework.lwm2m_test import *
-from . import bootstrap_server
 
 g = SequentialMsgIdGenerator(1)
 
@@ -350,7 +367,7 @@ class UnbootstrappingOnlyOneOwnerTest(AccessControl.Test):
         # Deleting server shall delete ACO Instance and /TEST_OID/1 instance too.
         self.communicate('trim-servers 2')
         self.assertDemoDeregisters(self.servers[2])
-        del(self.servers[2])
+        del (self.servers[2])
 
         assert not self.find_access_control_instance(server=self.servers[1], oid=TEST_OID, iid=1,
                                                      expect_existence=False)
@@ -370,7 +387,7 @@ class UnbootstrappingOwnerElection(AccessControl.Test):
                                 make_acl_entry(3, ACCESS_MASK_OWNER)])
         self.communicate('trim-servers 2')
         self.assertDemoDeregisters(self.servers[2])
-        del(self.servers[2])
+        del (self.servers[2])
         ac_iid = self.find_access_control_instance(server=self.servers[1], oid=TEST_OID, iid=1)
 
         # SSID=1 shall win the election

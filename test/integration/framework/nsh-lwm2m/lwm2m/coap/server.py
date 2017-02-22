@@ -1,23 +1,37 @@
-import socket
-import errno
-import contextlib
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+import contextlib
+import socket
 from typing import Tuple, Optional
 
 from .packet import Packet
 
 
 @contextlib.contextmanager
-def _override_timeout(socket, timeout_s=-1):
-    skip_override = socket is None or (timeout_s is not None and timeout_s < 0)
+def _override_timeout(sock, timeout_s=-1):
+    skip_override = sock is None or (timeout_s is not None and timeout_s < 0)
 
     if skip_override:
         yield
     else:
-        orig_timeout_s = socket.gettimeout()
-        socket.settimeout(timeout_s)
+        orig_timeout_s = sock.gettimeout()
+        sock.settimeout(timeout_s)
         yield
-        socket.settimeout(orig_timeout_s)
+        sock.settimeout(orig_timeout_s)
 
 
 @contextlib.contextmanager
@@ -70,7 +84,7 @@ class Server(object):
     def send(self, coap_packet: Packet) -> None:
         self.socket.send(coap_packet.serialize())
 
-    def recv(self, timeout_s: float=-1) -> Packet:
+    def recv(self, timeout_s: float = -1) -> Packet:
         with _override_timeout(self.socket, timeout_s):
             if not self.get_remote_addr():
                 self.listen()
@@ -93,9 +107,12 @@ class Server(object):
         return self.socket.getsockname()[1]
 
     def get_remote_addr(self) -> Optional[Tuple[str, int]]:
+        if not self.socket:
+            return None
+
         try:
             return self.socket.getpeername()
-        except:
+        except socket.error:
             return None
 
 
@@ -141,7 +158,7 @@ class DtlsServer(Server):
                               '`python3 setup.py install --user` in the '
                               'pymbedtls/ subdirectory of nsh-lwm2m submodule')
 
-    def listen(self, timeout_s: float=-1) -> None:
+    def listen(self, timeout_s: float = -1) -> None:
         with _override_timeout(self.server_socket, timeout_s):
             self.socket = self.server_socket.accept()
             if self.socket_timeout is not None:

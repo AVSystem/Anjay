@@ -1,5 +1,22 @@
-from framework.lwm2m_test import *
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from framework.lwm2m.tlv import TLV
+from framework.lwm2m_test import *
+
 
 class TestObject:
     class TestCase(test_suite.Lwm2mSingleServerTest):
@@ -21,6 +38,7 @@ class TimestampTest(TestObject.TestCase):
         self.assertMsgEqual(Lwm2mContent.matching(req)(),
                             self.serv.recv())
 
+
 class CounterTest(TestObject.TestCase):
     def runTest(self):
         # ensure the counter is zero initially
@@ -41,6 +59,7 @@ class CounterTest(TestObject.TestCase):
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=b'1'),
                             self.serv.recv())
 
+
 class IntegerArrayTest(TestObject.TestCase):
     def runTest(self):
         # ensure the array is empty
@@ -53,12 +72,12 @@ class IntegerArrayTest(TestObject.TestCase):
 
         # write something
         array_tlv = TLV.make_multires(
-                resource_id=3,
-                instances=[
-                    # (1, (0).to_bytes(0, byteorder='big')),
-                    (2, (12).to_bytes(1, byteorder='big')),
-                    (4, (1234).to_bytes(2, byteorder='big')),
-                ])
+            resource_id=3,
+            instances=[
+                # (1, (0).to_bytes(0, byteorder='big')),
+                (2, (12).to_bytes(1, byteorder='big')),
+                (4, (1234).to_bytes(2, byteorder='big')),
+            ])
         req = Lwm2mWrite('/1337/1/3',
                          array_tlv.serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
@@ -74,6 +93,7 @@ class IntegerArrayTest(TestObject.TestCase):
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=array_tlv.serialize(),
                                                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV),
                             self.serv.recv())
+
 
 class ExecArgsArrayTest(TestObject.TestCase):
     def runTest(self):

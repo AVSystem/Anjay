@@ -74,7 +74,7 @@ static anjay_binding_mode_t read_binding_mode(anjay_t *anjay,
             && !_anjay_dm_res_read_string(anjay, &path, buf, sizeof(buf))) {
         return anjay_binding_mode_from_str(buf);
     } else {
-        anjay_log(WARNING, "could not read binding mode for LWM2M server %u",
+        anjay_log(WARNING, "could not read binding mode for LwM2M server %u",
                   ssid);
         // pass through
     }
@@ -230,7 +230,7 @@ static int get_security_mode(anjay_t *anjay,
     };
 
     if (_anjay_dm_res_read_i64(anjay, &path, &mode)) {
-        anjay_log(ERROR, "could not read LWM2M server security mode");
+        anjay_log(ERROR, "could not read LwM2M server security mode");
         return -1;
     }
 
@@ -259,7 +259,7 @@ static bool is_valid_coap_uri(const anjay_url_t *uri,
     }
 
     if (!*uri->port) {
-        anjay_log(ERROR, "missing port in LWM2M server URI");
+        anjay_log(ERROR, "missing port in LwM2M server URI");
         return false;
     }
 
@@ -278,14 +278,14 @@ static int get_server_uri(anjay_t *anjay,
     };
 
     if (_anjay_dm_res_read_string(anjay, &path, raw_uri, sizeof(raw_uri))) {
-        anjay_log(ERROR, "could not read LWM2M server URI");
+        anjay_log(ERROR, "could not read LwM2M server URI");
         return -1;
     }
 
     const bool use_nosec = (security_mode == ANJAY_UDP_SECURITY_NOSEC);
     if (_anjay_parse_url(raw_uri, out_uri)
             || !is_valid_coap_uri(out_uri, use_nosec)) {
-        anjay_log(ERROR, "could not parse LWM2M server URI: %s", raw_uri);
+        anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
         return -1;
     }
     return 0;

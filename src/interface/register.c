@@ -84,13 +84,13 @@ static const char *assemble_endpoint_path(char *buffer,
 
 static int send_objects_list(avs_stream_abstract_t *stream,
                              AVS_LIST(anjay_dm_cache_object_t) dm) {
-    // TODO: (LWM2M 5.2.1) </>;rt="oma.lwm2m";ct=100 when JSON is implemented
+    // TODO: (LwM2M 5.2.1) </>;rt="oma.lwm2m";ct=100 when JSON is implemented
     bool is_first_path = true;
 
     anjay_dm_cache_object_t *object;
     AVS_LIST_FOREACH(object, dm) {
         if (object->oid == ANJAY_DM_OID_SECURITY) {
-            /* LWM2M spec, 2016-09-08 update says that Register/Update must not
+            /* LwM2M spec, 2016-09-08 update says that Register/Update must not
              * include Security object instances */
             continue;
         }
@@ -135,10 +135,10 @@ static int get_server_lifetime(anjay_t *anjay,
     int read_ret = _anjay_dm_res_read_i64(anjay, &path, &lifetime);
 
     if (read_ret) {
-        anjay_log(ERROR, "could not read lifetime for LWM2M server %u", ssid);
+        anjay_log(ERROR, "could not read lifetime for LwM2M server %u", ssid);
         return -1;
     } else if (lifetime <= 0) {
-        anjay_log(ERROR, "lifetime returned by LWM2M server %u is <= 0", ssid);
+        anjay_log(ERROR, "lifetime returned by LwM2M server %u is <= 0", ssid);
         return -1;
     }
     *out_lifetime = lifetime;

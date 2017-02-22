@@ -73,35 +73,26 @@ const uint8_t *_anjay_coap_opt_value(const anjay_coap_opt_t *opt) {
            + get_ext_field_size(_anjay_coap_opt_get_short_length(opt));
 }
 
-int _anjay_coap_opt_u8_value(const anjay_coap_opt_t *opt,
-                             uint8_t *out_value) {
+int _anjay_coap_opt_uint_value(const anjay_coap_opt_t *opt,
+                               void *out_value,
+                               size_t out_value_size) {
+    const uint8_t *value = _anjay_coap_opt_value(opt);
     uint32_t length = _anjay_coap_opt_content_length(opt);
-    if (length > sizeof(uint8_t)) {
+    if (length > out_value_size) {
         return -1;
     }
-
-    *out_value = 0;
-    memcpy(out_value, _anjay_coap_opt_value(opt), length);
+    memset(out_value, 0, out_value_size);
+#if __BYTE_ORDER == __BIG_ENDIAN
+    memcpy(((char *) out_value) + (out_value_size - length), value, length);
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
+    for (size_t i = 0; i < length; ++i) {
+        ((uint8_t *) out_value)[length - 1 - i] = value[i];
+    }
+#else
+#error "Unsupported byte order"
+#endif
     return 0;
 }
-
-#define INT_GETTER(Bits) \
-    int _anjay_coap_opt_u##Bits##_value(const anjay_coap_opt_t *opt, \
-                                        uint##Bits##_t *out_value) { \
-        uint32_t length = _anjay_coap_opt_content_length(opt); \
-        if (length > sizeof(uint##Bits##_t)) { \
-            return -1; \
-        } \
-        uint##Bits##_t tmp = 0; \
-        memcpy(((char *) &tmp) + (sizeof(uint##Bits##_t) - length), \
-               _anjay_coap_opt_value(opt), length); \
-        *out_value = be##Bits##toh(tmp); \
-        return 0; \
-    }
-
-INT_GETTER(16)
-INT_GETTER(32)
-INT_GETTER(64)
 
 int _anjay_coap_opt_string_value(const anjay_coap_opt_t *opt,
                                  size_t *out_bytes_read,
@@ -120,8 +111,7 @@ int _anjay_coap_opt_string_value(const anjay_coap_opt_t *opt,
 int _anjay_coap_opt_block_seq_number(const anjay_coap_opt_t *opt,
                                      uint32_t *out_seq_num) {
     uint32_t value;
-    if (_anjay_coap_opt_u32_value(opt, &value)
-            || value >= (1 << 24)) {
+    if (_anjay_coap_opt_u32_value(opt, &value) || value >= (1 << 24)) {
         return -1;
     }
 
@@ -132,8 +122,7 @@ int _anjay_coap_opt_block_seq_number(const anjay_coap_opt_t *opt,
 int _anjay_coap_opt_block_has_more(const anjay_coap_opt_t *opt,
                                    bool *out_has_more) {
     uint32_t value;
-    if (_anjay_coap_opt_u32_value(opt, &value)
-            || value >= (1 << 24)) {
+    if (_anjay_coap_opt_u32_value(opt, &value) || value >= (1 << 24)) {
         return -1;
     }
 
@@ -144,8 +133,7 @@ int _anjay_coap_opt_block_has_more(const anjay_coap_opt_t *opt,
 int _anjay_coap_opt_block_size(const anjay_coap_opt_t *opt,
                                uint16_t *out_size) {
     uint32_t value;
-    if (_anjay_coap_opt_u32_value(opt, &value)
-            || value >= (1 << 24)) {
+    if (_anjay_coap_opt_u32_value(opt, &value) || value >= (1 << 24)) {
         return -1;
     }
 

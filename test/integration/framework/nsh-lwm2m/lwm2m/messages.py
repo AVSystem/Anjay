@@ -1,17 +1,30 @@
-import sys
-import string
-import random
-import struct
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import copy
 import functools
+import sys
+from typing import List, T
 
 from . import coap
-from .tlv import TLV
-from .coap.utils import hexlify_nonprintable, hexlify
 from .coap.packet import ANY
-from .path import *
+from .coap.utils import hexlify_nonprintable, hexlify
+from .path import CoapPath, Lwm2mPath, Lwm2mNonemptyPath, Lwm2mObjectPath, Lwm2mResourcePath
+from .tlv import TLV
 
-from typing import List, Union, T
 
 class EscapedBytes:
     """
@@ -22,11 +35,13 @@ class EscapedBytes:
     Example:
         '\x61\x62\x63' - parsed as b'abc'
     """
+
     @staticmethod
     def powercmd_parse(text):
         import ast
         result = ast.literal_eval('b"%s"' % (text,))
         return result
+
 
 def concat_if_not_any(*lists: List[T]):
     if all(list is ANY for list in lists):
@@ -34,10 +49,12 @@ def concat_if_not_any(*lists: List[T]):
 
     return sum((([] if list is ANY else list) for list in lists), [])
 
+
 class Lwm2mMsg(coap.Packet):
     """
     Base class of all LWM2M messages.
     """
+
     @classmethod
     def from_packet(cls, pkt: coap.Packet):
         if not cls._pkt_matches(pkt):
@@ -53,7 +70,7 @@ class Lwm2mMsg(coap.Packet):
         return msg
 
     @staticmethod
-    def _pkt_matches(pkt: coap.Packet):
+    def _pkt_matches(_pkt: coap.Packet):
         return True
 
     def summary(self):
@@ -89,15 +106,15 @@ class Lwm2mMsg(coap.Packet):
     def _decode_tlv_content(content):
         try:
             return str(TLV.parse(content))
-        except Exception as e:
-            return ('(malformed TLV: %s)\n' % (e,)
+        except Exception as exc:
+            return ('(malformed TLV: %s)\n' % (exc,)
                     + Lwm2mMsg._decode_binary_content(content))
 
     def _decode_content(self):
         if self.content is ANY:
             return ''
 
-        DECODERS = {
+        decoders = {
             coap.ContentFormat.TEXT_PLAIN:               Lwm2mMsg._decode_text_content,
             coap.ContentFormat.APPLICATION_LINK:         Lwm2mMsg._decode_text_content,
             coap.ContentFormat.APPLICATION_LWM2M_TLV:    Lwm2mMsg._decode_tlv_content,
@@ -107,11 +124,11 @@ class Lwm2mMsg(coap.Packet):
         desired_decoders = set()
 
         for opt in self.get_options(coap.Option.CONTENT_FORMAT):
-            decoder = DECODERS.get(opt.content_to_int(), Lwm2mMsg._decode_binary_content)
+            decoder = decoders.get(opt.content_to_int(), Lwm2mMsg._decode_binary_content)
             desired_decoders.add(decoder)
 
         if not desired_decoders:
-            desired_decoders.add(DECODERS[coap.ContentFormat.TEXT_PLAIN])
+            desired_decoders.add(decoders[coap.ContentFormat.TEXT_PLAIN])
 
         decoded_content = ''
         for decoder in desired_decoders:
@@ -127,20 +144,14 @@ class Lwm2mMsg(coap.Packet):
                                  super().__str__(),
                                  self._decode_content())
 
-    def to_test_case(self, type):
-        import nsh
-
-        if type is nsh.Recv:
-            return ('pkt = serv.recv()\n'
-                    'assertEqual(%s, pkt)\n' % (repr(self),))
-        else:
-            return 'serv.send(%s)\n' % (repr(self),)
 
 class Lwm2mResponse(Lwm2mMsg):
     """
     Base class for all LWM2M responses.
     """
-    def _pkt_matches(pkt: coap.Packet):
+
+    @staticmethod
+    def _pkt_matches(_pkt: coap.Packet):
         return False
 
     @classmethod
@@ -152,27 +163,32 @@ class Lwm2mResponse(Lwm2mMsg):
                                      msg_id=request.msg_id,
                                      token=request.token)
 
+
 def is_lwm2m_nonempty_path(path):
     try:
         return Lwm2mNonemptyPath(path) is not None
-    except:
+    except ValueError:
         return False
+
 
 def is_lwm2m_path(path):
     try:
         return Lwm2mPath(path) is not None
-    except:
+    except ValueError:
         return False
+
 
 def is_link_format(pkt):
     fmt = pkt.get_options(coap.Option.CONTENT_FORMAT)
     return (fmt == [coap.Option.CONTENT_FORMAT.APPLICATION_LINK]
             or (fmt == [] and pkt.content == b''))
 
+
 def shorten(text):
     if len(text) > 30:
         return text[:27] + '...'
     return text
+
 
 class Lwm2mRequestBootstrap(Lwm2mMsg):
     @staticmethod
@@ -184,10 +200,10 @@ class Lwm2mRequestBootstrap(Lwm2mMsg):
 
     def __init__(self,
                  endpoint_name: str,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY,
-                 content: EscapedBytes=ANY):
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_POST,
                          msg_id=msg_id,
@@ -202,6 +218,7 @@ class Lwm2mRequestBootstrap(Lwm2mMsg):
         return ('Request Bootstrap %s: %s' % (self.get_full_uri(),
                                               self.content_summary()))
 
+
 class Lwm2mBootstrapFinish(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -211,10 +228,10 @@ class Lwm2mBootstrapFinish(Lwm2mMsg):
                 and pkt.get_full_uri() == '/bs')
 
     def __init__(self,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY,
-                 content: EscapedBytes=ANY):
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_POST,
                          msg_id=msg_id,
@@ -228,8 +245,9 @@ class Lwm2mBootstrapFinish(Lwm2mMsg):
         return ('Request Bootstrap %s: %s' % (self.get_full_uri(),
                                               self.content_summary()))
 
+
 def _split_string_path(path: str,
-                       query: List[str]=None):
+                       query: List[str] = None):
     """
     Splits a CoAP PATH given as string into a path component and a list of
     query strings ("foo=bar").
@@ -248,6 +266,7 @@ def _split_string_path(path: str,
 
     return path, path_query + (query or [])
 
+
 class Lwm2mRegister(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -259,11 +278,11 @@ class Lwm2mRegister(Lwm2mMsg):
 
     def __init__(self,
                  path: str or CoapPath,
-                 query: List[str]=None,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY,
-                 content: EscapedBytes=ANY):
+                 query: List[str] = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
         path, query = _split_string_path(path, query)
 
         super().__init__(type=coap.Type.CONFIRMABLE,
@@ -281,6 +300,7 @@ class Lwm2mRegister(Lwm2mMsg):
         return ('Register %s: %s' % (self.get_full_uri(),
                                      self.content_summary()))
 
+
 class Lwm2mUpdate(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -296,11 +316,11 @@ class Lwm2mUpdate(Lwm2mMsg):
 
     def __init__(self,
                  path: str or CoapPath,
-                 query: List[str]=None,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY,
-                 content: EscapedBytes=ANY):
+                 query: List[str] = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
         path, query = _split_string_path(path, query)
 
         super().__init__(type=coap.Type.CONFIRMABLE,
@@ -318,6 +338,7 @@ class Lwm2mUpdate(Lwm2mMsg):
         return ('Update %s: %s' % (self.get_full_uri(),
                                    self.content_summary()))
 
+
 class Lwm2mDeregister(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -327,9 +348,9 @@ class Lwm2mDeregister(Lwm2mMsg):
 
     def __init__(self,
                  path: str or CoapPath,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = CoapPath(path)
 
@@ -344,6 +365,7 @@ class Lwm2mDeregister(Lwm2mMsg):
     def summary(self):
         return 'De-register ' + self.get_full_uri()
 
+
 class Lwm2mRead(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -354,10 +376,10 @@ class Lwm2mRead(Lwm2mMsg):
 
     def __init__(self,
                  path: str or Lwm2mNonemptyPath,
-                 accept: coap.AcceptOption=None,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 accept: coap.AcceptOption = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = Lwm2mNonemptyPath(path)
 
@@ -383,6 +405,7 @@ class Lwm2mRead(Lwm2mMsg):
 
         return text
 
+
 class Lwm2mObserve(Lwm2mRead):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -391,11 +414,11 @@ class Lwm2mObserve(Lwm2mRead):
 
     def __init__(self,
                  path: str or Lwm2mNonemptyPath,
-                 observe: int=0,
-                 accept: coap.AcceptOption=None,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 observe: int = 0,
+                 accept: coap.AcceptOption = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = Lwm2mNonemptyPath(path)
 
@@ -430,6 +453,7 @@ class Lwm2mObserve(Lwm2mRead):
 
         return text
 
+
 class Lwm2mDiscover(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -440,9 +464,9 @@ class Lwm2mDiscover(Lwm2mMsg):
 
     def __init__(self,
                  path: str or Lwm2mPath,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = Lwm2mPath(path)
 
@@ -458,6 +482,7 @@ class Lwm2mDiscover(Lwm2mMsg):
     def summary(self):
         return 'Discover ' + self.get_full_uri()
 
+
 class Lwm2mWrite(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -469,11 +494,11 @@ class Lwm2mWrite(Lwm2mMsg):
     def __init__(self,
                  path: str or Lwm2mNonemptyPath,
                  content: EscapedBytes or str or bytes,
-                 format: coap.ContentFormatOption=coap.ContentFormat.TEXT_PLAIN,
-                 update: bool=False,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 format: coap.ContentFormatOption = coap.ContentFormat.TEXT_PLAIN,
+                 update: bool = False,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = Lwm2mNonemptyPath(path)
         if isinstance(content, str):
@@ -500,6 +525,7 @@ class Lwm2mWrite(Lwm2mMsg):
                 % (' (update)' if self.code == coap.Code.REQ_POST else '',
                    self.get_full_uri(), fmt, len(self.content)))
 
+
 class Lwm2mWriteAttributes(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -510,15 +536,15 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
 
     def __init__(self,
                  path: str or Lwm2mNonemptyPath,
-                 lt: float=None,
-                 gt: float=None,
-                 st: float=None,
-                 pmin: int=None,
-                 pmax: int=None,
-                 query: List[str]=None,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 lt: float = None,
+                 gt: float = None,
+                 st: float = None,
+                 pmin: int = None,
+                 pmax: int = None,
+                 query: List[str] = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         path, query = _split_string_path(path, query)
 
         if lt is not None:
@@ -544,7 +570,8 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
 
     def summary(self):
         attrs = ', '.join(x.content_to_str() for x in self.get_options(coap.Option.URI_QUERY))
-        return ('Write Attributes %s: %s' % (self.get_full_uri(), attrs))
+        return 'Write Attributes %s: %s' % (self.get_full_uri(), attrs)
+
 
 class Lwm2mExecute(Lwm2mMsg):
     @staticmethod
@@ -556,10 +583,10 @@ class Lwm2mExecute(Lwm2mMsg):
 
     def __init__(self,
                  path: str or Lwm2mResourcePath,
-                 content: EscapedBytes=b'',
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 content: EscapedBytes = b'',
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = Lwm2mResourcePath(path)
 
@@ -575,6 +602,7 @@ class Lwm2mExecute(Lwm2mMsg):
         return ('Execute %s: %s' % (self.get_full_uri(),
                                     self.content_summary()))
 
+
 class Lwm2mCreate(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -585,10 +613,10 @@ class Lwm2mCreate(Lwm2mMsg):
 
     def __init__(self,
                  path: str or Lwm2mObjectPath,
-                 content: EscapedBytes=b'',
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 content: EscapedBytes = b'',
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = Lwm2mObjectPath(path)
 
@@ -605,6 +633,7 @@ class Lwm2mCreate(Lwm2mMsg):
     def summary(self):
         return 'Create %s: %s' % (self.get_full_uri(), self.content_summary())
 
+
 class Lwm2mDelete(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -618,9 +647,9 @@ class Lwm2mDelete(Lwm2mMsg):
 
     def __init__(self,
                  path: str or Lwm2mPath,
-                 msg_id: int=ANY,
-                 token: EscapedBytes=ANY,
-                 options: List[coap.Option]=ANY):
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(path, str):
             path = Lwm2mPath(path)
         if path.resource_id is not None:
@@ -636,6 +665,7 @@ class Lwm2mDelete(Lwm2mMsg):
     def summary(self):
         return 'Delete ' + self.get_full_uri()
 
+
 # Classes defined below are responses that should be matched to some request.
 # Therefeore, msg_id and token in the constructor are mandatory.
 
@@ -647,10 +677,10 @@ class Lwm2mContent(Lwm2mResponse):
     def __init__(self,
                  msg_id: int,
                  token: EscapedBytes,
-                 content: EscapedBytes=ANY,
-                 format: coap.ContentFormatOption=ANY,
-                 type: coap.Type=coap.Type.ACKNOWLEDGEMENT,
-                 options: List[coap.Option]=ANY):
+                 content: EscapedBytes = ANY,
+                 format: coap.ContentFormatOption = ANY,
+                 type: coap.Type = coap.Type.ACKNOWLEDGEMENT,
+                 options: List[coap.Option] = ANY):
         if isinstance(format, int):
             format = coap.Option.CONTENT_FORMAT(format)
 
@@ -668,7 +698,7 @@ class Lwm2mContent(Lwm2mResponse):
     def make_content_summary(self):
         try:
             fmt = self.get_options(coap.Option.CONTENT_FORMAT)[0]
-        except:
+        except ValueError:
             fmt = coap.Option.CONTENT_FORMAT.TEXT_PLAIN
 
         if fmt == coap.Option.CONTENT_FORMAT.TEXT_PLAIN:
@@ -679,6 +709,7 @@ class Lwm2mContent(Lwm2mResponse):
     def summary(self):
         return 'Content ' + self.make_content_summary()
 
+
 class Lwm2mNotify(Lwm2mContent):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -687,10 +718,10 @@ class Lwm2mNotify(Lwm2mContent):
 
     def __init__(self,
                  token: EscapedBytes,
-                 content: EscapedBytes=ANY,
-                 format: coap.ContentFormatOption=ANY,
-                 confirmable: bool=False,
-                 options: List[coap.Option]=ANY):
+                 content: EscapedBytes = ANY,
+                 format: coap.ContentFormatOption = ANY,
+                 confirmable: bool = False,
+                 options: List[coap.Option] = ANY):
         if isinstance(format, int):
             format = coap.Option.CONTENT_FORMAT(format)
 
@@ -704,7 +735,9 @@ class Lwm2mNotify(Lwm2mContent):
     def summary(self):
         observe_opts = self.get_options(coap.Option.OBSERVE)
         seq = '/'.join(str(opt.content_to_int()) for opt in observe_opts)
-        return 'Notify (%s, seq %s, token %s) %s' % (str(self.type), seq, hexlify(self.token), self.make_content_summary())
+        return 'Notify (%s, seq %s, token %s) %s' % (
+            str(self.type), seq, hexlify(self.token), self.make_content_summary())
+
 
 class Lwm2mCreated(Lwm2mResponse):
     @staticmethod
@@ -714,8 +747,8 @@ class Lwm2mCreated(Lwm2mResponse):
     def __init__(self,
                  msg_id: int,
                  token: EscapedBytes,
-                 location: str or CoapPath=ANY,
-                 options: List[coap.Option]=ANY):
+                 location: str or CoapPath = ANY,
+                 options: List[coap.Option] = ANY):
         if isinstance(location, str):
             location = CoapPath(location)
 
@@ -731,6 +764,7 @@ class Lwm2mCreated(Lwm2mResponse):
         location = self.get_location_path()
         return 'Created ' + (location or '(no location-path)')
 
+
 class Lwm2mDeleted(Lwm2mResponse):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -739,8 +773,8 @@ class Lwm2mDeleted(Lwm2mResponse):
     def __init__(self,
                  msg_id: int,
                  token: EscapedBytes,
-                 location: str or CoapPath=ANY,
-                 options: List[coap.Option]=ANY):
+                 location: str or CoapPath = ANY,
+                 options: List[coap.Option] = ANY):
         if location is not ANY and isinstance(location, str):
             location = CoapPath(location)
 
@@ -756,6 +790,7 @@ class Lwm2mDeleted(Lwm2mResponse):
         location = self.get_location_path()
         return 'Deleted ' + (location or '(no location-path)')
 
+
 class Lwm2mChanged(Lwm2mResponse):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -764,8 +799,8 @@ class Lwm2mChanged(Lwm2mResponse):
     def __init__(self,
                  msg_id: int,
                  token: EscapedBytes,
-                 location: str or CoapPath=ANY,
-                 options: List[coap.Option]=ANY):
+                 location: str or CoapPath = ANY,
+                 options: List[coap.Option] = ANY):
         if location is not ANY and isinstance(location, str):
             location = CoapPath(location)
 
@@ -781,6 +816,7 @@ class Lwm2mChanged(Lwm2mResponse):
         location = self.get_location_path()
         return 'Changed ' + (location or '(no location path)')
 
+
 class Lwm2mErrorResponse(Lwm2mResponse):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -791,7 +827,7 @@ class Lwm2mErrorResponse(Lwm2mResponse):
                  code: coap.Code,
                  msg_id: int,
                  token: EscapedBytes,
-                 options: List[coap.Option]=ANY):
+                 options: List[coap.Option] = ANY):
         if code.cls not in (4, 5):
             raise ValueError('Error responses must have code class 4 or 5')
 
@@ -805,6 +841,7 @@ class Lwm2mErrorResponse(Lwm2mResponse):
         content_str = shorten(hexlify_nonprintable(self.content)) if self.content else '(no details available)'
         return '%s: %s' % (str(self.code), content_str)
 
+
 class Lwm2mEmpty(Lwm2mResponse):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -814,8 +851,8 @@ class Lwm2mEmpty(Lwm2mResponse):
                 and pkt.content == b'')
 
     def __init__(self,
-                 type: coap.Type=coap.Type.ACKNOWLEDGEMENT,
-                 msg_id: int=ANY):
+                 type: coap.Type = coap.Type.ACKNOWLEDGEMENT,
+                 msg_id: int = ANY):
         super().__init__(type=type,
                          code=coap.Code.EMPTY,
                          msg_id=msg_id,
@@ -824,6 +861,7 @@ class Lwm2mEmpty(Lwm2mResponse):
 
     def summary(self):
         return 'Empty %s, msg_id = %d' % (str(self.type), self.msg_id)
+
 
 class Lwm2mReset(Lwm2mEmpty):
     @staticmethod
@@ -837,6 +875,7 @@ class Lwm2mReset(Lwm2mEmpty):
     def summary(self):
         return 'Reset, msg_id = %d' % (self.msg_id,)
 
+
 class Lwm2mContinue(Lwm2mResponse):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
@@ -845,8 +884,8 @@ class Lwm2mContinue(Lwm2mResponse):
     def __init__(self,
                  msg_id: int,
                  token: EscapedBytes,
-                 type: coap.Type=coap.Type.ACKNOWLEDGEMENT,
-                 options: List[coap.Option]=ANY):
+                 type: coap.Type = coap.Type.ACKNOWLEDGEMENT,
+                 options: List[coap.Option] = ANY):
         super().__init__(type=type,
                          code=coap.Code.RES_CONTINUE,
                          msg_id=msg_id,
@@ -856,13 +895,14 @@ class Lwm2mContinue(Lwm2mResponse):
     def summary(self):
         return 'Continue, msg_id = %d, token = %s' % (self.msg_id, self.token)
 
+
 def _get_ordered_types_list():
     def _sequence_preserving_uniq(seq):
         seen = set()
         return [x for x in seq if not (x in seen or seen.add(x))]
 
     msg_subclasses = [v for v in sys.modules[__name__].__dict__.values()
-                      if type(v) is type and issubclass(v, Lwm2mMsg)]
+                      if isinstance(v, type) and issubclass(v, Lwm2mMsg)]
 
     # for each Lwm2mMsg subclass, list the subclass and all its base classes
     # up to and including Lwm2mMsg
@@ -870,7 +910,7 @@ def _get_ordered_types_list():
     types = []
     for cls in msg_subclasses:
         types += [base for base in reversed(cls.mro())
-                      if issubclass(base, Lwm2mMsg) ]
+                  if issubclass(base, Lwm2mMsg)]
 
     # leave only the first occurrence of every class
     # reverse the result so that subclasses are always first
@@ -878,13 +918,15 @@ def _get_ordered_types_list():
 
     # sanity check: for any class in ORDERED_TYPES all its subclasses are
     # BEFORE it on the list
-    for left in range(len(ordered_types)):
-        for right in range(left + 1, len(ordered_types)):
-            assert not issubclass(ordered_types[right], ordered_types[left])
+    for left_idx, left in enumerate(ordered_types):
+        for right in ordered_types[left_idx + 1:]:
+            assert not issubclass(right, left)
 
     return ordered_types
 
+
 TYPES = _get_ordered_types_list()
+
 
 def get_lwm2m_msg(pkt: coap.Packet):
     for t in TYPES:

@@ -1,8 +1,25 @@
-from framework.lwm2m_test import *
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 
+from framework.lwm2m_test import *
+
 from .dm.utils import DataModel, ValueValidator
+
 
 class Test201_QueryingBasicInformationInPlainTextFormat(DataModel.Test):
     def runTest(self):
@@ -16,12 +33,13 @@ class Test201_QueryingBasicInformationInPlainTextFormat(DataModel.Test):
         #   - Model number
         #   - Serial number
 
+
 class Test203_QueryingBasicInformationInTLVFormat(DataModel.Test):
     def runTest(self):
         tlv_with_string = ValueValidator.tlv_resources(ValueValidator.ascii_string())
 
         self.test_read(ResPath.Device.Manufacturer, tlv_with_string, coap.ContentFormat.APPLICATION_LWM2M_TLV)
-        self.test_read(ResPath.Device.ModelNumber,  tlv_with_string, coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        self.test_read(ResPath.Device.ModelNumber, tlv_with_string, coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.test_read(ResPath.Device.SerialNumber, tlv_with_string, coap.ContentFormat.APPLICATION_LWM2M_TLV)
 
         # 1. Server has received the requested information and display of the
@@ -30,18 +48,23 @@ class Test203_QueryingBasicInformationInTLVFormat(DataModel.Test):
         #   - Model number
         #   - Serial number
 
+
 @unittest.skip("JSON format not implemented")
 class Test204_QueryingBasicInformationInJSONFormat(DataModel.Test):
     def runTest(self):
-        self.test_read(ResPath.Device.Manufacturer, ValueValidator.ascii_string(), coap.ContentFormat.APPLICATION_LWM2M_JSON)
-        self.test_read(ResPath.Device.ModelNumber,  ValueValidator.ascii_string(), coap.ContentFormat.APPLICATION_LWM2M_JSON)
-        self.test_read(ResPath.Device.SerialNumber, ValueValidator.ascii_string(), coap.ContentFormat.APPLICATION_LWM2M_JSON)
+        self.test_read(ResPath.Device.Manufacturer, ValueValidator.ascii_string(),
+                       coap.ContentFormat.APPLICATION_LWM2M_JSON)
+        self.test_read(ResPath.Device.ModelNumber, ValueValidator.ascii_string(),
+                       coap.ContentFormat.APPLICATION_LWM2M_JSON)
+        self.test_read(ResPath.Device.SerialNumber, ValueValidator.ascii_string(),
+                       coap.ContentFormat.APPLICATION_LWM2M_JSON)
 
         # 1. Server has received the requested information and display of the
         # following data to the user is possible:
         #   - Manufacturer
         #   - Model number
         #   - Serial number
+
 
 class Test205_SettingBasicInformationInPlainTextFormat(DataModel.Test):
     def runTest(self):
@@ -62,8 +85,9 @@ class Test205_SettingBasicInformationInPlainTextFormat(DataModel.Test):
         self.test_write_validated(ResPath.Server[1].NotificationStoring, '1')
 
         self.test_write(ResPath.Server[1].Binding, 'UQ')
-        self.assertDemoUpdatesRegistration(lifetime=123, binding='UQ') # triggered by Binding change
+        self.assertDemoUpdatesRegistration(lifetime=123, binding='UQ')  # triggered by Binding change
         self.assertEqual(b'UQ', self.test_read(ResPath.Server[1].Binding))
+
 
 class Test241_ExecutableResourceRebootingTheDevice(test_suite.Lwm2mSingleServerTest):
     def _get_valgrind_args(self):

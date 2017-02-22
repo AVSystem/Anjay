@@ -49,7 +49,7 @@ static anjay_t *const FAKE_ANJAY = (anjay_t *) ~(uintptr_t) NULL;
             PERSISTENCE_TEST_FINISH; \
         } while (0)
 
-#define MAGIC_HEADER "FAS\1"
+#define MAGIC_HEADER "FAS\0"
 
 AVS_UNIT_TEST(attr_storage_persistence, persist_empty) {
     PERSIST_TEST_INIT(256);
@@ -94,7 +94,7 @@ static void write_res_attrs(anjay_attr_storage_t *fas,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
                             anjay_ssid_t ssid,
-                            const anjay_dm_attributes_t *attrs) {
+                            const anjay_dm_resource_attributes_t *attrs) {
     fas_object_t *obj = _anjay_attr_storage_find_object(fas, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(obj->def.resource_write_attrs(
@@ -108,47 +108,44 @@ static void persist_test_fill(anjay_attr_storage_t *fas) {
     write_obj_attrs(fas, 4, 33,
                     &(const anjay_dm_attributes_t) {
                         .min_period = 42,
-                        .max_period = ANJAY_ATTRIB_PERIOD_NONE,
-                        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .step = ANJAY_ATTRIB_VALUE_NONE
+                        .max_period = ANJAY_ATTRIB_PERIOD_NONE
                     });
     write_obj_attrs(fas, 4, 14,
                     &(const anjay_dm_attributes_t) {
                         .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                        .max_period = 3,
-                        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .step = ANJAY_ATTRIB_VALUE_NONE
+                        .max_period = 3
                     });
     write_inst_attrs(fas, 42, 1, 2,
                      &(const anjay_dm_attributes_t) {
                          .min_period = 7,
-                         .max_period = 13,
-                         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                         .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                         .step = ANJAY_ATTRIB_VALUE_NONE
+                         .max_period = 13
                      });
     write_res_attrs(fas, 42, 1, 3, 2,
-                    &(const anjay_dm_attributes_t) {
-                        .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                        .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    &(const anjay_dm_resource_attributes_t) {
+                        .common = {
+                            .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                            .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                        },
                         .greater_than = 1.0,
                         .less_than = -1.0,
                         .step = ANJAY_ATTRIB_VALUE_NONE
                     });
     write_res_attrs(fas, 42, 1, 3, 7,
-                    &(const anjay_dm_attributes_t) {
-                        .min_period = 1,
-                        .max_period = 14,
+                    &(const anjay_dm_resource_attributes_t) {
+                        .common = {
+                            .min_period = 1,
+                            .max_period = 14
+                        },
                         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                         .less_than = ANJAY_ATTRIB_VALUE_NONE,
                         .step = ANJAY_ATTRIB_VALUE_NONE
                     });
     write_res_attrs(fas, 517, 516, 515, 514,
-                    &(const anjay_dm_attributes_t) {
-                        .min_period = 33,
-                        .max_period = ANJAY_ATTRIB_PERIOD_NONE,
+                    &(const anjay_dm_resource_attributes_t) {
+                        .common = {
+                            .min_period = 33,
+                            .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                        },
                         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
                         .less_than = ANJAY_ATTRIB_VALUE_NONE,
                         .step = 42.0
@@ -163,15 +160,9 @@ static const char PERSIST_TEST_DATA[] =
                     "\x00\x0E" // SSID 14
                         "\xFF\xFF\xFF\xFF" // min period
                         "\x00\x00\x00\x03" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                     "\x00\x21" // SSID 33
                         "\x00\x00\x00\x2A" // min period
                         "\xFF\xFF\xFF\xFF" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                 "\x00\x00\x00\x00" // 0 instance entries
             "\x00\x2A" // OID 42
                 "\x00\x00\x00\x00" // 0 object-level default attrs
@@ -181,9 +172,6 @@ static const char PERSIST_TEST_DATA[] =
                             "\x00\x02" // SSID 2
                                 "\x00\x00\x00\x07" // min period
                                 "\x00\x00\x00\x0D" // max period
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                         "\x00\x00\x00\x01" // 1 resource entry
                             "\x00\x03" // RID 3
                                 "\x00\x00\x00\x02" // 2 attr entries
@@ -192,7 +180,6 @@ static const char PERSIST_TEST_DATA[] =
                                         "\xFF\xFF\xFF\xFF" // max period
                     /* greater than */  "\x3F\xF0\x00\x00\x00\x00\x00\x00"
                     /* less than */     "\xBF\xF0\x00\x00\x00\x00\x00\x00"
-
                     /* step */          "\x7F\xF8\x00\x00\x00\x00\x00\x00"
                                     "\x00\x07" // SSID 7
                                         "\x00\x00\x00\x01" // min period
@@ -327,10 +314,10 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
     // object 4
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(
             _anjay_attr_storage_find_object(fas, 4)->default_attrs), 2);
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             _anjay_attr_storage_find_object(fas, 4)->default_attrs,
             test_default_attrs(14, ANJAY_ATTRIB_PERIOD_NONE, 3));
-    assert_attrs_equal(
+    assert_default_attrs_equal(
             AVS_LIST_NEXT(
                     _anjay_attr_storage_find_object(fas, 4)->default_attrs),
             test_default_attrs(33, 42, ANJAY_ATTRIB_PERIOD_NONE));
@@ -578,16 +565,10 @@ static const char TEST_DATA_WITH_EMPTY_OID_ATTRS[] =
                     "\x00\x0E" // SSID 14
                         "\xFF\xFF\xFF\xFF" // min period
                         "\x00\x00\x00\x03" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                     "\x00\x21" // SSID 33
                 /********* EMPTY ATTRIBUTES FOLLOW *********/
                         "\xFF\xFF\xFF\xFF" // min period
                         "\xFF\xFF\xFF\xFF" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                 /*********** EMPTY ATTRIBUTES END ***********/
                 "\x00\x00\x00\x00"; // 0 instance entries
 
@@ -604,9 +585,6 @@ static const char TEST_DATA_WITH_EMPTY_IID_ATTRS[] =
                         /********* EMPTY ATTRIBUTES FOLLOW *********/
                                 "\xFF\xFF\xFF\xFF" // min period
                                 "\xFF\xFF\xFF\xFF" // max period
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00"
                         /*********** EMPTY ATTRIBUTES END ***********/
                         "\x00\x00\x00\x01" // 1 resource entry
                             "\x00\x03" // RID 3
@@ -703,18 +681,12 @@ static const char TEST_DATA_DUPLICATE_OID[] =
                     "\x00\x0E" // SSID 14
                         "\xFF\xFF\xFF\xFF" // min period
                         "\x00\x00\x00\x03" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                 "\x00\x00\x00\x00" // 0 instance entries
             "\x00\x04" // OID 4
                 "\x00\x00\x00\x01" // 1 object-level default attr
                     "\x00\x07" // SSID 7
                         "\xFF\xFF\xFF\xFF" // min period
                         "\x00\x00\x00\x03" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                 "\x00\x00\x00\x00"; // 0 instance entries
 
 AVS_UNIT_TEST(attr_storage_persistence, restore_duplicate_oid) {

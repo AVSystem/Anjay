@@ -479,7 +479,7 @@ int _anjay_bootstrap_finish(anjay_t *anjay) {
     if ((retval = _anjay_dm_foreach_instance(
                  anjay, obj, schedule_bootstrap_timeout, NULL))) {
         anjay_log(ERROR,
-                  "Could not iterate over LWM2M Security object instances");
+                  "Could not iterate over LwM2M Security object instances");
     }
     int retval2 = _anjay_notify_perform(anjay, ANJAY_SSID_BOOTSTRAP,
                                         anjay->bootstrap.notification_queue);
@@ -512,16 +512,25 @@ static int invoke_action(anjay_t *anjay,
                          const anjay_request_details_t *details,
                          avs_stream_abstract_t *stream) {
     anjay_input_ctx_t *in_ctx = NULL;
+    const uint16_t format =
+            _anjay_translate_legacy_content_format(details->content_format);
     int result = -1;
-
     switch (details->action) {
     case ANJAY_ACTION_WRITE:
         if ((result = _anjay_input_dynamic_create(&in_ctx, &stream, false))) {
             anjay_log(ERROR, "could not create input context");
             return result;
         }
-        result = bootstrap_write(anjay, &DETAILS_TO_DM_WRITE_ARGS(details),
-                                 in_ctx);
+
+        if (format == ANJAY_COAP_FORMAT_TLV && details->has_rid) {
+            result = _anjay_dm_check_if_tlv_rid_matches_uri_rid(in_ctx,
+                                                                details->rid);
+        }
+
+        if (!result) {
+            result = bootstrap_write(anjay, &DETAILS_TO_DM_WRITE_ARGS(details),
+                                     in_ctx);
+        }
         if (_anjay_input_ctx_destroy(&in_ctx)) {
             anjay_log(ERROR, "input ctx cleanup failed");
         }

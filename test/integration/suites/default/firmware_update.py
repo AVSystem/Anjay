@@ -1,13 +1,26 @@
-from framework.lwm2m_test import *
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import os
-import socket
-import time
-import threading
 import http
 import http.server
 import tempfile
-import binascii
+import threading
+import time
+
+from framework.lwm2m_test import *
 
 UPDATE_STATE_IDLE = 0
 UPDATE_STATE_DOWNLOADING = 1
@@ -27,6 +40,7 @@ UPDATE_RESULT_UNSUPPORTED_PROTOCOL = 9
 
 FIRMWARE_PATH = '/firmware'
 FIRMWARE_SCRIPT_TEMPLATE = '#!/bin/sh\necho updated > "%s"\nrm "$0"\n'
+
 
 class FirmwareUpdate:
     class Test(test_suite.Lwm2mSingleServerTest):
@@ -67,7 +81,6 @@ class FirmwareUpdate:
             self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
             return int(res.content)
 
-
     class TestWithHttpServer(Test):
         def get_firmware_uri(self):
             return 'http://127.0.0.1:%d%s' % (self.http_server.server_address[1], FIRMWARE_PATH)
@@ -99,6 +112,7 @@ class FirmwareUpdate:
             self.requests = []
 
             test_case = self
+
             class FirmwareRequestHandler(http.server.BaseHTTPRequestHandler):
                 def do_GET(self):
                     test_case.requests.append(self.path)
@@ -118,7 +132,6 @@ class FirmwareUpdate:
             self.server_thread = threading.Thread(target=lambda: self.http_server.serve_forever())
             self.server_thread.start()
 
-
         def tearDown(self):
             try:
                 super().tearDown()
@@ -128,6 +141,7 @@ class FirmwareUpdate:
 
             # there should be exactly one request
             self.assertEqual(['/firmware'], self.requests)
+
 
 class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
     def setUp(self):
@@ -153,6 +167,7 @@ class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
         # wait for execv
         time.sleep(0.5)
 
+
 class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
     def setUp(self):
         super().setUp()
@@ -170,6 +185,7 @@ class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
 
         # wait for execv
         time.sleep(0.5)
+
 
 class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
     def setUp(self):
@@ -226,11 +242,12 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         # to 1 after successful update.
         # That's only demo client that is not really expected to update
         # properly, so it will stay as it is for now...
-        #self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'3'),
-        #                    self.serv.recv())
+        # self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'3'),
+        #                     self.serv.recv())
 
         # wait for execv
         time.sleep(2.5)
+
 
 class FirmwareUpdateBadBase64(FirmwareUpdate.Test):
     def runTest(self):
@@ -242,6 +259,7 @@ class FirmwareUpdateBadBase64(FirmwareUpdate.Test):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_INTERNAL_SERVER_ERROR),
                             self.serv.recv(timeout_s=1))
 
+
 class FirmwareUpdateGoodBase64(FirmwareUpdate.Test):
     def runTest(self):
         import base64
@@ -250,6 +268,7 @@ class FirmwareUpdateGoodBase64(FirmwareUpdate.Test):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv(timeout_s=1))
+
 
 class FirmwareUpdateEmptyPkg(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
@@ -262,6 +281,7 @@ class FirmwareUpdateEmptyPkg(FirmwareUpdate.TestWithHttpServer):
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
 
+
 class FirmwareUpdateEmptyPkgUri(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
         self.write_firmware_and_wait_for_download()
@@ -273,6 +293,7 @@ class FirmwareUpdateEmptyPkgUri(FirmwareUpdate.TestWithHttpServer):
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
 
+
 class FirmwareUpdateInvalidUri(FirmwareUpdate.Test):
     def runTest(self):
         req = Lwm2mWrite('/5/0/1', b'http://invalidfirmware.exe')
@@ -283,16 +304,18 @@ class FirmwareUpdateInvalidUri(FirmwareUpdate.Test):
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
         self.assertEqual(UPDATE_RESULT_INVALID_URI, self.read_update_result())
 
+
 class FirmwareUpdateUnsupportedUri(FirmwareUpdate.Test):
     def runTest(self):
         req = Lwm2mWrite('/5/0/1', b'unsupported://uri.exe')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_BAD_REQUEST),
                             self.serv.recv())
-        # This does not even change state or anything, because according to the LWM2M spec
+        # This does not even change state or anything, because according to the LwM2M spec
         # Server can't feed us with unsupported URI type
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
         self.assertEqual(UPDATE_RESULT_UNSUPPORTED_PROTOCOL, self.read_update_result())
+
 
 class FirmwareUpdateReplacingPkgUri(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
@@ -308,6 +331,7 @@ class FirmwareUpdateReplacingPkgUri(FirmwareUpdate.TestWithHttpServer):
         self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
 
+
 class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
         self.write_firmware_and_wait_for_download()
@@ -321,4 +345,3 @@ class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
 
         self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
-

@@ -15,14 +15,11 @@
  */
 
 #include <assert.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <string.h>
 
 #include "demo_args.h"
-
-#ifdef DEMO_SSL_KEY_FILE
-#include DEMO_SSL_KEY_FILE
-#endif
 
 #define DEFAULT_PSK_IDENTITY "sesame"
 #define DEFAULT_PSK_KEY      "password"
@@ -44,7 +41,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .location_update_frequency_s = 1,
     .inbuf_size = 4000,
     .outbuf_size = 4000,
-    .cleanup_fw_on_upgrade = true
+    .dont_cleanup_fw_on_upgrade = 0
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -123,14 +120,18 @@ static void print_option_help(const struct option *opt) {
           "set registration lifetime. If SECONDS <= 0, use default value and "
           "don't send lifetime in Register/Update messages." },
         { 'c', "CSV_FILE", NULL, "file to load location CSV from" },
-        { 'C', NULL, NULL, "Do not remove firmware image after successful upgrade. "
-                           "By default firmware is being removed." },
         { 'f', "SECONDS", "1", "location update frequency in seconds" },
         { 'p', "PORT", NULL, "bind all sockets to the specified UDP port." },
         { 'i', "PSK identity (psk mode) or Public Certificate (cert mode)", NULL,
           "Both are specified as hexlified strings" },
+        { 'C', "CLIENT_CERT_FILE", "$(dirname $0)/../certs/client.crt.der",
+          "DER-formatted client certificate file to load. "
+          "Mutually exclusive with -i" },
         { 'k', "PSK key (psk mode) or Private Certificate (cert mode)", NULL,
           "Both are specified as hexlified strings" },
+        { 'K', "PRIVATE_KEY_FILE", "$(dirname $0)/../certs/client.key.der",
+          "DER-formatted PKCS#8 private key complementary to the certificate "
+          "specified with -C. Mutually exclusive with -k" },
         { 'q', "[BINDING_MODE=UQ]", "U", "set the Binding Mode to use." },
         { 's', "MODE", NULL, "set security mode, one of: psk rpk cert nosec." },
         { 'u', "URI", DEFAULT_CMDLINE_ARGS.connection_args.servers[0].uri,
@@ -143,21 +144,31 @@ static void print_option_help(const struct option *opt) {
         { 'O', "SIZE", "4000", "Nonnegative integer representing maximum "
                                "size of a non-BLOCK CoAP packet the client "
                                "should be able to send." },
+        { 1, NULL, NULL, "Do not remove firmware image after successful "
+                         "upgrade. By default firmware is being removed." }
     };
 
+    int description_offset = 25;
+
     fprintf(stderr, "  ");
-    if (opt->val) {
+    if (isprint(opt->val)) {
         fprintf(stderr, "-%c, ", opt->val);
+        description_offset -= 4;
     }
 
-    static const int DESCRIPTION_OFFSET = 20;
     int chars_written;
     fprintf(stderr, "--%s %n", opt->name, &chars_written);
 
     for (size_t i = 0; i < ARRAY_SIZE(HELP_INFO); ++i) {
         if (opt->val == HELP_INFO[i].opt_val) {
-            int padding = DESCRIPTION_OFFSET - chars_written;
-            fprintf(stderr, "%*s - %s", -padding,
+            int padding = description_offset - chars_written;
+            if (HELP_INFO[i].args) {
+                int arg_length = (int) strlen(HELP_INFO[i].args);
+                if (arg_length + 1 > padding) {
+                    padding = arg_length + 1;
+                }
+            }
+            fprintf(stderr, "%*s- %s", (padding > 0 ? -padding : 0),
                     HELP_INFO[i].args ? HELP_INFO[i].args : "",
                     HELP_INFO[i].help);
             if (HELP_INFO[i].default_value) {
@@ -232,7 +243,8 @@ static void build_getopt_string(const struct option *options,
     }
 }
 
-static int clone_buffer(uint8_t **out, size_t *out_size, const void *src, size_t src_size) {
+static int clone_buffer(uint8_t **out, size_t *out_size,
+                        const void *src, size_t src_size) {
     *out = (uint8_t *) malloc(src_size);
     if (!*out) {
         return -1;
@@ -242,28 +254,78 @@ static int clone_buffer(uint8_t **out, size_t *out_size, const void *src, size_t
     return 0;
 }
 
+static int load_buffer_from_file(uint8_t **out, size_t *out_size,
+                                 const char *filename) {
+    FILE *f = fopen(filename, "rb");
+    if (!f) {
+        return -1;
+    }
+    int result = -1;
+    if (fseek(f, 0, SEEK_END)) {
+        goto finish;
+    }
+    long size = ftell(f);
+    if (size < 0 || (unsigned long) size > SIZE_MAX
+            || fseek(f, 0, SEEK_SET)) {
+        goto finish;
+    }
+    *out_size = (size_t) size;
+    if (!(*out = (uint8_t *) malloc(*out_size))) {
+        goto finish;
+    }
+    if (fread(*out, *out_size, 1, f) != 1) {
+        free(*out);
+        *out = NULL;
+        goto finish;
+    }
+    result = 0;
+finish:
+    fclose(f);
+    return result;
+}
+
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
+    static const char DEFAULT_CERT_FILE[] = "../certs/client.crt.der";
+    static const char DEFAULT_KEY_FILE[] = "../certs/client.key.der";
+    const char *last_arg0_slash = strrchr(argv[0], '/');
+    size_t arg0_prefix_length =
+            (size_t) (last_arg0_slash ? (last_arg0_slash - argv[0] + 1) : 0);
+
+    char default_cert_path[arg0_prefix_length + sizeof(DEFAULT_CERT_FILE)];
+    memcpy(default_cert_path, argv[0], arg0_prefix_length);
+    strcpy(default_cert_path + arg0_prefix_length, DEFAULT_CERT_FILE);
+
+    char default_key_path[arg0_prefix_length + sizeof(DEFAULT_KEY_FILE)];
+    memcpy(default_key_path, argv[0], arg0_prefix_length);
+    strcpy(default_key_path + arg0_prefix_length, DEFAULT_KEY_FILE);
+
+    const char *cert_path = default_cert_path;
+    const char *key_path = default_key_path;
+
     *parsed_args = DEFAULT_CMDLINE_ARGS;
 
-    static const struct option options[] = {
-        { "access-entry",                required_argument, 0, 'a' },
-        { "bootstrap",                   no_argument,       0, 'b' },
-        { "bootstrap-holdoff",           required_argument, 0, 'H' },
-        { "bootstrap-timeout",           required_argument, 0, 'T' },
-        { "endpoint-name",               required_argument, 0, 'e' },
-        { "help",                        no_argument,       0, 'h' },
-        { "lifetime",                    required_argument, 0, 'l' },
-        { "location-csv",                required_argument, 0, 'c' },
-        { "location-update-freq-s",      required_argument, 0, 'f' },
-        { "port",                        required_argument, 0, 'p' },
-        { "identity",                    required_argument, 0, 'i' },
-        { "key",                         required_argument, 0, 'k' },
-        { "binding",                     optional_argument, 0, 'q' },
-        { "security-mode",               required_argument, 0, 's' },
-        { "server-uri",                  required_argument, 0, 'u' },
-        { "inbuf-size",                  required_argument, 0, 'I' },
-        { "outbuf-size",                 required_argument, 0, 'O' },
-        { "dont-cleanup-fw-on-upgrade",  no_argument,       0, 'C' },
+    const struct option options[] = {
+        { "access-entry",               required_argument, 0, 'a' },
+        { "bootstrap",                  no_argument,       0, 'b' },
+        { "bootstrap-holdoff",          required_argument, 0, 'H' },
+        { "bootstrap-timeout",          required_argument, 0, 'T' },
+        { "endpoint-name",              required_argument, 0, 'e' },
+        { "help",                       no_argument,       0, 'h' },
+        { "lifetime",                   required_argument, 0, 'l' },
+        { "location-csv",               required_argument, 0, 'c' },
+        { "location-update-freq-s",     required_argument, 0, 'f' },
+        { "port",                       required_argument, 0, 'p' },
+        { "identity",                   required_argument, 0, 'i' },
+        { "client-cert-file",           required_argument, 0, 'C' },
+        { "key",                        required_argument, 0, 'k' },
+        { "key-file",                   required_argument, 0, 'K' },
+        { "binding",                    optional_argument, 0, 'q' },
+        { "security-mode",              required_argument, 0, 's' },
+        { "server-uri",                 required_argument, 0, 'u' },
+        { "inbuf-size",                 required_argument, 0, 'I' },
+        { "outbuf-size",                required_argument, 0, 'O' },
+        { "dont-cleanup-fw-on-upgrade", no_argument,
+          &parsed_args->dont_cleanup_fw_on_upgrade, 1 },
         { 0, 0, 0, 0 }
     };
     int num_servers = 0;
@@ -328,7 +390,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         case 'h':
             fprintf(stderr, "Available options:\n");
-            for (size_t i = 0; options[i].val != 0; ++i) {
+            for (size_t i = 0; options[i].name || options[i].val; ++i) {
                 print_option_help(&options[i]);
             }
             goto error;
@@ -339,9 +401,6 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         case 'c':
             parsed_args->location_csv = optarg;
-            break;
-        case 'C':
-            parsed_args->cleanup_fw_on_upgrade = false;
             break;
         case 'f':
             {
@@ -379,6 +438,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto error;
             }
             break;
+        case 'C':
+            cert_path = optarg;
+            break;
         case 'k':
             if (parse_hexstring(
                         optarg,
@@ -388,6 +450,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 demo_log(ERROR, "Invalid key");
                 goto error;
             }
+            break;
+        case 'K':
+            key_path = optarg;
             break;
         case 'q':
             {
@@ -437,6 +502,12 @@ finish:
     bool identity_set =
             !!parsed_args->connection_args.public_cert_or_psk_identity_size;
     bool key_set = !!parsed_args->connection_args.private_cert_or_psk_key_size;
+    if ((identity_set && (cert_path != default_cert_path))
+            || (key_set && (key_path != default_key_path))) {
+        demo_log(ERROR, "Certificate information cannot be loaded both from "
+                        "file and immediate hex data at the same time");
+        goto error;
+    }
     if (parsed_args->connection_args.security_mode == ANJAY_UDP_SECURITY_PSK) {
         if (!identity_set
             && clone_buffer(&parsed_args->connection_args
@@ -462,21 +533,22 @@ finish:
                             "other way around) makes little sense");
             goto error;
         } else if (!identity_set) {
-#ifdef DEMO_SSL_KEY_FILE
-            if (clone_buffer(&parsed_args->connection_args
-                                      .public_cert_or_psk_identity,
-                             &parsed_args->connection_args
-                                      .public_cert_or_psk_identity_size,
-                             ANJAY_DEMO_CLIENT_X509_CERTIFICATE,
-                             sizeof(ANJAY_DEMO_CLIENT_X509_CERTIFICATE) - 1)
-                || clone_buffer(&parsed_args->connection_args
-                                         .private_cert_or_psk_key,
-                                &parsed_args->connection_args
-                                         .private_cert_or_psk_key_size,
-                                ANJAY_DEMO_CLIENT_PKCS8_PRIVATE_KEY,
-                                sizeof(ANJAY_DEMO_CLIENT_PKCS8_PRIVATE_KEY) - 1))
-#endif
-            {
+            if (load_buffer_from_file(&parsed_args->connection_args
+                                              .public_cert_or_psk_identity,
+                                      &parsed_args->connection_args
+                                              .public_cert_or_psk_identity_size,
+                                      cert_path)) {
+                demo_log(ERROR, "Could not load certificate from %s",
+                         cert_path);
+                goto error;
+            }
+            if (load_buffer_from_file(&parsed_args->connection_args
+                                              .private_cert_or_psk_key,
+                                      &parsed_args->connection_args
+                                              .private_cert_or_psk_key_size,
+                                      key_path)) {
+                demo_log(ERROR, "Could not load private key from %s",
+                         key_path);
                 goto error;
             }
         }
@@ -486,4 +558,3 @@ error:
     AVS_LIST_CLEAR(&parsed_args->access_entries);
     return -1;
 }
-

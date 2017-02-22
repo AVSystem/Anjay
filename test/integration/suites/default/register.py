@@ -1,8 +1,24 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import socket
+import unittest
+
 from framework.lwm2m_test import *
 
-import unittest
-import socket
-import time
 
 class BlockRegister:
     class Test(unittest.TestCase):
@@ -24,10 +40,11 @@ class BlockRegister:
                 server.send(Lwm2mContinue.matching(pkt)(options=[block1]))
 
             self.assertEquals(expected_content, register_content)
-            server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo',options=[block1]))
+            server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo', options=[block1]))
 
             with self.assertRaises(socket.timeout, msg='unexpected message'):
                 print(server.recv(timeout_s=6))
+
 
 class Register:
     class TestCase(test_suite.Lwm2mSingleServerTest):
@@ -35,31 +52,33 @@ class Register:
             # skip initial registration
             super().setUp(auto_register=False)
 
+
 # Security (/0) instances MUST not be a part of the list
-# see LWM2M spec, 2016-09-08 draft
+# see LwM2M spec, 2016-09-08 draft
 expected_content = (b'</1/1>,</2/0>,</2/1>,</2/2>,</2/3>,</2/4>,</2/5>,'
-                  + b'</2/6>,</2/7>,</2/8>,</2/9>,</2/10>,</2/11>,</2/12>,'
-                  + b'</2/13>,</2/14>,</2/15>,</2/16>,</2/17>,</2/18>,</2/19>,'
-                  + b'</2/20>,</2/21>,</2/22>,</3/0>,</4/0>,</5/0>,</6/0>,'
-                  + b'</7/0>,</10/0>,</11>,</1337>,</11111/0>,</12359/0>,</12360>,'
-                  + b'</12361/0>')
+                    + b'</2/6>,</2/7>,</2/8>,</2/9>,</2/10>,</2/11>,</2/12>,'
+                    + b'</2/13>,</2/14>,</2/15>,</2/16>,</2/17>,</2/18>,</2/19>,'
+                    + b'</2/20>,</2/21>,</2/22>,</3/0>,</4/0>,</5/0>,</6/0>,'
+                    + b'</7/0>,</10/0>,</11>,</1337>,</11111/0>,</12359/0>,</12360>,'
+                    + b'</12361/0>')
+
 
 class RegisterTest(Register.TestCase):
     def runTest(self):
         # should send Register request at start
         pkt = self.serv.recv(timeout_s=1)
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                              content=expected_content),
-                pkt)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
+                          content=expected_content),
+            pkt)
 
         # should retry when no response is sent
         pkt = self.serv.recv(timeout_s=6)
 
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                              content=expected_content),
-                pkt)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
+                          content=expected_content),
+            pkt)
 
         # should ignore this message as Message ID does not match
         self.serv.send(Lwm2mCreated(msg_id=((pkt.msg_id + 1) % (1 << 16)),
@@ -70,9 +89,9 @@ class RegisterTest(Register.TestCase):
         pkt = self.serv.recv(timeout_s=12)
 
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                              content=expected_content),
-                pkt)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
+                          content=expected_content),
+            pkt)
 
         # should not retry after receiving valid response
         self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
@@ -86,14 +105,14 @@ class RegisterWithLostSeparateAck(Register.TestCase):
         # should send Register request at start
         pkt = self.serv.recv(timeout_s=1)
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                              content=expected_content),
-                pkt)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
+                          content=expected_content),
+            pkt)
 
         # Separate Response: Confirmable; msg_id does not match, but token does
         res = Lwm2mCreated(msg_id=((pkt.msg_id + 1) % (1 << 16)),
-                                    token=pkt.token,
-                                    location='/rd/demo')
+                           token=pkt.token,
+                           location='/rd/demo')
         res.type = coap.Type.CONFIRMABLE
 
         # should respond with Empty ACK
@@ -111,4 +130,4 @@ class RegisterWithBlock(test_suite.Lwm2mSingleServerTest):
                                      auto_register=False)
 
     def runTest(self):
-       BlockRegister().Test()(self.serv)
+        BlockRegister().Test()(self.serv)

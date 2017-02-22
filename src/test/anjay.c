@@ -102,17 +102,17 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
 
 AVS_UNIT_TEST(parse_headers, parse_attribute) {
     TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", "123",
-                                 min_period, has_min_period, 123);
+                                 common.min_period, has_min_period, 123);
     TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", NULL,
-                                 min_period, has_min_period, -1);
+                                 common.min_period, has_min_period, -1);
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "123.4");
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "woof");
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "");
 
     TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", "234",
-                                 max_period, has_max_period, 234);
+                                 common.max_period, has_max_period, 234);
     TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", NULL,
-                                 max_period, has_max_period, -1);
+                                 common.max_period, has_max_period, -1);
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "234.5");
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "meow");
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "");
@@ -150,10 +150,10 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
 
 #define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
     do { \
-        AVS_UNIT_ASSERT_EQUAL(actual.min_period, \
-                              expected.min_period); \
-        AVS_UNIT_ASSERT_EQUAL(actual.max_period, \
-                              expected.max_period); \
+        AVS_UNIT_ASSERT_EQUAL(actual.common.min_period, \
+                              expected.common.min_period); \
+        AVS_UNIT_ASSERT_EQUAL(actual.common.max_period, \
+                              expected.common.max_period); \
         ASSERT_DOUBLE_EQUAL(actual.greater_than, expected.greater_than); \
         ASSERT_DOUBLE_EQUAL(actual.less_than, expected.less_than); \
         ASSERT_DOUBLE_EQUAL(actual.step, expected.step); \
@@ -177,7 +177,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     anjay_request_attributes_t attrs;
     anjay_request_attributes_t empty_attrs;
     memset(&empty_attrs, 0, sizeof(empty_attrs));
-    empty_attrs.values = ANJAY_DM_ATTRIBS_EMPTY;
+    empty_attrs.values = ANJAY_RES_ATTRIBS_EMPTY;
     anjay_request_attributes_t expected_attrs;
 
     mock.expected_option_number = ANJAY_COAP_OPT_URI_QUERY;
@@ -191,7 +191,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     mock.next_opt_value_string = &(const char*[]){ "pmin=10", NULL }[0];
     memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
     expected_attrs.has_min_period = true;
-    expected_attrs.values.min_period = 10;
+    expected_attrs.values.common.min_period = 10;
     AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
 
@@ -199,9 +199,9 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     mock.next_opt_value_string = &(const char*[]){ "pmin=10", "pmax=20", NULL }[0];
     memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
     expected_attrs.has_min_period = true;
-    expected_attrs.values.min_period = 10;
+    expected_attrs.values.common.min_period = 10;
     expected_attrs.has_max_period = true;
-    expected_attrs.values.max_period = 20;
+    expected_attrs.values.common.max_period = 20;
     AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
 
@@ -214,7 +214,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     mock.next_opt_value_string = &(const char*[]){ "WhyDidTheyBuildThe=Stonehenge", "pmax=20", NULL }[0];
     memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
     expected_attrs.has_max_period = true;
-    expected_attrs.values.max_period = 20;
+    expected_attrs.values.common.max_period = 20;
     AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
 
@@ -470,9 +470,11 @@ static time_t sched_time_to_next_s(anjay_sched_t *sched) {
 }
 
 AVS_UNIT_TEST(queue_mode, behaviour) {
-    static const anjay_dm_attributes_t ATTRS = {
-        .min_period = 0,
-        .max_period = 9001,
+    static const anjay_dm_resource_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 9001
+        },
         .greater_than = ANJAY_ATTRIB_VALUE_NONE,
         .less_than = ANJAY_ATTRIB_VALUE_NONE,
         .step = ANJAY_ATTRIB_VALUE_NONE
@@ -510,10 +512,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
                                               &ATTRS);
-    _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 42, 0,
-                                                      &ANJAY_DM_ATTRIBS_EMPTY);
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 42, 0,
-                                                    &ANJAY_DM_ATTRIBS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     avs_unit_mocksock_assert_expects_met(mocksocks[0]);
@@ -534,10 +532,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
                                               &ATTRS);
-    _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 42, 0,
-                                                      &ANJAY_DM_ATTRIBS_EMPTY);
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 42, 0,
-                                                    &ANJAY_DM_ATTRIBS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     avs_unit_mocksock_assert_expects_met(mocksocks[0]);
 
@@ -548,10 +542,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
                                               &ATTRS);
-    _anjay_mock_dm_expect_instance_read_default_attrs(anjay, &OBJ, 69, 42, 0,
-                                                      &ANJAY_DM_ATTRIBS_EMPTY);
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, 42, 0,
-                                                    &ANJAY_DM_ATTRIBS_EMPTY);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
     _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);

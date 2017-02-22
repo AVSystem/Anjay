@@ -136,6 +136,23 @@ AVS_UNIT_TEST(bootstrap_write, resource_error) {
     DM_TEST_FINISH;
 }
 
+AVS_UNIT_TEST(bootstrap_write, resource_with_mismatched_tlv_rid) {
+    DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
+    static const char REQUEST[] =
+            "\x40\x03\xFA\x3E" // CoAP header
+            "\xB2" "42" // OID
+            "\x03" "514" // IID
+            "\x01" "4" // RID
+            "\x12\x42\x42" // Content-Format TLV
+            "\xFF"
+            "\xc5\x05" // mismatched resource id, RID Uri-Path was 4 but in the payload it is 5
+            "Hello";
+    avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
 AVS_UNIT_TEST(bootstrap_write, resource_error_with_create) {
     DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
     static const char REQUEST[] =
@@ -176,6 +193,38 @@ AVS_UNIT_TEST(bootstrap_write, instance) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 6,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(bootstrap_write, instance_with_redundant_tlv_header) {
+    DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
+    static const char REQUEST[] =
+            "\x40\x03\xFA\x3E" // CoAP header
+            "\xB2" "42" // OID
+            "\x02" "69" // IID
+            "\x12\x42\x42" // Content-Format TLV
+            "\xFF"
+            "\x08\x45\x08\xc6\x0a" // Redundant \x08\x45
+            "DDDDDD";
+    avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(bootstrap_write, instance_with_redundant_and_incorrect_tlv_header) {
+    DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
+    static const char REQUEST[] =
+            "\x40\x03\xFA\x3E" // CoAP header
+            "\xB2" "42" // OID
+            "\x02" "69" // IID
+            "\x12\x42\x42" // Content-Format TLV
+            "\xFF"
+            "\x08\x01\x08\xc6\x0a" // IID is 69 but TLV payload contains IID 1
+            "DDDDDD";
+    avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }

@@ -1,14 +1,29 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import binascii
+
 from framework.lwm2m_test import *
 
 from .dm.utils import DataModel
-
-import binascii
 
 
 class Test401_UDPChannelSecurity_PreSharedKeyMode(DataModel.Test):
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
-
 
     def setUp(self):
         self.servers = [Lwm2mDtlsServer(psk_identity=self.PSK_IDENTITY,
@@ -20,13 +35,12 @@ class Test401_UDPChannelSecurity_PreSharedKeyMode(DataModel.Test):
                 '--server-uri', 'coaps://127.0.0.1:%d' % (self.serv.get_listen_port(),)]
         self.start_demo(cmdline_args=args)
 
-
     def runTest(self):
         # a. Registration message (COAP POST) is sent from client to server.
         req = self.serv.recv()
         self.assertMsgEqual(
-                Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
-                req)
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
+            req)
 
         # b. Client receives Success message (2.01 Created) from the server.
         self.serv.send(Lwm2mCreated.matching(req)(location=self.DEFAULT_REGISTER_ENDPOINT))

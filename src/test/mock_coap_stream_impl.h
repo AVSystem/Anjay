@@ -53,29 +53,34 @@ static int mock_get_code(avs_stream_abstract_t *stream,
     return 0;
 }
 
-#define MOCK_GET_OPTION_UINT(Bits) \
-static int mock_get_option_u##Bits (avs_stream_abstract_t *stream, \
-                                    uint16_t option_number, \
-                                    uint##Bits##_t *out_value) { \
-    coap_stream_mock_t *mock = (coap_stream_mock_t*)stream; \
-    AVS_UNIT_ASSERT_EQUAL(option_number, mock->expected_option_number); \
-    AVS_UNIT_ASSERT_NULL(mock->next_opt_value_string); \
-    \
-    if (mock->next_opt_value_uint == -1) { \
-        return ANJAY_COAP_OPTION_MISSING; \
-    } \
-    \
-    AVS_UNIT_ASSERT_TRUE(mock->next_opt_value_uint >= 0); \
-    AVS_UNIT_ASSERT_EQUAL((intmax_t) mock->next_opt_value_uint, \
-            (intmax_t) (uint##Bits##_t) mock->next_opt_value_uint); \
-    \
-    *out_value = (uint##Bits##_t) mock->next_opt_value_uint; \
-    mock->next_opt_value_uint = -1; \
-    return 0; \
-}
+static int mock_get_option_uint(avs_stream_abstract_t *stream,
+                                uint16_t option_number,
+                                void *out_value,
+                                size_t out_value_size) {
+    coap_stream_mock_t *mock = (coap_stream_mock_t*) stream;
+    AVS_UNIT_ASSERT_EQUAL(option_number, mock->expected_option_number);
+    AVS_UNIT_ASSERT_NULL(mock->next_opt_value_string);
 
-MOCK_GET_OPTION_UINT(16)
-MOCK_GET_OPTION_UINT(32)
+    if (mock->next_opt_value_uint == -1) {
+        return ANJAY_COAP_OPTION_MISSING;
+    }
+
+    AVS_UNIT_ASSERT_TRUE(mock->next_opt_value_uint >= 0);
+
+    if (out_value_size == 2) {
+        AVS_UNIT_ASSERT_EQUAL((intmax_t) mock->next_opt_value_uint,
+                (intmax_t) (uint16_t) mock->next_opt_value_uint);
+        *(uint16_t *) out_value = (uint16_t) mock->next_opt_value_uint;
+    } else if (out_value_size == 4) {
+        AVS_UNIT_ASSERT_EQUAL((intmax_t) mock->next_opt_value_uint,
+                (intmax_t) (uint32_t) mock->next_opt_value_uint);
+        *(uint32_t *) out_value = (uint32_t) mock->next_opt_value_uint;
+    } else {
+        AVS_UNIT_ASSERT_EQUAL_STRING("Unexpected out_value_size", NULL);
+    }
+    mock->next_opt_value_uint = -1;
+    return 0;
+}
 
 static int mock_get_option_string_it(avs_stream_abstract_t *stream,
                                      uint16_t option_number,
@@ -135,10 +140,8 @@ static int mock_get_option_string_it(avs_stream_abstract_t *stream,
                 (AVS_CONFIG_TYPEOF(&_anjay_coap_stream_setup_request)) fail; \
         AVS_UNIT_MOCK(_anjay_coap_stream_get_msg_type) = mock_get_msg_type; \
         AVS_UNIT_MOCK(_anjay_coap_stream_get_code) = mock_get_code; \
-        AVS_UNIT_MOCK(_anjay_coap_stream_get_option_u16) = \
-                mock_get_option_u16; \
-        AVS_UNIT_MOCK(_anjay_coap_stream_get_option_u32) = \
-                mock_get_option_u32; \
+        AVS_UNIT_MOCK(_anjay_coap_stream_get_option_uint) = \
+                mock_get_option_uint; \
         AVS_UNIT_MOCK(_anjay_coap_stream_get_option_string_it) = \
                 mock_get_option_string_it
 

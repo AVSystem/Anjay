@@ -63,23 +63,29 @@ static inline int _anjay_dm_res_read_string(anjay_t *anjay,
     return result;
 }
 
-#define DEFINE_RES_READ_FUNC(Suffix, Type) \
-    static inline int _anjay_dm_res_read_##Suffix( \
-            anjay_t *anjay, \
-            const anjay_resource_path_t *path, \
-            Type *out_value) { \
-        size_t bytes_read; \
-        int result = _anjay_dm_res_read(anjay, path, (char*) out_value, \
-                                        sizeof(*out_value), &bytes_read); \
-        if (result) { \
-            return result; \
-        } \
-        return bytes_read != sizeof(*out_value); \
+static inline int _anjay_dm_res_read_i64(anjay_t *anjay,
+                                         const anjay_resource_path_t *path,
+                                         int64_t *out_value) {
+    size_t bytes_read;
+    int result = _anjay_dm_res_read(anjay, path, (char *) out_value,
+                                    sizeof(*out_value), &bytes_read);
+    if (result) {
+        return result;
     }
+    return bytes_read != sizeof(*out_value);
+}
 
-DEFINE_RES_READ_FUNC(i64, int64_t)   // _anjay_dm_res_read_i64
-DEFINE_RES_READ_FUNC(double, double) // _anjay_dm_res_read_double
-DEFINE_RES_READ_FUNC(bool, bool)     // _anjay_dm_res_read_bool
+static inline int _anjay_dm_res_read_bool(anjay_t *anjay,
+                                          const anjay_resource_path_t *path,
+                                          bool *out_value) {
+    size_t bytes_read;
+    int result = _anjay_dm_res_read(anjay, path, (char *) out_value,
+                                    sizeof(*out_value), &bytes_read);
+    if (result) {
+        return result;
+    }
+    return bytes_read != sizeof(*out_value);
+}
 
 typedef struct anjay_dm anjay_dm_t;
 
@@ -184,13 +190,13 @@ int _anjay_dm_resource_read_attrs(anjay_t *anjay,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_ssid_t ssid,
-                                  anjay_dm_attributes_t *out);
+                                  anjay_dm_resource_attributes_t *out);
 int _anjay_dm_resource_write_attrs(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
                                    anjay_ssid_t ssid,
-                                   const anjay_dm_attributes_t *attrs);
+                                   const anjay_dm_resource_attributes_t *attrs);
 
 /**
  * Starts a transaction on the data model. If a transaction is already in
@@ -251,6 +257,9 @@ _anjay_dm_find_object_by_oid(anjay_t *anjay, anjay_oid_t oid);
 bool _anjay_dm_ssid_exists(anjay_t *anjay, anjay_ssid_t ssid);
 
 bool _anjay_dm_attributes_empty(const anjay_dm_attributes_t *attrs);
+bool _anjay_dm_resource_attributes_empty(
+        const anjay_dm_resource_attributes_t *attrs);
+
 bool _anjay_dm_attributes_full(const anjay_dm_attributes_t *attrs);
 
 #define ANJAY_DM_OID_SECURITY 0

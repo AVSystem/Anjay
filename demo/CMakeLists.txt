@@ -1,3 +1,17 @@
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 cmake_minimum_required(VERSION 2.8.1)
 project(lwm2m_demo C)
 
@@ -27,11 +41,6 @@ set(HEADERS
     utils.h
     wget_downloader.h)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ssl_key.h")
-    set(DEMO_SSL_KEY_FILE ssl_key.h)
-    set(HEADERS ${HEADERS} ${DEMO_SSL_KEY_FILE})
-endif()
-
 set(ALL_SOURCES ${SOURCES} ${HEADERS})
 
 if(NOT ANJAY_INCLUDE_DIRS AND NOT ANJAY_LIBRARIES)
@@ -53,11 +62,6 @@ include_directories(${ANJAY_INCLUDE_DIRS})
 
 add_executable(demo ${ALL_SOURCES})
 target_link_libraries(demo ${DEMO_ANJAY_TARGET} m)
-
-if(DEMO_SSL_KEY_FILE)
-    set_property(TARGET demo APPEND PROPERTY COMPILE_DEFINITIONS
-                 "DEMO_SSL_KEY_FILE=\"${DEMO_SSL_KEY_FILE}\"")
-endif()
 
 add_custom_target(demo_firmware
                   COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../test/integration/framework/firmware_package.py

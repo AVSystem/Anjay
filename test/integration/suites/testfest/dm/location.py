@@ -1,5 +1,20 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from framework.lwm2m_test import *
-import unittest
 
 from .utils import DataModel, ValueValidator
 
@@ -30,7 +45,7 @@ class Test801_Location_QueryingTheResourcesOfObject(DataModel.Test):
         self.test_read(ResPath.Location.Uncertainty, ValueValidator.float_as_string(), coap.ContentFormat.TEXT_PLAIN)
         # TODO: cannot be represented in text/plain format, as test requires
         self.test_read(ResPath.Location.Velocity,    VelocityValidator(),              coap.ContentFormat.APPLICATION_OCTET_STREAM)
-        # TODO: According to LWM2M spec, Timestamp values should be in range 0-6 (???)
+        # TODO: According to LwM2M spec, Timestamp values should be in range 0-6 (???)
         self.test_read(ResPath.Location.Timestamp,   ValueValidator.integer(),         coap.ContentFormat.TEXT_PLAIN)
 
 
@@ -51,5 +66,5 @@ class Test810_Location_ObservationAndNotificationOfObservableResources(DataModel
         self.test_observe(ResPath.Location.Altitude,    ValueValidator.float_as_string())
         self.test_observe(ResPath.Location.Uncertainty, ValueValidator.float_as_string())
         self.test_observe(ResPath.Location.Velocity,    VelocityValidator())
-        # TODO: According to LWM2M spec, Timestamp values should be in range 0-6 (???)
+        # TODO: According to LwM2M spec, Timestamp values should be in range 0-6 (???)
         self.test_observe(ResPath.Location.Timestamp,   ValueValidator.integer())

@@ -1,11 +1,25 @@
-from framework.lwm2m_test import *
-from framework.lwm2m.tlv import *
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import unittest
 import socket
-import math
-
 from typing import List, Optional
+
+from framework.lwm2m.tlv import *
+from framework.lwm2m_test import *
+
 
 class ValueValidator:
     def validate(self, value):
@@ -21,6 +35,7 @@ class ValueValidator:
         class Validator(cls):
             def validate(self, value):
                 ctor(value)
+
         return Validator()
 
     @classmethod
@@ -30,6 +45,7 @@ class ValueValidator:
                 if value not in allowed_values:
                     raise ValueError('%s is not a valid value (expected one of: %s)'
                                      % (value, ' '.join(map(str, allowed_values))))
+
         return Validator()
 
     @classmethod
@@ -45,6 +61,7 @@ class ValueValidator:
         class Validator(cls):
             def validate(self, value):
                 float(value.decode('ascii'))
+
         return Validator()
 
     @classmethod
@@ -112,8 +129,8 @@ class DataModel:
     class Test(test_suite.Lwm2mSingleServerTest):
         def test_read(self,
                       path: Lwm2mPath,
-                      validator: Optional[ValueValidator]=None,
-                      format: Optional[int]=None):
+                      validator: Optional[ValueValidator] = None,
+                      format: Optional[int] = None):
             req = Lwm2mRead(path, accept=format)
             self.serv.send(req)
 
@@ -138,9 +155,9 @@ class DataModel:
         def test_write(self,
                        path: Lwm2mPath,
                        value: str,
-                       format: coap.ContentFormat=coap.ContentFormat.TEXT_PLAIN):
+                       format: coap.ContentFormat = coap.ContentFormat.TEXT_PLAIN):
             # WRITE (CoAP PUT/POST) on the resource with a value
-            # admissible with regards to LWM2M technical specification
+            # admissible with regards to LwM2M technical specification
             req = Lwm2mWrite(path, value, format=format)
             self.serv.send(req)
 
@@ -151,7 +168,7 @@ class DataModel:
         def test_write_validated(self,
                                  path: Lwm2mPath,
                                  value: str,
-                                 alternative_acceptable_values: List[str]=[]):
+                                 alternative_acceptable_values: List[str] = []):
             self.test_write(path, value)
 
             acceptable_values = [v.encode('ascii') for v in [value] + alternative_acceptable_values]
@@ -161,7 +178,7 @@ class DataModel:
                              path: Lwm2mPath,
                              payload: bytes,
                              format: coap.ContentFormat,
-                             block_size: int=1024):
+                             block_size: int = 1024):
             offset = 0
 
             while offset < len(payload):

@@ -1,7 +1,24 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import socket
 
-from framework.lwm2m_test import *
 from framework.lwm2m.tlv import TLV
+from framework.lwm2m_test import *
+
 
 class BootstrapServer:
     class Test(test_suite.Lwm2mTest):
@@ -10,6 +27,7 @@ class BootstrapServer:
             self.setup_demo_with_servers(num_servers=0,
                                          bootstrap_server=True,
                                          extra_cmdline_args=extra_args)
+
         def tearDown(self):
             self.teardown_demo_with_servers()
 
@@ -26,6 +44,7 @@ class BootstrapServer:
 
             # send Bootstrap messages without request
             return int(self.communicate('get-port -1', match_regex='PORT==([0-9]+)\n').group(1))
+
 
 class BootstrapServerTest(BootstrapServer.Test):
     def runTest(self):
@@ -86,12 +105,13 @@ class BootstrapServerTest(BootstrapServer.Test):
 
         regular_serv.close()
 
+
 class BootstrapEmptyResourcesDoesNotSegfault(BootstrapServer.Test):
     def runTest(self):
         self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
 
         req = Lwm2mWrite('/0/42',
-                TLV.make_resource(RID.Security.ServerURI, 'coap://1.2.3.4:5678').serialize()
+                         TLV.make_resource(RID.Security.ServerURI, 'coap://1.2.3.4:5678').serialize()
                          + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
                          + TLV.make_resource(RID.Security.Mode, 3).serialize()
                          + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
@@ -109,5 +129,3 @@ class BootstrapEmptyResourcesDoesNotSegfault(BootstrapServer.Test):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.bootstrap_server.recv(timeout_s=1))
         self.request_demo_shutdown()
-
-

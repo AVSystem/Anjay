@@ -1,14 +1,32 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import inspect
 import math
 import struct
 
-from .content_format import *
-from .utils import *
+from .content_format import ContentFormat
+from .utils import hexlify_nonprintable
+
 
 class OptionLike(object):
     def __init__(self, cls, number):
         self.cls = cls
         self.number = number
+
 
 class Option(OptionLike):
     @staticmethod
@@ -27,28 +45,27 @@ class Option(OptionLike):
                                       match_extra_cls=[OptionConstructor])
                 if not ctor:
                     return []
-
-            if isinstance(ctor, OptionConstructor):
-                ctor = ctor.content_mapper
+                elif isinstance(ctor, OptionConstructor):
+                    ctor = ctor.content_mapper
 
             sig = inspect.signature(ctor)
 
             # the '' is a hack to prevent Cmd from actually inserting the completion
             return ['', str(sig)]
 
-        possible =  get_available_instance_names(Option,
-                                                 match_extra_cls=[OptionConstructor],
-                                                 append_paren_to_callables=True)
+        possible = get_available_instance_names(Option,
+                                                match_extra_cls=[OptionConstructor],
+                                                append_paren_to_callables=True)
         return match_string(text, possible)
 
     @staticmethod
     def powercmd_parse(text):
-        from powercmd.utils import match_instance, get_available_instance_names
+        from powercmd.utils import match_instance
 
         paren_idx = text.find('(')
         if paren_idx >= 0:
             ctor = match_instance(Option, text[:paren_idx],
-                                   match_extra_cls=[OptionConstructor])
+                                  match_extra_cls=[OptionConstructor])
             arg = eval(text[paren_idx:])
             opt = ctor(*arg) if isinstance(arg, tuple) else ctor(arg)
         else:
@@ -78,17 +95,17 @@ class Option(OptionLike):
         short_length = short_delta_length & 0x0F
 
         at = 1
-        number_delta, bytes_parsed = Option.parse_ext_value(short_delta, data[at:at+2])
-        number = prev_opt_number + number_delta;
+        number_delta, bytes_parsed = Option.parse_ext_value(short_delta, data[at:at + 2])
+        number = prev_opt_number + number_delta
         at += bytes_parsed
 
-        length, bytes_parsed = Option.parse_ext_value(short_length, data[at:at+2])
+        length, bytes_parsed = Option.parse_ext_value(short_length, data[at:at + 2])
         at += bytes_parsed
 
         if len(data) < at + length:
             raise ValueError('incomplete option')
 
-        content = data[at:at+length]
+        content = data[at:at + length]
         return Option.get_class_by_number(number)(number, content), at + length
 
     @staticmethod
@@ -136,10 +153,10 @@ class Option(OptionLike):
     def __str__(self):
         opt_name = Option.get_name_by_number(self.number)
         return 'option %d%s, content (%d bytes): %s' % (
-                    self.number,
-                    ' (%s)' % (opt_name,) if opt_name else '',
-                    len(self.content),
-                    self.content_to_str())
+            self.number,
+            ' (%s)' % (opt_name,) if opt_name else '',
+            len(self.content),
+            self.content_to_str())
 
     def __repr__(self):
         opt_name = Option.get_name_by_number(self.number)
@@ -157,6 +174,7 @@ class Option(OptionLike):
         num = Option.get_number_of(what)
         assert num is not None
         return self.number == num
+
 
 class IntOption(Option):
     @staticmethod
@@ -196,10 +214,12 @@ class IntOption(Option):
         opt_name = Option.get_name_by_number(self.number)
         return 'coap.Option.%s(%s)' % (opt_name, self.content_to_str())
 
+
 class StringOption(Option):
     def __repr__(self):
         opt_name = Option.get_name_by_number(self.number)
         return 'coap.Option.%s(%s)' % (opt_name, repr(self.content_to_str()))
+
 
 class ContentFormatOption(IntOption):
     @staticmethod
@@ -229,7 +249,8 @@ class ContentFormatOption(IntOption):
     def __repr__(self):
         opt_name = Option.get_name_by_number(self.number)
         return 'coap.Option.%s(%s)' % (
-                opt_name, ContentFormat.to_repr(self.content_to_int()))
+            opt_name, ContentFormat.to_repr(self.content_to_int()))
+
 
 class AcceptOption(ContentFormatOption):
     @staticmethod
@@ -241,6 +262,7 @@ class AcceptOption(ContentFormatOption):
         except ValueError:
             return match_instance(AcceptOption, text)
 
+
 class OptionConstructor(OptionLike):
     def __init__(self, cls, number, content_mapper):
         OptionLike.__init__(self, cls, number)
@@ -249,10 +271,11 @@ class OptionConstructor(OptionLike):
     def __call__(self, *args, **kwargs):
         return self.cls(self.number, self.content_mapper(*args, **kwargs))
 
+
 class BlockOption(IntOption):
     def seq_num(self):
         content = self.content_to_int()
-        return (content >> 4)
+        return content >> 4
 
     def block_size(self):
         content = self.content_to_int()
@@ -267,13 +290,15 @@ class BlockOption(IntOption):
                                                            self.has_more(),
                                                            self.block_size())
 
+
 def is_power_of_2(num):
     return ((num & (num - 1)) == 0) and num > 0
+
 
 def pack_block(seq_num: int,
                has_more: bool,
                block_size: int):
-    if (seq_num >= 2**20
+    if (seq_num >= 2 ** 20
             or not is_power_of_2(block_size)
             or not 16 <= block_size <= 2048):
         raise ValueError('invalid arguments')
@@ -282,6 +307,7 @@ def pack_block(seq_num: int,
     unpacked = (seq_num << 4) | (int(has_more) << 3) | (szx & 0x7)
     packed = struct.pack('!I', unpacked)
     return packed.lstrip(b'\0')
+
 
 Option.IF_NONE_MATCH   = Option(5)
 
@@ -304,8 +330,10 @@ Option.SIZE1           = OptionConstructor(IntOption, 60, lambda int32: struct.p
 Option.BLOCK1          = OptionConstructor(BlockOption, 27, pack_block)
 Option.BLOCK2          = OptionConstructor(BlockOption, 23, pack_block)
 
+
 def pack_content_format(fmt: ContentFormat):
     return struct.pack('!H', fmt)
+
 
 Option.CONTENT_FORMAT  = OptionConstructor(ContentFormatOption, 12, pack_content_format)
 Option.ACCEPT          = OptionConstructor(AcceptOption,        17, pack_content_format)

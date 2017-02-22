@@ -1,17 +1,32 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import collections
 import os
 import re
-import collections
 
-from snippet_source import SnippetSourceNode
-from file_dirtiness_checker import FileDirtinessChecker
 from builders.dummy import DummyBuilder
-
+from file_dirtiness_checker import FileDirtinessChecker
+from snippet_source import SnippetSourceNode
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '../../../..'))
 
 DOC_ROOT = os.path.join(PROJECT_ROOT, "doc/sphinx/source")
-EXAMPLES_PATH = "examples" # relative to PROJECT_ROOT
+EXAMPLES_PATH = "examples"  # relative to PROJECT_ROOT
 EXAMPLES_ROOT = os.path.join(PROJECT_ROOT, EXAMPLES_PATH)
 MD5HASHES_FILE_PATH = os.path.join(EXAMPLES_ROOT, 'test_examples.md5')
 
@@ -20,6 +35,7 @@ class CodeChunk:
     """
     A chunk of code that should be found in source file (+/- indents).
     """
+
     def __init__(self,
                  doc_source_path,
                  doc_source_start_lineno,
@@ -42,7 +58,6 @@ class CodeChunk:
         self.code_source_path = code_source_path
         self.code = chunk_code
 
-
     def to_regex(self):
         """
         @returns: str
@@ -50,7 +65,6 @@ class CodeChunk:
         """
         return r'\s+'.join(re.escape(line.strip())
                            for line in self.code.split('\n') if line.strip())
-
 
     def __str__(self):
         return ('----- BEGIN CHUNK -----\n'
@@ -112,7 +126,6 @@ class CodeSnippet:
                                      code_source_path,
                                      '\n'.join(chunk_lines)))
 
-
     def get_invalid_chunks(self):
         """
         @returns: List[CodeChunk]
@@ -132,21 +145,19 @@ class CodeSnippet:
 
 
 DocSourceErrors = collections.namedtuple('DocSourceErrors',
-                                         ['invalid_chunks', # List[CodeChunk]
-                                          'dirty_referenced_paths', # Set[source_path: str]
-                                          'missing_referenced_paths']) # Dict[source_path: str, List[line: int]]
+                                         ['invalid_chunks',  # List[CodeChunk]
+                                          'dirty_referenced_paths',  # Set[source_path: str]
+                                          'missing_referenced_paths'])  # Dict[source_path: str, List[line: int]]
 
 
 class SnippetSourceLintBuilder(DummyBuilder):
     name = 'snippet_source_lint'
-
 
     def __init__(self, *args, **kwargs):
         super(SnippetSourceLintBuilder, self).__init__(*args, **kwargs)
 
         # doc_filename: str -> DocSourceErrors
         self.possibly_invalid_docs = dict()
-
 
     def write_doc(self, docname, doctree):
         dirtiness_checker = FileDirtinessChecker(MD5HASHES_FILE_PATH)
@@ -168,8 +179,8 @@ class SnippetSourceLintBuilder(DummyBuilder):
                 missing_referenced_paths[node.source_filepath].append(node.line)
 
         if invalid_chunks or dirty_referenced_paths or missing_referenced_paths:
-            self.possibly_invalid_docs[docname] = DocSourceErrors(invalid_chunks, dirty_referenced_paths, missing_referenced_paths)
-
+            self.possibly_invalid_docs[docname] = DocSourceErrors(invalid_chunks, dirty_referenced_paths,
+                                                                  missing_referenced_paths)
 
     def finish(self):
         if self.possibly_invalid_docs:
@@ -182,7 +193,8 @@ class SnippetSourceLintBuilder(DummyBuilder):
             if errors.missing_referenced_paths:
                 print('  - %s references to missing files:' % (len(errors.missing_referenced_paths),))
                 for path, lines in sorted(errors.missing_referenced_paths.items()):
-                    print('    - %s at line%s %s' % (path, 's' if len(lines) > 1 else '', ', '.join(str(l) for l in lines)))
+                    print('    - %s at line%s %s' % (
+                        path, 's' if len(lines) > 1 else '', ', '.join(str(l) for l in lines)))
 
             if errors.dirty_referenced_paths:
                 print('  - %d references to recently modified files:' % (len(errors.dirty_referenced_paths),))
@@ -200,7 +212,8 @@ class SnippetSourceLintBuilder(DummyBuilder):
         if self.possibly_invalid_docs:
             print('Resolve errors above, then use following command to update md5 hash cache:')
             print('')
-            print('    cd "%s"; sphinx-build -Q -b snippet_source_list_references "%s" /tmp | xargs md5sum > "%s"' % (PROJECT_ROOT, DOC_ROOT, MD5HASHES_FILE_PATH))
+            print('    cd "%s"; sphinx-build -Q -b snippet_source_list_references "%s" /tmp | xargs md5sum > "%s"' % (
+                PROJECT_ROOT, DOC_ROOT, MD5HASHES_FILE_PATH))
             print('')
 
             raise Exception('Lint errors occurred')
