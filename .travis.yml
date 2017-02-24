@@ -1,0 +1,51 @@
+language: c
+
+sudo: required
+
+dist: trusty
+
+services:
+  - docker
+
+before_script:
+  - |
+    cat <<EOF > Dockerfile
+    FROM ubuntu:16.04
+    RUN apt-get update
+    RUN apt-get install -y git build-essential cmake libmbedtls-dev \
+        libssl-dev python3 libboost-python-dev libpython3-dev wget \
+        $CC $CXX
+    RUN git clone https://github.com/AVSystem/Anjay.git
+    RUN sed -i -e "s/-Wdate-time/ /g" \
+        /usr/lib/python3.5/config-3.5m-x86_64-linux-gnu/Makefile \
+        /usr/lib/python3.5/plat-x86_64-linux-gnu/_sysconfigdata_m.py
+    CMD cd Anjay && ./devconfig && make -j && make check
+  - docker build -t anjay-docker .
+
+script:
+  - docker run -e CC=$CC -e CXX=$CXX anjay-docker
+
+env:
+  - CC=gcc-4.7
+    CXX=g++-4.7
+
+  - CC=gcc-4.8
+    CXX=g++-4.8
+
+  - CC=gcc-4.9
+    CXX=g++-4.9
+
+  - CC=gcc-5
+    CXX=g++-5
+
+  - CC=clang-3.5
+    CXX=clang++-3.5
+
+  - CC=clang-3.6
+    CXX=clang++-3.6
+
+  - CC=clang-3.7
+    CXX=clang++-3.7
+
+  - CC=clang-3.8
+    CXX=clang++-3.8
