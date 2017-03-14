@@ -292,9 +292,20 @@ static int dev_write(anjay_t *anjay,
 }
 
 static void perform_reboot(void *unused) {
-    (void)unused;
-    demo_log(INFO, "*** REBOOT ***");
-    execv("/proc/self/exe", saved_argv);
+    (void) unused;
+    char exe_path[256];
+#ifdef __APPLE__
+    extern int _NSGetExecutablePath(char *buf, uint32_t *bufsize);
+    if (_NSGetExecutablePath(exe_path, &(uint32_t) { sizeof(exe_path) })) {
+        demo_log(ERROR, "could not get executable path");
+    } else
+#else // __APPLE__
+    strcpy(exe_path, "/proc/self/exe");
+#endif
+    {
+        demo_log(INFO, "*** REBOOT ***");
+        execv(exe_path, saved_argv);
+    }
     demo_log(ERROR, "could not reboot");
 }
 

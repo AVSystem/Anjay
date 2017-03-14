@@ -173,7 +173,12 @@ static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
         .udp_listen_port = cmdline_args->udp_listen_port,
         .dtls_version = AVS_NET_SSL_VERSION_TLSv1_2,
         .in_buffer_size = (size_t) cmdline_args->inbuf_size,
-        .out_buffer_size = (size_t) cmdline_args->outbuf_size
+        .out_buffer_size = (size_t) cmdline_args->outbuf_size,
+#ifdef __APPLE__
+        .udp_socket_config = {
+            .forced_mtu = 1492
+        }
+#endif
     };
 
     demo->connection_args = &cmdline_args->connection_args;

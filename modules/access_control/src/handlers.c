@@ -111,7 +111,7 @@ static int ac_instance_create(anjay_t *anjay,
         .acl     = NULL
     };
     int retval = _anjay_access_control_add_instance(access_control,
-                                                    new_instance);
+                                                    new_instance, NULL);
     if (retval) {
         AVS_LIST_CLEAR(&new_instance);
     }
@@ -332,65 +332,130 @@ static int ac_resource_write(anjay_t *anjay,
     }
 }
 
-static bool instances_changed_for(anjay_notify_queue_t queue, anjay_oid_t oid) {
+static void what_changed(anjay_ssid_t origin_ssid,
+                         anjay_notify_queue_t queue,
+                         bool *out_might_caused_orphaned_ac_instances,
+                         bool *out_have_adds_or_removes) {
+    *out_might_caused_orphaned_ac_instances = false;
+    *out_have_adds_or_removes = false;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, queue) {
-        if (it->oid > oid) {
+        if (!it->instance_set_changes.instance_set_changed) {
+            continue;
+        }
+        if (it->oid == ANJAY_DM_OID_SECURITY
+                || it->oid == ANJAY_DM_OID_SERVER
+                || it->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
+            *out_might_caused_orphaned_ac_instances = true;
+        }
+        // NOTE: This makes it possible for BOOTSTRAP DELETE to leave
+        // "lingering" Access Control instances without valid targets;
+        // Relevant: https://github.com/OpenMobileAlliance/OMA_LwM2M_for_Developers/issues/192
+        //
+        // Quoting Thierry's response:
+        // > Regarding the orphan AC Object Instances, [...] it could be let
+        // > implementation dependant. In LwM2M 1.1, the Boostrap Server should
+        // > have better view on this, and could safely decide to take the
+        // > responsability to remove "lingering" ACO Instances.
+        //
+        // So in line with the spirit of letting the Bootstrap Server take care
+        // of everything, we don't remove such "lingering" instances
+        // automatically.
+        if (origin_ssid != ANJAY_SSID_BOOTSTRAP
+                && it->oid != ANJAY_DM_OID_ACCESS_CONTROL
+                && (it->instance_set_changes.known_removed_iids
+                        || it->instance_set_changes.known_added_iids)) {
+            *out_have_adds_or_removes = true;
+        }
+        if (*out_might_caused_orphaned_ac_instances
+                && *out_have_adds_or_removes) {
+            // both flags possible to set are already set
+            // they can't be any more true, so we break out from this loop
             break;
-        } else if (it->oid == oid) {
-            return it->instance_set_changes.instance_set_changed;
         }
     }
-    return false;
 }
 
-static bool servers_might_have_changed(anjay_notify_queue_t queue) {
-    return instances_changed_for(queue, ANJAY_DM_OID_SECURITY)
-            || instances_changed_for(queue, ANJAY_DM_OID_SERVER)
-            || instances_changed_for(queue, ANJAY_DM_OID_ACCESS_CONTROL);
-}
-
-static int append_oid(AVS_LIST(anjay_oid_t) **tail_ptr_ptr, anjay_oid_t oid) {
-    if (_anjay_access_control_target_oid_valid(oid)) {
-        assert(!**tail_ptr_ptr);
-        if (!AVS_LIST_INSERT_NEW(anjay_oid_t, *tail_ptr_ptr)) {
-            ac_log(ERROR, "Out of memory");
-            return -1;
+static int remove_ac_instance_by_target(access_control_t *ac,
+                                        obj_ptr_t possibly_wrapped_ac,
+                                        anjay_oid_t target_oid,
+                                        anjay_iid_t target_iid,
+                                        anjay_notify_queue_t *notify_queue) {
+    AVS_LIST(access_control_instance_t) *it;
+    AVS_LIST(access_control_instance_t) helper;
+    AVS_LIST_DELETABLE_FOREACH_PTR(it, helper, &ac->current.instances) {
+        if ((*it)->target.oid == target_oid
+                && (*it)->target.iid == target_iid) {
+            if (_anjay_dm_transaction_include_object(ac->anjay,
+                                                     possibly_wrapped_ac)
+                    || _anjay_notify_queue_instance_removed(
+                            notify_queue,
+                            ANJAY_DM_OID_ACCESS_CONTROL, (*it)->iid)) {
+                return -1;
+            }
+            AVS_LIST_CLEAR(&(*it)->acl);
+            AVS_LIST_DELETE(it);
         }
-        ***tail_ptr_ptr = oid;
-        *tail_ptr_ptr = AVS_LIST_NEXT_PTR(*tail_ptr_ptr);
     }
     return 0;
 }
 
-static int
-append_object_oid(anjay_t *anjay, obj_ptr_t obj, void *tail_ptr_ptr) {
-    (void) anjay;
-    return append_oid((AVS_LIST(anjay_oid_t) **) tail_ptr_ptr, (*obj)->oid);
-}
+static int perform_adds_and_removes(access_control_t *ac,
+                                    anjay_ssid_t origin_ssid,
+                                    anjay_notify_queue_t incoming_queue,
+                                    anjay_notify_queue_t *local_queue_ptr) {
+    obj_ptr_t possibly_wrapped_ac = _anjay_dm_find_object_by_oid(
+            ac->anjay, ANJAY_DM_OID_ACCESS_CONTROL);
+    assert(possibly_wrapped_ac);
 
-static int enumerate_oids_to_sync(anjay_t *anjay,
-                                  AVS_LIST(anjay_oid_t) *out_oids,
-                                  anjay_notify_queue_t notify_queue) {
-    AVS_LIST(anjay_oid_t) *tail_ptr = out_oids;
-    if (instances_changed_for(notify_queue, ANJAY_DM_OID_ACCESS_CONTROL)) {
-        // something changed in Access Control, sync everything
-        return _anjay_dm_foreach_object(anjay, append_object_oid, &tail_ptr);
-    } else {
-        // sync only what changed
-        AVS_LIST(anjay_notify_queue_object_entry_t) it;
-        AVS_LIST_FOREACH(it, notify_queue) {
-            if (it->instance_set_changes.instance_set_changed) {
-                int result = append_oid(&tail_ptr, it->oid);
-                if (result) {
-                    return result;
-                }
+    AVS_LIST(access_control_instance_t) acs_to_insert = NULL;
+    AVS_LIST(access_control_instance_t) *acs_to_insert_append_ptr
+            = &acs_to_insert;
+
+    AVS_LIST(anjay_notify_queue_object_entry_t) it;
+    AVS_LIST_FOREACH(it, incoming_queue) {
+        if (it->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
+            continue;
+        }
+        AVS_LIST(anjay_iid_t) iid_it;
+
+        // remove Access Control object instances for removed instances
+        AVS_LIST_FOREACH(iid_it, it->instance_set_changes.known_removed_iids) {
+            int result = remove_ac_instance_by_target(ac, possibly_wrapped_ac,
+                                                      it->oid, *iid_it,
+                                                      local_queue_ptr);
+            if (result) {
+                return result;
             }
         }
-        return 0;
-    }
-}
 
+        // create Access Control object instances for created instances
+        AVS_LIST_FOREACH(iid_it, it->instance_set_changes.known_added_iids) {
+            if (_anjay_dm_transaction_include_object(ac->anjay,
+                                                     possibly_wrapped_ac)) {
+                return -1;
+            }
+            AVS_LIST(access_control_instance_t) new_instance =
+                    _anjay_access_control_create_missing_ac_instance(
+                            origin_ssid,
+                            &(const acl_target_t) {
+                                .oid = it->oid,
+                                .iid = *iid_it
+                            });
+            if (!AVS_LIST_INSERT(acs_to_insert_append_ptr, new_instance)) {
+                return -1;
+            }
+            acs_to_insert_append_ptr =
+                    AVS_LIST_APPEND_PTR(acs_to_insert_append_ptr);
+        }
+    }
+    int result = _anjay_access_control_add_instances_without_iids(
+            ac, &acs_to_insert, local_queue_ptr);
+    AVS_LIST_CLEAR(&acs_to_insert) {
+        AVS_LIST_CLEAR(&acs_to_insert->acl);
+    }
+    return result;
+}
 
 static int sync_on_notify(anjay_t *anjay,
                           anjay_ssid_t origin_ssid,
@@ -400,22 +465,27 @@ static int sync_on_notify(anjay_t *anjay,
     if (ac->sync_in_progress) {
         return 0;
     }
+
+    bool might_caused_orphaned_ac_instances;
+    bool have_adds_or_removes;
+    what_changed(origin_ssid, incoming_queue,
+                 &might_caused_orphaned_ac_instances, &have_adds_or_removes);
+    if (!might_caused_orphaned_ac_instances && !have_adds_or_removes) {
+        return 0;
+    }
+
+    int result = 0;
     ac->sync_in_progress = true;
     _anjay_dm_transaction_begin(anjay);
-    AVS_LIST(anjay_oid_t) oids_to_sync = NULL;
-    int result;
     anjay_notify_queue_t local_queue = NULL;
-    if ((result = enumerate_oids_to_sync(anjay, &oids_to_sync, incoming_queue))
-            || (result = _anjay_access_control_sync_instances(
-                    ac, origin_ssid, oids_to_sync, &local_queue))) {
-        goto finish;
-    }
-    if (servers_might_have_changed(incoming_queue)) {
+    if (might_caused_orphaned_ac_instances) {
         result = _anjay_access_control_remove_orphaned_instances(ac,
                                                                  &local_queue);
     }
-finish:
-    AVS_LIST_CLEAR(&oids_to_sync);
+    if (!result && have_adds_or_removes) {
+        result = perform_adds_and_removes(ac, origin_ssid, incoming_queue,
+                                          &local_queue);
+    }
     if (!result) {
         result = _anjay_notify_flush(anjay, origin_ssid, &local_queue);
     } else {
@@ -455,7 +525,7 @@ static int acl_target_cmp(const void *left_, const void *right_) {
 static int validate_inst_ref(anjay_t *anjay,
                              AVS_RBTREE(acl_target_t) encountered_refs,
                              const acl_target_t *target) {
-    ac_log(TRACE, "Validating: /%" PRIu16 "/%" PRIu16,
+    ac_log(TRACE, "Validating: /%" PRIu16 "/%" PRId32,
            target->oid, target->iid);
     if (!_anjay_access_control_target_oid_valid(target->oid)
             || !_anjay_access_control_target_iid_valid(target->iid)) {

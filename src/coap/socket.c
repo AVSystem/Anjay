@@ -62,6 +62,23 @@ void _anjay_coap_socket_cleanup(anjay_coap_socket_t **sock) {
     *sock = NULL;
 }
 
+static int map_io_error(avs_net_abstract_socket_t *socket,
+                        int result,
+                        const char *operation) {
+    if (result) {
+        int error = avs_net_socket_errno(socket);
+        coap_log(ERROR, "%s failed: errno = %d", operation, error);
+        if (error == ETIMEDOUT) {
+            result = ANJAY_COAP_SOCKET_ERR_TIMEOUT;
+        } else if (error == EMSGSIZE) {
+            result = ANJAY_COAP_SOCKET_ERR_MSG_TOO_LONG;
+        } else {
+            result = ANJAY_COAP_SOCKET_ERR_NETWORK;
+        }
+    }
+    return result;
+}
+
 int _anjay_coap_socket_send(anjay_coap_socket_t *sock,
                             const anjay_coap_msg_t *msg) {
     assert(sock && sock->dtls_socket);
@@ -71,7 +88,9 @@ int _anjay_coap_socket_send(anjay_coap_socket_t *sock,
     }
 
     coap_log(TRACE, "send: %s", ANJAY_COAP_MSG_SUMMARY(msg));
-    return avs_net_socket_send(sock->dtls_socket, &msg->header, msg->length);
+    int result = avs_net_socket_send(sock->dtls_socket,
+                                     &msg->header, msg->length);
+    return map_io_error(sock->dtls_socket, result, "send");
 }
 
 int _anjay_coap_socket_recv(anjay_coap_socket_t *sock,
@@ -81,24 +100,13 @@ int _anjay_coap_socket_recv(anjay_coap_socket_t *sock,
     assert(msg_capacity < UINT32_MAX);
 
     size_t msg_length = 0;
-    int result = 0;
-
-    if (avs_net_socket_receive(sock->dtls_socket, &msg_length, &out_msg->header,
-                               msg_capacity - sizeof(out_msg->length))) {
-        int error = avs_net_socket_errno(sock->dtls_socket);
-        coap_log(ERROR, "recv failed: errno = %d", error);
-        if (error == ETIMEDOUT) {
-            result = ANJAY_COAP_SOCKET_RECV_ERR_TIMEOUT;
-        } else if (error == EMSGSIZE) {
-            result = ANJAY_COAP_SOCKET_RECV_ERR_MSG_TOO_LONG;
-        } else {
-            result = ANJAY_COAP_SOCKET_RECV_ERR_OTHER;
-        }
-    }
-    out_msg->length = (uint32_t)msg_length;
+    int result = avs_net_socket_receive(sock->dtls_socket, &msg_length,
+                                        &out_msg->header,
+                                        msg_capacity - sizeof(out_msg->length));
+    out_msg->length = (uint32_t) msg_length;
 
     if (result) {
-        return result;
+        return map_io_error(sock->dtls_socket, result, "receive");
     }
 
     if (_anjay_coap_msg_is_valid(out_msg)) {
@@ -106,7 +114,7 @@ int _anjay_coap_socket_recv(anjay_coap_socket_t *sock,
         return 0;
     } else {
         coap_log(DEBUG, "recv: malformed message");
-        return ANJAY_COAP_SOCKET_RECV_ERR_MSG_MALFORMED;
+        return ANJAY_COAP_SOCKET_ERR_MSG_MALFORMED;
     }
 }
 

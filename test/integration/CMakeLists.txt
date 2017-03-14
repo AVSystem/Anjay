@@ -57,14 +57,32 @@ set(NSH_LWM2M_DIR "${CMAKE_CURRENT_SOURCE_DIR}/framework/nsh-lwm2m")
 if(NOT MBEDTLS_LIBRARY)
     message(FATAL_ERROR "mbed TLS is required for integration tests")
 endif()
-find_package(PythonInterp 3)
-if(NOT PYTHONINTERP_FOUND OR PYTHON_VERSION_MINOR LESS 5)
-    message(FATAL_ERROR "Python >=3.5 is required for integration tests")
+
+if(CMAKE_MAJOR_VERSION LESS 3
+        OR (CMAKE_MAJOR_VERSION EQUAL 3 AND CMAKE_MINOR_VERSION LESS 1))
+    message(FATAL_ERROR "CMake >=3.1.0 is required to run integration tests")
+endif()
+
+set(_MISSING_PYTHON_MSG "If you have it installed on your system, but your cmake version is outdated you could try to restart the process that lead to this error message with: -DPython_ADDITIONAL_VERSIONS=3.x")
+
+if(Python_ADDITIONAL_VERSIONS)
+    find_package(PythonInterp)
+else()
+    find_package(PythonInterp 3)
+endif()
+if(NOT PYTHONINTERP_FOUND
+        OR PYTHON_VERSION_MAJOR LESS 3
+        OR (PYTHON_VERSION_MAJOR EQUAL 3 AND PYTHON_VERSION_MINOR LESS 5))
+    message(FATAL_ERROR
+            "Python >=3.5 is required for integration tests. ${_MISSING_PYTHON_MSG}")
 endif()
 find_package(PythonLibs "${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
 if(NOT PYTHONLIBS_FOUND)
-    message(FATAL_ERROR "libpython >=3.5 is required for integration tests")
+    message(FATAL_ERROR
+            "libpython ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR} is required for integration tests.")
 endif()
+unset(_MISSING_PYTHON_MSG)
+
 find_library(BOOST_PYTHON3_LIBRARY
              NAMES boost_python3 "boost_python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}")
 if(NOT BOOST_PYTHON3_LIBRARY)
@@ -73,8 +91,6 @@ endif()
 
 add_custom_target(pymbedtls COMMAND
                   python3 "${NSH_LWM2M_DIR}/pymbedtls/setup.py" install --install-lib ${PYMBEDTLS_MODULE_DIR})
-
-execute_process(COMMAND nproc OUTPUT_VARIABLE NPROC OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 add_custom_target(integration_check
                   COMMAND ${CMAKE_CTEST_COMMAND} -j ${NPROC} --output-on-failure

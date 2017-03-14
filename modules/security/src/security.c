@@ -150,6 +150,8 @@ static int del_instance(sec_repr_t *repr, anjay_iid_t iid) {
             return 0;
         }
     }
+
+    assert(0);
     return ANJAY_ERR_NOT_FOUND;
 }
 
@@ -193,9 +195,7 @@ static inline int sec_resource_present(anjay_t *anjay,
     (void) anjay;
     (void) iid;
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     if (rid == SEC_RES_SHORT_SERVER_ID) {
         return inst->has_ssid;
@@ -215,9 +215,7 @@ static int sec_read(anjay_t *anjay,
     (void) anjay;
 
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch ((security_resource_t) rid) {
     case SEC_RES_LWM2M_SERVER_URI:
@@ -255,9 +253,7 @@ static int sec_write(anjay_t *anjay,
     (void) anjay;
     sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     int retval;
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch ((security_resource_t) rid) {
     case SEC_RES_LWM2M_SERVER_URI:
@@ -396,6 +392,8 @@ sec_instance_reset(anjay_t *anjay,
                    anjay_iid_t iid) {
     (void) anjay;
     sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
+    assert(inst);
+
     _anjay_sec_destroy_instance_fields(inst);
     memset(inst, 0, sizeof(sec_instance_t));
     inst->iid = iid;
@@ -449,8 +447,10 @@ void anjay_security_object_purge(const anjay_dm_object_def_t *const *obj_ptr) {
 }
 
 void anjay_security_object_delete(const anjay_dm_object_def_t **def) {
-    anjay_security_object_purge(def);
-    free(_anjay_sec_get(def));
+    if (def) {
+        anjay_security_object_purge(def);
+        free(_anjay_sec_get(def));
+    }
 }
 
 #ifdef ANJAY_TEST

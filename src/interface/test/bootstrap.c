@@ -16,9 +16,13 @@
 
 #include <config.h>
 
+#include <errno.h>
+
 #include <avsystem/commons/unit/test.h>
 
 #include <anjay_test/dm.h>
+
+#include "../../sched_internal.h"
 
 AVS_UNIT_TEST(bootstrap_write, resource) {
     DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
@@ -600,6 +604,12 @@ AVS_UNIT_TEST(bootstrap_finish, success) {
     AVS_UNIT_ASSERT_EQUAL(
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_notify_perform), 1);
     AVS_UNIT_ASSERT_EQUAL(
+            AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
+    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    AVS_UNIT_ASSERT_EQUAL(
+            AVS_UNIT_MOCK_INVOCATIONS(_anjay_notify_perform), 1);
+    AVS_UNIT_ASSERT_EQUAL(
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 1);
     DM_TEST_FINISH;
 }
@@ -645,7 +655,12 @@ AVS_UNIT_TEST(bootstrap_finish, error) {
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     AVS_UNIT_ASSERT_EQUAL(
-            AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 1);
+            AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
+    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    // still not removing
+    AVS_UNIT_ASSERT_EQUAL(
+            AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
 
     DM_TEST_FINISH;
 }
@@ -677,6 +692,7 @@ AVS_UNIT_TEST(bootstrap_backoff, backoff) {
 
     while (backoff.tv_sec <= max_backoff.tv_sec) {
         avs_unit_mocksock_output_fail(mocksocks[0], -1);
+        avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
         AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
         AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next(anjay, &sched_job_delay));
@@ -689,11 +705,51 @@ AVS_UNIT_TEST(bootstrap_backoff, backoff) {
 
     // ensure the delay is capped at max_backoff
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next(anjay, &sched_job_delay));
     AVS_UNIT_ASSERT_TRUE(
             llabs(time_to_ns(sched_job_delay) - time_to_ns(max_backoff)) < 10);
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(bootstrap_reconnect, reconnect) {
+    DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
+    AVS_UNIT_ASSERT_SUCCESS(schedule_request_bootstrap(anjay, 0));
+
+    avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ECONNRESET);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+
+    // mocking reconnect is rather hard, so let's just check it's scheduled
+    AVS_UNIT_ASSERT_TRUE(anjay->sched->entries
+            == anjay->servers.active->sched_update_handle);
+    // encoded update args:
+    // - SSID==65535 (0xFFFF; fake-SSID for Bootstrap Server)
+    // - reconnect required == true (hence the 1 at the higher-order byte)
+    AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data, 0x1FFFF);
+    _anjay_sched_del(anjay->sched, &anjay->servers.active->sched_update_handle);
+
+    int sched_job_delay_ms;
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next_ms(anjay,
+                                                        &sched_job_delay_ms));
+    AVS_UNIT_ASSERT_EQUAL(sched_job_delay_ms, 2999);
+    _anjay_mock_clock_advance(&(const struct timespec) {
+        .tv_sec = 3,
+        .tv_nsec = 0
+    });
+
+    static const char REQUEST[] =
+            "\x40\x02\x69\xEE" // CoAP header
+            "\xB2" "bs" // Uri-Path
+            "\x4D\x0B" "ep=urn:dev:os:anjay-test"; // Uri-Query
+    avs_unit_mocksock_expect_output(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    static const char RESPONSE[] =
+            "\x60\x41\x69\xEE";
+    avs_unit_mocksock_input(mocksocks[0], RESPONSE, sizeof(RESPONSE) - 1);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     DM_TEST_FINISH;
 }

@@ -121,6 +121,8 @@ static int del_instance(server_repr_t *repr, anjay_iid_t iid) {
             break;
         }
     }
+
+    assert(0);
     return ANJAY_ERR_NOT_FOUND;
 }
 
@@ -199,6 +201,8 @@ static int serv_instance_reset(anjay_t *anjay,
                                anjay_iid_t iid) {
     (void) anjay;
     server_instance_t *inst = find_instance(_anjay_serv_get(obj_ptr), iid);
+    assert(inst);
+
     anjay_ssid_t ssid = inst->data.ssid;
     reset_instance_resources(inst);
     inst->data.ssid = ssid;
@@ -455,8 +459,10 @@ void anjay_server_object_purge(const anjay_dm_object_def_t *const *obj_ptr) {
 }
 
 void anjay_server_object_delete(const anjay_dm_object_def_t **def) {
-    anjay_server_object_purge(def);
-    free(_anjay_serv_get(def));
+    if (def) {
+        anjay_server_object_purge(def);
+        free(_anjay_serv_get(def));
+    }
 }
 
 #ifdef ANJAY_TEST

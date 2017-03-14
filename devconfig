@@ -22,7 +22,8 @@ if [[ -d '.git' ]]; then
     echo "Updating submodules" && git submodule update --init || exit 1
 fi
 
-C_FLAGS='-g -std=c99 -D_POSIX_C_SOURCE=200809L'
+C_FLAGS='-g -std=c99'
+
 EXTRA_C_FLAGS=
 EXTRA_FLAGS=()
 
@@ -30,7 +31,14 @@ MODULE_DYNAMIC_LIBS='ON'
 MODULE_STATIC_LIBS='ON'
 ANJAY_VERSION=$(git rev-parse --short HEAD)
 DTLS_BACKEND="mbedtls"
-WITH_VALGRIND=ON
+
+if valgrind --version >/dev/null 2>/dev/null; then
+    WITH_VALGRIND=ON
+    WITH_ASAN=OFF
+else
+    WITH_VALGRIND=OFF
+    WITH_ASAN=ON
+fi
 
 if [[ "$ANJAY_VERSION" == "" ]]; then
     ANJAY_VERSION="unknown"
@@ -59,12 +67,22 @@ while [ $# -gt 0 ]; do
         '--with-openssl')
             DTLS_BACKEND="openssl"
             ;;
+        '--with-tinydtls')
+            DTLS_BACKEND="tinydtls"
+            ;;
         '--without-dtls')
             DTLS_BACKEND=
             ;;
+        '--with-valgrind')
+            WITH_ASAN=OFF
+            WITH_VALGRIND=ON
+            ;;
         '--with-asan')
-            EXTRA_C_FLAGS="${EXTRA_C_FLAGS} -fsanitize=address"
-            # address sanitizer does not cooperate with valgrind
+            WITH_VALGRIND=OFF
+            WITH_ASAN=ON
+            ;;
+        '--without-memcheck')
+            WITH_ASAN=OFF
             WITH_VALGRIND=OFF
             ;;
         '--tiny')
@@ -83,6 +101,15 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+if [ "$WITH_ASAN" == "ON" ]; then
+    EXTRA_C_FLAGS="${EXTRA_C_FLAGS} -fsanitize=address"
+fi
+
+# use Homebrew-installed OpenSSL on macOS if available
+if brew ls --versions openssl >/dev/null 2>/dev/null; then
+    EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DOPENSSL_ROOT_DIR=/usr/local/opt/openssl"
+fi
 
 rm -f CMakeCache.txt
 rm -rf CMakeFiles

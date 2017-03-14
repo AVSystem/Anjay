@@ -21,6 +21,9 @@
 #include <assert.h>
 #include <string.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include "utils.h"
 
 static double geo_distance_m_with_radians(double lat1, double lon1,
@@ -40,6 +43,10 @@ double geo_distance_m(double lat1, double lon1, double lat2, double lon2) {
 
 int demo_parse_long(const char *str,
                     long *out_value) {
+    if (!str) {
+        return -1;
+    }
+
     char *endptr = NULL;
 
     errno = 0;
@@ -91,4 +98,11 @@ error:
     free(*buffer);
     *buffer = NULL;
     return result;
+}
+
+int open_temporary_file(char *path) {
+    mode_t old_umask = umask(S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+    int fd = mkstemp(path);
+    umask(old_umask);
+    return fd;
 }

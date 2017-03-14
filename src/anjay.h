@@ -51,9 +51,10 @@ typedef struct {
 struct anjay_struct {
     bool offline;
     avs_net_ssl_version_t dtls_version;
+    avs_net_socket_configuration_t udp_socket_config;
     anjay_sched_t *sched;
     anjay_dm_t dm;
-    char udp_port[6];
+    uint16_t udp_listen_port;
     anjay_servers_t servers;
 #ifdef WITH_OBSERVE
     anjay_observe_state_t observe;

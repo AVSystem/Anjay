@@ -34,7 +34,6 @@
 #define FW_RES_PACKAGE_URI              1
 #define FW_RES_UPDATE                   2
 #define FW_RES_STATE                    3
-#define FW_RES_UPDATE_SUPPORTED_OBJECTS 4
 #define FW_RES_UPDATE_RESULT            5
 #define FW_RES_PKG_NAME                 6
 #define FW_RES_PKG_VERSION              7
@@ -80,7 +79,6 @@ typedef struct fw_repr {
 
     firmware_metadata_t metadata;
     fw_update_state_t state;
-    bool update_supported_objects;
     fw_update_result_t result;
     char package_uri[256];
 
@@ -123,7 +121,7 @@ static int generate_random_target_filepath(char *out_path_pattern,
         return -1;
     }
 
-    int fd = mkstemp(out_path_pattern);
+    int fd = open_temporary_file(out_path_pattern);
     if (fd == -1) {
         demo_log(ERROR, "could not generate firmware filename: %s",
                  strerror(errno));
@@ -188,7 +186,8 @@ void firmware_update_set_package_path(anjay_t *anjay,
 void firmware_update_set_fw_updated_marker_path(
         const anjay_dm_object_def_t **fw_obj, const char *path) {
     fw_repr_t *fw = get_fw(fw_obj);
-    strncpy(fw->fw_updated_marker, path, sizeof(fw->fw_updated_marker));
+    strncpy(fw->fw_updated_marker, path, sizeof(fw->fw_updated_marker) - 1);
+    fw->fw_updated_marker[sizeof(fw->fw_updated_marker) - 1] = '\0';
 }
 
 static int fw_read(anjay_t *anjay,
@@ -201,8 +200,6 @@ static int fw_read(anjay_t *anjay,
     switch (rid) {
     case FW_RES_STATE:
         return anjay_ret_i32(ctx, fw->state);
-    case FW_RES_UPDATE_SUPPORTED_OBJECTS:
-        return anjay_ret_bool(ctx, fw->update_supported_objects);
     case FW_RES_UPDATE_RESULT:
         return anjay_ret_i32(ctx, fw->result);
     case FW_RES_PKG_NAME:
@@ -285,9 +282,9 @@ static int unpack_fw_to_file(const char *fw_pkg_path,
                              const char *target_path,
                              firmware_metadata_t *out_metadata) {
     int result = -1;
-
     FILE *fw = fopen(fw_pkg_path, "rb");
     FILE *tmp = NULL;
+
     if (!fw) {
         demo_log(ERROR, "could not open file: %s", fw_pkg_path);
         goto cleanup;
@@ -314,7 +311,9 @@ static int unpack_fw_to_file(const char *fw_pkg_path,
     result = 0;
 
 cleanup:
-    fclose(fw);
+    if (fw) {
+        fclose(fw);
+    }
     if (tmp) {
         fclose(tmp);
     }
@@ -699,8 +698,6 @@ static int fw_write(anjay_t *anjay,
 
             return 0;
         }
-    case FW_RES_UPDATE_SUPPORTED_OBJECTS:
-        return anjay_get_bool(ctx, &fw->update_supported_objects);
     default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -870,7 +867,9 @@ firmware_update_object_create(iosched_t *iosched,
 
 void firmware_update_object_release(const anjay_dm_object_def_t **def) {
     fw_repr_t *fw = get_fw(def);
-    maybe_delete_firmware_file(fw);
-    wget_context_delete(&fw->wget_context);
-    free(fw);
+    if (fw) {
+        maybe_delete_firmware_file(fw);
+        wget_context_delete(&fw->wget_context);
+        free(fw);
+    }
 }

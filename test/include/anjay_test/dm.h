@@ -37,6 +37,10 @@ int _anjay_test_dm_fake_security_instance_it(anjay_t *anjay,
                                              anjay_iid_t *out,
                                              void **cookie);
 
+int _anjay_test_dm_fake_security_instance_present(anjay_t *anjay,
+                                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                                  anjay_iid_t iid);
+
 int _anjay_test_dm_fake_security_present(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
                                          anjay_iid_t iid,
@@ -84,8 +88,9 @@ static anjay_dm_object_def_t *const EXECUTE_OBJ =
 static const anjay_dm_object_def_t *const FAKE_SECURITY =
         &(const anjay_dm_object_def_t) {
             .oid = 0,
-            .rid_bound = 11,
+            .rid_bound = 13,
             .instance_it = _anjay_test_dm_fake_security_instance_it,
+            .instance_present = _anjay_test_dm_fake_security_instance_present,
             .resource_supported = anjay_dm_resource_supported_TRUE,
             .resource_present = _anjay_test_dm_fake_security_present,
             .resource_read = _anjay_test_dm_fake_security_read,
@@ -133,6 +138,7 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
         mocksocks[i] = _anjay_test_dm_install_socket(anjay, ssids[i]); \
         avs_unit_mocksock_enable_recv_timeout_getsetopt(mocksocks[i], 1000); \
         avs_unit_mocksock_enable_inner_mtu_getopt(mocksocks[i], 1252); \
+        avs_unit_mocksock_enable_state_getopt(mocksocks[i]); \
     } \
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay)); \
     _anjay_test_dm_unsched_reload_sockets(anjay)

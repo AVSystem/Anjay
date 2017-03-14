@@ -155,11 +155,11 @@ static void handle_instant_entries(iosched_t *sched) {
     }
 }
 
-static size_t get_poll_fds(iosched_t *sched,
+static nfds_t get_poll_fds(iosched_t *sched,
                            struct pollfd *poll_fds,
                            size_t max_poll_fds) {
     iosched_entry_t *entry;
-    size_t count = 0;
+    nfds_t count = 0;
 
     AVS_LIST_FOREACH(entry, sched->entries) {
         assert(entry->type == SCHED_ENTRY_POLL);
@@ -178,7 +178,7 @@ static size_t get_poll_fds(iosched_t *sched,
 static int handle_poll_entries(iosched_t *sched,
                                int poll_timeout_ms) {
     struct pollfd poll_fds[AVS_LIST_SIZE(sched->entries)];
-    size_t poll_fds_count = get_poll_fds(sched, poll_fds, ARRAY_SIZE(poll_fds));
+    nfds_t poll_fds_count = get_poll_fds(sched, poll_fds, ARRAY_SIZE(poll_fds));
 
     int result = poll(poll_fds, poll_fds_count, poll_timeout_ms);
     if (result <= 0) {

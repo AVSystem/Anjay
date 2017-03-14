@@ -23,8 +23,10 @@
 #include <mbedtls/ssl_cookie.h>
 #include <mbedtls/timing.h>
 #include <mbedtls/debug.h>
+#include <mbedtls/error.h>
 
 #include <vector>
+#include <sstream>
 #include <stdexcept>
 #include <system_error>
 
@@ -46,11 +48,25 @@ struct bytes_converter {
     }
 };
 
-#ifdef WITH_MBEDTLS_DEBUG
 void debug_mbedtls(void * /*ctx*/, int /*level*/, const char *file, int line, const char *str) {
     fprintf(stderr, "%s:%04d: %s", file, line, str);
 }
-#endif
+
+string to_hex(int n) {
+    if (n < 0) {
+        return "-" + to_hex(-n);
+    } else {
+        stringstream ss;
+        ss << "0x" << hex << n;
+        return ss.str();
+    }
+}
+
+string mbedtls_error_string(int error) {
+    char buf[1024];
+    mbedtls_strerror(error, buf, sizeof(buf));
+    return string(buf) + " (" + to_hex(error) + ")";
+}
 
 } // namespace
 
@@ -60,6 +76,11 @@ struct Socket {
     enum class Type {
         Client,
         Server
+    };
+
+    enum class HandshakeResult {
+        Finished,
+        HelloVerifyRequired
     };
 
     mbedtls_ssl_cookie_ctx cookie_ctx;
@@ -122,22 +143,30 @@ struct Socket {
         return bytes_received;
     }
 
-    void _do_handshake() {
+    HandshakeResult _do_handshake() {
         for (;;) {
             int result = mbedtls_ssl_handshake(&context);
             if (result == 0) {
                 break;
+            } else if (result == MBEDTLS_ERR_SSL_HELLO_VERIFY_REQUIRED) {
+                // mbedtls is unable to continue in such case; one needs to
+                // reset the SSL context and try again
+                return HandshakeResult::HelloVerifyRequired;
             } else if (result != MBEDTLS_ERR_SSL_WANT_READ
                     && result != MBEDTLS_ERR_SSL_WANT_WRITE) {
-                throw runtime_error("mbedtls_ssl_handshake failed");
+                throw runtime_error("mbedtls_ssl_handshake failed: "
+                                    + mbedtls_error_string(result));
             }
         }
+
+        return HandshakeResult::Finished;
     }
 
     Socket(object py_socket_,
            Type type_,
            const string &psk_identity_,
-           const string &psk_key_):
+           const string &psk_key_,
+           bool debug):
         py_socket(py_socket_),
         type(type_)
     {
@@ -151,7 +180,8 @@ struct Socket {
 
         int result = mbedtls_ctr_drbg_seed(&rng, mbedtls_entropy_func, &entropy, NULL, 0);
         if (result) {
-            throw runtime_error("mbedtls_ctr_drbg_seed failed");
+            throw runtime_error("mbedtls_ctr_drbg_seed failed: "
+                                + mbedtls_error_string(result));
         }
 
         mbedtls_ssl_config_init(&config);
@@ -161,13 +191,13 @@ struct Socket {
                 MBEDTLS_SSL_TRANSPORT_DATAGRAM, // TODO
                 MBEDTLS_SSL_PRESET_DEFAULT);
         if (result) {
-            throw runtime_error("mbedtls_ssl_config_defaults failed");
+            throw runtime_error("mbedtls_ssl_config_defaults failed: "
+                                + mbedtls_error_string(result));
         }
 
-#ifdef WITH_MBEDTLS_DEBUG
-        mbedtls_ssl_conf_dbg(&config, debug_mbedtls, NULL);
-        mbedtls_debug_set_threshold(9999);
-#endif
+        if (debug) {
+            mbedtls_ssl_conf_dbg(&config, debug_mbedtls, NULL);
+        }
 
         // TODO
         mbedtls_ssl_conf_min_version(&config,
@@ -182,13 +212,17 @@ struct Socket {
         psk_ciphersuites = {MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8, 0};
         mbedtls_ssl_conf_ciphersuites(&config, &psk_ciphersuites[0]);
 
+        // NOTE: workaround for https://github.com/ARMmbed/mbedtls/issues/843
+        memset(&cookie_ctx, 0, sizeof(cookie_ctx));
         mbedtls_ssl_cookie_init(&cookie_ctx);
         result = mbedtls_ssl_cookie_setup(&cookie_ctx, mbedtls_ctr_drbg_random, &rng);
         if (result) {
-            throw runtime_error("mbedtls_ssl_cookie_setup failed");
+            throw runtime_error("mbedtls_ssl_cookie_setup failed: "
+                                + mbedtls_error_string(result));
         }
 
-        mbedtls_ssl_conf_dtls_cookies(&config, NULL, NULL, &cookie_ctx);
+        mbedtls_ssl_conf_dtls_cookies(&config, mbedtls_ssl_cookie_write,
+                                      mbedtls_ssl_cookie_check, &cookie_ctx);
 
         mbedtls_ssl_init(&context);
         mbedtls_ssl_set_bio(&context,
@@ -200,23 +234,52 @@ struct Socket {
 
         result = mbedtls_ssl_setup(&context, &config);
         if (result) {
-            throw runtime_error("mbedtls_ssl_setup failed");
+            throw runtime_error("mbedtls_ssl_setup failed: "
+                                + mbedtls_error_string(result));
         }
     }
 
     Socket(object py_socket,
+           Type type,
            const string &psk_identity,
            const string &psk_key):
-        Socket(py_socket, Socket::Type::Client, psk_identity, psk_key)
+        Socket(py_socket, type, psk_identity, psk_key, false)
+    {}
+
+    Socket(object py_socket,
+           const string &psk_identity,
+           const string &psk_key,
+           bool debug):
+        Socket(py_socket, Socket::Type::Client, psk_identity, psk_key, debug)
+    {}
+
+    Socket(object py_socket,
+           const string &psk_identity,
+           const string &psk_key):
+        Socket(py_socket, Socket::Type::Client, psk_identity, psk_key, false)
     {}
 
     void connect(object address_port) {
-        if (mbedtls_ssl_session_reset(&context)) {
-            throw runtime_error("mbedtls_ssl_sssion_reset failed");
-        }
+        HandshakeResult hs_result;
 
-        call_method<void>(py_socket.ptr(), "connect", address_port);
-        _do_handshake();
+        do {
+            int result = mbedtls_ssl_session_reset(&context);
+            if (result) {
+                throw runtime_error("mbedtls_ssl_sssion_reset failed: "
+                                    + mbedtls_error_string(result));
+            }
+
+            const char *address = extract<const char *>(address_port[0]);
+            result = mbedtls_ssl_set_client_transport_id(
+                    &context, (const unsigned char *) address, len(address_port[0]));
+            if (result) {
+                throw runtime_error("mbedtls_ssl_set_client_transport_id failed: "
+                                    + mbedtls_error_string(result));
+            }
+
+            call_method<void>(py_socket.ptr(), "connect", address_port);
+            hs_result = _do_handshake();
+        } while (hs_result == HandshakeResult::HelloVerifyRequired);
     }
 
     void send(const string &data) {
@@ -231,7 +294,8 @@ struct Socket {
                         || sent == MBEDTLS_ERR_SSL_WANT_WRITE) {
                     continue;
                 } else {
-                    throw runtime_error("mbedtls_ssl_write failed: " + to_string(sent));
+                    throw runtime_error("mbedtls_ssl_write failed: "
+                                        + mbedtls_error_string(sent));
                 }
             }
 
@@ -252,7 +316,8 @@ struct Socket {
             if (result == MBEDTLS_ERR_SSL_TIMEOUT) {
                 throw_error_already_set();
             } else {
-                throw runtime_error("mbedtls_ssl_read failed: " + to_string(result));
+                throw runtime_error("mbedtls_ssl_read failed: "
+                                    + mbedtls_error_string(result));
             }
         }
 
@@ -279,20 +344,51 @@ struct Socket {
     }
 };
 
-struct ServerSocket {
+class ServerSocket {
+    void enable_reuse(const object &socket) {
+        // Socket binding reuse on *nixes is crazy.
+        // See http://stackoverflow.com/a/14388707 for details.
+        //
+        // In short:
+        //
+        // On *BSD and macOS, we need both SO_REUSEADDR and SO_REUSEPORT, so
+        // that we can bind multiple sockets to exactly the same address and
+        // port (before calling connect(), which will resolve the ambiguity).
+        //
+        // On Linux, SO_REUSEADDR alone already has those semantics for UDP
+        // sockets. Linux also has SO_REUSEPORT, but for UDP sockets, it has
+        // very special meaning that enables round-robin load-balancing between
+        // sockets bound to the same address and port, and we don't want that.
+        //
+        // Some more exotic systems (Windows, Solaris) do not have SO_REUSEPORT
+        // at all, so we can always just set SO_REUSEADDR and see what happens.
+        // It may or may not work, but at least it'll compile ;)
+#ifdef SO_REUSEADDR
+        call_method<void>(socket.ptr(), "setsockopt", SOL_SOCKET, SO_REUSEADDR, 1);
+#endif
+#if !defined(__linux__) && defined(SO_REUSEPORT)
+        call_method<void>(socket.ptr(), "setsockopt", SOL_SOCKET, SO_REUSEPORT, 1);
+#endif
+    }
+
+public:
     object py_socket;
 
     string psk_identity;
     string psk_key;
 
+    bool debug;
+
     ServerSocket(object py_socket_,
                  const string &psk_identity_,
-                 const string &psk_key_ ):
+                 const string &psk_key_,
+                 bool debug_):
         py_socket(py_socket_),
         psk_identity(psk_identity_),
-        psk_key(psk_key_)
+        psk_key(psk_key_),
+        debug(debug_)
     {
-        call_method<void>(py_socket.ptr(), "setsockopt", SOL_SOCKET, SO_REUSEADDR, 1);
+        enable_reuse(py_socket);
     }
 
     Socket *accept() {
@@ -303,7 +399,7 @@ struct ServerSocket {
         object remote_addr = extract<object>(data__remote_addr[1]);
 
         object client_py_sock = eval("socket.socket(socket.AF_INET, socket.SOCK_DGRAM)");
-        call_method<void>(client_py_sock.ptr(), "setsockopt", (int)SOL_SOCKET, (int)SO_REUSEADDR, 1);
+        enable_reuse(client_py_sock);
         call_method<void>(client_py_sock.ptr(), "bind", bound_addr);
 
         swap(py_socket, client_py_sock);
@@ -311,10 +407,16 @@ struct ServerSocket {
         call_method<void>(client_py_sock.ptr(), "connect", remote_addr);
 
         Socket *client_sock = new Socket(client_py_sock, Socket::Type::Server,
-                                         psk_identity, psk_key);
+                                         psk_identity, psk_key, debug);
         client_sock->connect(remote_addr);
         return client_sock;
     }
+
+    ServerSocket(object py_socket,
+                 const string &psk_identity,
+                 const string &psk_key):
+        ServerSocket(py_socket, psk_identity, psk_key, false)
+    {}
 
     object __getattr__(object name) {
         return call_method<object>(py_socket.ptr(), "__getattribute__", name);
@@ -328,13 +430,15 @@ BOOST_PYTHON_MODULE(pymbedtls) {
 
     to_python_converter<vector<uint8_t>, bytes_converter, true>();
 
-    class_<ServerSocket>("ServerSocket", init<object, const string &, const string &>())
+    class_<ServerSocket>("ServerSocket", init<object, const string &, const string &, bool>())
+        .def(init<object, const string &, const string &>())
         .def("accept", &ServerSocket::accept, return_value_policy<manage_new_object>())
         .def("__getattr__", &ServerSocket::__getattr__);
     ;
 
     scope socket_scope =
-        class_<Socket>("Socket", init<object, const string &, const string &>())
+        class_<Socket>("Socket", init<object, const string &, const string &, bool>())
+            .def(init<object, const string &, const string &>())
             .def("connect", &Socket::connect)
             .def("send", &Socket::send)
             .def("sendall", &Socket::send)
@@ -352,4 +456,7 @@ BOOST_PYTHON_MODULE(pymbedtls) {
         .value("Server", Socket::Type::Server)
         .export_values()
     ;
+
+    // most verbose logs available
+    mbedtls_debug_set_threshold(4);
 }

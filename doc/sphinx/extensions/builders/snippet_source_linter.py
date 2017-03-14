@@ -22,14 +22,6 @@ from builders.dummy import DummyBuilder
 from file_dirtiness_checker import FileDirtinessChecker
 from snippet_source import SnippetSourceNode
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '../../../..'))
-
-DOC_ROOT = os.path.join(PROJECT_ROOT, "doc/sphinx/source")
-EXAMPLES_PATH = "examples"  # relative to PROJECT_ROOT
-EXAMPLES_ROOT = os.path.join(PROJECT_ROOT, EXAMPLES_PATH)
-MD5HASHES_FILE_PATH = os.path.join(EXAMPLES_ROOT, 'test_examples.md5')
-
 
 class CodeChunk:
     """
@@ -98,7 +90,7 @@ class CodeSnippet:
         @param code_source_path: str
                 - path to a source file @p code_lines associated with
                   @p code_lines (through ".. snippet-source:" comment).
-                  Relative to PROJECT_ROOT.
+                  Relative to PROJECT_SOURCE_ROOT.
         @param code: str
                 - code snippet extracted from @p doc_source_path file.
         """
@@ -132,7 +124,7 @@ class CodeSnippet:
                 - a list of chunks that were not found in associated source
                   code files.
         """
-        with open(os.path.join(PROJECT_ROOT, self.code_source_path)) as f:
+        with open(os.path.join(os.environ['CMAKE_SOURCE_DIR'], self.code_source_path)) as f:
             source = f.read()
 
         invalid_chunks = []
@@ -160,7 +152,7 @@ class SnippetSourceLintBuilder(DummyBuilder):
         self.possibly_invalid_docs = dict()
 
     def write_doc(self, docname, doctree):
-        dirtiness_checker = FileDirtinessChecker(MD5HASHES_FILE_PATH)
+        dirtiness_checker = FileDirtinessChecker(os.environ['SNIPPET_SOURCE_MD5FILE'])
         invalid_chunks = []
         dirty_referenced_paths = set()
         missing_referenced_paths = collections.defaultdict(lambda: [])
@@ -212,8 +204,9 @@ class SnippetSourceLintBuilder(DummyBuilder):
         if self.possibly_invalid_docs:
             print('Resolve errors above, then use following command to update md5 hash cache:')
             print('')
-            print('    cd "%s"; sphinx-build -Q -b snippet_source_list_references "%s" /tmp | xargs md5sum > "%s"' % (
-                PROJECT_ROOT, DOC_ROOT, MD5HASHES_FILE_PATH))
+            print('    cd "%s"; sphinx-build -Q -b snippet_source_list_references -c "%s" "%s" /tmp | xargs md5sum > "%s"' % (
+                    os.environ['CMAKE_SOURCE_DIR'], os.environ['ANJAY_SPHINX_DOC_CONF_DIR'],
+                    os.environ['ANJAY_SPHINX_DOC_ROOT_DIR'], os.environ['SNIPPET_SOURCE_MD5FILE']))
             print('')
 
             raise Exception('Lint errors occurred')

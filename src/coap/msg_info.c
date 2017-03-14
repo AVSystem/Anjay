@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include <endian.h>
+#include <sys/types.h>
 
 #include "log.h"
 #include "msg_builder.h"
@@ -198,9 +198,9 @@ int _anjay_coap_msg_info_opt_uint(anjay_coap_msg_info_t *info,
                                   uint16_t opt_number,
                                   const void *value,
                                   size_t value_size) {
-#if __BYTE_ORDER == __BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
     const uint8_t *converted = (const uint8_t *) value;
-#elif __BYTE_ORDER == __LITTLE_ENDIAN
+#elif BYTE_ORDER == LITTLE_ENDIAN
     uint8_t converted[value_size];
     for (size_t i = 0; i < value_size; ++i) {
         converted[value_size - 1 - i] = ((const uint8_t *) value)[i];

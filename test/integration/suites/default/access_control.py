@@ -352,8 +352,8 @@ class RemovingAcoInstanceFailsTest(AccessControl.Test):
 
 class EveryoneHasReadAccessToAcoInstancesTest(AccessControl.Test):
     def runTest(self):
-        self.read_instance(server=self.servers[0], oid=ACCESS_CONTROL_OID, iid=1)
-        self.read_instance(server=self.servers[1], oid=ACCESS_CONTROL_OID, iid=1)
+        self.read_instance(server=self.servers[0], oid=ACCESS_CONTROL_OID, iid=0)
+        self.read_instance(server=self.servers[1], oid=ACCESS_CONTROL_OID, iid=0)
 
 
 class UnbootstrappingOnlyOneOwnerTest(AccessControl.Test):
@@ -507,6 +507,3 @@ class AclBootstrapping(bootstrap_server.BootstrapServer.Test, test_suite.Lwm2mDm
         self.read_resource(server=self.servers[1], oid=TEST_OID, iid=69, rid=0,
                            expect_error_code=coap.Code.RES_UNAUTHORIZED)
         self.read_resource(server=self.servers[1], oid=TEST_OID, iid=514, rid=0)
-
-        # check that more ACLs were created
-        self.assertIn(b'</2/0>', self.discover(self.servers[0], OID.AccessControl).content)

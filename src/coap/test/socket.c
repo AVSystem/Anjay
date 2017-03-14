@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <alloca.h>
+#include <netinet/in.h>
 
 #include <avsystem/commons/unit/test.h>
 #include <avsystem/commons/stream.h>
@@ -35,10 +36,7 @@
 #define STR(x) _STR(x)
 
 AVS_UNIT_TEST(coap_socket, coap_socket) {
-    avs_net_socket_opt_value_t udp_outer_mtu;
-    avs_net_socket_opt_value_t udp_inner_mtu;
-    avs_net_socket_opt_value_t dtls_outer_mtu;
-    avs_net_socket_opt_value_t dtls_inner_mtu;
+    avs_net_socket_opt_value_t mtu;
     { // udp_client_send_recv
         anjay_coap_socket_t *socket =
                 _anjay_test_setup_udp_echo_socket(TEST_PORT_UDP);
@@ -59,10 +57,12 @@ AVS_UNIT_TEST(coap_socket, coap_socket) {
 
         avs_net_abstract_socket_t *backend =
                 _anjay_coap_socket_get_backend(socket);
-        avs_net_socket_get_opt(backend, AVS_NET_SOCKET_OPT_MTU, &udp_outer_mtu);
-        avs_net_socket_get_opt(backend, AVS_NET_SOCKET_OPT_INNER_MTU,
-                               &udp_inner_mtu);
-        AVS_UNIT_ASSERT_EQUAL(udp_inner_mtu.mtu, udp_outer_mtu.mtu - 28);
+        AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_get_opt(
+                backend, AVS_NET_SOCKET_OPT_MTU, &mtu));
+        AVS_UNIT_ASSERT_EQUAL(mtu.mtu, 1500);
+        AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_get_opt(
+                backend, AVS_NET_SOCKET_OPT_INNER_MTU, &mtu));
+        AVS_UNIT_ASSERT_EQUAL(mtu.mtu, 1472); // 20 bytes IPv4 + 8 bytes UDP
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_send(socket, msg));
 
@@ -97,12 +97,21 @@ AVS_UNIT_TEST(coap_socket, coap_socket) {
 
         avs_net_abstract_socket_t *backend =
                 _anjay_coap_socket_get_backend(socket);
-        avs_net_socket_get_opt(backend, AVS_NET_SOCKET_OPT_MTU,
-                               &dtls_outer_mtu);
-        AVS_UNIT_ASSERT_EQUAL(dtls_outer_mtu.mtu, udp_outer_mtu.mtu);
-        avs_net_socket_get_opt(backend, AVS_NET_SOCKET_OPT_INNER_MTU,
-                               &dtls_inner_mtu);
-        AVS_UNIT_ASSERT_TRUE(dtls_inner_mtu.mtu <= udp_inner_mtu.mtu - 13);
+        AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_get_opt(
+                backend, AVS_NET_SOCKET_OPT_MTU, &mtu));
+        AVS_UNIT_ASSERT_EQUAL(mtu.mtu, 1500);
+        AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_get_opt(
+                backend, AVS_NET_SOCKET_OPT_INNER_MTU, &mtu));
+        // The negotiated cipher is not well-defined, so it's a range:
+        // -- minimum ---- maximum --------------------------------------------
+        //         20           20      bytes of IPv4 header
+        //          8            8      bytes of UDP header
+        //         13           13      bytes of DTLS header
+        //          0            8      bytes of explicit IV
+        //          0           16      bytes of AEAD tag or MD+padding
+        // --------------------------------------------------------------------
+        //         41           65      bytes of headers subtracted from 1500
+        AVS_UNIT_ASSERT_TRUE(mtu.mtu >= 1435 && mtu.mtu <= 1459);
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_send(socket, msg));
 

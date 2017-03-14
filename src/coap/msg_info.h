@@ -110,10 +110,6 @@ void _anjay_coap_msg_info_opt_remove_by_number(anjay_coap_msg_info_t *info,
 
 #define ANJAY_COAP_FORMAT_APPLICATION_LINK 40
 
-/**
- * TODO: following numbers are not yet registered by IANA
- * See https://github.com/OpenMobileAlliance/OMA-LwM2M-Public-Review/issues/26
- */
 #define ANJAY_COAP_FORMAT_PLAINTEXT 0
 #define ANJAY_COAP_FORMAT_OPAQUE 42
 #define ANJAY_COAP_FORMAT_TLV 11542

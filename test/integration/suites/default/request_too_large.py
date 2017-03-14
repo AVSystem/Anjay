@@ -18,8 +18,11 @@ from framework.lwm2m_test import *
 
 
 class RequestTooLarge(test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['-I', '1000'])
+
     def runTest(self):
-        req = Lwm2mWrite('/5/0/0', random_stuff(16000))
+        req = Lwm2mWrite('/5/0/0', random_stuff(1200))
         self.serv.send(req)
         res = self.serv.recv()
         self.assertMsgEqual(

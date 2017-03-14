@@ -434,7 +434,25 @@ class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test):
         self.block_recv(seq_num_begin=(self.expected_num_blocks // 2 + 1))
 
 
-@unittest.skip("TODO: what should client do here?")
 class UnexpectedServerRequestWhileBlockRequestInProgress(ClientBlockRequest.Test):
     def runTest(self):
-        pass
+        self.communicate('send-update')
+
+        self.block_recv(seq_num_begin=0,
+                        seq_num_end=(self.expected_num_blocks // 2))
+
+        block_req = self.block_recv_next(expected_seq_num=(self.expected_num_blocks // 2))
+        block_opt = block_req.get_options(coap.Option.BLOCK1)[0]
+        block_res = Lwm2mContinue.matching(block_req)(options=[block_opt])
+
+        # send an unrelated request during a block-wise transfer
+        req = Lwm2mRead('/3/0/0')
+        self.serv.send(req)
+        res = self.serv.recv()
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE),
+                            res)
+        self.assertEqual(1, len(res.get_options(coap.Option.MAX_AGE)))
+
+        # continue block-wise request
+        self.serv.send(block_res)
+        self.block_recv(seq_num_begin=(self.expected_num_blocks // 2 + 1))

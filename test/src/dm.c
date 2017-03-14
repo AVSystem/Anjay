@@ -59,8 +59,7 @@ avs_net_abstract_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
     avs_unit_mocksock_create(&socket);
     avs_unit_mocksock_expect_connect(socket, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
-    _anjay_connection_internal_set_move_socket(
-            &anjay->servers.active->udp_connection, &socket);
+    anjay->servers.active->udp_connection.conn_priv_data_.socket = socket;
     anjay->servers.active->registration_info.expire_time.tv_sec =
             (time_t) ((1UL << (sizeof(time_t) * CHAR_BIT - 1)) - 1UL);
     assert(anjay->servers.active->registration_info.expire_time.tv_sec > 0);
@@ -104,6 +103,19 @@ int _anjay_test_dm_fake_security_instance_it(anjay_t *anjay,
     return 0;
 }
 
+int _anjay_test_dm_fake_security_instance_present(anjay_t *anjay,
+                                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                                  anjay_iid_t iid) {
+    (void) obj_ptr;
+    AVS_LIST(anjay_active_server_info_t) server;
+    AVS_LIST_FOREACH(server, anjay->servers.active) {
+        if (iid == ((server->ssid == ANJAY_IID_INVALID) ? 0 : server->ssid)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int _anjay_test_dm_fake_security_present(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
                                          anjay_iid_t iid,
@@ -114,6 +126,7 @@ int _anjay_test_dm_fake_security_present(anjay_t *anjay,
     switch (rid) {
     case ANJAY_DM_RID_SECURITY_BOOTSTRAP:
     case ANJAY_DM_RID_SECURITY_SSID:
+    case ANJAY_DM_RID_SECURITY_BOOTSTRAP_TIMEOUT:
         return 1;
     default:
         return 0;
@@ -132,6 +145,8 @@ int _anjay_test_dm_fake_security_read(anjay_t *anjay,
         return anjay_ret_bool(ctx, (iid == 0));
     case ANJAY_DM_RID_SECURITY_SSID:
         return anjay_ret_i32(ctx, iid ? iid : ANJAY_IID_INVALID);
+    case ANJAY_DM_RID_SECURITY_BOOTSTRAP_TIMEOUT:
+        return anjay_ret_i32(ctx, 1);
     default:
         return -1;
     }

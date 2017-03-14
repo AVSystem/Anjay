@@ -114,6 +114,9 @@ int _anjay_notify_perform(anjay_t *anjay,
                           anjay_ssid_t origin_ssid,
                           anjay_notify_queue_t queue) {
     assert(origin_ssid != ANJAY_SSID_ANY);
+    if (!queue) {
+        return 0;
+    }
     int ret = 0;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, queue) {
@@ -177,6 +180,18 @@ static int add_entry_to_iid_set(AVS_LIST(anjay_iid_t) *iid_set_ptr,
     }
 }
 
+static void remove_entry_from_iid_set(AVS_LIST(anjay_iid_t) *iid_set_ptr,
+                                      anjay_iid_t iid) {
+    AVS_LIST_ITERATE_PTR(iid_set_ptr) {
+        if (**iid_set_ptr >= iid) {
+            if (**iid_set_ptr == iid) {
+                AVS_LIST_DELETE(iid_set_ptr);
+            }
+            return;
+        }
+    }
+}
+
 static void delete_notify_queue_object_entry_if_empty(
         AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr) {
     if (!entry_ptr || !*entry_ptr) {
@@ -207,6 +222,8 @@ int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
         delete_notify_queue_object_entry_if_empty(entry_ptr);
         return -1;
     }
+    remove_entry_from_iid_set(
+            &(*entry_ptr)->instance_set_changes.known_removed_iids, iid);
     (*entry_ptr)->instance_set_changes.instance_set_changed = true;
     return 0;
 }
@@ -226,6 +243,8 @@ int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
         delete_notify_queue_object_entry_if_empty(entry_ptr);
         return -1;
     }
+    remove_entry_from_iid_set(
+            &(*entry_ptr)->instance_set_changes.known_added_iids, iid);
     (*entry_ptr)->instance_set_changes.instance_set_changed = true;
     return 0;
 }
@@ -243,6 +262,16 @@ int _anjay_notify_queue_instance_set_unknown_change(
     return 0;
 }
 
+static int compare_resource_entries(
+        const anjay_notify_queue_resource_entry_t *left,
+        const anjay_notify_queue_resource_entry_t *right) {
+    int result = left->iid - right->iid;
+    if (!result) {
+        result = left->rid - right->rid;
+    }
+    return result;
+}
+
 int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
                                         anjay_oid_t oid,
                                         anjay_iid_t iid,
@@ -253,15 +282,16 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
         anjay_log(ERROR, "Out of memory");
         return -1;
     }
+    anjay_notify_queue_resource_entry_t new_entry = {
+        .iid = iid,
+        .rid = rid
+    };
     AVS_LIST(anjay_notify_queue_resource_entry_t) *res_entry_ptr;
     AVS_LIST_FOREACH_PTR(res_entry_ptr, &(*obj_entry_ptr)->resources_changed) {
-        if ((*res_entry_ptr)->iid == iid) {
-            if ((*res_entry_ptr)->rid == rid) {
-                return 0;
-            } else if ((*res_entry_ptr)->rid > rid) {
-                break;
-            }
-        } else if ((*res_entry_ptr)->rid > rid) {
+        int compare = compare_resource_entries(*res_entry_ptr, &new_entry);
+        if (compare == 0) {
+            return 0;
+        } else if (compare > 0) {
             break;
         }
     }
@@ -273,8 +303,7 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
         }
         return -1;
     }
-    (*res_entry_ptr)->iid = iid;
-    (*res_entry_ptr)->rid = rid;
+    **res_entry_ptr = new_entry;
     return 0;
 }
 
@@ -332,6 +361,16 @@ static int reschedule_notify(anjay_t *anjay) {
     }
     return _anjay_sched_now(anjay->sched, &anjay->scheduled_notify.handle,
                             notify_clb, NULL);
+}
+
+int _anjay_notify_instance_created(anjay_t *anjay,
+                                   anjay_oid_t oid,
+                                   anjay_iid_t iid) {
+    int retval;
+    (void) ((retval = _anjay_notify_queue_instance_created(
+                    &anjay->scheduled_notify.queue, oid, iid))
+            || (retval = reschedule_notify(anjay)));
+    return retval;
 }
 
 int anjay_notify_changed(anjay_t *anjay,

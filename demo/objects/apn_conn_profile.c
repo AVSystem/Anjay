@@ -15,6 +15,7 @@
  */
 
 #include <stdio.h>
+#include <assert.h>
 
 #include "../objects.h"
 #include "../utils.h"
@@ -175,6 +176,7 @@ static int apncp_instance_remove(anjay_t *anjay,
         }
     }
 
+    assert(0);
     return ANJAY_ERR_NOT_FOUND;
 }
 
@@ -209,9 +211,7 @@ static int apncp_resource_read(anjay_t *anjay,
     (void) anjay; (void) obj_ptr; (void) iid;
 
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch (rid) {
     case APNCP_RES_PROFILE_NAME:
@@ -231,9 +231,7 @@ static int apncp_resource_write(anjay_t *anjay,
     (void) anjay; (void) obj_ptr; (void) iid;
 
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch (rid) {
     case APNCP_RES_PROFILE_NAME:
@@ -362,9 +360,11 @@ const anjay_dm_object_def_t **apn_conn_profile_object_create(void) {
 
 void apn_conn_profile_object_release(const anjay_dm_object_def_t **def) {
     apn_conn_profile_repr_t *apncp = get_apncp(def);
-    AVS_LIST_CLEAR(&apncp->instances);
-    AVS_LIST_CLEAR(&apncp->saved_instances);
-    free(apncp);
+    if (apncp) {
+        AVS_LIST_CLEAR(&apncp->instances);
+        AVS_LIST_CLEAR(&apncp->saved_instances);
+        free(apncp);
+    }
 }
 
 AVS_LIST(anjay_iid_t)

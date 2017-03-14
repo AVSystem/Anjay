@@ -19,7 +19,7 @@
 #include "opt.h"
 
 #include <assert.h>
-#include <endian.h>
+#include <sys/types.h>
 #include <stdio.h>
 
 #include "log.h"
@@ -82,9 +82,9 @@ int _anjay_coap_opt_uint_value(const anjay_coap_opt_t *opt,
         return -1;
     }
     memset(out_value, 0, out_value_size);
-#if __BYTE_ORDER == __BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
     memcpy(((char *) out_value) + (out_value_size - length), value, length);
-#elif __BYTE_ORDER == __LITTLE_ENDIAN
+#elif BYTE_ORDER == LITTLE_ENDIAN
     for (size_t i = 0; i < length; ++i) {
         ((uint8_t *) out_value)[length - 1 - i] = value[i];
     }
@@ -145,13 +145,17 @@ int _anjay_coap_opt_block_size(const anjay_coap_opt_t *opt,
 }
 
 uint32_t _anjay_coap_opt_delta(const anjay_coap_opt_t *opt) {
-    return decode_ext_value(_anjay_coap_opt_get_short_delta(opt),
-                            ext_delta_ptr(opt));
+    uint32_t delta = decode_ext_value(_anjay_coap_opt_get_short_delta(opt),
+                                      ext_delta_ptr(opt));
+    assert(delta <= UINT16_MAX + ANJAY_COAP_EXT_U16_BASE);
+    return delta;
 }
 
 uint32_t _anjay_coap_opt_content_length(const anjay_coap_opt_t *opt) {
-    return decode_ext_value(_anjay_coap_opt_get_short_length(opt),
-                            ext_length_ptr(opt));
+    uint32_t length = decode_ext_value(_anjay_coap_opt_get_short_length(opt),
+                                       ext_length_ptr(opt));
+    assert(length <= UINT16_MAX + ANJAY_COAP_EXT_U16_BASE);
+    return length;
 }
 
 static inline bool is_delta_valid(const anjay_coap_opt_t *opt,

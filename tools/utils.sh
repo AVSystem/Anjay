@@ -45,6 +45,9 @@ die() {
     exit 1
 }
 
+canonicalize() {
+    echo "$(cd "$(dirname "$1")" && pwd -P)/$(basename "$1")"
+}
 
 current_git_branch_name() {
     if git branch | grep --quiet 'HEAD detached at'; then
@@ -57,7 +60,6 @@ current_git_branch_name() {
 current_git_branch_hash() {
     git rev-parse --short HEAD
 }
-
 
 if [[ ! "$ATEXIT_SETUP" ]]; then
     ATEXIT_SETUP=1

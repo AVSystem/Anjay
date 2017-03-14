@@ -131,13 +131,22 @@ static anjay_ssid_t elect_instance_owner(AVS_LIST(acl_entry_t) acl) {
 
 int _anjay_access_control_add_instances_without_iids(
         access_control_t *access_control,
-        AVS_LIST(access_control_instance_t) *instances_to_move) {
+        AVS_LIST(access_control_instance_t) *instances_to_move,
+        anjay_notify_queue_t *out_dm_changes) {
     AVS_LIST(access_control_instance_t) *insert_ptr =
             &access_control->current.instances;
     anjay_iid_t proposed_iid = 0;
     while (*instances_to_move && proposed_iid < ANJAY_IID_INVALID) {
         assert((*instances_to_move)->iid == ANJAY_IID_INVALID);
         if (!*insert_ptr || proposed_iid < (*insert_ptr)->iid) {
+            if (out_dm_changes) {
+                int result = _anjay_notify_queue_instance_created(
+                        out_dm_changes,
+                        ANJAY_DM_OID_ACCESS_CONTROL, proposed_iid);
+                if (result) {
+                    return result;
+                }
+            }
             AVS_LIST_INSERT(insert_ptr, AVS_LIST_DETACH(instances_to_move));
             (*insert_ptr)->iid = proposed_iid;
         }
@@ -156,11 +165,12 @@ int _anjay_access_control_add_instances_without_iids(
 
 int _anjay_access_control_add_instance(
         access_control_t *access_control,
-        AVS_LIST(access_control_instance_t) instance) {
+        AVS_LIST(access_control_instance_t) instance,
+        anjay_notify_queue_t *out_dm_changes) {
     assert(!AVS_LIST_NEXT(instance));
     if (instance->iid == ANJAY_IID_INVALID) {
-        return _anjay_access_control_add_instances_without_iids(access_control,
-                                                                &instance);
+        return _anjay_access_control_add_instances_without_iids(
+                access_control, &instance, out_dm_changes);
     }
 
     AVS_LIST(access_control_instance_t) *ptr;
@@ -173,141 +183,20 @@ int _anjay_access_control_add_instance(
             break;
         }
     }
-    AVS_LIST_INSERT(ptr, instance);
-    return 0;
-}
-
-static int add_target_list_entry(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj,
-                                 anjay_iid_t iid,
-                                 void *list_ptr_) {
-    (void) anjay;
-    AVS_LIST(acl_target_t) *list_ptr = (AVS_LIST(acl_target_t) *) list_ptr_;
-    AVS_LIST(acl_target_t) new_element =
-            AVS_LIST_INSERT_NEW(acl_target_t, list_ptr);
-    if (!new_element) {
-        ac_log(ERROR, "Out of memory");
-        return -1;
+    int result = 0;
+    if (out_dm_changes) {
+        result = _anjay_notify_queue_instance_created(
+                out_dm_changes, ANJAY_DM_OID_ACCESS_CONTROL, instance->iid);
     }
-    new_element->oid = (*obj)->oid;
-    new_element->iid = iid;
-    return 0;
-}
-
-static int acl_target_compare(const acl_target_t *left,
-                              const acl_target_t *right) {
-    if (left->oid != right->oid) {
-        return left->oid - right->oid;
-    } else {
-        return left->iid - right->iid;
+    if (!result) {
+        AVS_LIST_INSERT(ptr, instance);
     }
+    return result;
 }
 
-static int acl_target_compare_for_sort(const void *left,
-                                       const void *right,
-                                       size_t element_size) {
-    (void) element_size;
-    assert(element_size == sizeof(acl_target_t));
-    return acl_target_compare((const acl_target_t *) left,
-                              (const acl_target_t *) right);
-}
-
-static int enumerate_ac_targets_present_in_object(
-        anjay_t *anjay, AVS_LIST(acl_target_t) *out_targets, anjay_oid_t oid) {
-    assert(!*out_targets);
-
-    obj_ptr_t obj = _anjay_dm_find_object_by_oid(anjay, oid);
-    if (!obj) {
-        // for our purposes, no object may not be an error
-        // we just expect no ACL objects referring to it
-        return 0;
-    }
-
-    // first, the Access Control instance that controls instance creation
-    AVS_LIST(acl_target_t) create_instance =
-            AVS_LIST_INSERT_NEW(acl_target_t, out_targets);
-    if (!create_instance) {
-        ac_log(ERROR, "Out of memory");
-        return -1;
-    }
-    create_instance->oid = (*obj)->oid;
-    create_instance->iid = UINT16_MAX;
-
-    // next, the Access Control instances mirroring existing instances
-    int result = _anjay_dm_foreach_instance(anjay, obj,
-                                            add_target_list_entry, out_targets);
-    if (result) {
-        return result;
-    }
-
-    AVS_LIST_SORT(out_targets, acl_target_compare_for_sort);
-    return 0;
-}
-
-static int enumerate_ac_targets_present_in_dm(
-        anjay_t *anjay,
-        AVS_LIST(acl_target_t) *out_targets,
-        AVS_LIST(anjay_oid_t) oids_to_sync) {
-    int result;
-    AVS_LIST(acl_target_t) *tail_ptr = out_targets;
-    AVS_LIST(anjay_oid_t) it;
-    AVS_LIST_FOREACH(it, oids_to_sync) {
-        if ((result = enumerate_ac_targets_present_in_object(anjay, tail_ptr,
-                                                             *it))) {
-            return result;
-        }
-        tail_ptr = AVS_LIST_APPEND_PTR(tail_ptr);
-    }
-    return 0;
-}
-
-static bool oid_present_on_list(AVS_LIST(anjay_oid_t) oids, anjay_oid_t oid) {
-    AVS_LIST_ITERATE(oids) {
-        if (*oids == oid) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static int acl_instance_ptr_compare_by_target_for_sort(const void *left_,
-                                                       const void *right_,
-                                                       size_t element_size) {
-    (void) element_size;
-    assert(element_size == sizeof(access_control_instance_t const * const *));
-    const acl_target_t *left =
-            &(*(access_control_instance_t const * const *) left_)->target;
-    const acl_target_t *right =
-            &(*(access_control_instance_t const * const *) right_)->target;
-    return acl_target_compare(left, right);
-}
-
-static int
-enumerate_present_ac_instances(
-        access_control_t *access_control,
-        AVS_LIST(access_control_instance_t const *) *out_acls,
-        AVS_LIST(anjay_oid_t) target_oids) {
-    AVS_LIST(access_control_instance_t) acl;
-    AVS_LIST_FOREACH(acl, access_control->current.instances) {
-        if (!oid_present_on_list(target_oids, acl->target.oid)) {
-            continue;
-        }
-        AVS_LIST(access_control_instance_t const *) new_entry =
-                AVS_LIST_INSERT_NEW(access_control_instance_t const *,
-                                    out_acls);
-        if (!new_entry) {
-            ac_log(ERROR, "Out of memory");
-            return -1;
-        }
-        *new_entry = acl;
-    }
-    AVS_LIST_SORT(out_acls, acl_instance_ptr_compare_by_target_for_sort);
-    return 0;
-}
-
-static AVS_LIST(access_control_instance_t)
-create_missing_ac_instance(anjay_ssid_t owner,
-                           const acl_target_t *target) {
+AVS_LIST(access_control_instance_t)
+_anjay_access_control_create_missing_ac_instance(anjay_ssid_t owner,
+                                                 const acl_target_t *target) {
     AVS_LIST(access_control_instance_t) aco_instance =
             AVS_LIST_NEW_ELEMENT(access_control_instance_t);
     AVS_LIST(acl_entry_t) acl_entry = NULL;
@@ -334,146 +223,6 @@ cleanup:
     AVS_LIST_CLEAR(&aco_instance);
     AVS_LIST_CLEAR(&acl_entry);
     return NULL;
-}
-
-static int acl_instance_ptr_compare_by_iid(const void *left_,
-                                           const void *right_,
-                                           size_t element_size) {
-    (void) element_size;
-    assert(element_size == sizeof(access_control_instance_t const * const *));
-    anjay_iid_t left =
-            (*(access_control_instance_t const * const *) left_)->iid;
-    anjay_iid_t right =
-            (*(access_control_instance_t const * const *) right_)->iid;
-    return left - right;
-}
-
-static void remove_ac_instances_orphaned_after_sync(
-        access_control_t *access_control,
-        AVS_LIST(access_control_instance_t const *) *to_remove) {
-    AVS_LIST_SORT(to_remove, acl_instance_ptr_compare_by_iid);
-    AVS_LIST(access_control_instance_t) *instance_ptr;
-    AVS_LIST(access_control_instance_t) instance_helper;
-    AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper,
-                                   &access_control->current.instances) {
-        if (!*to_remove) {
-            return;
-        } else if (*instance_ptr == **to_remove) {
-            AVS_LIST_CLEAR(&(*instance_ptr)->acl);
-            AVS_LIST_DELETE(instance_ptr);
-            AVS_LIST_DELETE(to_remove);
-        }
-    }
-}
-
-typedef enum {
-    SYNC_REMOVE_AC_INSTANCE,
-    SYNC_ADD_MISSING_AC_INSTANCE,
-    SYNC_CONTINUE
-} sync_action_t;
-
-static sync_action_t
-determine_sync_action(AVS_LIST(acl_target_t) present_dm_instances,
-                      AVS_LIST(access_control_instance_t const*) existing_acs) {
-    if (present_dm_instances && !existing_acs) {
-        // some required ACs don't exist, create missing
-        return SYNC_ADD_MISSING_AC_INSTANCE;
-    } else if (!present_dm_instances && existing_acs) {
-        // excessive ACs exist, remove
-        return SYNC_REMOVE_AC_INSTANCE;
-    } else {
-        assert(present_dm_instances && existing_acs);
-        int diff = acl_target_compare(present_dm_instances,
-                                      &(*existing_acs)->target);
-        if (diff < 0) {
-            // (*existing_acs)->target not present in data model
-            return SYNC_ADD_MISSING_AC_INSTANCE;
-        } else if (diff > 0) {
-            // AC instance does not exist for (*existing_acs)->target
-            return SYNC_REMOVE_AC_INSTANCE;
-        } else {
-            assert(diff == 0);
-            return SYNC_CONTINUE;
-        }
-    }
-}
-
-int _anjay_access_control_sync_instances(access_control_t *access_control,
-                                         anjay_ssid_t origin_ssid,
-                                         AVS_LIST(anjay_oid_t) oids_to_sync,
-                                         anjay_notify_queue_t *out_dm_changes) {
-    obj_ptr_t possibly_wrapped_ac = _anjay_dm_find_object_by_oid(
-            access_control->anjay, ANJAY_DM_OID_ACCESS_CONTROL);
-    assert(possibly_wrapped_ac);
-    int result;
-    AVS_LIST(acl_target_t) present_dm_instances = NULL;
-    AVS_LIST(access_control_instance_t const *) existing_acs = NULL;
-    AVS_LIST(access_control_instance_t const *) acs_to_remove = NULL;
-    AVS_LIST(access_control_instance_t) acs_to_insert = NULL;
-    AVS_LIST(access_control_instance_t) *acs_to_insert_append_ptr
-            = &acs_to_insert;
-
-    (void) ((result = enumerate_ac_targets_present_in_dm(
-                    access_control->anjay, &present_dm_instances, oids_to_sync))
-            || (result = enumerate_present_ac_instances(
-                    access_control, &existing_acs, oids_to_sync)));
-
-    while (!result && (present_dm_instances || existing_acs)) {
-        switch (determine_sync_action(present_dm_instances, existing_acs)) {
-        case SYNC_REMOVE_AC_INSTANCE:
-            // mark the orphaned Access Control instance for removal
-            if (!(result = _anjay_dm_transaction_include_object(
-                    access_control->anjay, possibly_wrapped_ac))) {
-                AVS_LIST_INSERT(&acs_to_remove, AVS_LIST_DETACH(&existing_acs));
-            }
-            break;
-
-        case SYNC_ADD_MISSING_AC_INSTANCE:
-            result = _anjay_dm_transaction_include_object(access_control->anjay,
-                                                          possibly_wrapped_ac);
-            if (!result) {
-                AVS_LIST(access_control_instance_t) new_instance =
-                        create_missing_ac_instance(origin_ssid,
-                                                   present_dm_instances);
-                if (!AVS_LIST_INSERT(acs_to_insert_append_ptr, new_instance)) {
-                    result = -1;
-                }
-            }
-            AVS_LIST_DELETE(&present_dm_instances);
-            acs_to_insert_append_ptr =
-                    AVS_LIST_APPEND_PTR(acs_to_insert_append_ptr);
-            break;
-
-        case SYNC_CONTINUE:
-            AVS_LIST_DELETE(&present_dm_instances);
-            AVS_LIST_DELETE(&existing_acs);
-            break;
-        }
-    }
-    AVS_LIST_CLEAR(&present_dm_instances);
-    AVS_LIST_CLEAR(&existing_acs);
-    if (acs_to_remove) {
-        remove_ac_instances_orphaned_after_sync(access_control, &acs_to_remove);
-        if (!result) {
-            result = _anjay_notify_queue_instance_set_unknown_change(
-                    out_dm_changes, ANJAY_DM_OID_ACCESS_CONTROL);
-        }
-    }
-    assert(!acs_to_remove);
-    if (acs_to_insert) {
-        if (!result) {
-            result = _anjay_access_control_add_instances_without_iids(
-                    access_control, &acs_to_insert);
-        }
-        if (!result) {
-            result = _anjay_notify_queue_instance_set_unknown_change(
-                out_dm_changes, ANJAY_DM_OID_ACCESS_CONTROL);
-        }
-        AVS_LIST_CLEAR(&acs_to_insert) {
-            AVS_LIST_CLEAR(&acs_to_insert->acl);
-        }
-    }
-    return result;
 }
 
 int _anjay_access_control_remove_orphaned_instances(
@@ -613,7 +362,7 @@ static int set_acl(access_control_t *ac,
                    "/%" PRIu16 "/%" PRIu16 " does not exist", oid, iid);
             return -1;
         }
-        ac_instance = create_missing_ac_instance(
+        ac_instance = _anjay_access_control_create_missing_ac_instance(
                 ANJAY_SSID_BOOTSTRAP, &(const acl_target_t) { oid, iid });
         if (!ac_instance) {
             ac_log(ERROR, "cannot set ACL: Access Control instance for /%u/%u "
@@ -624,20 +373,32 @@ static int set_acl(access_control_t *ac,
     }
 
     int result = set_acl_in_instance(ac->anjay, ac_instance, ssid, access_mask);
+    if (!ac_instance_needs_inserting) {
+        return result;
+    }
 
-    if (ac_instance_needs_inserting) {
-        if (!result
-                && (result = anjay_notify_instances_changed(
-                        ac->anjay, ANJAY_DM_OID_ACCESS_CONTROL))) {
-            ac_log(ERROR,
-                   "error while calling anjay_notify_instances_changed()");
-        }
-        if (!result
-                && (result = _anjay_access_control_add_instance(ac,
-                                                                ac_instance))) {
-            AVS_LIST_CLEAR(&ac_instance) {
-                AVS_LIST_CLEAR(&ac_instance->acl);
-            }
+    if (!result
+            && (result = anjay_notify_instances_changed(
+                    ac->anjay, ANJAY_DM_OID_ACCESS_CONTROL))) {
+        ac_log(ERROR, "error while calling anjay_notify_instances_changed()");
+    }
+    anjay_notify_queue_t dm_changes = NULL;
+    if (!result
+            && !(result = _anjay_access_control_add_instance(ac, ac_instance,
+                                                             &dm_changes))) {
+        assert(AVS_LIST_SIZE(dm_changes) == 1);
+        assert(AVS_LIST_SIZE(dm_changes->instance_set_changes.known_added_iids)
+                == 1);
+        assert(!dm_changes->instance_set_changes.known_removed_iids);
+        assert(!dm_changes->resources_changed);
+        _anjay_notify_instance_created(
+                ac->anjay, dm_changes->oid,
+                *dm_changes->instance_set_changes.known_added_iids);
+        _anjay_notify_clear_queue(&dm_changes);
+    }
+    if (result) {
+        AVS_LIST_CLEAR(&ac_instance) {
+            AVS_LIST_CLEAR(&ac_instance->acl);
         }
     }
     return result;

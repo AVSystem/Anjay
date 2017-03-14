@@ -96,12 +96,9 @@ void _anjay_coap_common_send_error(anjay_coap_socket_t *socket,
                                    const anjay_coap_msg_t *msg,
                                    uint8_t error_code);
 
-/**
- * Rejects a message by either ignoring it (if it's not a Confirmable one) or
- * by sending a Reset response.
- */
-void _anjay_coap_common_reject_message(anjay_coap_socket_t *socket,
-                                       const anjay_coap_msg_t *msg);
+void _anjay_coap_common_send_service_unavailable(anjay_coap_socket_t *socket,
+                                                 const anjay_coap_msg_t *msg,
+                                                 int32_t retry_after_ms);
 
 /**
  * @param      msg               Received message. It is guaranteed to never
@@ -126,8 +123,6 @@ typedef int recv_msg_handler_t(const anjay_coap_msg_t *msg,
                                void *data,
                                bool *out_wait_for_next,
                                uint8_t *out_error_code);
-
-#define COAP_RECV_MSG_WITH_TIMEOUT_EXPIRED (-0xE0)
 
 /**
  * @param        socket             Socket to wait on.

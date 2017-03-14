@@ -22,17 +22,12 @@ protocol, including the necessary subset of CoAP.
 The project has been created and is actively maintained by
 `AVSystem <https://www.avsystem.com>`_.
 
-As the protocol itself is still in a draft stage, the current version might not
-exactly reflect the final specification once it is released. However, we are
-taking great care to achieve maximum possible interoperability with other
-existing implementations.
-
 Protocol support status
 -----------------------
 
 The basis for this implementation was the *OMA Lightweight Machine to Machine
-Technical Specification, Draft Version 1.0 - 13 Jan 2017*, document number
-``OMA-TS-LightweightM2M-V1_0-20170113-D``. In case of ambiguities, existing
+Technical Specification, Version 1.0 - 8 Feb 2017*, document number
+``OMA-TS-LightweightM2M-V1_0-20170208-A``. In case of ambiguities, existing
 implementations were considered as a reference.
 
 The following features are **supported**:
@@ -75,7 +70,8 @@ Its only external dependency is the open source
 `AVSystem Commons Library <https://github.com/AVSystem/avs_commons>`_. That
 library in turn may additionally depend either on
 `OpenSSL <https://www.openssl.org/>`_ or `mbedTLS <https://tls.mbed.org/>`_
-for DTLS support.
+or `tinydtls <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
+support.
 
-To build Anjay from source, `CMake <http://www.cmake.org/>`_ version 2.8.1 or
+To build Anjay from source, `CMake <http://www.cmake.org/>`_ version 2.8.11 or
 newer is necessary.

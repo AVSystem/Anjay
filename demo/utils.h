@@ -79,4 +79,6 @@ int demo_parse_long(const char *str,
 
 int fetch_bytes(anjay_input_ctx_t *ctx, void **buffer, size_t *out_size);
 
+int open_temporary_file(char *path);
+
 #endif // DEMO_UTILS_H

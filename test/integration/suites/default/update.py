@@ -67,6 +67,46 @@ class UpdateTest(test_suite.Lwm2mSingleServerTest):
         self.serv.send(Lwm2mChanged.matching(pkt)())
 
 
+class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        # close the server socket, so that demo receives Port Unreachable in response
+        # to the next packet
+        listen_port = self.serv.get_listen_port()
+        self.serv.socket.close()
+
+        self.communicate('send-update')
+        logs = self.read_logs_for(1)
+        # assert that there was exactly one reconnect attempt
+        self.assertEqual(sum(1 for line in logs.splitlines() if 'connected to ' in line), 1)
+
+        # start the server again
+        self.serv = Lwm2mServer(listen_port)
+
+        # the Update failed, wait for retransmission to check if the stream was
+        # properly released, i.e. sending another message does not trigger
+        # assertion failure
+
+        # demo should still work at this point
+
+        # receive the update packet and send valid reply
+        # otherwise demo will not finish until timeout
+
+        # Note: explicit timeout is added on purpose to avoid following scenario,
+        #       that happened few times during regular test runs:
+        #
+        # 1. Demo retrieves 'send-update' command.
+        # 2. Test waits for 1s to miss that update request.
+        # 3. Demo notices that it failed to deliver an update, therefore
+        #    update is being rescheduled after 2s.
+        # 4. Time passes, demo sends update again, but Lwm2mServer hasn't started
+        #    just yet.
+        # 5. Demo reschedules update again after about 4s of delay.
+        # 6. Lwm2mServer has finally started.
+        # 7. Test waited for 1 second for the update (default assertDemoUpdatesRegistration
+        #    timeout), which is too little (see 5.), and failed.
+        self.assertDemoUpdatesRegistration(timeout_s=5)
+
+
 class ReconnectTest(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)

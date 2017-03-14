@@ -248,3 +248,22 @@ class BlockResponseDifferentBursts(BlockResponseTest):
             response = self.read_bytes(iid=1)
             self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
             self.read_blocks(iid=1)
+
+
+@unittest.skip("TODO: enable after fixing T1103")
+class BlockResponseUnexpectedServerRequestInTheMiddleOfTransfer(BlockResponseTest):
+    def runTest(self):
+        response = self.read_bytes(iid=1, seq_num=None, block_size=None)
+        self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
+
+        # send an unrelated request during a block-wise transfer
+        req = Lwm2mRead('/3/0/0')
+        self.serv.send(req)
+        res = self.serv.recv()
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE),
+                            res)
+        self.assertEqual(1, len(res.get_options(coap.Option.MAX_AGE)))
+
+        # continue reading block-wise response
+        self.read_blocks(iid=1, block_size=1024)
+

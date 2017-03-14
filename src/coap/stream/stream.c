@@ -343,7 +343,6 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
     if (!stream->in.buffer || !stream->out.buffer) {
         coap_close((avs_stream_abstract_t *) stream);
         free(stream);
-        _anjay_coap_id_source_release(&stream->id_source);
         return -1;
     }
     reset(stream);

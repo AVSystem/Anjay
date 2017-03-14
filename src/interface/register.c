@@ -443,10 +443,10 @@ static int send_update(avs_stream_abstract_t *stream,
     };
 
     int result = -1;
-    if (_anjay_coap_stream_setup_request(stream, &details, NULL, 0)
+    if ((result = _anjay_coap_stream_setup_request(stream, &details, NULL, 0))
             || (dm_changed_since_last_update
-                && send_objects_list(stream, new_params->dm))
-            || avs_stream_finish_message(stream)) {
+                && (result = send_objects_list(stream, new_params->dm)))
+            || (result = avs_stream_finish_message(stream))) {
         anjay_log(ERROR, "could not send Update message");
     } else {
         anjay_log(INFO, "Update sent");

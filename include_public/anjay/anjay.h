@@ -57,10 +57,18 @@ typedef struct anjay_configuration {
 
     /** Maximum size of a single outgoing CoAP message. If the message exceeds
      * this size, the library performs the block-wise CoAP transfer
-     * ( https://datatracker.ietf.org/doc/draft-ietf-core-block/ ).
+     * ( https://tools.ietf.org/html/rfc7959 ).
      * NOTE: in case of block-wise transfers, this value limits the payload size
      * for a single block, not the size of a whole packet. */
     size_t out_buffer_size;
+
+    /** Socket configuration to use when creating UDP sockets.
+     *
+     * Note that:
+     * - <c>reuse_addr</c> will be forced to true.
+     * - Value pointed to by the <c>preferred_endpoint</c> will be ignored.
+     */
+    avs_net_socket_configuration_t udp_socket_config;
 } anjay_configuration_t;
 
 /**

@@ -283,7 +283,7 @@ static int send_confirmable_with_retry(coap_client_t *client,
         result = accept_response_with_timeout(
                 client, in, socket, retry_state.recv_timeout_ms);
 
-        if (result != COAP_RECV_MSG_WITH_TIMEOUT_EXPIRED) {
+        if (result != ANJAY_COAP_SOCKET_ERR_TIMEOUT) {
             break;
         }
 

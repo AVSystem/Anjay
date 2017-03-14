@@ -969,7 +969,7 @@ static int dm_create(anjay_t *anjay,
         result = dm_create_inner(anjay, obj, &new_iid, details->ssid, in_ctx);
     }
     if (!result) {
-        anjay_log(DEBUG, "created: %s", ANJAY_DEBUG_MAKE_PATH(details));
+        anjay_log(DEBUG, "created: /%u/%u", (*obj)->oid, new_iid);
         if ((result = set_create_response_location((*obj)->oid, new_iid,
                                                    stream))) {
             anjay_log(DEBUG, "Could not prepare response message.");

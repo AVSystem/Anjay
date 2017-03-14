@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import socket
-
 from framework.lwm2m_test import *
 
 
@@ -62,7 +60,7 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
         # now regular server shall not be able to communicate with the client
         req = Lwm2mExecute('/1337/1/2')
         self.serv.send(req)
-        with self.assertRaises(socket.timeout):
+        with self.assertRaises(OSError):
             self.serv.recv(timeout_s=5)
 
         self.assertEqual(1, self._get_socket_count())

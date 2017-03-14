@@ -39,6 +39,9 @@ anjay_attr_storage_t *anjay_attr_storage_new(anjay_t *anjay) {
     }
     anjay_attr_storage_t *fas =
             (anjay_attr_storage_t *) calloc(1, sizeof(anjay_attr_storage_t));
+    if (!fas) {
+        return NULL;
+    }
     fas->anjay = anjay;
     if (!(fas->saved_state.persist_data = avs_stream_membuf_create())) {
         free(fas);
@@ -438,11 +441,10 @@ static int write_attrs_impl(anjay_attr_storage_t *fas,
 }
 
 #define WRITE_ATTRS(Fas, OutAttrs, IsEmptyFunc, Ssid, Attrs) \
-        write_attrs_impl((Fas), (AVS_LIST(void) *) (OutAttrs), \
-                         sizeof(**(OutAttrs)), \
-                         (char *) &(*(OutAttrs))->attrs - (char *) *(OutAttrs),\
-                         sizeof((*(OutAttrs))->attrs), \
-                         (IsEmptyFunc), (Ssid), (Attrs))
+    write_attrs_impl( \
+            (Fas), (AVS_LIST(void) *) (OutAttrs), sizeof(**(OutAttrs)), \
+            (size_t) ((char *) &(*(OutAttrs))->attrs - (char *) *(OutAttrs)), \
+            sizeof((*(OutAttrs))->attrs), (IsEmptyFunc), (Ssid), (Attrs))
 
 //// ATTRIBUTE HANDLERS ////////////////////////////////////////////////////////
 
@@ -847,6 +849,11 @@ anjay_attr_storage_wrap_object(anjay_attr_storage_t *attr_storage,
     }
 
     AVS_LIST(fas_object_t) obj = AVS_LIST_NEW_ELEMENT(fas_object_t);
+    if (!obj) {
+        fas_log(ERROR, "out of memory");
+        return NULL;
+    }
+
     AVS_LIST_INSERT(obj_ptr, obj);
     init_object(attr_storage, obj, def_ptr);
     return &obj->def_ptr;

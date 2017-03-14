@@ -289,8 +289,10 @@ class BlockBrokenStreamTest(BlockTest):
 
         # broken stream
         self.serv.send(second_request)
-        self.assertMsgEqual(Lwm2mReset.matching(second_request)(),
-                            self.serv.recv())
+        res = self.serv.recv()
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(second_request)(coap.Code.RES_SERVICE_UNAVAILABLE),
+                            res)
+        self.assertEqual(1, len(res.get_options(coap.Option.MAX_AGE)))
 
         # send the valid packet so that demo can terminate cleanly
         second_request.options = incrementer.last_orig_opts
@@ -423,7 +425,7 @@ class ConfirmableRequestInTheMiddleOfBlockTransfer(MessageInTheMiddleOfBlockTran
     def runTest(self):
         req = Lwm2mRead('/3/0/0')
         req.fill_placeholders()
-        res = Lwm2mReset.matching(req)()
+        res = Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE)
         self.test_with_message(req, res)
 
 

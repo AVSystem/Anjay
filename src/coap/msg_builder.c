@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include <endian.h>
+#include <sys/types.h>
 
 #include "log.h"
 #include "msg_builder.h"

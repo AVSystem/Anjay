@@ -109,7 +109,14 @@ static int gather_download_stats(wget_context_t *ctx,
     struct stat stats;
     if (!stat(ctx->save_path, &stats)) {
         out_stats->beg = ctx->download_start_time;
+#ifdef __GLIBC__
         out_stats->end = stats.st_mtim;
+#elif defined(__APPLE__)
+        out_stats->end = stats.st_mtimespec;
+#else
+        out_stats->end.tv_sec = stats.st_mtime;
+        out_stats->end.tv_nsec = 0;
+#endif
         if (stats.st_size < 0) {
             return -1;
         } else {
@@ -200,5 +207,3 @@ int wget_background_download(wget_context_t *ctx,
     }
     return 0;
 }
-
-

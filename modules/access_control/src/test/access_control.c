@@ -51,10 +51,15 @@ AVS_UNIT_TEST(access_control, set_acl) {
             anjay_access_control_object_new(anjay);
     AVS_UNIT_ASSERT_NOT_NULL(aco);
 
-    _anjay_mock_dm_expect_instance_it(anjay, &TEST, 0, 0, iid);
-    _anjay_mock_dm_expect_instance_it(anjay, &TEST, 1, 0, ANJAY_IID_INVALID);
     AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay, aco));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+
+    {
+        anjay_notify_queue_t queue = NULL;
+        AVS_UNIT_ASSERT_SUCCESS(
+                _anjay_notify_queue_instance_created(&queue, TEST->oid, iid));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_flush(anjay, ssid, &queue));
+    }
 
     // NULL AC object ptr
     AVS_UNIT_ASSERT_FAILED(
@@ -90,9 +95,8 @@ AVS_UNIT_TEST(access_control, set_acl) {
         AVS_UNIT_ASSERT_SUCCESS(
                 anjay_access_control_set_acl(aco, TEST->oid, iid, ssid, mask));
 
-        // the second instance refers to the whole object
         access_control_t *ac = _anjay_access_control_get(aco);
-        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac->current.instances), 2);
+        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac->current.instances), 1);
 
         AVS_LIST(access_control_instance_t) inst = ac->current.instances;
         AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(inst->acl), 1);
@@ -107,9 +111,8 @@ AVS_UNIT_TEST(access_control, set_acl) {
         AVS_UNIT_ASSERT_SUCCESS(
                 anjay_access_control_set_acl(aco, TEST->oid, iid, ssid, mask));
 
-        // make sure no more stuff got allocated
         access_control_t *ac = _anjay_access_control_get(aco);
-        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac->current.instances), 2);
+        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac->current.instances), 1);
 
         AVS_LIST(access_control_instance_t) inst = ac->current.instances;
         AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(inst->acl), 1);

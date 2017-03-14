@@ -184,6 +184,7 @@ static int test_instance_remove(anjay_t *anjay,
         }
     }
 
+    assert(0);
     return ANJAY_ERR_NOT_FOUND;
 }
 
@@ -191,7 +192,9 @@ static int test_instance_reset(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid) {
     (void) anjay;
+
     test_instance_t *inst = find_instance(get_test(obj_ptr), iid);
+    assert(inst);
     inst->volatile_res_present = false;
     return 0;
 }
@@ -238,9 +241,7 @@ static int test_resource_read(anjay_t *anjay,
 
     test_repr_t* test = get_test(obj_ptr);
     test_instance_t *inst = find_instance(test, iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch (rid) {
     case TEST_RES_TIMESTAMP:
@@ -382,9 +383,7 @@ static int test_resource_write(anjay_t *anjay,
 
     test_repr_t* test = get_test(obj_ptr);
     test_instance_t *inst = find_instance(test, iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch (rid) {
     case TEST_RES_COUNTER:
@@ -604,9 +603,7 @@ static int test_resource_execute(anjay_t *anjay,
 
     test_repr_t* test = get_test(obj_ptr);
     test_instance_t *inst = find_instance(test, iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch (rid) {
     case TEST_RES_TIMESTAMP:
@@ -639,9 +636,7 @@ static int test_resource_dim(anjay_t *anjay,
 
     test_repr_t *test = get_test(obj_ptr);
     test_instance_t *inst = find_instance(test, iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch (rid) {
     case TEST_RES_INT_ARRAY:

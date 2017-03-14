@@ -685,6 +685,9 @@ static void value_sent(anjay_observe_connection_entry_t *conn_state) {
     entry->last_sent = sent;
 }
 
+static int sched_flush_send_queue(anjay_t *anjay,
+                                  anjay_observe_connection_entry_t *conn);
+
 static int send_entry(anjay_t *anjay,
                       anjay_observe_connection_entry_t *conn_state) {
     anjay_active_server_info_t *server;
@@ -726,6 +729,11 @@ static int send_entry(anjay_t *anjay,
         }
         value_sent(conn_state);
         entry->last_sent->identity.msg_id = notify_id.msg_id;
+    } else if (result == ANJAY_COAP_SOCKET_ERR_NETWORK) {
+        anjay_log(ERROR, "network communication error while sending Observe");
+        _anjay_schedule_server_reconnect(anjay, server);
+        // reschedule notification
+        sched_flush_send_queue(anjay, conn_state);
     }
     return result;
 }
@@ -786,11 +794,13 @@ static int handle_send_queue_entry(anjay_t *anjay,
     } else if (result < 0) {
         anjay_log(ERROR, "Could not send Observe notification, result == %d",
                   result);
-        if (!observe_state.notification_storing_enabled) {
+        if (result != ANJAY_COAP_SOCKET_ERR_NETWORK
+                && !observe_state.notification_storing_enabled) {
             remove_all_unsent_values(conn_state);
         }
     }
     if (is_error
+            && result != ANJAY_COAP_SOCKET_ERR_NETWORK
             && (result == 0 || !observe_state.notification_storing_enabled)) {
         result = 1;
     }
@@ -995,6 +1005,9 @@ static int observe_notify_bound(anjay_t *anjay,
     AVS_RBTREE_ELEM(anjay_observe_entry_t) end =
             AVS_RBTREE_UPPER_BOUND(connection->entries,
                                    entry_query(upper_bound));
+    // if it == NULL, end must also be NULL
+    assert(it || !end);
+
     for (; it != end; it = AVS_RBTREE_ELEM_NEXT(it)) {
         update_retval(&retval, notify_entry(anjay, obj, it));
     }

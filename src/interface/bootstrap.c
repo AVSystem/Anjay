@@ -35,29 +35,44 @@
 VISIBILITY_SOURCE_BEGIN
 
 static void cancel_client_initiated_bootstrap(anjay_t *anjay) {
-    anjay->bootstrap.client_initiated_bootstrap_scheduled = true;
+    /* Client-Initiated Bootstrap is normally scheduled at most once during the
+     * entire lifetime of the client process.
+     *
+     * This function is called if bootstrap information is obtained in any way:
+     * when some Bootstrap command is received or after successful registration.
+     * That's why we're marking Client-Initiated Bootstrap as not allowed even
+     * though it may have not even been attempted. */
+    anjay->bootstrap.client_initiated_bootstrap_allowed = false;
     _anjay_sched_del(anjay->sched,
                      &anjay->bootstrap.client_initiated_bootstrap_handle);
 }
 
 static void start_bootstrap_if_not_already_started(anjay_t *anjay) {
     if (!anjay->bootstrap.in_progress) {
+        AVS_LIST(anjay_active_server_info_t) server;
+        AVS_LIST_FOREACH(server, anjay->servers.active) {
+            if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
+                anjay_connection_ref_t ref = {
+                    .server = server,
+                    .conn_type = ANJAY_CONNECTION_WILDCARD
+                };
+                _anjay_connection_suspend(ref);
+            }
+        }
         _anjay_dm_transaction_begin(anjay);
         anjay->bootstrap.in_progress = true;
+        _anjay_sched_del(anjay->sched,
+                         &anjay->bootstrap.purge_bootstrap_handle);
     }
 }
 
 static int commit_bootstrap(anjay_t *anjay) {
-    int result = 0;
-    if (anjay->bootstrap.in_progress) {
-        if (_anjay_dm_transaction_validate(anjay)) {
-            result = ANJAY_ERR_NOT_ACCEPTABLE;
-        } else {
-            anjay->bootstrap.in_progress = false;
-            result = _anjay_dm_transaction_finish_without_validation(anjay, 0);
-        }
+    if (_anjay_dm_transaction_validate(anjay)) {
+        return ANJAY_ERR_NOT_ACCEPTABLE;
+    } else {
+        anjay->bootstrap.in_progress = false;
+        return _anjay_dm_transaction_finish_without_validation(anjay, 0);
     }
-    return result;
 }
 
 static void abort_bootstrap(anjay_t *anjay) {
@@ -78,7 +93,7 @@ static void bootstrap_remove_notify_changed(anjay_t *anjay,
             break;
         }
     }
-    if (!obj_it || !*obj_it) {
+    if (!*obj_it) {
         return;
     }
     AVS_LIST(anjay_notify_queue_resource_entry_t) *res_it;
@@ -87,7 +102,7 @@ static void bootstrap_remove_notify_changed(anjay_t *anjay,
             break;
         }
     }
-    while (res_it && *res_it && (*res_it)->iid == iid) {
+    while (*res_it && (*res_it)->iid == iid) {
         AVS_LIST_DELETE(res_it);
     }
 }
@@ -408,10 +423,15 @@ static int bootstrap_discover(anjay_t *anjay,
                    ANJAY_DEBUG_MAKE_PATH(details)), ANJAY_ERR_NOT_IMPLEMENTED)
 #endif // WITH_DISCOVER
 
-static int purge_bootstrap(anjay_t *anjay, void *iid_) {
-    anjay_iid_t iid = (anjay_iid_t) (uintptr_t) iid_;
+static int purge_bootstrap(anjay_t *anjay, void *dummy) {
+    (void) dummy;
+    anjay_iid_t iid;
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+    if (!obj || _anjay_find_security_iid(anjay, ANJAY_SSID_BOOTSTRAP, &iid)) {
+        anjay_log(WARNING, "Could not find Bootstrap Server Account to purge");
+        return 0;
+    }
     int retval = -1;
     if (obj && *obj) {
         _anjay_dm_transaction_begin(anjay);
@@ -430,14 +450,12 @@ static int purge_bootstrap(anjay_t *anjay, void *iid_) {
     return retval;
 }
 
-static int schedule_bootstrap_timeout(anjay_t *anjay,
-                                      const anjay_dm_object_def_t *const *obj,
-                                      anjay_iid_t iid,
-                                      void *dummy) {
-    assert((*obj)->oid == ANJAY_DM_OID_SECURITY);
-    (void) dummy;
-
-    if (!_anjay_is_bootstrap_security_instance(anjay, iid)) {
+static int schedule_bootstrap_timeout(anjay_t *anjay) {
+    anjay_iid_t iid;
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+    if (!obj || _anjay_find_security_iid(anjay, ANJAY_SSID_BOOTSTRAP, &iid)) {
+        anjay_log(DEBUG, "Could not find Bootstrap Server Account to purge");
         return 0;
     }
 
@@ -448,17 +466,19 @@ static int schedule_bootstrap_timeout(anjay_t *anjay,
     };
 
     int64_t timeout;
-    bool timeout_is_set = !_anjay_dm_res_read_i64(anjay, &res_path, &timeout);
-    if (!timeout_is_set) {
-        timeout = 0;
-    }
-
-    if (!timeout_is_set || timeout > 0) {
-        if (_anjay_sched(anjay->sched, NULL,
+    if (!_anjay_dm_res_read_i64(anjay, &res_path, &timeout) && timeout > 0) {
+        /* This is only ever called from _anjay_bootstrap_finish() if
+         * in_progess was originally true. purge_bootstrap_handle is reset
+         * when setting in_progress to true (see
+         * start_bootstrap_if_not_already_started()) and never touched anywhere
+         * else than there and here, so it's certainly NULL here and it's safe
+         * to call _anjay_sched(). There's an assert for that inside it. */
+        if (_anjay_sched(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle,
                          (struct timespec){ (time_t) timeout, 0 },
-                         purge_bootstrap, (void *) (uintptr_t) iid)) {
+                         purge_bootstrap, NULL)) {
             anjay_log(ERROR, "Could not schedule purge of "
                              "Bootstrap Server Account %" PRIu16, iid);
+            return -1;
         }
     }
     return 0;
@@ -467,6 +487,10 @@ static int schedule_bootstrap_timeout(anjay_t *anjay,
 int _anjay_bootstrap_finish(anjay_t *anjay) {
     anjay_log(TRACE, "Bootstrap Sequence finished");
 
+    if (!anjay->bootstrap.in_progress) {
+        return 0;
+    }
+
     cancel_client_initiated_bootstrap(anjay);
     int retval = commit_bootstrap(anjay);
     if (retval) {
@@ -474,20 +498,12 @@ int _anjay_bootstrap_finish(anjay_t *anjay) {
                   "Bootstrap configuration could not be committed, rejecting");
         return retval;
     }
-    const anjay_dm_object_def_t *const *obj =
-            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
-    if ((retval = _anjay_dm_foreach_instance(
-                 anjay, obj, schedule_bootstrap_timeout, NULL))) {
-        anjay_log(ERROR,
-                  "Could not iterate over LwM2M Security object instances");
-    }
-    int retval2 = _anjay_notify_perform(anjay, ANJAY_SSID_BOOTSTRAP,
-                                        anjay->bootstrap.notification_queue);
-    if (retval2) {
+    if ((retval = _anjay_notify_perform(anjay, ANJAY_SSID_BOOTSTRAP,
+                                        anjay->bootstrap.notification_queue))) {
         anjay_log(ERROR, "Could not post-process data model after bootstrap");
-        retval = retval2;
     } else {
         _anjay_notify_clear_queue(&anjay->bootstrap.notification_queue);
+        retval = schedule_bootstrap_timeout(anjay);
     }
     if (retval) {
         anjay_log(ERROR,
@@ -540,6 +556,14 @@ static int invoke_action(anjay_t *anjay,
     case ANJAY_ACTION_DISCOVER:
         return bootstrap_discover(anjay, details, stream);
     case ANJAY_ACTION_BOOTSTRAP_FINISH:
+        // _anjay_bootstrap_finish() is also called when Bootstrap Sequence is
+        // finished via means other than Bootstrap Server communication.
+        // It is a no-op if Client- or Server-Initiated Bootstrap is not
+        // currently in progress. But we want proper purge semantics even if the
+        // Bootstrap Server derps and sends Bootstrap Finish without doing
+        // anything beforehand. That's why we're calling
+        // start_bootstrap_if_not_already_started() first.
+        start_bootstrap_if_not_already_started(anjay);
         return _anjay_bootstrap_finish(anjay);
     default:
         anjay_log(ERROR, "Invalid action for Bootstrap Interface");
@@ -613,6 +637,27 @@ cleanup:
     return result;
 }
 
+static int request_bootstrap(anjay_t *anjay, void *dummy);
+
+static int schedule_request_bootstrap(anjay_t *anjay, time_t holdoff_s) {
+    struct timespec delay = { holdoff_s, 0 };
+    anjay_sched_retryable_backoff_t backoff = {
+        .delay = { 3, 0 },
+        .max_delay = { 120, 0 }
+    };
+
+    if (_anjay_sched_retryable(
+                anjay->sched,
+                &anjay->bootstrap.client_initiated_bootstrap_handle, delay,
+                backoff, request_bootstrap, NULL)) {
+        anjay_log(ERROR, "Could not schedule Client Initiated Bootstrap");
+        return -1;
+    }
+    anjay->bootstrap.client_initiated_bootstrap_allowed = false;
+    start_bootstrap_if_not_already_started(anjay);
+    return 0;
+}
+
 static int request_bootstrap(anjay_t *anjay, void *dummy) {
     assert(!_anjay_servers_is_connected_to_non_bootstrap(&anjay->servers));
 
@@ -635,41 +680,22 @@ static int request_bootstrap(anjay_t *anjay, void *dummy) {
     }
 
     int result = send_request_bootstrap(stream, anjay->endpoint_name);
-    if (result) {
+    if (result == ANJAY_COAP_SOCKET_ERR_NETWORK) {
+        anjay_log(ERROR, "network communication error while "
+                         "sending Request Bootstrap");
+        _anjay_schedule_server_reconnect(anjay, server);
+    } else if (result) {
         anjay_log(ERROR, "could not send Request Bootstrap");
     }
 
     avs_stream_reset(stream);
     _anjay_release_server_stream(anjay, connection);
-
-    if (result) {
-        anjay_log(ERROR, "could not send Request Bootstrap");
-    }
     return result;
-}
-
-static int schedule_request_bootstrap(anjay_t *anjay, time_t holdoff_s) {
-    struct timespec delay = { holdoff_s, 0 };
-    anjay_sched_retryable_backoff_t backoff = {
-        .delay = { 3, 0 },
-        .max_delay = { 120, 0 }
-    };
-
-    if (_anjay_sched_retryable(
-                anjay->sched,
-                &anjay->bootstrap.client_initiated_bootstrap_handle, delay,
-                backoff, request_bootstrap, NULL)) {
-        anjay_log(ERROR, "Could not schedule Client Initiated Bootstrap");
-        return -1;
-    }
-    anjay->bootstrap.client_initiated_bootstrap_scheduled = true;
-    start_bootstrap_if_not_already_started(anjay);
-    return 0;
 }
 
 int _anjay_bootstrap_account_prepare(anjay_t *anjay) {
     // schedule Client Initiated Bootstrap if not attempted already
-    if (anjay->bootstrap.client_initiated_bootstrap_scheduled
+    if (!anjay->bootstrap.client_initiated_bootstrap_allowed
             || anjay->bootstrap.client_initiated_bootstrap_handle) {
         // Client Initiated Bootstrap is never scheduled more than once
         return 0;
@@ -706,9 +732,14 @@ int _anjay_bootstrap_update_reconnected(anjay_t *anjay) {
     return 0;
 }
 
+void _anjay_bootstrap_init(anjay_t *anjay) {
+    anjay->bootstrap.client_initiated_bootstrap_allowed = true;
+}
+
 void _anjay_bootstrap_cleanup(anjay_t *anjay) {
     cancel_client_initiated_bootstrap(anjay);
     abort_bootstrap(anjay);
+    _anjay_sched_del(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle);
     _anjay_notify_clear_queue(&anjay->bootstrap.notification_queue);
 }
 

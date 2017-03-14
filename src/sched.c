@@ -26,32 +26,15 @@
 
 #include <anjay_modules/time.h>
 
+#define ANJAY_SCHED_C
+
 #include "utils.h"
 #include "sched.h"
+#include "sched_internal.h"
 
 #define sched_log(...) _anjay_log(anjay_sched, __VA_ARGS__)
 
 VISIBILITY_SOURCE_BEGIN
-
-typedef enum {
-    SCHED_TASK_ONESHOT,
-    SCHED_TASK_RETRYABLE
-} anjay_sched_task_type_t;
-
-typedef struct {
-    anjay_sched_task_type_t type;
-
-    anjay_sched_handle_t *handle_ptr;
-    struct timespec when;
-    anjay_sched_clb_t clb;
-    void *clb_data;
-} anjay_sched_entry_t;
-
-typedef struct {
-    anjay_sched_entry_t entry;
-
-    anjay_sched_retryable_backoff_t backoff;
-} anjay_sched_retryable_entry_t;
 
 static anjay_sched_retryable_entry_t *
 get_retryable_entry(anjay_sched_entry_t *entry) {
@@ -59,15 +42,11 @@ get_retryable_entry(anjay_sched_entry_t *entry) {
     return (anjay_sched_retryable_entry_t*)entry;
 }
 
-struct anjay_sched_struct {
-    anjay_t *anjay;
-    AVS_LIST(anjay_sched_entry_t) entries;
-    bool shut_down;
-};
-
 anjay_sched_t *_anjay_sched_new(anjay_t *anjay) {
     anjay_sched_t *sched = (anjay_sched_t *) calloc(1, sizeof(anjay_sched_t));
-    sched->anjay = anjay;
+    if (sched) {
+        sched->anjay = anjay;
+    }
     return sched;
 }
 

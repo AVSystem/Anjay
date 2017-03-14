@@ -282,7 +282,7 @@ static int receive_request(coap_server_t *server,
                            coap_input_buffer_t *in,
                            anjay_coap_socket_t *socket) {
     int result = _anjay_coap_in_get_next_message(in, socket);
-    if (result == ANJAY_COAP_SOCKET_RECV_ERR_MSG_TOO_LONG) {
+    if (result == ANJAY_COAP_SOCKET_ERR_MSG_TOO_LONG) {
         const anjay_coap_msg_t *partial_msg = (anjay_coap_msg_t *) in->buffer;
         if (partial_msg->length < sizeof(partial_msg->header)) {
             coap_log(ERROR, "message too small to read header properly");
@@ -311,7 +311,11 @@ static int receive_request(coap_server_t *server,
     switch (process_initial_request(server, msg)) {
     case PROCESS_INITIAL_INVALID_REQUEST:
         if (!server->last_error_code) {
-            _anjay_coap_common_reject_message(socket, msg);
+            if (_anjay_coap_msg_header_get_type(&msg->header)
+                    == ANJAY_COAP_MSG_CONFIRMABLE) {
+                _anjay_coap_common_send_empty(socket, ANJAY_COAP_MSG_RESET,
+                                              _anjay_coap_msg_get_id(msg));
+            }
         } else {
             _anjay_coap_common_send_error(socket, msg, server->last_error_code);
         }
@@ -391,37 +395,63 @@ static int block_validate_critical_options(AVS_LIST(coap_block_optbuf_t) opts,
 #undef BVCO_LOG_MSG
 }
 
-#define PROCESS_BLOCK_INVALID (-1)
-#define PROCESS_BLOCK_OK 0
-#define PROCESS_BLOCK_DUPLICATE 1
+typedef enum process_block_result {
+    // next block-wise transfer message received
+    PROCESS_BLOCK_OK,
+    // duplicate of a last block received
+    PROCESS_BLOCK_DUPLICATE,
+    // received an unrelated packet; reject it and wait for another
+    PROCESS_BLOCK_REJECT_CONTINUE,
+    // received an invalid block packet; reject it and abort block transfer
+    PROCESS_BLOCK_REJECT_ABORT,
+} process_block_result_t;
 
-/**
- * Returns: any PROCESS_BLOCK_* ANJAY_ERR_* constant
- */
-static int process_next_block(coap_server_t *server,
-                              const anjay_coap_msg_t *msg) {
-    coap_block_info_t new_block;
-    coap_block_info_t block2;
-    int result =
-            _anjay_coap_common_get_block_info(msg, COAP_BLOCK1, &new_block);
-    if (!new_block.valid) {
-        coap_log(DEBUG, "block-wise transfer - rejecting message: BLOCK1 %s",
-                 result ? "invalid" : "missing");
-        if (result) {
-            return ANJAY_ERR_BAD_REQUEST;
-        } else {
-            return PROCESS_BLOCK_INVALID;
-        }
+static int retrieve_block_options(const anjay_coap_msg_t *msg,
+                                  coap_block_info_t *out_block1,
+                                  coap_block_info_t *out_block2) {
+    int result = 0;
+
+    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK1, out_block1)) {
+        coap_log(DEBUG, "block-wise transfer - BLOCK1 invalid");
+        result = -1;
     }
 
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK2, &block2)) {
-        coap_log(DEBUG, "block-wise transfer - cannot get information about "
-                        "BLOCK2 option");
-        return PROCESS_BLOCK_INVALID;
-    } else if (block2.valid) {
+    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK2, out_block2)) {
+        coap_log(DEBUG, "block-wise transfer - BLOCK2 invalid");
+        result = -1;
+    }
+
+    return result;
+}
+
+static process_block_result_t process_next_block(coap_server_t *server,
+                                                 const anjay_coap_msg_t *msg,
+                                                 uint8_t *out_error_code) {
+    if (!_anjay_coap_msg_is_request(msg)) {
+        *out_error_code = 0;
+        return PROCESS_BLOCK_REJECT_CONTINUE;
+    }
+
+    coap_block_info_t new_block;
+    coap_block_info_t block2;
+
+    if (retrieve_block_options(msg, &new_block, &block2)) {
+        // malformed block option(s)
+        *out_error_code = ANJAY_COAP_CODE_BAD_REQUEST;
+        return PROCESS_BLOCK_REJECT_ABORT;
+    }
+
+    if (!new_block.valid) {
+        coap_log(DEBUG, "block-wise transfer - BLOCK1 missing");
+        *out_error_code = ANJAY_COAP_CODE_SERVICE_UNAVAILABLE;
+        return PROCESS_BLOCK_REJECT_CONTINUE;
+    }
+
+    if (block2.valid) {
         coap_log(DEBUG, "block-wise transfer - got BLOCK2 option while "
                         "BLOCK1 transfer, this is not implemented");
-        return ANJAY_ERR_BAD_OPTION;
+        *out_error_code = ANJAY_COAP_CODE_BAD_OPTION;
+        return PROCESS_BLOCK_REJECT_ABORT;
     }
 
     uint32_t offset = get_block_offset(&new_block);
@@ -437,12 +467,14 @@ static int process_next_block(coap_server_t *server,
         }
 
         coap_log(ERROR, "incomplete block request");
-        return ANJAY_ERR_REQUEST_ENTITY_INCOMPLETE;
+        *out_error_code = ANJAY_COAP_CODE_REQUEST_ENTITY_INCOMPLETE;
+        return PROCESS_BLOCK_REJECT_ABORT;
     }
 
     if (block_validate_critical_options(server->expected_block_opts, msg,
                                         ANJAY_COAP_OPT_BLOCK1)) {
-        return PROCESS_BLOCK_INVALID;
+        *out_error_code = ANJAY_COAP_CODE_SERVICE_UNAVAILABLE;
+        return PROCESS_BLOCK_REJECT_CONTINUE;
     }
 
     server->state = COAP_SERVER_STATE_HAS_BLOCK1_REQUEST;
@@ -494,7 +526,6 @@ static int receive_next_block(const anjay_coap_msg_t *msg,
                               void *server_,
                               bool *out_wait_for_next,
                               uint8_t *out_error_code) {
-    (void) out_error_code;
     assert(msg);
 
     coap_server_t *server = (coap_server_t *)server_;
@@ -502,16 +533,18 @@ static int receive_next_block(const anjay_coap_msg_t *msg,
     assert(server->state == COAP_SERVER_STATE_NEEDS_NEXT_BLOCK);
     assert(server->curr_block.valid);
 
-    int result = process_next_block(server, msg);
+    process_block_result_t result = process_next_block(server, msg,
+                                                       out_error_code);
 
     switch (result) {
-    case PROCESS_BLOCK_INVALID:
+    case PROCESS_BLOCK_REJECT_CONTINUE:
+        *out_wait_for_next = true;
         break;
     case PROCESS_BLOCK_OK:
     case PROCESS_BLOCK_DUPLICATE:
-    default: // any ANJAY_ERR_*
-        *out_wait_for_next = false;
+    case PROCESS_BLOCK_REJECT_ABORT:
         server->request_identity = _anjay_coap_common_identity_from_msg(msg);
+        *out_wait_for_next = false;
         break;
     }
 
@@ -550,11 +583,12 @@ static int receive_next_block_with_timeout(coap_server_t *server,
             assert(server->state == COAP_SERVER_STATE_HAS_BLOCK1_REQUEST);
             return -(server->state != COAP_SERVER_STATE_HAS_BLOCK1_REQUEST);
 
-        case PROCESS_BLOCK_INVALID:
+        case PROCESS_BLOCK_REJECT_CONTINUE:
+        default:
             assert(0 && "should never happen");
             return -1;
 
-        default: // any ANJAY_ERR_*
+        case PROCESS_BLOCK_REJECT_ABORT:
             return recv_result;
         }
     }

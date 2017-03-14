@@ -140,13 +140,9 @@ class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mSingleServerTest):
 
 class OfflineWithObserve(test_suite.Lwm2mSingleServerTest,
                          test_suite.Lwm2mDmOperations):
-    UPDATED_INSTANCES = (b'</1/1>,</2/0>,</2/1>,</2/2>,</2/3>,</2/4>,'
-                         + b'</2/5>,</2/6>,</2/7>,</2/8>,</2/9>,</2/10>,'
-                         + b'</2/11>,</2/12>,</2/13>,</2/14>,</2/15>,</2/16>,'
-                         + b'</2/17>,</2/18>,</2/19>,</2/20>,</2/21>,</2/22>,'
-                         + b'</2/23>,</3/0>,</4/0>,</5/0>,</6/0>,</7/0>,'
-                         + b'</10/0>,</11>,</1337/1>,</11111/0>,</12359/0>,</12360>,'
-                         + b'</12361/0>')
+    UPDATED_INSTANCES = (b'</1/1>,</2/0>,</3/0>,</4/0>,</5/0>,</6/0>,'
+                         + b'</7/0>,</10/0>,</11>,</1337/1>,</11111/0>,</12359/0>,'
+                         + b'</12360>,</12361/0>')
 
     # Explanation what's the idea:
     # 1. Set min notification period to 3 seconds.

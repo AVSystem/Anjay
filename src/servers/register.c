@@ -123,6 +123,19 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
 
     if (!result && !is_bootstrap) {
         result = _anjay_server_update_or_reregister(anjay, server);
+        if (result == ANJAY_COAP_SOCKET_ERR_NETWORK) {
+            anjay_log(ERROR, "network communication error while updating "
+                             "registration for SSID==%" PRIu16, server->ssid);
+            // We cannot use _anjay_schedule_server_reconnect(), because it
+            // would mean an endless loop without backoff if the server is down.
+            // Instead, we disconnect the socket and rely on scheduler's
+            // backoff. During the next call, _anjay_server_refresh() will
+            // reconnect the socket.
+            _anjay_connection_suspend((anjay_connection_ref_t) {
+                .server = server,
+                .conn_type = _anjay_get_default_connection_type(server)
+            });
+        }
     }
 
     // Updates are retryable, so we only need to reschedule after success
@@ -289,6 +302,11 @@ int anjay_schedule_reconnect(anjay_t *anjay) {
     }
     anjay->offline = false;
     return 0;
+}
+
+int _anjay_schedule_server_reconnect(anjay_t *anjay,
+                                     anjay_active_server_info_t *server) {
+    return reschedule_update_for_server(anjay, server, DO_RECONNECT);
 }
 
 int _anjay_server_register(anjay_t *anjay,

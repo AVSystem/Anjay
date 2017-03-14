@@ -185,7 +185,7 @@ static int accept_response_with_timeout(coap_block_transfer_ctx_t *ctx,
             ctx->socket, ctx->in, &recv_timeout_ms,
             block_recv, &block_recv_data, &handler_retval);
 
-    if (result == COAP_RECV_MSG_WITH_TIMEOUT_EXPIRED) {
+    if (result == ANJAY_COAP_SOCKET_ERR_TIMEOUT) {
         ctx->timed_out = true;
     }
 
@@ -218,7 +218,7 @@ static int send_block_msg(coap_block_transfer_ctx_t *ctx,
                                                   retry_state.recv_timeout_ms);
         }
 
-        if (result != COAP_RECV_MSG_WITH_TIMEOUT_EXPIRED) {
+        if (result != ANJAY_COAP_SOCKET_ERR_TIMEOUT) {
             break;
         }
 
@@ -270,7 +270,6 @@ static int send_next_block(coap_block_transfer_ctx_t *ctx,
                            anjay_coap_aligned_msg_buffer_t *buffer,
                            size_t buffer_size) {
     ctx->info.identity = _anjay_coap_id_source_get(ctx->id_source);
-    ctx->block.seq_num = ctx->block.seq_num;
 
     const anjay_coap_msg_t *msg = NULL;
     int result;
@@ -375,7 +374,7 @@ int _anjay_coap_block_transfer_write(coap_block_transfer_ctx_t *ctx,
 
     assert(ctx->timed_out || bytes_written == data_length);
     if (ctx->timed_out) {
-        return ANJAY_COAP_SOCKET_RECV_ERR_TIMEOUT;
+        return ANJAY_COAP_SOCKET_ERR_TIMEOUT;
     }
     return 0;
 }

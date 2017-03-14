@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 2.8.8)
+cmake_minimum_required(VERSION 2.8.11)
 
 option(WITH_FUZZ_TESTS "Compile fuzz tests using the AFL fuzzer" OFF)
 if(WITH_FUZZ_TESTS)
@@ -80,7 +80,8 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c
 try_compile(HAVE_VISIBILITY
             ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp
             ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c
-            COMPILE_DEFINITIONS -Wall -Wextra -Werror -fvisibility=default)
+            COMPILE_DEFINITIONS -Wall -Wextra -Werror -fvisibility=default
+            LINK_LIBRARIES -Wl,--exclude-libs,ALL)
 
 ################# TUNABLES #####################################################
 
@@ -217,6 +218,7 @@ set(CORE_PRIVATE_HEADERS
     src/io/vtable.h
     src/observe.h
     src/sched.h
+    src/sched_internal.h
     src/servers.h
     src/servers/activate.h
     src/servers/connection_info.h
@@ -334,7 +336,7 @@ else()
         cmake_dependent_option(WITH_VALGRIND "Enable usage of valgrind during unit tests" OFF "VALGRIND_EXECUTABLE" OFF)
     endif()
 
-    set(_DTLS_BACKENDS "mbedtls" "openssl")
+    set(_DTLS_BACKENDS "mbedtls" "openssl" "tinydtls")
     set(DTLS_BACKEND "mbedtls" CACHE STRING "DTLS backend to use; possible values: <empty> ${_DTLS_BACKENDS}")
 
     string(TOLOWER "${DTLS_BACKEND}" _DTLS_BACKEND_LOWERCASE)
@@ -348,6 +350,10 @@ else()
         set(OPENSSL_CUSTOM_CIPHERS_ENABLED ON CACHE INTERNAL "")
         set(WITH_OPENSSL ON CACHE INTERNAL "")
         set(WITH_OPENSSL_CUSTOM_CIPHERS "ECDHE-ECDSA-AES128-CCM8:PSK-AES128-CCM8" CACHE INTERNAL "")
+    elseif(_DTLS_BACKEND_LOWERCASE STREQUAL "tinydtls")
+        set(WITH_OPENSSL OFF CACHE INTERNAL "")
+        set(WITH_MBEDTLS OFF CACHE INTERNAL "")
+        set(WITH_TINYDTLS ON CACHE INTERNAL "")
     else()
         message(FATAL_ERROR "Unsupported DTLS backend: ${_DTLS_BACKEND_LOWERCASE}; possible values: ${_DTLS_BACKENDS}")
     endif()
@@ -388,6 +394,10 @@ if(WITH_LIBRARY_SHARED)
     if(HAVE_VISIBILITY)
         get_property(LINK_FLAGS TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS)
         set_property(TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,--exclude-libs,ALL")
+    endif()
+    if(APPLE)
+        get_property(LINK_FLAGS TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS)
+        set_property(TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,-undefined,dynamic_lookup")
     endif()
 endif()
 
@@ -474,10 +484,16 @@ foreach(F ${ABSOLUTE_SOURCES})
     endif()
 endforeach()
 add_test(NAME test_function_duplicates COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_duplicates.py ${ABSOLUTE_HEADERS})
+add_test(NAME test_markdown_toc COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-toc.py --check "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 
 add_custom_target(function_duplicates_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_function_duplicates$$'")
-add_custom_target(examples_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_examples$$'")
-add_dependencies(anjay_unit_check function_duplicates_check)
+add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc$$'")
+add_custom_target(toc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_markdown_toc$$'")
+
+add_dependencies(anjay_unit_check
+                 function_duplicates_check
+                 doc_check
+                 toc_check)
 
 ################# SYMBOL VALIDATION ############################################
 
@@ -494,6 +510,9 @@ add_dependencies(symbols_check ${PROJECT_NAME}_static)
 add_dependencies(anjay_unit_check symbols_check)
 
 ################# UNIT TESTS ###################################################
+
+include(ProcessorCount)
+ProcessorCount(NPROC)
 
 if(WITH_VALGRIND)
     set(VALGRIND ${VALGRIND_EXECUTABLE} --leak-check=full --track-origins=yes -q --error-exitcode=63 --suppressions=${CMAKE_CURRENT_SOURCE_DIR}/valgrind_test.supp)
@@ -542,33 +561,41 @@ endif()
 
 add_custom_target(doc)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source/conf.py.in")
+set(ANJAY_SPHINX_DOC_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source")
+set(ANJAY_SPHINX_DOC_CONF_DIR "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx")
+
+if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
     find_program(SPHINX_BUILD_EXECUTABLE sphinx-build
                  HINTS $ENV{SPHINX_DIR} PATH_SUFFIXES bin)
 
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sphinx.cmake)
 
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source/conf.py.in
-                   ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/conf.py
+    configure_file(${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in
+                   ${ANJAY_SPHINX_DOC_CONF_DIR}/conf.py
                    @ONLY)
     add_custom_target(doc_sphinx
                       COMMAND ${SPHINX_BUILD_EXECUTABLE}
                               -b html
-                              -c ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx
-                              ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source
-                              ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/html
+                              -c ${ANJAY_SPHINX_DOC_CONF_DIR}
+                              ${ANJAY_SPHINX_DOC_ROOT_DIR}
+                              ${ANJAY_SPHINX_DOC_CONF_DIR}/html
                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
 
     add_dependencies(doc doc_sphinx)
 
     # sphinx-based .. snippet-source:: validation
-    add_test(NAME test_examples
+    add_test(NAME test_doc
              COMMAND ${SPHINX_BUILD_EXECUTABLE}
                      -Q -b snippet_source_lint
-                     -c ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx
-                     ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source
-                     ${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/lint
+                     -c ${ANJAY_SPHINX_DOC_CONF_DIR}
+                     ${ANJAY_SPHINX_DOC_ROOT_DIR}
+                     ${ANJAY_SPHINX_DOC_CONF_DIR}/lint
              WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
+    set_property(TEST test_doc APPEND PROPERTY ENVIRONMENT
+                 "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"
+                 "ANJAY_SPHINX_DOC_ROOT_DIR=${ANJAY_SPHINX_DOC_ROOT_DIR}"
+                 "CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+                 "SNIPPET_SOURCE_MD5FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/test_examples.md5")
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in")
@@ -613,7 +640,8 @@ add_custom_command(TARGET examples
                         -H${CMAKE_CURRENT_SOURCE_DIR}
                         -B.
                         -DCMAKE_INSTALL_PREFIX="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
-                   COMMAND ${CMAKE_COMMAND} --build . --target install -- -j$(nproc)
+                        -DWITH_LIBRARY_SHARED=OFF
+                   COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})
 
 add_custom_command(TARGET examples
@@ -622,7 +650,7 @@ add_custom_command(TARGET examples
                         -B.
                         -DCMAKE_PREFIX_PATH="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
-                   COMMAND ${CMAKE_COMMAND} --build . -- -j$(nproc)
+                   COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
                    WORKING_DIRECTORY "${ANJAY_EXAMPLES_BUILD_DIR}")
 
 add_dependencies(check examples)

@@ -19,7 +19,7 @@
 #include <assert.h>
 #include <string.h>
 
-#include <endian.h>
+#include <sys/types.h>
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/stream.h>
@@ -102,7 +102,7 @@ static int write_shortened_u32(avs_stream_abstract_t *stream, uint32_t value) {
         uint32_t uval;
         char tab[4];
     } value32;
-    value32.uval = htobe32(value);
+    value32.uval = htonl(value);
     return avs_stream_write(stream, value32.tab + (4 - length), length);
 }
 
@@ -251,8 +251,13 @@ static int tlv_ret_i##Bits(anjay_output_ctx_t *ctx, int##Bits##_t value) { \
     if (value == (int##Half##_t) value) { \
         return tlv_ret_i##Half(ctx, (int##Half##_t) value); \
     } \
-    uint##Bits##_t portable = htobe##Bits ((uint##Bits##_t) value); \
-    return anjay_ret_bytes(ctx, &portable, sizeof(portable)); \
+    union { \
+        uint##Bits##_t value; \
+        char bytes[Bits / 8]; \
+    } portable; \
+    portable.value = (uint##Bits##_t) value; \
+    ANJAY_CONVERT_BYTES_BE(portable.bytes); \
+    return anjay_ret_bytes(ctx, portable.bytes, sizeof(portable.bytes)); \
 }
 
 static int tlv_ret_i8(anjay_output_ctx_t *ctx, int8_t value) {
@@ -283,7 +288,7 @@ static int tlv_ret_bool(anjay_output_ctx_t *ctx, bool value) {
 
 static int tlv_ret_objlnk(anjay_output_ctx_t *ctx,
                           anjay_oid_t oid, anjay_iid_t iid) {
-    uint32_t portable = htobe32(((uint32_t) oid << 16) | (uint32_t) iid);
+    uint32_t portable = htonl(((uint32_t) oid << 16) | (uint32_t) iid);
     return anjay_ret_bytes(ctx, &portable, sizeof(portable));
 }
 

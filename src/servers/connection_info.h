@@ -26,21 +26,14 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-static inline avs_net_abstract_socket_t *_anjay_connection_internal_get_socket(
-        const anjay_server_connection_t *connection) {
-    return (avs_net_abstract_socket_t *) connection->private_data;
-}
+avs_net_abstract_socket_t *_anjay_connection_internal_get_socket(
+        const anjay_server_connection_t *connection);
 
-static inline void _anjay_connection_internal_set_move_socket(
-        anjay_server_connection_t *connection,
-        avs_net_abstract_socket_t **move_socket) {
-    avs_net_socket_cleanup(
-            (avs_net_abstract_socket_t **) &connection->private_data);
-    if (move_socket) {
-        connection->private_data = *move_socket;
-        *move_socket = NULL;
-    }
-}
+void
+_anjay_connection_internal_clean_socket(anjay_server_connection_t *connection);
+
+int
+_anjay_connection_internal_ensure_online(anjay_server_connection_t *connection);
 
 int _anjay_server_refresh(anjay_t *anjay,
                           anjay_active_server_info_t *server,

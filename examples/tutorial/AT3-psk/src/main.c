@@ -65,9 +65,9 @@ static const anjay_dm_object_def_t **create_and_init_security_object(void) {
         .ssid = 1,
         .server_uri = "coaps://localhost:5684",
         .security_mode = ANJAY_UDP_SECURITY_PSK,
-        .public_cert_or_psk_identity = PSK_IDENTITY,
+        .public_cert_or_psk_identity = (const uint8_t *) PSK_IDENTITY,
         .public_cert_or_psk_identity_size = strlen(PSK_IDENTITY),
-        .private_cert_or_psk_key = PSK_KEY,
+        .private_cert_or_psk_key = (const uint8_t *) PSK_KEY,
         .private_cert_or_psk_key_size = strlen(PSK_KEY)
     };
 

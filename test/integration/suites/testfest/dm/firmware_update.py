@@ -30,13 +30,12 @@ class Test750_FirmwareUpdate_QueryingTheReadableResources(DataModel.Test):
         # A READ operation from server on the resource has been received by the
         # client. This test has to be run on the following resources:
         # a) State
-        # b) Update supported objects
+        # b) Update supported objects (NOTE: this is removed in the most up to date spec)
         # c) Update result
         # d) Pkgname
         # e) Pkgversion
 
         self.test_read(ResPath.FirmwareUpdate.State,                  ValueValidator.integer(),      coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.FirmwareUpdate.UpdateSupportedObjects, ValueValidator.boolean(),      coap.ContentFormat.TEXT_PLAIN)
         self.test_read(ResPath.FirmwareUpdate.UpdateResult,           ValueValidator.integer(),      coap.ContentFormat.TEXT_PLAIN)
         self.test_read(ResPath.FirmwareUpdate.PackageName,            ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
         self.test_read(ResPath.FirmwareUpdate.PackageVersion,         ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
@@ -48,14 +47,12 @@ class Test755_FirmwareUpdate_SettingTheWritableResources(DataModel.Test):
         # client. This test has to be run for the following resources:
         # a) Package
         # b) Package URI
-        # c) Update supported objects
+        # c) Update supported objects (NOTE: this is removed in the most up to date spec)
 
         # TODO: Package/Package URI are write-only. It should be impossible to
         # validate written value as the test requires.
         self.test_write(ResPath.FirmwareUpdate.Package, 'test', format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.test_write(ResPath.FirmwareUpdate.PackageURI, 'http://localhost/test')
-
-        self.test_write_validated(ResPath.FirmwareUpdate.UpdateSupportedObjects, '1')
 
 
 class Test760_FirmwareUpdate_ObservationAndNotificationOfObservableResources(DataModel.Test):
@@ -63,13 +60,12 @@ class Test760_FirmwareUpdate_ObservationAndNotificationOfObservableResources(Dat
         # A READ operation from server on the resource has been received by the
         # client. This test has to be run on the following resources:
         # a) State
-        # b) Update supported objects
+        # b) Update supported objects (NOTE: this is removed in the most up to date spec)
         # c) Update result
         # d) Pkgname
         # e) Pkgversion
 
         self.test_observe(ResPath.FirmwareUpdate.State,                  ValueValidator.integer())
-        self.test_observe(ResPath.FirmwareUpdate.UpdateSupportedObjects, ValueValidator.boolean())
         self.test_observe(ResPath.FirmwareUpdate.UpdateResult,           ValueValidator.integer())
         self.test_observe(ResPath.FirmwareUpdate.PackageName,            ValueValidator.ascii_string())
         self.test_observe(ResPath.FirmwareUpdate.PackageVersion,         ValueValidator.ascii_string())

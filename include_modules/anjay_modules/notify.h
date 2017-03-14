@@ -89,6 +89,10 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
 
 void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue);
 
+int _anjay_notify_instance_created(anjay_t *anjay,
+                                   anjay_oid_t oid,
+                                   anjay_iid_t iid);
+
 typedef int anjay_notify_callback_t(anjay_t *anjay,
                                     anjay_ssid_t origin_ssid,
                                     anjay_notify_queue_t queue,

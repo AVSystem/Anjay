@@ -57,12 +57,8 @@ static int init(anjay_t *anjay,
         return -1;
     }
 
-    if (config->udp_listen_port > 0
-            && _anjay_snprintf(anjay->udp_port, sizeof(anjay->udp_port),
-                               "%" PRIu16, config->udp_listen_port) < 0) {
-        anjay_log(ERROR, "cannot initialize UDP listening port");
-        return -1;
-    }
+    anjay->udp_socket_config = config->udp_socket_config;
+    anjay->udp_listen_port = config->udp_listen_port;
 
     anjay->servers = _anjay_servers_create();
 
@@ -83,6 +79,7 @@ static int init(anjay_t *anjay,
         return -1;
     }
 
+    _anjay_bootstrap_init(anjay);
     if (_anjay_observe_init(anjay)) {
         return -1;
     }
@@ -620,23 +617,6 @@ cleanup:
     return result;
 }
 
-static avs_stream_abstract_t *
-get_server_stream(anjay_t *anjay,
-                  anjay_server_connection_t *connection,
-                  const coap_transmission_params_t *tx_params) {
-    avs_net_abstract_socket_t *socket =
-            _anjay_connection_get_prepared_socket(connection);
-    if (!socket
-            || avs_stream_net_setsock(anjay->comm_stream, socket)
-            || _anjay_coap_stream_set_tx_params(anjay->comm_stream,
-                                                tx_params)) {
-        anjay_log(ERROR, "could not set stream socket");
-        return NULL;
-    }
-
-    return anjay->comm_stream;
-}
-
 static anjay_server_connection_t *get_connection(anjay_connection_ref_t ref) {
     // TODO: Implement properly once SMS gets done
     assert(ref.conn_type == ANJAY_CONNECTION_UDP);
@@ -654,22 +634,68 @@ avs_stream_abstract_t *
 _anjay_get_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
     // TODO: Implement properly once SMS gets done
     assert(ref.conn_type == ANJAY_CONNECTION_UDP);
-    return get_server_stream(anjay, &ref.server->udp_connection,
-                             &_anjay_coap_DEFAULT_TX_PARAMS);
+    const coap_transmission_params_t *tx_params =
+            &_anjay_coap_DEFAULT_TX_PARAMS;
+
+    anjay_server_connection_t *connection = get_connection(ref);
+    avs_net_abstract_socket_t *socket = _anjay_connection_get_prepared_socket(
+            anjay, ref.server, connection);
+    if (!socket
+            || avs_stream_net_setsock(anjay->comm_stream, socket)
+            || _anjay_coap_stream_set_tx_params(anjay->comm_stream,
+                                                tx_params)) {
+        anjay_log(ERROR, "could not set stream socket");
+        return NULL;
+    }
+
+    return anjay->comm_stream;
 }
 
-static int queue_mode_suspend_socket(anjay_t *anjay, void *dummy) {
-    (void) anjay; (void) dummy;
-    // no-op; the scheduler will clear queue_mode_suspend_socket_clb_handle
-    // see comment on its declaration for logic summary
+typedef struct {
+    anjay_ssid_t ssid;
+    anjay_connection_type_t conn_type : 16;
+} queue_mode_close_socket_args_t;
+
+static void *
+queue_mode_close_socket_args_encode(queue_mode_close_socket_args_t args) {
+    AVS_STATIC_ASSERT(sizeof(void *) >= sizeof(queue_mode_close_socket_args_t),
+                      pointer_big_enough);
+    // ensure that ANJAY_CONNECTION_WILDCARD is the last value
+    assert(args.conn_type < ANJAY_CONNECTION_WILDCARD);
+    void *result = NULL;
+    memcpy(&result, &args, sizeof(args));
+    return result;
+}
+
+static queue_mode_close_socket_args_t
+queue_mode_close_socket_args_decode(void *value) {
+    queue_mode_close_socket_args_t result;
+    memcpy(&result, &value, sizeof(result));
+    assert(result.conn_type < ANJAY_CONNECTION_WILDCARD);
+    return result;
+}
+
+static int queue_mode_close_socket(anjay_t *anjay, void *args_) {
+    queue_mode_close_socket_args_t args =
+            queue_mode_close_socket_args_decode(args_);
+    anjay_connection_ref_t ref = {
+        .server = _anjay_servers_find_active(&anjay->servers, args.ssid),
+        .conn_type = args.conn_type
+    };
+    if (!ref.server) {
+        return -1;
+    }
+    _anjay_connection_suspend(ref);
     return 0;
 }
 
 static void queue_mode_activate_socket(anjay_t *anjay,
-                                       anjay_server_connection_t *connection) {
+                                       anjay_connection_ref_t ref) {
     assert(anjay->comm_stream);
+
+    anjay_server_connection_t *connection = get_connection(ref);
     assert(connection);
-    assert(connection->queue_mode_suspend_socket_clb_handle == NULL);
+    assert(connection->queue_mode_close_socket_clb_handle == NULL);
 
     coap_transmission_params_t tx_params;
     if (_anjay_coap_stream_get_tx_params(anjay->comm_stream, &tx_params)) {
@@ -680,10 +706,15 @@ static void queue_mode_activate_socket(anjay_t *anjay,
     _anjay_time_from_ms(&delay,
                         _anjay_coap_max_transmit_wait_ms(&tx_params));
 
+    queue_mode_close_socket_args_t args = {
+        .ssid = ref.server->ssid,
+        .conn_type = ref.conn_type
+    };
     // see comment on field declaration for logic summary
     if (_anjay_sched(anjay->sched,
-                     &connection->queue_mode_suspend_socket_clb_handle,
-                     delay, queue_mode_suspend_socket, NULL)) {
+                     &connection->queue_mode_close_socket_clb_handle,
+                     delay, queue_mode_close_socket,
+                     queue_mode_close_socket_args_encode(args))) {
         anjay_log(ERROR, "could not schedule queue mode operations");
     }
 }
@@ -693,10 +724,10 @@ void _anjay_release_server_stream(anjay_t *anjay,
     anjay_server_connection_t *connection = get_connection(ref);
     assert(connection);
     _anjay_sched_del(anjay->sched,
-                     &connection->queue_mode_suspend_socket_clb_handle);
+                     &connection->queue_mode_close_socket_clb_handle);
 
     if (connection->queue_mode) {
-        queue_mode_activate_socket(anjay, connection);
+        queue_mode_activate_socket(anjay, ref);
     }
 
     _anjay_release_server_stream_without_scheduling_queue(anjay);

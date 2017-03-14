@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if(NOT OPENSSL_SSL_LIBRARY)
+if(NOT OPENSSL_SSL_LIBRARY OR NOT OPENSSL_INCLUDE_DIR)
     message(FATAL_ERROR "OpenSSL libraries are required for unit tests")
 endif()
 
+include_directories("${OPENSSL_INCLUDE_DIR}")
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")
 add_executable(dtls_echo_server EXCLUDE_FROM_ALL dtls_echo.c)
-target_link_libraries(dtls_echo_server ssl crypto)
+target_link_libraries(dtls_echo_server
+                      "${OPENSSL_SSL_LIBRARY}" "${OPENSSL_CRYPTO_LIBRARY}")

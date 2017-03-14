@@ -86,16 +86,16 @@ static void notify_parent(void) {
 
 static void set_sigusr1_mask(int action) {
     sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGUSR1);
-    sigprocmask(action, &set, NULL);
+    AVS_UNIT_ASSERT_SUCCESS(sigemptyset(&set));
+    AVS_UNIT_ASSERT_SUCCESS(sigaddset(&set, SIGUSR1));
+    AVS_UNIT_ASSERT_SUCCESS(sigprocmask(action, &set, NULL));
 }
 
 static void wait_for_child(void) {
     sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGUSR1);
-    sigwaitinfo(&set, NULL);
+    AVS_UNIT_ASSERT_SUCCESS(sigemptyset(&set));
+    AVS_UNIT_ASSERT_SUCCESS(sigaddset(&set, SIGUSR1));
+    sigwait(&set, &(int){ -1 });
 }
 
 static void spawn_dtls_echo_server(uint16_t port) {
@@ -304,7 +304,8 @@ static anjay_coap_socket_t *setup_socket(socket_type_t type,
             }
         },
         .backend_configuration = {
-            .address_family = AVS_NET_AF_INET4
+            .address_family = AVS_NET_AF_INET4,
+            .forced_mtu = 1500
         }
     };
 

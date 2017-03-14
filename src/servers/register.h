@@ -32,7 +32,7 @@ int _anjay_server_update_or_reregister(anjay_t *anjay,
                                        anjay_active_server_info_t *server);
 
 int _anjay_server_reschedule_update_job(anjay_t *anjay,
-                                    anjay_active_server_info_t *server);
+                                        anjay_active_server_info_t *server);
 
 int _anjay_server_deregister(anjay_t *anjay,
                              anjay_active_server_info_t *server);

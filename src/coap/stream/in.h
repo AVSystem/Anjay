@@ -73,7 +73,7 @@ _anjay_coap_in_get_payload_size(const coap_input_buffer_t *in) {
  * to @p in buffer being too small), then it responds with 413 Request Entity
  * Too Large to the sender.
  *
- * @return 0 on success, one of ANJAY_COAP_SOCKET_RECV_ERR_* in case of failure
+ * @return 0 on success, one of ANJAY_COAP_SOCKET_ERR_* in case of failure
  */
 int _anjay_coap_in_get_next_message(coap_input_buffer_t *in,
                                     anjay_coap_socket_t *socket);

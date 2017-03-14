@@ -141,19 +141,27 @@ int _anjay_coap_common_send_empty(anjay_coap_socket_t *socket,
     return _anjay_coap_socket_send(socket, msg);
 }
 
-void _anjay_coap_common_send_error(anjay_coap_socket_t *socket,
-                                   const anjay_coap_msg_t *msg,
-                                   uint8_t error_code) {
+static void send_response(anjay_coap_socket_t *socket,
+                          const anjay_coap_msg_t *msg,
+                          uint8_t code,
+                          const uint32_t *max_age) {
     anjay_coap_msg_info_t info = _anjay_coap_msg_info_init();
 
     info.type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT;
-    info.code = error_code;
+    info.code = code;
     info.identity.msg_id = _anjay_coap_msg_get_id(msg);
     info.identity.token_size = _anjay_coap_msg_get_token(msg,
                                                          &info.identity.token);
 
+    if (max_age && _anjay_coap_msg_info_opt_u32(&info, ANJAY_COAP_OPT_MAX_AGE,
+                                                *max_age)) {
+        coap_log(WARNING, "unable to add Max-Age option to response");
+    }
+
     union {
-        uint8_t buffer[sizeof(anjay_coap_msg_t) + ANJAY_COAP_MAX_TOKEN_LENGTH];
+        uint8_t buffer[sizeof(anjay_coap_msg_t)
+                       + ANJAY_COAP_MAX_TOKEN_LENGTH
+                       + ANJAY_COAP_OPT_INT_MAX_SIZE];
         anjay_coap_msg_t force_align_;
     } aligned_buffer;
     const anjay_coap_msg_t *error = _anjay_coap_msg_build_without_payload(
@@ -162,30 +170,29 @@ void _anjay_coap_common_send_error(anjay_coap_socket_t *socket,
     assert(error);
 
     if (_anjay_coap_socket_send(socket, error)) {
-        coap_log(ERROR, "failed to send error message");
+        coap_log(WARNING, "failed to send error message");
     }
+
+    _anjay_coap_msg_info_reset(&info);
 }
 
-void _anjay_coap_common_reject_message(anjay_coap_socket_t *socket,
-                                       const anjay_coap_msg_t *msg) {
-    anjay_coap_msg_type_t type = _anjay_coap_msg_header_get_type(&msg->header);
-    uint16_t msg_id = _anjay_coap_msg_get_id(msg);
+void _anjay_coap_common_send_error(anjay_coap_socket_t *socket,
+                                   const anjay_coap_msg_t *msg,
+                                   uint8_t error_code) {
+    send_response(socket, msg, error_code, NULL);
+}
 
-    if (type != ANJAY_COAP_MSG_CONFIRMABLE) {
-        coap_log(TRACE, "ignoring message: id = %u", msg_id);
-        // ignore any non-confirmable requests
-        return;
-    }
+void _anjay_coap_common_send_service_unavailable(anjay_coap_socket_t *socket,
+                                                 const anjay_coap_msg_t *msg,
+                                                 int32_t retry_after_ms) {
+    uint32_t ms_to_retry_after =
+        retry_after_ms >= 0 ? (uint32_t)retry_after_ms : 0;
 
-    int result = _anjay_coap_common_send_empty(socket, ANJAY_COAP_MSG_RESET,
-                                               msg_id);
-    (void)result;
+    // round up to nearest full second
+    uint32_t s_to_retry_after = (ms_to_retry_after + 999) / 1000;
 
-    coap_log(TRACE, "%sRESET: id = %u",
-             result ? "could not send ": "", msg_id);
-
-    // ignore any errors from send_empty
-    // thanks to the power of UDP we can pretend we didn't get the request
+    send_response(socket, msg, ANJAY_COAP_CODE_SERVICE_UNAVAILABLE,
+                  &s_to_retry_after);
 }
 
 int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
@@ -211,14 +218,13 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
 
         result = _anjay_coap_in_get_next_message(in, socket);
         switch (result) {
-        case ANJAY_COAP_SOCKET_RECV_ERR_TIMEOUT:
+        case ANJAY_COAP_SOCKET_ERR_TIMEOUT:
             *inout_timeout_ms = 0;
-            result = COAP_RECV_MSG_WITH_TIMEOUT_EXPIRED;
             // fall-through
         default:
             goto exit;
 
-        case ANJAY_COAP_SOCKET_RECV_ERR_MSG_MALFORMED:
+        case ANJAY_COAP_SOCKET_ERR_MSG_MALFORMED:
         case 0:
             break;
         }
@@ -241,7 +247,14 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
             }
 
             if (!error_code) {
-                _anjay_coap_common_reject_message(socket, msg);
+                if (_anjay_coap_msg_header_get_type(&msg->header)
+                        == ANJAY_COAP_MSG_CONFIRMABLE) {
+                    _anjay_coap_common_send_empty(socket, ANJAY_COAP_MSG_RESET,
+                                                  _anjay_coap_msg_get_id(msg));
+                }
+            } else if (error_code == ANJAY_COAP_CODE_SERVICE_UNAVAILABLE) {
+                _anjay_coap_common_send_service_unavailable(
+                        socket, msg, *inout_timeout_ms);
             } else {
                 _anjay_coap_common_send_error(socket, msg, error_code);
             }
@@ -249,7 +262,7 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
     }
 
     *inout_timeout_ms = 0;
-    result = COAP_RECV_MSG_WITH_TIMEOUT_EXPIRED;
+    result = ANJAY_COAP_SOCKET_ERR_TIMEOUT;
 
 exit:
     _anjay_coap_socket_set_recv_timeout(socket, original_recv_timeout);

@@ -37,9 +37,9 @@ VISIBILITY_SOURCE_BEGIN
 
 static void connection_cleanup(anjay_t *anjay,
                                anjay_server_connection_t *connection) {
-    _anjay_connection_internal_set_move_socket(connection, NULL);
+    _anjay_connection_internal_clean_socket(connection);
     _anjay_sched_del(anjay->sched,
-                     &connection->queue_mode_suspend_socket_clb_handle);
+                     &connection->queue_mode_close_socket_clb_handle);
 }
 
 void _anjay_server_cleanup(anjay_t *anjay, anjay_active_server_info_t *server) {
@@ -78,53 +78,36 @@ void _anjay_servers_cleanup(anjay_t *anjay,
     AVS_LIST_CLEAR(&servers->nonqueue_sockets);
 }
 
-static bool is_connection_online(anjay_t *anjay,
-                                 anjay_ssid_t ssid,
-                                 const anjay_server_connection_t *connection) {
+static bool
+should_connection_be_online(anjay_t *anjay,
+                            anjay_ssid_t ssid,
+                            const anjay_server_connection_t *connection) {
     (void) anjay; (void) ssid;
     return _anjay_connection_internal_get_socket(connection) != NULL
 #ifdef WITH_BOOTSTRAP
             && (!anjay->bootstrap.in_progress || ssid == ANJAY_SSID_BOOTSTRAP)
 #endif
             && (!connection->queue_mode
-                    || connection->queue_mode_suspend_socket_clb_handle);
+                    || connection->queue_mode_close_socket_clb_handle);
     // see comment on field declaration for logic summary
 }
 
-static void discard_old_packets(avs_net_abstract_socket_t *socket) {
-    avs_net_socket_opt_value_t old_timeout;
-    if (avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
-                               &old_timeout)
-            || avs_net_socket_set_opt(socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
-                                      (avs_net_socket_opt_value_t) {
-                                          .recv_timeout = 0
-                                      })) {
-        anjay_log(ERROR, "could not set socket recv timeout");
-        return;
-    }
-    size_t ignore;
-    int receive_result;
-    do {
-        receive_result = avs_net_socket_receive(socket, &ignore, &ignore, 0);
-    } while (receive_result == 0 || avs_net_socket_errno(socket) == EMSGSIZE);
-    if (avs_net_socket_set_opt(socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
-                               old_timeout)) {
-        anjay_log(ERROR, "could not restore socket recv timeout");
-    }
-}
-
 avs_net_abstract_socket_t *
-_anjay_connection_get_prepared_socket(anjay_server_connection_t *connection) {
-    avs_net_abstract_socket_t *socket = NULL;
-    if (connection) {
-        socket = _anjay_connection_internal_get_socket(connection);
-    }
+_anjay_connection_get_prepared_socket(anjay_t *anjay,
+                                      anjay_active_server_info_t *server,
+                                      anjay_server_connection_t *connection) {
+    avs_net_abstract_socket_t *socket =
+            _anjay_connection_internal_get_socket(connection);
     if (!socket) {
         return NULL;
     }
-    if (connection->needs_discard_old_packets) {
-        discard_old_packets(socket);
-        connection->needs_discard_old_packets = false;
+    if (_anjay_connection_internal_ensure_online(connection)) {
+        anjay_log(ERROR, "broken socket for server %" PRIu16, server->ssid);
+        if (_anjay_schedule_server_reconnect(anjay, server)) {
+            anjay_log(ERROR, "could not schedule reconnect for server %" PRIu16,
+                      server->ssid);
+        }
+        return NULL;
     }
     return socket;
 }
@@ -136,19 +119,21 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
 
     anjay_active_server_info_t *server;
     AVS_LIST_FOREACH(server, anjay->servers.active) {
-        if (is_connection_online(anjay, server->ssid,
-                                 &server->udp_connection)) {
+        if (should_connection_be_online(anjay, server->ssid,
+                                        &server->udp_connection)) {
+            avs_net_abstract_socket_t *socket =
+                    _anjay_connection_get_prepared_socket(
+                            anjay, server, &server->udp_connection);
+            if (!socket) {
+                continue;
+            }
             AVS_LIST_INSERT_NEW(avs_net_abstract_socket_t *const, tail_ptr);
             if (!*tail_ptr) {
                 anjay_log(ERROR, "Out of memory while building socket list");
             } else {
-                *(avs_net_abstract_socket_t **) (intptr_t) *tail_ptr
-                        = _anjay_connection_get_prepared_socket(
-                                &server->udp_connection);
+                *(avs_net_abstract_socket_t **) (intptr_t) *tail_ptr = socket;
                 tail_ptr = AVS_LIST_NEXT_PTR(tail_ptr);
             }
-        } else {
-            server->udp_connection.needs_discard_old_packets = true;
         }
     }
     return anjay->servers.nonqueue_sockets;

@@ -165,20 +165,45 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(fake_anjay, &mock_obj1));
     const anjay_dm_object_def_t *mock_obj2 = make_mock_object(64);
     AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(fake_anjay, &mock_obj2));
-    AVS_LIST(anjay_oid_t) oids_to_sync = NULL;
-    *AVS_LIST_APPEND_NEW(anjay_oid_t, &oids_to_sync) = mock_obj1->oid;
-    *AVS_LIST_APPEND_NEW(anjay_oid_t, &oids_to_sync) = mock_obj2->oid;
-    _anjay_dm_transaction_begin(fake_anjay);
-    anjay_notify_queue_t dm_changes = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_sync_instances(
-            ac1, ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP, oids_to_sync, &dm_changes));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_sync_instances(
-            ac2, ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP, oids_to_sync, &dm_changes));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_transaction_finish(fake_anjay, 0));
-    AVS_LIST_CLEAR(&oids_to_sync);
-    _anjay_notify_clear_queue(&dm_changes);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
+            ac1,
+            _anjay_access_control_create_missing_ac_instance(
+                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
+                    &(const acl_target_t) {
+                        .oid = mock_obj1->oid,
+                        .iid = ANJAY_IID_INVALID
+                    }),
+            NULL));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
+            ac1,
+            _anjay_access_control_create_missing_ac_instance(
+                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
+                    &(const acl_target_t) {
+                        .oid = mock_obj2->oid,
+                        .iid = ANJAY_IID_INVALID
+                    }),
+            NULL));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
+            ac2,
+            _anjay_access_control_create_missing_ac_instance(
+                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
+                    &(const acl_target_t) {
+                        .oid = mock_obj1->oid,
+                        .iid = ANJAY_IID_INVALID
+                    }),
+            NULL));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
+            ac2,
+            _anjay_access_control_create_missing_ac_instance(
+                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
+                    &(const acl_target_t) {
+                        .oid = mock_obj2->oid,
+                        .iid = ANJAY_IID_INVALID
+                    }),
+            NULL));
     // There are now 2 bootstrap instances.
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac1->current.instances), 2);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac2->current.instances), 2);
 
     AVS_LIST(acl_entry_t) acl1 = NULL;
     AVS_LIST_APPEND(&acl1, AVS_LIST_NEW_ELEMENT(acl_entry_t));

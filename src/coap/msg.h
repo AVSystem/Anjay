@@ -42,6 +42,11 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
                                        + 1  /* extended number */ \
                                        + 3) /* block option value */
 
+#define ANJAY_COAP_OPT_INT_MAX_SIZE (1 /* option header */ \
+                                     + 2 /* extended number */ \
+                                     + 2 /* extended length */ \
+                                     + sizeof(uint64_t))
+
 typedef struct {
     char bytes[ANJAY_COAP_MAX_TOKEN_LENGTH];
 } anjay_coap_token_t;

@@ -501,8 +501,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
             "\x63\xF4\x00\x00" // Observe option
             "\x60" // Content-Format
             "\xFF" "514";
-    avs_unit_mocksock_expect_output(mocksocks[0],
-                                    RESPONSE, sizeof(RESPONSE) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], RESPONSE);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     // observe::flush_send_queue()
@@ -518,13 +517,13 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     ////// QUEUE MODE - EMPTY PASS //////
     AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_suspend_socket_clb_handle);
+            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
     _anjay_mock_clock_advance(&(const struct timespec) { 93, 0 });
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_suspend_socket_clb_handle);
+            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
 
     ////// NOTIFY - TRIGGER QUEUE MODE //////
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
@@ -554,8 +553,12 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
             "\x60" // Content-Format
             "\xFF" "Hello";
     avs_unit_mocksock_assert_expects_met(mocksocks[0]);
-    avs_unit_mocksock_input_fail(mocksocks[0], -1);
-    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
+    avs_unit_mocksock_expect_remote_hostname(mocksocks[0],
+                                             "server.example.org");
+    avs_unit_mocksock_expect_remote_port(mocksocks[0], "8378");
+    avs_unit_mocksock_expect_bind(mocksocks[0], NULL, "");
+    avs_unit_mocksock_expect_connect(mocksocks[0],
+                                     "server.example.org", "8378");
     avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
                                     sizeof(NOTIFY_RESPONSE) - 1);
 
@@ -614,7 +617,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     ////// ASSERT QUEUE MODE //////
     AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_suspend_socket_clb_handle);
+            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
     AVS_UNIT_ASSERT_NOT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     _anjay_mock_clock_advance(&(const struct timespec) { 93, 0 });
@@ -622,7 +625,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_suspend_socket_clb_handle);
+            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
 
     DM_TEST_FINISH;
 }
@@ -662,7 +665,7 @@ AVS_UNIT_TEST(queue_mode, change) {
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(anjay_get_sockets(anjay)), 1);
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_suspend_socket_clb_handle);
+            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
 
     ////// REFRESH BINDING MODE //////
     // query SSID in Security
@@ -753,14 +756,14 @@ AVS_UNIT_TEST(queue_mode, change) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_suspend_socket_clb_handle);
+            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     _anjay_mock_clock_advance(&(const struct timespec) { 93, 0 });
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_suspend_socket_clb_handle);
+            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
 
     DM_TEST_FINISH;
 }

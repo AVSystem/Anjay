@@ -117,10 +117,11 @@ class Server(object):
 
 
 class DtlsServer(Server):
-    def __init__(self, psk_identity, psk_key, listen_port=0):
+    def __init__(self, psk_identity, psk_key, listen_port=0, debug=False):
         self.psk_identity = psk_identity
         self.psk_key = psk_key
         self.server_socket = None
+        self.debug = debug
 
         super().__init__(listen_port)
 
@@ -133,7 +134,7 @@ class DtlsServer(Server):
             try:
                 self.server_socket = None
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self.socket = Socket(self.socket, self.psk_identity, self.psk_key)
+                self.socket = Socket(self.socket, self.psk_identity, self.psk_key, self.debug)
                 self.socket.connect(remote_addr)
             except:
                 self.close()
@@ -151,7 +152,7 @@ class DtlsServer(Server):
                 from pymbedtls import ServerSocket
 
                 super().reset(listen_port)
-                self.server_socket = ServerSocket(self.socket, self.psk_identity, self.psk_key)
+                self.server_socket = ServerSocket(self.socket, self.psk_identity, self.psk_key, self.debug)
                 self.socket = None
         except ImportError:
             raise ImportError('could not import pymbedtls! run '

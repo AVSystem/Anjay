@@ -69,7 +69,7 @@ static download_diag_repr_t *get_diag(const anjay_dm_object_def_t *const *obj_pt
 }
 
 static int make_temp_file(char *out_name) {
-    int fd = mkstemp(out_name);
+    int fd = open_temporary_file(out_name);
     if (fd == -1) {
         return -1;
     }
@@ -302,7 +302,9 @@ download_diagnostics_object_create(iosched_t *iosched) {
 
 void download_diagnostics_object_release(const anjay_dm_object_def_t **def) {
     download_diag_repr_t *repr = get_diag(def);
-    wget_context_delete(&repr->wget_ctx);
-    free(repr);
+    if (repr) {
+        wget_context_delete(&repr->wget_ctx);
+        free(repr);
+    }
 }
 

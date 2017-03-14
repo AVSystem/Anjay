@@ -75,8 +75,6 @@ typedef struct coap_server {
     AVS_LIST(coap_block_optbuf_t) expected_block_opts;
 
     uint8_t last_error_code;
-
-    anjay_msg_details_t request_details;
 } coap_server_t;
 
 void _anjay_coap_server_reset(coap_server_t *server);

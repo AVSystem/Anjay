@@ -22,6 +22,7 @@
 
 #include "../dm/query.h"
 
+#define ANJAY_SERVERS_CONNECTION_INFO_C
 #define ANJAY_SERVERS_INTERNALS
 
 #include "connection_info.h"
@@ -48,11 +49,10 @@ typedef struct {
     anjay_raw_buffer_t secret_key;
 } dtls_keys_t;
 
-#define MAX_PORT_LENGTH sizeof("65535")
 typedef struct {
     anjay_server_connection_mode_t mode;
     anjay_url_t uri;
-    char local_port[MAX_PORT_LENGTH];
+    char local_port[ANJAY_MAX_URL_PORT_SIZE];
     anjay_udp_security_mode_t security_mode;
     dtls_keys_t keys;
 } udp_connection_info_t;
@@ -62,6 +62,18 @@ typedef struct {
     anjay_ssid_t ssid; // or ANJAY_SSID_BOOTSTRAP
     udp_connection_info_t udp;
 } server_connection_info_t;
+
+avs_net_abstract_socket_t *_anjay_connection_internal_get_socket(
+        const anjay_server_connection_t *connection) {
+    return connection->conn_priv_data_.socket;
+}
+
+void
+_anjay_connection_internal_clean_socket(anjay_server_connection_t *connection) {
+    avs_net_socket_cleanup(&connection->conn_priv_data_.socket);
+    memset(&connection->conn_priv_data_, 0,
+           sizeof(connection->conn_priv_data_));
+}
 
 static anjay_binding_mode_t read_binding_mode(anjay_t *anjay,
                                               anjay_ssid_t ssid) {
@@ -201,10 +213,13 @@ static int init_cert_security(avs_net_security_info_t *security,
 
 static int fill_socket_config(anjay_t *anjay,
                               avs_net_ssl_configuration_t *config,
+                              avs_net_resolved_endpoint_t *preferred_endpoint,
                               const udp_connection_info_t *udp_info) {
     memset(config, 0, sizeof(*config));
     config->version = anjay->dtls_version;
+    config->backend_configuration = anjay->udp_socket_config;
     config->backend_configuration.reuse_addr = 1;
+    config->backend_configuration.preferred_endpoint = preferred_endpoint;
 
     switch (udp_info->security_mode) {
     case ANJAY_UDP_SECURITY_NOSEC:
@@ -346,19 +361,22 @@ static int get_udp_connection_info(anjay_t *anjay,
             ? -1 : 0;
 }
 
-static void get_requested_local_port(char out_port[static MAX_PORT_LENGTH],
-                                     anjay_t *anjay,
-                                     avs_net_abstract_socket_t *socket) {
+static void
+get_requested_local_port(char out_port[static ANJAY_MAX_URL_PORT_SIZE],
+                         anjay_t *anjay,
+                         avs_net_abstract_socket_t *socket) {
     if (socket) {
         if (!avs_net_socket_get_local_port(socket, out_port,
-                                           MAX_PORT_LENGTH)) {
+                                           ANJAY_MAX_URL_PORT_SIZE)) {
             return;
         }
 
         anjay_log(DEBUG, "could not read local port from old socket");
     }
 
-    if (_anjay_snprintf(out_port, MAX_PORT_LENGTH, "%s", anjay->udp_port) > 0) {
+    if (anjay->udp_listen_port > 0
+            && _anjay_snprintf(out_port, ANJAY_MAX_URL_PORT_SIZE,
+                               "%" PRIu16, anjay->udp_listen_port) > 0) {
         return;
     }
 
@@ -402,15 +420,18 @@ static int get_connection_info(anjay_t *anjay,
     return 0;
 }
 
-static avs_net_abstract_socket_t *
-create_connected_udp_socket(anjay_t *anjay, const udp_connection_info_t *info) {
+static int create_connected_udp_socket(anjay_t *anjay,
+                                       anjay_server_connection_t *out_conn,
+                                       const udp_connection_info_t *info) {
     avs_net_abstract_socket_t *socket = NULL;
     avs_net_socket_type_t type =
             info->security_mode == ANJAY_UDP_SECURITY_NOSEC
                 ? AVS_NET_UDP_SOCKET : AVS_NET_DTLS_SOCKET;
 
     avs_net_ssl_configuration_t config;
-    if (fill_socket_config(anjay, &config, info)) {
+    if (fill_socket_config(anjay, &config,
+                           &out_conn->conn_priv_data_.preferred_endpoint,
+                           info)) {
         goto error;
     }
 
@@ -437,33 +458,35 @@ create_connected_udp_socket(anjay_t *anjay, const udp_connection_info_t *info) {
     }
 
     anjay_log(INFO, "connected to %s:%s", info->uri.host, info->uri.port);
-    return socket;
+    out_conn->conn_priv_data_.socket = socket;
+    return 0;
 error:
     avs_net_socket_cleanup(&socket);
-    return NULL;
+    return -1;
 }
 
 static int refresh_udp(anjay_t *anjay,
                        anjay_server_connection_t *out_connection,
                        const udp_connection_info_t *info) {
-    avs_net_abstract_socket_t *new_socket = NULL;
-    bool currently_connected =
+    bool socket_created =
             (_anjay_connection_internal_get_socket(out_connection) != NULL);
     bool should_be_connected = (info->mode != ANJAY_CONNECTION_DISABLED);
-    if (currently_connected != should_be_connected
-            || out_connection->needs_socket_update) {
-        _anjay_connection_internal_set_move_socket(out_connection, NULL);
-        if (should_be_connected) {
-            if (!(new_socket = create_connected_udp_socket(anjay, info))) {
-                return -1;
-            } else {
-                _anjay_connection_internal_set_move_socket(out_connection,
-                                                           &new_socket);
-            }
+    if (!should_be_connected) {
+        _anjay_connection_internal_clean_socket(out_connection);
+    } else if (!socket_created || out_connection->needs_socket_update) {
+        _anjay_connection_internal_clean_socket(out_connection);
+        if (create_connected_udp_socket(anjay, out_connection, info)
+                || avs_net_socket_get_local_port(
+                        out_connection->conn_priv_data_.socket,
+                        out_connection->conn_priv_data_.last_local_port,
+                        sizeof(out_connection->conn_priv_data_.last_local_port))) {
+            avs_net_socket_cleanup(&out_connection->conn_priv_data_.socket);
+            return -1;
         }
+    } else if (_anjay_connection_internal_ensure_online(out_connection)) {
+        return -1;
     }
     out_connection->needs_socket_update = false;
-    out_connection->needs_discard_old_packets = false;
     out_connection->queue_mode = (info->mode == ANJAY_CONNECTION_QUEUE);
     return 0;
 }
@@ -488,4 +511,61 @@ int _anjay_server_refresh(anjay_t *anjay,
     }
 
     return refresh_udp(anjay, &server->udp_connection, &server_info.udp);
+}
+
+void _anjay_connection_suspend(anjay_connection_ref_t conn_ref) {
+    // TODO: Implement properly once we have SMS
+    assert(conn_ref.conn_type == ANJAY_CONNECTION_UDP
+            || conn_ref.conn_type == ANJAY_CONNECTION_WILDCARD);
+
+    avs_net_abstract_socket_t *socket = _anjay_connection_internal_get_socket(
+            &conn_ref.server->udp_connection);
+    if (socket) {
+        avs_net_socket_close(socket);
+    }
+}
+
+int _anjay_connection_internal_ensure_online(
+        anjay_server_connection_t *connection) {
+    char remote_host[ANJAY_MAX_URL_HOSTNAME_SIZE];
+    char remote_port[ANJAY_MAX_URL_PORT_SIZE];
+
+    avs_net_socket_opt_value_t opt;
+    if (avs_net_socket_get_opt(connection->conn_priv_data_.socket,
+                               AVS_NET_SOCKET_OPT_STATE, &opt)) {
+        anjay_log(ERROR, "Could not get socket state");
+        return -1;
+    }
+    if (opt.state == AVS_NET_SOCKET_STATE_CONNECTED) {
+        // already connected, OK
+        return 0;
+    }
+    if (opt.state != AVS_NET_SOCKET_STATE_CLOSED
+            && avs_net_socket_close(connection->conn_priv_data_.socket)) {
+        anjay_log(ERROR, "Could not close the socket (?!)");
+        return -1;
+    }
+    if (avs_net_socket_get_remote_hostname(connection->conn_priv_data_.socket,
+                                           remote_host, sizeof(remote_host))
+            || avs_net_socket_get_remote_port(
+                    connection->conn_priv_data_.socket,
+                    remote_port, sizeof(remote_port))) {
+        anjay_log(ERROR, "Could not get peer address and port "
+                         "of a suspended connection");
+        return -1;
+    }
+    if (avs_net_socket_bind(connection->conn_priv_data_.socket, NULL,
+                            connection->conn_priv_data_.last_local_port)) {
+        anjay_log(ERROR, "could not bind socket to port %s",
+                  connection->conn_priv_data_.last_local_port);
+        return -1;
+    }
+    if (avs_net_socket_connect(connection->conn_priv_data_.socket,
+                               remote_host, remote_port)) {
+        anjay_log(ERROR, "could not connect to %s:%s",
+                  remote_host, remote_port);
+        return -1;
+    }
+    anjay_log(INFO, "reconnected to %s:%s", remote_host, remote_port);
+    return 0;
 }

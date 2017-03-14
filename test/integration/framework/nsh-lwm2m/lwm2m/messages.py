@@ -696,9 +696,10 @@ class Lwm2mContent(Lwm2mResponse):
                          content=content)
 
     def make_content_summary(self):
-        try:
-            fmt = self.get_options(coap.Option.CONTENT_FORMAT)[0]
-        except ValueError:
+        format_opts = self.get_options(coap.Option.CONTENT_FORMAT)
+        if format_opts:
+            fmt = format_opts[0]
+        else:
             fmt = coap.Option.CONTENT_FORMAT.TEXT_PLAIN
 
         if fmt == coap.Option.CONTENT_FORMAT.TEXT_PLAIN:

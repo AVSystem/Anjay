@@ -17,6 +17,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <string.h>
+#include <assert.h>
 
 #include "../objects.h"
 #include "../utils.h"
@@ -159,6 +160,7 @@ static int geopoints_instance_remove(anjay_t *anjay,
         }
     }
 
+    assert(0);
     return ANJAY_ERR_NOT_FOUND;
 }
 
@@ -170,9 +172,7 @@ static int geopoints_resource_read(anjay_t *anjay,
     (void) anjay;
 
     geopoint_t *inst = find_instance(get_geopoints(obj_ptr), iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     switch (rid) {
     case GEOPOINTS_LATITUDE:
@@ -198,9 +198,7 @@ static int geopoints_resource_write(anjay_t *anjay,
     (void) anjay;
 
     geopoint_t *inst = find_instance(get_geopoints(obj_ptr), iid);
-    if (!inst) {
-        return ANJAY_ERR_NOT_FOUND;
-    }
+    assert(inst);
 
     double value;
     int result;
@@ -344,9 +342,11 @@ geopoints_object_create(const anjay_dm_object_def_t **location_obj_ptr) {
 
 void geopoints_object_release(const anjay_dm_object_def_t **def) {
     geopoints_t *geopoints = get_geopoints(def);
-    AVS_LIST_CLEAR(&geopoints->instances);
-    AVS_LIST_CLEAR(&geopoints->saved_instances);
-    free(geopoints);
+    if (geopoints) {
+        AVS_LIST_CLEAR(&geopoints->instances);
+        AVS_LIST_CLEAR(&geopoints->saved_instances);
+        free(geopoints);
+    }
 }
 
 void geopoints_notify_time_dependent(anjay_t *anjay,

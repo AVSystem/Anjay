@@ -140,7 +140,6 @@ class RID:
         PackageURI = 1
         Update = 2
         State = 3
-        UpdateSupportedObjects = 4
         UpdateResult = 5
         PackageName = 6
         PackageVersion = 7

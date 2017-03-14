@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import inspect
+import io
 import os
 import re
 import subprocess
@@ -27,21 +28,29 @@ from .lwm2m.server import Lwm2mServer
 from .lwm2m_test import *
 
 
-def read_until_match(fd, regex, timeout_s):
+def read_with_timeout(fd, timeout_s):
     import select
-    out = ''
-    rlist = [fd]
-    xlist = [fd]
+    deadline = time.time() + timeout_s
+    while True:
+        partial_timeout = deadline - time.time()
+        if partial_timeout < 0:
+            return '' if isinstance(fd, io.TextIOBase) else b''
+        r, w, x = select.select([fd], [], [fd], partial_timeout)
+        if len(r) > 0 or len(x) > 0:
+            buf = fd.read()
+            if buf is not None and len(buf) > 0:
+                return buf
 
-    start_time = time.time()
-    while time.time() - start_time < timeout_s:
+
+def read_until_match(fd, regex, timeout_s):
+    deadline = time.time() + timeout_s
+    out = '' if isinstance(fd, io.TextIOBase) else b''
+    while True:
+        partial_timeout = deadline - time.time()
+        out += read_with_timeout(fd, partial_timeout)
         match = re.search(regex, out)
         if match:
             return match
-        r, w, x = select.select(rlist, [], xlist)
-        if len(r) < 1: break
-        buf = fd.read()
-        out += buf
 
 
 def test_case_name(test_filepath):
@@ -318,6 +327,17 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         return None
 
+    def read_logs_for(self, timeout_s):
+        deadline = time.time() + timeout_s
+        out = '' if isinstance(self.demo_process.log_file, io.TextIOBase) else b''
+        self.demo_process.log_file.seek(0, os.SEEK_END)
+        while True:
+            partial_timeout = deadline - time.time()
+            if partial_timeout < 0:
+                break
+            out += read_with_timeout(self.demo_process.log_file, partial_timeout)
+        return out
+
     def _terminate_demo(self, demo):
         cleanup_actions = [
             (5.0, lambda _: None),  # check if the demo already stopped
@@ -385,8 +405,11 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
 
     def setUp(self,
               auto_register=True,
-              lifetime=None):
+              lifetime=None,
+              extra_cmdline_args=None):
         extra_args = ['--lifetime', str(lifetime)] if lifetime else []
+        if extra_cmdline_args is not None:
+            extra_args += extra_cmdline_args
 
         self.setup_demo_with_servers(num_servers=1,
                                      extra_cmdline_args=extra_args,

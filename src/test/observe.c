@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <errno.h>
 #include <math.h>
 #include <stdarg.h>
 
@@ -25,6 +26,7 @@
 #include <anjay_test/mock_clock.h>
 
 #include "../anjay.h"
+#include "../sched_internal.h"
 
 // HACK to enable access to servers
 #define ANJAY_SERVERS_INTERNALS
@@ -350,8 +352,7 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
 
 static inline void
 remove_server(AVS_LIST(anjay_active_server_info_t) *server_ptr) {
-    _anjay_connection_internal_set_move_socket(&(*server_ptr)->udp_connection,
-                                               NULL);
+    _anjay_connection_internal_clean_socket(&(*server_ptr)->udp_connection);
     AVS_LIST_DELETE(server_ptr);
 }
 
@@ -1246,9 +1247,9 @@ static void test_observe_entry(anjay_t *anjay,
     AVS_UNIT_ASSERT_NOT_NULL(new_entry);
 
     memcpy((void *) (intptr_t) (const void *) &new_entry->key,
-            &(const anjay_observe_key_t) {
+            (&(const anjay_observe_key_t) {
                 { ssid, conn_type }, oid, iid, rid, ANJAY_COAP_FORMAT_NONE
-            }, sizeof(anjay_observe_key_t));
+            }), sizeof(anjay_observe_key_t));
     AVS_RBTREE_ELEM(anjay_observe_entry_t) entry =
             AVS_RBTREE_INSERT(conn->entries, new_entry);
     if (entry != new_entry) {
@@ -1602,6 +1603,7 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // second notification
@@ -1622,6 +1624,7 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // anjay_serve() with reschedule notification sending
@@ -1686,6 +1689,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // second notification
@@ -1707,6 +1711,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // anjay_serve() with reschedule notification sending...
@@ -1751,6 +1756,7 @@ AVS_UNIT_TEST(notify, storing_of_errors) {
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // second notification - should not actually do anything
@@ -1793,10 +1799,53 @@ AVS_UNIT_TEST(notify, no_storing_of_errors) {
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // now the notification shall be gone
     assert_observe_size(anjay, 0);
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(notify, reconnect) {
+    SUCCESS_TEST(14);
+
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+
+    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    // error during attribute reading
+    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, -1);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    avs_unit_mocksock_output_fail(mocksocks[0], -1);
+    avs_unit_mocksock_expect_errno(mocksocks[0], ECONNRESET);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+
+    // mocking reconnect is rather hard, so let's just check it's scheduled
+    AVS_UNIT_ASSERT_TRUE(anjay->sched->entries
+            == anjay->servers.active->sched_update_handle);
+    // encoded update args:
+    // - SSID==14 (0x000E)
+    // - reconnect required == true (hence the 1 at the higher-order byte)
+    AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data, 0x1000E);
+    _anjay_sched_del(anjay->sched, &anjay->servers.active->sched_update_handle);
+
+    // resend
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    static const char NOTIFY_RESPONSE[] =
+            "\x50\xA0\x69\xEE" // CoAP header
+            "\x63\xF4\x80\x00"; // Observe option
+    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
+                                    sizeof(NOTIFY_RESPONSE) - 1);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+
+    AVS_UNIT_ASSERT_NULL(anjay->sched->entries);
 
     DM_TEST_FINISH;
 }

@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include <endian.h>
+#include <sys/types.h>
 #include <alloca.h>
 
 #include <avsystem/commons/unit/test.h>
@@ -161,15 +161,26 @@ AVS_UNIT_TEST(coap_builder, option_multiple_ints) {
     anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE(content_length);
 
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[0], 1);
-    memcpy(&msg_tpl->content[1], &(uint8_t){0x10}, 1);
+    msg_tpl->content[1] = 0x10;
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[2], 2);
-    memcpy(&msg_tpl->content[3], &(uint16_t){htobe16(0x2120)}, 2);
+    msg_tpl->content[3] = 0x21;
+    msg_tpl->content[4] = 0x20;
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[5], 4);
-    memcpy(&msg_tpl->content[6], &(uint32_t){htobe32(0x43424140)}, 4);
+    msg_tpl->content[6] = 0x43;
+    msg_tpl->content[7] = 0x42;
+    msg_tpl->content[8] = 0x41;
+    msg_tpl->content[9] = 0x40;
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[10], 8);
-    memcpy(&msg_tpl->content[11], &(uint64_t){htobe64(0x8786858483828180)}, 8);
+    msg_tpl->content[11] = 0x87;
+    msg_tpl->content[12] = 0x86;
+    msg_tpl->content[13] = 0x85;
+    msg_tpl->content[14] = 0x84;
+    msg_tpl->content[15] = 0x83;
+    msg_tpl->content[16] = 0x82;
+    msg_tpl->content[17] = 0x81;
+    msg_tpl->content[18] = 0x80;
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[19], 1);
-    memcpy(&msg_tpl->content[20], &(uint8_t){0xFF}, 1);
+    msg_tpl->content[20] = 0xFF;
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[21], 0);
 
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
@@ -198,7 +209,7 @@ AVS_UNIT_TEST(coap_builder, option_content_format) {
     anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE(content_length);
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[0], 2);
     _anjay_coap_opt_set_short_delta((anjay_coap_opt_t *)&msg_tpl->content[0], ANJAY_COAP_OPT_CONTENT_FORMAT);
-    memcpy(&msg_tpl->content[1], &(uint16_t){htobe16(ANJAY_COAP_FORMAT_TLV)}, 2);
+    memcpy(&msg_tpl->content[1], &(uint16_t){htons(ANJAY_COAP_FORMAT_TLV)}, 2);
 
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_content_format(&info, ANJAY_COAP_FORMAT_TLV));

@@ -31,8 +31,9 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {
     bool in_progress;
-    bool client_initiated_bootstrap_scheduled;
+    bool client_initiated_bootstrap_allowed;
     anjay_sched_handle_t client_initiated_bootstrap_handle;
+    anjay_sched_handle_t purge_bootstrap_handle;
     anjay_notify_queue_t notification_queue;
 } anjay_bootstrap_t;
 
@@ -46,6 +47,8 @@ int _anjay_bootstrap_account_prepare(anjay_t *anjay);
 
 int _anjay_bootstrap_update_reconnected(anjay_t *anjay);
 
+void _anjay_bootstrap_init(anjay_t *anjay);
+
 void _anjay_bootstrap_cleanup(anjay_t *anjay);
 
 #else
@@ -57,6 +60,8 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay);
 #define _anjay_bootstrap_account_prepare(anjay) (-1)
 
 #define _anjay_bootstrap_update_reconnected(anjay) (-1)
+
+#define _anjay_bootstrap_init(anjay) ((void) 0)
 
 #define _anjay_bootstrap_cleanup(anjay) ((void) 0)
 

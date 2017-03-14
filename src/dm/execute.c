@@ -16,7 +16,9 @@
 
 #include <config.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <ctype.h>
+#include <assert.h>
 
 #include "execute.h"
 
@@ -27,13 +29,13 @@ static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t* ctx, int c
 
 static int next_char(anjay_execute_ctx_t *ctx) {
     if (ctx->end_of_message) {
-        return -1;
+        return EOF;
     }
     char buf[2];
     int result = anjay_get_string(ctx->input_ctx, buf, sizeof(buf));
     if (result < 0 || buf[0] == '\0') {
         ctx->end_of_message = true;
-        return -1;
+        return EOF;
     } else if (result == 0) {
         ctx->end_of_message = true;
     }
@@ -165,7 +167,7 @@ static anjay_execute_state_t expect_separator_or_eof(anjay_execute_ctx_t* ctx,
     (void)ctx;
     if (is_arg_separator(ch)) {
         return STATE_FINISHED_READING_ARGUMENT;
-    } else if (ch == -1) {
+    } else if (ch == EOF) {
         return STATE_EOF;
     }
     return STATE_ERROR;
@@ -202,17 +204,19 @@ static anjay_execute_state_t expect_separator_or_assignment_or_eof(anjay_execute
     } else if (is_value_assignment(ch)) {
         ctx->arg_has_value = true;
         return expect_value(ctx, next_char(ctx));
-    } else if (ch == -1 && ctx->end_of_message) {
+    } else if (ch == EOF && ctx->end_of_message) {
         return STATE_EOF;
     }
     return STATE_ERROR;
 }
 
 static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t* ctx, int ch) {
+    assert(ch == EOF || (0 <= ch && ch <= UINT8_MAX));
+
     if (isdigit(ch)) {
         ctx->arg = ch - '0';
         return expect_separator_or_assignment_or_eof(ctx, next_char(ctx));
-    } else if (ch == -1) {
+    } else if (ch == EOF) {
         return STATE_EOF;
     }
     return STATE_ERROR;

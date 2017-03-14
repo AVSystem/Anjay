@@ -26,7 +26,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 static void disable_connection(anjay_server_connection_t *connection) {
-    _anjay_connection_internal_set_move_socket(connection, NULL);
+    _anjay_connection_internal_clean_socket(connection);
     connection->needs_socket_update = false;
 }
 

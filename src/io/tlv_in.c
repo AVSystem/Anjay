@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include <endian.h>
+#include <sys/types.h>
 
 #include <avsystem/commons/stream_v_table.h>
 

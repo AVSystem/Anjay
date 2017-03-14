@@ -19,8 +19,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
-#include <endian.h>
-#include <ieee754.h>
+#include <sys/types.h>
 
 #include <avsystem/commons/stream_v_table.h>
 
@@ -32,41 +31,45 @@
 VISIBILITY_SOURCE_BEGIN
 
 uint32_t _anjay_htonf(float f) {
-    union ieee754_float conv;
+    AVS_STATIC_ASSERT(sizeof(float) == sizeof(uint32_t), float_sane);
+    union {
+        float f;
+        uint32_t ieee;
+    } conv;
     conv.f = f;
-    return htonl((uint32_t) (
-            (((uint32_t) conv.ieee.negative & 1) << 31) |
-            (((uint32_t) conv.ieee.exponent & 0xFF) << 23) |
-            ((uint32_t) conv.ieee.mantissa & 0x7FFFFF)));
+    return htonl(conv.ieee);
 }
 
 uint64_t _anjay_htond(double d) {
-    union ieee754_double conv;
+    AVS_STATIC_ASSERT(sizeof(double) == sizeof(uint64_t), float_sane);
+    union {
+        double d;
+        uint64_t ieee;
+        char bytes[8];
+    } conv;
     conv.d = d;
-    return htobe64((uint64_t) (
-            (((uint64_t) conv.ieee.negative & 1) << 63) |
-            (((uint64_t) conv.ieee.exponent & 0x7FF) << 52) |
-            (((uint64_t) conv.ieee.mantissa0 & 0xFFFFF) << 32) |
-            ((uint64_t) conv.ieee.mantissa1 & 0xFFFFFFFF)));
+    ANJAY_CONVERT_BYTES_BE(conv.bytes);
+    return conv.ieee;
 }
 
 float _anjay_ntohf(uint32_t v) {
-    v = ntohl(v);
-    union ieee754_float conv;
-    conv.ieee.negative = !!((v >> 31) & 0x1);
-    conv.ieee.exponent = ((v >> 23) & 0xFF);
-    conv.ieee.mantissa = (v & 0x7FFFFF);
+    union {
+        float f;
+        uint32_t ieee;
+    } conv;
+    conv.ieee = ntohl(v);
     return conv.f;
 }
 
 double _anjay_ntohd(uint64_t v) {
-    v = be64toh(v);
-    union ieee754_double conv;
-    conv.ieee.negative = !!((v >> 63) & 0x1);
-    conv.ieee.exponent = ((v >> 52) & 0x7FF);
-    conv.ieee.mantissa0 = ((v >> 32) & 0xFFFFF);
-    conv.ieee.mantissa1 = (v & 0xFFFFFFFF);
-    return conv.d;
+  union {
+      double d;
+      uint64_t ieee;
+      char bytes[8];
+  } conv;
+  conv.ieee = v;
+  ANJAY_CONVERT_BYTES_BE(conv.bytes);
+  return conv.d;
 }
 
 struct anjay_output_ctx_struct {

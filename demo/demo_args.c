@@ -46,6 +46,10 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
 
 static int parse_security_mode(const char *mode_string,
                                anjay_udp_security_mode_t *out_mode) {
+    if (!mode_string) {
+        return -1;
+    }
+
     static const struct {
         const char *name;
         anjay_udp_security_mode_t value;
@@ -196,6 +200,10 @@ static int parse_i32(const char *str, int32_t *out_value) {
 }
 
 static int parse_hexstring(const char *str, uint8_t **out, size_t *out_size) {
+    if (!str) {
+        return -1;
+    }
+
     size_t length = strlen(str);
     if (length % 2 || !length) {
         return -1;

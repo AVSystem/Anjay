@@ -165,8 +165,6 @@ static int continue_block_request(const anjay_coap_msg_t *msg,
                                   coap_block_transfer_ctx_t *ctx,
                                   bool *out_wait_for_next,
                                   uint8_t *out_error_code) {
-    (void) out_error_code;
-
     if (is_separate_ack(msg, request)) {
         // Empty ACK to a request: wait for Separate Response
         *out_wait_for_next = true;
@@ -180,6 +178,13 @@ static int continue_block_request(const anjay_coap_msg_t *msg,
 
     // message unrelated to the block-wise transfer; reject and wait for next
     *out_wait_for_next = true;
+    if (_anjay_coap_msg_header_get_type(&msg->header)
+            == ANJAY_COAP_MSG_CONFIRMABLE) {
+        if (_anjay_coap_msg_is_request(msg)) {
+            *out_error_code = ANJAY_COAP_CODE_SERVICE_UNAVAILABLE;
+        }
+    }
+
     return -1;
 }
 
