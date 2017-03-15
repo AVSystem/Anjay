@@ -43,9 +43,9 @@ int _anjay_safe_strtod(const char *in, double *value);
 #define ANJAY_MAX_URL_HOSTNAME_SIZE (256 - ANJAY_MAX_URL_PROTO_SIZE - (sizeof("://" ":0") - 1))
 #define ANJAY_MAX_URL_PORT_SIZE sizeof("65535")
 
-#if BYTE_ORDER == BIG_ENDIAN
+#ifdef ANJAY_BIG_ENDIAN
 #define ANJAY_CONVERT_BYTES_BE(Bytes)
-#elif BYTE_ORDER == LITTLE_ENDIAN
+#else
 #define ANJAY_CONVERT_BYTES_BE(Bytes) \
 do { \
     for (size_t i = 0; i < sizeof(Bytes) / 2; ++i) { \
@@ -54,8 +54,6 @@ do { \
         (Bytes)[sizeof(Bytes) - i - 1] = tmp; \
     } \
 } while (false)
-#else
-#error "Unsupported byte order"
 #endif
 
 typedef struct anjay_url {

@@ -198,15 +198,13 @@ int _anjay_coap_msg_info_opt_uint(anjay_coap_msg_info_t *info,
                                   uint16_t opt_number,
                                   const void *value,
                                   size_t value_size) {
-#if BYTE_ORDER == BIG_ENDIAN
+#ifdef ANJAY_BIG_ENDIAN
     const uint8_t *converted = (const uint8_t *) value;
-#elif BYTE_ORDER == LITTLE_ENDIAN
+#else
     uint8_t converted[value_size];
     for (size_t i = 0; i < value_size; ++i) {
         converted[value_size - 1 - i] = ((const uint8_t *) value)[i];
     }
-#else
-#error "Unsupported byte order"
 #endif
     size_t start = 0;
     while (start < value_size && !converted[start]) {

@@ -47,9 +47,12 @@ include(cmake/install_utils.cmake)
 ################# FEATURES #####################################################
 
 include(CMakeDependentOption)
+include(TestBigEndian)
+
+test_big_endian(ANJAY_BIG_ENDIAN)
 
 # compilation flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_DEFAULT_SOURCE")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -D_POSIX_C_SOURCE=200809L")
 
 option(WITH_EXTRA_WARNINGS "Enable extra compilation warnings" OFF)
 if(WITH_EXTRA_WARNINGS)

@@ -82,14 +82,12 @@ int _anjay_coap_opt_uint_value(const anjay_coap_opt_t *opt,
         return -1;
     }
     memset(out_value, 0, out_value_size);
-#if BYTE_ORDER == BIG_ENDIAN
+#ifdef ANJAY_BIG_ENDIAN
     memcpy(((char *) out_value) + (out_value_size - length), value, length);
-#elif BYTE_ORDER == LITTLE_ENDIAN
+#else
     for (size_t i = 0; i < length; ++i) {
         ((uint8_t *) out_value)[length - 1 - i] = value[i];
     }
-#else
-#error "Unsupported byte order"
 #endif
     return 0;
 }

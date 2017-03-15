@@ -161,8 +161,8 @@ static void udp_serve(uint16_t port,
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
 
-    if (!inet_aton("127.0.0.1", &addr.sin_addr)
-            || bind(sock, (struct sockaddr*)&addr, sizeof(addr))) {
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    if (bind(sock, (struct sockaddr*)&addr, sizeof(addr))) {
         coap_log(ERROR, "UDP server (127.0.0.1:%u) bind failed: %s",
                  port, strerror(errno));
         goto cleanup;
