@@ -242,7 +242,7 @@ int _anjay_dm_transaction_include_object(
  *               be committed. Non-zero value is treated as an error code and
  *               causes the transaction to be rolled back.
  *
- * @return Final result code of the transaction. If an error occured during the
+ * @return Final result code of the transaction. If an error occurred during the
  *         transaction handling routines (e.g. the transaction did not
  *         validate), a nonzero error code from those routines is returned.
  *         Otherwise, <c>result</c> is propagated. Note that it means that

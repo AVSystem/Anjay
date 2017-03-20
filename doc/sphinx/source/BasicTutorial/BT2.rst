@@ -118,7 +118,7 @@ example we omitted it for clarity.
 
     The order in which objects and Anjay are deleted is not accidental, as
     during the instance destruction Anjay may still try to refer to object's
-    data, therefore premature object deletion could be disasterous in effects.
+    data, therefore premature object deletion could be disastrous in effects.
 
 Adding necessary Security and Server entries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

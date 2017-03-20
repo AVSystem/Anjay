@@ -537,7 +537,7 @@ static int dm_discover(anjay_t *anjay,
                        const anjay_request_details_t *details,
                        avs_stream_abstract_t *stream) {
     anjay_log(DEBUG, "Discover %s", ANJAY_DEBUG_MAKE_PATH(details));
-    /* Access Control check is ommited here, because dm_discover is always
+    /* Access Control check is omitted here, because dm_discover is always
      * allowed. */
     int result = _anjay_coap_stream_setup_response(stream,
             &(anjay_msg_details_t) {

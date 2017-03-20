@@ -116,7 +116,7 @@ class BlockIncompleteTest(BlockTest):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
                             self.serv.recv())
 
-        # consecutive packets recieved by the anjay with such seq_nums: (0, k > 1)
+        # consecutive packets received by the anjay with such seq_nums: (0, k > 1)
         req = packets[0]
         self.serv.send(req)
         res = self.serv.recv()
@@ -127,7 +127,7 @@ class BlockIncompleteTest(BlockTest):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
                             self.serv.recv())
 
-        # consecutive packets recieved by the anjay with such seq_nums: (0, 1, 0)
+        # consecutive packets received by the anjay with such seq_nums: (0, 1, 0)
         req = packets[0]
         self.serv.send(req)
         res = self.serv.recv()

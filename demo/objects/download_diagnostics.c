@@ -29,7 +29,7 @@ typedef enum {
     DOWNLOAD_DIAG_STATE         = 0,
     DOWNLOAD_DIAG_URL           = 1,
     DOWNLOAD_DIAG_ROM_TIME_US   = 2,
-    /* begin of transmision time */
+    /* begin of transmission time */
     DOWNLOAD_DIAG_BOM_TIME_US   = 3,
     /* end of transmission time */
     DOWNLOAD_DIAG_EOM_TIME_US   = 4,

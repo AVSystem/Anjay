@@ -70,7 +70,7 @@ int anjay_access_control_persist(const anjay_dm_object_def_t *const *ac_obj,
  * Tries to restore Access Control Object Instances from given @p in_stream.
  * Warning: @p ac_obj must not be wrapped
  *
- * @param ac_obj        Access Control Object defintion
+ * @param ac_obj        Access Control Object definition
  * @param in_stream     stream used for reading Access Control Object Instances
  * @return 0 in case of success, negative value in case of an error
  */

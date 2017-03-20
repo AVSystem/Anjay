@@ -305,7 +305,7 @@ The ``inout_iid`` parameter is the most important for us at the moment, as
 if the instantiation succeeds we MUST tell the library the id of the newly
 created Instance by setting ``*inout_iid`` properly.
 
-As we previously discussed, LwM2M Create requests do not necessairly have
+As we previously discussed, LwM2M Create requests do not necessarily have
 to contain preferred Instance ID. However if they do, then Anjay first makes
 sure no Object Instance with given Instance ID exists.
 
