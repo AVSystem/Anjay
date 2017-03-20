@@ -204,7 +204,7 @@ class SnippetSourceLintBuilder(DummyBuilder):
         if self.possibly_invalid_docs:
             print('Resolve errors above, then use following command to update md5 hash cache:')
             print('')
-            print('    cd "%s"; sphinx-build -Q -b snippet_source_list_references -c "%s" "%s" /tmp | xargs md5sum > "%s"' % (
+            print('    cd "%s"; sphinx-build -Q -b snippet_source_list_references -c "%s" "%s" /tmp | sort | xargs md5sum > "%s"' % (
                     os.environ['CMAKE_SOURCE_DIR'], os.environ['ANJAY_SPHINX_DOC_CONF_DIR'],
                     os.environ['ANJAY_SPHINX_DOC_ROOT_DIR'], os.environ['SNIPPET_SOURCE_MD5FILE']))
             print('')
