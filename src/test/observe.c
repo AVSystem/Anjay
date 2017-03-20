@@ -50,7 +50,7 @@ static void assert_msg_details_equal(const anjay_msg_details_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->msg_code, b->msg_code);
     AVS_UNIT_ASSERT_EQUAL(a->format, b->format);
     AVS_UNIT_ASSERT_EQUAL(a->observe_serial, b->observe_serial);
-    /* Yes, a pointer comparision */
+    /* Yes, a pointer comparison */
     AVS_UNIT_ASSERT_TRUE(a->uri_path == b->uri_path);
     AVS_UNIT_ASSERT_TRUE(a->uri_query == b->uri_query);
     AVS_UNIT_ASSERT_TRUE(a->location_path == b->location_path);

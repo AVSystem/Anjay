@@ -1216,7 +1216,7 @@ typedef int anjay_dm_object_on_register_t(anjay_t *anjay,
  * and fail. Such situation often requires to rollback changes, and this handler
  * shall implement logic that prepares for possible failure in the future.
  *
- * Handlers listed below are NOT called without begining transaction in the
+ * Handlers listed below are NOT called without beginning transaction in the
  * first place (note that if an Object does not implement transaction handlers,
  * then it will not be possible to perform operations listed below):
  *  - @ref anjay_dm_instance_create_t
@@ -1305,7 +1305,7 @@ int anjay_dm_transaction_NOOP(anjay_t *anjay,
 
 /**
  * A handler that is called whenever there is a need to restore previous
- * Object state during a transaction or during commiting a transaction.
+ * Object state during a transaction or during committing a transaction.
  *
  * @param anjay     Anjay Object to operate on.
  * @param obj_ptr   Object definition pointer, as passed to

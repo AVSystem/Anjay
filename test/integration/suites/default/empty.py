@@ -34,7 +34,7 @@ class EmptyTest(test_suite.Lwm2mSingleServerTest):
         pkt1 = self.serv.recv(timeout_s=4)
         reregister_send_time = time.time()
 
-        # Now, since we know a rough estimate of the choosen timeout by the demo, and knowing
+        # Now, since we know a rough estimate of the chosen timeout by the demo, and knowing
         # that the next retry will be performed after 2 * current_timeout we can test whether
         # demo doesn't respond to invalid empty messages.
         next_timeout = 2.0 * (reregister_send_time - register_send_time)

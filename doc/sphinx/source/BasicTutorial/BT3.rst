@@ -119,7 +119,7 @@ presented :ref:`before <incomplete-event-loop-idea>` as follows:
     #. At some point network error might have happened, forcing the library
        to reconnect the socket, possibly changing its underlying descriptor.
 
-    #. The data model might have changed (for instance due to spontanous Bootstrap
+    #. The data model might have changed (for instance due to spontaneous Bootstrap
        Write) and some Server were added / removed or their credentials were
        modified.
 

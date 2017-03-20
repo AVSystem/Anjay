@@ -356,7 +356,7 @@ static void what_changed(anjay_ssid_t origin_ssid,
         // > Regarding the orphan AC Object Instances, [...] it could be let
         // > implementation dependant. In LwM2M 1.1, the Boostrap Server should
         // > have better view on this, and could safely decide to take the
-        // > responsability to remove "lingering" ACO Instances.
+        // > responsibility to remove "lingering" ACO Instances.
         //
         // So in line with the spirit of letting the Bootstrap Server take care
         // of everything, we don't remove such "lingering" instances

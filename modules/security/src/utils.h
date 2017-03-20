@@ -72,7 +72,7 @@ void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr);
 
 /**
  * Clones all instances of the given Security Object @p repr . Return NULL
- * if either there was nothing to clone or an error has occured.
+ * if either there was nothing to clone or an error has occurred.
  */
 AVS_LIST(sec_instance_t) _anjay_sec_clone_instances(const sec_repr_t *repr);
 

@@ -142,7 +142,7 @@ int anjay_persistence_u32(anjay_persistence_context_t *ctx,
 
 /**
  * Performs operation (depending on the @p ctx) on time_t.
- * Note: for cross-platform compability time_t is stored as unsgined 32bit
+ * Note: for cross-platform compatibility time_t is stored as unsgined 32bit
  *       integer, therefore values larger than UINT32_MAX will get truncated
  *       in a way it is usually done on unsigned integers.
  *
