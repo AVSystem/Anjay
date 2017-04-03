@@ -17,7 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_DM_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_DM_H
 
-#include <anjay/anjay.h>
+#include <anjay_modules/dm/modules.h>
 
 #include <assert.h>
 #include <limits.h>
@@ -112,49 +112,96 @@ int _anjay_dm_foreach_instance(anjay_t *anjay,
                                anjay_dm_foreach_instance_handler_t *handler,
                                void *data);
 
+/**
+ * Checks whether a specific data model handler is implemented for a given
+ * Object, with respect to the overlay system.
+ *
+ * The basic idea is that if this function returns <c>true</c> for a given
+ * handler, it means that the corresponding <c>_anjay_dm_*</c> function called
+ * with the same <c>anjay</c>, <c>obj_ptr</c> and <c>current_module</c>
+ * arguments will forward to some actually implemented code (rather than
+ * defaulting to <c>ANJAY_ERR_METHOD_NOT_ALLOWED</c>).
+ *
+ * This is why there is <c>current_module</c> argument - "outside" code will
+ * normally call this with <c>current_module == NULL</c> to check whether a
+ * handler is implemented at all (either in the object or in some overlay).
+ * Overlay handlers may then call it with self self pointer as
+ * <c>current_module</c> to check whether the corresponding handler is
+ * implemented in lower-layer code.
+ *
+ * @param anjay          Anjay object to operate on
+ *
+ * @param obj_ptr        Handle to an object to check handlers in
+ *
+ * @param current_module The module after which to start search for handlers in
+ *                       the overlays
+ *
+ * @param handler_offset Offset in @ref anjay_dm_handlers_t to the handler whose
+ *                       presence to check, e.g.
+ *                       <c>offsetof(anjay_dm_handlers_t, resource_read)</c>
+ *
+ * @return Boolean value determining whether an applicable handler
+ *         implementation is available
+ */
+bool _anjay_dm_handler_implemented(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   const anjay_dm_module_t *current_module,
+                                   size_t handler_offset);
+
 int _anjay_dm_object_read_default_attrs(anjay_t *anjay,
                                         const anjay_dm_object_def_t *const *obj_ptr,
                                         anjay_ssid_t ssid,
-                                        anjay_dm_attributes_t *out);
+                                        anjay_dm_attributes_t *out,
+                                        const anjay_dm_module_t *current_module);
 int _anjay_dm_object_write_default_attrs(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
                                          anjay_ssid_t ssid,
-                                         const anjay_dm_attributes_t *attrs);
+                                         const anjay_dm_attributes_t *attrs,
+                                         const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_it(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t *out,
-                          void **cookie);
+                          void **cookie,
+                          const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_reset(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr,
-                             anjay_iid_t iid);
+                             anjay_iid_t iid,
+                             const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_present(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t iid);
+                               anjay_iid_t iid,
+                               const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_create(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t *inout_iid,
-                              anjay_ssid_t ssid);
+                              anjay_ssid_t ssid,
+                              const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_remove(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_iid_t iid);
+                              anjay_iid_t iid,
+                              const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_read_default_attrs(anjay_t *anjay,
                                           const anjay_dm_object_def_t *const *obj_ptr,
                                           anjay_iid_t iid,
                                           anjay_ssid_t ssid,
-                                          anjay_dm_attributes_t *out);
+                                          anjay_dm_attributes_t *out,
+                                          const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_write_default_attrs(anjay_t *anjay,
                                            const anjay_dm_object_def_t *const *obj_ptr,
                                            anjay_iid_t iid,
                                            anjay_ssid_t ssid,
-                                           const anjay_dm_attributes_t *attrs);
+                                           const anjay_dm_attributes_t *attrs,
+                                           const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_present(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
-                               anjay_rid_t rid);
+                               anjay_rid_t rid,
+                               const anjay_dm_module_t *current_module);
 
 int _anjay_dm_resource_supported(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_rid_t rid);
+                                 anjay_rid_t rid,
+                                 const anjay_dm_module_t *current_module);
 int
 _anjay_dm_resource_supported_and_present(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
@@ -164,39 +211,59 @@ _anjay_dm_resource_supported_and_present(anjay_t *anjay,
 int _anjay_dm_resource_operations(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_rid_t rid,
-                                  anjay_dm_resource_op_mask_t *out);
+                                  anjay_dm_resource_op_mask_t *out,
+                                  const anjay_dm_module_t *current_module);
 
 int _anjay_dm_resource_read(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
-                            anjay_output_ctx_t *ctx);
+                            anjay_output_ctx_t *ctx,
+                            const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_write(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
-                             anjay_input_ctx_t *ctx);
+                             anjay_input_ctx_t *ctx,
+                             const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_execute(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
-                               anjay_execute_ctx_t *execute_ctx);
+                               anjay_execute_ctx_t *execute_ctx,
+                               const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_dim(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
                            anjay_iid_t iid,
-                           anjay_rid_t rid);
+                           anjay_rid_t rid,
+                           const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_read_attrs(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_ssid_t ssid,
-                                  anjay_dm_resource_attributes_t *out);
+                                  anjay_dm_resource_attributes_t *out,
+                                  const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_write_attrs(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
                                    anjay_ssid_t ssid,
-                                   const anjay_dm_resource_attributes_t *attrs);
+                                   const anjay_dm_resource_attributes_t *attrs,
+                                   const anjay_dm_module_t *current_module);
+
+int _anjay_dm_delegate_transaction_begin(anjay_t *anjay,
+                                         const anjay_dm_object_def_t *const *obj_ptr,
+                                         const anjay_dm_module_t *current_module);
+int _anjay_dm_delegate_transaction_validate(anjay_t *anjay,
+                                            const anjay_dm_object_def_t *const *obj_ptr,
+                                            const anjay_dm_module_t *current_module);
+int _anjay_dm_delegate_transaction_commit(anjay_t *anjay,
+                                          const anjay_dm_object_def_t *const *obj_ptr,
+                                          const anjay_dm_module_t *current_module);
+int _anjay_dm_delegate_transaction_rollback(anjay_t *anjay,
+                                            const anjay_dm_object_def_t *const *obj_ptr,
+                                            const anjay_dm_module_t *current_module);
 
 /**
  * Starts a transaction on the data model. If a transaction is already in

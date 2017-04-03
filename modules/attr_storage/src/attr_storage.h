@@ -48,32 +48,33 @@ typedef struct {
 } fas_instance_entry_t;
 
 typedef struct {
-    const anjay_dm_object_def_t *def_ptr;
-    const anjay_dm_object_def_t *const *backend;
-    anjay_attr_storage_t *fas;
-    anjay_dm_object_def_t def;
-    AVS_LIST(anjay_iid_t) instance_it_iids;
-    void *instance_it_last_cookie;
+    anjay_oid_t oid;
     AVS_LIST(fas_default_attrs_t) default_attrs;
     AVS_LIST(fas_instance_entry_t) instances;
-} fas_object_t;
+} fas_object_entry_t;
 
 typedef struct {
+    anjay_oid_t oid;
+    AVS_LIST(anjay_iid_t) iids;
+    void *last_cookie;
+} fas_iteration_state_t;
+
+typedef struct {
+    size_t depth;
     avs_stream_abstract_t *persist_data;
     bool modified_since_persist;
 } fas_saved_state_t;
 
-struct anjay_attr_storage_struct {
-    anjay_t *anjay;
-    AVS_LIST(fas_object_t) objects;
+typedef struct {
+    AVS_LIST(fas_object_entry_t) objects;
     bool modified_since_persist;
+    fas_iteration_state_t iteration;
     fas_saved_state_t saved_state;
-};
+} anjay_attr_storage_t;
 
-fas_object_t *_anjay_attr_storage_find_object(anjay_attr_storage_t *fas,
-                                              anjay_oid_t oid);
+void _anjay_attr_storage_clear(anjay_attr_storage_t *fas);
 
-void _anjay_attr_storage_clear_object(fas_object_t *obj);
+anjay_attr_storage_t *_anjay_attr_storage_get(anjay_t *anjay);
 
 static inline void mark_modified(anjay_attr_storage_t *fas) {
     fas->modified_since_persist = true;
@@ -86,9 +87,36 @@ static void remove_resource_entry(anjay_attr_storage_t *fas,
     mark_modified(fas);
 }
 
+static void remove_instance_entry(anjay_attr_storage_t *fas,
+                                  AVS_LIST(fas_instance_entry_t) *entry_ptr) {
+    AVS_LIST_CLEAR(&(*entry_ptr)->default_attrs);
+    while ((*entry_ptr)->resources) {
+        remove_resource_entry(fas, &(*entry_ptr)->resources);
+    }
+    AVS_LIST_DELETE(entry_ptr);
+    mark_modified(fas);
+}
+
+static void remove_object_entry(anjay_attr_storage_t *fas,
+                                AVS_LIST(fas_object_entry_t) *entry_ptr) {
+    AVS_LIST_CLEAR(&(*entry_ptr)->default_attrs);
+    while ((*entry_ptr)->instances) {
+        remove_instance_entry(fas, &(*entry_ptr)->instances);
+    }
+    AVS_LIST_DELETE(entry_ptr);
+    mark_modified(fas);
+}
+
 static void
 remove_instance_if_empty(AVS_LIST(fas_instance_entry_t) *entry_ptr) {
     if (!(*entry_ptr)->default_attrs && !(*entry_ptr)->resources) {
+        AVS_LIST_DELETE(entry_ptr);
+    }
+}
+
+static void
+remove_object_if_empty(AVS_LIST(fas_object_entry_t) *entry_ptr) {
+    if (!(*entry_ptr)->default_attrs && !(*entry_ptr)->instances) {
         AVS_LIST_DELETE(entry_ptr);
     }
 }
@@ -120,7 +148,8 @@ static bool resource_attrs_empty(const void *attrs) {
 int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *out);
 
-int _anjay_attr_storage_restore_inner(anjay_attr_storage_t *attr_storage,
+int _anjay_attr_storage_restore_inner(anjay_t *anjay,
+                                      anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *in);
 
 VISIBILITY_PRIVATE_HEADER_END

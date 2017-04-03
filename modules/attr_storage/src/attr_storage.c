@@ -30,89 +30,128 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-//// LIFETIME //////////////////////////////////////////////////////////////////
+//// LIFETIME AND OBJECT HANDLING //////////////////////////////////////////////
 
-anjay_attr_storage_t *anjay_attr_storage_new(anjay_t *anjay) {
+static anjay_dm_object_read_default_attrs_t object_read_default_attrs;
+static anjay_dm_object_write_default_attrs_t object_write_default_attrs;
+static anjay_dm_instance_it_t instance_it;
+static anjay_dm_instance_present_t instance_present;
+static anjay_dm_instance_remove_t instance_remove;
+static anjay_dm_instance_read_default_attrs_t instance_read_default_attrs;
+static anjay_dm_instance_write_default_attrs_t instance_write_default_attrs;
+static anjay_dm_resource_present_t resource_present;
+static anjay_dm_resource_read_attrs_t resource_read_attrs;
+static anjay_dm_resource_write_attrs_t resource_write_attrs;
+static anjay_dm_transaction_begin_t transaction_begin;
+static anjay_dm_transaction_commit_t transaction_commit;
+static anjay_dm_transaction_rollback_t transaction_rollback;
+
+static void fas_delete(anjay_t *anjay, void *fas_) {
+    (void) anjay;
+    anjay_attr_storage_t *fas = (anjay_attr_storage_t *) fas_;
+    assert(fas);
+    _anjay_attr_storage_clear(fas);
+    avs_stream_cleanup(&fas->saved_state.persist_data);
+    free(fas);
+}
+
+static const anjay_dm_module_t ATTR_STORAGE_DEF = {
+    .overlay_handlers = {
+        .object_read_default_attrs = object_read_default_attrs,
+        .object_write_default_attrs = object_write_default_attrs,
+        .instance_it = instance_it,
+        .instance_present = instance_present,
+        .instance_remove = instance_remove,
+        .instance_read_default_attrs = instance_read_default_attrs,
+        .instance_write_default_attrs = instance_write_default_attrs,
+        .resource_present = resource_present,
+        .resource_read_attrs = resource_read_attrs,
+        .resource_write_attrs = resource_write_attrs,
+        .transaction_begin = transaction_begin,
+        .transaction_commit = transaction_commit,
+        .transaction_rollback = transaction_rollback
+    },
+    .deleter = fas_delete
+};
+
+int anjay_attr_storage_install(anjay_t *anjay) {
     if (!anjay) {
         fas_log(ERROR, "ANJAY object must not be NULL");
-        return NULL;
+        return -1;
     }
     anjay_attr_storage_t *fas =
             (anjay_attr_storage_t *) calloc(1, sizeof(anjay_attr_storage_t));
     if (!fas) {
-        return NULL;
+        fas_log(ERROR, "out of memory");
+        return -1;
     }
-    fas->anjay = anjay;
-    if (!(fas->saved_state.persist_data = avs_stream_membuf_create())) {
+    if (!(fas->saved_state.persist_data = avs_stream_membuf_create())
+            || _anjay_dm_module_install(anjay, &ATTR_STORAGE_DEF, fas)) {
+        avs_stream_cleanup(&fas->saved_state.persist_data);
         free(fas);
-        return NULL;
+        return -1;
     }
-    return fas;
+    return 0;
 }
 
-static void remove_instance_entry(anjay_attr_storage_t *fas,
-                                  AVS_LIST(fas_instance_entry_t) *entry_ptr) {
-    AVS_LIST_CLEAR(&(*entry_ptr)->default_attrs);
-    while ((*entry_ptr)->resources) {
-        remove_resource_entry(fas, &(*entry_ptr)->resources);
-    }
-    AVS_LIST_DELETE(entry_ptr);
-    mark_modified(fas);
+static void reset_it_state(fas_iteration_state_t *it) {
+    it->oid = UINT16_MAX;
+    AVS_LIST_CLEAR(&it->iids);
+    it->last_cookie = NULL;
 }
 
-static void reset_instance_it_state(fas_object_t *obj) {
-    AVS_LIST_CLEAR(&obj->instance_it_iids);
-    obj->instance_it_last_cookie = NULL;
+bool anjay_attr_storage_is_modified(anjay_t *anjay) {
+    anjay_attr_storage_t *fas = _anjay_attr_storage_get(anjay);
+    if (!fas) {
+        fas_log(ERROR, "Attribute Storage is not installed");
+        return false;
+    }
+    return fas->modified_since_persist;
 }
 
-fas_object_t *_anjay_attr_storage_find_object(anjay_attr_storage_t *fas,
-                                              anjay_oid_t oid) {
-    AVS_LIST(fas_object_t) object;
-    AVS_LIST_FOREACH(object, fas->objects) {
-        if (object->def.oid == oid) {
-            return object;
-        } else if (object->def.oid > oid) {
-            break;
-        }
+void _anjay_attr_storage_clear(anjay_attr_storage_t *fas) {
+    reset_it_state(&fas->iteration);
+    while (fas->objects) {
+        remove_object_entry(fas, &fas->objects);
     }
-    return NULL;
-}
-
-void _anjay_attr_storage_clear_object(fas_object_t *obj) {
-    anjay_attr_storage_t *fas = obj->fas;
-    reset_instance_it_state(obj);
-    AVS_LIST_CLEAR(&obj->default_attrs);
-    while (obj->instances) {
-        remove_instance_entry(fas, &obj->instances);
-    }
-}
-
-void anjay_attr_storage_delete(anjay_attr_storage_t *attr_storage) {
-    AVS_LIST_CLEAR(&attr_storage->objects) {
-        _anjay_attr_storage_clear_object(attr_storage->objects);
-    }
-    avs_stream_cleanup(&attr_storage->saved_state.persist_data);
-    free(attr_storage);
 }
 
 //// HELPERS ///////////////////////////////////////////////////////////////////
 
 static bool implements_any_object_default_attrs_handlers(
-        const anjay_dm_object_def_t *def) {
-    return def->object_read_default_attrs
-            || def->object_write_default_attrs;
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr) {
+    return _anjay_dm_handler_implemented(anjay, obj_ptr, &ATTR_STORAGE_DEF,
+                                         offsetof(anjay_dm_handlers_t,
+                                                  object_read_default_attrs))
+            || _anjay_dm_handler_implemented(anjay, obj_ptr,
+                                             &ATTR_STORAGE_DEF,
+                                             offsetof(anjay_dm_handlers_t,
+                                                      object_write_default_attrs));
 }
 
 static bool implements_any_instance_default_attrs_handlers(
-        const anjay_dm_object_def_t *def) {
-    return def->instance_read_default_attrs
-            || def->instance_write_default_attrs;
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr) {
+    return _anjay_dm_handler_implemented(anjay, obj_ptr, &ATTR_STORAGE_DEF,
+                                         offsetof(anjay_dm_handlers_t,
+                                                  instance_read_default_attrs))
+            || _anjay_dm_handler_implemented(anjay, obj_ptr,
+                                             &ATTR_STORAGE_DEF,
+                                             offsetof(anjay_dm_handlers_t,
+                                                      instance_write_default_attrs));
 }
 
 static bool implements_any_resource_attrs_handlers(
-        const anjay_dm_object_def_t *def) {
-    return def->resource_read_attrs
-            || def->resource_write_attrs;
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr) {
+    return _anjay_dm_handler_implemented(anjay, obj_ptr, &ATTR_STORAGE_DEF,
+                                         offsetof(anjay_dm_handlers_t,
+                                                  resource_read_attrs))
+            || _anjay_dm_handler_implemented(anjay, obj_ptr,
+                                             &ATTR_STORAGE_DEF,
+                                             offsetof(anjay_dm_handlers_t,
+                                                      resource_write_attrs));
 }
 
 static void
@@ -122,16 +161,24 @@ remove_resource_if_empty(AVS_LIST(fas_resource_entry_t) *entry_ptr) {
     }
 }
 
-static inline fas_object_t *
-get_object(const anjay_dm_object_def_t *const *obj_ptr) {
-    assert(obj_ptr);
-    return AVS_CONTAINER_OF(obj_ptr, fas_object_t, def_ptr);
+anjay_attr_storage_t *_anjay_attr_storage_get(anjay_t *anjay) {
+    return (anjay_attr_storage_t *)
+            _anjay_dm_module_get_arg(anjay, &ATTR_STORAGE_DEF);
 }
 
+static anjay_attr_storage_t *get_fas(anjay_t *anjay) {
+    assert(anjay);
+    anjay_attr_storage_t *fas = _anjay_attr_storage_get(anjay);
+    assert(fas);
+    return (anjay_attr_storage_t *) fas;
+}
+
+AVS_STATIC_ASSERT(offsetof(fas_object_entry_t, oid) == 0,
+                  object_id_offset);
 AVS_STATIC_ASSERT(offsetof(fas_instance_entry_t, iid) == 0,
-                  instance_iid_offset);
+                  instance_id_offset);
 AVS_STATIC_ASSERT(offsetof(fas_resource_entry_t, rid) == 0,
-                  resource_iid_offset);
+                  resource_id_offset);
 
 static AVS_LIST(void) *
 find_or_create_entry_impl(AVS_LIST(void) *children_list_ptr,
@@ -161,7 +208,23 @@ find_or_create_entry_impl(AVS_LIST(void) *children_list_ptr,
 }
 
 static inline
-AVS_LIST(fas_instance_entry_t) *find_instance(fas_object_t *parent,
+AVS_LIST(fas_object_entry_t) *find_object(anjay_attr_storage_t *parent,
+                                          anjay_oid_t id) {
+    return (AVS_LIST(fas_object_entry_t) *)
+            find_or_create_entry_impl((AVS_LIST(void) *) &parent->objects,
+                                      sizeof(fas_object_entry_t), id, false);
+}
+
+static inline
+AVS_LIST(fas_object_entry_t) *find_or_create_object(anjay_attr_storage_t *parent,
+                                                    anjay_oid_t id) {
+    return (AVS_LIST(fas_object_entry_t) *)
+            find_or_create_entry_impl((AVS_LIST(void) *) &parent->objects,
+                                      sizeof(fas_object_entry_t), id, true);
+}
+
+static inline
+AVS_LIST(fas_instance_entry_t) *find_instance(fas_object_entry_t *parent,
                                               anjay_iid_t id) {
     return (AVS_LIST(fas_instance_entry_t) *)
             find_or_create_entry_impl((AVS_LIST(void) *) &parent->instances,
@@ -169,7 +232,7 @@ AVS_LIST(fas_instance_entry_t) *find_instance(fas_object_t *parent,
 }
 
 static inline
-AVS_LIST(fas_instance_entry_t) *find_or_create_instance(fas_object_t *parent,
+AVS_LIST(fas_instance_entry_t) *find_or_create_instance(fas_object_entry_t *parent,
                                                         anjay_iid_t id) {
     return (AVS_LIST(fas_instance_entry_t) *)
             find_or_create_entry_impl((AVS_LIST(void) *) &parent->instances,
@@ -191,24 +254,28 @@ find_or_create_resource(fas_instance_entry_t *parent, anjay_rid_t id) {
                                       sizeof(fas_resource_entry_t), id, true);
 }
 
-static void remove_instance(fas_object_t *obj, anjay_iid_t iid) {
-    AVS_LIST(fas_instance_entry_t) *instance_ptr = find_instance(obj, iid);
+static void remove_instance(anjay_attr_storage_t *fas,
+                            AVS_LIST(fas_object_entry_t) *object_ptr,
+                            anjay_iid_t iid) {
+    AVS_LIST(fas_instance_entry_t) *instance_ptr = find_instance(*object_ptr,
+                                                                 iid);
     if (instance_ptr && *instance_ptr) {
-        remove_instance_entry(obj->fas, instance_ptr);
+        remove_instance_entry(fas, instance_ptr);
     }
+    remove_object_if_empty(object_ptr);
 }
 
-static void remove_resource(fas_object_t *obj, anjay_rid_t rid) {
-    AVS_LIST(fas_instance_entry_t) *instance_ptr;
-    AVS_LIST(fas_instance_entry_t) helper;
-    AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, helper, &obj->instances) {
-        AVS_LIST(fas_resource_entry_t) *resource_ptr =
-                find_resource(*instance_ptr, rid);
-        if (resource_ptr && *resource_ptr) {
-            remove_resource_entry(obj->fas, resource_ptr);
-        }
-        remove_instance_if_empty(instance_ptr);
+static void remove_resource(anjay_attr_storage_t *fas,
+                            AVS_LIST(fas_object_entry_t) *object_ptr,
+                            AVS_LIST(fas_instance_entry_t) *instance_ptr,
+                            anjay_rid_t rid) {
+    AVS_LIST(fas_resource_entry_t) *resource_ptr = find_resource(*instance_ptr,
+                                                                 rid);
+    if (resource_ptr) {
+        remove_resource_entry(fas, resource_ptr);
     }
+    remove_instance_if_empty(instance_ptr);
+    remove_object_if_empty(object_ptr);
 }
 
 static inline bool is_ssid_reference_object(anjay_oid_t oid) {
@@ -297,14 +364,15 @@ typedef void remove_attrs_func_t(anjay_attr_storage_t *fas,
 static void remove_servers(anjay_attr_storage_t *fas,
                            remove_attrs_func_t *remove_attrs_func,
                            void *ssid_ref) {
-    AVS_LIST(fas_object_t) object;
-    AVS_LIST_FOREACH(object, fas->objects) {
-        remove_attrs_func(fas, (AVS_LIST(void) *) &object->default_attrs,
+    AVS_LIST(fas_object_entry_t) *object_ptr;
+    AVS_LIST(fas_object_entry_t) object_helper;
+    AVS_LIST_DELETABLE_FOREACH_PTR(object_ptr, object_helper, &fas->objects) {
+        remove_attrs_func(fas, (AVS_LIST(void) *) &(*object_ptr)->default_attrs,
                           ssid_ref);
         AVS_LIST(fas_instance_entry_t) *instance_ptr;
         AVS_LIST(fas_instance_entry_t) instance_helper;
         AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper,
-                                       &object->instances) {
+                                       &(*object_ptr)->instances) {
             remove_attrs_func(
                     fas, (AVS_LIST(void) *) &(*instance_ptr)->default_attrs,
                               ssid_ref);
@@ -318,6 +386,7 @@ static void remove_servers(anjay_attr_storage_t *fas,
             }
             remove_instance_if_empty(instance_ptr);
         }
+        remove_object_if_empty(object_ptr);
     }
 }
 
@@ -327,11 +396,13 @@ static int compare_u16ids(const void *a, const void *b, size_t element_size) {
     return *(const uint16_t *) a - *(const uint16_t *) b;
 }
 
-static int remove_servers_after_iteration(anjay_t *anjay, fas_object_t *obj) {
+static int
+remove_servers_after_iteration(anjay_t *anjay,
+                               anjay_attr_storage_t *fas) {
     AVS_LIST(anjay_ssid_t) ssids = NULL;
     AVS_LIST(anjay_iid_t) iid;
-    AVS_LIST_FOREACH(iid, obj->instance_it_iids) {
-        anjay_ssid_t ssid = query_ssid(anjay, obj->def.oid, *iid);
+    AVS_LIST_FOREACH(iid, fas->iteration.iids) {
+        anjay_ssid_t ssid = query_ssid(anjay, fas->iteration.oid, *iid);
         if (!ssid) {
             continue;
         }
@@ -344,33 +415,40 @@ static int remove_servers_after_iteration(anjay_t *anjay, fas_object_t *obj) {
     }
 
     AVS_LIST_SORT(&ssids, compare_u16ids);
-    remove_servers(obj->fas, remove_attrs_for_servers_not_on_list, &ssids);
+    remove_servers(fas, remove_attrs_for_servers_not_on_list, &ssids);
     AVS_LIST_CLEAR(&ssids);
     return 0;
 }
 
-static int remove_instances_after_iteration(anjay_t *anjay, fas_object_t *obj) {
+static int remove_instances_after_iteration(anjay_t *anjay,
+                                            anjay_attr_storage_t *fas) {
     int result = 0;
-    AVS_LIST_SORT(&obj->instance_it_iids, compare_u16ids);
-    AVS_LIST(anjay_iid_t) iid = obj->instance_it_iids;
-    AVS_LIST(fas_instance_entry_t) *instance_ptr = &obj->instances;
-    while (*instance_ptr) {
-        if (!iid || (*instance_ptr)->iid < *iid) {
-            remove_instance_entry(obj->fas, instance_ptr);
-        } else {
-            while (iid && (*instance_ptr)->iid > *iid) {
-                iid = AVS_LIST_NEXT(iid);
-            }
-            if (iid && (*instance_ptr)->iid == *iid) {
-                iid = AVS_LIST_NEXT(iid);
-                instance_ptr = AVS_LIST_NEXT_PTR(instance_ptr);
+    AVS_LIST(fas_object_entry_t) *object_ptr =
+            find_object(fas, fas->iteration.oid);
+    if (object_ptr) {
+        AVS_LIST_SORT(&fas->iteration.iids, compare_u16ids);
+        AVS_LIST(anjay_iid_t) iid = fas->iteration.iids;
+        AVS_LIST(fas_instance_entry_t) *instance_ptr =
+                &(*object_ptr)->instances;
+        while (*instance_ptr) {
+            if (!iid || (*instance_ptr)->iid < *iid) {
+                remove_instance_entry(fas, instance_ptr);
+            } else {
+                while (iid && (*instance_ptr)->iid > *iid) {
+                    iid = AVS_LIST_NEXT(iid);
+                }
+                if (iid && (*instance_ptr)->iid == *iid) {
+                    iid = AVS_LIST_NEXT(iid);
+                    instance_ptr = AVS_LIST_NEXT_PTR(instance_ptr);
+                }
             }
         }
+        remove_object_if_empty(object_ptr);
     }
-    if (is_ssid_reference_object(obj->def.oid)) {
-        result = remove_servers_after_iteration(anjay, obj);
+    if (is_ssid_reference_object(fas->iteration.oid)) {
+        result = remove_servers_after_iteration(anjay, fas);
     }
-    reset_instance_it_state(obj);
+    reset_it_state(&fas->iteration);
     return result;
 }
 
@@ -452,12 +530,14 @@ static int object_read_default_attrs(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj_ptr,
                                      anjay_ssid_t ssid,
                                      anjay_dm_attributes_t *out) {
-    fas_object_t *obj = get_object(obj_ptr);
-    if (implements_any_object_default_attrs_handlers(*obj->backend)) {
-        return (*obj->backend)->object_read_default_attrs(anjay, obj->backend,
-                                                          ssid, out);
+    if (implements_any_object_default_attrs_handlers(anjay, obj_ptr)) {
+        return _anjay_dm_object_read_default_attrs(anjay, obj_ptr, ssid, out,
+                                                   &ATTR_STORAGE_DEF);
     }
-    read_default_attrs(obj->default_attrs, ssid, out);
+    AVS_LIST(fas_object_entry_t) *object_ptr = find_object(get_fas(anjay),
+                                                           (*obj_ptr)->oid);
+    read_default_attrs(object_ptr ? (*object_ptr)->default_attrs : NULL,
+                       ssid, out);
     return 0;
 }
 
@@ -465,13 +545,20 @@ static int object_write_default_attrs(anjay_t *anjay,
                                       const anjay_dm_object_def_t *const *obj_ptr,
                                       anjay_ssid_t ssid,
                                       const anjay_dm_attributes_t *attrs) {
-    fas_object_t *obj = get_object(obj_ptr);
-    if (implements_any_object_default_attrs_handlers(*obj->backend)) {
-        return (*obj->backend)->object_write_default_attrs(anjay, obj->backend,
-                                                           ssid, attrs);
+    if (implements_any_object_default_attrs_handlers(anjay, obj_ptr)) {
+        return _anjay_dm_object_write_default_attrs(anjay, obj_ptr, ssid, attrs,
+                                                    &ATTR_STORAGE_DEF);
     }
-    return WRITE_ATTRS(obj->fas, &obj->default_attrs,
-                       default_attrs_empty, ssid, attrs);
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    AVS_LIST(fas_object_entry_t) *object_ptr =
+            find_or_create_object(fas, (*obj_ptr)->oid);
+    if (!object_ptr) {
+        return ANJAY_ERR_INTERNAL;
+    }
+    int result = WRITE_ATTRS(fas, &(*object_ptr)->default_attrs,
+                             default_attrs_empty, ssid, attrs);
+    remove_object_if_empty(object_ptr);
+    return result;
 }
 
 static int instance_read_default_attrs(anjay_t *anjay,
@@ -479,14 +566,15 @@ static int instance_read_default_attrs(anjay_t *anjay,
                                        anjay_iid_t iid,
                                        anjay_ssid_t ssid,
                                        anjay_dm_attributes_t *out) {
-    fas_object_t *obj = get_object(obj_ptr);
-    if (implements_any_instance_default_attrs_handlers(*obj->backend)) {
-        return (*obj->backend)->instance_read_default_attrs(
-                anjay, obj->backend, iid, ssid, out);
+    if (implements_any_instance_default_attrs_handlers(anjay, obj_ptr)) {
+        return _anjay_dm_instance_read_default_attrs(
+                anjay, obj_ptr, iid, ssid, out, &ATTR_STORAGE_DEF);
     }
-    AVS_LIST(fas_instance_entry_t) *instance_ptr = find_instance(obj, iid);
-    read_default_attrs((instance_ptr && *instance_ptr)
-                               ? (*instance_ptr)->default_attrs : NULL,
+    AVS_LIST(fas_object_entry_t) *object_ptr = find_object(get_fas(anjay),
+                                                           (*obj_ptr)->oid);
+    AVS_LIST(fas_instance_entry_t) *instance_ptr =
+            object_ptr ? find_instance(*object_ptr, iid) : NULL;
+    read_default_attrs(instance_ptr ? (*instance_ptr)->default_attrs : NULL,
                        ssid, out);
     return 0;
 }
@@ -496,19 +584,30 @@ static int instance_write_default_attrs(anjay_t *anjay,
                                         anjay_iid_t iid,
                                         anjay_ssid_t ssid,
                                         const anjay_dm_attributes_t *attrs) {
-    fas_object_t *obj = get_object(obj_ptr);
-    if (implements_any_instance_default_attrs_handlers(*obj->backend)) {
-        return (*obj->backend)->instance_write_default_attrs(
-                anjay, obj->backend, iid, ssid, attrs);
+    if (implements_any_instance_default_attrs_handlers(anjay, obj_ptr)) {
+        return _anjay_dm_instance_write_default_attrs(
+                anjay, obj_ptr, iid, ssid, attrs, &ATTR_STORAGE_DEF);
     }
-    AVS_LIST(fas_instance_entry_t) *instance_ptr =
-            find_or_create_instance(obj, iid);
-    if (!(instance_ptr && *instance_ptr)) {
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    AVS_LIST(fas_object_entry_t) *object_ptr =
+            find_or_create_object(fas, (*obj_ptr)->oid);
+    if (!object_ptr) {
         return ANJAY_ERR_INTERNAL;
     }
-    int result = WRITE_ATTRS(obj->fas, &(*instance_ptr)->default_attrs,
+    int result = 0;
+    AVS_LIST(fas_instance_entry_t) *instance_ptr =
+            find_or_create_instance(*object_ptr, iid);
+    if (!instance_ptr) {
+        result = ANJAY_ERR_INTERNAL;
+    }
+    if (!result) {
+        result = WRITE_ATTRS(fas, &(*instance_ptr)->default_attrs,
                              default_attrs_empty, ssid, attrs);
-    remove_instance_if_empty(instance_ptr);
+    }
+    if (instance_ptr) {
+        remove_instance_if_empty(instance_ptr);
+    }
+    remove_object_if_empty(object_ptr);
     return result;
 }
 
@@ -518,16 +617,17 @@ static int resource_read_attrs(anjay_t *anjay,
                                anjay_rid_t rid,
                                anjay_ssid_t ssid,
                                anjay_dm_resource_attributes_t *out) {
-    fas_object_t *obj = get_object(obj_ptr);
-    if (implements_any_resource_attrs_handlers(*obj->backend)) {
-        return (*obj->backend)->resource_read_attrs(
-                anjay, obj->backend, iid, rid, ssid, out);
+    if (implements_any_resource_attrs_handlers(anjay, obj_ptr)) {
+        return _anjay_dm_resource_read_attrs(anjay, obj_ptr, iid, rid, ssid,
+                                             out, &ATTR_STORAGE_DEF);
     }
-    AVS_LIST(fas_instance_entry_t) *instance_ptr = find_instance(obj, iid);
+    AVS_LIST(fas_object_entry_t) *object_ptr = find_object(get_fas(anjay),
+                                                           (*obj_ptr)->oid);
+    AVS_LIST(fas_instance_entry_t) *instance_ptr =
+            object_ptr ? find_instance(*object_ptr, iid) : NULL;
     AVS_LIST(fas_resource_entry_t) *res_ptr =
             instance_ptr ? find_resource(*instance_ptr, rid) : NULL;
-    read_resource_attrs((res_ptr && *res_ptr) ? (*res_ptr)->attrs : NULL,
-                        ssid, out);
+    read_resource_attrs(res_ptr ? (*res_ptr)->attrs : NULL, ssid, out);
     return 0;
 }
 
@@ -537,25 +637,38 @@ static int resource_write_attrs(anjay_t *anjay,
                                 anjay_rid_t rid,
                                 anjay_ssid_t ssid,
                                 const anjay_dm_resource_attributes_t *attrs) {
-    fas_object_t *obj = get_object(obj_ptr);
-    if (implements_any_resource_attrs_handlers(*obj->backend)) {
-        return (*obj->backend)->resource_write_attrs(
-                anjay, obj->backend, iid, rid, ssid, attrs);
+    if (implements_any_resource_attrs_handlers(anjay, obj_ptr)) {
+        return _anjay_dm_resource_write_attrs(anjay, obj_ptr, iid, rid, ssid,
+                                              attrs, &ATTR_STORAGE_DEF);
     }
-    AVS_LIST(fas_instance_entry_t) *instance_ptr =
-            find_or_create_instance(obj, iid);
-    if (!(instance_ptr && *instance_ptr)) {
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    AVS_LIST(fas_object_entry_t) *object_ptr =
+            find_or_create_object(fas, (*obj_ptr)->oid);
+    if (!object_ptr) {
         return ANJAY_ERR_INTERNAL;
+    }
+    int result = 0;
+    AVS_LIST(fas_instance_entry_t) *instance_ptr =
+            find_or_create_instance(*object_ptr, iid);
+    if (!instance_ptr) {
+        result = ANJAY_ERR_INTERNAL;
     }
     AVS_LIST(fas_resource_entry_t) *resource_ptr =
-            find_or_create_resource(*instance_ptr, rid);
-    if (!(resource_ptr && *resource_ptr)) {
-        return ANJAY_ERR_INTERNAL;
+            result ? NULL : find_or_create_resource(*instance_ptr, rid);
+    if (!resource_ptr) {
+        result = ANJAY_ERR_INTERNAL;
     }
-    int result = WRITE_ATTRS(obj->fas, &(*resource_ptr)->attrs,
+    if (!result) {
+        result = WRITE_ATTRS(fas, &(*resource_ptr)->attrs,
                              resource_attrs_empty, ssid, attrs);
-    remove_resource_if_empty(resource_ptr);
-    remove_instance_if_empty(instance_ptr);
+    }
+    if (resource_ptr) {
+        remove_resource_if_empty(resource_ptr);
+    }
+    if (instance_ptr) {
+        remove_instance_if_empty(instance_ptr);
+    }
+    remove_object_if_empty(object_ptr);
     return result;
 }
 
@@ -575,25 +688,29 @@ static int instance_it(anjay_t *anjay,
     // * we're called with some unrelated cookie
     //   - it means parallel or nested iterations; we don't support it, so we
     //     reset our state and ignore it
-    fas_object_t *obj = get_object(obj_ptr);
+    anjay_attr_storage_t *fas = get_fas(anjay);
     void *orig_cookie = *cookie;
     if (!orig_cookie) {
-        reset_instance_it_state(obj);
+        reset_it_state(&fas->iteration);
+        fas->iteration.oid = (*obj_ptr)->oid;
     }
-    int result = (*obj->backend)->instance_it(anjay, obj->backend, out, cookie);
-    if (result || obj->instance_it_last_cookie != orig_cookie) {
-        reset_instance_it_state(obj);
+    int result = _anjay_dm_instance_it(anjay, obj_ptr, out, cookie,
+                                       &ATTR_STORAGE_DEF);
+    if (result
+            || fas->iteration.oid != (*obj_ptr)->oid
+            || fas->iteration.last_cookie != orig_cookie) {
+        reset_it_state(&fas->iteration);
     } else {
-        obj->instance_it_last_cookie = *cookie;
+        fas->iteration.last_cookie = *cookie;
         if (*out == ANJAY_IID_INVALID) {
-            result = remove_instances_after_iteration(anjay, obj);
+            result = remove_instances_after_iteration(anjay, fas);
         } else {
             anjay_iid_t *new_iid = AVS_LIST_NEW_ELEMENT(anjay_iid_t);
             if (!new_iid) {
                 return ANJAY_ERR_INTERNAL;
             }
             *new_iid = *out;
-            AVS_LIST_INSERT(&obj->instance_it_iids, new_iid);
+            AVS_LIST_INSERT(&fas->iteration.iids, new_iid);
         }
     }
     return result;
@@ -602,10 +719,15 @@ static int instance_it(anjay_t *anjay,
 static int instance_present(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,
                             anjay_iid_t iid) {
-    fas_object_t *obj = get_object(obj_ptr);
-    int result = (*obj->backend)->instance_present(anjay, obj->backend, iid);
+    int result = _anjay_dm_instance_present(anjay, obj_ptr, iid,
+                                            &ATTR_STORAGE_DEF);
     if (result == 0) {
-        remove_instance(obj, iid);
+        anjay_attr_storage_t *fas = get_fas(anjay);
+        AVS_LIST(fas_object_entry_t) *object_ptr = find_object(fas,
+                                                               (*obj_ptr)->oid);
+        if (object_ptr) {
+            remove_instance(fas, object_ptr, iid);
+        }
     }
     return result;
 }
@@ -613,13 +735,18 @@ static int instance_present(anjay_t *anjay,
 static int instance_remove(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
                            anjay_iid_t iid) {
-    fas_object_t *obj = get_object(obj_ptr);
-    anjay_ssid_t ssid = query_ssid(anjay, obj->def.oid, iid);
-    int result = (*obj->backend)->instance_remove(anjay, obj->backend, iid);
+    anjay_ssid_t ssid = query_ssid(anjay, (*obj_ptr)->oid, iid);
+    int result = _anjay_dm_instance_remove(anjay, obj_ptr, iid,
+                                           &ATTR_STORAGE_DEF);
     if (result == 0) {
-        remove_instance(obj, iid);
+        anjay_attr_storage_t *fas = get_fas(anjay);
+        AVS_LIST(fas_object_entry_t) *object_ptr = find_object(fas,
+                                                               (*obj_ptr)->oid);
+        if (object_ptr) {
+            remove_instance(fas, object_ptr, iid);
+        }
         if (ssid) {
-            remove_servers(obj->fas, remove_attrs_for_server, &ssid);
+            remove_servers(fas, remove_attrs_for_server, &ssid);
         }
     }
     return result;
@@ -629,10 +756,17 @@ static int resource_present(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,
                             anjay_iid_t iid,
                             anjay_rid_t rid) {
-    fas_object_t *obj = get_object(obj_ptr);
-    int result = (*obj->backend)->resource_present(anjay, obj->backend, iid, rid);
+    int result = _anjay_dm_resource_present(anjay, obj_ptr, iid, rid,
+                                            &ATTR_STORAGE_DEF);
     if (result == 0) {
-        remove_resource(obj, rid);
+        anjay_attr_storage_t *fas = get_fas(anjay);
+        AVS_LIST(fas_object_entry_t) *object_ptr = find_object(fas,
+                                                               (*obj_ptr)->oid);
+        AVS_LIST(fas_instance_entry_t) *instance_ptr =
+                object_ptr ? find_instance(*object_ptr, iid) : NULL;
+        if (instance_ptr) {
+            remove_resource(fas, object_ptr, instance_ptr, rid);
+        }
     }
     return result;
 }
@@ -648,219 +782,59 @@ static int saved_state_save(anjay_attr_storage_t *fas) {
                                              fas->saved_state.persist_data);
 }
 
-static int saved_state_restore(anjay_attr_storage_t *fas) {
+static int saved_state_restore(anjay_t *anjay,
+                               anjay_attr_storage_t *fas) {
     int result =
-            _anjay_attr_storage_restore_inner(fas,
+            _anjay_attr_storage_restore_inner(anjay, fas,
                                               fas->saved_state.persist_data);
-    fas->modified_since_persist = fas->saved_state.modified_since_persist;
+    fas->modified_since_persist =
+            (result ? true : fas->saved_state.modified_since_persist);
     return result;
 }
 
 static int transaction_begin(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr) {
-    fas_object_t *obj = get_object(obj_ptr);
-
-    if (saved_state_save(obj->fas)) {
-        return ANJAY_ERR_INTERNAL;
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    if (fas->saved_state.depth++ == 0) {
+        if (saved_state_save(fas)) {
+            --fas->saved_state.depth;
+            return ANJAY_ERR_INTERNAL;
+        }
     }
-    int result = (*obj->backend)->transaction_begin(anjay, obj->backend);
+    int result = _anjay_dm_delegate_transaction_begin(anjay, obj_ptr,
+                                                      &ATTR_STORAGE_DEF);
     if (result) {
-        saved_state_reset(obj->fas);
+        saved_state_reset(fas);
     }
     return result;
 }
 
 static int transaction_commit(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr) {
-    fas_object_t *obj = get_object(obj_ptr);
-    int result = (*obj->backend)->transaction_commit(anjay, obj->backend);
-    if (result && saved_state_restore(obj->fas)) {
-        result = ANJAY_ERR_INTERNAL;
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    int result = _anjay_dm_delegate_transaction_commit(anjay, obj_ptr,
+                                                       &ATTR_STORAGE_DEF);
+    if (--fas->saved_state.depth == 0) {
+        if (result && saved_state_restore(anjay, fas)) {
+            result = ANJAY_ERR_INTERNAL;
+        }
+        saved_state_reset(fas);
     }
-    saved_state_reset(obj->fas);
     return result;
 }
 
 static int transaction_rollback(anjay_t *anjay,
                                 const anjay_dm_object_def_t *const *obj_ptr) {
-    fas_object_t *obj = get_object(obj_ptr);
-    int result = (*obj->backend)->transaction_rollback(anjay, obj->backend);
-    if (saved_state_restore(obj->fas)) {
-        result = ANJAY_ERR_INTERNAL;
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    int result = _anjay_dm_delegate_transaction_rollback(
+            anjay, obj_ptr, &ATTR_STORAGE_DEF);
+    if (--fas->saved_state.depth == 0) {
+        if (saved_state_restore(anjay, fas)) {
+            result = ANJAY_ERR_INTERNAL;
+        }
+        saved_state_reset(fas);
     }
-    saved_state_reset(obj->fas);
     return result;
-}
-
-//// PASSIVE PROXY HANDLERS ////////////////////////////////////////////////////
-
-static int instance_reset(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj_ptr,
-                          anjay_iid_t iid) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->instance_reset(anjay, obj->backend, iid);
-}
-
-static int instance_create(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj_ptr,
-                           anjay_iid_t *inout_iid,
-                           anjay_ssid_t ssid) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->instance_create(anjay, obj->backend, inout_iid,
-                                            ssid);
-}
-
-static int resource_read(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj_ptr,
-                         anjay_iid_t iid,
-                         anjay_rid_t rid,
-                         anjay_output_ctx_t *ctx) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->resource_read(anjay, obj->backend, iid, rid, ctx);
-}
-
-static int resource_write(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj_ptr,
-                          anjay_iid_t iid,
-                          anjay_rid_t rid,
-                          anjay_input_ctx_t *ctx) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->resource_write(anjay, obj->backend, iid, rid, ctx);
-}
-
-static int resource_execute(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t iid,
-                            anjay_rid_t rid,
-                            anjay_execute_ctx_t *ctx) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->resource_execute(anjay, obj->backend, iid, rid,
-                                             ctx);
-}
-
-static int resource_dim(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj_ptr,
-                        anjay_iid_t iid,
-                        anjay_rid_t rid) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->resource_dim(anjay, obj->backend, iid, rid);
-}
-
-static int resource_supported(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_rid_t rid) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->resource_supported(anjay, obj->backend, rid);
-}
-
-static int resource_operations(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_rid_t rid,
-                               anjay_dm_resource_op_mask_t *out) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->resource_operations(anjay, obj->backend, rid, out);
-}
-
-static int transaction_validate(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->transaction_validate(anjay, obj->backend);
-}
-
-static int on_register(anjay_t *anjay,
-                       const anjay_dm_object_def_t *const *obj_ptr) {
-    fas_object_t *obj = get_object(obj_ptr);
-    return (*obj->backend)->on_register(anjay, obj->backend);
-}
-
-//// OBJECT HANDLING ///////////////////////////////////////////////////////////
-
-static void init_object(anjay_attr_storage_t *attr_storage,
-                        fas_object_t *out,
-                        const anjay_dm_object_def_t *const *def_ptr) {
-    out->def_ptr = &out->def;
-    out->backend = def_ptr;
-    out->fas = attr_storage;
-    out->def.oid = (*def_ptr)->oid;
-    out->def.rid_bound = (*def_ptr)->rid_bound;
-#define INIT_HANDLER(Handler) (out->def.Handler = Handler)
-#define INIT_PROXY(Handler) if ((*def_ptr)->Handler) INIT_HANDLER(Handler)
-    if (implements_any_object_default_attrs_handlers(*def_ptr)) {
-        INIT_PROXY(object_read_default_attrs);
-        INIT_PROXY(object_write_default_attrs);
-    } else {
-        INIT_HANDLER(object_read_default_attrs);
-        INIT_HANDLER(object_write_default_attrs);
-    }
-    INIT_PROXY(instance_it);
-    INIT_PROXY(instance_reset);
-    INIT_PROXY(instance_present);
-    INIT_PROXY(instance_create);
-    INIT_PROXY(instance_remove);
-    if (implements_any_instance_default_attrs_handlers(*def_ptr)) {
-        INIT_PROXY(instance_read_default_attrs);
-        INIT_PROXY(instance_write_default_attrs);
-    } else {
-        INIT_HANDLER(instance_read_default_attrs);
-        INIT_HANDLER(instance_write_default_attrs);
-    }
-    INIT_PROXY(resource_present);
-    INIT_PROXY(resource_read);
-    INIT_PROXY(resource_write);
-    INIT_PROXY(resource_execute);
-    INIT_PROXY(resource_dim);
-    if (implements_any_resource_attrs_handlers(*def_ptr)) {
-        INIT_PROXY(resource_read_attrs);
-        INIT_PROXY(resource_write_attrs);
-    } else {
-        INIT_HANDLER(resource_read_attrs);
-        INIT_HANDLER(resource_write_attrs);
-    }
-    INIT_PROXY(resource_supported);
-    INIT_PROXY(resource_operations);
-    INIT_PROXY(on_register);
-    INIT_PROXY(transaction_begin);
-    INIT_PROXY(transaction_validate);
-    INIT_PROXY(transaction_commit);
-    INIT_PROXY(transaction_rollback);
-#undef INIT_PROXY
-#undef INIT_HANDLER
-}
-
-const anjay_dm_object_def_t *const *
-anjay_attr_storage_wrap_object(anjay_attr_storage_t *attr_storage,
-                               const anjay_dm_object_def_t *const *def_ptr) {
-    if (!attr_storage) {
-        fas_log(ERROR, "Invalid anjay_attr_storage_t pointer");
-        return NULL;
-    }
-    if (!def_ptr || !*def_ptr) {
-        fas_log(ERROR, "invalid object pointer");
-        return NULL;
-    }
-    AVS_LIST(fas_object_t) *obj_ptr = &attr_storage->objects;
-    while (*obj_ptr && (*obj_ptr)->def.oid < (*def_ptr)->oid) {
-        obj_ptr = AVS_LIST_NEXT_PTR(obj_ptr);
-    }
-    if (*obj_ptr && (*obj_ptr)->def.oid == (*def_ptr)->oid) {
-        fas_log(ERROR, "Object %" PRIu16 " is already registered",
-                       (*def_ptr)->oid);
-        return NULL;
-    }
-
-    AVS_LIST(fas_object_t) obj = AVS_LIST_NEW_ELEMENT(fas_object_t);
-    if (!obj) {
-        fas_log(ERROR, "out of memory");
-        return NULL;
-    }
-
-    AVS_LIST_INSERT(obj_ptr, obj);
-    init_object(attr_storage, obj, def_ptr);
-    return &obj->def_ptr;
-}
-
-bool anjay_attr_storage_is_modified(anjay_attr_storage_t *attr_storage) {
-    return attr_storage->modified_since_persist;
 }
 
 #ifdef ANJAY_TEST

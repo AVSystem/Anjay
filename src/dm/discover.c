@@ -121,7 +121,7 @@ static int read_object_level_attributes(anjay_t *anjay,
                                         anjay_ssid_t ssid,
                                         anjay_dm_attributes_t *out) {
     *out = ANJAY_DM_ATTRIBS_EMPTY;
-    return _anjay_dm_object_read_default_attrs(anjay, obj, ssid, out);
+    return _anjay_dm_object_read_default_attrs(anjay, obj, ssid, out, NULL);
 }
 
 static int
@@ -139,7 +139,7 @@ static int read_resource_dim(anjay_t *anjay,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
                              int32_t *out_dim) {
-    int result = _anjay_dm_resource_dim(anjay, obj, iid, rid);
+    int result = _anjay_dm_resource_dim(anjay, obj, iid, rid, NULL);
     if (result == ANJAY_DM_DIM_INVALID
             || result == ANJAY_ERR_METHOD_NOT_ALLOWED
             || result == ANJAY_ERR_NOT_IMPLEMENTED) {
@@ -179,7 +179,7 @@ static int discover_resource(anjay_t *anjay,
             = ANJAY_RES_ATTRIBS_EMPTY;
     if (hint == WITH_RESOURCE_ATTRIBS) {
         result = _anjay_dm_resource_read_attrs(
-                anjay, obj, iid, rid, ssid, &resource_attributes);
+                anjay, obj, iid, rid, ssid, &resource_attributes, NULL);
     } else if (hint == WITH_INHERITED_ATTRIBS) {
         anjay_dm_attrs_query_details_t details =
                 (anjay_dm_attrs_query_details_t) {

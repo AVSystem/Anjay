@@ -188,6 +188,7 @@ typedef uint16_t anjay_riid_t;
 
 #define ANJAY_ERR_INTERNAL                   (-ANJAY_COAP_STATUS(5,  0))
 #define ANJAY_ERR_NOT_IMPLEMENTED            (-ANJAY_COAP_STATUS(5,  1))
+#define ANJAY_ERR_SERVICE_UNAVAILABLE        (-ANJAY_COAP_STATUS(5,  3))
 /** @} */
 
 /** Type used to return some content in response to a RPC. */
@@ -1199,19 +1200,6 @@ typedef int anjay_dm_resource_write_attrs_t(anjay_t *anjay,
                                             const anjay_dm_resource_attributes_t *attrs);
 
 /**
- * A handler that is called while registering an object with @ref anjay_register_object,
- * it may be used to perform additional registration tasks.
- *
- * @param anjay     Anjay object to operate on.
- * @param obj_ptr   Object definition pointer, as passed to
- *                  @ref anjay_register_object .
- * @return 0 on success, negative value on error in which case the object
- *         @p obj_ptr will not be registered.
- */
-typedef int anjay_dm_object_on_register_t(anjay_t *anjay,
-                                          const anjay_dm_object_def_t *const *obj_ptr);
-
-/**
  * A handler that is called when there is a request that might modify an Object
  * and fail. Such situation often requires to rollback changes, and this handler
  * shall implement logic that prepares for possible failure in the future.
@@ -1317,17 +1305,8 @@ int anjay_dm_transaction_NOOP(anjay_t *anjay,
 typedef int anjay_dm_transaction_rollback_t(anjay_t *anjay,
                                             const anjay_dm_object_def_t *const *obj_ptr);
 
-/** A struct defining an LwM2M Object and available operations. */
-struct anjay_dm_object_def_struct {
-    /** Object ID */
-    anjay_oid_t oid;
-
-    /** Smallest Resource ID that is invalid for this Object. All requests to
-     * Resources with ID = @ref anjay_dm_object_def_struct#rid_bound
-     * or bigger are discarded without calling the
-     * @ref anjay_dm_object_def_struct#resource_present handler. */
-    anjay_rid_t rid_bound;
-
+/** A struct containing pointers to Object handlers. */
+typedef struct {
     /** Get default Object attributes, @ref anjay_dm_object_read_default_attrs_t */
     anjay_dm_object_read_default_attrs_t *object_read_default_attrs;
     /** Set default Object attributes, @ref anjay_dm_object_write_default_attrs_t */
@@ -1371,9 +1350,6 @@ struct anjay_dm_object_def_struct {
     /** Set Resource attributes, @ref anjay_dm_resource_write_attrs_t */
     anjay_dm_resource_write_attrs_t *resource_write_attrs;
 
-    /** Perform additional registration operations, @ref anjay_dm_object_on_register_t */
-    anjay_dm_object_on_register_t *on_register;
-
     /** Begin a transaction on this Object, @ref anjay_dm_transaction_begin_t */
     anjay_dm_transaction_begin_t *transaction_begin;
     /** Validate whether a transaction on this Object can be cleanly committed. See @ref anjay_dm_transaction_validate_t */
@@ -1382,6 +1358,21 @@ struct anjay_dm_object_def_struct {
     anjay_dm_transaction_commit_t *transaction_commit;
     /** Rollback changes made in a transaction, @ref anjay_dm_transaction_rollback_t */
     anjay_dm_transaction_rollback_t *transaction_rollback;
+} anjay_dm_handlers_t;
+
+/** A struct defining an LwM2M Object. */
+struct anjay_dm_object_def_struct {
+    /** Object ID */
+    anjay_oid_t oid;
+
+    /** Smallest Resource ID that is invalid for this Object. All requests to
+     * Resources with ID = @ref anjay_dm_object_def_struct#rid_bound
+     * or bigger are discarded without calling the
+     * @ref anjay_dm_handlers_t#resource_present handler. */
+    anjay_rid_t rid_bound;
+
+    /** Handler callbacks for this object. */
+    anjay_dm_handlers_t handlers;
 };
 
 /**
@@ -1484,8 +1475,8 @@ int anjay_sched_run(anjay_t *anjay);
 /**
  * Registers the Object in the data model, making it available for RPC calls.
  *
- * NOTE: <c>def_ptr</c> MUST stay valid for the entire lifetime of the
- * <c>anjay</c> object, including the call to @ref anjay_delete.
+ * NOTE: <c>def_ptr</c> MUST stay valid up to and including the corresponding
+ * @ref anjay_delete or @ref anjay_unregister_object call.
  *
  * @param anjay   Anjay object to operate on.
  * @param def_ptr Pointer to the Object definition struct. The exact value
@@ -1496,6 +1487,29 @@ int anjay_sched_run(anjay_t *anjay);
  */
 int anjay_register_object(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *def_ptr);
+
+/**
+ * Unregisters an Object in the data model, so that it is no longer available
+ * for RPC calls.
+ *
+ * <c>def_ptr</c> MUST be a pointer previously passed to
+ * @ref anjay_register_object for the same <c>anjay</c> object.
+ *
+ * After a successful unregister, any resources used by the actual object may be
+ * safely freed up.
+ *
+ * NOTE: This function MUST NOT be called from within any data model handler
+ * callback function (i.e. any of the @ref anjay_dm_handlers_t members). Doing
+ * so is undefined behavior.
+ *
+ * @param anjay   Anjay object to operate on.
+ * @param def_ptr Pointer to the Object definition struct.
+ *
+ * @returns 0 on success, a negative value if <c>def_ptr</c> does not correspond
+ *          to any known registered object.
+ */
+int anjay_unregister_object(anjay_t *anjay,
+                            const anjay_dm_object_def_t *const *def_ptr);
 
 /**
  * Schedules sending an Update message to the server identified by given

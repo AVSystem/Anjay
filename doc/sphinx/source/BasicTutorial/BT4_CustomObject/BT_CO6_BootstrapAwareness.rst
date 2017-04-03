@@ -109,11 +109,13 @@ To achieve that, ``anjay_dm_resource_operations_t`` handler is required:
    static const anjay_dm_object_def_t OBJECT_DEF = {
        // Object ID
        .oid = 1234,
+       // ...
+       .handlers = {
+           // ... other handlers
 
-       // ... other handlers
-
-       .resource_operations = test_resource_operations,
-       // ... other handlers
+           .resource_operations = test_resource_operations,
+           // ... other handlers
+       }
    };
 
 

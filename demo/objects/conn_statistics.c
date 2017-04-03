@@ -216,21 +216,22 @@ static int cs_resource_write(anjay_t *anjay,
     return 0;
 }
 
-
 static const anjay_dm_object_def_t CONN_STATISTICS = {
-    .oid = 7,
+    .oid = DEMO_OID_CONN_STATISTICS,
     .rid_bound = CS_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = anjay_dm_resource_present_TRUE,
-    .resource_supported = cs_resource_supported,
-    .resource_execute = cs_resource_execute,
-    .resource_read = cs_resource_read,
-    .resource_write = cs_resource_write,
-    .transaction_begin = anjay_dm_transaction_NOOP,
-    .transaction_validate = anjay_dm_transaction_NOOP,
-    .transaction_commit = anjay_dm_transaction_NOOP,
-    .transaction_rollback = anjay_dm_transaction_NOOP
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = anjay_dm_resource_present_TRUE,
+        .resource_supported = cs_resource_supported,
+        .resource_execute = cs_resource_execute,
+        .resource_read = cs_resource_read,
+        .resource_write = cs_resource_write,
+        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_validate = anjay_dm_transaction_NOOP,
+        .transaction_commit = anjay_dm_transaction_NOOP,
+        .transaction_rollback = anjay_dm_transaction_NOOP
+    }
 };
 
 const anjay_dm_object_def_t **cs_object_create(void) {

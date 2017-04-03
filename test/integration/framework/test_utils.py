@@ -16,6 +16,7 @@
 
 import binascii
 import struct
+import tempfile
 
 from typing import Optional
 
@@ -33,6 +34,11 @@ class SequentialMsgIdGenerator:
     def next(self):
         self.curr_id = (self.curr_id + 1) % 2 ** 16
         return self.curr_id
+
+
+def generate_temp_filename(suffix='', prefix='tmp', dir=None):
+    with tempfile.NamedTemporaryFile(suffix=suffix, prefix=prefix, dir=dir) as f:
+        return f.name
 
 
 def random_stuff(size):
@@ -61,7 +67,13 @@ class OID:
     FirmwareUpdate = 5
     Location = 6
     ConnectivityStatistics = 7
+    CellConnectivity = 10
+    ApnConnectionProfile = 11
     Test = 1337
+    ExtDevInfo = 11111
+    IpPing = 12359
+    Geopoints = 12360
+    DownloadDiagnostics = 12361
 
 
 class RID:

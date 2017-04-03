@@ -130,13 +130,16 @@ of these.
 
     static const anjay_dm_object_def_t OBJECT_DEF = {
         // ...
+        .handlers = {
+            // ...
 
-        .resource_write = test_resource_write,
+            .resource_write = test_resource_write,
 
-        .transaction_begin = anjay_dm_transaction_NOOP,
-        .transaction_validate = anjay_dm_transaction_NOOP,
-        .transaction_commit = anjay_dm_transaction_NOOP,
-        .transaction_rollback = anjay_dm_transaction_NOOP
+            .transaction_begin = anjay_dm_transaction_NOOP,
+            .transaction_validate = anjay_dm_transaction_NOOP,
+            .transaction_commit = anjay_dm_transaction_NOOP,
+            .transaction_rollback = anjay_dm_transaction_NOOP
+        }
    };
 
 
@@ -378,15 +381,18 @@ transaction handlers:
 
     static const anjay_dm_object_def_t OBJECT_DEF = {
         // ...
+        .handlers = {
+            // ...
 
-        .instance_reset = test_instance_reset,
+            .instance_reset = test_instance_reset,
 
-        // ...
+            // ...
 
-        .transaction_begin = test_transaction_begin,
-        .transaction_validate = test_transaction_validate,
-        .transaction_commit = test_transaction_commit,
-        .transaction_rollback = test_transaction_rollback
+            .transaction_begin = test_transaction_begin,
+            .transaction_validate = test_transaction_validate,
+            .transaction_commit = test_transaction_commit,
+            .transaction_rollback = test_transaction_rollback
+        }
     };
 
 

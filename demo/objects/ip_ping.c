@@ -406,19 +406,21 @@ ip_ping_transaction_rollback(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t IP_PING = {
-    .oid = 12359,
+    .oid = DEMO_OID_IP_PING,
     .rid_bound = IP_PING_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = anjay_dm_resource_present_TRUE,
-    .resource_supported = anjay_dm_resource_supported_TRUE,
-    .resource_read = ip_ping_resource_read,
-    .resource_write = ip_ping_resource_write,
-    .resource_execute = ip_ping_resource_execute,
-    .transaction_begin = ip_ping_transaction_begin,
-    .transaction_validate = ip_ping_transaction_validate,
-    .transaction_commit = ip_ping_transaction_commit,
-    .transaction_rollback = ip_ping_transaction_rollback
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = anjay_dm_resource_present_TRUE,
+        .resource_supported = anjay_dm_resource_supported_TRUE,
+        .resource_read = ip_ping_resource_read,
+        .resource_write = ip_ping_resource_write,
+        .resource_execute = ip_ping_resource_execute,
+        .transaction_begin = ip_ping_transaction_begin,
+        .transaction_validate = ip_ping_transaction_validate,
+        .transaction_commit = ip_ping_transaction_commit,
+        .transaction_rollback = ip_ping_transaction_rollback
+    }
 };
 
 const anjay_dm_object_def_t **ip_ping_object_create(iosched_t *iosched) {

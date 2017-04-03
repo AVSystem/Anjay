@@ -310,13 +310,15 @@ static bool update_location(location_t *location) {
 }
 
 static const anjay_dm_object_def_t LOCATION = {
-    .oid = 6,
+    .oid = DEMO_OID_LOCATION,
     .rid_bound = LOCATION_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = location_resource_present,
-    .resource_supported = location_resource_supported,
-    .resource_read = location_resource_read
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = location_resource_present,
+        .resource_supported = location_resource_supported,
+        .resource_read = location_resource_read
+    }
 };
 
 const anjay_dm_object_def_t **location_object_create(void) {

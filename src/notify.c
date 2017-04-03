@@ -129,9 +129,12 @@ int _anjay_notify_perform(anjay_t *anjay,
         }
     }
     update_ret(&ret, observe_notify(anjay, origin_ssid, queue));
-    AVS_LIST(anjay_notify_callback_entry_t) clb;
-    AVS_LIST_FOREACH(clb, anjay->notify_callbacks) {
-        update_ret(&ret, clb->callback(anjay, origin_ssid, queue, clb->data));
+    AVS_LIST(anjay_dm_installed_module_t) module;
+    AVS_LIST_FOREACH(module, anjay->dm.modules) {
+        if (module->def->notify_callback) {
+            update_ret(&ret, module->def->notify_callback(
+                                     anjay, origin_ssid, queue, module->arg));
+        }
     }
     return ret;
 }
@@ -313,40 +316,6 @@ void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue) {
         AVS_LIST_CLEAR(&(*out_queue)->instance_set_changes.known_removed_iids);
         AVS_LIST_CLEAR(&(*out_queue)->resources_changed);
     }
-}
-
-static inline bool
-is_notify_callback_registered(anjay_t *anjay,
-                              anjay_notify_callback_t *callback) {
-    AVS_LIST(anjay_notify_callback_entry_t) it;
-    AVS_LIST_FOREACH(it, anjay->notify_callbacks) {
-        if (it->callback == callback) {
-            return true;
-        }
-    }
-    return false;
-}
-
-int _anjay_notify_register_callback(anjay_t *anjay,
-                                    anjay_notify_callback_t *callback,
-                                    void *callback_data) {
-    assert(callback);
-    if ((void *) (intptr_t) callback == NULL) {
-        return -1;
-    }
-    assert(!is_notify_callback_registered(anjay, callback));
-    AVS_LIST(anjay_notify_callback_entry_t) elem =
-        AVS_LIST_NEW_ELEMENT(anjay_notify_callback_entry_t);
-    if (!elem) {
-        anjay_log(ERROR, "Out of memory");
-        return -1;
-    }
-    *elem = (anjay_notify_callback_entry_t) {
-        .callback = callback,
-        .data = callback_data
-    };
-    AVS_LIST_INSERT(&anjay->notify_callbacks, elem);
-    return 0;
 }
 
 static int notify_clb(anjay_t *anjay, void *dummy) {

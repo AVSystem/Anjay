@@ -26,61 +26,45 @@ extern "C" {
 #endif
 
 /**
- * Creates Access Control Object.
+ * Installs the Access Control Object in an Anjay object.
  *
- * After valid Access Control Object has been created one can enable Access
- * Control by registering this Object in Anjay by using for example
- * @p anjay_register_object() function.
+ * The Access Control module does not require explicit cleanup; all resources
+ * will be automatically freed up during the call to @ref anjay_delete.
  *
  * WARNING: After any modification of Security, Server or Access Control Object
  * by means other than LwM2M one has to execute
  * @ref anjay_notify_instances_changed in order to trigger necessary
  * revalidation routines of Access Control Object instances.
  *
- * @param anjay ANJAY object for which the Attribute Storage is created.
+ * @param anjay ANJAY object for which the Access Control Object is installed.
  *
- * @return pointer to the pointer of the newly created object on success,
- *         NULL otherwise
+ * @returns 0 on success, or a negative value in case of error.
  */
-const anjay_dm_object_def_t *const *
-anjay_access_control_object_new(anjay_t *anjay);
-
-/**
- * Destroys Access Control Object.
- *
- * NOTE: It shall not be called before releasing all references to the object -
- * likely not before calling @ref anjay_delete.
- *
- * @param obj
- */
-void anjay_access_control_object_delete(const anjay_dm_object_def_t *const *obj);
+int anjay_access_control_install(anjay_t *anjay);
 
 /**
  * Dumps Access Control Object Instances to the @p out_stream.
- * Warning: @p ac_obj must not be wrapped
  *
- * @param ac_obj        Access Control Object definition
+ * @param anjay         ANJAY object with the Access Control module installed
  * @param out_stream    stream to write to
  * @return 0 in case of success, negative value in case of an error
  */
-int anjay_access_control_persist(const anjay_dm_object_def_t *const *ac_obj,
+int anjay_access_control_persist(anjay_t *anjay,
                                  avs_stream_abstract_t *out_stream);
 
 /**
  * Tries to restore Access Control Object Instances from given @p in_stream.
- * Warning: @p ac_obj must not be wrapped
  *
- * @param ac_obj        Access Control Object definition
+ * @param anjay         ANJAY object with the Access Control module installed
  * @param in_stream     stream used for reading Access Control Object Instances
  * @return 0 in case of success, negative value in case of an error
  */
-int anjay_access_control_restore(const anjay_dm_object_def_t *const *ac_obj,
-                                 avs_stream_abstract_t *in_stream);
+int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in);
 
 /**
  * Assign permissions for Instance /OID/IID to a particular server.
  *
- * @param ac_obj      Access Control Object definition.
+ * @param anjay       ANJAY object with the Access Control module installed
  * @param oid         Object ID of the target Instance.
  * @param iid         Target Object Instance ID, or <c>ANJAY_IID_INVALID</c>
  *                    (i.e., MAX_ID==65535) to set an ACL referring to new
@@ -96,7 +80,7 @@ int anjay_access_control_restore(const anjay_dm_object_def_t *const *ac_obj,
  * @return 0 in case of success, negative value in case of an error (including
  *         the case where target Object Instance does not exist).
  */
-int anjay_access_control_set_acl(const anjay_dm_object_def_t *const *ac_obj,
+int anjay_access_control_set_acl(anjay_t *anjay,
                                  anjay_oid_t oid,
                                  anjay_iid_t iid,
                                  anjay_ssid_t ssid,

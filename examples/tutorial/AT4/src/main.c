@@ -67,33 +67,29 @@ int main(int argc, char *argv[]) {
         avs_log(tutorial, ERROR, "Could not create Anjay object");
         return -1;
     }
-    int result = 0;
+
+    int result;
+    if (anjay_attr_storage_install(anjay)
+        || anjay_access_control_install(anjay)) {
+        result = -1;
+        goto cleanup;
+    }
 
     // Instantiate necessary objects
     const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
     const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
     const anjay_dm_object_def_t **test_obj = create_test_object();
-    const anjay_dm_object_def_t *const *access_control_obj =
-            anjay_access_control_object_new(anjay);
-
-    anjay_attr_storage_t *attr_storage = anjay_attr_storage_new(anjay);
 
     // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj || !test_obj || !access_control_obj
-            || !attr_storage) {
+    if (!security_obj || !server_obj || !test_obj) {
         result = -1;
         goto cleanup;
     }
 
     // Register them within Anjay
-    if (anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                             attr_storage, security_obj))
-        || anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                                attr_storage, server_obj))
-        || anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                                attr_storage, test_obj))
-        || anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                                attr_storage, access_control_obj))) {
+    if (anjay_register_object(anjay, security_obj)
+        || anjay_register_object(anjay, server_obj)
+        || anjay_register_object(anjay, test_obj)) {
         result = -1;
         goto cleanup;
     }
@@ -146,13 +142,13 @@ int main(int argc, char *argv[]) {
 
     // Set LwM2M Create permission rights for SSID = 1, this will make SSID=1
     // an exclusive owner of the Test Object
-    anjay_access_control_set_acl(access_control_obj, 1234, ANJAY_IID_INVALID, 1,
+    anjay_access_control_set_acl(anjay, 1234, ANJAY_IID_INVALID, 1,
                                  ANJAY_ACCESS_MASK_CREATE);
 
     // Allow both LwM2M Servers to read their Server Instances
-    anjay_access_control_set_acl(access_control_obj, 1, server_instance_iid1,
+    anjay_access_control_set_acl(anjay, 1, server_instance_iid1,
                                  server_instance1.ssid, ANJAY_ACCESS_MASK_READ);
-    anjay_access_control_set_acl(access_control_obj, 1, server_instance_iid2,
+    anjay_access_control_set_acl(anjay, 1, server_instance_iid2,
                                  server_instance2.ssid, ANJAY_ACCESS_MASK_READ);
 
     result = main_loop(anjay);
@@ -162,7 +158,5 @@ cleanup:
     anjay_security_object_delete(security_obj);
     anjay_server_object_delete(server_obj);
     delete_test_object(test_obj);
-    anjay_access_control_object_delete(access_control_obj);
-    anjay_attr_storage_delete(attr_storage);
     return result;
 }

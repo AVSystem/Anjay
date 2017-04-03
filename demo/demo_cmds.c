@@ -64,22 +64,35 @@ static void cmd_reconnect(anjay_demo_t *demo,
 
 static void cmd_set_fw_package_path(anjay_demo_t *demo,
                                     const char *args_string) {
+    const anjay_dm_object_def_t **firmware_update_obj =
+            demo_find_object(demo, DEMO_OID_FIRMWARE_UPDATE);
+    if (!firmware_update_obj) {
+        demo_log(ERROR, "Firmware update object not registered");
+        return;
+    }
+
     const char *path = args_string;
     while (isspace(*path)) {
         ++path;
     }
 
     firmware_update_set_package_path(demo->anjay,
-                                     demo->firmware_update_obj, path);
+                                     firmware_update_obj, path);
 }
 
 static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
+    const anjay_dm_object_def_t **location_obj =
+            demo_find_object(demo, DEMO_OID_LOCATION);
+    if (!location_obj) {
+        demo_log(ERROR, "Location object not registered");
+        return;
+    }
+
     char filename[strlen(args_string) + 1];
     filename[0] = '\0';
     unsigned long frequency_s = 1;
     sscanf(args_string, "%s %lu", filename, &frequency_s);
-    if (!location_open_csv(demo->location_obj,
-                           filename, (time_t) frequency_s)) {
+    if (!location_open_csv(location_obj, filename, (time_t) frequency_s)) {
         demo_log(INFO, "Successfully opened CSV file");
     }
 }
@@ -201,9 +214,28 @@ static void cmd_notify(anjay_demo_t *demo, const char *args_string) {
     }
 }
 
-static void cmd_set_fw_updated_marker(anjay_demo_t *demo, const char *args_string) {
-    firmware_update_set_fw_updated_marker_path(demo->firmware_update_obj,
-                                               args_string + 1);
+static void cmd_unregister_object(anjay_demo_t *demo, const char *args_string) {
+    int oid;
+    if (sscanf(args_string, "%d", &oid) != 1 || oid < 0 || oid > UINT16_MAX) {
+        demo_log(ERROR, "Invalid OID: %s", args_string);
+        return;
+    }
+
+    AVS_LIST(anjay_demo_object_t) *object_entry_ptr;
+    AVS_LIST_FOREACH_PTR(object_entry_ptr, &demo->objects) {
+        if ((*(*object_entry_ptr)->obj_ptr)->oid == oid) {
+            if (anjay_unregister_object(demo->anjay,
+                                        (*object_entry_ptr)->obj_ptr)) {
+                demo_log(ERROR, "Could not unregister object %d", oid);
+                return;
+            }
+            (*object_entry_ptr)->release_func((*object_entry_ptr)->obj_ptr);
+            AVS_LIST_DELETE(object_entry_ptr);
+            return;
+        }
+    }
+
+    demo_log(ERROR, "No such object to unregister: %d", oid);
 }
 
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
@@ -243,8 +275,8 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("exit-offline", "", cmd_exit_offline, "Exits Offline mode"),
     CMD_HANDLER("notify", "", cmd_notify,
                 "Executes anjay_notify_* on a specified path"),
-    CMD_HANDLER("set-fw-updated-marker", "filename", cmd_set_fw_updated_marker,
-                "Sets location where information about upgrade will be stored"),
+    CMD_HANDLER("unregister-object", "oid", cmd_unregister_object,
+                "Unregister an LwM2M Object"),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
 };
 #undef CMD_HANDLER

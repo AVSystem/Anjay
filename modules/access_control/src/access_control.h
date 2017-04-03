@@ -31,8 +31,6 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #define ac_log(...) _anjay_log(access_control, __VA_ARGS__)
 
-typedef struct access_control_struct access_control_t;
-
 typedef struct {
     anjay_access_mask_t mask;
     anjay_ssid_t ssid;
@@ -55,30 +53,34 @@ typedef struct {
     AVS_LIST(access_control_instance_t) instances;
 } access_control_state_t;
 
-struct access_control_struct {
+typedef struct {
     const anjay_dm_object_def_t *obj_def;
-    anjay_t *anjay;
     access_control_state_t current;
     access_control_state_t saved_state;
     bool needs_validation;
     bool sync_in_progress;
-};
+} access_control_t;
 
 typedef const anjay_dm_object_def_t *const *obj_ptr_t;
 
 access_control_t *
-_anjay_access_control_get(const anjay_dm_object_def_t *const *obj_ptr);
+_anjay_access_control_from_obj_ptr(const anjay_dm_object_def_t *const *obj_ptr);
+
+access_control_t *_anjay_access_control_get(anjay_t *anjay);
 
 void _anjay_access_control_clear_state(access_control_state_t *state);
 
 int _anjay_access_control_clone_state(access_control_state_t *dest,
                                       const access_control_state_t *src);
 
-int _anjay_access_control_remove_instance(access_control_t *access_control,
-                                          anjay_iid_t iid);
+int
+_anjay_access_control_remove_instance(access_control_t *access_control,
+                                      anjay_iid_t iid);
 
 int _anjay_access_control_remove_orphaned_instances(
-        access_control_t *access_control, anjay_notify_queue_t *out_dm_changes);
+        anjay_t *anjay,
+        access_control_t *access_control,
+        anjay_notify_queue_t *out_dm_changes);
 
 int _anjay_access_control_validate_ssid(anjay_t *anjay, anjay_ssid_t ssid);
 

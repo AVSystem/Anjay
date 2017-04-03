@@ -329,21 +329,23 @@ apncp_instance_reset(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t apn_conn_profile = {
-    .oid = 11,
+    .oid = DEMO_OID_APN_CONN_PROFILE,
     .rid_bound = APNCP_RID_BOUND_,
-    .instance_it = apncp_instance_it,
-    .instance_present = apncp_instance_present,
-    .instance_create = apncp_instance_create,
-    .instance_remove = apncp_instance_remove,
-    .instance_reset = apncp_instance_reset,
-    .resource_supported = apncp_resource_supported,
-    .resource_present = apncp_resource_present,
-    .resource_read = apncp_resource_read,
-    .resource_write = apncp_resource_write,
-    .transaction_begin = apncp_transaction_begin,
-    .transaction_validate = apncp_transaction_validate,
-    .transaction_commit = apncp_transaction_commit,
-    .transaction_rollback = apncp_transaction_rollback
+    .handlers = {
+        .instance_it = apncp_instance_it,
+        .instance_present = apncp_instance_present,
+        .instance_create = apncp_instance_create,
+        .instance_remove = apncp_instance_remove,
+        .instance_reset = apncp_instance_reset,
+        .resource_supported = apncp_resource_supported,
+        .resource_present = apncp_resource_present,
+        .resource_read = apncp_resource_read,
+        .resource_write = apncp_resource_write,
+        .transaction_begin = apncp_transaction_begin,
+        .transaction_validate = apncp_transaction_validate,
+        .transaction_commit = apncp_transaction_commit,
+        .transaction_rollback = apncp_transaction_rollback
+    }
 };
 
 const anjay_dm_object_def_t **apn_conn_profile_object_create(void) {

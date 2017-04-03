@@ -31,11 +31,17 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+typedef struct {
+    const anjay_dm_module_t *def;
+    void *arg;
+} anjay_dm_installed_module_t;
+
 struct anjay_dm {
     AVS_LIST(const anjay_dm_object_def_t *const *) objects;
+    AVS_LIST(anjay_dm_installed_module_t) modules;
 };
 
-void _anjay_dm_cleanup(anjay_dm_t *dm);
+void _anjay_dm_cleanup(anjay_t *anjay);
 
 const char *_anjay_res_path_string__(char *buffer,
                                      size_t buffer_size,
@@ -190,6 +196,9 @@ static inline int _anjay_dm_map_present_result(int result) {
 
 int _anjay_dm_check_if_tlv_rid_matches_uri_rid(anjay_input_ctx_t *in_ctx,
                                                anjay_rid_t uri_rid);
+
+AVS_LIST(anjay_dm_installed_module_t) *
+_anjay_dm_module_find_ptr(anjay_t *anjay, const anjay_dm_module_t *module);
 
 VISIBILITY_PRIVATE_HEADER_END
 

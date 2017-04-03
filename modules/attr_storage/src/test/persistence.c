@@ -27,18 +27,19 @@
 
 #include "../attr_storage.h"
 #include "attr_storage_test.h"
-static anjay_t *const FAKE_ANJAY = (anjay_t *) ~(uintptr_t) NULL;
 
 #define PERSIST_TEST_INIT(Size) \
         char buf[Size]; \
         avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER; \
         avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf)); \
-        anjay_attr_storage_t *fas = anjay_attr_storage_new(FAKE_ANJAY)
+        anjay_t *anjay = _anjay_test_dm_init(); \
+        AVS_UNIT_ASSERT_NOT_NULL(anjay); \
+        AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay))
 
 #define PERSISTENCE_TEST_FINISH \
         do { \
-            anjay_attr_storage_delete(fas); \
             _anjay_mock_dm_expect_clean(); \
+            _anjay_test_dm_finish(anjay); \
         } while (0)
 
 #define PERSIST_TEST_CHECK(Data) \
@@ -54,7 +55,7 @@ static anjay_t *const FAKE_ANJAY = (anjay_t *) ~(uintptr_t) NULL;
 AVS_UNIT_TEST(attr_storage_persistence, persist_empty) {
     PERSIST_TEST_INIT(256);
     AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_persist(
-            fas, (avs_stream_abstract_t *) &outbuf));
+            anjay, (avs_stream_abstract_t *) &outbuf));
     PERSIST_TEST_CHECK(MAGIC_HEADER "\x00\x00\x00\x00");
 }
 
@@ -63,64 +64,65 @@ AVS_UNIT_TEST(attr_storage_persistence, persist_empty) {
                 &(const anjay_dm_object_def_t) { \
                     .oid = Oid, \
                     .rid_bound = RidBound, \
-                    ANJAY_MOCK_DM_HANDLERS_NOATTRS \
+                    .handlers = { \
+                        ANJAY_MOCK_DM_HANDLERS_NOATTRS \
+                    } \
                 }; \
-        AVS_UNIT_ASSERT_NOT_NULL(anjay_attr_storage_wrap_object( \
-                fas, &OBJ##Oid ))
+        AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay, &OBJ##Oid))
 
-static void write_obj_attrs(anjay_attr_storage_t *fas,
+static void write_obj_attrs(anjay_t *anjay,
                             anjay_oid_t oid,
                             anjay_ssid_t ssid,
                             const anjay_dm_attributes_t *attrs) {
-    fas_object_t *obj = _anjay_attr_storage_find_object(fas, oid);
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
-    AVS_UNIT_ASSERT_SUCCESS(obj->def.object_write_default_attrs(
-            NULL, &obj->def_ptr, ssid, attrs));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_object_write_default_attrs(
+            anjay, obj, ssid, attrs, NULL));
 }
 
-static void write_inst_attrs(anjay_attr_storage_t *fas,
+static void write_inst_attrs(anjay_t *anjay,
                              anjay_oid_t oid,
                              anjay_iid_t iid,
                              anjay_ssid_t ssid,
                              const anjay_dm_attributes_t *attrs) {
-    fas_object_t *obj = _anjay_attr_storage_find_object(fas, oid);
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
-    AVS_UNIT_ASSERT_SUCCESS(obj->def.instance_write_default_attrs(
-            NULL, &obj->def_ptr, iid, ssid, attrs));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_instance_write_default_attrs(
+            anjay, obj, iid, ssid, attrs, NULL));
 }
 
-static void write_res_attrs(anjay_attr_storage_t *fas,
+static void write_res_attrs(anjay_t *anjay,
                             anjay_oid_t oid,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
                             anjay_ssid_t ssid,
                             const anjay_dm_resource_attributes_t *attrs) {
-    fas_object_t *obj = _anjay_attr_storage_find_object(fas, oid);
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
-    AVS_UNIT_ASSERT_SUCCESS(obj->def.resource_write_attrs(
-            NULL, &obj->def_ptr, iid, rid, ssid, attrs));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_resource_write_attrs(
+            anjay, obj, iid, rid, ssid, attrs, NULL));
 }
 
-static void persist_test_fill(anjay_attr_storage_t *fas) {
-    INSTALL_FAKE_OBJECT(4, 4);
-    INSTALL_FAKE_OBJECT(42, 4);
-    INSTALL_FAKE_OBJECT(517, 522);
-    write_obj_attrs(fas, 4, 33,
+static void persist_test_fill(anjay_t *anjay) {
+    write_obj_attrs(anjay, 4, 33,
                     &(const anjay_dm_attributes_t) {
                         .min_period = 42,
                         .max_period = ANJAY_ATTRIB_PERIOD_NONE
                     });
-    write_obj_attrs(fas, 4, 14,
+    write_obj_attrs(anjay, 4, 14,
                     &(const anjay_dm_attributes_t) {
                         .min_period = ANJAY_ATTRIB_PERIOD_NONE,
                         .max_period = 3
                     });
-    write_inst_attrs(fas, 42, 1, 2,
+    write_inst_attrs(anjay, 42, 1, 2,
                      &(const anjay_dm_attributes_t) {
                          .min_period = 7,
                          .max_period = 13
                      });
-    write_res_attrs(fas, 42, 1, 3, 2,
+    write_res_attrs(anjay, 42, 1, 3, 2,
                     &(const anjay_dm_resource_attributes_t) {
                         .common = {
                             .min_period = ANJAY_ATTRIB_PERIOD_NONE,
@@ -130,7 +132,7 @@ static void persist_test_fill(anjay_attr_storage_t *fas) {
                         .less_than = -1.0,
                         .step = ANJAY_ATTRIB_VALUE_NONE
                     });
-    write_res_attrs(fas, 42, 1, 3, 7,
+    write_res_attrs(anjay, 42, 1, 3, 7,
                     &(const anjay_dm_resource_attributes_t) {
                         .common = {
                             .min_period = 1,
@@ -140,7 +142,7 @@ static void persist_test_fill(anjay_attr_storage_t *fas) {
                         .less_than = ANJAY_ATTRIB_VALUE_NONE,
                         .step = ANJAY_ATTRIB_VALUE_NONE
                     });
-    write_res_attrs(fas, 517, 516, 515, 514,
+    write_res_attrs(anjay, 517, 516, 515, 514,
                     &(const anjay_dm_resource_attributes_t) {
                         .common = {
                             .min_period = 33,
@@ -204,37 +206,45 @@ static const char PERSIST_TEST_DATA[] =
 
 AVS_UNIT_TEST(attr_storage_persistence, persist_full) {
     PERSIST_TEST_INIT(512);
-    persist_test_fill(fas);
+    INSTALL_FAKE_OBJECT(4, 4);
+    INSTALL_FAKE_OBJECT(42, 4);
+    INSTALL_FAKE_OBJECT(517, 522);
+    persist_test_fill(anjay);
     AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_persist(
-            fas, (avs_stream_abstract_t *) &outbuf));
+            anjay, (avs_stream_abstract_t *) &outbuf));
     PERSIST_TEST_CHECK(PERSIST_TEST_DATA);
 }
 
 AVS_UNIT_TEST(attr_storage_persistence, persist_not_enough_space) {
     PERSIST_TEST_INIT(128);
-    persist_test_fill(fas);
+    INSTALL_FAKE_OBJECT(4, 4);
+    INSTALL_FAKE_OBJECT(42, 4);
+    INSTALL_FAKE_OBJECT(517, 522);
+    persist_test_fill(anjay);
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_persist(
-            fas, (avs_stream_abstract_t *) &outbuf));
+            anjay, (avs_stream_abstract_t *) &outbuf));
     PERSISTENCE_TEST_FINISH;
 }
 
 #define RESTORE_TEST_INIT(Data) \
         avs_stream_inbuf_t inbuf = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
         avs_stream_inbuf_set_buffer(&inbuf, (Data), sizeof(Data) - 1); \
-        anjay_attr_storage_t *fas = anjay_attr_storage_new(FAKE_ANJAY)
+        anjay_t *anjay = _anjay_test_dm_init(); \
+        AVS_UNIT_ASSERT_NOT_NULL(anjay); \
+        AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay))
 
 AVS_UNIT_TEST(attr_storage_persistence, restore_empty) {
     RESTORE_TEST_INIT("");
     AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
+            anjay, (avs_stream_abstract_t *) &inbuf));
     PERSISTENCE_TEST_FINISH;
 }
 
 AVS_UNIT_TEST(attr_storage_persistence, restore_no_objects) {
     RESTORE_TEST_INIT(PERSIST_TEST_DATA);
     AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
-    AVS_UNIT_ASSERT_NULL(fas->objects);
+            anjay, (avs_stream_abstract_t *) &inbuf));
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -242,40 +252,41 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_one_object) {
     RESTORE_TEST_INIT(PERSIST_TEST_DATA);
     INSTALL_FAKE_OBJECT(42, 5);
 
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ42, 0, 0, 1);
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ42, 1, 0,
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 0, 0, 1);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 1, 0,
                                       ANJAY_IID_INVALID);
-    _anjay_mock_dm_expect_resource_supported(FAKE_ANJAY, &OBJ42, 3, 1);
-    _anjay_mock_dm_expect_resource_present(FAKE_ANJAY, &OBJ42, 1, 3, 1);
+    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ42, 3, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &OBJ42, 1, 3, 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
+            anjay, (avs_stream_abstract_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->default_attrs);
     AVS_UNIT_ASSERT_EQUAL(
-            AVS_LIST_SIZE(_anjay_attr_storage_find_object(fas, 42)->instances),
-            1);
-    assert_instance_equal(
-            _anjay_attr_storage_find_object(fas, 42)->instances,
-            test_instance_entry(
-                    1,
-                    test_default_attrlist(
-                            test_default_attrs(2, 7, 13),
-                            NULL),
-                    test_resource_entry(
-                            3,
-                            test_resource_attrs(2,
-                                                ANJAY_ATTRIB_PERIOD_NONE,
-                                                ANJAY_ATTRIB_PERIOD_NONE,
-                                                1.0,
-                                                -1.0,
-                                                ANJAY_ATTRIB_VALUE_NONE),
-                            test_resource_attrs(7,
-                                                1,
-                                                14,
-                                                ANJAY_ATTRIB_VALUE_NONE,
-                                                ANJAY_ATTRIB_VALUE_NONE,
-                                                ANJAY_ATTRIB_VALUE_NONE),
+            AVS_LIST_SIZE(_anjay_attr_storage_get(anjay)->objects), 1);
+    assert_object_equal(_anjay_attr_storage_get(anjay)->objects,
+            test_object_entry(
+                    42, NULL,
+                    test_instance_entry(
+                            1,
+                            test_default_attrlist(
+                                    test_default_attrs(2, 7, 13),
+                                    NULL),
+                            test_resource_entry(
+                                    3,
+                                    test_resource_attrs(
+                                            2,
+                                            ANJAY_ATTRIB_PERIOD_NONE,
+                                            ANJAY_ATTRIB_PERIOD_NONE,
+                                            1.0,
+                                            -1.0,
+                                            ANJAY_ATTRIB_VALUE_NONE),
+                                    test_resource_attrs(
+                                            7,
+                                            1,
+                                            14,
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_ATTRIB_VALUE_NONE),
+                                    NULL),
                             NULL),
                     NULL));
     PERSISTENCE_TEST_FINISH;
@@ -290,103 +301,89 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
     INSTALL_FAKE_OBJECT(517, 522);
 
     // this will be cleared
-    write_inst_attrs(fas, 69, 68, 67,
+    write_inst_attrs(anjay, 69, 68, 67,
                      &(const anjay_dm_attributes_t) {
                          .min_period = 66,
                          .max_period = 65
                      });
 
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ4, 0, 0,
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ4, 0, 0,
                                       ANJAY_IID_INVALID);
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ42, 0, 0, 1);
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ42, 1, 0,
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 0, 0, 1);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 1, 0,
                                       ANJAY_IID_INVALID);
-    _anjay_mock_dm_expect_resource_supported(FAKE_ANJAY, &OBJ42, 3, 1);
-    _anjay_mock_dm_expect_resource_present(FAKE_ANJAY, &OBJ42, 1, 3, 1);
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ517, 0, 0, 516);
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ517, 1, 0,
+    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ42, 3, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &OBJ42, 1, 3, 1);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ517, 0, 0, 516);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ517, 1, 0,
                                       ANJAY_IID_INVALID);
-    _anjay_mock_dm_expect_resource_supported(FAKE_ANJAY, &OBJ517, 515, 1);
-    _anjay_mock_dm_expect_resource_present(FAKE_ANJAY, &OBJ517, 516, 515, 1);
+    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ517, 515, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &OBJ517, 516, 515, 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
+            anjay, (avs_stream_abstract_t *) &inbuf));
+
+    AVS_UNIT_ASSERT_EQUAL(
+            AVS_LIST_SIZE(_anjay_attr_storage_get(anjay)->objects), 3);
 
     // object 4
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(
-            _anjay_attr_storage_find_object(fas, 4)->default_attrs), 2);
-    assert_default_attrs_equal(
-            _anjay_attr_storage_find_object(fas, 4)->default_attrs,
-            test_default_attrs(14, ANJAY_ATTRIB_PERIOD_NONE, 3));
-    assert_default_attrs_equal(
-            AVS_LIST_NEXT(
-                    _anjay_attr_storage_find_object(fas, 4)->default_attrs),
-            test_default_attrs(33, 42, ANJAY_ATTRIB_PERIOD_NONE));
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_find_object(fas, 4)->instances);
+    assert_object_equal(_anjay_attr_storage_get(anjay)->objects,
+            test_object_entry(
+                    4,
+                    test_default_attrlist(
+                            test_default_attrs(14, ANJAY_ATTRIB_PERIOD_NONE, 3),
+                            test_default_attrs(33,
+                                               42, ANJAY_ATTRIB_PERIOD_NONE),
+                            NULL),
+                    NULL));
 
     // object 42
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->default_attrs);
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_LIST_SIZE(_anjay_attr_storage_find_object(fas, 42)->instances),
-            1);
-    assert_instance_equal(
-            _anjay_attr_storage_find_object(fas, 42)->instances,
-            test_instance_entry(
-                    1,
-                    test_default_attrlist(
-                            test_default_attrs(2, 7, 13),
-                            NULL),
-                    test_resource_entry(
-                            3,
-                            test_resource_attrs(2,
-                                                ANJAY_ATTRIB_PERIOD_NONE,
-                                                ANJAY_ATTRIB_PERIOD_NONE,
-                                                1.0,
-                                                -1.0,
-                                                ANJAY_ATTRIB_VALUE_NONE),
-                            test_resource_attrs(7,
-                                                1,
-                                                14,
-                                                ANJAY_ATTRIB_VALUE_NONE,
-                                                ANJAY_ATTRIB_VALUE_NONE,
-                                                ANJAY_ATTRIB_VALUE_NONE),
+    assert_object_equal(AVS_LIST_NEXT(_anjay_attr_storage_get(anjay)->objects),
+            test_object_entry(
+                    42, NULL,
+                    test_instance_entry(
+                            1,
+                            test_default_attrlist(
+                                    test_default_attrs(2, 7, 13),
+                                    NULL),
+                            test_resource_entry(
+                                    3,
+                                    test_resource_attrs(
+                                            2,
+                                            ANJAY_ATTRIB_PERIOD_NONE,
+                                            ANJAY_ATTRIB_PERIOD_NONE,
+                                            1.0,
+                                            -1.0,
+                                            ANJAY_ATTRIB_VALUE_NONE),
+                                    test_resource_attrs(
+                                            7,
+                                            1,
+                                            14,
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_ATTRIB_VALUE_NONE),
+                                    NULL),
                             NULL),
                     NULL));
-
-    // object 69
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 69)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 69)->instances);
-
-    // object 514
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 514)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 514)->instances);
 
     // object 517
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 517)->default_attrs);
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_LIST_SIZE(_anjay_attr_storage_find_object(fas, 517)->instances),
-            1);
-    assert_instance_equal(
-            _anjay_attr_storage_find_object(fas, 517)->instances,
-            test_instance_entry(
-                    516,
-                    NULL,
-                    test_resource_entry(
-                            515,
-                            test_resource_attrs(514,
-                                                33,
-                                                ANJAY_ATTRIB_PERIOD_NONE,
-                                                ANJAY_ATTRIB_VALUE_NONE,
-                                                ANJAY_ATTRIB_VALUE_NONE,
-                                                42.0),
+    assert_object_equal(
+            AVS_LIST_NTH(_anjay_attr_storage_get(anjay)->objects, 2),
+            test_object_entry(
+                    517, NULL,
+                    test_instance_entry(
+                            516,
+                            NULL,
+                            test_resource_entry(
+                                    515,
+                                    test_resource_attrs(514,
+                                                        33,
+                                                        ANJAY_ATTRIB_PERIOD_NONE,
+                                                        ANJAY_ATTRIB_VALUE_NONE,
+                                                        ANJAY_ATTRIB_VALUE_NONE,
+                                                        42.0),
+                                    NULL),
                             NULL),
                     NULL));
-
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -436,29 +433,16 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_broken_stream) {
     INSTALL_FAKE_OBJECT(517, 522);
 
     // this will be cleared
-    write_inst_attrs(fas, 517, 518, 519,
+    write_inst_attrs(anjay, 517, 518, 519,
                      &(const anjay_dm_attributes_t) {
                          .min_period = 520,
                          .max_period = 521,
                      });
 
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ4, 0, 0,
-                                      ANJAY_IID_INVALID);
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
+            anjay, (avs_stream_abstract_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->instances);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->instances);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 517)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 517)->instances);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -470,15 +454,9 @@ static const char INSANE_TEST_DATA[] =
                     "\x00\x0E" // SSID 14
                         "\xFF\xFF\xFF\xFF" // min period
                         "\x00\x00\x00\x03" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                     "\x00\x21" // SSID 33
                         "\x00\x00\x00\x2A" // min period
                         "\xFF\xFF\xFF\xFF" // max period
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                        "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                 "\x00\x00\x00\x00" // 0 instance entries
             "\x00\x2A" // OID 42
                 "\x00\x00\x00\x00" // 0 object-level default attrs
@@ -488,9 +466,6 @@ static const char INSANE_TEST_DATA[] =
                             "\x00\x02" // SSID 2
                                 "\x00\x00\x00\x07" // min period
                                 "\x00\x00\x00\x0D" // max period
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00" // greater than
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00" // less than
-                                "\x7f\xf8\x00\x00\x00\x00\x00\x00" // step
                         "\x00\x00\x00\x01" // 1 resource entry
                             "\x00\x03" // RID 3
                                 "\x00\x00\x00\x02" // 2 attr entries
@@ -530,30 +505,16 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_insane_data) {
     INSTALL_FAKE_OBJECT(517, 522);
 
     // this will be cleared
-    write_inst_attrs(fas, 517, 518, 519,
+    write_inst_attrs(anjay, 517, 518, 519,
                      &(const anjay_dm_attributes_t) {
                          .min_period = 520,
                          .max_period = 521
                      });
 
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ4, 0, 0,
-                                      ANJAY_IID_INVALID);
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
+            anjay, (avs_stream_abstract_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->instances);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->instances);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 517)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 517)->instances);
-
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -624,21 +585,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_data_with_empty_##Suffix) { \
     INSTALL_FAKE_OBJECT(517, 522); \
     \
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore( \
-            fas, (avs_stream_abstract_t *) &inbuf)); \
+            anjay, (avs_stream_abstract_t *) &inbuf)); \
     \
-    AVS_UNIT_ASSERT_NULL( \
-            _anjay_attr_storage_find_object(fas, 4)->default_attrs); \
-    AVS_UNIT_ASSERT_NULL( \
-            _anjay_attr_storage_find_object(fas, 4)->instances); \
-    AVS_UNIT_ASSERT_NULL( \
-            _anjay_attr_storage_find_object(fas, 42)->default_attrs); \
-    AVS_UNIT_ASSERT_NULL( \
-            _anjay_attr_storage_find_object(fas, 42)->instances); \
-    AVS_UNIT_ASSERT_NULL( \
-            _anjay_attr_storage_find_object(fas, 517)->default_attrs); \
-    AVS_UNIT_ASSERT_NULL( \
-            _anjay_attr_storage_find_object(fas, 517)->instances); \
-    \
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects); \
     PERSISTENCE_TEST_FINISH; \
 }
 
@@ -655,21 +604,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_data_with_bad_magic) {
     INSTALL_FAKE_OBJECT(517, 522);
 
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
+            anjay, (avs_stream_abstract_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->instances);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 42)->instances);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 517)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 517)->instances);
-
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -694,22 +631,16 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_duplicate_oid) {
     INSTALL_FAKE_OBJECT(4, 5);
 
     // this will be cleared
-    write_inst_attrs(fas, 4, 5, 6,
+    write_inst_attrs(anjay, 4, 5, 6,
                      &(const anjay_dm_attributes_t) {
                          .min_period = 7,
                          .max_period = 8
                      });
 
-    _anjay_mock_dm_expect_instance_it(FAKE_ANJAY, &OBJ4, 0, 0,
-                                      ANJAY_IID_INVALID);
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore(
-            fas, (avs_stream_abstract_t *) &inbuf));
+            anjay, (avs_stream_abstract_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->default_attrs);
-    AVS_UNIT_ASSERT_NULL(
-            _anjay_attr_storage_find_object(fas, 4)->instances);
-
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
     PERSISTENCE_TEST_FINISH;
 }
 

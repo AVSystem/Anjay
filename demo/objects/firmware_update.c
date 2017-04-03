@@ -29,8 +29,6 @@
 #include "../utils.h"
 #include "../wget_downloader.h"
 
-#define FIRMWARE_UPDATE_OID 5
-
 #define FW_RES_PACKAGE                  0
 #define FW_RES_PACKAGE_URI              1
 #define FW_RES_UPDATE                   2
@@ -84,8 +82,7 @@ typedef struct fw_repr {
     char package_uri[256];
 
     char next_target_path[256];
-    char fw_updated_marker[256];
-    bool cleanup_fw_on_upgrade;
+    const char *fw_updated_marker;
 } fw_repr_t;
 
 static inline fw_repr_t *get_fw(const anjay_dm_object_def_t *const *obj_ptr) {
@@ -100,7 +97,7 @@ static void set_update_result(anjay_t *anjay,
                               fw_update_result_t new_result) {
     if (fw->result != new_result) {
         fw->result = new_result;
-        anjay_notify_changed(anjay, FIRMWARE_UPDATE_OID, 0,
+        anjay_notify_changed(anjay, DEMO_OID_FIRMWARE_UPDATE, 0,
                              FW_RES_UPDATE_RESULT);
     }
 }
@@ -110,7 +107,7 @@ static void set_state(anjay_t *anjay,
                       fw_update_state_t new_state) {
     if (fw->state != new_state) {
         fw->state = new_state;
-        anjay_notify_changed(anjay, FIRMWARE_UPDATE_OID, 0, FW_RES_STATE);
+        anjay_notify_changed(anjay, DEMO_OID_FIRMWARE_UPDATE, 0, FW_RES_STATE);
     }
 }
 
@@ -182,13 +179,6 @@ void firmware_update_set_package_path(anjay_t *anjay,
     demo_log(INFO, "firmware package path set to %s", fw->next_target_path);
 
     set_state(anjay, fw, UPDATE_STATE_IDLE);
-}
-
-void firmware_update_set_fw_updated_marker_path(
-        const anjay_dm_object_def_t **fw_obj, const char *path) {
-    fw_repr_t *fw = get_fw(fw_obj);
-    strncpy(fw->fw_updated_marker, path, sizeof(fw->fw_updated_marker) - 1);
-    fw->fw_updated_marker[sizeof(fw->fw_updated_marker) - 1] = '\0';
 }
 
 static int fw_read(anjay_t *anjay,
@@ -709,8 +699,7 @@ static int create_update_marker_file(fw_repr_t *fw) {
     if (!f) {
         return -1;
     }
-    if (fw->cleanup_fw_on_upgrade
-            && fprintf(f, "%s", fw->next_target_path) < 0) {
+    if (fprintf(f, "%s", fw->next_target_path) < 0) {
         demo_log(ERROR, "Couldn't write to firmware update marker");
     }
     fclose(f);
@@ -800,19 +789,21 @@ static int fw_execute(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t FIRMWARE_UPDATE = {
-    .oid = FIRMWARE_UPDATE_OID,
+    .oid = DEMO_OID_FIRMWARE_UPDATE,
     .rid_bound = FW_RES_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = anjay_dm_resource_present_TRUE,
-    .resource_supported = anjay_dm_resource_supported_TRUE,
-    .resource_read = fw_read,
-    .resource_write = fw_write,
-    .resource_execute = fw_execute,
-    .transaction_begin = anjay_dm_transaction_NOOP,
-    .transaction_validate = anjay_dm_transaction_NOOP,
-    .transaction_commit = anjay_dm_transaction_NOOP,
-    .transaction_rollback = anjay_dm_transaction_NOOP,
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = anjay_dm_resource_present_TRUE,
+        .resource_supported = anjay_dm_resource_supported_TRUE,
+        .resource_read = fw_read,
+        .resource_write = fw_write,
+        .resource_execute = fw_execute,
+        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_validate = anjay_dm_transaction_NOOP,
+        .transaction_commit = anjay_dm_transaction_NOOP,
+        .transaction_rollback = anjay_dm_transaction_NOOP
+    }
 };
 
 static void cleanup_after_upgrade(const char *fw_updated_marker) {
@@ -841,23 +832,23 @@ determine_update_result(const char *fw_updated_marker) {
 
 const anjay_dm_object_def_t **
 firmware_update_object_create(iosched_t *iosched,
-                              bool cleanup_fw_on_upgrade) {
+                              const char *fw_updated_marker_path) {
     fw_repr_t *repr = (fw_repr_t*)calloc(1, sizeof(fw_repr_t));
     if (!repr) {
         return NULL;
     }
 
-    strcpy(repr->fw_updated_marker, "/tmp/anjay-fw-updated");
+    repr->fw_updated_marker = fw_updated_marker_path;
     repr->def = &FIRMWARE_UPDATE;
     repr->iosched = iosched;
     repr->result = determine_update_result(repr->fw_updated_marker);
+    demo_log(INFO, "Initial firmware upgrade state: %d", (int) repr->result);
 
     if (repr->result == UPDATE_RESULT_SUCCESS) {
         cleanup_after_upgrade(repr->fw_updated_marker);
     }
 
     repr->wget_context = wget_context_new(iosched);
-    repr->cleanup_fw_on_upgrade = cleanup_fw_on_upgrade;
     if (!repr->wget_context) {
         free(repr);
         return NULL;

@@ -16,8 +16,8 @@
 
 import http
 import http.server
-import tempfile
 import threading
+import os
 import time
 
 from framework.lwm2m_test import *
@@ -51,21 +51,30 @@ class FirmwareUpdate:
             self.check_marker = check_marker
 
         def setUp(self):
-            super().setUp()
-            self.ANJAY_MARKER_FILE = tempfile.NamedTemporaryFile(dir='/tmp', prefix='anjay-fw-updated-')
-            self.FIRMWARE_SCRIPT_CONTENT = (FIRMWARE_SCRIPT_TEMPLATE % self.ANJAY_MARKER_FILE.name).encode('ascii')
-            self.communicate('set-fw-updated-marker %s' % self.ANJAY_MARKER_FILE.name)
+            self.ANJAY_MARKER_FILE = generate_temp_filename(dir='/tmp', prefix='anjay-fw-updated-')
+            self.FIRMWARE_SCRIPT_CONTENT = (FIRMWARE_SCRIPT_TEMPLATE % self.ANJAY_MARKER_FILE).encode('ascii')
+            super().setUp(extra_cmdline_args=['--fw-updated-marker-path', self.ANJAY_MARKER_FILE])
 
         def tearDown(self):
+            check_marker = getattr(self, 'check_marker', False)
             try:
-                # no deregistration here, demo already terminated
-                super().tearDown(auto_deregister=getattr(self, 'auto_deregister', True))
-            finally:
-                if getattr(self, 'check_marker', False):
-                    line = self.ANJAY_MARKER_FILE.readline()[:-1]
-                    self.assertEqual(line, b"updated")
+                if check_marker:
+                    for _ in range(10):
+                        time.sleep(0.5)
 
-                self.ANJAY_MARKER_FILE.close()
+                        if os.path.isfile(self.ANJAY_MARKER_FILE):
+                            break
+                    else:
+                        self.fail('firmware marker not created')
+            finally:
+                try:
+                    # no deregistration here, demo already terminated
+                    super().tearDown(auto_deregister=getattr(self, 'auto_deregister', True))
+                finally:
+                    if check_marker:
+                        with open(self.ANJAY_MARKER_FILE, "rb") as f:
+                            line = f.readline()[:-1]
+                            self.assertEqual(line, b"updated")
 
         def read_update_result(self):
             req = Lwm2mRead('/5/0/5')
@@ -85,10 +94,15 @@ class FirmwareUpdate:
         def get_firmware_uri(self):
             return 'http://127.0.0.1:%d%s' % (self.http_server.server_address[1], FIRMWARE_PATH)
 
-        def before_download(self):
-            pass
+        def provide_response(self):
+            with self._response_cv:
+                self.assertIsNone(self._response_content)
+                self._response_content = make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT)
+                self._response_cv.notify()
 
         def write_firmware_and_wait_for_download(self):
+            self.provide_response()
+
             # Write /5/0/1 (Firmware URI)
             req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
             self.serv.send(req)
@@ -108,15 +122,24 @@ class FirmwareUpdate:
         def setUp(self):
             super().setUp()
 
-            response_content = make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT)
             self.requests = []
+            self._response_content = None
+            self._response_cv = threading.Condition()
 
             test_case = self
 
             class FirmwareRequestHandler(http.server.BaseHTTPRequestHandler):
                 def do_GET(self):
                     test_case.requests.append(self.path)
-                    test_case.before_download()
+
+                    # This condition variable makes it possible to defer sending the response.
+                    # FirmwareUpdateStateChangeTest uses it to ensure demo has enough time
+                    # to send the interim "Downloading" state notification.
+                    with test_case._response_cv:
+                        while test_case._response_content is None:
+                            test_case._response_cv.wait()
+                        response_content = test_case._response_content
+                        test_case._response_content = None
 
                     self.send_header('Content-type', 'text/plain')
                     self.send_response(http.HTTPStatus.OK)
@@ -164,9 +187,6 @@ class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv(timeout_s=1))
 
-        # wait for execv
-        time.sleep(0.5)
-
 
 class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
     def setUp(self):
@@ -183,20 +203,12 @@ class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv(timeout_s=1))
 
-        # wait for execv
-        time.sleep(0.5)
-
 
 class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
     def setUp(self):
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
-
-    def before_download(self):
-        # wait a bit so that demo has a chance to send DOWNLOADING
-        # state update
-        time.sleep(1)
 
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
@@ -221,6 +233,8 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'1'),
                             self.serv.recv(timeout_s=3))
 
+        self.provide_response()
+
         # ... and after it finishes
         self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'2'),
                             self.serv.recv(timeout_s=3))
@@ -244,9 +258,6 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         # properly, so it will stay as it is for now...
         # self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'3'),
         #                     self.serv.recv())
-
-        # wait for execv
-        time.sleep(2.5)
 
 
 class FirmwareUpdateBadBase64(FirmwareUpdate.Test):
@@ -296,13 +307,22 @@ class FirmwareUpdateEmptyPkgUri(FirmwareUpdate.TestWithHttpServer):
 
 class FirmwareUpdateInvalidUri(FirmwareUpdate.Test):
     def runTest(self):
+        # observe Result
+        observe_req = Lwm2mObserve('/5/0/5')
+        self.serv.send(observe_req)
+        self.assertMsgEqual(Lwm2mContent.matching(observe_req)(content=b'0'), self.serv.recv())
+
         req = Lwm2mWrite('/5/0/1', b'http://invalidfirmware.exe')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv(timeout_s=1))
-        # Wait till the demo realizes that URI is broken
-        time.sleep(2.0)
+
+        while True:
+            notify = self.serv.recv(timeout_s=5)
+            self.assertMsgEqual(Lwm2mNotify(observe_req.token), notify)
+            if int(notify.content) != UPDATE_RESULT_INITIAL:
+                break
+        self.assertEqual(UPDATE_RESULT_INVALID_URI, int(notify.content))
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INVALID_URI, self.read_update_result())
 
 
 class FirmwareUpdateUnsupportedUri(FirmwareUpdate.Test):

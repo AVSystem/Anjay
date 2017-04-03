@@ -154,10 +154,10 @@ static int reload_sockets_sched_job(anjay_t *anjay, void *unused) {
 
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
-    if (_anjay_dm_foreach_instance(anjay, obj,
-                                   reload_server_socket_by_security_iid,
-                                   &reload_state)
-            || reload_state.retval) {
+    if (obj && (_anjay_dm_foreach_instance(anjay, obj,
+                                           reload_server_socket_by_security_iid,
+                                           &reload_state)
+                    || reload_state.retval)) {
         // re-add old servers, don't discard them
         while (anjay->servers.active) {
             _anjay_servers_add_active(&reloaded_servers,
@@ -170,7 +170,12 @@ static int reload_sockets_sched_job(anjay_t *anjay, void *unused) {
                   RELOAD_DELAY_S);
         reschedule_reload_sockets_job(anjay, RELOAD_DELAY_S);
     } else {
-        anjay_log(INFO, "sockets reloaded");
+        if (obj) {
+            anjay_log(INFO, "sockets reloaded");
+        } else {
+            anjay_log(WARNING,
+                      "Security object not present, no sockets to create");
+        }
         _anjay_servers_cleanup(anjay, &anjay->servers);
         anjay->servers = reloaded_servers;
     }

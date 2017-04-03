@@ -21,8 +21,6 @@
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/net.h>
 
-#include <anjay_modules/notify.h>
-
 #include "dm.h"
 #include "observe.h"
 #include "sched.h"
@@ -37,11 +35,6 @@ typedef struct {
     anjay_notify_queue_t queue;
     anjay_sched_handle_t handle;
 } anjay_scheduled_notify_t;
-
-typedef struct {
-    anjay_notify_callback_t *callback;
-    void *data;
-} anjay_notify_callback_entry_t;
 
 typedef struct {
     unsigned depth;
@@ -63,7 +56,6 @@ struct anjay_struct {
     anjay_bootstrap_t bootstrap;
 #endif
     avs_stream_abstract_t *comm_stream;
-    AVS_LIST(anjay_notify_callback_entry_t) notify_callbacks;
     anjay_scheduled_notify_t scheduled_notify;
 
     const char *endpoint_name;

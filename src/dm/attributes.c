@@ -121,8 +121,8 @@ int _anjay_dm_read_combined_instance_attrs(
         anjay_dm_attributes_t *out) {
     if (!_anjay_dm_attributes_full(out)) {
         anjay_dm_attributes_t instattrs = ANJAY_DM_ATTRIBS_EMPTY;
-        int result = _anjay_dm_instance_read_default_attrs(anjay, obj, iid,
-                                                           ssid, &instattrs);
+        int result = _anjay_dm_instance_read_default_attrs(
+                anjay, obj, iid, ssid, &instattrs, NULL);
         if (result) {
             return result;
         }
@@ -139,7 +139,7 @@ int _anjay_dm_read_combined_object_attrs(
     if (!_anjay_dm_attributes_full(out)) {
         anjay_dm_attributes_t objattrs = ANJAY_DM_ATTRIBS_EMPTY;
         int result = _anjay_dm_object_read_default_attrs(anjay, obj, ssid,
-                                                         &objattrs);
+                                                         &objattrs, NULL);
         if (result) {
             return result;
         }
@@ -174,25 +174,27 @@ int _anjay_dm_effective_attrs(anjay_t *anjay,
     assert(!(query->iid == ANJAY_IID_INVALID && query->rid >= 0));
     *out = ANJAY_RES_ATTRIBS_EMPTY;
 
-    if (query->rid >= 0) {
-        result = _anjay_dm_resource_read_attrs(anjay, query->obj, query->iid,
-                                               (anjay_rid_t) query->rid,
-                                               query->ssid, out);
-        if (result) {
-            return result;
+    if (query->obj && *query->obj) {
+        if (query->rid >= 0) {
+            result = _anjay_dm_resource_read_attrs(
+                    anjay, query->obj, query->iid, (anjay_rid_t) query->rid,
+                    query->ssid, out, NULL);
+            if (result) {
+                return result;
+            }
         }
-    }
 
-    if (query->iid != ANJAY_IID_INVALID) {
-        result = _anjay_dm_read_combined_instance_attrs(
-                anjay, query->obj, query->iid, query->ssid, &out->common);
-        if (result) {
-            return result;
+        if (query->iid != ANJAY_IID_INVALID) {
+            result = _anjay_dm_read_combined_instance_attrs(
+                    anjay, query->obj, query->iid, query->ssid, &out->common);
+            if (result) {
+                return result;
+            }
         }
-    }
 
-    result = _anjay_dm_read_combined_object_attrs(
-            anjay, query->obj, query->ssid, &out->common);
+        result = _anjay_dm_read_combined_object_attrs(
+                anjay, query->obj, query->ssid, &out->common);
+    }
     if (!result && query->with_server_level_attrs) {
         return _anjay_dm_read_combined_server_attrs(anjay, query->ssid,
                                                     &out->common);

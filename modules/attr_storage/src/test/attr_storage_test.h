@@ -96,6 +96,24 @@ test_instance_entry(anjay_iid_t iid,
     return instance;
 }
 
+static fas_object_entry_t *
+test_object_entry(anjay_oid_t oid,
+                  AVS_LIST(fas_default_attrs_t) default_attrs,
+                  ...) {
+    fas_object_entry_t *object = AVS_LIST_NEW_ELEMENT(fas_object_entry_t);
+    AVS_UNIT_ASSERT_NOT_NULL(object);
+    object->oid = oid;
+    object->default_attrs = default_attrs;
+    va_list ap;
+    va_start(ap, default_attrs);
+    fas_instance_entry_t *instance;
+    while ((instance = va_arg(ap, fas_instance_entry_t *))) {
+        AVS_LIST_APPEND(&object->instances, instance);
+    }
+    va_end(ap);
+    return object;
+}
+
 static void assert_default_attrs_equal(fas_default_attrs_t *actual,
                                        fas_default_attrs_t *tmp_expected) {
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(actual, tmp_expected, sizeof(*actual));
@@ -144,6 +162,30 @@ static void assert_instance_equal(fas_instance_entry_t *actual,
         assert_resource_equal(resource,
                               AVS_LIST_DETACH(&tmp_expected->resources));
         resource = AVS_LIST_NEXT(resource);
+    }
+
+    AVS_LIST_DELETE(&tmp_expected);
+}
+
+static void assert_object_equal(fas_object_entry_t *actual,
+                                fas_object_entry_t *tmp_expected) {
+    AVS_UNIT_ASSERT_EQUAL(actual->oid, tmp_expected->oid);
+    size_t count = AVS_LIST_SIZE(tmp_expected->default_attrs);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(actual->default_attrs), count);
+    AVS_LIST(fas_default_attrs_t) default_attrs = actual->default_attrs;
+    while (count--) {
+        assert_default_attrs_equal(
+                default_attrs, AVS_LIST_DETACH(&tmp_expected->default_attrs));
+        default_attrs = AVS_LIST_NEXT(default_attrs);
+    }
+
+    count = AVS_LIST_SIZE(tmp_expected->instances);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(actual->instances), count);
+    AVS_LIST(fas_instance_entry_t) instance = actual->instances;
+    while (count--) {
+        assert_instance_equal(instance,
+                              AVS_LIST_DETACH(&tmp_expected->instances));
+        instance = AVS_LIST_NEXT(instance);
     }
 
     AVS_LIST_DELETE(&tmp_expected);

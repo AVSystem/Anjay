@@ -59,9 +59,9 @@ static int persist_instance(anjay_persistence_context_t *ctx,
     return retval;
 }
 
-static bool is_object_registered(access_control_t *ac, anjay_oid_t oid) {
+static bool is_object_registered(anjay_t *anjay, anjay_oid_t oid) {
     return oid != ANJAY_DM_OID_SECURITY
-            && _anjay_dm_find_object_by_oid(ac->anjay, oid) != NULL;
+            && _anjay_dm_find_object_by_oid(anjay, oid) != NULL;
 }
 
 static int restore_instance(access_control_instance_t *out_instance,
@@ -78,7 +78,7 @@ static int restore_instance(access_control_instance_t *out_instance,
     return retval;
 }
 
-static int restore_instances(access_control_t *ac,
+static int restore_instances(anjay_t *anjay,
                              AVS_LIST(access_control_instance_t) *instances_ptr,
                              anjay_persistence_context_t *restore_ctx,
                              anjay_persistence_context_t *ignore_ctx) {
@@ -95,7 +95,7 @@ static int restore_instances(access_control_t *ac,
                                             &instance.target.oid))) {
             return retval;
         }
-        if (!is_object_registered(ac, instance.target.oid)) {
+        if (!is_object_registered(anjay, instance.target.oid)) {
             /* Actually ignore this instance. */
             retval = restore_instance(&instance, ignore_ctx);
         } else {
@@ -119,7 +119,8 @@ static int restore_instances(access_control_t *ac,
     return 0;
 }
 
-static int restore(access_control_t *ac,
+static int restore(anjay_t *anjay,
+                   access_control_t *ac,
                    avs_stream_abstract_t *in) {
     anjay_persistence_context_t *restore_ctx =
             anjay_persistence_restore_context_new(in);
@@ -131,7 +132,7 @@ static int restore(access_control_t *ac,
     }
 
     access_control_state_t state = { NULL };
-    if ((retval = restore_instances(ac, &state.instances,
+    if ((retval = restore_instances(anjay, &state.instances,
                                     restore_ctx, ignore_ctx))) {
         _anjay_access_control_clear_state(&state);
         goto finish;
@@ -146,12 +147,14 @@ finish:
 
 static const char MAGIC[] = { 'A', 'C', 'O', '\1' };
 
-int anjay_access_control_persist(const anjay_dm_object_def_t *const *ac_obj,
+int anjay_access_control_persist(anjay_t *anjay,
                                  avs_stream_abstract_t *out) {
-    access_control_t *ac = _anjay_access_control_get(ac_obj);
+    access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
+        ac_log(ERROR, "Access Control not installed in this Anjay object");
         return -1;
     }
+
     int retval = avs_stream_write(out, MAGIC, sizeof(MAGIC));
     if (retval) {
         return retval;
@@ -169,14 +172,16 @@ int anjay_access_control_persist(const anjay_dm_object_def_t *const *ac_obj,
     return retval;
 }
 
-int anjay_access_control_restore(const anjay_dm_object_def_t *const *ac_obj,
-                                 avs_stream_abstract_t *in) {
-    access_control_t *ac = _anjay_access_control_get(ac_obj);
+int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
+    access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
+        ac_log(ERROR, "Access Control not installed in this Anjay object");
         return -1;
     }
+
     char magic_header[sizeof(MAGIC)];
-    int retval = avs_stream_read_reliably(in, magic_header, sizeof(magic_header));
+    int retval = avs_stream_read_reliably(in,
+                                          magic_header, sizeof(magic_header));
     if (retval) {
         ac_log(ERROR, "magic constant not found");
         return retval;
@@ -186,7 +191,7 @@ int anjay_access_control_restore(const anjay_dm_object_def_t *const *ac_obj,
         ac_log(ERROR, "header magic constant mismatch");
         return -1;
     }
-    return restore(ac, in);
+    return restore(anjay, ac, in);
 }
 
 #ifdef ANJAY_TEST

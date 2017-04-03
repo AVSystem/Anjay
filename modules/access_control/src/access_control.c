@@ -26,7 +26,7 @@ VISIBILITY_SOURCE_BEGIN
 
 //// HELPERS ///////////////////////////////////////////////////////////////////
 access_control_t *
-_anjay_access_control_get(obj_ptr_t obj_ptr) {
+_anjay_access_control_from_obj_ptr(obj_ptr_t obj_ptr) {
     if (!obj_ptr) {
         return NULL;
     }
@@ -95,9 +95,10 @@ remove_referred_instance(anjay_t *anjay,
     if (obj
             && _anjay_access_control_target_iid_valid(it->target.iid)
             && _anjay_dm_instance_present(anjay, obj,
-                                          (anjay_iid_t) it->target.iid) > 0) {
+                                          (anjay_iid_t) it->target.iid,
+                                          NULL) > 0) {
         result = _anjay_dm_instance_remove(anjay, obj,
-                                           (anjay_iid_t) it->target.iid);
+                                           (anjay_iid_t) it->target.iid, NULL);
     }
     if (result) {
         ac_log(ERROR,
@@ -226,29 +227,28 @@ cleanup:
 }
 
 int _anjay_access_control_remove_orphaned_instances(
+        anjay_t *anjay,
         access_control_t *access_control,
         anjay_notify_queue_t *out_dm_changes) {
-    obj_ptr_t possibly_wrapped_ac = _anjay_dm_find_object_by_oid(
-            access_control->anjay, ANJAY_DM_OID_ACCESS_CONTROL);
-    assert(possibly_wrapped_ac);
+    assert(_anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL)
+            == &access_control->obj_def);
     AVS_LIST(access_control_instance_t) *curr;
     AVS_LIST(access_control_instance_t) helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(curr, helper,
                                    &access_control->current.instances) {
         if ((*curr)->owner == ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP
-                || !_anjay_access_control_validate_ssid(access_control->anjay,
+                || !_anjay_access_control_validate_ssid(anjay,
                                                         (*curr)->owner)) {
             continue;
         }
-        int result = _anjay_dm_transaction_include_object(access_control->anjay,
-                                                          possibly_wrapped_ac);
+        int result = _anjay_dm_transaction_include_object(
+                anjay, &access_control->obj_def);
         if (result) {
             return result;
         }
         if (!has_instance_multiple_owners(*curr)) {
             /* Try to remove referred Instance according to Appendix E.1.3 */
-            if ((result = remove_referred_instance(access_control->anjay,
-                                                   *curr))
+            if ((result = remove_referred_instance(anjay, *curr))
                     || (result = _anjay_notify_queue_instance_removed(
                             out_dm_changes, ANJAY_DM_OID_ACCESS_CONTROL,
                             (*curr)->iid))) {
@@ -278,15 +278,6 @@ int _anjay_access_control_remove_orphaned_instances(
     return 0;
 }
 
-void anjay_access_control_object_delete(obj_ptr_t obj) {
-    access_control_t *access_control = _anjay_access_control_get(obj);
-    if (access_control) {
-        _anjay_access_control_clear_state(&access_control->current);
-        _anjay_access_control_clear_state(&access_control->saved_state);
-        free(access_control);
-    }
-}
-
 static access_control_instance_t *find_ac_instance(access_control_t *ac,
                                                    anjay_oid_t oid,
                                                    anjay_iid_t iid) {
@@ -312,7 +303,7 @@ static bool target_instance_reachable(anjay_t *anjay,
         return false;
     }
     return iid == UINT16_MAX
-            || _anjay_dm_instance_present(anjay, target_obj, iid) > 0;
+            || _anjay_dm_instance_present(anjay, target_obj, iid, NULL) > 0;
 }
 
 static int set_acl_in_instance(anjay_t *anjay,
@@ -348,7 +339,8 @@ static int set_acl_in_instance(anjay_t *anjay,
     return 0;
 }
 
-static int set_acl(access_control_t *ac,
+static int set_acl(anjay_t *anjay,
+                   access_control_t *ac,
                    anjay_oid_t oid,
                    anjay_iid_t iid,
                    anjay_ssid_t ssid,
@@ -357,7 +349,7 @@ static int set_acl(access_control_t *ac,
     AVS_LIST(access_control_instance_t) ac_instance =
             find_ac_instance(ac, oid, iid);
     if (!ac_instance) {
-        if (!target_instance_reachable(ac->anjay, oid, iid)) {
+        if (!target_instance_reachable(anjay, oid, iid)) {
             ac_log(ERROR, "cannot set ACL: object instance "
                    "/%" PRIu16 "/%" PRIu16 " does not exist", oid, iid);
             return -1;
@@ -372,14 +364,14 @@ static int set_acl(access_control_t *ac,
         ac_instance_needs_inserting = true;
     }
 
-    int result = set_acl_in_instance(ac->anjay, ac_instance, ssid, access_mask);
+    int result = set_acl_in_instance(anjay, ac_instance, ssid, access_mask);
     if (!ac_instance_needs_inserting) {
         return result;
     }
 
     if (!result
             && (result = anjay_notify_instances_changed(
-                    ac->anjay, ANJAY_DM_OID_ACCESS_CONTROL))) {
+                    anjay, ANJAY_DM_OID_ACCESS_CONTROL))) {
         ac_log(ERROR, "error while calling anjay_notify_instances_changed()");
     }
     anjay_notify_queue_t dm_changes = NULL;
@@ -392,7 +384,7 @@ static int set_acl(access_control_t *ac,
         assert(!dm_changes->instance_set_changes.known_removed_iids);
         assert(!dm_changes->resources_changed);
         _anjay_notify_instance_created(
-                ac->anjay, dm_changes->oid,
+                anjay, dm_changes->oid,
                 *dm_changes->instance_set_changes.known_added_iids);
         _anjay_notify_clear_queue(&dm_changes);
     }
@@ -404,11 +396,17 @@ static int set_acl(access_control_t *ac,
     return result;
 }
 
-int anjay_access_control_set_acl(const anjay_dm_object_def_t *const *ac_obj_ptr,
+int anjay_access_control_set_acl(anjay_t *anjay,
                                  anjay_oid_t oid,
                                  anjay_iid_t iid,
                                  anjay_ssid_t ssid,
                                  anjay_access_mask_t access_mask) {
+    access_control_t *access_control = _anjay_access_control_get(anjay);
+    if (!access_control) {
+        ac_log(ERROR, "Access Control not installed in this Anjay object");
+        return -1;
+    }
+
     if (ssid == UINT16_MAX) {
         ac_log(ERROR, "cannot set ACL: SSID = %u is a reserved value", ssid);
         return -1;
@@ -429,13 +427,7 @@ int anjay_access_control_set_acl(const anjay_dm_object_def_t *const *ac_obj_ptr,
         return -1;
     }
 
-    access_control_t *access_control = _anjay_access_control_get(ac_obj_ptr);
-    if (!access_control) {
-        ac_log(ERROR, "invalid Access Control object pointer");
-        return -1;
-    }
-
-    return set_acl(access_control, oid, iid, ssid, access_mask);
+    return set_acl(anjay, access_control, oid, iid, ssid, access_mask);
 }
 
 #ifdef ANJAY_TEST

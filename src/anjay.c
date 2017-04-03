@@ -117,9 +117,8 @@ void anjay_delete(anjay_t *anjay) {
     assert(avs_stream_net_getsock(anjay->comm_stream) == NULL);
     avs_stream_cleanup(&anjay->comm_stream);
 
-    _anjay_dm_cleanup(&anjay->dm);
+    _anjay_dm_cleanup(anjay);
     _anjay_observe_cleanup(anjay);
-    AVS_LIST_CLEAR(&anjay->notify_callbacks);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
     free(anjay);
 }

@@ -66,60 +66,74 @@ static const anjay_dm_object_def_t *const OBJ =
         &(const anjay_dm_object_def_t) {
             .oid = 42,
             .rid_bound = 7,
-            ANJAY_MOCK_DM_HANDLERS,
-            .instance_reset = _anjay_test_dm_instance_reset_NOOP
+            .handlers = {
+                ANJAY_MOCK_DM_HANDLERS,
+                .instance_reset = _anjay_test_dm_instance_reset_NOOP
+            }
         };
 
 static const anjay_dm_object_def_t *const OBJ_WITH_RESET =
         &(const anjay_dm_object_def_t) {
             .oid = 25,
             .rid_bound = 7,
-            ANJAY_MOCK_DM_HANDLERS,
-            .instance_reset = _anjay_mock_dm_instance_reset
+            .handlers = {
+                ANJAY_MOCK_DM_HANDLERS,
+                .instance_reset = _anjay_mock_dm_instance_reset
+            }
         };
 
 static anjay_dm_object_def_t *const EXECUTE_OBJ =
         &(anjay_dm_object_def_t) {
             .oid = 128,
             .rid_bound = 7,
-            ANJAY_MOCK_DM_HANDLERS
+            .handlers = {
+                ANJAY_MOCK_DM_HANDLERS
+            }
         };
 
 static const anjay_dm_object_def_t *const FAKE_SECURITY =
         &(const anjay_dm_object_def_t) {
             .oid = 0,
             .rid_bound = 13,
-            .instance_it = _anjay_test_dm_fake_security_instance_it,
-            .instance_present = _anjay_test_dm_fake_security_instance_present,
-            .resource_supported = anjay_dm_resource_supported_TRUE,
-            .resource_present = _anjay_test_dm_fake_security_present,
-            .resource_read = _anjay_test_dm_fake_security_read,
-            .transaction_begin = anjay_dm_transaction_NOOP,
-            .transaction_validate = anjay_dm_transaction_NOOP,
-            .transaction_commit = anjay_dm_transaction_NOOP,
-            .transaction_rollback = anjay_dm_transaction_NOOP
+            .handlers = {
+                .instance_it = _anjay_test_dm_fake_security_instance_it,
+                .instance_present = _anjay_test_dm_fake_security_instance_present,
+                .resource_supported = anjay_dm_resource_supported_TRUE,
+                .resource_present = _anjay_test_dm_fake_security_present,
+                .resource_read = _anjay_test_dm_fake_security_read,
+                .transaction_begin = anjay_dm_transaction_NOOP,
+                .transaction_validate = anjay_dm_transaction_NOOP,
+                .transaction_commit = anjay_dm_transaction_NOOP,
+                .transaction_rollback = anjay_dm_transaction_NOOP
+            }
         };
 
 static const anjay_dm_object_def_t *const FAKE_SECURITY2 =
         &(const anjay_dm_object_def_t) {
             .oid = 0,
             .rid_bound = 11,
-            ANJAY_MOCK_DM_HANDLERS
+            .handlers = {
+                ANJAY_MOCK_DM_HANDLERS
+            }
         };
 
 static const anjay_dm_object_def_t *const FAKE_SERVER =
         &(const anjay_dm_object_def_t) {
             .oid = 1,
             .rid_bound = 9,
-            ANJAY_MOCK_DM_HANDLERS
+            .handlers = {
+                ANJAY_MOCK_DM_HANDLERS
+            }
         };
 
 static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
         &(const anjay_dm_object_def_t) {
             .oid = 667,
             .rid_bound = 8,
-            ANJAY_MOCK_DM_HANDLERS,
-            .resource_operations = _anjay_mock_dm_resource_operations
+            .handlers = {
+                ANJAY_MOCK_DM_HANDLERS,
+                .resource_operations = _anjay_mock_dm_resource_operations
+            }
         };
 
 #define DM_TEST_ARRAY(...) { __VA_ARGS__ }

@@ -310,57 +310,54 @@ static int insert_error(anjay_t *anjay,
                             NAN, NULL, 0);
 }
 
-static int ensure_present(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj,
-                          anjay_iid_t iid,
-                          int32_t rid) {
-    int result = 0;
-    if (iid != ANJAY_IID_INVALID) {
-        result = _anjay_dm_map_present_result(
-                _anjay_dm_instance_present(anjay, obj, iid));
-        if (result) {
-            return result;
-        }
-    }
-    if (rid >= 0) {
-        result = _anjay_dm_map_present_result(
-                _anjay_dm_resource_supported_and_present(
-                        anjay, obj, iid, (anjay_rid_t) rid));
-        if (result) {
-            return result;
-        }
-    }
-    return 0;
-}
-
-static int get_obj_and_attrs(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const **out_obj,
-                             anjay_dm_resource_attributes_t *out_attrs,
-                             const anjay_observe_key_t *key) {
-    *out_obj = _anjay_dm_find_object_by_oid(anjay, key->oid);
-    if (!*out_obj || !**out_obj) {
-        return -1;
-    }
-    int result = ensure_present(anjay, *out_obj, key->iid, key->rid);
-    if (result) {
-        return result;
-    }
-
+static int get_effective_attrs(anjay_t *anjay,
+                               anjay_dm_resource_attributes_t *out_attrs,
+                               const anjay_dm_object_def_t *const *obj,
+                               const anjay_observe_key_t *key) {
+    assert(!obj || !*obj || (*obj)->oid == key->oid);
     anjay_dm_attrs_query_details_t details = {
-        .obj = *out_obj,
+        .obj = obj,
         .iid = key->iid,
         .rid = key->rid,
         .ssid = key->connection.ssid,
         .with_server_level_attrs = true
     };
+
+    // Some of the details above may be invalid, e.g. when the object, instance
+    // or resource are no longer valid. Here we sanitize the details so that if
+    // some component is invalid, all lower-level path components are also
+    // invalid. This is so that <c>_anjay_dm_effective_attrs()</c> will return
+    // the appropriate defaults.
+    if (!obj || !*obj) {
+        // if object is invalid, any instance is invalid
+        details.iid = ANJAY_IID_INVALID;
+    }
+    if (details.iid != ANJAY_IID_INVALID
+            && _anjay_dm_map_present_result(_anjay_dm_instance_present(
+                    anjay, obj, details.iid, NULL))) {
+        // instance is no longer present, use invalid instead
+        details.iid = ANJAY_IID_INVALID;
+    }
+    if (details.iid == ANJAY_IID_INVALID) {
+        // if instance is invalid, any resource is invalid
+        details.rid = -1;
+    }
+    if (details.rid >= 0
+            && _anjay_dm_map_present_result(
+                    _anjay_dm_resource_supported_and_present(
+                            anjay, obj, key->iid, (anjay_rid_t) details.rid))) {
+        // if resource is no longer present, use invalid instead
+        details.rid = -1;
+    }
     return _anjay_dm_effective_attrs(anjay, &details, out_attrs);
 }
 
 static inline int get_attrs(anjay_t *anjay,
                             anjay_dm_resource_attributes_t *out_attrs,
                             const anjay_observe_key_t *key) {
-    const anjay_dm_object_def_t *const *obj_placeholder;
-    return get_obj_and_attrs(anjay, &obj_placeholder, out_attrs, key);
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, key->oid);
+    return get_effective_attrs(anjay, out_attrs, obj, key);
 }
 
 static int insert_initial_value(
@@ -898,9 +895,14 @@ update_notification_value(anjay_t *anjay,
         return 0;
     }
 
-    const anjay_dm_object_def_t *const *obj;
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, entry->key.oid);
+    if (!obj) {
+        return ANJAY_ERR_NOT_FOUND;
+    }
+
     anjay_dm_resource_attributes_t attrs;
-    int result = get_obj_and_attrs(anjay, &obj, &attrs, &entry->key);
+    int result = get_effective_attrs(anjay, &attrs, obj, &entry->key);
     if (result) {
         return result;
     }
@@ -960,25 +962,10 @@ static inline int notify_entry(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                anjay_observe_entry_t *entry) {
     anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
-    int result = ensure_present(anjay, obj, entry->key.iid, entry->key.rid);
-    if (result) {
-        return result;
-    }
-    anjay_dm_attrs_query_details_t details = {
-        .obj = obj,
-        .iid = entry->key.iid,
-        .rid = entry->key.rid,
-        .ssid = entry->key.connection.ssid,
-        .with_server_level_attrs = true
-    };
-    result = _anjay_dm_effective_attrs(anjay, &details, &attrs);
-    if (result) {
-        return result;
-    }
-    _anjay_sched_del(anjay->sched, &entry->notify_task);
-    time_t period = attrs.common.min_period;
-    if (period < 0) {
-        period = 0;
+    time_t period = 0;
+    if (!get_effective_attrs(anjay, &attrs, obj, &entry->key)
+            && attrs.common.min_period > 0) {
+        period = attrs.common.min_period;
     }
     return schedule_trigger(anjay, entry, period);
 }
@@ -1130,7 +1117,7 @@ static int observe_notify(anjay_t *anjay,
                           const anjay_observe_key_t *key,
                           const anjay_dm_object_def_t *const *obj) {
     assert(key->format == ANJAY_COAP_FORMAT_NONE);
-    assert(obj && *obj && (*obj)->oid == key->oid);
+    assert(!obj || !*obj || (*obj)->oid == key->oid);
     assert(key->rid >= -1 && key->rid <= UINT16_MAX);
 
     int retval = 0;
@@ -1168,9 +1155,6 @@ int _anjay_observe_notify(anjay_t *anjay,
     assert(key->format == ANJAY_COAP_FORMAT_NONE);
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, key->oid);
-    if (!obj || !*obj) {
-        return -1;
-    }
 
     // iterate through all SSIDs we have
     int result = 0;

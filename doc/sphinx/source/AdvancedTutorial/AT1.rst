@@ -51,87 +51,38 @@ header:
 
 
 Then, in the main program logic, you need to initialize the attribute storage
-object. Its life cycle is supposed to be very similar to the main ``anjay_t``
-object.
+module. After installation, its life cycle is automatically managed - it will be
+removed during the ``anjay_delete()`` call.
 
-So, we can modify part of our ``main()`` function to initialize and destroy
-``anjay_attr_storage_t`` as well:
+So, we can modify part of our ``main()`` function to install the module:
 
-.. snippet-source:: examples/tutorial/AT2/src/main.c
+.. snippet-source:: examples/tutorial/AT1/src/main.c
 
     anjay_t *anjay = anjay_new(&CONFIG);
 
     // ...
 
+    int result = anjay_attr_storage_install(anjay);
+
     // Instantiate necessary objects
     const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
     const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
 
-    anjay_attr_storage_t *attr_storage = anjay_attr_storage_new(anjay);
-
     // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj || !attr_storage) {
+    if (!security_obj || !server_obj) {
         result = -1;
+    }
+
+    if (result) {
         goto cleanup;
     }
 
-    // ...
-
-    cleanup:
-        anjay_delete(anjay);
-        // ...
-        anjay_attr_storage_delete(attr_storage);
-        return result;
-
-While this may seem counter-intuitive, it is actually the intended and preferred
-flow to destroy ``attr_storage`` after ``anjay`` (i.e. the same order they were
-created). This is because when there are objects managed by the module, the
-Anjay object might access them, even during de-initialization.
-
-On the other hand, the attribute storage module will not access the Anjay
-object during destruction. In fact, attribute storage module uses Anjay
-object only if attribute :ref:`persistence <persistence>` is being used via
-``anjay_attr_storage_persist`` or ``anjay_attr_storage_restore``.
-
-.. _wrapping-objects:
-
-Wrapping objects
-^^^^^^^^^^^^^^^^
-
-To actually make use of the ``attr_storage`` module, objects, as defined
-according to the rules described in the previous chapter, need to be wrapped by
-it.
-
-For example, the following snippet:
-
-.. snippet-source:: examples/tutorial/BT2/src/main.c
-
-    if (anjay_register_object(anjay, security_obj)
-            || anjay_register_object(anjay, server_obj)) {
-        result = -1;
-        goto cleanup;
-    }
-
-can be replaced with:
-
-.. snippet-source:: examples/tutorial/AT2/src/main.c
-
-    if (anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                             attr_storage, security_obj))
-        || anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                                attr_storage, server_obj))) {
-        result = -1;
-        goto cleanup;
-    }
-
-The ``anjay_attr_storage_wrap_object()`` function will replace all the
-unimplemented (set to ``NULL``) attribute-related handlers in the original
-object with its own implementation. For a detailed description on how does
-the handler replacement behave when only some of the handlers are implemented,
-refer to the `documentation <../../api/attr__storage_8h.html>`_.
-
-No additional actions are necessary. Any resources allocated for the wrapped
-object will be freed during the call to ``anjay_attr_storage_delete()``.
+No additional steps are necessary - the Attribute Storage module will take over
+the implementations of attribute-related handlers in the original objects with
+its own implementation, unless some handlers are actually already implemented
+(set to anything else than ``NULL``). For a detailed description on how does the
+handler replacement behave when only some of the handlers are implemented, refer
+to the `documentation <../../api/attr__storage_8h.html>`_.
 
 .. _persistence:
 
@@ -147,10 +98,10 @@ These two functions can be used for this purpose:
 
 .. snippet-source:: modules/attr_storage/include_public/anjay/attr_storage.h
 
-    int anjay_attr_storage_persist(anjay_attr_storage_t *attr_storage,
+    int anjay_attr_storage_persist(anjay_t *anjay,
                                    avs_stream_abstract_t *out_stream);
 
-    int anjay_attr_storage_restore(anjay_attr_storage_t *attr_storage,
+    int anjay_attr_storage_restore(anjay_t *anjay,
                                    avs_stream_abstract_t *in_stream);
 
 

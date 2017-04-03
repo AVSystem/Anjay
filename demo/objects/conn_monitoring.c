@@ -173,14 +173,16 @@ static int cm_resource_dim(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t CONN_MONITORING = {
-    .oid = 4,
+    .oid = DEMO_OID_CONN_MONITORING,
     .rid_bound = CM_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = cm_resource_present,
-    .resource_supported = cm_resource_supported,
-    .resource_read = cm_resource_read,
-    .resource_dim = cm_resource_dim
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = cm_resource_present,
+        .resource_supported = cm_resource_supported,
+        .resource_read = cm_resource_read,
+        .resource_dim = cm_resource_dim
+    }
 };
 
 const anjay_dm_object_def_t **cm_object_create(void) {

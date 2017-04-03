@@ -31,7 +31,17 @@ typedef struct {
     char data[1]; // actually a VLA, but struct cannot be empty
 } anjay_demo_string_t;
 
+typedef void anjay_demo_object_deleter_t(const anjay_dm_object_def_t **);
+typedef void anjay_demo_object_notify_t(anjay_t *,
+                                        const anjay_dm_object_def_t **);
+
 typedef struct {
+    const anjay_dm_object_def_t **obj_ptr;
+    anjay_demo_object_notify_t *time_dependent_notify_func;
+    anjay_demo_object_deleter_t *release_func;
+} anjay_demo_object_t;
+
+struct anjay_demo_struct {
     anjay_t *anjay;
     bool running;
 
@@ -40,24 +50,11 @@ typedef struct {
 
     iosched_t *iosched;
 
-    anjay_attr_storage_t *attr_storage;
+    AVS_LIST(anjay_demo_object_t) objects;
+};
 
-    const anjay_dm_object_def_t **apn_conn_profile_obj;
-    const anjay_dm_object_def_t **cell_connectivity_obj;
-    const anjay_dm_object_def_t **conn_monitoring_obj;
-    const anjay_dm_object_def_t **conn_statistics_obj;
-    const anjay_dm_object_def_t **download_diagnostics_obj;
-    const anjay_dm_object_def_t **device_obj;
-    const anjay_dm_object_def_t **ext_dev_info_obj;
-    const anjay_dm_object_def_t **firmware_update_obj;
-    const anjay_dm_object_def_t **security_obj;
-    const anjay_dm_object_def_t **server_obj;
-    const anjay_dm_object_def_t **location_obj;
-    const anjay_dm_object_def_t **geopoints_obj;
-    const anjay_dm_object_def_t **ip_ping_obj;
-    const anjay_dm_object_def_t **test_obj;
-    const anjay_dm_object_def_t *const *access_control_obj;
-} anjay_demo_t;
+const anjay_dm_object_def_t **demo_find_object(anjay_demo_t *demo,
+                                               anjay_oid_t oid);
 
 void demo_reload_servers(anjay_demo_t *demo);
 

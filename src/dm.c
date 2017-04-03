@@ -46,30 +46,11 @@ VISIBILITY_SOURCE_BEGIN
 #include "test/mock_coap_stream.h"
 #endif
 
-static int object_remove(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *def_ptr) {
-    if (!def_ptr || !*def_ptr) {
-        anjay_log(ERROR, "invalid object pointer");
-        return -1;
-    }
-
-    AVS_LIST(const anjay_dm_object_def_t *const *) *obj_iter;
-    AVS_LIST_FOREACH_PTR(obj_iter, &anjay->dm.objects) {
-        assert(*obj_iter && **obj_iter);
-        anjay_oid_t oid = (***obj_iter)->oid;
-        if (oid == (*def_ptr)->oid) {
-            AVS_LIST_DELETE(obj_iter);
-            return 0;
-        } else if (oid > (*def_ptr)->oid) {
-            break;
-        }
-    }
-    anjay_log(ERROR, "object /%u not found", (*def_ptr)->oid);
-    return -1;
-}
-
 int anjay_register_object(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *def_ptr) {
+    assert(!anjay->transaction_state.depth);
+    assert(!anjay->transaction_state.objs_in_transaction);
+
     if (!def_ptr || !*def_ptr) {
         anjay_log(ERROR, "invalid object pointer");
         return -1;
@@ -101,13 +82,6 @@ int anjay_register_object(anjay_t *anjay,
     *new_elem = def_ptr;
     AVS_LIST_INSERT(obj_iter, new_elem);
 
-    int retval = 0;
-    if ((*def_ptr)->on_register
-            && (retval = (*def_ptr)->on_register(anjay, def_ptr))) {
-        (void) object_remove(anjay, def_ptr);
-        return retval;
-    }
-
     anjay_log(INFO, "successfully registered object /%u", (**new_elem)->oid);
     if (anjay_notify_instances_changed(anjay, (**new_elem)->oid)) {
         anjay_log(WARNING, "anjay_notify_instances_changed() failed on /%u",
@@ -116,8 +90,78 @@ int anjay_register_object(anjay_t *anjay,
     return 0;
 }
 
-void _anjay_dm_cleanup(anjay_dm_t *dm) {
-    AVS_LIST_CLEAR(&dm->objects);
+static void remove_oid_from_notify_queue(anjay_notify_queue_t *out_queue,
+                                         anjay_oid_t oid) {
+    AVS_LIST(anjay_notify_queue_object_entry_t) *it;
+    AVS_LIST_FOREACH_PTR(it, out_queue) {
+        if ((*it)->oid >= oid) {
+            break;
+        }
+    }
+    if (*it && (*it)->oid == oid) {
+        AVS_LIST(anjay_notify_queue_object_entry_t) entry = AVS_LIST_DETACH(it);
+        _anjay_notify_clear_queue(&entry);
+    }
+}
+
+int anjay_unregister_object(anjay_t *anjay,
+                            const anjay_dm_object_def_t *const *def_ptr) {
+    assert(!anjay->transaction_state.depth);
+    assert(!anjay->transaction_state.objs_in_transaction);
+
+    if (!def_ptr || !*def_ptr) {
+        anjay_log(ERROR, "invalid object pointer");
+        return -1;
+    }
+
+    AVS_LIST(const anjay_dm_object_def_t *const *) *obj_iter;
+    AVS_LIST_FOREACH_PTR(obj_iter, &anjay->dm.objects) {
+        assert(*obj_iter && **obj_iter);
+        if ((***obj_iter)->oid >= (*def_ptr)->oid) {
+            break;
+        }
+    }
+
+    if (!*obj_iter || (***obj_iter)->oid != (*def_ptr)->oid) {
+        anjay_log(ERROR, "object %" PRIu16 " is not currently registered",
+                  (*def_ptr)->oid);
+        return -1;
+    }
+    if (**obj_iter != def_ptr) {
+        anjay_log(ERROR, "object %" PRIu16 " that is registered is not "
+                         "the same as the object passed for unregister",
+                  (*def_ptr)->oid);
+        return -1;
+    }
+
+    AVS_LIST(const anjay_dm_object_def_t *const *) detached =
+            AVS_LIST_DETACH(obj_iter);
+
+    anjay_notify_queue_t notify = NULL;
+    if (_anjay_notify_queue_instance_set_unknown_change(&notify,
+                                                        (*def_ptr)->oid)
+            || _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP, &notify)) {
+        anjay_log(WARNING, "could not perform notifications about "
+                           "removed object %" PRIu16, (*def_ptr)->oid);
+    }
+
+    remove_oid_from_notify_queue(&anjay->scheduled_notify.queue,
+                                 (*def_ptr)->oid);
+    remove_oid_from_notify_queue(&anjay->bootstrap.notification_queue,
+                                 (*def_ptr)->oid);
+    anjay_log(INFO, "successfully unregistered object /%u", (*def_ptr)->oid);
+    AVS_LIST_DELETE(&detached);
+    return 0;
+}
+
+void _anjay_dm_cleanup(anjay_t *anjay) {
+    AVS_LIST_CLEAR(&anjay->dm.modules) {
+        if (anjay->dm.modules->def->deleter) {
+            anjay->dm.modules->def->deleter(anjay, anjay->dm.modules->arg);
+        }
+    }
+
+    AVS_LIST_CLEAR(&anjay->dm.objects);
 }
 
 const anjay_dm_object_def_t *const *
@@ -225,7 +269,7 @@ static int ensure_instance_present(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid) {
     return _anjay_dm_map_present_result(
-            _anjay_dm_instance_present(anjay, obj_ptr, iid));
+            _anjay_dm_instance_present(anjay, obj_ptr, iid, NULL));
 }
 
 static int ensure_resource_present(anjay_t *anjay,
@@ -242,7 +286,7 @@ has_resource_operation_bit(anjay_t *anjay,
                            anjay_rid_t rid,
                            anjay_dm_resource_op_bit_t bit) {
     anjay_dm_resource_op_mask_t mask = ANJAY_DM_RESOURCE_OP_NONE;
-    if (_anjay_dm_resource_operations(anjay, obj_ptr, rid, &mask)) {
+    if (_anjay_dm_resource_operations(anjay, obj_ptr, rid, &mask, NULL)) {
         anjay_log(ERROR, "resource_operations /%u/*/%u failed", (*obj_ptr)->oid,
                   rid);
         return false;
@@ -257,7 +301,7 @@ static int read_resource_internal(anjay_t *anjay,
                                   anjay_output_ctx_t *out_ctx) {
     int result = _anjay_output_set_id(out_ctx, ANJAY_ID_RID, rid);
     if (!result) {
-        result = _anjay_dm_resource_read(anjay, obj, iid, rid, out_ctx);
+        result = _anjay_dm_resource_read(anjay, obj, iid, rid, out_ctx, NULL);
     }
     return result;
 }
@@ -326,7 +370,8 @@ static int read_object(anjay_t *anjay,
     };
 
     while (!result
-            && !(result = _anjay_dm_instance_it(anjay, obj, &iid, &cookie))
+            && !(result = _anjay_dm_instance_it(anjay, obj, &iid, &cookie,
+                                                NULL))
             && iid != ANJAY_IID_INVALID) {
         info.iid = iid;
         if (!_anjay_access_control_action_allowed(anjay, &info)) {
@@ -592,7 +637,7 @@ write_present_resource(anjay_t *anjay,
         anjay_log(ERROR, "Write /%u/*/%u is not supported", (*obj)->oid, rid);
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-    int result = _anjay_dm_resource_write(anjay, obj, iid, rid, in_ctx);
+    int result = _anjay_dm_resource_write(anjay, obj, iid, rid, in_ctx, NULL);
     if (!result && notify_queue) {
         result = _anjay_notify_queue_resource_change(notify_queue,
                                                      (*obj)->oid, iid, rid);
@@ -607,7 +652,7 @@ static int write_resource(anjay_t *anjay,
                           anjay_input_ctx_t *in_ctx,
                           anjay_notify_queue_t *notify_queue) {
     int result = _anjay_dm_map_present_result(
-            _anjay_dm_resource_supported(anjay, obj, rid));
+            _anjay_dm_resource_supported(anjay, obj, rid, NULL));
     if (!result) {
         result = write_present_resource(anjay, obj, iid, rid, in_ctx,
                                         notify_queue);
@@ -633,7 +678,7 @@ static int write_instance(anjay_t *anjay,
         if (type != ANJAY_ID_RID) {
             return ANJAY_ERR_BAD_REQUEST;
         }
-        int supported = _anjay_dm_resource_supported(anjay, obj, id);
+        int supported = _anjay_dm_resource_supported(anjay, obj, id, NULL);
         if (supported < 0) {
             return supported;
         }
@@ -687,7 +732,7 @@ static int dm_write(anjay_t *anjay,
             }
         } else {
             if (action != ANJAY_ACTION_WRITE_UPDATE) {
-                retval = _anjay_dm_instance_reset(anjay, obj, args->iid);
+                retval = _anjay_dm_instance_reset(anjay, obj, args->iid, NULL);
             }
             if (!retval) {
                 retval = write_instance(anjay, obj, args->iid,
@@ -733,12 +778,12 @@ static int dm_write_resource_attrs(anjay_t *anjay,
 
     if (!result) {
         result = _anjay_dm_resource_read_attrs(anjay, obj, iid, rid, ssid,
-                                               &attrs);
+                                               &attrs, NULL);
     }
     if (!result) {
         update_attrs(&attrs, attributes);
         result = _anjay_dm_resource_write_attrs(anjay, obj, iid, rid, ssid,
-                                                &attrs);
+                                                &attrs, NULL);
     }
     return result;
 }
@@ -754,7 +799,7 @@ static int dm_write_instance_attrs(anjay_t *anjay,
     if (!result) {
         update_attrs(&attrs, attributes);
         result = _anjay_dm_instance_write_default_attrs(anjay, obj, iid, ssid,
-                                                        &attrs.common);
+                                                        &attrs.common, NULL);
     }
     return result;
 }
@@ -769,7 +814,7 @@ static int dm_write_object_attrs(anjay_t *anjay,
     if (!result) {
         update_attrs(&attrs, attributes);
         result = _anjay_dm_object_write_default_attrs(anjay, obj, ssid,
-                                                      &attrs.common);
+                                                      &attrs.common, NULL);
     }
     return result;
 }
@@ -843,7 +888,7 @@ static int dm_execute(anjay_t *anjay,
 
         anjay_execute_ctx_t* execute_ctx = _anjay_execute_ctx_create(in_ctx);
         retval = _anjay_dm_resource_execute(anjay, obj, details->iid,
-                                            details->rid, execute_ctx);
+                                            details->rid, execute_ctx, NULL);
         _anjay_execute_ctx_destroy(&execute_ctx);
     }
     return retval;
@@ -884,7 +929,7 @@ static int dm_create_inner(anjay_t *anjay,
                            anjay_ssid_t ssid,
                            anjay_input_ctx_t *in_ctx) {
     anjay_iid_t proposed_iid = *new_iid_ptr;
-    int result = _anjay_dm_instance_create(anjay, obj, new_iid_ptr, ssid);
+    int result = _anjay_dm_instance_create(anjay, obj, new_iid_ptr, ssid, NULL);
     if (result || *new_iid_ptr == ANJAY_IID_INVALID) {
         anjay_log(DEBUG, "Instance Create handler for object %" PRIu16
                          " failed", (*obj)->oid);
@@ -913,7 +958,7 @@ static int dm_create_with_explicit_iid(anjay_t *anjay,
     if (*new_iid_ptr == ANJAY_IID_INVALID) {
         return ANJAY_ERR_BAD_REQUEST;
     }
-    int result = _anjay_dm_instance_present(anjay, obj, *new_iid_ptr);
+    int result = _anjay_dm_instance_present(anjay, obj, *new_iid_ptr, NULL);
     if (result > 0) {
         anjay_log(DEBUG, "Instance /%" PRIu16 "/%" PRIu16 " already exists",
                   (*obj)->oid, *new_iid_ptr);
@@ -1000,7 +1045,7 @@ static int dm_delete(anjay_t *anjay,
                 &DETAILS_TO_ACTION_INFO(details))) {
             return ANJAY_ERR_UNAUTHORIZED;
         }
-        retval = _anjay_dm_instance_remove(anjay, obj, details->iid);
+        retval = _anjay_dm_instance_remove(anjay, obj, details->iid, NULL);
     }
     if (!retval) {
         anjay_notify_queue_t notify_queue = NULL;
@@ -1162,7 +1207,7 @@ int _anjay_dm_foreach_instance(anjay_t *anjay,
     int result;
     anjay_iid_t iid = 0;
 
-    while (!(result = _anjay_dm_instance_it(anjay, obj, &iid, &cookie))
+    while (!(result = _anjay_dm_instance_it(anjay, obj, &iid, &cookie, NULL))
             && iid != ANJAY_IID_INVALID) {
         result = handler(anjay, obj, iid, data);
         if (result == ANJAY_DM_FOREACH_BREAK) {

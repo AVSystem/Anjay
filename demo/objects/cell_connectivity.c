@@ -16,6 +16,7 @@
 
 #include <stdio.h>
 
+#include "../demo.h"
 #include "../objects.h"
 #include "../utils.h"
 
@@ -30,7 +31,7 @@
 
 typedef struct {
     const anjay_dm_object_def_t *def;
-    const anjay_dm_object_def_t **apn_profile_obj;
+    anjay_demo_t *demo;
 } cell_connectivity_repr_t;
 
 static inline cell_connectivity_repr_t *
@@ -67,10 +68,15 @@ static int cell_resource_read(anjay_t *anjay,
     case CELL_RES_ACTIVATED_PROFILE_NAMES:
         {
             int result = ANJAY_ERR_INTERNAL;
-            anjay_oid_t apn_oid = (*cell->apn_profile_obj)->oid;
+            AVS_LIST(anjay_iid_t) profile_iids = NULL;
 
-            AVS_LIST(anjay_iid_t) profile_iids =
-                    apn_conn_profile_list_activated(cell->apn_profile_obj);
+            const anjay_dm_object_def_t **apn_conn_profile =
+                    demo_find_object(cell->demo, DEMO_OID_APN_CONN_PROFILE);
+            if (!apn_conn_profile) {
+                goto cleanup;
+            }
+
+            profile_iids = apn_conn_profile_list_activated(apn_conn_profile);
 
             anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
             if (!array) {
@@ -80,7 +86,8 @@ static int cell_resource_read(anjay_t *anjay,
             AVS_LIST(anjay_iid_t) iid = NULL;
             AVS_LIST_FOREACH(iid, profile_iids) {
                 if (anjay_ret_array_index(array, *iid)
-                        || anjay_ret_objlnk(array, apn_oid, *iid)) {
+                        || anjay_ret_objlnk(array,
+                                            DEMO_OID_APN_CONN_PROFILE, *iid)) {
                     goto cleanup;
                 }
             }
@@ -120,8 +127,14 @@ static int cell_resource_dim(anjay_t *anjay,
     switch (rid) {
     case CELL_RES_ACTIVATED_PROFILE_NAMES:
         {
+            const anjay_dm_object_def_t **apn_conn_profile =
+                    demo_find_object(cell->demo, DEMO_OID_APN_CONN_PROFILE);
+            if (!apn_conn_profile) {
+                return ANJAY_ERR_INTERNAL;
+            }
+
             AVS_LIST(anjay_iid_t) profile_iids =
-                    apn_conn_profile_list_activated(cell->apn_profile_obj);
+                    apn_conn_profile_list_activated(apn_conn_profile);
             size_t size = AVS_LIST_SIZE(profile_iids);
             AVS_LIST_CLEAR(&profile_iids);
 
@@ -133,23 +146,25 @@ static int cell_resource_dim(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t cell_connectivity = {
-    .oid = 10,
+    .oid = DEMO_OID_CELL_CONNECTIVITY,
     .rid_bound = CELL_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = anjay_dm_resource_present_TRUE,
-    .resource_supported = cell_resource_supported,
-    .resource_read = cell_resource_read,
-    .resource_write = cell_resource_write,
-    .resource_dim = cell_resource_dim,
-    .transaction_begin = anjay_dm_transaction_NOOP,
-    .transaction_validate = anjay_dm_transaction_NOOP,
-    .transaction_commit = anjay_dm_transaction_NOOP,
-    .transaction_rollback = anjay_dm_transaction_NOOP
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = anjay_dm_resource_present_TRUE,
+        .resource_supported = cell_resource_supported,
+        .resource_read = cell_resource_read,
+        .resource_write = cell_resource_write,
+        .resource_dim = cell_resource_dim,
+        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_validate = anjay_dm_transaction_NOOP,
+        .transaction_commit = anjay_dm_transaction_NOOP,
+        .transaction_rollback = anjay_dm_transaction_NOOP
+    }
 };
 
 const anjay_dm_object_def_t **
-cell_connectivity_object_create(const anjay_dm_object_def_t **apn_profile_obj) {
+cell_connectivity_object_create(anjay_demo_t *demo) {
     cell_connectivity_repr_t *repr = (cell_connectivity_repr_t *)
             calloc(1, sizeof(cell_connectivity_repr_t));
     if (!repr) {
@@ -157,7 +172,7 @@ cell_connectivity_object_create(const anjay_dm_object_def_t **apn_profile_obj) {
     }
 
     repr->def = &cell_connectivity;
-    repr->apn_profile_obj = apn_profile_obj;
+    repr->demo = demo;
 
     return &repr->def;
 }

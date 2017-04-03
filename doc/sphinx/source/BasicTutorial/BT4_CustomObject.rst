@@ -26,17 +26,8 @@ which holds:
 .. highlight:: c
 .. snippet-source:: include_public/anjay/anjay.h
 
-    /** A struct defining an LwM2M Object and available operations. */
-    struct anjay_dm_object_def_struct {
-        /** Object ID */
-        anjay_oid_t oid;
-
-        /** Smallest Resource ID that is invalid for this Object. All requests to
-         * Resources with ID = @ref anjay_dm_object_def_struct#rid_bound
-         * or bigger are discarded without calling the
-         * @ref anjay_dm_object_def_struct#resource_present handler. */
-        anjay_rid_t rid_bound;
-
+    /** A struct containing pointers to Object handlers. */
+    typedef struct {
         /** Get default Object attributes, @ref anjay_dm_object_read_default_attrs_t */
         anjay_dm_object_read_default_attrs_t *object_read_default_attrs;
         /** Set default Object attributes, @ref anjay_dm_object_write_default_attrs_t */
@@ -80,9 +71,6 @@ which holds:
         /** Set Resource attributes, @ref anjay_dm_resource_write_attrs_t */
         anjay_dm_resource_write_attrs_t *resource_write_attrs;
 
-        /** Perform additional registration operations, @ref anjay_dm_object_on_register_t */
-        anjay_dm_object_on_register_t *on_register;
-
         /** Begin a transaction on this Object, @ref anjay_dm_transaction_begin_t */
         anjay_dm_transaction_begin_t *transaction_begin;
         /** Validate whether a transaction on this Object can be cleanly committed. See @ref anjay_dm_transaction_validate_t */
@@ -91,15 +79,30 @@ which holds:
         anjay_dm_transaction_commit_t *transaction_commit;
         /** Rollback changes made in a transaction, @ref anjay_dm_transaction_rollback_t */
         anjay_dm_transaction_rollback_t *transaction_rollback;
+    } anjay_dm_handlers_t;
+
+    /** A struct defining an LwM2M Object. */
+    struct anjay_dm_object_def_struct {
+        /** Object ID */
+        anjay_oid_t oid;
+
+        /** Smallest Resource ID that is invalid for this Object. All requests to
+         * Resources with ID = @ref anjay_dm_object_def_struct#rid_bound
+         * or bigger are discarded without calling the
+         * @ref anjay_dm_handlers_t#resource_present handler. */
+        anjay_rid_t rid_bound;
+
+        /** Handler callbacks for this object. */
+        anjay_dm_handlers_t handlers;
     };
 
 See `API docs <../../api/structanjay__dm__object__def__struct.html>`_ for detailed
 information about each of those fields.
 
-The structure itself may seem intimidating at the first glance. In reality, most
-use cases will not require setting up all possible handlers - this tutorial
-will show multiple possible implementations, from the simplest cases to the most
-complex ones.
+These structures themselves may seem intimidating at the first glance. In
+reality, most use cases will not require setting up all possible handlers - this
+tutorial will show multiple possible implementations, from the simplest cases to
+the most complex ones.
 
 
 .. toctree::

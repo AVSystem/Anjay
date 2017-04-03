@@ -46,8 +46,9 @@ class FileDirtinessChecker:
             print('*** expected format:')
             print('*** MD5HASH <whitespace> FILEPATH_RELATIVE_TO_PROJECT_ROOT')
             print('***')
-
-        self.file_to_md5 = dict((tpl[1].rstrip('\n'), tpl[0]) for tpl in tuples)
+            self.file_to_md5 = {}
+        else:
+            self.file_to_md5 = dict((tpl[1].rstrip('\n'), tpl[0]) for tpl in tuples)
 
     def is_file_dirty(self, filepath):
         """

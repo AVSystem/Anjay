@@ -29,20 +29,35 @@
 #include "iosched.h"
 #include "utils.h"
 
+typedef struct anjay_demo_struct anjay_demo_t;
+
+#define DEMO_OID_SECURITY           0
+#define DEMO_OID_SERVER             1
+#define DEMO_OID_DEVICE             3
+#define DEMO_OID_CONN_MONITORING    4
+#define DEMO_OID_FIRMWARE_UPDATE    5
+#define DEMO_OID_LOCATION           6
+#define DEMO_OID_CONN_STATISTICS    7
+#define DEMO_OID_CELL_CONNECTIVITY 10
+#define DEMO_OID_APN_CONN_PROFILE  11
+#define DEMO_OID_TEST            1337
+#define DEMO_OID_EXT_DEV_INFO   11111
+#define DEMO_OID_IP_PING        12359
+#define DEMO_OID_GEOPOINTS      12360
+#define DEMO_OID_DOWNLOAD_DIAG  12361
+
 const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
                                                    const char *endpoint_name);
 void device_object_release(const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **
 firmware_update_object_create(iosched_t *iosched,
-                              bool cleanup_fw_on_upgrade);
+                              const char *fw_updated_marker_path);
 void firmware_update_object_release(const anjay_dm_object_def_t **def);
 
 void firmware_update_set_package_path(anjay_t *anjay,
                                       const anjay_dm_object_def_t **fw_obj,
                                       const char *path);
-void firmware_update_set_fw_updated_marker_path(
-        const anjay_dm_object_def_t **fw_obj, const char *path);
 
 #define MAX_SERVERS 1024
 
@@ -87,7 +102,6 @@ void cs_object_release(const anjay_dm_object_def_t **def);
 const anjay_dm_object_def_t **download_diagnostics_object_create(iosched_t *iosched);
 void download_diagnostics_object_release(const anjay_dm_object_def_t **def);
 
-#define EXT_DEV_INFO_OID 11111
 const anjay_dm_object_def_t **ext_dev_info_object_create(void);
 void ext_dev_info_object_release(const anjay_dm_object_def_t **def);
 void ext_dev_info_notify_time_dependent(anjay_t *anjay,
@@ -104,7 +118,7 @@ AVS_LIST(anjay_iid_t)
 apn_conn_profile_list_activated(const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **
-cell_connectivity_object_create(const anjay_dm_object_def_t **apn_profile_obj);
+cell_connectivity_object_create(anjay_demo_t *demo);
 void cell_connectivity_object_release(const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **location_object_create(void);
@@ -116,8 +130,7 @@ void location_get(const anjay_dm_object_def_t **def,
 int location_open_csv(const anjay_dm_object_def_t **def,
                       const char *file_name, time_t frequency_s);
 
-const anjay_dm_object_def_t **
-geopoints_object_create(const anjay_dm_object_def_t **location_obj_ptr);
+const anjay_dm_object_def_t **geopoints_object_create(anjay_demo_t *demo);
 void geopoints_object_release(const anjay_dm_object_def_t **def);
 void geopoints_notify_time_dependent(anjay_t *anjay,
                                      const anjay_dm_object_def_t **def);

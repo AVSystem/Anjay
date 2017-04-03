@@ -649,24 +649,25 @@ static int test_resource_dim(anjay_t *anjay,
 }
 
 const anjay_dm_object_def_t TEST_OBJECT = {
-    .oid = 1337,
+    .oid = DEMO_OID_TEST,
     .rid_bound = _TEST_RES_COUNT,
-
-    .instance_it = test_instance_it,
-    .instance_present = test_instance_present,
-    .instance_create = test_instance_create,
-    .instance_remove = test_instance_remove,
-    .instance_reset = test_instance_reset,
-    .resource_supported = test_resource_supported,
-    .resource_present = test_resource_present,
-    .resource_read = test_resource_read,
-    .resource_write = test_resource_write,
-    .resource_execute = test_resource_execute,
-    .resource_dim = test_resource_dim,
-    .transaction_begin = anjay_dm_transaction_NOOP,
-    .transaction_validate = anjay_dm_transaction_NOOP,
-    .transaction_commit = anjay_dm_transaction_NOOP,
-    .transaction_rollback = anjay_dm_transaction_NOOP
+    .handlers = {
+        .instance_it = test_instance_it,
+        .instance_present = test_instance_present,
+        .instance_create = test_instance_create,
+        .instance_remove = test_instance_remove,
+        .instance_reset = test_instance_reset,
+        .resource_supported = test_resource_supported,
+        .resource_present = test_resource_present,
+        .resource_read = test_resource_read,
+        .resource_write = test_resource_write,
+        .resource_execute = test_resource_execute,
+        .resource_dim = test_resource_dim,
+        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_validate = anjay_dm_transaction_NOOP,
+        .transaction_commit = anjay_dm_transaction_NOOP,
+        .transaction_rollback = anjay_dm_transaction_NOOP
+    }
 };
 
 const anjay_dm_object_def_t **test_object_create(void) {

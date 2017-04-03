@@ -226,10 +226,12 @@ Definition struct:
         // Object does not contain any Resources with IDs >= 2
         .rid_bound = 2,
 
-        .instance_it = test_instance_it,
-        .instance_present = test_instance_present,
+        .handlers = {
+            .instance_it = test_instance_it,
+            .instance_present = test_instance_present,
 
-        // ... other handlers
+            // ... other handlers
+        }
    };
 
 

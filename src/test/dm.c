@@ -846,7 +846,7 @@ AVS_UNIT_TEST(dm_execute, execute_get_arg_value_invalid_args) {
             "\x01" "1" // RID
             "\xFF" "0='foobarbaz'";
 
-    EXECUTE_OBJ->resource_execute = execute_get_arg_value_invalid_args;
+    EXECUTE_OBJ->handlers.resource_execute = execute_get_arg_value_invalid_args;
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay,
         (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ, 514, 1);
@@ -901,7 +901,7 @@ AVS_UNIT_TEST(dm_execute, valid_args) {
             "\x01" "1" // RID
             "\xFF" "0,1,2";
 
-    EXECUTE_OBJ->resource_execute = valid_args_execute;
+    EXECUTE_OBJ->handlers.resource_execute = valid_args_execute;
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay,
         (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ, 514, 1);
@@ -964,7 +964,7 @@ AVS_UNIT_TEST(dm_execute, valid_args_with_values) {
             "\x01" "1" // RID
             "\xFF" "0,1='value',2";
 
-    EXECUTE_OBJ->resource_execute = valid_args_with_values_execute;
+    EXECUTE_OBJ->handlers.resource_execute = valid_args_with_values_execute;
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay,
         (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ, 514, 1);
@@ -1018,7 +1018,7 @@ AVS_UNIT_TEST(dm_execute, valid_values_partial_read) {
             "\x01" "1" // RID
             "\xFF" "1='verylongvalue'";
 
-    EXECUTE_OBJ->resource_execute = valid_values_partial_read_execute;
+    EXECUTE_OBJ->handlers.resource_execute = valid_values_partial_read_execute;
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay,
         (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ, 514, 1);
@@ -1081,7 +1081,7 @@ AVS_UNIT_TEST(dm_execute, valid_values_skipping) {
             "\x01" "1" // RID
             "\xFF" "1='verylongvalue',2,3";
 
-    EXECUTE_OBJ->resource_execute = valid_values_skipping_execute;
+    EXECUTE_OBJ->handlers.resource_execute = valid_values_skipping_execute;
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay,
         (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ, 514, 1);
@@ -1138,7 +1138,7 @@ AVS_UNIT_TEST(dm_execute, invalid_input) {
         "0='val"
     };
 
-    EXECUTE_OBJ->resource_execute = invalid_input_execute;
+    EXECUTE_OBJ->handlers.resource_execute = invalid_input_execute;
     for (size_t i = 0; i < ANJAY_ARRAY_SIZE(invalid_inputs); i++) {
         DM_TEST_INIT;
         size_t input_len = strlen(invalid_inputs[i]);
@@ -1193,7 +1193,7 @@ AVS_UNIT_TEST(dm_execute, valid_input) {
         "\xFF" "0,1,2,3,4"
     };
 
-    EXECUTE_OBJ->resource_execute = valid_input_execute;
+    EXECUTE_OBJ->handlers.resource_execute = valid_input_execute;
     for (size_t i = 0; i < ANJAY_ARRAY_SIZE(valid_inputs); i++) {
         DM_TEST_INIT;
         size_t input_len = strlen(valid_inputs[i]);

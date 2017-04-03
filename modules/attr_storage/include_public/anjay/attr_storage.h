@@ -26,35 +26,9 @@ extern "C" {
 #endif
 
 /**
- * Anjay Attribute Storage object that may be used to handle attribute setting
- * for any LwM2M entities.
- */
-typedef struct anjay_attr_storage_struct anjay_attr_storage_t;
-
-/**
- * Creates a new Anjay Attribute Storage object.
- *
- * @param anjay ANJAY object for which the Attribute Storage is created.
- *
- * @returns Created Anjay Attribute Storage object on success,
- *          NULL in case of error.
- */
-anjay_attr_storage_t *anjay_attr_storage_new(anjay_t *anjay);
-
-/**
- * Cleans up all resources and releases the Anjay Attribute Storage object,
- * also discarding any stored attributes.
- *
- * NOTE: It shall not be called before releasing all references to LwM2M Objects
- * wrapped in this object - likely not before calling @ref anjay_delete.
- *
- * @param attr_storage Anjay Attribute Storage object to delete.
- */
-void anjay_attr_storage_delete(anjay_attr_storage_t *attr_storage);
-
-/**
- * Registers an LwM2M Object in the Attribute Storage, making it possible to
- * automatically manage attributes for it, its instances and resources.
+ * Installs the Attribute Storage handlers in an Anjay object, making it
+ * possible to automatically manage attributes for LwM2M Objects, their
+ * instances and resources.
  *
  * In accordance to the LwM2M specification, there are three levels on which
  * attributes may be stored:
@@ -66,35 +40,34 @@ void anjay_attr_storage_delete(anjay_attr_storage_t *attr_storage);
  * - Object level (@ref anjay_dm_object_read_default_attrs_t,
  *   @ref anjay_dm_object_write_default_attrs_t)
  *
- * If at least one of either read or write handlers is provided in the original
+ * If at least one of either read or write handlers is provided in a given
  * object for a given level, attribute handling on that level will not be
  * altered, but instead any calls will be directly forwarded to the original
  * handlers.
  *
- * If both read and write handlers are left as NULL in the original object for
- * a given level, attribute storage will be handled by the Attribute Storage
+ * If both read and write handlers are left as NULL in a given object for a
+ * given level, attribute storage will be handled by the Attribute Storage
  * module instead, implementing both handlers.
  *
- * The enhanced object is returned as another, wrapped object, which may then be
- * passed to @ref anjay_register_object. The pointer will remain valid until
- * a call to @ref anjay_attr_storage_delete.
+ * The Attribute Storage module does not require explicit cleanup; all resources
+ * will be automatically freed up during the call to @ref anjay_delete.
  *
- * @returns A wrapped LwM2M object definition, or NULL in case of error.
+ * @param anjay ANJAY object for which the Attribute Storage is installed.
+ *
+ * @returns 0 on success, or a negative value in case of error.
  */
-const anjay_dm_object_def_t *const *
-anjay_attr_storage_wrap_object(anjay_attr_storage_t *attr_storage,
-                               const anjay_dm_object_def_t *const *def_ptr);
+int anjay_attr_storage_install(anjay_t *anjay);
 
 /**
  * Checks whether the attribute storage has been modified since last call to
  * @ref anjay_attr_storage_persist or @ref anjay_attr_storage_restore.
  */
-bool anjay_attr_storage_is_modified(anjay_attr_storage_t *attr_storage);
+bool anjay_attr_storage_is_modified(anjay_t *anjay);
 
-int anjay_attr_storage_persist(anjay_attr_storage_t *attr_storage,
+int anjay_attr_storage_persist(anjay_t *anjay,
                                avs_stream_abstract_t *out_stream);
 
-int anjay_attr_storage_restore(anjay_attr_storage_t *attr_storage,
+int anjay_attr_storage_restore(anjay_t *anjay,
                                avs_stream_abstract_t *in_stream);
 
 #ifdef __cplusplus

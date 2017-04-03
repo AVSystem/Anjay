@@ -88,9 +88,9 @@ static int handle_instance_entry(anjay_persistence_context_t *ctx, void *instanc
 }
 
 static int handle_object(anjay_persistence_context_t *ctx, void *object_) {
-    fas_object_t *object = (fas_object_t *) object_;
+    fas_object_entry_t *object = (fas_object_entry_t *) object_;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &object->def.oid))
+    (void) ((retval = anjay_persistence_u16(ctx, &object->oid))
             || (retval = HANDLE_LIST(default_attrs, ctx,
                                      &object->default_attrs))
             || (retval = HANDLE_LIST(instance_entry, ctx, &object->instances)));
@@ -98,13 +98,6 @@ static int handle_object(anjay_persistence_context_t *ctx, void *object_) {
 }
 
 // HELPERS /////////////////////////////////////////////////////////////////////
-
-static void clear_storage(anjay_attr_storage_t *attr_storage) {
-    AVS_LIST(fas_object_t) object;
-    AVS_LIST_FOREACH(object, attr_storage->objects) {
-        _anjay_attr_storage_clear_object(object);
-    }
-}
 
 static int stream_at_end(avs_stream_abstract_t *in) {
     if (avs_stream_peek(in, 0) != EOF) {
@@ -172,21 +165,37 @@ static bool is_instances_list_sane(AVS_LIST(fas_instance_entry_t) instances) {
     return true;
 }
 
-static bool is_object_sane(fas_object_t *object) {
+static bool is_object_sane(fas_object_entry_t *object) {
     return is_attrs_list_sane(object->default_attrs,
                               offsetof(fas_default_attrs_t, attrs),
                               default_attrs_empty)
             && is_instances_list_sane(object->instances);
 }
 
+static bool is_attr_storage_sane(anjay_attr_storage_t *fas) {
+    int32_t last_oid = -1;
+    AVS_LIST(fas_object_entry_t) *object_ptr;
+    AVS_LIST(fas_object_entry_t) object_helper;
+    AVS_LIST_DELETABLE_FOREACH_PTR(object_ptr, object_helper, &fas->objects) {
+        if ((*object_ptr)->oid <= last_oid) {
+            return false;
+        }
+        last_oid = (*object_ptr)->oid;
+        if (!is_object_sane(*object_ptr)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static int clear_nonexistent_iids(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *def_ptr) {
-    // def_ptr refers to the wrapper object, so it effectively calls the
-    // FAS handlers that will eventually clear what is meant to be cleared
     void *cookie = NULL;
     anjay_iid_t iid = 0;
     while (iid != ANJAY_IID_INVALID) {
-        int retval = _anjay_dm_instance_it(anjay, def_ptr, &iid, &cookie);
+        // we call the FAS overlaid handler which will eventually clear what is
+        // meant to be cleared
+        int retval = _anjay_dm_instance_it(anjay, def_ptr, &iid, &cookie, NULL);
         if (retval) {
             return retval;
         }
@@ -194,7 +203,9 @@ static int clear_nonexistent_iids(anjay_t *anjay,
     return 0;
 }
 
-static int clear_nonexistent_rids(anjay_t *anjay, fas_object_t *object) {
+static int clear_nonexistent_rids(anjay_t *anjay,
+                                  fas_object_entry_t *object,
+                                  const anjay_dm_object_def_t *const *def_ptr) {
     AVS_LIST(fas_instance_entry_t) *instance_ptr;
     AVS_LIST(fas_instance_entry_t) instance_helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper,
@@ -203,15 +214,13 @@ static int clear_nonexistent_rids(anjay_t *anjay, fas_object_t *object) {
         AVS_LIST(fas_resource_entry_t) resource_helper;
         AVS_LIST_DELETABLE_FOREACH_PTR(resource_ptr, resource_helper,
                                        &(*instance_ptr)->resources) {
-            int rid_present
-                = _anjay_dm_resource_supported_and_present(anjay,
-                                                           object->backend,
-                                                           (*instance_ptr)->iid,
-                                                           (*resource_ptr)->rid);
+            // we call the FAS overlaid handler which will eventually clear what
+            // is meant to be cleared
+            int rid_present = _anjay_dm_resource_supported_and_present(
+                    anjay, def_ptr,
+                    (*instance_ptr)->iid, (*resource_ptr)->rid);
             if (rid_present < 0) {
                 return -1;
-            } else if (!rid_present) {
-                remove_resource_entry(object->fas, resource_ptr);
             }
         }
         remove_instance_if_empty(instance_ptr);
@@ -219,75 +228,26 @@ static int clear_nonexistent_rids(anjay_t *anjay, fas_object_t *object) {
     return 0;
 }
 
-static int clear_nonexistent(anjay_t *anjay, fas_object_t *object) {
-    int retval;
-    (void) ((retval = clear_nonexistent_iids(anjay, &object->def_ptr))
-            || (retval = clear_nonexistent_rids(anjay, object)));
-    return retval;
-}
-
-static int restore_object_data(anjay_persistence_context_t *ctx,
-                               fas_object_t *object) {
-    int retval;
-    (void) ((retval = HANDLE_LIST(default_attrs, ctx, &object->default_attrs))
-            || (retval = HANDLE_LIST(instance_entry, ctx, &object->instances)));
-    return retval;
-}
-
-static int restore_objects_inner(anjay_attr_storage_t *attr_storage,
-                                 anjay_persistence_context_t *restore_ctx,
-                                 anjay_persistence_context_t *ignore_ctx) {
-    int retval;
-    uint32_t count;
-    if ((retval = anjay_persistence_u32(restore_ctx, &count))) {
-        return retval;
-    }
-    int32_t last_oid = -1;
-    while (count--) {
-        anjay_oid_t oid;
-        if ((retval = anjay_persistence_u16(restore_ctx, &oid))) {
-            return retval;
-        }
-        if (oid <= last_oid) {
-            return -1;
-        }
-        last_oid = oid;
-        fas_object_t *object =
-                _anjay_attr_storage_find_object(attr_storage, oid);
-        if ((retval = restore_object_data(object ? restore_ctx : ignore_ctx,
-                                          object))) {
-            return retval;
-        }
-        if (object) {
-            if (!is_object_sane(object)) {
-                fas_log(ERROR, "Invalid persistence data format");
-                return -1;
-            } else if ((retval = clear_nonexistent(attr_storage->anjay,
-                                                   object))) {
-                fas_log(ERROR, "Could not properly clear data for "
-                               "nonexistent instances");
+static int clear_nonexistent_entries(anjay_t *anjay,
+                                     anjay_attr_storage_t *fas) {
+    AVS_LIST(fas_object_entry_t) *object_ptr;
+    AVS_LIST(fas_object_entry_t) object_helper;
+    AVS_LIST_DELETABLE_FOREACH_PTR(object_ptr, object_helper, &fas->objects) {
+        const anjay_dm_object_def_t *const *def_ptr =
+                _anjay_dm_find_object_by_oid(anjay, (*object_ptr)->oid);
+        if (!def_ptr) {
+            remove_object_entry(fas, object_ptr);
+        } else {
+            int retval;
+            if ((retval = clear_nonexistent_iids(anjay, def_ptr))
+                    || (retval = clear_nonexistent_rids(anjay, *object_ptr,
+                                                        def_ptr))) {
                 return retval;
             }
+            remove_object_if_empty(object_ptr);
         }
     }
     return 0;
-}
-
-static int restore_objects(anjay_attr_storage_t *attr_storage,
-                           avs_stream_abstract_t *in) {
-    anjay_persistence_context_t *restore_ctx =
-            anjay_persistence_restore_context_new(in);
-    anjay_persistence_context_t *ignore_ctx =
-            anjay_persistence_ignore_context_new(in);
-    int retval = -1;
-    if (restore_ctx && ignore_ctx) {
-        retval = restore_objects_inner(attr_storage, restore_ctx, ignore_ctx);
-    } else {
-        fas_log(ERROR, "Out of memory");
-    }
-    anjay_persistence_context_delete(restore_ctx);
-    anjay_persistence_context_delete(ignore_ctx);
-    return retval;
 }
 
 //// PUBLIC FUNCTIONS //////////////////////////////////////////////////////////
@@ -320,9 +280,10 @@ int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
     return retval;
 }
 
-int _anjay_attr_storage_restore_inner(anjay_attr_storage_t *attr_storage,
+int _anjay_attr_storage_restore_inner(anjay_t *anjay,
+                                      anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *in) {
-    clear_storage(attr_storage);
+    _anjay_attr_storage_clear(attr_storage);
     int retval = stream_at_end(in);
     if (retval) {
         return (retval < 0) ? retval : 0;
@@ -335,28 +296,49 @@ int _anjay_attr_storage_restore_inner(anjay_attr_storage_t *attr_storage,
     } else if (memcmp(MAGIC, magic_buffer, sizeof(MAGIC))) {
         fas_log(ERROR, "Magic value mismatch");
         return -1;
-    } else if ((retval = restore_objects(attr_storage, in))) {
-        clear_storage(attr_storage);
+    } else {
+        anjay_persistence_context_t *ctx =
+                anjay_persistence_restore_context_new(in);
+        if (!ctx) {
+            fas_log(ERROR, "Out of memory");
+            retval = -1;
+        } else {
+            (void) ((retval = HANDLE_LIST(object, ctx, &attr_storage->objects))
+                    || (retval = (is_attr_storage_sane(attr_storage) ? 0 : -1))
+                    || (retval = clear_nonexistent_entries(anjay,
+                                                           attr_storage)));
+            anjay_persistence_context_delete(ctx);
+        }
+        if (retval) {
+            _anjay_attr_storage_clear(attr_storage);
+        }
     }
     return retval;
 }
 
-int anjay_attr_storage_persist(anjay_attr_storage_t *attr_storage,
-                               avs_stream_abstract_t *out) {
-    int retval = _anjay_attr_storage_persist_inner(attr_storage, out);
+int anjay_attr_storage_persist(anjay_t *anjay, avs_stream_abstract_t *out) {
+    anjay_attr_storage_t *fas = _anjay_attr_storage_get(anjay);
+    if (!fas) {
+        fas_log(ERROR,
+                "Attribute Storage is not installed on this Anjay object");
+        return -1;
+    }
+    int retval = _anjay_attr_storage_persist_inner(fas, out);
     if (!retval) {
-        attr_storage->modified_since_persist = false;
+        fas->modified_since_persist = false;
     }
     return retval;
 }
 
-int anjay_attr_storage_restore(anjay_attr_storage_t *attr_storage,
-                               avs_stream_abstract_t *in) {
-    attr_storage->modified_since_persist = false;
-    int retval = _anjay_attr_storage_restore_inner(attr_storage, in);
-    if (retval) {
-        attr_storage->modified_since_persist = true;
+int anjay_attr_storage_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
+    anjay_attr_storage_t *fas = _anjay_attr_storage_get(anjay);
+    if (!fas) {
+        fas_log(ERROR,
+                "Attribute Storage is not installed on this Anjay object");
+        return -1;
     }
+    int retval = _anjay_attr_storage_restore_inner(anjay, fas, in);
+    fas->modified_since_persist = (retval != 0);
     return retval;
 }
 

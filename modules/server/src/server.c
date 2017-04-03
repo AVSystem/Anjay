@@ -414,21 +414,23 @@ serv_transaction_rollback(anjay_t *anjay,
 static const anjay_dm_object_def_t SERVER = {
     .oid = 1,
     .rid_bound = _SERV_RID_BOUND,
-    .instance_it = serv_instance_it,
-    .instance_present = serv_instance_present,
-    .instance_create = serv_instance_create,
-    .instance_remove = serv_instance_remove,
-    .instance_reset = serv_instance_reset,
-    .resource_present = serv_resource_present,
-    .resource_supported = anjay_dm_resource_supported_TRUE,
-    .resource_operations = serv_resource_operations,
-    .resource_read = serv_read,
-    .resource_write = serv_write,
-    .resource_execute = serv_execute,
-    .transaction_begin = serv_transaction_begin,
-    .transaction_validate = serv_transaction_validate,
-    .transaction_commit = serv_transaction_commit,
-    .transaction_rollback = serv_transaction_rollback
+    .handlers = {
+        .instance_it = serv_instance_it,
+        .instance_present = serv_instance_present,
+        .instance_create = serv_instance_create,
+        .instance_remove = serv_instance_remove,
+        .instance_reset = serv_instance_reset,
+        .resource_present = serv_resource_present,
+        .resource_supported = anjay_dm_resource_supported_TRUE,
+        .resource_operations = serv_resource_operations,
+        .resource_read = serv_read,
+        .resource_write = serv_write,
+        .resource_execute = serv_execute,
+        .transaction_begin = serv_transaction_begin,
+        .transaction_validate = serv_transaction_validate,
+        .transaction_commit = serv_transaction_commit,
+        .transaction_rollback = serv_transaction_rollback
+    }
 };
 
 const anjay_dm_object_def_t **anjay_server_object_create(void) {

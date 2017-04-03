@@ -98,14 +98,6 @@ typedef int anjay_notify_callback_t(anjay_t *anjay,
                                     anjay_notify_queue_t queue,
                                     void *data);
 
-/**
- * Registers a function to be called during each @ref _anjay_notify_perform, in
- * addition to predefined handlers.
- */
-int _anjay_notify_register_callback(anjay_t *anjay,
-                                    anjay_notify_callback_t *callback,
-                                    void *callback_data);
-
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_NOTIFY_IO_H */

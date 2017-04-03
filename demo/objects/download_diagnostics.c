@@ -23,7 +23,6 @@
 #include <time.h>
 
 #define TEMP_FILE_FMT       "/tmp/diag-XXXXXX"
-#define DOWNLOAD_DIAG_OID   12361
 
 typedef enum {
     DOWNLOAD_DIAG_STATE         = 0,
@@ -83,7 +82,7 @@ static void set_state(anjay_t *anjay,
     (void) anjay;
     if (repr->state != state) {
         repr->state = state;
-        anjay_notify_changed(anjay, DOWNLOAD_DIAG_OID, 0,
+        anjay_notify_changed(anjay, DEMO_OID_DOWNLOAD_DIAG, 0,
                              DOWNLOAD_DIAG_STATE);
     }
 }
@@ -269,19 +268,21 @@ static int diag_resource_write(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t DOWNLOAD_DIAG = {
-    .oid = DOWNLOAD_DIAG_OID,
+    .oid = DEMO_OID_DOWNLOAD_DIAG,
     .rid_bound = DOWNLOAD_DIAG_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = diag_resource_present,
-    .resource_supported = anjay_dm_resource_supported_TRUE,
-    .resource_execute = diag_resource_execute,
-    .resource_read = diag_resource_read,
-    .resource_write = diag_resource_write,
-    .transaction_begin = anjay_dm_transaction_NOOP,
-    .transaction_validate = anjay_dm_transaction_NOOP,
-    .transaction_commit = anjay_dm_transaction_NOOP,
-    .transaction_rollback = anjay_dm_transaction_NOOP,
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = diag_resource_present,
+        .resource_supported = anjay_dm_resource_supported_TRUE,
+        .resource_execute = diag_resource_execute,
+        .resource_read = diag_resource_read,
+        .resource_write = diag_resource_write,
+        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_validate = anjay_dm_transaction_NOOP,
+        .transaction_commit = anjay_dm_transaction_NOOP,
+        .transaction_rollback = anjay_dm_transaction_NOOP
+    }
 };
 
 const anjay_dm_object_def_t **

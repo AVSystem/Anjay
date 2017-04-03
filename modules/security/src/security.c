@@ -403,20 +403,22 @@ sec_instance_reset(anjay_t *anjay,
 static const anjay_dm_object_def_t SECURITY = {
     .oid = 0,
     .rid_bound = _SEC_RID_BOUND,
-    .instance_it = sec_instance_it,
-    .instance_present = sec_instance_present,
-    .instance_create = sec_instance_create,
-    .instance_remove = sec_instance_remove,
-    .instance_reset = sec_instance_reset,
-    .resource_present = sec_resource_present,
-    .resource_supported = sec_resource_supported,
-    .resource_operations = sec_resource_operations,
-    .resource_read = sec_read,
-    .resource_write = sec_write,
-    .transaction_begin = sec_transaction_begin,
-    .transaction_commit = sec_transaction_commit,
-    .transaction_validate = sec_transaction_validate,
-    .transaction_rollback = sec_transaction_rollback
+    .handlers = {
+        .instance_it = sec_instance_it,
+        .instance_present = sec_instance_present,
+        .instance_create = sec_instance_create,
+        .instance_remove = sec_instance_remove,
+        .instance_reset = sec_instance_reset,
+        .resource_present = sec_resource_present,
+        .resource_supported = sec_resource_supported,
+        .resource_operations = sec_resource_operations,
+        .resource_read = sec_read,
+        .resource_write = sec_write,
+        .transaction_begin = sec_transaction_begin,
+        .transaction_commit = sec_transaction_commit,
+        .transaction_validate = sec_transaction_validate,
+        .transaction_rollback = sec_transaction_rollback
+    }
 };
 
 const anjay_dm_object_def_t **anjay_security_object_create(void) {

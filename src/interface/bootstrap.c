@@ -131,9 +131,9 @@ static int write_resource(anjay_t *anjay,
                           void *rid_) {
     anjay_rid_t rid = (anjay_rid_t) (uintptr_t) rid_;
     int result = _anjay_dm_map_present_result(
-            _anjay_dm_resource_supported(anjay, obj, rid));
+            _anjay_dm_resource_supported(anjay, obj, rid, NULL));
     if (!result) {
-        result = _anjay_dm_resource_write(anjay, obj, iid, rid, in_ctx);
+        result = _anjay_dm_resource_write(anjay, obj, iid, rid, in_ctx, NULL);
     }
     if (!result) {
         result = _anjay_notify_queue_resource_change(
@@ -185,13 +185,13 @@ static int with_instance_on_demand(anjay_t *anjay,
                                    with_instance_on_demand_cb_t callback,
                                    void *arg) {
     int result = 0;
-    int ipresent = _anjay_dm_instance_present(anjay, obj, iid);
+    int ipresent = _anjay_dm_instance_present(anjay, obj, iid, NULL);
     anjay_iid_t new_iid = iid;
     if (ipresent < 0) {
         return ipresent;
     } else if (ipresent == 0) {
         result = _anjay_dm_instance_create(anjay, obj, &new_iid,
-                                           ANJAY_SSID_BOOTSTRAP);
+                                           ANJAY_SSID_BOOTSTRAP, NULL);
         if (result) {
             anjay_log(DEBUG, "Instance Create handler for object %" PRIu16
                              " failed", (*obj)->oid);
@@ -330,7 +330,7 @@ static int append_iid(anjay_t *anjay,
 static int delete_instance(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj,
                            anjay_iid_t iid) {
-    int retval = _anjay_dm_instance_remove(anjay, obj, iid);
+    int retval = _anjay_dm_instance_remove(anjay, obj, iid, NULL);
     if (retval) {
         anjay_log(ERROR, "delete_instance: cannot delete /%d/%d: %d",
                   (*obj)->oid, iid, retval);
@@ -391,7 +391,8 @@ static int bootstrap_delete(anjay_t *anjay,
     }
 
     if (details->has_iid) {
-        int present = _anjay_dm_instance_present(anjay, obj, details->iid);
+        int present = _anjay_dm_instance_present(anjay, obj, details->iid,
+                                                 NULL);
         if (present > 0) {
             return delete_instance(anjay, obj, details->iid);
         } else {
@@ -436,7 +437,7 @@ static int purge_bootstrap(anjay_t *anjay, void *dummy) {
     if (obj && *obj) {
         _anjay_dm_transaction_begin(anjay);
         anjay_notify_queue_t notification = NULL;
-        (void) ((retval = _anjay_dm_instance_remove(anjay, obj, iid))
+        (void) ((retval = _anjay_dm_instance_remove(anjay, obj, iid, NULL))
                 || (retval = _anjay_notify_queue_instance_removed(
                         &notification, (*obj)->oid, iid))
                 || (retval = _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP,

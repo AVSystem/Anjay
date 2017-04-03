@@ -17,6 +17,7 @@
 import http
 import os
 import threading
+import tempfile
 import time
 import unittest
 
@@ -25,7 +26,14 @@ from framework.lwm2m_test import *
 from .utils import DataModel, ValueValidator
 
 
-class Test750_FirmwareUpdate_QueryingTheReadableResources(DataModel.Test):
+class FirmwareUpdate:
+    class Test(DataModel.Test):
+        def setUp(self):
+            self.ANJAY_MARKER_FILE = generate_temp_filename(dir='/tmp', prefix='anjay-fw-updated-')
+            super().setUp(extra_cmdline_args=['--fw-updated-marker-path', self.ANJAY_MARKER_FILE])
+
+
+class Test750_FirmwareUpdate_QueryingTheReadableResources(FirmwareUpdate.Test):
     def runTest(self):
         # A READ operation from server on the resource has been received by the
         # client. This test has to be run on the following resources:
@@ -41,7 +49,7 @@ class Test750_FirmwareUpdate_QueryingTheReadableResources(DataModel.Test):
         self.test_read(ResPath.FirmwareUpdate.PackageVersion,         ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
 
 
-class Test755_FirmwareUpdate_SettingTheWritableResources(DataModel.Test):
+class Test755_FirmwareUpdate_SettingTheWritableResources(FirmwareUpdate.Test):
     def runTest(self):
         # A WRITE operation from server on the resource has been received by the
         # client. This test has to be run for the following resources:
@@ -55,7 +63,7 @@ class Test755_FirmwareUpdate_SettingTheWritableResources(DataModel.Test):
         self.test_write(ResPath.FirmwareUpdate.PackageURI, 'http://localhost/test')
 
 
-class Test760_FirmwareUpdate_ObservationAndNotificationOfObservableResources(DataModel.Test):
+class Test760_FirmwareUpdate_ObservationAndNotificationOfObservableResources(FirmwareUpdate.Test):
     def runTest(self):
         # A READ operation from server on the resource has been received by the
         # client. This test has to be run on the following resources:
@@ -71,7 +79,7 @@ class Test760_FirmwareUpdate_ObservationAndNotificationOfObservableResources(Dat
         self.test_observe(ResPath.FirmwareUpdate.PackageVersion,         ValueValidator.ascii_string())
 
 
-class Test770_FirmwareUpdate_SuccessfulFirmwareUpdateViaCoAP(DataModel.Test):
+class Test770_FirmwareUpdate_SuccessfulFirmwareUpdateViaCoAP(FirmwareUpdate.Test):
     def runTest(self):
         # 1. Step 1 – Write
         #    a. The server delivers the firmware to the device through a WRITE
@@ -121,7 +129,7 @@ class Test770_FirmwareUpdate_SuccessfulFirmwareUpdateViaCoAP(DataModel.Test):
 
 
 class FirmwareUpdateWithHttpServer:
-    class Test(DataModel.Test):
+    class Test(FirmwareUpdate.Test):
         FIRMWARE_PATH = '/firmware'
 
         def get_firmware_uri(self):
@@ -211,7 +219,7 @@ class Test771_FirmwareUpdate_SuccessfulFirmwareUpdateViaAlternateMechanism(Firmw
         self.assertIn(b'2', observed_states)
 
 
-class Test772_FirmwareUpdate_ErrorCase_FirmwarePackageNotDownloaded(DataModel.Test):
+class Test772_FirmwareUpdate_ErrorCase_FirmwarePackageNotDownloaded(FirmwareUpdate.Test):
     def runTest(self):
         # Try to perform a device firmware installation when there is no downloaded
         # firmware package
@@ -251,12 +259,12 @@ class Test772_FirmwareUpdate_ErrorCase_FirmwarePackageNotDownloaded(DataModel.Te
 
 
 @unittest.skip("TODO")
-class Test773_FirmwareUpdate_ErrorCase_NotEnoughStorage(DataModel.Test):
+class Test773_FirmwareUpdate_ErrorCase_NotEnoughStorage(FirmwareUpdate.Test):
     def runTest(self):
         pass
 
 
-class Test774_FirmwareUpdate_ErrorCase_OutOfMemory(DataModel.Test):
+class Test774_FirmwareUpdate_ErrorCase_OutOfMemory(FirmwareUpdate.Test):
     def runTest(self):
         # A WRITE operation from the server on /5/0/0 (Package) is received by
         # the Client
@@ -321,12 +329,12 @@ class FirmwareUpdate_ErrorCase_OutOfMemory_PackageURI(FirmwareUpdateWithHttpServ
 
 
 @unittest.skip("TODO")
-class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI(DataModel.Test):
+class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI(FirmwareUpdate.Test):
     def runTest(self):
         pass
 
 
-class Test776_FirmwareUpdate_ErrorCase_CRCCheckFail(DataModel.Test):
+class Test776_FirmwareUpdate_ErrorCase_CRCCheckFail(FirmwareUpdate.Test):
     def runTest(self):
         self.assertEqual(b'0', self.test_read(ResPath.FirmwareUpdate.State))
 
@@ -386,7 +394,7 @@ class FirmwareUpdate_ErrorCase_CRCCheckFail_PackageURI(FirmwareUpdateWithHttpSer
         self.assertEqual(b'5', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
 
 
-class Test777_FirmwareUpdate_ErrorCase_UnsupportedPackageType(DataModel.Test):
+class Test777_FirmwareUpdate_ErrorCase_UnsupportedPackageType(FirmwareUpdate.Test):
     def runTest(self):
         # A WRITE operation from the server on /5/0/0 (Package) with a package
         # with an unsupported type is received by the client
@@ -439,12 +447,12 @@ class FirmwareUpdate_ErrorCase_UnsupportedPackageType_PackageURI(FirmwareUpdateW
 
 
 @unittest.skip("TODO")
-class Test778_FirmwareUpdate_ErrorCase_InvalidURI(DataModel.Test):
+class Test778_FirmwareUpdate_ErrorCase_InvalidURI(FirmwareUpdate.Test):
     def runTest(self):
         pass
 
 
-class Test779_FirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate(DataModel.Test):
+class Test779_FirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate(FirmwareUpdate.Test):
     def runTest(self):
         self.assertEqual(b'0', self.test_read(ResPath.FirmwareUpdate.State))
 

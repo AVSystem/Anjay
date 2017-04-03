@@ -34,7 +34,7 @@ def read_with_timeout(fd, timeout_s):
     while True:
         partial_timeout = deadline - time.time()
         if partial_timeout < 0:
-            return '' if isinstance(fd, io.TextIOBase) else b''
+            return b''
         r, w, x = select.select([fd], [], [fd], partial_timeout)
         if len(r) > 0 or len(x) > 0:
             buf = fd.read()
@@ -44,11 +44,13 @@ def read_with_timeout(fd, timeout_s):
 
 def read_until_match(fd, regex, timeout_s):
     deadline = time.time() + timeout_s
-    out = '' if isinstance(fd, io.TextIOBase) else b''
+    out = b''
     while True:
         partial_timeout = deadline - time.time()
+        if partial_timeout < 0:
+            return None
         out += read_with_timeout(fd, partial_timeout)
-        match = re.search(regex, out)
+        match = re.search(regex, out.decode(errors='replace'))
         if match:
             return match
 
@@ -243,11 +245,13 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                              bufsize=1)
         self.demo_process.log_file_write = console
         self.demo_process.log_file_path = console_log_path
-        self.demo_process.log_file = open(console_log_path, 'r')
+        self.demo_process.log_file = open(console_log_path, mode='rb', buffering=0)
 
         if timeout_s is not None:
             # wait until demo process starts
-            if self.communicate('', timeout=timeout_s) is None:
+            if read_until_match(self.demo_process.log_file,
+                                regex=re.escape('*** ANJAY DEMO STARTUP FINISHED ***'),
+                                timeout_s=timeout_s) is None:
                 raise self.failureException('demo executable did not start in time')
 
     def setup_demo_with_servers(self,
@@ -310,6 +314,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             if self.bootstrap_server:
                 self.bootstrap_server.close()
 
+    def seek_demo_log_to_end(self):
+        self.demo_process.log_file.seek(os.fstat(self.demo_process.log_file.fileno()).st_size)
+
     def communicate(self, cmd, timeout=-1, match_regex=re.escape('(DEMO)>')):
         """
         Writes CMD to the demo process stdin. If MATCH_REGEX is not None,
@@ -318,7 +325,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         if timeout < 0:
             timeout = self.DEFAULT_COMM_TIMEOUT
 
-        self.demo_process.log_file.seek(0, os.SEEK_END)
+        self.seek_demo_log_to_end()
         self.demo_process.stdin.write((cmd.strip('\n') + '\n').encode())
         self.demo_process.stdin.flush()
 
@@ -329,14 +336,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
     def read_logs_for(self, timeout_s):
         deadline = time.time() + timeout_s
-        out = '' if isinstance(self.demo_process.log_file, io.TextIOBase) else b''
-        self.demo_process.log_file.seek(0, os.SEEK_END)
+        out = b''
+        self.seek_demo_log_to_end()
         while True:
             partial_timeout = deadline - time.time()
             if partial_timeout < 0:
                 break
             out += read_with_timeout(self.demo_process.log_file, partial_timeout)
-        return out
+        return out.decode(errors='replace')
 
     def _terminate_demo(self, demo):
         cleanup_actions = [

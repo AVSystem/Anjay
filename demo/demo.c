@@ -97,18 +97,38 @@ static int server_object_reload(const anjay_dm_object_def_t *const *serv_obj,
     }
     return 0;
 }
+const anjay_dm_object_def_t **demo_find_object(anjay_demo_t *demo,
+                                               anjay_oid_t oid) {
+    AVS_LIST(anjay_demo_object_t) object;
+    AVS_LIST_FOREACH(object, demo->objects) {
+        if ((*object->obj_ptr)->oid == oid) {
+            return object->obj_ptr;
+        }
+    }
+    return NULL;
+}
 
 void demo_reload_servers(anjay_demo_t *demo) {
-    if (security_object_reload(demo->security_obj, demo->connection_args)
-        || server_object_reload(demo->server_obj, demo->connection_args)) {
+    const anjay_dm_object_def_t **security_obj =
+            demo_find_object(demo, DEMO_OID_SECURITY);
+    const anjay_dm_object_def_t **server_obj =
+            demo_find_object(demo, DEMO_OID_SERVER);
+
+    if (!security_obj || !server_obj) {
+        demo_log(ERROR, "Either security or server object is not registered");
+        exit(-1);
+    }
+
+    if (security_object_reload(security_obj, demo->connection_args)
+        || server_object_reload(server_obj, demo->connection_args)) {
         demo_log(ERROR, "Error while adding new server objects");
         exit(-1);
     }
 
-    int ret_notify_sec = anjay_notify_instances_changed(
-            demo->anjay, (*demo->security_obj)->oid);
-    int ret_notify_serv = anjay_notify_instances_changed(
-            demo->anjay, (*demo->server_obj)->oid);
+    int ret_notify_sec = anjay_notify_instances_changed(demo->anjay,
+                                                        (*security_obj)->oid);
+    int ret_notify_serv = anjay_notify_instances_changed(demo->anjay,
+                                                         (*server_obj)->oid);
     if (ret_notify_sec || ret_notify_serv) {
         demo_log(WARNING, "Could not schedule socket reload");
     }
@@ -118,42 +138,20 @@ static void demo_delete(anjay_demo_t *demo) {
     if (demo->anjay) {
         anjay_delete(demo->anjay);
     }
-    apn_conn_profile_object_release(demo->apn_conn_profile_obj);
-    cell_connectivity_object_release(demo->cell_connectivity_obj);
-    cm_object_release(demo->conn_monitoring_obj);
-    cs_object_release(demo->conn_statistics_obj);
-    download_diagnostics_object_release(demo->download_diagnostics_obj);
-    device_object_release(demo->device_obj);
-    ext_dev_info_object_release(demo->ext_dev_info_obj);
-    firmware_update_object_release(demo->firmware_update_obj);
-    location_object_release(demo->location_obj);
-    geopoints_object_release(demo->geopoints_obj);
-    ip_ping_object_release(demo->ip_ping_obj);
-    test_object_release(demo->test_obj);
-    anjay_security_object_delete(demo->security_obj);
-    anjay_server_object_delete(demo->server_obj);
-    anjay_access_control_object_delete(demo->access_control_obj);
+    AVS_LIST_CLEAR(&demo->objects) {
+        demo->objects->release_func(demo->objects->obj_ptr);
+    }
 
     iosched_release(demo->iosched);
-    if (demo->attr_storage) {
-        anjay_attr_storage_delete(demo->attr_storage);
-    }
     AVS_LIST_CLEAR(&demo->allocated_strings);
     free(demo);
-}
-
-static int register_wrapped_object(anjay_demo_t *demo,
-                                   const anjay_dm_object_def_t *const *obj) {
-    return anjay_register_object(
-            demo->anjay,
-            anjay_attr_storage_wrap_object(demo->attr_storage, obj));
 }
 
 static int add_access_entries(anjay_demo_t *demo,
                               const cmdline_args_t *cmdline_args) {
     const AVS_LIST(access_entry_t) it;
     AVS_LIST_FOREACH(it, cmdline_args->access_entries) {
-        if (anjay_access_control_set_acl(demo->access_control_obj,
+        if (anjay_access_control_set_acl(demo->anjay,
                                          it->oid, ANJAY_IID_INVALID, it->ssid,
                                          ANJAY_ACCESS_MASK_CREATE)) {
             return -1;
@@ -162,12 +160,38 @@ static int add_access_entries(anjay_demo_t *demo,
     return 0;
 }
 
-static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
-    anjay_demo_t *demo = (anjay_demo_t*) calloc(1, sizeof(anjay_demo_t));
-    if (!demo) {
-        return NULL;
+static int
+install_object(anjay_demo_t *demo,
+               const anjay_dm_object_def_t **obj_ptr,
+               anjay_demo_object_notify_t *time_dependent_notify_func,
+               anjay_demo_object_deleter_t *release_func) {
+    if (!obj_ptr) {
+        return -1;
     }
 
+    AVS_LIST(anjay_demo_object_t) *object_entry =
+            AVS_LIST_APPEND_PTR(&demo->objects);
+    assert(object_entry && !*object_entry);
+    *object_entry = AVS_LIST_NEW_ELEMENT(anjay_demo_object_t);
+    if (!object_entry) {
+        release_func(obj_ptr);
+        return -1;
+    }
+
+    if (anjay_register_object(demo->anjay, obj_ptr)) {
+        release_func(obj_ptr);
+        AVS_LIST_DELETE(object_entry);
+        return -1;
+    }
+
+    (*object_entry)->obj_ptr = obj_ptr;
+    (*object_entry)->time_dependent_notify_func = time_dependent_notify_func;
+    (*object_entry)->release_func = release_func;
+    return 0;
+}
+
+static int demo_init(anjay_demo_t *demo,
+                     cmdline_args_t *cmdline_args) {
     anjay_configuration_t config = {
         .endpoint_name = cmdline_args->endpoint_name,
         .udp_listen_port = cmdline_args->udp_listen_port,
@@ -185,66 +209,79 @@ static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
 
     demo->anjay = anjay_new(&config);
     demo->iosched = iosched_create();
-    demo->attr_storage = anjay_attr_storage_new(demo->anjay);
     if (!demo->anjay
             || !demo->iosched
-            || !demo->attr_storage
+            || anjay_attr_storage_install(demo->anjay)
+            || anjay_access_control_install(demo->anjay)
             || !iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
                                        POLLIN | POLLHUP,
                                        demo_command_dispatch, demo, NULL)) {
-        demo_delete(demo);
-        return NULL;
+        return -1;
     }
 
-    demo->apn_conn_profile_obj = apn_conn_profile_object_create();
-    demo->cell_connectivity_obj =
-            cell_connectivity_object_create(demo->apn_conn_profile_obj);
-    demo->conn_monitoring_obj = cm_object_create();
-    demo->conn_statistics_obj = cs_object_create();
-    demo->download_diagnostics_obj = download_diagnostics_object_create(demo->iosched);
-    demo->device_obj = device_object_create(demo->iosched,
-                                            cmdline_args->endpoint_name);
-    demo->ext_dev_info_obj = ext_dev_info_object_create();
-    demo->firmware_update_obj = firmware_update_object_create(
-            demo->iosched, !cmdline_args->dont_cleanup_fw_on_upgrade);
-    demo->server_obj = anjay_server_object_create();
-    demo->location_obj = location_object_create();
-    demo->geopoints_obj = geopoints_object_create(demo->location_obj);
-    demo->ip_ping_obj = ip_ping_object_create(demo->iosched);
-    demo->test_obj = test_object_create();
-    demo->security_obj = anjay_security_object_create();
-    demo->access_control_obj = anjay_access_control_object_new(demo->anjay);
+    if (install_object(demo, anjay_security_object_create(), NULL,
+                       anjay_security_object_delete)
+            || install_object(demo, anjay_server_object_create(), NULL,
+                              anjay_server_object_delete)
+            || install_object(demo, location_object_create(),
+                              location_notify_time_dependent,
+                              location_object_release)
+            || install_object(demo, apn_conn_profile_object_create(), NULL,
+                              apn_conn_profile_object_release)
+            || install_object(demo, cell_connectivity_object_create(demo), NULL,
+                              cell_connectivity_object_release)
+            || install_object(demo, cm_object_create(),
+                              cm_notify_time_dependent, cm_object_release)
+            || install_object(demo, cs_object_create(), NULL, cs_object_release)
+            || install_object(demo,
+                              download_diagnostics_object_create(demo->iosched),
+                              NULL, download_diagnostics_object_release)
+            || install_object(demo,
+                              device_object_create(demo->iosched,
+                                                   cmdline_args->endpoint_name),
+                              NULL, device_object_release)
+            || install_object(demo, ext_dev_info_object_create(),
+                              ext_dev_info_notify_time_dependent,
+                              ext_dev_info_object_release)
+            || install_object(demo,
+                              firmware_update_object_create(
+                                      demo->iosched,
+                                      cmdline_args->fw_updated_marker_path),
+                              NULL, firmware_update_object_release)
+            || install_object(demo, geopoints_object_create(demo),
+                              geopoints_notify_time_dependent,
+                              geopoints_object_release)
+            || install_object(demo, ip_ping_object_create(demo->iosched), NULL,
+                              ip_ping_object_release)
+            || install_object(demo, test_object_create(),
+                              test_notify_time_dependent,
+                              test_object_release)) {
+        return -1;
+    }
 
     if (cmdline_args->location_csv
-            && location_open_csv(demo->location_obj,
+            && location_open_csv(demo_find_object(demo, DEMO_OID_LOCATION),
                                  cmdline_args->location_csv,
                                  cmdline_args->location_update_frequency_s)) {
-        demo_delete(demo);
-        return NULL;
-    }
-
-    if (register_wrapped_object(demo, demo->apn_conn_profile_obj)
-            || register_wrapped_object(demo, demo->cell_connectivity_obj)
-            || register_wrapped_object(demo, demo->conn_monitoring_obj)
-            || register_wrapped_object(demo, demo->conn_statistics_obj)
-            || register_wrapped_object(demo, demo->download_diagnostics_obj)
-            || register_wrapped_object(demo, demo->device_obj)
-            || register_wrapped_object(demo, demo->ext_dev_info_obj)
-            || register_wrapped_object(demo, demo->firmware_update_obj)
-            || register_wrapped_object(demo, demo->security_obj)
-            || register_wrapped_object(demo, demo->server_obj)
-            || register_wrapped_object(demo, demo->location_obj)
-            || register_wrapped_object(demo, demo->geopoints_obj)
-            || register_wrapped_object(demo, demo->ip_ping_obj)
-            || register_wrapped_object(demo, demo->test_obj)
-            || register_wrapped_object(demo, demo->access_control_obj)) {
-        demo_delete(demo);
-        return NULL;
+        return -1;
     }
 
     demo_reload_servers(demo);
 
     if (add_access_entries(demo, cmdline_args)) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
+    anjay_demo_t *demo = (anjay_demo_t*) calloc(1, sizeof(anjay_demo_t));
+    if (!demo) {
+        return NULL;
+    }
+
+    if (demo_init(demo, cmdline_args)) {
         demo_delete(demo);
         return NULL;
     }
@@ -254,11 +291,12 @@ static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
 }
 
 static void notify_time_dependent(anjay_demo_t *demo) {
-    cm_notify_time_dependent(demo->anjay, demo->conn_monitoring_obj);
-    ext_dev_info_notify_time_dependent(demo->anjay, demo->ext_dev_info_obj);
-    location_notify_time_dependent(demo->anjay, demo->location_obj);
-    geopoints_notify_time_dependent(demo->anjay, demo->geopoints_obj);
-    test_notify_time_dependent(demo->anjay, demo->test_obj);
+    anjay_demo_object_t *object;
+    AVS_LIST_FOREACH(object, demo->objects) {
+        if (object->time_dependent_notify_func) {
+            object->time_dependent_notify_func(demo->anjay, object->obj_ptr);
+        }
+    }
 }
 
 typedef struct {
@@ -406,6 +444,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // NOTE: This log is expected by our test suite (see Lwm2mTest.start_demo())
+    // Please don't remove.
+    demo_log(INFO, "*** ANJAY DEMO STARTUP FINISHED ***");
     serve(demo);
     demo_delete(demo);
     free(cmdline_args.connection_args.public_cert_or_psk_identity);

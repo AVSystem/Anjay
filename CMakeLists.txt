@@ -52,7 +52,10 @@ include(TestBigEndian)
 test_big_endian(ANJAY_BIG_ENDIAN)
 
 # compilation flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -D_POSIX_C_SOURCE=200809L")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+if(NOT APPLE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_POSIX_C_SOURCE=200809L")
+endif()
 
 option(WITH_EXTRA_WARNINGS "Enable extra compilation warnings" OFF)
 if(WITH_EXTRA_WARNINGS)
@@ -150,6 +153,7 @@ set(CORE_SOURCES
     src/dm/attributes.c
     src/dm/execute.c
     src/dm/handlers.c
+    src/dm/modules.c
     src/dm/query.c
     src/anjay.c
     src/io.c
@@ -231,6 +235,7 @@ set(CORE_PRIVATE_HEADERS
 set(CORE_MODULES_HEADERS
     include_modules/anjay_modules/dm.h
     include_modules/anjay_modules/dm/execute.h
+    include_modules/anjay_modules/dm/modules.h
     include_modules/anjay_modules/io.h
     include_modules/anjay_modules/notify.h
     include_modules/anjay_modules/observe.h
@@ -515,7 +520,9 @@ add_dependencies(anjay_unit_check symbols_check)
 ################# UNIT TESTS ###################################################
 
 include(ProcessorCount)
-ProcessorCount(NPROC)
+ProcessorCount(ANJAY_DEFAULT_NPROC)
+
+set(NPROC "${ANJAY_DEFAULT_NPROC}" CACHE STRING "Number of threads for multi-threaded build/test operations")
 
 if(WITH_VALGRIND)
     set(VALGRIND ${VALGRIND_EXECUTABLE} --leak-check=full --track-origins=yes -q --error-exitcode=63 --suppressions=${CMAKE_CURRENT_SOURCE_DIR}/valgrind_test.supp)

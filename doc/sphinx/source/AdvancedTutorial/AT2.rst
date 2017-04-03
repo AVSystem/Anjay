@@ -66,16 +66,10 @@ support persistence:
 .. snippet-source:: modules/access_control/include_public/anjay/access_control.h
 
     // ...
-    int anjay_access_control_persist(const anjay_dm_object_def_t *const *ac_obj,
+    int anjay_access_control_persist(anjay_t *anjay,
                                      avs_stream_abstract_t *out_stream);
     // ...
-    int anjay_access_control_restore(const anjay_dm_object_def_t *const *ac_obj,
-                                     avs_stream_abstract_t *in_stream);
-
-.. warning::
-    One should however note that every object handle MUST NOT point to a
-    wrapped object (see :ref:`wrapping-objects` for example of the wrapped
-    object).
+    int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in);
 
 .. note::
     All of the mentioned objects have complicated semantics, which is why you
@@ -93,9 +87,9 @@ startup (if a valid persistence file exists).
 
     #define PERSISTENCE_FILENAME "at2-persistence.dat"
 
-    int persist_objects(const anjay_dm_object_def_t **security_obj,
-                        const anjay_dm_object_def_t **server_obj,
-                        anjay_attr_storage_t *attr_storage) {
+    int persist_objects(anjay_t *anjay,
+                        const anjay_dm_object_def_t **security_obj,
+                        const anjay_dm_object_def_t **server_obj) {
         avs_log(tutorial, INFO, "Persisting objects to %s", PERSISTENCE_FILENAME);
 
         avs_stream_abstract_t *file_stream =
@@ -118,8 +112,8 @@ startup (if a valid persistence file exists).
             goto finish;
         }
 
-        if ((result = anjay_attr_storage_persist(attr_storage, file_stream))) {
-            avs_log(tutorial, ERROR, "Could not persist Attr Storage Object");
+        if ((result = anjay_attr_storage_persist(anjay, file_stream))) {
+            avs_log(tutorial, ERROR, "Could not persist LwM2M attribute storage");
             goto finish;
         }
 
@@ -131,9 +125,9 @@ startup (if a valid persistence file exists).
 .. snippet-source:: examples/tutorial/AT2/src/main.c
 
     int restore_objects_if_possible(
+            anjay_t *anjay,
             const anjay_dm_object_def_t **security_obj,
-            const anjay_dm_object_def_t **server_obj,
-            anjay_attr_storage_t *attr_storage) {
+            const anjay_dm_object_def_t **server_obj) {
 
         avs_log(tutorial, INFO, "Attempting to restore objects from persistence");
         int result;
@@ -171,8 +165,8 @@ startup (if a valid persistence file exists).
             goto finish;
         }
 
-        if ((result = anjay_attr_storage_restore(attr_storage, file_stream))) {
-            avs_log(tutorial, ERROR, "Could not restore Attr Storage Object");
+        if ((result = anjay_attr_storage_restore(anjay, file_stream))) {
+            avs_log(tutorial, ERROR, "Could not restore LwM2M attribute storage");
             goto finish;
         }
 

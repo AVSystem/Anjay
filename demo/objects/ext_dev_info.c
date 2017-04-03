@@ -114,13 +114,15 @@ static int dev_read(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t EXT_DEV_INFO = {
-    .oid = EXT_DEV_INFO_OID,
+    .oid = DEMO_OID_EXT_DEV_INFO,
     .rid_bound = EXT_DEV_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = dev_resource_present,
-    .resource_supported = dev_resource_supported,
-    .resource_read = dev_read
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = dev_resource_present,
+        .resource_supported = dev_resource_supported,
+        .resource_read = dev_read
+    }
 };
 
 const anjay_dm_object_def_t **ext_dev_info_object_create(void) {

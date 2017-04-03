@@ -117,8 +117,7 @@ we won't be able to proceed further without allocating memory on demand.
        i.e. notice how handles to all objects shown to you so far were returned as
        pointers to ``anjay_dm_object_def_t`` -- clearly, it indicates to the user
        that they have nothing interesting to do with such reference (besides being
-       able to register and/or wrap it), unless some additional public API is
-       provided.
+       able to register it), unless some additional public API is provided.
 
 To achieve proper control over object lifetime and initialization, we are
 going to introduce two functions, namely ``create_test_object``:

@@ -318,27 +318,29 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
     // Object does not contain any Resources with IDs >= 2
     .rid_bound = 2,
 
-    .instance_it = test_instance_it,
-    .instance_present = test_instance_present,
-    .instance_create = test_instance_create,
-    .instance_remove = test_instance_remove,
-    .instance_reset = test_instance_reset,
+    .handlers = {
+        .instance_it = test_instance_it,
+        .instance_present = test_instance_present,
+        .instance_create = test_instance_create,
+        .instance_remove = test_instance_remove,
+        .instance_reset = test_instance_reset,
 
-    // if the Object implements all Resources from ID 0 up to its
-    // `rid_bound`, it can use this predefined `resource_supported` handler:
-    .resource_supported = anjay_dm_resource_supported_TRUE,
+        // if the Object implements all Resources from ID 0 up to its
+        // `rid_bound`, it can use this predefined `resource_supported` handler:
+        .resource_supported = anjay_dm_resource_supported_TRUE,
 
-    // if all supported Resources are always available, one can use
-    // a pre-implemented `resource_present` handler too:
-    .resource_present = anjay_dm_resource_present_TRUE,
+        // if all supported Resources are always available, one can use
+        // a pre-implemented `resource_present` handler too:
+        .resource_present = anjay_dm_resource_present_TRUE,
 
-    .resource_read = test_resource_read,
-    .resource_write = test_resource_write,
+        .resource_read = test_resource_read,
+        .resource_write = test_resource_write,
 
-    .transaction_begin = test_transaction_begin,
-    .transaction_validate = test_transaction_validate,
-    .transaction_commit = test_transaction_commit,
-    .transaction_rollback = test_transaction_rollback
+        .transaction_begin = test_transaction_begin,
+        .transaction_validate = test_transaction_validate,
+        .transaction_commit = test_transaction_commit,
+        .transaction_rollback = test_transaction_rollback
+    }
 };
 
 const anjay_dm_object_def_t **create_test_object() {

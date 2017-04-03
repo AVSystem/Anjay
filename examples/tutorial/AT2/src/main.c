@@ -66,9 +66,9 @@ int main_loop(anjay_t *anjay) {
 
 #define PERSISTENCE_FILENAME "at2-persistence.dat"
 
-int persist_objects(const anjay_dm_object_def_t **security_obj,
-                    const anjay_dm_object_def_t **server_obj,
-                    anjay_attr_storage_t *attr_storage) {
+int persist_objects(anjay_t *anjay,
+                    const anjay_dm_object_def_t **security_obj,
+                    const anjay_dm_object_def_t **server_obj) {
     avs_log(tutorial, INFO, "Persisting objects to %s", PERSISTENCE_FILENAME);
 
     avs_stream_abstract_t *file_stream =
@@ -91,8 +91,8 @@ int persist_objects(const anjay_dm_object_def_t **security_obj,
         goto finish;
     }
 
-    if ((result = anjay_attr_storage_persist(attr_storage, file_stream))) {
-        avs_log(tutorial, ERROR, "Could not persist Attr Storage Object");
+    if ((result = anjay_attr_storage_persist(anjay, file_stream))) {
+        avs_log(tutorial, ERROR, "Could not persist LwM2M attribute storage");
         goto finish;
     }
 
@@ -102,9 +102,9 @@ finish:
 }
 
 int restore_objects_if_possible(
+        anjay_t *anjay,
         const anjay_dm_object_def_t **security_obj,
-        const anjay_dm_object_def_t **server_obj,
-        anjay_attr_storage_t *attr_storage) {
+        const anjay_dm_object_def_t **server_obj) {
 
     avs_log(tutorial, INFO, "Attempting to restore objects from persistence");
     int result;
@@ -142,8 +142,8 @@ int restore_objects_if_possible(
         goto finish;
     }
 
-    if ((result = anjay_attr_storage_restore(attr_storage, file_stream))) {
-        avs_log(tutorial, ERROR, "Could not restore Attr Storage Object");
+    if ((result = anjay_attr_storage_restore(anjay, file_stream))) {
+        avs_log(tutorial, ERROR, "Could not restore LwM2M attribute storage");
         goto finish;
     }
 
@@ -198,15 +198,17 @@ int main(int argc, char *argv[]) {
     const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
     const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
 
-    anjay_attr_storage_t *attr_storage = anjay_attr_storage_new(anjay);
-
     // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj || !attr_storage) {
+    if (!security_obj || !server_obj) {
         result = -1;
+    }
+
+    if (result) {
         goto cleanup;
     }
 
-    int restore_retval = restore_objects_if_possible(security_obj, server_obj, attr_storage);
+    int restore_retval =
+            restore_objects_if_possible(anjay, security_obj, server_obj);
     if (restore_retval < 0) {
         result = -1;
         goto cleanup;
@@ -215,18 +217,15 @@ int main(int argc, char *argv[]) {
     }
 
     // Register them within Anjay
-    if (anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                             attr_storage, security_obj))
-        || anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                                attr_storage, server_obj))) {
+    if (anjay_register_object(anjay, security_obj)
+        || anjay_register_object(anjay, server_obj)) {
         result = -1;
         goto cleanup;
     }
 
     result = main_loop(anjay);
 
-    int persist_result =
-            persist_objects(security_obj, server_obj, attr_storage);
+    int persist_result = persist_objects(anjay, security_obj, server_obj);
     if (!result) {
         result = persist_result;
     }
@@ -235,6 +234,5 @@ cleanup:
     anjay_delete(anjay);
     anjay_security_object_delete(security_obj);
     anjay_server_object_delete(server_obj);
-    anjay_attr_storage_delete(attr_storage);
     return result;
 }

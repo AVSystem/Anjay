@@ -64,25 +64,25 @@ int main(int argc, char *argv[]) {
         avs_log(tutorial, ERROR, "Could not create Anjay object");
         return -1;
     }
-    int result = 0;
+
+    int result = anjay_attr_storage_install(anjay);
 
     // Instantiate necessary objects
     const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
     const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
 
-    anjay_attr_storage_t *attr_storage = anjay_attr_storage_new(anjay);
-
     // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj || !attr_storage) {
+    if (!security_obj || !server_obj) {
         result = -1;
+    }
+
+    if (result) {
         goto cleanup;
     }
 
     // Register them within Anjay
-    if (anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                             attr_storage, security_obj))
-        || anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                                attr_storage, server_obj))) {
+    if (anjay_register_object(anjay, security_obj)
+        || anjay_register_object(anjay, server_obj)) {
         result = -1;
         goto cleanup;
     }
@@ -115,6 +115,5 @@ cleanup:
     anjay_delete(anjay);
     anjay_security_object_delete(security_obj);
     anjay_server_object_delete(server_obj);
-    anjay_attr_storage_delete(attr_storage);
     return result;
 }

@@ -225,7 +225,7 @@ static int dev_read(anjay_t *anjay,
             anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
             if (!array
                     || anjay_ret_array_index(array, 0)
-                    || anjay_ret_objlnk(array, EXT_DEV_INFO_OID, 0)) {
+                    || anjay_ret_objlnk(array, DEMO_OID_EXT_DEV_INFO, 0)) {
                 return ANJAY_ERR_INTERNAL;
             }
             return anjay_ret_array_finish(array);
@@ -350,22 +350,23 @@ static int dev_dim(anjay_t *anjay,
     }
 }
 
-
 static const anjay_dm_object_def_t DEVICE = {
-    .oid = 3,
+    .oid = DEMO_OID_DEVICE,
     .rid_bound = DEV_RID_BOUND_,
-    .instance_it = anjay_dm_instance_it_SINGLE,
-    .instance_present = anjay_dm_instance_present_SINGLE,
-    .resource_present = dev_resource_present,
-    .resource_supported = dev_resource_supported,
-    .resource_read = dev_read,
-    .resource_write = dev_write,
-    .resource_execute = dev_execute,
-    .resource_dim = dev_dim,
-    .transaction_begin = anjay_dm_transaction_NOOP,
-    .transaction_validate = anjay_dm_transaction_NOOP,
-    .transaction_commit = anjay_dm_transaction_NOOP,
-    .transaction_rollback = anjay_dm_transaction_NOOP
+    .handlers = {
+        .instance_it = anjay_dm_instance_it_SINGLE,
+        .instance_present = anjay_dm_instance_present_SINGLE,
+        .resource_present = dev_resource_present,
+        .resource_supported = dev_resource_supported,
+        .resource_read = dev_read,
+        .resource_write = dev_write,
+        .resource_execute = dev_execute,
+        .resource_dim = dev_dim,
+        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_validate = anjay_dm_transaction_NOOP,
+        .transaction_commit = anjay_dm_transaction_NOOP,
+        .transaction_rollback = anjay_dm_transaction_NOOP
+    }
 };
 
 static void extract_device_info(const char *endpoint_name,

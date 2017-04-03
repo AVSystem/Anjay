@@ -41,19 +41,7 @@ static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
             (anjay_dm_object_def_t *) calloc(1, sizeof(anjay_dm_object_def_t));
     if (obj) {
         obj->oid = oid;
-        obj->instance_it = null_instance_it;
-    }
-    return obj;
-}
-
-static anjay_dm_object_def_t *make_mock_aco(void) {
-    anjay_dm_object_def_t *obj =
-            (anjay_dm_object_def_t *) calloc(1, sizeof(anjay_dm_object_def_t));
-    if (obj) {
-        obj->oid = ANJAY_DM_OID_ACCESS_CONTROL;
-        obj->transaction_begin = anjay_dm_transaction_NOOP;
-        obj->transaction_validate = anjay_dm_transaction_NOOP;
-        obj->transaction_commit = anjay_dm_transaction_NOOP;
+        obj->handlers.instance_it = null_instance_it;
     }
     return obj;
 }
@@ -91,8 +79,7 @@ static bool instances_equal(const void *a, const void *b) {
                         lists_equal(p->acl, q->acl, acl_entry_equal));
 }
 
-static bool aco_equal(access_control_t *a,
-                      access_control_t *b) {
+static bool aco_equal(access_control_t *a, access_control_t *b) {
     return lists_equal(a->current.instances, b->current.instances,
                        instances_equal);
 }
@@ -121,50 +108,45 @@ static void init_context(storage_ctx_t *ctx) {
 }
 
 AVS_UNIT_TEST(access_control_persistence, empty_aco) {
-    anjay_t *fake_anjay = ac_test_create_fake_anjay();
+    anjay_t *anjay1 = ac_test_create_fake_anjay();
+    anjay_t *anjay2 = ac_test_create_fake_anjay();
 
     storage_ctx_t ctx = { .buffer = {} };
     init_context(&ctx);
-    const anjay_dm_object_def_t *const *aco1 =
-            anjay_access_control_object_new(fake_anjay);
-    const anjay_dm_object_def_t *const *aco2 =
-            anjay_access_control_object_new(fake_anjay);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_persist(aco1, (avs_stream_abstract_t *) &ctx.out));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay1));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay2));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_persist(
+            anjay1, (avs_stream_abstract_t *) &ctx.out));
 
     ctx.in.buffer_size = avs_stream_outbuf_offset(&ctx.out);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_restore(aco2, (avs_stream_abstract_t *) &ctx.in));
-    AVS_UNIT_ASSERT_TRUE(aco_equal(_anjay_access_control_get(aco1),
-                                   _anjay_access_control_get(aco2)));
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_LIST_SIZE(_anjay_access_control_get(aco1)->current.instances),
-            0);
-    anjay_access_control_object_delete(aco1);
-    anjay_access_control_object_delete(aco2);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_restore(
+            anjay2, (avs_stream_abstract_t *) &ctx.in));
+    AVS_UNIT_ASSERT_TRUE(aco_equal(_anjay_access_control_get(anjay1),
+                                   _anjay_access_control_get(anjay2)));
+    AVS_UNIT_ASSERT_NULL(_anjay_access_control_get(anjay1)->current.instances);
 
-    anjay_delete(fake_anjay);
+    anjay_delete(anjay1);
+    anjay_delete(anjay2);
 }
 
 AVS_UNIT_TEST(access_control_persistence, normal_usage) {
-    anjay_t *fake_anjay = ac_test_create_fake_anjay();
+    anjay_t *anjay1 = ac_test_create_fake_anjay();
+    anjay_t *anjay2 = ac_test_create_fake_anjay();
 
     storage_ctx_t ctx = { .buffer = {} };
     init_context(&ctx);
 
-    const anjay_dm_object_def_t *const *aco1 =
-            anjay_access_control_object_new(fake_anjay);
-    const anjay_dm_object_def_t *const *aco2 =
-            anjay_access_control_object_new(fake_anjay);
-    access_control_t *ac1 = _anjay_access_control_get(aco1);
-    access_control_t *ac2 = _anjay_access_control_get(aco2);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay1));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay2));
+    access_control_t *ac1 = _anjay_access_control_get(anjay1);
+    access_control_t *ac2 = _anjay_access_control_get(anjay2);
 
-    const anjay_dm_object_def_t *fake_wrapped_aco = make_mock_aco();
-
-    AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(fake_anjay,
-                                                  &fake_wrapped_aco));
     const anjay_dm_object_def_t *mock_obj1 = make_mock_object(32);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(fake_anjay, &mock_obj1));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay1, &mock_obj1));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay2, &mock_obj1));
     const anjay_dm_object_def_t *mock_obj2 = make_mock_object(64);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(fake_anjay, &mock_obj2));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay1, &mock_obj2));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay2, &mock_obj2));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
             ac1,
             _anjay_access_control_create_missing_ac_instance(
@@ -237,19 +219,19 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     AVS_LIST_APPEND(&ac1->current.instances, entry1);
     AVS_LIST_APPEND(&ac1->current.instances, entry2);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac1->current.instances), 4);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_persist(aco1, (avs_stream_abstract_t *) &ctx.out));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_persist(
+            anjay1, (avs_stream_abstract_t *) &ctx.out));
 
     ctx.in.buffer_size = avs_stream_outbuf_offset(&ctx.out);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_restore(aco2, (avs_stream_abstract_t *) &ctx.in));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_restore(
+            anjay2, (avs_stream_abstract_t *) &ctx.in));
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac2->current.instances), 4);
     AVS_UNIT_ASSERT_TRUE(aco_equal(ac1, ac2));
 
-    anjay_delete(fake_anjay);
+    anjay_delete(anjay1);
+    anjay_delete(anjay2);
 
-    anjay_access_control_object_delete(aco1);
-    anjay_access_control_object_delete(aco2);
     free((anjay_dm_object_def_t *) (intptr_t) mock_obj1);
     free((anjay_dm_object_def_t *) (intptr_t) mock_obj2);
-    free((anjay_dm_object_def_t *) (intptr_t) fake_wrapped_aco);
 }

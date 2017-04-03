@@ -1752,6 +1752,8 @@ AVS_UNIT_TEST(notify, storing_of_errors) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     // error during attribute reading
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, -1);
+    _anjay_mock_dm_expect_object_read_default_attrs(
+            anjay, &OBJ, 14, -1, &ANJAY_DM_ATTRIBS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
@@ -1795,6 +1797,8 @@ AVS_UNIT_TEST(notify, no_storing_of_errors) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
     // error during attribute reading
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, -1);
+    _anjay_mock_dm_expect_object_read_default_attrs(
+            anjay, &OBJ, 14, -1, &ANJAY_DM_ATTRIBS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
@@ -1820,6 +1824,8 @@ AVS_UNIT_TEST(notify, reconnect) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     // error during attribute reading
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, -1);
+    _anjay_mock_dm_expect_object_read_default_attrs(
+            anjay, &OBJ, 14, -1, &ANJAY_DM_ATTRIBS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);

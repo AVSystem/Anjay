@@ -109,22 +109,13 @@ Server Instances.
 
 .. highlight:: c
 
-We start with instantiation and registration of Access Control Object:
+We start with installation of the Access Control module:
 
 .. snippet-source:: examples/tutorial/AT4/src/main.c
 
-    const anjay_dm_object_def_t *const *access_control_obj =
-                anjay_access_control_object_new(anjay);
-
-    // ...
-
-    // Register them within Anjay
-    if (anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                             attr_storage, security_obj))
-        // ...
-
-        || anjay_register_object(anjay, anjay_attr_storage_wrap_object(
-                                                attr_storage, access_control_obj))) {
+    int result;
+    if (anjay_attr_storage_install(anjay)
+        || anjay_access_control_install(anjay)) {
         result = -1;
         goto cleanup;
     }
@@ -185,13 +176,13 @@ And finally, we are ready to set access lists:
 
     // Set LwM2M Create permission rights for SSID = 1, this will make SSID=1
     // an exclusive owner of the Test Object
-    anjay_access_control_set_acl(access_control_obj, 1234, ANJAY_IID_INVALID, 1,
+    anjay_access_control_set_acl(anjay, 1234, ANJAY_IID_INVALID, 1,
                                  ANJAY_ACCESS_MASK_CREATE);
 
     // Allow both LwM2M Servers to read their Server Instances
-    anjay_access_control_set_acl(access_control_obj, 1, server_instance_iid1,
+    anjay_access_control_set_acl(anjay, 1, server_instance_iid1,
                                  server_instance1.ssid, ANJAY_ACCESS_MASK_READ);
-    anjay_access_control_set_acl(access_control_obj, 1, server_instance_iid2,
+    anjay_access_control_set_acl(anjay, 1, server_instance_iid2,
                                  server_instance2.ssid, ANJAY_ACCESS_MASK_READ);
 
 That way we have ensured an exclusive access of Server with SSID 1 to Test

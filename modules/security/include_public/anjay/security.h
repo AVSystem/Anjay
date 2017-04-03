@@ -100,7 +100,6 @@ void anjay_security_object_delete(const anjay_dm_object_def_t **security);
 
 /**
  * Dumps Security Object Instance to the @p out_stream.
- * Warning: @p obj MUST NOT be wrapped.
  *
  * @param obj           Security Object.
  * @param out_stream    Stream to write to.
@@ -111,7 +110,6 @@ int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
 
 /**
  * Attempts to restore Security Object Instances from specified @p in_stream.
- * Warning: @p obj MUST NOT be wrapped.
  *
  * Note: if restore fails, then Security Object will be left untouched, on
  * success though all Instances stored within the Object will be purged.

@@ -1,51 +1,92 @@
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 language: c
 
 sudo: required
 
 dist: trusty
 
+osx_image: xcode8.2
+
 services:
   - docker
 
+matrix:
+  include:
+  - os: osx
+    env: DEVCONFIG_FLAGS=--with-asan
+
+  - os: linux
+    env: ANJAY_CC=gcc-4.7
+         ANJAY_CXX=g++
+         PYMBEDTLS_CC=gcc
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=gcc-4.8
+         ANJAY_CXX=g++
+         PYMBEDTLS_CC=gcc
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=gcc-4.9
+         ANJAY_CXX=g++
+         PYMBEDTLS_CC=gcc
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=gcc-5
+         ANJAY_CXX=g++-5
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=clang-3.5
+         ANJAY_CXX=clang++-3.5
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=clang-3.6
+         ANJAY_CXX=clang++-3.6
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=clang-3.7
+         ANJAY_CXX=clang++-3.7
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=clang-3.8
+         ANJAY_CXX=clang++-3.8
+         DEVCONFIG_FLAGS=--with-valgrind
+         DOCKER_IMAGE=ubuntu-16.04
+
+  - os: linux
+    env: ANJAY_CC=gcc
+         ANJAY_CXX=g++
+         DEVCONFIG_FLAGS=--with-valgrind -DPython_ADDITIONAL_VERSIONS=3.5
+         DOCKER_IMAGE=centos7
+
 before_script:
-  - |
-    cat <<EOF > Dockerfile
-    FROM ubuntu:16.04
-    RUN apt-get update
-    RUN apt-get install -y git build-essential cmake libmbedtls-dev \
-        libssl-dev python3 libboost-python-dev libpython3-dev wget \
-        python3-sphinx $CC $CXX
-    RUN git clone https://github.com/AVSystem/Anjay.git
-    RUN sed -i -e "s/-Wdate-time/ /g" \
-        /usr/lib/python3.5/config-3.5m-x86_64-linux-gnu/Makefile \
-        /usr/lib/python3.5/plat-x86_64-linux-gnu/_sysconfigdata_m.py
-    CMD cd Anjay && ./devconfig && make -j && make check
-  - docker build -t anjay-docker .
+  - source travis/prepare.sh
 
 script:
-  - docker run -e CC=$CC -e CXX=$CXX anjay-docker
-
-env:
-  - CC=gcc-4.7
-    CXX=g++-4.7
-
-  - CC=gcc-4.8
-    CXX=g++-4.8
-
-  - CC=gcc-4.9
-    CXX=g++-4.9
-
-  - CC=gcc-5
-    CXX=g++-5
-
-  - CC=clang-3.5
-    CXX=clang++-3.5
-
-  - CC=clang-3.6
-    CXX=clang++-3.6
-
-  - CC=clang-3.7
-    CXX=clang++-3.7
-
-  - CC=clang-3.8
-    CXX=clang++-3.8
+  - travis/run.sh
