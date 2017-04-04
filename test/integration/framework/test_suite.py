@@ -72,7 +72,7 @@ def ensure_dir(dir_path):
 class Lwm2mDmOperations(Lwm2mAsserts):
     def _perform_action(self, server, request, expected_response):
         server.send(request)
-        res = server.recv(timeout_s=2)
+        res = server.recv(timeout_s=5)
         self.assertMsgEqual(expected_response, res)
         return res
 
