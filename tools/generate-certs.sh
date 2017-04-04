@@ -58,7 +58,7 @@ openssl pkcs8 -topk8 -in client.key -inform pem -outform der \
     -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client.key.der
 openssl x509 -in client.crt -outform der > client.crt.der
 
-if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ] || ! "$KEYTOOL" -version >/dev/null 2>/dev/null; then
+if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ] || ! "$KEYTOOL" -help >/dev/null 2>/dev/null; then
     echo ''
     echo "NOTE: keytool not found, not generating keystores for Java/Californium"
     echo ''
