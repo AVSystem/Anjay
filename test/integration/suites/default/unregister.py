@@ -72,9 +72,6 @@ def unregister_test(oid):
 
         def runTest(self):
             self.communicate('unregister-object %d' % oid)
-
-            # FIXME: Registration Update should be triggered automatically, see T1005
-            self.communicate('send-update')
             pkt = self.serv.recv()
             self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT), pkt)
             current_objects = object_set_from_payload(pkt.content)

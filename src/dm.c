@@ -87,6 +87,9 @@ int anjay_register_object(anjay_t *anjay,
         anjay_log(WARNING, "anjay_notify_instances_changed() failed on /%u",
                   (**new_elem)->oid);
     }
+    if (anjay_schedule_registration_update(anjay, ANJAY_SSID_ANY)) {
+        anjay_log(WARNING, "anjay_schedule_registration_update() failed");
+    }
     return 0;
 }
 
@@ -151,6 +154,9 @@ int anjay_unregister_object(anjay_t *anjay,
                                  (*def_ptr)->oid);
     anjay_log(INFO, "successfully unregistered object /%u", (*def_ptr)->oid);
     AVS_LIST_DELETE(&detached);
+    if (anjay_schedule_registration_update(anjay, ANJAY_SSID_ANY)) {
+        anjay_log(WARNING, "anjay_schedule_registration_update() failed");
+    }
     return 0;
 }
 
@@ -277,7 +283,8 @@ static int ensure_resource_present(anjay_t *anjay,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid) {
     return _anjay_dm_map_present_result(
-            _anjay_dm_resource_supported_and_present(anjay, obj, iid, rid));
+            _anjay_dm_resource_supported_and_present(anjay, obj, iid, rid,
+                                                     NULL));
 }
 
 static bool
@@ -502,6 +509,7 @@ static int dm_observe(anjay_t *anjay,
                       const anjay_dm_object_def_t *const *obj,
                       const anjay_request_details_t *details,
                       avs_stream_abstract_t *stream) {
+    anjay_log(DEBUG, "Observe %s", ANJAY_DEBUG_MAKE_PATH(details));
     char buf[ANJAY_MAX_OBSERVABLE_RESOURCE_SIZE];
     double numeric = NAN;
     anjay_msg_details_t observe_details;

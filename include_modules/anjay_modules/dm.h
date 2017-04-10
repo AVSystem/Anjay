@@ -206,7 +206,8 @@ int
 _anjay_dm_resource_supported_and_present(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
                                          anjay_iid_t iid,
-                                         anjay_rid_t rid);
+                                         anjay_rid_t rid,
+                                         const anjay_dm_module_t *current_module);
 
 int _anjay_dm_resource_operations(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,

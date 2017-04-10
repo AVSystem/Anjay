@@ -72,9 +72,16 @@ typedef struct {
     fas_saved_state_t saved_state;
 } anjay_attr_storage_t;
 
+extern const anjay_dm_module_t _anjay_attr_storage_MODULE;
+
 void _anjay_attr_storage_clear(anjay_attr_storage_t *fas);
 
 anjay_attr_storage_t *_anjay_attr_storage_get(anjay_t *anjay);
+
+void _anjay_attr_storage_remove_instances_not_on_sorted_list(
+        anjay_attr_storage_t *fas,
+        fas_object_entry_t *object,
+        AVS_LIST(anjay_iid_t) iids);
 
 static inline void mark_modified(anjay_attr_storage_t *fas) {
     fas->modified_since_persist = true;
@@ -144,6 +151,9 @@ static bool resource_attrs_empty(const void *attrs) {
     return _anjay_dm_resource_attributes_empty(
             (const anjay_dm_resource_attributes_t *) attrs);
 }
+
+int _anjay_attr_storage_compare_u16ids(const void *a, const void *b,
+                                       size_t element_size);
 
 int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *out);

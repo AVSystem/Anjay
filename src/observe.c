@@ -345,7 +345,8 @@ static int get_effective_attrs(anjay_t *anjay,
     if (details.rid >= 0
             && _anjay_dm_map_present_result(
                     _anjay_dm_resource_supported_and_present(
-                            anjay, obj, key->iid, (anjay_rid_t) details.rid))) {
+                            anjay, obj, key->iid, (anjay_rid_t) details.rid,
+                            NULL))) {
         // if resource is no longer present, use invalid instead
         details.rid = -1;
     }

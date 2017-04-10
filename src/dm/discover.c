@@ -211,7 +211,8 @@ static int discover_instance_resources(anjay_t *anjay,
                                        discover_resource_hint_t hint) {
     int result = 0;
     for (anjay_rid_t rid = 0; !result && rid < (*obj)->rid_bound; ++rid) {
-        result = _anjay_dm_resource_supported_and_present(anjay, obj, iid, rid);
+        result = _anjay_dm_resource_supported_and_present(anjay, obj, iid, rid,
+                                                          NULL);
         if (result <= 0) {
             continue;
         }

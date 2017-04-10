@@ -387,6 +387,99 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
     PERSISTENCE_TEST_FINISH;
 }
 
+static const char CLEARING_TEST_DATA[] =
+        MAGIC_HEADER
+        "\x00\x00\x00\x02" // 2 objects
+            "\x00\x2A" // OID 42
+                "\x00\x00\x00\x00" // 0 object-level default attrs
+                "\x00\x00\x00\x01" // 1 instance entry
+                    "\x00\x01" // IID 1
+                        "\x00\x00\x00\x00" // 0 instance-level default attr
+                        "\x00\x00\x00\x01" // 1 resource entry
+                            "\x00\x03" // RID 3
+                                "\x00\x00\x00\x02" // 2 attr entries
+                                    "\x00\x02" // SSID 2
+                                        "\xFF\xFF\xFF\xFF" // min period
+                                        "\xFF\xFF\xFF\xFF" // max period
+                    /* greater than */  "\x3F\xF0\x00\x00\x00\x00\x00\x00"
+                    /* less than */     "\xBF\xF0\x00\x00\x00\x00\x00\x00"
+                    /* step */          "\x7F\xF8\x00\x00\x00\x00\x00\x00"
+                                    "\x00\x07" // SSID 7
+                                        "\x00\x00\x00\x01" // min period
+                                        "\x00\x00\x00\x0E" // max period
+                    /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* step */          "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+            "\x02\x05" // OID 517
+                "\x00\x00\x00\x00" // 0 object-level default attrs
+                "\x00\x00\x00\x01" // 1 instance entry
+                    "\x02\x04" // IID 516
+                        "\x00\x00\x00\x00" // 0 instance-level default attrs
+                        "\x00\x00\x00\x01" // 1 resource entry
+                            "\x02\x03" // RID 515
+                                "\x00\x00\x00\x01" // 1 attr entry
+                                    "\x02\x02" // SSID 514
+                                        "\x00\x00\x00\x21" // min period
+                                        "\xFF\xFF\xFF\xFF" // max period
+                    /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* step */          "\x40\x45\x00\x00\x00\x00\x00\x00";
+
+AVS_UNIT_TEST(attr_storage_persistence, restore_no_instances) {
+    RESTORE_TEST_INIT(CLEARING_TEST_DATA);
+    INSTALL_FAKE_OBJECT(42, 5);
+    INSTALL_FAKE_OBJECT(517, 522);
+
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 0, 0,
+                                      ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ517, 0, 0,
+                                      ANJAY_IID_INVALID);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_restore(
+            anjay, (avs_stream_abstract_t *) &inbuf));
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    PERSISTENCE_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(attr_storage_persistence, restore_no_supported_resources) {
+    RESTORE_TEST_INIT(CLEARING_TEST_DATA);
+    INSTALL_FAKE_OBJECT(42, 5);
+    INSTALL_FAKE_OBJECT(517, 522);
+
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 0, 0, 1);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 1, 0,
+                                      ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ42, 3, 0);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ517, 0, 0, 516);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ517, 1, 0,
+                                      ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ517, 515, 0);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_restore(
+            anjay, (avs_stream_abstract_t *) &inbuf));
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    PERSISTENCE_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(attr_storage_persistence, restore_no_present_resources) {
+    RESTORE_TEST_INIT(CLEARING_TEST_DATA);
+    INSTALL_FAKE_OBJECT(42, 5);
+    INSTALL_FAKE_OBJECT(517, 522);
+
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 0, 0, 1);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ42, 1, 0,
+                                      ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ42, 3, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &OBJ42, 1, 3, 0);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ517, 0, 0, 516);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ517, 1, 0,
+                                      ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ517, 515, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &OBJ517, 516, 515, 0);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_restore(
+            anjay, (avs_stream_abstract_t *) &inbuf));
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    PERSISTENCE_TEST_FINISH;
+}
+
 static const char RESTORE_BROKEN_DATA[] =
         MAGIC_HEADER
         "\x00\x00\x00\x03" // 3 objects

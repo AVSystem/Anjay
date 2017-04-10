@@ -188,39 +188,67 @@ static bool is_attr_storage_sane(anjay_attr_storage_t *fas) {
     return true;
 }
 
-static int clear_nonexistent_iids(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *def_ptr) {
+static int collect_existing_iids(anjay_t *anjay,
+                                 AVS_LIST(anjay_iid_t) *out,
+                                 const anjay_dm_object_def_t *const *def_ptr) {
+    assert(!*out);
+    int result = 0;
     void *cookie = NULL;
-    anjay_iid_t iid = 0;
-    while (iid != ANJAY_IID_INVALID) {
-        // we call the FAS overlaid handler which will eventually clear what is
-        // meant to be cleared
-        int retval = _anjay_dm_instance_it(anjay, def_ptr, &iid, &cookie, NULL);
-        if (retval) {
-            return retval;
+    while (true) {
+        anjay_iid_t iid;
+        result = _anjay_dm_instance_it(anjay, def_ptr, &iid, &cookie,
+                                       &_anjay_attr_storage_MODULE);
+        if (result || iid == ANJAY_IID_INVALID) {
+            break;
         }
+        anjay_iid_t *new_iid = AVS_LIST_NEW_ELEMENT(anjay_iid_t);
+        if (!new_iid) {
+            fas_log(ERROR, "Out of memory");
+            result = ANJAY_ERR_INTERNAL;
+            break;
+        }
+        *new_iid = iid;
+        AVS_LIST_INSERT(out, new_iid);
     }
-    return 0;
+    if (!result) {
+        AVS_LIST_SORT(out, _anjay_attr_storage_compare_u16ids);
+    }
+    return result;
+}
+
+static int clear_nonexistent_iids(anjay_t *anjay,
+                                  anjay_attr_storage_t *fas,
+                                  AVS_LIST(fas_object_entry_t) *object_ptr,
+                                  const anjay_dm_object_def_t *const *def_ptr) {
+    AVS_LIST(anjay_iid_t) iids = NULL;
+    int result = collect_existing_iids(anjay, &iids, def_ptr);
+    if (!result) {
+        _anjay_attr_storage_remove_instances_not_on_sorted_list(
+                fas, *object_ptr, iids);
+    }
+    AVS_LIST_CLEAR(&iids);
+    return result;
 }
 
 static int clear_nonexistent_rids(anjay_t *anjay,
-                                  fas_object_entry_t *object,
+                                  anjay_attr_storage_t *fas,
+                                  AVS_LIST(fas_object_entry_t) *object_ptr,
                                   const anjay_dm_object_def_t *const *def_ptr) {
     AVS_LIST(fas_instance_entry_t) *instance_ptr;
     AVS_LIST(fas_instance_entry_t) instance_helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper,
-                                   &object->instances) {
+                                   &(*object_ptr)->instances) {
         AVS_LIST(fas_resource_entry_t) *resource_ptr;
         AVS_LIST(fas_resource_entry_t) resource_helper;
         AVS_LIST_DELETABLE_FOREACH_PTR(resource_ptr, resource_helper,
                                        &(*instance_ptr)->resources) {
-            // we call the FAS overlaid handler which will eventually clear what
-            // is meant to be cleared
             int rid_present = _anjay_dm_resource_supported_and_present(
-                    anjay, def_ptr,
-                    (*instance_ptr)->iid, (*resource_ptr)->rid);
+                    anjay, def_ptr, (*instance_ptr)->iid, (*resource_ptr)->rid,
+                    &_anjay_attr_storage_MODULE);
             if (rid_present < 0) {
                 return -1;
+            } else if (!rid_present) {
+                remove_resource_entry(fas, resource_ptr);
             }
         }
         remove_instance_if_empty(instance_ptr);
@@ -239,8 +267,9 @@ static int clear_nonexistent_entries(anjay_t *anjay,
             remove_object_entry(fas, object_ptr);
         } else {
             int retval;
-            if ((retval = clear_nonexistent_iids(anjay, def_ptr))
-                    || (retval = clear_nonexistent_rids(anjay, *object_ptr,
+            if ((retval = clear_nonexistent_iids(anjay, fas, object_ptr,
+                                                 def_ptr))
+                    || (retval = clear_nonexistent_rids(anjay, fas, object_ptr,
                                                         def_ptr))) {
                 return retval;
             }

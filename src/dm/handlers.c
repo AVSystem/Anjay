@@ -215,12 +215,15 @@ int
 _anjay_dm_resource_supported_and_present(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
                                          anjay_iid_t iid,
-                                         anjay_rid_t rid) {
-    int retval = _anjay_dm_resource_supported(anjay, obj_ptr, rid, NULL);
+                                         anjay_rid_t rid,
+                                         const anjay_dm_module_t *current_module) {
+    int retval = _anjay_dm_resource_supported(anjay, obj_ptr, rid,
+                                              current_module);
     if (retval < 0 || retval > 1) {
         return retval;
     } else if (retval) {
-        return _anjay_dm_resource_present(anjay, obj_ptr, iid, rid, NULL);
+        return _anjay_dm_resource_present(anjay, obj_ptr, iid, rid,
+                                          current_module);
     }
     return 0;
 }
