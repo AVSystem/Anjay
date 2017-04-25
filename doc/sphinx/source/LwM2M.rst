@@ -379,9 +379,9 @@ requests that may be sent from the Client to the Server include:
   - these are taken directly from the source fields in IP and UDP layer headers.
 
 - **Update**, which is a CoAP **POST** request on an URL previously returned in
-  a response to *Register*. **Update** is sent in 2 situations:
+  a response to *Register*. **Update** is sent in following situations:
 
-  - periodically to ensure the Server that the device is still online
+  - periodically - to ensure the Server that the device is still online,
 
   - whenever any of the information previously given in a Register message
     changes - so that the Server always has up-to-date information about the
