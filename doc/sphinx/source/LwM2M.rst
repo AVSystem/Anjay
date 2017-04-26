@@ -346,11 +346,11 @@ and a CoAP client. The messages that may be exchanged between those include:
 
 As you can see, the Bootstrap Interface is mostly write-only. The Bootstrap
 Server is not able to do any actual management or monitoring of the Client. It
-can only prepare it for communication with regular LwM2M Servers - however,
+can only prepare it for communication with regular LwM2M Servers. Nevertheless,
 nothing prevents Bootstrap Server and regular Server applications from
 coexisting on the same host.
 
-However, the Bootstrap Server is the only entity that can manage connections to
+The Bootstrap Server is the only entity that can manage connections to
 LwM2M Servers on a Client via the LwM2M protocol itself. For this reason, an
 association with a Bootstrap Server may be maintained indefinitely - however,
 the protocol also provides an option to permanently disconnect from the
@@ -379,10 +379,13 @@ requests that may be sent from the Client to the Server include:
   - these are taken directly from the source fields in IP and UDP layer headers.
 
 - **Update**, which is a CoAP **POST** request on an URL previously returned in
-  a response to *Register*, is sent periodically to ensure the Server that the
-  device is still online, and whenever any of the information previously given
-  in a Register message change - so that the Server always has up-to-date
-  information about the Client's state.
+  a response to *Register*. **Update** is sent in following situations:
+
+  - periodically - to ensure the Server that the device is still online,
+
+  - whenever any of the information previously given in a Register message
+    changes - so that the Server always has up-to-date information about the
+    Client's state.
 
 - **De-register** (CoAP **DELETE**) may be sent by the Client if it can
   determine that it is shutting down. It terminates the association between
@@ -393,7 +396,7 @@ requests that may be sent from the Client to the Server include:
 Device Management and Service Enablement Interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This is the main interface on which the actual device management occur. In this
+This is the main interface on which the actual device management occurs. In this
 interface, the LwM2M Server acts as a CoAP client, sending requests to the LwM2M
 Client, which acts as a server on the CoAP layer. However, please note that
 the IP addresses and port numbers are exactly the same as previously established
@@ -458,7 +461,7 @@ commands:
 Information Reporting Interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This interface can be thought of as an extension of the
+This interface can be thought of as an extension to the
 `Device Management and Service Enablement Interface`_, allowing the Server to
 automatically receive periodic updates about some values in the data model it is
 particularly interested in. It is based on the
