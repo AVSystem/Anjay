@@ -198,10 +198,8 @@ int _anjay_dm_resource_present(anjay_t *anjay,
                                anjay_rid_t rid,
                                const anjay_dm_module_t *current_module);
 
-int _anjay_dm_resource_supported(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_rid_t rid,
-                                 const anjay_dm_module_t *current_module);
+bool _anjay_dm_resource_supported(const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_rid_t rid);
 int
 _anjay_dm_resource_supported_and_present(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
@@ -340,6 +338,10 @@ bool _anjay_dm_attributes_full(const anjay_dm_attributes_t *attrs);
 #define ANJAY_DM_RID_SECURITY_PK_OR_IDENTITY 3
 #define ANJAY_DM_RID_SECURITY_SERVER_PK_OR_IDENTITY 4
 #define ANJAY_DM_RID_SECURITY_SECRET_KEY 5
+#define ANJAY_DM_RID_SECURITY_SMS_MODE 6
+#define ANJAY_DM_RID_SECURITY_SMS_KEY_PARAMETERS 7
+#define ANJAY_DM_RID_SECURITY_SMS_SECRET_KEY 8
+#define ANJAY_DM_RID_SECURITY_SMS_MSISDN 9
 #define ANJAY_DM_RID_SECURITY_SSID 10
 #define ANJAY_DM_RID_SECURITY_CLIENT_HOLD_OFF_TIME 11
 #define ANJAY_DM_RID_SECURITY_BOOTSTRAP_TIMEOUT 12

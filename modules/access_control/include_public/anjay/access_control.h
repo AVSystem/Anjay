@@ -59,7 +59,8 @@ int anjay_access_control_persist(anjay_t *anjay,
  * @param in_stream     stream used for reading Access Control Object Instances
  * @return 0 in case of success, negative value in case of an error
  */
-int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in);
+int anjay_access_control_restore(anjay_t *anjay,
+                                 avs_stream_abstract_t *in_stream);
 
 /**
  * Assign permissions for Instance /OID/IID to a particular server.

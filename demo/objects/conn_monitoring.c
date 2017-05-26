@@ -28,7 +28,6 @@
 #define CM_RES_CELL_ID                  8 /* int */
 #define CM_RES_SMNC                     9 /* int */
 #define CM_RES_SMCC                     10 /* int */
-#define CM_RID_BOUND_                   11
 
 typedef struct {
     const anjay_dm_object_def_t *def;
@@ -40,38 +39,6 @@ get_cm(const anjay_dm_object_def_t *const *obj_ptr) {
         return NULL;
     }
     return container_of(obj_ptr, conn_monitoring_repr_t, def);
-}
-
-static int cm_resource_supported(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_rid_t rid) {
-    (void) anjay;
-    (void) obj_ptr;
-
-    switch (rid) {
-    case CM_RES_NETWORK_BEARER:
-    case CM_RES_AVAILABLE_NETWORK_BEARER:
-    case CM_RES_RADIO_SIGNAL_STRENGTH:
-    case CM_RES_LINK_QUALITY:
-    case CM_RES_IP_ADDRESSES:
-    case CM_RES_ROUTER_IP_ADDRESSES:
-    case CM_RES_LINK_UTILIZATION:
-    case CM_RES_APN:
-    case CM_RES_CELL_ID:
-    case CM_RES_SMNC:
-    case CM_RES_SMCC:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int cm_resource_present(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t iid,
-                               anjay_rid_t rid) {
-    (void) iid;
-    return cm_resource_supported(anjay, obj_ptr, rid);
 }
 
 static int signal_strength_dbm(void) {
@@ -174,12 +141,22 @@ static int cm_resource_dim(anjay_t *anjay,
 
 static const anjay_dm_object_def_t CONN_MONITORING = {
     .oid = DEMO_OID_CONN_MONITORING,
-    .rid_bound = CM_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            CM_RES_NETWORK_BEARER,
+            CM_RES_AVAILABLE_NETWORK_BEARER,
+            CM_RES_RADIO_SIGNAL_STRENGTH,
+            CM_RES_LINK_QUALITY,
+            CM_RES_IP_ADDRESSES,
+            CM_RES_ROUTER_IP_ADDRESSES,
+            CM_RES_LINK_UTILIZATION,
+            CM_RES_APN,
+            CM_RES_CELL_ID,
+            CM_RES_SMNC,
+            CM_RES_SMCC),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = cm_resource_present,
-        .resource_supported = cm_resource_supported,
+        .resource_present = anjay_dm_resource_present_TRUE,
         .resource_read = cm_resource_read,
         .resource_dim = cm_resource_dim
     }

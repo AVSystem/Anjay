@@ -109,7 +109,7 @@ int _anjay_sec_fetch_string(anjay_input_ctx_t *ctx, char **out) {
                                      _anjay_sec_string_getter);
 }
 
-int _anjay_sec_validate_security_mode(int32_t security_mode) {
+int _anjay_sec_validate_udp_security_mode(int32_t security_mode) {
     switch (security_mode) {
     case ANJAY_UDP_SECURITY_NOSEC:
     case ANJAY_UDP_SECURITY_PSK:
@@ -119,20 +119,47 @@ int _anjay_sec_validate_security_mode(int32_t security_mode) {
         security_log(ERROR, "Raw Public Key mode not supported");
         return ANJAY_ERR_NOT_IMPLEMENTED;
     default:
-        security_log(ERROR, "Invalid Security Mode");
+        security_log(ERROR, "Invalid UDP Security Mode");
         return ANJAY_ERR_BAD_REQUEST;
     }
 }
 
-int _anjay_sec_fetch_security_mode(anjay_input_ctx_t *ctx,
-                                    anjay_udp_security_mode_t *out) {
+int _anjay_sec_fetch_udp_security_mode(anjay_input_ctx_t *ctx,
+                                       anjay_udp_security_mode_t *out) {
     int32_t value;
     int retval = anjay_get_i32(ctx, &value);
     if (!retval) {
-        retval = _anjay_sec_validate_security_mode(value);
+        retval = _anjay_sec_validate_udp_security_mode(value);
     }
     if (!retval) {
         *out = (anjay_udp_security_mode_t) value;
+    }
+    return retval;
+}
+
+int _anjay_sec_validate_sms_security_mode(int32_t security_mode) {
+    switch (security_mode) {
+    case ANJAY_SMS_SECURITY_DTLS_PSK:
+    case ANJAY_SMS_SECURITY_NOSEC:
+        return 0;
+    case ANJAY_SMS_SECURITY_SECURE_PACKET:
+        security_log(ERROR, "Secure Packet mode not supported");
+        return ANJAY_ERR_NOT_IMPLEMENTED;
+    default:
+        security_log(ERROR, "Invalid SMS Security Mode");
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+}
+
+int _anjay_sec_fetch_sms_security_mode(anjay_input_ctx_t *ctx,
+                                       anjay_sms_security_mode_t *out) {
+    int32_t value;
+    int retval = anjay_get_i32(ctx, &value);
+    if (!retval) {
+        retval = _anjay_sec_validate_sms_security_mode(value);
+    }
+    if (!retval) {
+        *out = (anjay_sms_security_mode_t) value;
     }
     return retval;
 }
@@ -159,9 +186,12 @@ void _anjay_sec_destroy_instance_fields(sec_instance_t *instance) {
         return;
     }
     free((char *) (intptr_t) instance->server_uri);
+    free((char *) (intptr_t) instance->sms_number);
     _anjay_raw_buffer_clear(&instance->public_cert_or_psk_identity);
     _anjay_raw_buffer_clear(&instance->private_cert_or_psk_key);
     _anjay_raw_buffer_clear(&instance->server_public_key);
+    _anjay_raw_buffer_clear(&instance->sms_key_params);
+    _anjay_raw_buffer_clear(&instance->sms_secret_key);
 }
 
 void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr) {
@@ -176,12 +206,22 @@ static int _anjay_sec_clone_instance(sec_instance_t *dest,
     dest->public_cert_or_psk_identity = ANJAY_RAW_BUFFER_EMPTY;
     dest->private_cert_or_psk_key = ANJAY_RAW_BUFFER_EMPTY;
     dest->server_public_key = ANJAY_RAW_BUFFER_EMPTY;
+    dest->sms_key_params = ANJAY_RAW_BUFFER_EMPTY;
+    dest->sms_secret_key = ANJAY_RAW_BUFFER_EMPTY;
     dest->server_uri = NULL;
+    dest->sms_number = NULL;
 
     dest->server_uri = strdup(src->server_uri);
     if (!dest->server_uri) {
         security_log(ERROR, "Cannot clone Server Uri resource");
         return -1;
+    }
+    if (src->sms_number) {
+        dest->sms_number = strdup(src->sms_number);
+        if (!dest->sms_number) {
+            security_log(ERROR, "Cannot clone Server SMS Number resource");
+            return -1;
+        }
     }
     if (_anjay_raw_buffer_clone(&dest->public_cert_or_psk_identity,
                                 &src->public_cert_or_psk_identity)) {
@@ -196,6 +236,14 @@ static int _anjay_sec_clone_instance(sec_instance_t *dest,
     if (_anjay_raw_buffer_clone(&dest->server_public_key,
                                 &src->server_public_key)) {
         security_log(ERROR, "Cannot clone Server Public Key resource");
+        return -1;
+    }
+    if (_anjay_raw_buffer_clone(&dest->sms_key_params, &src->sms_key_params)) {
+        security_log(ERROR, "Cannot clone SMS Binding Key Parameters resource");
+        return -1;
+    }
+    if (_anjay_raw_buffer_clone(&dest->sms_secret_key, &src->sms_secret_key)) {
+        security_log(ERROR, "Cannot clone SMS Binding Secret Key(s) resource");
         return -1;
     }
     return 0;

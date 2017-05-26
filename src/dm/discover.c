@@ -210,16 +210,18 @@ static int discover_instance_resources(anjay_t *anjay,
                                        avs_stream_abstract_t *stream,
                                        discover_resource_hint_t hint) {
     int result = 0;
-    for (anjay_rid_t rid = 0; !result && rid < (*obj)->rid_bound; ++rid) {
-        result = _anjay_dm_resource_supported_and_present(anjay, obj, iid, rid,
-                                                          NULL);
+    for (size_t i = 0; i < (*obj)->supported_rids.count; ++i) {
+        result = _anjay_dm_resource_present(anjay, obj, iid,
+                                            (*obj)->supported_rids.rids[i],
+                                            NULL);
         if (result <= 0) {
             continue;
         }
         result = print_separator(stream);
         if (!result) {
-            result =
-                    discover_resource(anjay, obj, iid, rid, ssid, stream, hint);
+            result = discover_resource(anjay, obj, iid,
+                                       (*obj)->supported_rids.rids[i],
+                                       ssid, stream, hint);
         }
     }
     return result;

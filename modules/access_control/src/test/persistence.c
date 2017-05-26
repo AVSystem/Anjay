@@ -36,11 +36,15 @@ static int null_instance_it(anjay_t *anjay,
     return 0;
 }
 
+static const anjay_dm_supported_rids_t MOCK_SUPPORTED_RIDS =
+        ANJAY_DM_SUPPORTED_RIDS();
+
 static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
     anjay_dm_object_def_t *obj =
             (anjay_dm_object_def_t *) calloc(1, sizeof(anjay_dm_object_def_t));
     if (obj) {
         obj->oid = oid;
+        obj->supported_rids = MOCK_SUPPORTED_RIDS;
         obj->handlers.instance_it = null_instance_it;
     }
     return obj;

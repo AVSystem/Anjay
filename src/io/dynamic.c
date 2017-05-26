@@ -38,6 +38,7 @@ typedef struct {
     anjay_id_type_t id_type;
     int32_t id;
     anjay_output_ctx_t *backend;
+    anjay_uri_path_t uri;
 } dynamic_out_t;
 
 static int *dynamic_errno_ptr(anjay_output_ctx_t *ctx) {
@@ -64,6 +65,19 @@ static anjay_output_ctx_t *spawn_tlv(dynamic_out_t *ctx) {
     return result;
 }
 
+#ifdef WITH_JSON
+static anjay_output_ctx_t *spawn_json(dynamic_out_t *ctx) {
+    anjay_output_ctx_t *result =
+            _anjay_output_json_create(ctx->stream, ctx->errno_ptr,
+                                      &ctx->details, &ctx->uri);
+    if (result && ctx->id >= 0
+            && _anjay_output_set_id(result, ctx->id_type, (uint16_t) ctx->id)) {
+        _anjay_output_ctx_destroy(&result);
+    }
+    return result;
+}
+#endif
+
 static anjay_output_ctx_t *spawn_backend(dynamic_out_t *ctx, uint16_t format) {
     switch (_anjay_translate_legacy_content_format(format)) {
     case ANJAY_COAP_FORMAT_OPAQUE:
@@ -72,6 +86,10 @@ static anjay_output_ctx_t *spawn_backend(dynamic_out_t *ctx, uint16_t format) {
         return spawn_text(ctx);
     case ANJAY_COAP_FORMAT_TLV:
         return spawn_tlv(ctx);
+#ifdef WITH_JSON
+    case ANJAY_COAP_FORMAT_JSON:
+        return spawn_json(ctx);
+#endif
     default:
         anjay_log(ERROR, "Unsupported output format: %" PRIu16, format);
         *ctx->errno_ptr = -ANJAY_COAP_CODE_NOT_ACCEPTABLE;
@@ -260,7 +278,8 @@ static const anjay_output_ctx_vtable_t DYNAMIC_OUT_VTABLE = {
 anjay_output_ctx_t *
 _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
                              int *errno_ptr,
-                             anjay_msg_details_t *details_template) {
+                             anjay_msg_details_t *details_template,
+                             const anjay_uri_path_t *uri) {
     dynamic_out_t *ctx = (dynamic_out_t *) calloc(1, sizeof(dynamic_out_t));
     if (!ctx) {
         return NULL;
@@ -270,6 +289,7 @@ _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
     ctx->stream = stream;
     ctx->details = *details_template;
     ctx->id = -1;
+    ctx->uri = *uri;
     if (ctx->details.format != ANJAY_COAP_FORMAT_NONE
             && !ensure_backend(ctx, ctx->details.format)) {
         free(ctx);

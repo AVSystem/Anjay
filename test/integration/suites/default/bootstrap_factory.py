@@ -20,6 +20,9 @@ from framework.lwm2m_test import *
 
 
 class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor):
+    def _get_socket_count(self):
+        return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
+
     def setUp(self):
         extra_args = ['--bootstrap-timeout', '5']
         self.setup_demo_with_servers(num_servers=1,
@@ -30,21 +33,25 @@ class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor
         self.teardown_demo_with_servers()
 
     def runTest(self):
+        self.assertEqual(2, self._get_socket_count())
+
         # no message on the bootstrap socket - already bootstrapped
         with self.assertRaises(socket.timeout):
             print(self.bootstrap_server.recv(timeout_s=2))
 
         # no changes
-        self.communicate('send-update')
-        self.assertDemoUpdatesRegistration()
+        self.assertEqual(2, self._get_socket_count())
 
         # still no message
         with self.assertRaises(socket.timeout):
             print(self.bootstrap_server.recv(timeout_s=4))
 
         # now the Bootstrap Server Account should be gone
+        self.assertEqual(1, self._get_socket_count())
+
+        # Registration Update shall not include changes, because only Security changed
         self.communicate('send-update')
-        self.assertDemoUpdatesRegistration(content=ANY)
+        self.assertDemoUpdatesRegistration()
 
         req = Lwm2mDiscover('/0')
         self.serv.send(req)

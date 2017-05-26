@@ -26,8 +26,7 @@ class Test401_UDPChannelSecurity_PreSharedKeyMode(DataModel.Test):
     PSK_KEY = b'test-key'
 
     def setUp(self):
-        self.servers = [Lwm2mDtlsServer(psk_identity=self.PSK_IDENTITY,
-                                        psk_key=self.PSK_KEY)]
+        self.servers = [Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY))]
 
         args = ['--security-mode', 'psk',
                 '--identity', str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),

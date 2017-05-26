@@ -32,7 +32,7 @@
 static const anjay_dm_object_def_t *const OBJ2 =
         &(const anjay_dm_object_def_t) {
             .oid = 69,
-            .rid_bound = 7,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
             .handlers = {
                 .instance_it = _anjay_mock_dm_instance_it,
                 .instance_present = _anjay_mock_dm_instance_present,
@@ -1313,19 +1313,15 @@ AVS_UNIT_TEST(attr_storage, ssid_it) {
     AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 4, 0,
                                       ANJAY_IID_INVALID);
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2, 10, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 4, 10, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 4, 10, 0,
                                         ANJAY_MOCK_DM_INT(0, 3));
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2, 10, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 42, 10, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 42, 10, 0,
                                         ANJAY_MOCK_DM_INT(0, 2));
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2, 10, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 7, 10, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 7, 10, 0,
                                         ANJAY_MOCK_DM_INT(0, 514));
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2, 10, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 514, 10, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 514, 10, 0,
                                         ANJAY_MOCK_DM_INT(0, -4));
@@ -1371,15 +1367,12 @@ AVS_UNIT_TEST(attr_storage, ssid_it) {
     AVS_UNIT_ASSERT_EQUAL(iid, 10);
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 3, 0,
                                       ANJAY_IID_INVALID);
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER, 0, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 10, 0, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 10, 0, 0,
                                         ANJAY_MOCK_DM_INT(0, 2));
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER, 0, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 9, 0, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 9, 0, 0,
                                         ANJAY_MOCK_DM_INT(0, 514));
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER, 0, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 11, 0, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 11, 0, 0,
                                         ANJAY_MOCK_DM_INT(0, -5));
@@ -1458,7 +1451,6 @@ AVS_UNIT_TEST(attr_storage, ssid_remove) {
                             NULL),
                     NULL));
 
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2, 10, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 7, 10, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 7, 10, 0,
                                         ANJAY_MOCK_DM_INT(0, 2));
@@ -1517,7 +1509,6 @@ AVS_UNIT_TEST(attr_storage, ssid_remove) {
                             NULL),
                     NULL));
 
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER, 0, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 19, 0, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 19, 0, 0,
                                         ANJAY_MOCK_DM_INT(0, 42));

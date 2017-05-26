@@ -84,6 +84,11 @@ typedef struct {
     size_t server_public_key_size;
 } server_connection_args_t;
 
+#define DEMO_FOREACH_SERVER_ENTRY(It, ConnArgs) \
+        for ((It) = &(ConnArgs)->servers[0]; \
+                (It) < &(ConnArgs)->servers[MAX_SERVERS] && (It)->uri; \
+                ++(It))
+
 #define UNDEFINED_LIFETIME -1
 
 const anjay_dm_object_def_t **test_object_create(void);

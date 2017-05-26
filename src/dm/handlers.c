@@ -217,11 +217,7 @@ _anjay_dm_resource_supported_and_present(anjay_t *anjay,
                                          anjay_iid_t iid,
                                          anjay_rid_t rid,
                                          const anjay_dm_module_t *current_module) {
-    int retval = _anjay_dm_resource_supported(anjay, obj_ptr, rid,
-                                              current_module);
-    if (retval < 0 || retval > 1) {
-        return retval;
-    } else if (retval) {
+    if (_anjay_dm_resource_supported(obj_ptr, rid)) {
         return _anjay_dm_resource_present(anjay, obj_ptr, iid, rid,
                                           current_module);
     }
@@ -238,16 +234,22 @@ int _anjay_dm_resource_present(anjay_t *anjay,
                               resource_present, anjay, obj_ptr, iid, rid);
 }
 
-int _anjay_dm_resource_supported(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_rid_t rid,
-                                 const anjay_dm_module_t *current_module) {
+bool _anjay_dm_resource_supported(const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_rid_t rid) {
     anjay_log(TRACE, "resource_supported /%u/*/%u", (*obj_ptr)->oid, rid);
-    if (rid >= (*obj_ptr)->rid_bound) {
-        return 0;
+    size_t left = 0;
+    size_t right = (*obj_ptr)->supported_rids.count;
+    while (left < right) {
+        size_t mid = (left + right) / 2;
+        if ((*obj_ptr)->supported_rids.rids[mid] == rid) {
+            return true;
+        } else if ((*obj_ptr)->supported_rids.rids[mid] < rid) {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
     }
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              resource_supported, anjay, obj_ptr, rid);
+    return false;
 }
 
 int _anjay_dm_resource_operations(anjay_t *anjay,
@@ -532,13 +534,6 @@ int anjay_dm_resource_present_TRUE(anjay_t *anjay,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid) {
     (void) anjay; (void) obj_ptr; (void) iid, (void) rid;
-    return 1;
-}
-
-int anjay_dm_resource_supported_TRUE(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_rid_t rid) {
-    (void) anjay; (void) obj_ptr; (void) rid;
     return 1;
 }
 

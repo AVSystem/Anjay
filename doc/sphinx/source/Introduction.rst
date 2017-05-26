@@ -42,6 +42,7 @@ The following features are **supported**:
   - Plain Text
   - Opaque
   - TLV
+  - JSON (output only)
 
 - Security
 
@@ -52,13 +53,14 @@ The following features are **supported**:
 - Mechanism
 
   - Support for UDP Binding
+  - Support for SMS Binding (:doc:`commercial version <Commercial_support>`
+    only)
 
 The following features are **not implemented**:
 
-- Support of JSON format
+- Parsing of JSON format
 - RPK DTLS mode
 - Smartcard support
-- SMS Binding
 
 Technical information
 ---------------------

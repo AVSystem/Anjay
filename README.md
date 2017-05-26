@@ -139,10 +139,18 @@ First, make sure all necessary submodules are downloaded and up-to-date:
 git submodule update --init
 ```
 
-To compile the library and demo application:
+By default demo client compiles with DTLS enabled and uses `mbedtls` as a DTLS provider,
+but you may choose other DTLS backends currently supported by setting `DTLS_BACKEND` in
+a CMake invocation to one of the following DTLS backends: `openssl`, `mbedtls` or `tinydtls`:
 
 ``` sh
-cmake . && make -j
+cmake . -DDTLS_BACKEND="mbedtls" && make -j
+```
+
+Or, if a lack of security (not recommended) is what you need for some reason:
+
+```sh
+cmake . -DDTLS_BACKEND="" && make -j
 ```
 
 Compiled executables, including demo client, can be found in output/bin subdirectory.

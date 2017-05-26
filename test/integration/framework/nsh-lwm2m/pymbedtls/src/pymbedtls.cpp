@@ -437,7 +437,9 @@ BOOST_PYTHON_MODULE(pymbedtls) {
     ;
 
     scope socket_scope =
-        class_<Socket>("Socket", init<object, const string &, const string &, bool>())
+        class_<Socket>("Socket", init<object, Socket::Type, const string &, const string &, bool>())
+            .def(init<object, Socket::Type, const string &, const string &>())
+            .def(init<object, const string &, const string &, bool>())
             .def(init<object, const string &, const string &>())
             .def("connect", &Socket::connect)
             .def("send", &Socket::send)
@@ -448,7 +450,7 @@ BOOST_PYTHON_MODULE(pymbedtls) {
             .def("recvfrom", &Socket::fail<int>)
             .def("recvfrom_into", &Socket::fail<object>)
             .def("settimeout", &Socket::settimeout)
-            .def("__getattr__", &Socket::__getattr__);
+            .def("__getattr__", &Socket::__getattr__)
     ;
 
     enum_<Socket::Type>("Type")

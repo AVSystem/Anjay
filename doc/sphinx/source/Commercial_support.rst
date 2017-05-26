@@ -21,4 +21,7 @@ Commercial support
    :target: https://www.avsystem.com/products/anjay/
    :alt: AVSystem logo
 
-Enterprise-grade commercial support for the Anjay library is provided by AVSystem. For more details, see `AVSystem Anjay website <https://www.avsystem.com/products/anjay/>`_.
+Enterprise-grade commercial support for the Anjay library, as well as additional
+commercially-licensed library features, are provided by AVSystem. For more
+details, see
+`AVSystem Anjay website <https://www.avsystem.com/products/anjay/>`_.

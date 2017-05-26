@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <math.h>
 #include <ctype.h>
 #include <inttypes.h>
@@ -79,8 +80,18 @@ static int init(anjay_t *anjay,
         return -1;
     }
 
-    _anjay_bootstrap_init(anjay);
     if (_anjay_observe_init(anjay)) {
+        return -1;
+    }
+
+    if ((config->sms_driver != NULL) != (config->local_msisdn != NULL)) {
+        anjay_log(ERROR,
+                  "inconsistent nullness of sms_driver and local_msisdn");
+        return -1;
+    }
+
+    if (config->sms_driver) {
+        anjay_log(ERROR, "SMS support not available in this version of Anjay");
         return -1;
     }
 
@@ -120,6 +131,7 @@ void anjay_delete(anjay_t *anjay) {
     _anjay_dm_cleanup(anjay);
     _anjay_observe_cleanup(anjay);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
+
     free(anjay);
 }
 
@@ -616,27 +628,52 @@ cleanup:
     return result;
 }
 
-static anjay_server_connection_t *get_connection(anjay_connection_ref_t ref) {
-    // TODO: Implement properly once SMS gets done
-    assert(ref.conn_type == ANJAY_CONNECTION_UDP);
-    return &ref.server->udp_connection;
+anjay_server_connection_t *
+_anjay_get_server_connection(anjay_connection_ref_t ref) {
+    switch (ref.conn_type) {
+    case ANJAY_CONNECTION_UDP:
+        return &ref.server->udp_connection;
+    default:
+        return NULL;
+    }
 }
 
 anjay_connection_type_t
-_anjay_get_default_connection_type(const anjay_active_server_info_t *server) {
-    // TODO: Implement properly once SMS gets done
-    (void) server;
-    return ANJAY_CONNECTION_UDP;
+_anjay_get_default_connection_type(anjay_active_server_info_t *server) {
+    const anjay_connection_ref_t sms_ref = {
+        .server = server,
+        .conn_type = ANJAY_CONNECTION_SMS
+    };
+    const anjay_connection_ref_t udp_ref = {
+        .server = server,
+        .conn_type = ANJAY_CONNECTION_UDP
+    };
+    if (_anjay_connection_current_mode(sms_ref) != ANJAY_CONNECTION_DISABLED
+            && _anjay_connection_current_mode(udp_ref)
+                    == ANJAY_CONNECTION_DISABLED) {
+        return ANJAY_CONNECTION_SMS;
+    } else {
+        (void) server;
+        return ANJAY_CONNECTION_UDP;
+    }
 }
 
 avs_stream_abstract_t *
 _anjay_get_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
-    // TODO: Implement properly once SMS gets done
-    assert(ref.conn_type == ANJAY_CONNECTION_UDP);
-    const coap_transmission_params_t *tx_params =
-            &_anjay_coap_DEFAULT_TX_PARAMS;
+    const coap_transmission_params_t *tx_params;
+    switch (ref.conn_type) {
+    case ANJAY_CONNECTION_UDP:
+        tx_params = &_anjay_coap_DEFAULT_TX_PARAMS;
+        break;
+    case ANJAY_CONNECTION_SMS:
+        tx_params = &_anjay_coap_SMS_TX_PARAMS;
+        break;
+    default:
+        assert(0 && "Should never happen");
+        return NULL;
+    }
 
-    anjay_server_connection_t *connection = get_connection(ref);
+    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
     avs_net_abstract_socket_t *socket = _anjay_connection_get_prepared_socket(
             anjay, ref.server, connection);
     if (!socket
@@ -652,7 +689,7 @@ _anjay_get_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
 
 typedef struct {
     anjay_ssid_t ssid;
-    anjay_connection_type_t conn_type : 16;
+    uint16_t conn_type; // semantically anjay_connection_type_t
 } queue_mode_close_socket_args_t;
 
 static void *
@@ -679,7 +716,7 @@ static int queue_mode_close_socket(anjay_t *anjay, void *args_) {
             queue_mode_close_socket_args_decode(args_);
     anjay_connection_ref_t ref = {
         .server = _anjay_servers_find_active(&anjay->servers, args.ssid),
-        .conn_type = args.conn_type
+        .conn_type = (anjay_connection_type_t) args.conn_type
     };
     if (!ref.server) {
         return -1;
@@ -692,7 +729,7 @@ static void queue_mode_activate_socket(anjay_t *anjay,
                                        anjay_connection_ref_t ref) {
     assert(anjay->comm_stream);
 
-    anjay_server_connection_t *connection = get_connection(ref);
+    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
     assert(connection);
     assert(connection->queue_mode_close_socket_clb_handle == NULL);
 
@@ -707,7 +744,7 @@ static void queue_mode_activate_socket(anjay_t *anjay,
 
     queue_mode_close_socket_args_t args = {
         .ssid = ref.server->ssid,
-        .conn_type = ref.conn_type
+        .conn_type = (uint16_t) ref.conn_type
     };
     // see comment on field declaration for logic summary
     if (_anjay_sched(anjay->sched,
@@ -720,7 +757,7 @@ static void queue_mode_activate_socket(anjay_t *anjay,
 
 void _anjay_release_server_stream(anjay_t *anjay,
                                   anjay_connection_ref_t ref) {
-    anjay_server_connection_t *connection = get_connection(ref);
+    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
     assert(connection);
     _anjay_sched_del(anjay->sched,
                      &connection->queue_mode_close_socket_clb_handle);
@@ -753,8 +790,8 @@ size_t _anjay_num_non_bootstrap_servers(anjay_t *anjay) {
     return num_servers;
 }
 
-int anjay_serve(anjay_t *anjay,
-                avs_net_abstract_socket_t *ready_socket) {
+static int udp_serve(anjay_t *anjay,
+                     avs_net_abstract_socket_t *ready_socket) {
     anjay_connection_ref_t connection = {
         .server = _anjay_servers_find_by_udp_socket(&anjay->servers,
                                                     ready_socket),
@@ -772,6 +809,21 @@ int anjay_serve(anjay_t *anjay,
     int result = handle_incoming_message(anjay, stream, connection);
     _anjay_release_server_stream(anjay, connection);
     return result;
+}
+
+static int sms_serve(anjay_t *anjay) {
+    (void) anjay;
+    assert(0 && "SMS not supported in this version of Anjay");
+    return -1;
+}
+
+int anjay_serve(anjay_t *anjay,
+                avs_net_abstract_socket_t *ready_socket) {
+    if (_anjay_sms_router(anjay)
+            && ready_socket == _anjay_sms_poll_socket(anjay)) {
+        return sms_serve(anjay);
+    }
+    return udp_serve(anjay, ready_socket);
 }
 
 int anjay_sched_time_to_next(anjay_t *anjay,
@@ -809,6 +861,12 @@ int anjay_sched_run(anjay_t *anjay) {
     }
 
     return 0;
+}
+
+void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr) {
+    if (*smsdrv_ptr) {
+        assert(0 && "SMS drivers not supported by this version of Anjay");
+    }
 }
 
 #ifdef ANJAY_TEST

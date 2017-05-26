@@ -29,7 +29,6 @@ typedef enum {
     CS_STOP                 = 7,
     CS_COLLECTION_PERIOD    = 8,
     CS_COLLECTION_DURATION  = 9,
-    CS_RID_BOUND_           = 10
 } conn_stats_res_t;
 
 typedef struct {
@@ -44,26 +43,6 @@ static conn_stats_repr_t *get_cs(const anjay_dm_object_def_t *const *obj_ptr) {
         return NULL;
     }
     return container_of(obj_ptr, conn_stats_repr_t, def);
-}
-
-static int cs_resource_supported(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_rid_t rid) {
-    (void) anjay;
-    (void) obj_ptr;
-    switch (rid) {
-    case CS_SMS_TX_COUNTER:
-    case CS_SMS_RX_COUNTER:
-    case CS_RX_KB:
-    case CS_TX_KB:
-    case CS_MAX_MSG_SIZE:
-    case CS_AVG_MSG_SIZE:
-    case CS_START:
-    case CS_STOP:
-        return 1;
-    default:
-        return 0;
-    }
 }
 
 static int read_uint64_from_file(uint64_t *number, const char *filename) {
@@ -218,12 +197,19 @@ static int cs_resource_write(anjay_t *anjay,
 
 static const anjay_dm_object_def_t CONN_STATISTICS = {
     .oid = DEMO_OID_CONN_STATISTICS,
-    .rid_bound = CS_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            CS_SMS_TX_COUNTER,
+            CS_SMS_RX_COUNTER,
+            CS_TX_KB,
+            CS_RX_KB,
+            CS_MAX_MSG_SIZE,
+            CS_AVG_MSG_SIZE,
+            CS_START,
+            CS_STOP),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
         .resource_present = anjay_dm_resource_present_TRUE,
-        .resource_supported = cs_resource_supported,
         .resource_execute = cs_resource_execute,
         .resource_read = cs_resource_read,
         .resource_write = cs_resource_write,

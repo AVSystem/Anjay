@@ -40,8 +40,7 @@ happen if:
 
 - an LwM2M server sends a Read request,
 
-- the Resource is being observed and the library needs to send a Notify message
-  (see :doc:`Notifications`),
+- the Resource is being observed and the library needs to send a Notify message,
 
 - value of the Resource is required for the library to function correctly
   (mostly related to Objects 0 (Security), 1 (Server) and 2 (Access Control)).
@@ -68,7 +67,7 @@ The Read handler for our test object might be implemented as follows:
        case 1:
            return anjay_ret_i32(ctx, (int32_t)time(NULL));
        default:
-           // control will never reach this part due to object's rid_bound
+           // control will never reach this part due to object's supported_rids
            return 0;
        }
    }
@@ -94,17 +93,13 @@ Having the Read handler implemented, one can initialize the
         // Object ID
         .oid = 1234,
 
-        // Object does not contain any Resources with IDs >= 2
-        .rid_bound = 2,
+        // List of supported Resource IDs
+        .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
 
         .handlers = {
             // single-instance Objects can use these pre-implemented handlers:
             .instance_it = anjay_dm_instance_it_SINGLE,
             .instance_present = anjay_dm_instance_present_SINGLE,
-
-            // if the Object implements all Resources from ID 0 up to its
-            // `rid_bound`, it can use this predefined `resource_supported` handler:
-            .resource_supported = anjay_dm_resource_supported_TRUE,
 
             // if all supported Resources are always available, one can use
             // a pre-implemented `resource_present` handler too:
@@ -138,13 +133,8 @@ Having the Read handler implemented, one can initialize the
 
           More info: :doc:`../../AdvancedTutorial/AT4`
 
-   #. Resource ID 3 is compared against ``rid_bound`` defined for the
-      object. If ``rid_bound`` is strictly lower, a Not Found response
-      is issued.
-
-   #. ``resource_supported`` handler of the object is called to determine
-      whether the Object is able to perform operations on Resource 3.
-      If the handler returns 0, a Not Found response is issued.
+   #. Resource ID 3 is searched for in the ``supported_rids`` list defined for
+      the object. If it is not found, a Not Found response is issued.
 
    #. ``resource_present`` handler is called to ensure that Resource 3
       is instantiated for Object Instance 2. If the handler returns 0,
@@ -169,7 +159,8 @@ Having the Read handler implemented, one can initialize the
    the library to respond with returned error code.
 
 
-.. topic:: Why `resource_supported`/`resource_present` are separate handlers?
+.. topic:: Why both the `supported_rids` list and the `resource_present` handler
+           are necessary?
 
    An LwM2M client may be able to handle a Resource that has no default value.
    Such Resource is always *supported*, but becomes *present* only after

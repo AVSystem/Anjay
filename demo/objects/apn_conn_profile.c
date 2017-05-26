@@ -44,8 +44,6 @@
 #define APNCP_RES_QCI 21                                    // int[1:9]
 #define APNCP_RES_VENDOR_SPECIFIC_EXTENSIONS 22             // objlnk
 
-#define APNCP_RID_BOUND_ 23
-
 typedef enum {
     AUTH_PAP = 0,
     AUTH_CHAP,
@@ -180,29 +178,6 @@ static int apncp_instance_remove(anjay_t *anjay,
     return ANJAY_ERR_NOT_FOUND;
 }
 
-static int apncp_resource_supported(anjay_t *anjay,
-                                    const anjay_dm_object_def_t *const *obj_ptr,
-                                    anjay_rid_t rid) {
-    (void) anjay;
-    (void) obj_ptr;
-
-    switch (rid) {
-    case APNCP_RES_PROFILE_NAME:
-    case APNCP_RES_AUTHENTICATION_TYPE:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int apncp_resource_present(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t iid,
-                                  anjay_rid_t rid) {
-    (void) iid;
-    return apncp_resource_supported(anjay, obj_ptr, rid);
-}
-
 static int apncp_resource_read(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
@@ -330,15 +305,16 @@ apncp_instance_reset(anjay_t *anjay,
 
 static const anjay_dm_object_def_t apn_conn_profile = {
     .oid = DEMO_OID_APN_CONN_PROFILE,
-    .rid_bound = APNCP_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            APNCP_RES_PROFILE_NAME,
+            APNCP_RES_AUTHENTICATION_TYPE),
     .handlers = {
         .instance_it = apncp_instance_it,
         .instance_present = apncp_instance_present,
         .instance_create = apncp_instance_create,
         .instance_remove = apncp_instance_remove,
         .instance_reset = apncp_instance_reset,
-        .resource_supported = apncp_resource_supported,
-        .resource_present = apncp_resource_present,
+        .resource_present = anjay_dm_resource_present_TRUE,
         .resource_read = apncp_resource_read,
         .resource_write = apncp_resource_write,
         .transaction_begin = apncp_transaction_begin,

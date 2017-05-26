@@ -173,7 +173,6 @@ anjay_dm_resource_execute_t _anjay_mock_dm_resource_execute;
 anjay_dm_resource_dim_t _anjay_mock_dm_resource_dim;
 anjay_dm_resource_read_attrs_t _anjay_mock_dm_resource_read_attrs;
 anjay_dm_resource_write_attrs_t _anjay_mock_dm_resource_write_attrs;
-anjay_dm_resource_supported_t _anjay_mock_dm_resource_supported;
 anjay_dm_resource_operations_t _anjay_mock_dm_resource_operations;
 
 #define ANJAY_MOCK_DM_HANDLERS_NOATTRS \
@@ -185,8 +184,7 @@ anjay_dm_resource_operations_t _anjay_mock_dm_resource_operations;
     .resource_read = _anjay_mock_dm_resource_read, \
     .resource_write = _anjay_mock_dm_resource_write, \
     .resource_execute = _anjay_mock_dm_resource_execute, \
-    .resource_dim = _anjay_mock_dm_resource_dim, \
-    .resource_supported = _anjay_mock_dm_resource_supported
+    .resource_dim = _anjay_mock_dm_resource_dim
 
 #define ANJAY_MOCK_DM_HANDLERS \
     ANJAY_MOCK_DM_HANDLERS_NOATTRS, \
@@ -251,10 +249,6 @@ void _anjay_mock_dm_expect_resource_present(anjay_t *anjay,
                                             anjay_iid_t iid,
                                             anjay_rid_t rid,
                                             int retval);
-void _anjay_mock_dm_expect_resource_supported(anjay_t *anjay,
-                                              const anjay_dm_object_def_t *const *obj_ptr,
-                                              anjay_rid_t rid,
-                                              int retval);
 void _anjay_mock_dm_expect_resource_operations(anjay_t *anjay,
                                                const anjay_dm_object_def_t *const *obj_ptr,
                                                anjay_rid_t rid,

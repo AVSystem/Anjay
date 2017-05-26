@@ -46,6 +46,25 @@ VISIBILITY_SOURCE_BEGIN
 #include "test/mock_coap_stream.h"
 #endif
 
+static int validate_supported_rids(const anjay_dm_object_def_t *obj_def) {
+    if (obj_def->supported_rids.count != 0 && !obj_def->supported_rids.rids) {
+        anjay_log(ERROR, "/%u: supported_rids.count is nonzero, but "
+                         "supported_rids.rids in is NULL", obj_def->oid);
+        return -1;
+    }
+
+    for (size_t i = 1; i < obj_def->supported_rids.count; ++i) {
+        if (obj_def->supported_rids.rids[i]
+                <= obj_def->supported_rids.rids[i - 1]) {
+            anjay_log(ERROR, "supported_rids in /%u is not strictly ascending",
+                             obj_def->oid);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 int anjay_register_object(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *def_ptr) {
     assert(!anjay->transaction_state.depth);
@@ -69,6 +88,10 @@ int anjay_register_object(anjay_t *anjay,
     if (*obj_iter && (***obj_iter)->oid == (*def_ptr)->oid) {
         anjay_log(ERROR, "data model object /%u already registered",
                   (*def_ptr)->oid);
+        return -1;
+    }
+
+    if (validate_supported_rids(*def_ptr)) {
         return -1;
     }
 
@@ -249,15 +272,15 @@ const char *_anjay_debug_make_obj_path__(char *buffer,
 
     size_t offset = 0;
     while (*id_ptr) {
-        ssize_t result = snprintf(buffer + offset, buffer_size - offset,
-                                  "/%u", **id_ptr);
+        ssize_t result = _anjay_snprintf(buffer + offset, buffer_size - offset,
+                                         "/%u", **id_ptr);
 
-        if (result < 0 || (size_t)result >= buffer_size - offset) {
+        if (result < 0) {
             assert(0 && "should never happen");
             return "<error>";
         }
 
-        offset += (size_t)result;
+        offset += (size_t) result;
         ++id_ptr;
     }
 
@@ -278,13 +301,22 @@ static int ensure_instance_present(anjay_t *anjay,
             _anjay_dm_instance_present(anjay, obj_ptr, iid, NULL));
 }
 
+static int
+ensure_resource_supported_and_present(anjay_t *anjay,
+                                      const anjay_dm_object_def_t *const *obj,
+                                      anjay_iid_t iid,
+                                      anjay_rid_t rid) {
+    return _anjay_dm_map_present_result(
+            _anjay_dm_resource_supported_and_present(anjay, obj, iid, rid,
+                                                     NULL));
+}
+
 static int ensure_resource_present(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid) {
     return _anjay_dm_map_present_result(
-            _anjay_dm_resource_supported_and_present(anjay, obj, iid, rid,
-                                                     NULL));
+            _anjay_dm_resource_present(anjay, obj, iid, rid, NULL));
 }
 
 static bool
@@ -313,15 +345,11 @@ static int read_resource_internal(anjay_t *anjay,
     return result;
 }
 
-static int read_resource(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj,
-                         anjay_iid_t iid,
-                         anjay_rid_t rid,
-                         anjay_output_ctx_t *out_ctx) {
-    int result = ensure_resource_present(anjay, obj, iid, rid);
-    if (result) {
-        return result;
-    }
+static int read_present_resource(anjay_t *anjay,
+                                 const anjay_dm_object_def_t *const *obj,
+                                 anjay_iid_t iid,
+                                 anjay_rid_t rid,
+                                 anjay_output_ctx_t *out_ctx) {
     if (!has_resource_operation_bit(anjay, obj, rid,
                                     ANJAY_DM_RESOURCE_OP_BIT_R)) {
         anjay_log(ERROR, "Read /%u/*/%u is not supported", (*obj)->oid, rid);
@@ -330,12 +358,30 @@ static int read_resource(anjay_t *anjay,
     return read_resource_internal(anjay, obj, iid, rid, out_ctx);
 }
 
+static int read_resource(anjay_t *anjay,
+                         const anjay_dm_object_def_t *const *obj,
+                         anjay_iid_t iid,
+                         anjay_rid_t rid,
+                         anjay_output_ctx_t *out_ctx) {
+    int result = ensure_resource_supported_and_present(anjay, obj, iid, rid);
+    if (result) {
+        return result;
+    }
+    return read_present_resource(anjay, obj, iid, rid, out_ctx);
+}
+
 static int read_instance(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj,
                          anjay_iid_t iid,
                          anjay_output_ctx_t *out_ctx) {
-    for (anjay_rid_t rid = 0; rid < (*obj)->rid_bound; ++rid) {
-        int result = read_resource(anjay, obj, iid, rid, out_ctx);
+    for (size_t i = 0; i < (*obj)->supported_rids.count; ++i) {
+        int result = ensure_resource_present(anjay, obj, iid,
+                                             (*obj)->supported_rids.rids[i]);
+        if (!result) {
+            result = read_present_resource(anjay, obj, iid,
+                                           (*obj)->supported_rids.rids[i],
+                                           out_ctx);
+        }
         if (result
                 && result != ANJAY_ERR_METHOD_NOT_ALLOWED
                 && result != ANJAY_ERR_NOT_FOUND) {
@@ -394,21 +440,41 @@ dm_read_spawn_ctx(avs_stream_abstract_t *stream,
                   int *errno_ptr,
                   const anjay_dm_read_args_t *details) {
     uint16_t requested_format = details->requested_format;
-    if (!details->has_rid
-            && (*errno_ptr = _anjay_handle_requested_format(
-                    &requested_format, ANJAY_COAP_FORMAT_TLV))) {
-        anjay_log(ERROR, "Got option: Accept: %" PRIu16 ", "
-                  "but reads on non-resource paths only support TLV format",
-                  details->requested_format);
-        return NULL;
+    if (!details->has_rid) {
+        int ret = _anjay_handle_requested_format(&requested_format,
+                                                 ANJAY_COAP_FORMAT_TLV);
+#ifdef WITH_JSON
+        if (ret) {
+            ret = _anjay_handle_requested_format(&requested_format,
+                                                 ANJAY_COAP_FORMAT_JSON);
+        }
+#endif
+        if (ret) {
+            *errno_ptr = ret;
+            anjay_log(ERROR,
+                      "Got option: Accept: %" PRIu16 ", but reads on "
+                      "non-resource paths only support TLV and JSON formats",
+                      details->requested_format);
+            return NULL;
+        }
     }
-    return _anjay_output_dynamic_create(
-            stream, errno_ptr, &(anjay_msg_details_t) {
-                .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
-                .format = requested_format,
-                .msg_code = make_success_response_code(ANJAY_ACTION_READ),
-                .observe_serial = details->observe_serial
-            });
+
+    anjay_msg_details_t msg_details = {
+        .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+        .format = requested_format,
+        .msg_code = make_success_response_code(ANJAY_ACTION_READ),
+        .observe_serial = details->observe_serial
+    };
+
+    const anjay_uri_path_t uri = {
+        .has_oid = true,
+        .has_iid = details->has_iid,
+        .has_rid = details->has_rid,
+        .oid = details->oid,
+        .iid = details->iid,
+        .rid = details->rid
+    };
+    return _anjay_output_dynamic_create(stream, errno_ptr, &msg_details, &uri);
 }
 
 static int dm_read(anjay_t *anjay,
@@ -607,8 +673,8 @@ static int dm_discover(anjay_t *anjay,
     if (details->has_iid) {
         if (!(result = ensure_instance_present(anjay, obj, details->iid))) {
             if (details->has_rid) {
-                if (!(result = ensure_resource_present(anjay, obj, details->iid,
-                                                       details->rid))) {
+                if (!(result = ensure_resource_supported_and_present(
+                        anjay, obj, details->iid, details->rid))) {
                     result = _anjay_discover_resource(anjay, obj, details->iid,
                                                       details->rid,
                                                       details->ssid, stream);
@@ -659,13 +725,10 @@ static int write_resource(anjay_t *anjay,
                           anjay_rid_t rid,
                           anjay_input_ctx_t *in_ctx,
                           anjay_notify_queue_t *notify_queue) {
-    int result = _anjay_dm_map_present_result(
-            _anjay_dm_resource_supported(anjay, obj, rid, NULL));
-    if (!result) {
-        result = write_present_resource(anjay, obj, iid, rid, in_ctx,
-                                        notify_queue);
+    if (!_anjay_dm_resource_supported(obj, rid)) {
+        return ANJAY_ERR_NOT_FOUND;
     }
-    return result;
+    return write_present_resource(anjay, obj, iid, rid, in_ctx, notify_queue);
 }
 
 typedef enum {
@@ -686,10 +749,7 @@ static int write_instance(anjay_t *anjay,
         if (type != ANJAY_ID_RID) {
             return ANJAY_ERR_BAD_REQUEST;
         }
-        int supported = _anjay_dm_resource_supported(anjay, obj, id, NULL);
-        if (supported < 0) {
-            return supported;
-        }
+        bool supported = _anjay_dm_resource_supported(obj, id);
         if (!supported && hint == WRITE_INSTANCE_FAIL_ON_UNSUPPORTED) {
             return ANJAY_ERR_NOT_FOUND;
         }
@@ -782,7 +842,7 @@ static int dm_write_resource_attrs(anjay_t *anjay,
                                    anjay_ssid_t ssid,
                                    const anjay_request_attributes_t *attributes) {
     anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
-    int result = ensure_resource_present(anjay, obj, iid, rid);
+    int result = ensure_resource_supported_and_present(anjay, obj, iid, rid);
 
     if (!result) {
         result = _anjay_dm_resource_read_attrs(anjay, obj, iid, rid, ssid,
@@ -878,7 +938,7 @@ static int dm_execute(anjay_t *anjay,
 
     int retval = ensure_instance_present(anjay, obj, details->iid);
     if (!retval) {
-        retval = ensure_resource_present(anjay, obj,
+        retval = ensure_resource_supported_and_present(anjay, obj,
                                          details->iid, details->rid);
     }
     if (!retval) {
@@ -1255,7 +1315,8 @@ int _anjay_dm_res_read(anjay_t *anjay,
 
     anjay_output_buf_ctx_t ctx = _anjay_output_buf_ctx_init(&stream);
 
-    int result = ensure_resource_present(anjay, obj, path->iid, path->rid);
+    int result = ensure_resource_supported_and_present(
+            anjay, obj, path->iid, path->rid);
     if (result) {
         return result;
     }

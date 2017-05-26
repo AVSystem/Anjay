@@ -95,20 +95,21 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         expected_res = self._make_expected_res(req, Lwm2mDeleted, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
-    def _read_path(self, server, path, expect_error_code, accept=None):
+    def read_path(self, server, path, expect_error_code=None, accept=None):
         req = Lwm2mRead(path, accept=accept)
         expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
     def read_resource(self, server, oid, iid, rid, expect_error_code=None, accept=None):
-        return self._read_path(server, '/%d/%d/%d' % (oid, iid, rid), expect_error_code,
-                               accept=accept)
+        return self.read_path(server, '/%d/%d/%d' % (oid, iid, rid), expect_error_code,
+                              accept=accept)
 
-    def read_instance(self, server, oid, iid, expect_error_code=None):
-        return self._read_path(server, '/%d/%d' % (oid, iid), expect_error_code)
+    def read_instance(self, server, oid, iid, expect_error_code=None, accept=None):
+        return self.read_path(server, '/%d/%d' % (oid, iid), expect_error_code,
+                              accept=accept)
 
-    def read_object(self, server, oid, expect_error_code=None):
-        return self._read_path(server, '/%d' % oid, expect_error_code)
+    def read_object(self, server, oid, expect_error_code=None, accept=None):
+        return self.read_path(server, '/%d' % oid, expect_error_code, accept=accept)
 
     def write_instance(self, server, oid, iid, content=b'', partial=False, expect_error_code=None):
         req = Lwm2mWrite('/%d/%d' % (oid, iid), content,
@@ -125,8 +126,8 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
-    def execute_resource(self, server, oid, iid, rid, expect_error_code=None):
-        req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid))
+    def execute_resource(self, server, oid, iid, rid, content='', expect_error_code=None):
+        req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid), content=content)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
@@ -267,7 +268,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         If BOOTSTRAP_SERVER is true, self.bootstrap_server is initialized to
         an Lwm2mServer instance and the demo is executed with --bootstrap
-        optiom.
+        option.
 
         Any EXTRA_CMDLINE_ARGS are appended to the demo command line.
 
@@ -303,9 +304,11 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         If AUTO_DEREGISTER is True, the function ensures that demo correctly
         de-registers from all servers in self.servers list.
         """
-        servers = []
+        if auto_deregister and not 'deregister_servers' in kwargs:
+            kwargs = kwargs.copy()
+            kwargs['deregister_servers'] = self.servers
         try:
-            self.request_demo_shutdown(self.servers if auto_deregister else [], *args, **kwargs)
+            self.request_demo_shutdown(*args, **kwargs)
         finally:
             self.terminate_demo()
             for serv in self.servers:

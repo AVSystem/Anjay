@@ -89,12 +89,6 @@ static int send_objects_list(avs_stream_abstract_t *stream,
 
     anjay_dm_cache_object_t *object;
     AVS_LIST_FOREACH(object, dm) {
-        if (object->oid == ANJAY_DM_OID_SECURITY) {
-            /* LwM2M spec, 2016-09-08 update says that Register/Update must not
-             * include Security object instances */
-            continue;
-        }
-
         if (object->instances) {
             anjay_iid_t *iid;
             AVS_LIST_FOREACH(iid, object->instances) {
@@ -148,6 +142,7 @@ static int get_server_lifetime(anjay_t *anjay,
 
 static int send_register(avs_stream_abstract_t *stream,
                          const char *endpoint_name,
+                         const char *sms_msisdn,
                          const anjay_update_parameters_t *params) {
     anjay_msg_details_t details = {
         .msg_type = ANJAY_COAP_MSG_CONFIRMABLE,
@@ -158,8 +153,8 @@ static int send_register(avs_stream_abstract_t *stream,
                 ANJAY_SUPPORTED_ENABLER_VERSION, endpoint_name,
                 &params->lifetime_s,
                 params->binding_mode == ANJAY_BINDING_U ? ANJAY_BINDING_NONE
-                                                        : params->binding_mode)
-    // TODO: support SMS number updates
+                                                        : params->binding_mode,
+                sms_msisdn)
     };
 
     int result = -1;
@@ -266,6 +261,12 @@ static int compare_iids(const void *left_, const void *right_, size_t size) {
 static int query_dm_object(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj,
                            void *cache_object_insert_ptr_) {
+    if ((*obj)->oid == ANJAY_DM_OID_SECURITY) {
+        /* LwM2M spec, 2016-09-08 update says that Register/Update must not
+         * include Security object instances */
+        return 0;
+    }
+
     AVS_LIST(anjay_dm_cache_object_t) **cache_object_insert_ptr =
             (AVS_LIST(anjay_dm_cache_object_t) **) cache_object_insert_ptr_;
 
@@ -312,7 +313,7 @@ static void cleanup_update_parameters(anjay_update_parameters_t *params) {
 }
 
 static int init_update_parameters(anjay_t *anjay,
-                                  const anjay_active_server_info_t *server,
+                                  anjay_active_server_info_t *server,
                                   anjay_update_parameters_t *out_params) {
     if (query_dm(anjay, &out_params->dm)) {
         goto error;
@@ -372,7 +373,8 @@ int _anjay_register(anjay_t *anjay,
     AVS_LIST(const anjay_string_t) endpoint_path = NULL;
     int result = -1;
 
-    if (send_register(stream, endpoint_name, &new_params)
+    if (send_register(stream, endpoint_name, _anjay_local_msisdn(anjay),
+                      &new_params)
             || check_register_response(stream, &endpoint_path)) {
         anjay_log(ERROR, "could not register to server %u", server->ssid);
         goto fail;
@@ -438,8 +440,7 @@ static int send_update(avs_stream_abstract_t *stream,
                     : ANJAY_COAP_FORMAT_NONE,
         .uri_path = endpoint_path,
         .uri_query = _anjay_make_query_string_list(NULL, NULL, lifetime_s_ptr,
-                                                   binding_mode)
-        // TODO: support SMS binding modes and number updates
+                                                   binding_mode, NULL)
     };
 
     int result = -1;

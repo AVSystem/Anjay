@@ -611,6 +611,13 @@ int _anjay_coap_server_read(coap_server_t *server,
 
 #ifdef WITH_BLOCK_RECEIVE
     if (server->state == COAP_SERVER_STATE_NEEDS_NEXT_BLOCK) {
+        // An attempt to read more payload was made, but we finished reading
+        // last packet. Send 2.31 Continue to let the server know we are ready
+        // to handle the next block and wait for it.
+        const anjay_coap_msg_identity_t *id =
+                _anjay_coap_server_get_request_identity(server);
+        send_continue(socket, id, &server->curr_block);
+
         int result = receive_next_block_with_timeout(server, in, socket);
         if (result) {
             return result;
@@ -629,12 +636,14 @@ int _anjay_coap_server_read(coap_server_t *server,
                      server->curr_block.seq_num);
 
             server->state = COAP_SERVER_STATE_NEEDS_NEXT_BLOCK;
-
-            const anjay_coap_msg_identity_t *id =
-                    _anjay_coap_server_get_request_identity(server);
-            send_continue(socket, id, &server->curr_block);
-
             *out_message_finished = false;
+
+            // Even though we return the rest of packet payload, we must not
+            // send the 2.31 Continue response yet: the payload might be
+            // malformed and cause an error response, terminating the block-wise
+            // transfer. If we sent the Continue, it would result in two
+            // different responses to the same server request, which is quite
+            // disastrous.
 #else
             (void) socket;
             coap_log(ERROR, "block: Block1 requests not supported");

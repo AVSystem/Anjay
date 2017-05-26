@@ -259,7 +259,8 @@ AVS_LIST(const anjay_string_t)
 _anjay_make_query_string_list(const char *version,
                               const char *endpoint_name,
                               const int64_t *lifetime,
-                              anjay_binding_mode_t binding_mode) {
+                              anjay_binding_mode_t binding_mode,
+                              const char *sms_msisdn) {
     AVS_LIST(const anjay_string_t) list = NULL;
 
     if (version && append_string_query_arg(&list, "lwm2m", version)) {
@@ -285,6 +286,10 @@ _anjay_make_query_string_list(const char *version,
     const char *binding_mode_str = anjay_binding_mode_as_str(binding_mode);
     if (binding_mode_str
             && append_string_query_arg(&list, "b", binding_mode_str)) {
+        goto fail;
+    }
+
+    if (sms_msisdn && append_string_query_arg(&list, "sms", sms_msisdn)) {
         goto fail;
     }
 

@@ -37,7 +37,6 @@ typedef enum {
     MOCK_DM_INSTANCE_READ_DEFAULT_ATTRS,
     MOCK_DM_INSTANCE_WRITE_DEFAULT_ATTRS,
     MOCK_DM_RESOURCE_PRESENT,
-    MOCK_DM_RESOURCE_SUPPORTED,
     MOCK_DM_RESOURCE_OPERATIONS,
     MOCK_DM_RESOURCE_READ,
     MOCK_DM_RESOURCE_WRITE,
@@ -205,14 +204,6 @@ int _anjay_mock_dm_resource_present(anjay_t *anjay,
     DM_ACTION_COMMON(RESOURCE_PRESENT);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_and_rid.iid);
     AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_and_rid.rid);
-    DM_ACTION_RETURN;
-}
-
-int _anjay_mock_dm_resource_supported(anjay_t *anjay,
-                                      const anjay_dm_object_def_t *const *obj_ptr,
-                                      anjay_rid_t rid) {
-    DM_ACTION_COMMON(RESOURCE_SUPPORTED);
-    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.rid);
     DM_ACTION_RETURN;
 }
 
@@ -607,18 +598,6 @@ void _anjay_mock_dm_expect_resource_present(anjay_t *anjay,
                                             anjay_rid_t rid,
                                             int retval) {
     EXPECT_RESOURCE_ACTION_COMMON(PRESENT);
-}
-
-void _anjay_mock_dm_expect_resource_supported(anjay_t *anjay,
-                                              const anjay_dm_object_def_t *const *obj_ptr,
-                                              anjay_rid_t rid,
-                                              int retval) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_RESOURCE_SUPPORTED;
-    command->anjay = anjay;
-    command->obj_ptr = obj_ptr;
-    command->input.rid = rid;
-    command->retval = retval;
 }
 
 void _anjay_mock_dm_expect_resource_operations(anjay_t *anjay,

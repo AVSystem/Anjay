@@ -16,6 +16,8 @@
 
 #include <string.h>
 #include <assert.h>
+// for htonl
+#include <arpa/inet.h>
 
 #include "../objects.h"
 #include "../utils.h"
@@ -33,8 +35,7 @@
 #define TEST_RES_EMPTY                8
 #define TEST_RES_INIT_INT_ARRAY       9
 #define TEST_RES_RAW_BYTES            10
-
-#define _TEST_RES_COUNT               11
+#define TEST_RES_OPAQUE_ARRAY         11
 
 typedef struct test_array_entry_struct {
     anjay_riid_t index;
@@ -199,39 +200,6 @@ static int test_instance_reset(anjay_t *anjay,
     return 0;
 }
 
-static int test_resource_supported(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                   anjay_rid_t rid) {
-    (void) anjay;
-    (void) obj_ptr;
-    switch (rid) {
-    case TEST_RES_TIMESTAMP:
-    case TEST_RES_COUNTER:
-    case TEST_RES_INCREMENT_COUNTER:
-    case TEST_RES_INT_ARRAY:
-    case TEST_RES_LAST_EXEC_ARGS_ARRAY:
-    case TEST_RES_BYTES:
-    case TEST_RES_BYTES_SIZE:
-    case TEST_RES_BYTES_BURST:
-    case TEST_RES_EMPTY:
-    case TEST_RES_INIT_INT_ARRAY:
-    case TEST_RES_RAW_BYTES:
-        return 1;
-    default:
-        return 0;
-    }
-
-}
-
-static int test_resource_present(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t iid,
-                                 anjay_rid_t rid) {
-    (void) anjay;
-    (void) iid;
-    return test_resource_supported(anjay, obj_ptr, rid);
-}
-
 static int test_resource_read(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid,
@@ -324,6 +292,24 @@ static int test_resource_read(anjay_t *anjay,
         return anjay_ret_i32(ctx, inst->bytes_burst);
     case TEST_RES_EMPTY:
         return 0; // trololo, see T832
+    case TEST_RES_OPAQUE_ARRAY: {
+        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+        if (!array) {
+            return ANJAY_ERR_INTERNAL;
+        }
+
+        if (inst->array) {
+            test_array_entry_t *it;
+            AVS_LIST_FOREACH(it, inst->array) {
+                const uint32_t value = htonl((uint32_t) it->value);
+                if (anjay_ret_array_index(array, it->index)
+                    || anjay_ret_bytes(array, &value, sizeof(value))) {
+                    return ANJAY_ERR_INTERNAL;
+                }
+            }
+        }
+        return anjay_ret_array_finish(array);
+    }
     case TEST_RES_INCREMENT_COUNTER:
     case TEST_RES_INIT_INT_ARRAY:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -650,15 +636,26 @@ static int test_resource_dim(anjay_t *anjay,
 
 const anjay_dm_object_def_t TEST_OBJECT = {
     .oid = DEMO_OID_TEST,
-    .rid_bound = _TEST_RES_COUNT,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            TEST_RES_TIMESTAMP,
+            TEST_RES_COUNTER,
+            TEST_RES_INCREMENT_COUNTER,
+            TEST_RES_INT_ARRAY,
+            TEST_RES_LAST_EXEC_ARGS_ARRAY,
+            TEST_RES_BYTES,
+            TEST_RES_BYTES_SIZE,
+            TEST_RES_BYTES_BURST,
+            TEST_RES_EMPTY,
+            TEST_RES_INIT_INT_ARRAY,
+            TEST_RES_RAW_BYTES,
+            TEST_RES_OPAQUE_ARRAY),
     .handlers = {
         .instance_it = test_instance_it,
         .instance_present = test_instance_present,
         .instance_create = test_instance_create,
         .instance_remove = test_instance_remove,
         .instance_reset = test_instance_reset,
-        .resource_supported = test_resource_supported,
-        .resource_present = test_resource_present,
+        .resource_present = anjay_dm_resource_present_TRUE,
         .resource_read = test_resource_read,
         .resource_write = test_resource_write,
         .resource_execute = test_resource_execute,

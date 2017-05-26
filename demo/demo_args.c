@@ -35,13 +35,13 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
         .bootstrap_timeout_s = 0,
         .lifetime = 86400,
         .binding_mode = ANJAY_BINDING_U,
-        .security_mode = ANJAY_UDP_SECURITY_NOSEC
+        .security_mode = ANJAY_UDP_SECURITY_NOSEC,
     },
     .location_csv = NULL,
     .location_update_frequency_s = 1,
     .inbuf_size = 4000,
     .outbuf_size = 4000,
-    .fw_updated_marker_path = "/tmp/anjay-fw-updated"
+    .fw_updated_marker_path = "/tmp/anjay-fw-updated",
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -87,6 +87,7 @@ static int parse_security_mode(const char *mode_string,
              mode_string, allowed_modes);
     return -1;
 }
+
 
 static const char *help_arg_list(const struct option *opt) {
     switch (opt->has_arg) {
@@ -149,7 +150,7 @@ static void print_option_help(const struct option *opt) {
                                "size of a non-BLOCK CoAP packet the client "
                                "should be able to send." },
         { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
-          "File path to use as a marker for persisting firmware update state" }
+          "File path to use as a marker for persisting firmware update state" },
     };
 
     int description_offset = 25;

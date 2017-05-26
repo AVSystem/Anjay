@@ -413,7 +413,16 @@ serv_transaction_rollback(anjay_t *anjay,
 
 static const anjay_dm_object_def_t SERVER = {
     .oid = 1,
-    .rid_bound = _SERV_RID_BOUND,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            SERV_RES_SSID,
+            SERV_RES_LIFETIME,
+            SERV_RES_DEFAULT_MIN_PERIOD,
+            SERV_RES_DEFAULT_MAX_PERIOD,
+            SERV_RES_DISABLE,
+            SERV_RES_DISABLE_TIMEOUT,
+            SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE,
+            SERV_RES_BINDING,
+            SERV_RES_REGISTRATION_UPDATE_TRIGGER),
     .handlers = {
         .instance_it = serv_instance_it,
         .instance_present = serv_instance_present,
@@ -421,7 +430,6 @@ static const anjay_dm_object_def_t SERVER = {
         .instance_remove = serv_instance_remove,
         .instance_reset = serv_instance_reset,
         .resource_present = serv_resource_present,
-        .resource_supported = anjay_dm_resource_supported_TRUE,
         .resource_operations = serv_resource_operations,
         .resource_read = serv_read,
         .resource_write = serv_write,

@@ -116,6 +116,8 @@ class OutputBufferCannotHoldPayloadMarker(BufferSizeTest.Base):
     def runTest(self):
         from . import register as r
         r.BlockRegister().Test()(self.serv)
+        with self.assertRaises(socket.timeout, msg='unexpected message'):
+            print(self.serv.recv(timeout_s=6))
 
 
 class OutputBufferAbleToHoldPayloadMarkerBeginsBlockTransfer(BufferSizeTest.Base):
@@ -128,6 +130,8 @@ class OutputBufferAbleToHoldPayloadMarkerBeginsBlockTransfer(BufferSizeTest.Base
     def runTest(self):
         from . import register as r
         r.BlockRegister().Test()(self.serv)
+        with self.assertRaises(socket.timeout, msg='unexpected message'):
+            print(self.serv.recv(timeout_s=6))
 
 
 class ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize(BufferSizeTest.Base):

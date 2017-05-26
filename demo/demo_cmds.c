@@ -99,7 +99,8 @@ static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
 
 static size_t count_servers(const server_connection_args_t *args) {
     size_t num_servers = 0;
-    while (num_servers < MAX_SERVERS && args->servers[num_servers].uri) {
+    const server_entry_t *server;
+    DEMO_FOREACH_SERVER_ENTRY(server, args) {
         ++num_servers;
     }
     return num_servers;

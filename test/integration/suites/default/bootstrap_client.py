@@ -186,6 +186,35 @@ class ClientBootstrapBacksOffAfterErrorResponse(test_suite.Lwm2mTest):
             self.bootstrap_server.recv(timeout_s=1)
 
 
+class ClientBootstrapReconnect(test_suite.Lwm2mTest):
+    def setUp(self):
+        self.bootstrap_server = Lwm2mServer()
+
+        demo_args = (self.make_demo_args([self.bootstrap_server])
+                     + ['--bootstrap'])
+        self.start_demo(demo_args)
+
+    def tearDown(self):
+        try:
+            self.request_demo_shutdown()
+        finally:
+            self.bootstrap_server.close()
+
+            self.terminate_demo()
+
+    def runTest(self):
+        req = self.bootstrap_server.recv()
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
+                            req)
+        self.bootstrap_server.send(Lwm2mChanged.matching(req)())
+
+        self.communicate('reconnect')
+        req = self.bootstrap_server.recv()
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
+                            req)
+        self.bootstrap_server.send(Lwm2mChanged.matching(req)())
+
+
 class BootstrapNonwritableResources(test_suite.Lwm2mTest):
     def setUp(self):
         self.setup_demo_with_servers(num_servers=0,

@@ -42,25 +42,31 @@ typedef enum {
     SEC_RES_SHORT_SERVER_ID         = 10,
     SEC_RES_CLIENT_HOLD_OFF_TIME    = 11,
     SEC_RES_BOOTSTRAP_TIMEOUT       = 12,
-
-    _SEC_RID_BOUND
 } security_resource_t;
 
 typedef struct {
     anjay_iid_t iid;
     char *server_uri;
     bool is_bootstrap;
-    anjay_udp_security_mode_t security_mode;
+    anjay_udp_security_mode_t udp_security_mode;
     anjay_raw_buffer_t public_cert_or_psk_identity;
     anjay_raw_buffer_t private_cert_or_psk_key;
     anjay_raw_buffer_t server_public_key;
+
+    anjay_sms_security_mode_t sms_security_mode;
+    anjay_raw_buffer_t sms_key_params;
+    anjay_raw_buffer_t sms_secret_key;
+    char *sms_number;
 
     anjay_ssid_t ssid;
     int32_t holdoff_s;
     int32_t bs_timeout_s;
 
     bool has_is_bootstrap;
-    bool has_security_mode;
+    bool has_udp_security_mode;
+    bool has_sms_security_mode;
+    bool has_sms_key_params;
+    bool has_sms_secret_key;
     bool has_ssid;
 } sec_instance_t;
 

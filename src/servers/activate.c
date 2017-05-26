@@ -43,7 +43,7 @@ initialize_active_server(anjay_t *anjay,
     server->ssid = ssid;
 
     if (_anjay_server_refresh(anjay, server, true)) {
-        anjay_log(TRACE, "could not initialize UDP socket for SSID %u",
+        anjay_log(TRACE, "could not initialize sockets for SSID %u",
                   server->ssid);
         return -1;
     }

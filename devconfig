@@ -116,6 +116,7 @@ rm -rf CMakeFiles
 cmake -D WITH_AVS_UNIT=ON \
       -D WITH_DEMO=ON \
       -D WITH_EXTRA_WARNINGS=ON \
+      -D WITH_JSON=ON \
       -D WITH_VALGRIND=${WITH_VALGRIND} \
       -D WITH_INTEGRATION_TESTS=ON \
       -D DTLS_BACKEND="${DTLS_BACKEND}" \
@@ -124,5 +125,5 @@ cmake -D WITH_AVS_UNIT=ON \
       -D ANJAY_VERSION="${ANJAY_VERSION}" \
       ${WITH_MODULE_FLAGS} \
       "${EXTRA_FLAGS[@]}" \
-      "$@" "`dirname "$0"`" &&
+      "$@" -H"$(dirname "$0")" -B. &&
 make clean

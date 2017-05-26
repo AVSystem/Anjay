@@ -27,8 +27,6 @@
 
 #define CELL_RES_ACTIVATED_PROFILE_NAMES 4000 // objlnk[]
 
-#define CELL_RID_BOUND_ 4001
-
 typedef struct {
     const anjay_dm_object_def_t *def;
     anjay_demo_t *demo;
@@ -40,20 +38,6 @@ get_cell(const anjay_dm_object_def_t *const *obj_ptr) {
         return NULL;
     }
     return container_of(obj_ptr, cell_connectivity_repr_t, def);
-}
-
-static int cell_resource_supported(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                   anjay_rid_t rid) {
-    (void) anjay;
-    (void) obj_ptr;
-
-    switch (rid) {
-    case CELL_RES_ACTIVATED_PROFILE_NAMES:
-        return 1;
-    default:
-        return 0;
-    }
 }
 
 static int cell_resource_read(anjay_t *anjay,
@@ -147,12 +131,12 @@ static int cell_resource_dim(anjay_t *anjay,
 
 static const anjay_dm_object_def_t cell_connectivity = {
     .oid = DEMO_OID_CELL_CONNECTIVITY,
-    .rid_bound = CELL_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            CELL_RES_ACTIVATED_PROFILE_NAMES),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
         .resource_present = anjay_dm_resource_present_TRUE,
-        .resource_supported = cell_resource_supported,
         .resource_read = cell_resource_read,
         .resource_write = cell_resource_write,
         .resource_dim = cell_resource_dim,

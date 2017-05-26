@@ -112,7 +112,7 @@ Now the ``anjay_dm_resource_write_t`` handler implementation:
           return anjay_get_i32(ctx, &current_instance->value);
 
       default:
-          // control will never reach this part due to object's rid_bound
+          // control will never reach this part due to object's supported_rids
           return ANJAY_ERR_INTERNAL;
       }
    }
@@ -122,8 +122,8 @@ Everything that was left to do is plugging in handlers. There is a catch though:
 any modifying operation (writing a value, creating or deleting an Object
 Instance) requires explicitly defined transaction handlers.
 ``anjay_transaction_handler_NOOP`` placeholder will be used for now, see
-:ref:`SingleInstanceWritable-transactional` for an actual implementation
-of these.
+:ref:`FixedInstanceWritable-transactional` for an actual implementation of
+these.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/writable-multiple-fixed/src/main.c
@@ -233,6 +233,8 @@ a snapshot of the entire state of an LwM2M Object.
     Such implementation, while simple, effectively doubles amount of RAM used
     by the Object.
 
+
+.. _FixedInstanceWritable-transactional:
 
 Transactional variant
 ---------------------

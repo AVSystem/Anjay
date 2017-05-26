@@ -975,12 +975,6 @@ static inline int notify_entry(anjay_t *anjay,
 #include "test/observe_mock.h"
 #endif // ANJAY_TEST
 
-static void update_retval(int *retval_ptr, int local_retval) {
-    if (!*retval_ptr) {
-        *retval_ptr = local_retval;
-    }
-}
-
 static int observe_notify_bound(anjay_t *anjay,
                                 anjay_observe_connection_entry_t *connection,
                                 const anjay_observe_key_t *lower_bound,
@@ -997,7 +991,7 @@ static int observe_notify_bound(anjay_t *anjay,
     assert(it || !end);
 
     for (; it != end; it = AVS_RBTREE_ELEM_NEXT(it)) {
-        update_retval(&retval, notify_entry(anjay, obj, it));
+        _anjay_update_ret(&retval, notify_entry(anjay, obj, it));
     }
     return retval;
 }
@@ -1134,19 +1128,22 @@ static int observe_notify(anjay_t *anjay,
             lower_bound.iid = 0;
             upper_bound.iid = ANJAY_IID_INVALID;
         } else {
-            update_retval(&retval,
-                          observe_notify_iid_wildcard(anjay, connection,
-                                                      key, obj));
+            _anjay_update_ret(&retval,
+                              observe_notify_iid_wildcard(anjay, connection,
+                                                          key, obj));
         }
     } else {
-        update_retval(&retval, observe_notify_rid_wildcard(anjay, connection,
-                                                           key, obj));
-        update_retval(&retval, observe_notify_iid_wildcard(anjay, connection,
-                                                           key, obj));
+        _anjay_update_ret(&retval,
+                          observe_notify_rid_wildcard(anjay, connection,
+                                                      key, obj));
+        _anjay_update_ret(&retval,
+                          observe_notify_iid_wildcard(anjay, connection,
+                                                      key, obj));
     }
 
-    update_retval(&retval, observe_notify_bound(anjay, connection, &lower_bound,
-                                                &upper_bound, obj));
+    _anjay_update_ret(&retval,
+                      observe_notify_bound(anjay, connection, &lower_bound,
+                                           &upper_bound, obj));
     return retval;
 }
 
@@ -1167,8 +1164,8 @@ int _anjay_observe_notify(anjay_t *anjay,
             continue;
         }
         modified_key.connection = connection->key;
-        update_retval(&result, observe_notify(anjay, connection,
-                                              &modified_key, obj));
+        _anjay_update_ret(&result, observe_notify(anjay, connection,
+                                                  &modified_key, obj));
     }
     return result;
 }

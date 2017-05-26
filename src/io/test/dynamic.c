@@ -72,9 +72,11 @@ static const avs_stream_outbuf_t COAPIZED_OUTBUF
     avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf)); \
     COAP_FORMAT = -1; \
     int outctx_errno = 0; \
+    anjay_uri_path_t no_uri; \
+    memset(&no_uri, 0, sizeof(no_uri)); \
     anjay_output_ctx_t *out = \
             _anjay_output_dynamic_create((avs_stream_abstract_t *) &outbuf, \
-                                         &outctx_errno, &details)
+                                         &outctx_errno, &details, &no_uri)
 
 #define TEST_ENV(Size) TEST_ENV_WITH_FORMAT(Size, ANJAY_COAP_FORMAT_NONE)
 

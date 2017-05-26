@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "##version##" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.3.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -73,6 +73,7 @@ option(WITH_DISCOVER "Enable support for LwM2M Discover operation" ON)
 option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe)" ON)
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
+option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
 
 option(WITH_AVS_LOG "Enable logging support" ON)
 
@@ -143,6 +144,7 @@ set(CORE_SOURCES
     src/coap/stream/stream.c
     src/coap/utils.c
     src/interface/register.c
+    src/io/base64_out.c
     src/io/dynamic.c
     src/io/opaque.c
     src/io/output_buf.c
@@ -186,6 +188,10 @@ if(WITH_OBSERVE)
     set(CORE_SOURCES ${CORE_SOURCES}
         src/observe.c
         src/observe_io.c)
+endif()
+if(WITH_JSON)
+    set(CORE_SOURCES ${CORE_SOURCES}
+        src/io/json_out.c)
 endif()
 set(CORE_PRIVATE_HEADERS
     src/access_control.h
@@ -243,6 +249,7 @@ set(CORE_MODULES_HEADERS
     include_modules/anjay_modules/utils.h)
 set(CORE_PUBLIC_HEADERS
     include_public/anjay/anjay.h)
+
 
 set(ALL_SOURCES
     ${CORE_SOURCES}
@@ -347,22 +354,21 @@ else()
     set(_DTLS_BACKENDS "mbedtls" "openssl" "tinydtls")
     set(DTLS_BACKEND "mbedtls" CACHE STRING "DTLS backend to use; possible values: <empty> ${_DTLS_BACKENDS}")
 
+    # Reset enabled backends first, to avoid issues with CMakeCache
+    set(WITH_MBEDTLS OFF CACHE INTERNAL "")
+    set(WITH_OPENSSL OFF CACHE INTERNAL "")
+    set(WITH_TINYDTLS OFF CACHE INTERNAL "")
+
     string(TOLOWER "${DTLS_BACKEND}" _DTLS_BACKEND_LOWERCASE)
-    if(_DTLS_BACKEND_LOWERCASE STREQUAL "")
-        set(WITH_OPENSSL OFF CACHE INTERNAL "")
-        set(WITH_MBEDTLS OFF CACHE INTERNAL "")
-    elseif(_DTLS_BACKEND_LOWERCASE STREQUAL "mbedtls")
-        set(WITH_OPENSSL OFF CACHE INTERNAL "")
+    if(_DTLS_BACKEND_LOWERCASE STREQUAL "mbedtls")
         set(WITH_MBEDTLS ON CACHE INTERNAL "")
     elseif(_DTLS_BACKEND_LOWERCASE STREQUAL "openssl")
         set(OPENSSL_CUSTOM_CIPHERS_ENABLED ON CACHE INTERNAL "")
         set(WITH_OPENSSL ON CACHE INTERNAL "")
         set(WITH_OPENSSL_CUSTOM_CIPHERS "ECDHE-ECDSA-AES128-CCM8:PSK-AES128-CCM8" CACHE INTERNAL "")
     elseif(_DTLS_BACKEND_LOWERCASE STREQUAL "tinydtls")
-        set(WITH_OPENSSL OFF CACHE INTERNAL "")
-        set(WITH_MBEDTLS OFF CACHE INTERNAL "")
         set(WITH_TINYDTLS ON CACHE INTERNAL "")
-    else()
+    elseif(NOT _DTLS_BACKEND_LOWERCASE STREQUAL "")
         message(FATAL_ERROR "Unsupported DTLS backend: ${_DTLS_BACKEND_LOWERCASE}; possible values: ${_DTLS_BACKENDS}")
     endif()
 

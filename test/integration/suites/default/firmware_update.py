@@ -365,3 +365,20 @@ class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
 
         self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+
+
+class FirmwareUpdateResetInIdleState(FirmwareUpdate.Test):
+    def runTest(self):
+        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
+
+        req = Lwm2mWrite('/5/0/1', b'')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
+        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+
+        req = Lwm2mWrite('/5/0/0', b'')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
+        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())

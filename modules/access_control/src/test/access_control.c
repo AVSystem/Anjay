@@ -30,7 +30,7 @@
 #define TEST_OID 0x100
 static const anjay_dm_object_def_t *const TEST = &(const anjay_dm_object_def_t) {
     .oid = TEST_OID,
-    .rid_bound = 7,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
     .handlers = {
         .instance_it = _anjay_mock_dm_instance_it,
         .instance_present = _anjay_mock_dm_instance_present,

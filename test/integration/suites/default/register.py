@@ -22,28 +22,19 @@ from framework.lwm2m_test import *
 
 class BlockRegister:
     class Test(unittest.TestCase):
-        def __call__(self, server):
-            def get_block_option(pkt):
-                for i in range(len(pkt.options)):
-                    if pkt.options[i].matches(coap.Option.BLOCK1):
-                        return pkt.options[i]
-                else:
-                    raise
-
+        def __call__(self, server, timeout_s=1):
             register_content = b''
             while True:
-                pkt = server.recv(timeout_s=1)
-                block1 = get_block_option(pkt)
+                pkt = server.recv(timeout_s=timeout_s)
+                block1 = pkt.get_options(coap.Option.BLOCK1)
+                self.assertIn(len(block1), {0, 1})
                 register_content += pkt.content
-                if not block1.has_more():
+                if len(block1) < 1 or not block1[0].has_more():
                     break
-                server.send(Lwm2mContinue.matching(pkt)(options=[block1]))
+                server.send(Lwm2mContinue.matching(pkt)(options=block1))
 
             self.assertEquals(expected_content, register_content)
-            server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo', options=[block1]))
-
-            with self.assertRaises(socket.timeout, msg='unexpected message'):
-                print(server.recv(timeout_s=6))
+            server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo', options=block1))
 
 
 class Register:
@@ -127,3 +118,22 @@ class RegisterWithBlock(test_suite.Lwm2mSingleServerTest):
 
     def runTest(self):
         BlockRegister().Test()(self.serv)
+        with self.assertRaises(socket.timeout, msg='unexpected message'):
+            print(self.serv.recv(timeout_s=6))
+
+
+class ConcurrentRequestWhileWaitingForResponse(Register.TestCase):
+    def runTest(self):
+        pkt = self.serv.recv()
+        self.assertMsgEqual(
+            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
+                          content=expected_content),
+            pkt)
+
+        req = Lwm2mRead('/3/0/0')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_SERVICE_UNAVAILABLE,
+                                                             options=ANY),
+                            self.serv.recv())
+
+        self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))

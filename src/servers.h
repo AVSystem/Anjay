@@ -127,12 +127,12 @@ typedef struct {
     AVS_LIST(anjay_inactive_server_info_t) inactive;
     anjay_sched_handle_t reload_sockets_sched_job_handle;
 
-    AVS_LIST(avs_net_abstract_socket_t *const) nonqueue_sockets;
+    AVS_LIST(avs_net_abstract_socket_t *const) public_sockets;
 } anjay_servers_t;
 
 typedef enum {
     ANJAY_CONNECTION_UDP,
-    // ANJAY_CONNECTION_SMS,
+    ANJAY_CONNECTION_SMS,
     ANJAY_CONNECTION_WILDCARD
 } anjay_connection_type_t;
 
@@ -186,7 +186,10 @@ int _anjay_schedule_server_reconnect(anjay_t *anjay,
                                      anjay_active_server_info_t *server);
 
 anjay_binding_mode_t
-_anjay_server_cached_binding_mode(const anjay_active_server_info_t *server);
+_anjay_server_cached_binding_mode(anjay_active_server_info_t *server);
+
+anjay_server_connection_mode_t
+_anjay_connection_current_mode(anjay_connection_ref_t ref);
 
 avs_net_abstract_socket_t *
 _anjay_connection_get_prepared_socket(anjay_t *anjay,

@@ -21,7 +21,7 @@ static int test_resource_read(anjay_t *anjay,
     case 1:
         return anjay_ret_i32(ctx, (int32_t)time(NULL));
     default:
-        // control will never reach this part due to object's rid_bound
+        // control will never reach this part due to object's supported_rids
         return 0;
     }
 }
@@ -30,17 +30,13 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
     // Object ID
     .oid = 1234,
 
-    // Object does not contain any Resources with IDs >= 2
-    .rid_bound = 2,
+    // List of supported Resource IDs
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
 
     .handlers = {
         // single-instance Objects can use these pre-implemented handlers:
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
-
-        // if the Object implements all Resources from ID 0 up to its
-        // `rid_bound`, it can use this predefined `resource_supported` handler:
-        .resource_supported = anjay_dm_resource_supported_TRUE,
 
         // if all supported Resources are always available, one can use
         // a pre-implemented `resource_present` handler too:

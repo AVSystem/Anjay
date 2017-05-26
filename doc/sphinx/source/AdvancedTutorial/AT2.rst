@@ -69,7 +69,8 @@ support persistence:
     int anjay_access_control_persist(anjay_t *anjay,
                                      avs_stream_abstract_t *out_stream);
     // ...
-    int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in);
+    int anjay_access_control_restore(anjay_t *anjay,
+                                     avs_stream_abstract_t *in_stream);
 
 .. note::
     All of the mentioned objects have complicated semantics, which is why you

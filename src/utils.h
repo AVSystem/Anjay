@@ -33,9 +33,6 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #define anjay_log(...) _anjay_log(anjay, __VA_ARGS__)
 
-#define ANJAY_MIN(a, b) ((a) < (b) ? (a) : (b))
-#define ANJAY_MAX(a, b) ((a) > (b) ? (a) : (b))
-
 int _anjay_safe_strtoll(const char *in, long long *value);
 int _anjay_safe_strtod(const char *in, double *value);
 
@@ -71,11 +68,6 @@ typedef unsigned anjay_rand_seed_t;
 #endif
 uint32_t _anjay_rand32(anjay_rand_seed_t *seed);
 
-ssize_t _anjay_snprintf(char *buffer,
-                        size_t buffer_size,
-                        const char *fmt,
-                        ...) AVS_F_PRINTF(3, 4);
-
 typedef struct anjay_string {
     char c_str[1]; // actually a FAM, but a struct must not consist of FAM only
 } anjay_string_t;
@@ -88,10 +80,17 @@ AVS_LIST(const anjay_string_t)
 _anjay_make_query_string_list(const char *version,
                               const char *endpoint_name,
                               const int64_t *lifetime,
-                              anjay_binding_mode_t queue_mode);
+                              anjay_binding_mode_t binding_mode,
+                              const char *sms_msisdn);
 
 static inline bool _anjay_is_power_of_2(size_t value) {
     return value > 0 && !(value & (value - 1));
+}
+
+static inline void _anjay_update_ret(int *var, int new_retval) {
+    if (!*var) {
+        *var = new_retval;
+    }
 }
 
 VISIBILITY_PRIVATE_HEADER_END

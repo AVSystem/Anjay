@@ -36,7 +36,6 @@ typedef enum {
     DOWNLOAD_DIAG_TOTAL_BYTES   = 5,
     DOWNLOAD_DIAG_RUN           = 6
 } download_diag_res_t;
-#define DOWNLOAD_DIAG_RID_BOUND_ 7
 
 typedef enum {
     DIAG_STATE_NONE             = 0,
@@ -269,12 +268,18 @@ static int diag_resource_write(anjay_t *anjay,
 
 static const anjay_dm_object_def_t DOWNLOAD_DIAG = {
     .oid = DEMO_OID_DOWNLOAD_DIAG,
-    .rid_bound = DOWNLOAD_DIAG_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            DOWNLOAD_DIAG_STATE,
+            DOWNLOAD_DIAG_URL,
+            DOWNLOAD_DIAG_ROM_TIME_US,
+            DOWNLOAD_DIAG_BOM_TIME_US,
+            DOWNLOAD_DIAG_EOM_TIME_US,
+            DOWNLOAD_DIAG_TOTAL_BYTES,
+            DOWNLOAD_DIAG_RUN),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
         .resource_present = diag_resource_present,
-        .resource_supported = anjay_dm_resource_supported_TRUE,
         .resource_execute = diag_resource_execute,
         .resource_read = diag_resource_read,
         .resource_write = diag_resource_write,

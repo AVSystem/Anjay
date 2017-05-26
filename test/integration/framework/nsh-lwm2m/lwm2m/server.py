@@ -18,27 +18,23 @@ from . import coap
 from .messages import get_lwm2m_msg
 
 
-class Lwm2mServer(coap.Server):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class Lwm2mServer:
+    def __init__(self, coap_server=None):
+        super().__setattr__('_coap_server', coap_server or coap.Server())
         self.set_timeout(timeout_s=5)
 
     def send(self, pkt: coap.Packet):
-        super().send(pkt.fill_placeholders())
+        self._coap_server.send(pkt.fill_placeholders())
 
     def recv(self, timeout_s=-1):
-        pkt = super().recv(timeout_s=timeout_s)
+        pkt = self._coap_server.recv(timeout_s=timeout_s)
         return get_lwm2m_msg(pkt)
 
+    def __getattr__(self, name):
+        return getattr(self._coap_server, name)
 
-class Lwm2mDtlsServer(coap.DtlsServer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.set_timeout(timeout_s=5)
+    def __setattr__(self, name, value):
+        return setattr(self._coap_server, name, value)
 
-    def send(self, pkt: coap.Packet):
-        super().send(pkt.fill_placeholders())
-
-    def recv(self, timeout_s=-1):
-        pkt = super().recv(timeout_s=timeout_s)
-        return get_lwm2m_msg(pkt)
+    def __delattr__(self, name):
+        return delattr(self._coap_server, name)

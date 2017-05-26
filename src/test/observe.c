@@ -95,14 +95,11 @@ static void expect_server_res_read(anjay_t *anjay,
                                    const anjay_mock_dm_data_t *data) {
     assert((*obj)->oid == ANJAY_DM_OID_SERVER);
     _anjay_mock_dm_expect_instance_it(anjay, obj, 0, 0, ssid);
-    _anjay_mock_dm_expect_resource_supported(anjay, obj,
-                                             ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_present(anjay, obj, ssid,
                                            ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_read(anjay, obj, ssid,
                                         ANJAY_DM_RID_SERVER_SSID, 0,
                                         ANJAY_MOCK_DM_INT(0, ssid));
-    _anjay_mock_dm_expect_resource_supported(anjay, obj, rid, 1);
     _anjay_mock_dm_expect_resource_present(anjay, obj, ssid, rid, 1);
     _anjay_mock_dm_expect_resource_read(anjay, obj, ssid, rid, 0, data);
 }
@@ -137,7 +134,6 @@ do { \
                 "\x01" "4"; /* RID */ \
         avs_unit_mocksock_input(mocksocks[i], REQUEST, sizeof(REQUEST) - 1); \
         _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1); \
-        _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1); \
         _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1); \
         _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0, \
                                             ANJAY_MOCK_DM_INT(0, 514)); \
@@ -188,12 +184,10 @@ AVS_UNIT_TEST(observe, read_attrs_failed) {
             "\x01" "4"; // RID
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_INT(0, 514));
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 4, -1, NULL);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\xA0\xFA\x3E");
@@ -212,7 +206,6 @@ AVS_UNIT_TEST(observe, overwrite) {
             "\x01" "4"; // RID
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
             ANJAY_MOCK_DM_ARRAY(0,
@@ -252,23 +245,16 @@ AVS_UNIT_TEST(observe, instance) {
             "\x02" "69"; // IID
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 0, 0);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 1, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 1, 0);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 2, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 2, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 2, 0,
                                         ANJAY_MOCK_DM_STRING(0, "wow"));
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 3, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 3, 0);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "such value"));
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 5, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 5, 0);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 6, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 6, 0);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, -1);
 #define TLV_RESPONSE \
@@ -319,7 +305,6 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
             "\x01" "6"; // RID
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 6, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 6, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 6, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Hello"));
@@ -337,7 +322,6 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
             "\x01" "4"; // RID
     avs_unit_mocksock_input(mocksocks[0], REQUEST2, sizeof(REQUEST2) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Good-bye"));
@@ -393,7 +377,6 @@ static void expect_read_res_attrs(anjay_t *anjay,
                                   anjay_rid_t rid,
                                   const anjay_dm_resource_attributes_t *attrs) {
     _anjay_mock_dm_expect_instance_present(anjay, obj_ptr, iid, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, obj_ptr, rid, 1);
     _anjay_mock_dm_expect_resource_present(anjay, obj_ptr, iid, rid, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, obj_ptr, iid, rid, ssid, 0,
                                               attrs);
@@ -411,7 +394,6 @@ static void expect_read_res(anjay_t *anjay,
                             anjay_rid_t rid,
                             const anjay_mock_dm_data_t *data) {
     _anjay_mock_dm_expect_instance_present(anjay, obj_ptr, iid, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, obj_ptr, rid, 1);
     _anjay_mock_dm_expect_resource_present(anjay, obj_ptr, iid, rid, 1);
     _anjay_mock_dm_expect_resource_read(anjay, obj_ptr, iid, rid, 0, data);
 }
@@ -1408,7 +1390,6 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Rin"));
@@ -1416,7 +1397,6 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 34, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Len"));
@@ -1444,7 +1424,6 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Miku"));
@@ -1452,7 +1431,6 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 34, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Luka"));
@@ -1522,7 +1500,6 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 34, false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Ia"));
@@ -1551,7 +1528,6 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 34, false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(34, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Gumi"));
@@ -1595,7 +1571,6 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meiko"));
@@ -1616,7 +1591,6 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Kaito"));
@@ -1635,7 +1609,6 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
             "\x01" "3"; // RID
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 3, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 3, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 3, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Mayu"));
@@ -1681,7 +1654,6 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meiko"));
@@ -1703,7 +1675,6 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Kaito"));
@@ -1722,7 +1693,6 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
             "\x01" "3"; // RID
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 3, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 3, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 3, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Mayu"));

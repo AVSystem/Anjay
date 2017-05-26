@@ -91,7 +91,7 @@ class AccessControl:
                 assert False, "%d/%d/%d does not exist" % (ACCESS_CONTROL_OID, oid, iid)
             return None
 
-        def update_access(self, server, oid, iid, acl, expected_acl=None):
+        def update_access(self, server, oid, iid, acl, expected_acl=None, expect_error_code=None):
             self.validate_iid(iid)
             # Need to find Access Control instance for this iid.
             ac_iid = self.find_access_control_instance(server, oid, iid)
@@ -99,13 +99,16 @@ class AccessControl:
 
             tlv = TLV.make_multires(ACCESS_CONTROL_RID_ACL, acl).serialize()
             if expected_acl:
+                assert expect_error_code is None
                 expected_tlv = TLV.make_multires(ACCESS_CONTROL_RID_ACL, expected_acl).serialize()
             else:
                 expected_tlv = tlv
-            self.write_instance(server, ACCESS_CONTROL_OID, ac_iid, tlv, partial=True)
-            read_tlv = self.read_resource(server, ACCESS_CONTROL_OID, ac_iid, ACCESS_CONTROL_RID_ACL,
-                                          accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
-            self.assertEqual(expected_tlv, read_tlv.content)
+            self.write_instance(server, ACCESS_CONTROL_OID, ac_iid, tlv, partial=True,
+                                expect_error_code=expect_error_code)
+            if not expect_error_code:
+                read_tlv = self.read_resource(server, ACCESS_CONTROL_OID, ac_iid, ACCESS_CONTROL_RID_ACL,
+                                              accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+                self.assertEqual(expected_tlv, read_tlv.content)
 
         def setUp(self, num_servers=2, **kwargs):
             extra_args = sum((['--access-entry', '1337', str(ssid)] for ssid in range(2, num_servers + 1)), [])
@@ -248,7 +251,16 @@ class NoDuplicatedAclTest(AccessControl.Test):
 
 
 class DefaultAclTest(AccessControl.Test):
-    def test_default_acl():
+    def runTest(self):
+        self.read_instance(server=self.servers[0], oid=SERVER_OID, iid=1)
+        self.read_instance(server=self.servers[0], oid=SERVER_OID, iid=2,
+                           expect_error_code=coap.Code.RES_UNAUTHORIZED)
+        self.read_instance(server=self.servers[1], oid=SERVER_OID, iid=1,
+                           expect_error_code=coap.Code.RES_UNAUTHORIZED)
+        self.read_instance(server=self.servers[1], oid=SERVER_OID, iid=2)
+
+        self.read_path(self.servers[0], ResPath.Device.SerialNumber)
+
         self.create_instance(server=self.servers[1], oid=TEST_OID)
         self.update_access(server=self.servers[1], oid=TEST_OID, iid=1,
                            acl=[make_acl_entry(0, ACCESS_MASK_EXECUTE),
@@ -426,8 +438,8 @@ class AclActiveDespiteOnlyOneServerSuccessfullyConnected(AccessControl.Test):
         self.assertIsInstance(second_register, Lwm2mRegister)
         self.servers[1].send(Lwm2mReset.matching(second_register)())
 
-        # SSID 1 has no rights, even though it's the only properly connected server
-        self.read_resource(server=self.servers[0], oid=SERVER_OID, iid=1, rid=RID.Server.ShortServerID,
+        # SSID 1 has no rights to read information about SSID 2, even though it's the only properly connected server
+        self.read_resource(server=self.servers[0], oid=SERVER_OID, iid=2, rid=RID.Server.ShortServerID,
                            expect_error_code=coap.Code.RES_UNAUTHORIZED)
 
         # allow the second registration retry to make cleanup easier
@@ -507,3 +519,17 @@ class AclBootstrapping(bootstrap_server.BootstrapServer.Test, test_suite.Lwm2mDm
         self.read_resource(server=self.servers[1], oid=TEST_OID, iid=69, rid=0,
                            expect_error_code=coap.Code.RES_UNAUTHORIZED)
         self.read_resource(server=self.servers[1], oid=TEST_OID, iid=514, rid=0)
+
+
+class InvalidAcl(AccessControl.Test):
+    def runTest(self):
+        self.create_instance(server=self.servers[1], oid=TEST_OID)
+
+        # check that one cannot create an ACL with RIID==65535 (and that such attempt does not segfault)
+        self.update_access(server=self.servers[1], oid=TEST_OID, iid=1,
+                           acl=[make_acl_entry(65535, ACCESS_MASK_READ)],
+                           expect_error_code=coap.Code.RES_BAD_REQUEST)
+
+        # check that valid ACL works after previous failed attempt
+        self.update_access(server=self.servers[1], oid=TEST_OID, iid=1,
+                           acl=[make_acl_entry(2, ACCESS_MASK_READ)])

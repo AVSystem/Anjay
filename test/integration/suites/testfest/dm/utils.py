@@ -178,7 +178,8 @@ class DataModel:
                              path: Lwm2mPath,
                              payload: bytes,
                              format: coap.ContentFormat,
-                             block_size: int = 1024):
+                             block_size: int = 1024,
+                             return_on_fail: bool = False):
             offset = 0
 
             while offset < len(payload):
@@ -193,7 +194,11 @@ class DataModel:
                 self.serv.send(msg)
 
                 expected_response = Lwm2mContinue if has_more else Lwm2mChanged
-                self.assertMsgEqual(expected_response.matching(msg)(), self.serv.recv())
+                res = self.serv.recv()
+                if return_on_fail and not isinstance(res, expected_response):
+                    return res
+
+                self.assertMsgEqual(expected_response.matching(msg)(), res)
 
                 offset = new_offset
 

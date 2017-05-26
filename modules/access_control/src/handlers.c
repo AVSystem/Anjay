@@ -584,9 +584,13 @@ static int add_ssid(AVS_RBTREE(anjay_ssid_t) ssids_list, anjay_ssid_t ssid) {
     return 0;
 }
 
+/**
+ * Validates that <c>ssid</c> can be used as a key (RIID) in the ACL - it needs
+ * to either reference a valid server, or be equal to @ref ANJAY_SSID_ANY (0).
+ */
 int _anjay_access_control_validate_ssid(anjay_t *anjay, anjay_ssid_t ssid) {
-    return (ssid != 0
-                    && (ssid == ANJAY_SSID_BOOTSTRAP
+    return (ssid != ANJAY_SSID_BOOTSTRAP
+                    && (ssid == ANJAY_SSID_ANY
                             || _anjay_dm_ssid_exists(anjay, ssid)))
             ? 0 : -1;
 }
@@ -609,12 +613,13 @@ ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
         result = ANJAY_ERR_BAD_REQUEST;
         AVS_LIST_FOREACH(inst, access_control->current.instances) {
             if (validate_inst_ref(anjay, encountered_refs, &inst->target)
-                    || add_ssid(ssids_used, inst->owner)) {
+                    || (inst->owner != ANJAY_SSID_BOOTSTRAP
+                            && add_ssid(ssids_used, inst->owner))) {
                 goto finish;
             }
             acl_entry_t *acl;
             AVS_LIST_FOREACH(acl, inst->acl) {
-                if (acl->ssid != 0 && add_ssid(ssids_used, inst->owner)) {
+                if (add_ssid(ssids_used, acl->ssid)) {
                     goto finish;
                 }
             }
@@ -622,7 +627,7 @@ ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
         AVS_RBTREE_DELETE(&ssids_used) {
             if (_anjay_access_control_validate_ssid(anjay, **ssids_used)) {
                 ac_log(ERROR, "Validation failed: invalid SSID: %" PRIu16,
-                       inst->owner);
+                       **ssids_used);
                 goto finish;
             }
         }
@@ -667,31 +672,35 @@ static const anjay_dm_module_t ACCESS_CONTROL_MODULE = {
     .deleter = ac_delete
 };
 
+static const anjay_dm_object_def_t ACCESS_CONTROL = {
+    .oid = ANJAY_DM_OID_ACCESS_CONTROL,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            ANJAY_DM_RID_ACCESS_CONTROL_OID,
+            ANJAY_DM_RID_ACCESS_CONTROL_OIID,
+            ANJAY_DM_RID_ACCESS_CONTROL_ACL,
+            ANJAY_DM_RID_ACCESS_CONTROL_OWNER),
+    .handlers = {
+        .instance_it = ac_instance_it,
+        .instance_present = ac_instance_present,
+        .instance_reset = ac_instance_reset,
+        .instance_create = ac_instance_create,
+        .instance_remove = ac_instance_remove,
+        .resource_present = ac_resource_present,
+        .resource_operations = ac_resource_operations,
+        .resource_read = ac_resource_read,
+        .resource_write = ac_resource_write,
+        .transaction_begin = ac_transaction_begin,
+        .transaction_validate = ac_transaction_validate,
+        .transaction_commit = ac_transaction_commit,
+        .transaction_rollback = ac_transaction_rollback
+    }
+};
+
 int anjay_access_control_install(anjay_t *anjay) {
     if (!anjay) {
         ac_log(ERROR, "ANJAY object must not be NULL");
         return -1;
     }
-    static const anjay_dm_object_def_t ACCESS_CONTROL = {
-        .oid = ANJAY_DM_OID_ACCESS_CONTROL,
-        .rid_bound = 4,
-        .handlers = {
-            .instance_it = ac_instance_it,
-            .instance_present = ac_instance_present,
-            .instance_reset = ac_instance_reset,
-            .instance_create = ac_instance_create,
-            .instance_remove = ac_instance_remove,
-            .resource_present = ac_resource_present,
-            .resource_supported = anjay_dm_resource_supported_TRUE,
-            .resource_operations = ac_resource_operations,
-            .resource_read = ac_resource_read,
-            .resource_write = ac_resource_write,
-            .transaction_begin = ac_transaction_begin,
-            .transaction_validate = ac_transaction_validate,
-            .transaction_commit = ac_transaction_commit,
-            .transaction_rollback = ac_transaction_rollback
-        }
-    };
     access_control_t *access_control =
         (access_control_t *) calloc(1, sizeof(access_control_t));
     if (!access_control) {

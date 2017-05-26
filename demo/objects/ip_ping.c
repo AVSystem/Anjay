@@ -35,7 +35,6 @@
 #define IP_PING_MIN_TIME_MS   10
 #define IP_PING_MAX_TIME_MS   11
 #define IP_PING_TIME_STDEV_US 12
-#define IP_PING_RID_BOUND_    13
 
 typedef enum {
     IP_PING_STATE_NONE,
@@ -407,12 +406,24 @@ ip_ping_transaction_rollback(anjay_t *anjay,
 
 static const anjay_dm_object_def_t IP_PING = {
     .oid = DEMO_OID_IP_PING,
-    .rid_bound = IP_PING_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            IP_PING_HOSTNAME,
+            IP_PING_REPETITIONS,
+            IP_PING_TIMEOUT_MS,
+            IP_PING_BLOCK_SIZE,
+            IP_PING_DSCP,
+            IP_PING_RUN,
+            IP_PING_STATE,
+            IP_PING_SUCCESS_COUNT,
+            IP_PING_ERROR_COUNT,
+            IP_PING_AVG_TIME_MS,
+            IP_PING_MIN_TIME_MS,
+            IP_PING_MAX_TIME_MS,
+            IP_PING_TIME_STDEV_US),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
         .resource_present = anjay_dm_resource_present_TRUE,
-        .resource_supported = anjay_dm_resource_supported_TRUE,
         .resource_read = ip_ping_resource_read,
         .resource_write = ip_ping_resource_write,
         .resource_execute = ip_ping_resource_execute,

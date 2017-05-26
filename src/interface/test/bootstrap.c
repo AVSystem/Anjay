@@ -36,7 +36,6 @@ AVS_UNIT_TEST(bootstrap_write, resource) {
             "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 514, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 4,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
@@ -58,7 +57,6 @@ AVS_UNIT_TEST(bootstrap_write, resource_with_create) {
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 514, 0);
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 514,
                                           ANJAY_SSID_BOOTSTRAP, 0, 514);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 4,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
@@ -128,13 +126,12 @@ AVS_UNIT_TEST(bootstrap_write, resource_error) {
             "\x40\x03\xFA\x3E" // CoAP header
             "\xB2" "42" // OID
             "\x03" "514" // IID
-            "\x01" "4" // RID
+            "\x01" "7" // RID
             "\x10" // Content-Format
             "\xFF"
             "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 514, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x84\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
@@ -163,7 +160,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_error_with_create) {
             "\x40\x03\xFA\x3E" // CoAP header
             "\xB2" "42" // OID
             "\x03" "514" // IID
-            "\x01" "4" // RID
+            "\x01" "7" // RID
             "\x10" // Content-Format
             "\xFF"
             "Hello";
@@ -171,7 +168,6 @@ AVS_UNIT_TEST(bootstrap_write, resource_error_with_create) {
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 514, 0);
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 514,
                                           ANJAY_SSID_BOOTSTRAP, 0, 514);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 0);
     // TODO: should expect transaction_rollback here
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x84\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -190,10 +186,8 @@ AVS_UNIT_TEST(bootstrap_write, instance) {
             "\xc5\x06" "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 13), 0);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 6, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 6,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
@@ -245,7 +239,6 @@ AVS_UNIT_TEST(bootstrap_write, instance_wrong_type) {
             "\x05\x06" "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 13), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
@@ -265,7 +258,6 @@ AVS_UNIT_TEST(bootstrap_write, instance_error) {
             "\xc5\x06" "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 13), -1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\xA0\xFA\x3E");
@@ -282,13 +274,11 @@ AVS_UNIT_TEST(bootstrap_write, instance_some_unsupported) {
             "\x12\x2d\x16"
             "\xFF"
             "\xc1\x00\x0d"
-            "\xc5\x06" "Hello";
+            "\xc5\x07" "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 13), 0);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 6, 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
@@ -309,11 +299,9 @@ AVS_UNIT_TEST(bootstrap_write, object) {
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 0);
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 69, ANJAY_SSID_BOOTSTRAP,
                                           0, 69);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 42), 0);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 42, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 3, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 42, 3,
                                          ANJAY_MOCK_DM_INT(0, 69), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
@@ -336,11 +324,9 @@ AVS_UNIT_TEST(bootstrap_write, object_error) {
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 0);
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 69, ANJAY_SSID_BOOTSTRAP,
                                           0, 69);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 42), 0);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 42, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 3, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 42, 3,
                                          ANJAY_MOCK_DM_INT(0, 69), -1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\xA0\xFA\x3E");
@@ -363,11 +349,9 @@ AVS_UNIT_TEST(bootstrap_write, object_error_index_end) {
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 0);
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 69, ANJAY_SSID_BOOTSTRAP,
                                           0, 69);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 42), 0);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 42, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 3, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 42, 3,
                                          ANJAY_MOCK_DM_INT(0, 69),
                                          ANJAY_GET_INDEX_END);
@@ -391,7 +375,6 @@ AVS_UNIT_TEST(bootstrap_write, object_wrong_type) {
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 0);
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 69, ANJAY_SSID_BOOTSTRAP,
                                           0, 69);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 0, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 0,
                                          ANJAY_MOCK_DM_INT(0, 42), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
@@ -638,7 +621,6 @@ AVS_UNIT_TEST(bootstrap_finish, error) {
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 514, 0);
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 514,
                                           ANJAY_SSID_BOOTSTRAP, 0, 514);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 4,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");

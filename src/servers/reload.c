@@ -43,6 +43,23 @@ static int reload_inactive_server(anjay_t *anjay,
     return 0;
 }
 
+static bool server_needs_reconnect(anjay_active_server_info_t *server) {
+    anjay_connection_ref_t conn_ref = {
+        .server = server
+    };
+    for (conn_ref.conn_type = (anjay_connection_type_t) 0;
+            conn_ref.conn_type < ANJAY_CONNECTION_WILDCARD;
+            conn_ref.conn_type =
+                    (anjay_connection_type_t) (conn_ref.conn_type + 1)) {
+        anjay_server_connection_t *connection =
+                _anjay_get_server_connection(conn_ref);
+        if (connection && connection->needs_socket_update) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static int reload_active_server(anjay_t *anjay,
                                 anjay_servers_t *servers,
                                 AVS_LIST(anjay_active_server_info_t) server) {
@@ -50,7 +67,7 @@ static int reload_active_server(anjay_t *anjay,
 
     _anjay_servers_add_active(servers, server);
 
-    if (server->udp_connection.needs_socket_update) {
+    if (server_needs_reconnect(server)) {
         if (_anjay_server_refresh(anjay, server, false)) {
             return -1;
         }

@@ -207,7 +207,7 @@ to correctly handle requests to different Object Instance IDs.
       case 1:
           return anjay_ret_i32(ctx, current_instance->value);
       default:
-          // control will never reach this part due to object's rid_bound
+          // control will never reach this part due to object's supported_rids
           return ANJAY_ERR_INTERNAL;
       }
    }
@@ -223,8 +223,8 @@ Definition struct:
         // Object ID
         .oid = 1234,
 
-        // Object does not contain any Resources with IDs >= 2
-        .rid_bound = 2,
+        // List of supported Resource IDs
+        .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
 
         .handlers = {
             .instance_it = test_instance_it,
@@ -232,7 +232,7 @@ Definition struct:
 
             // ... other handlers
         }
-   };
+    };
 
 
 .. note::

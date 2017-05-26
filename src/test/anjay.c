@@ -491,7 +491,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
             "\x01" "4"; // RID
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_INT(0, 514));
@@ -507,7 +506,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     // observe::flush_send_queue()
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 0);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
                                               &ATTRS);
@@ -527,7 +525,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     ////// NOTIFY - TRIGGER QUEUE MODE //////
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
                                               &ATTRS);
@@ -537,12 +534,10 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     ////// NOTIFICATION //////
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, -1, 0);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
                                               &ATTRS);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Hello"));
@@ -556,7 +551,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     avs_unit_mocksock_expect_remote_hostname(mocksocks[0],
                                              "server.example.org");
     avs_unit_mocksock_expect_remote_port(mocksocks[0], "8378");
-    avs_unit_mocksock_expect_bind(mocksocks[0], NULL, "");
     avs_unit_mocksock_expect_connect(mocksocks[0],
                                      "server.example.org", "8378");
     avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
@@ -576,7 +570,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     avs_unit_mocksock_input(mocksocks[0],
                             QUEUED_REQUEST, sizeof(QUEUED_REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 3, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 1, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 3, 1, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 3, 1, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Hi!"));
@@ -598,7 +591,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     avs_unit_mocksock_input(mocksocks[0],
                             QUEUED_REQUEST2, sizeof(QUEUED_REQUEST2) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, 4, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meh"));
@@ -645,14 +637,10 @@ AVS_UNIT_TEST(queue_mode, change) {
     avs_unit_mocksock_input(mocksocks[0],
                             WRITE_REQUEST, sizeof(WRITE_REQUEST) - 1);
     _anjay_mock_dm_expect_instance_present(anjay, &FAKE_SERVER, 1, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER,
-                                             ANJAY_DM_RID_SERVER_BINDING, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &FAKE_SERVER, 1,
                                          ANJAY_DM_RID_SERVER_BINDING,
                                          ANJAY_MOCK_DM_STRING(0, "dummy"), 0);
     // SSID will be read afterwards
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER,
-                                             ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 1,
                                            ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
@@ -670,16 +658,12 @@ AVS_UNIT_TEST(queue_mode, change) {
     ////// REFRESH BINDING MODE //////
     // query SSID in Security
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2,
-                                             ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
                                            ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
                                         ANJAY_DM_RID_SECURITY_BOOTSTRAP, 0,
                                         ANJAY_MOCK_DM_BOOL(0, false));
 
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2,
-                                             ANJAY_DM_RID_SECURITY_SSID, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
                                            ANJAY_DM_RID_SECURITY_SSID, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
@@ -687,24 +671,18 @@ AVS_UNIT_TEST(queue_mode, change) {
                                         ANJAY_MOCK_DM_INT(0, 1));
     // query SSID in Server
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER,
-                                             ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 1,
                                            ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_SSID, 0,
                                         ANJAY_MOCK_DM_INT(0, 1));
     // get Binding
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER,
-                                             ANJAY_DM_RID_SERVER_BINDING, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 1,
                                            ANJAY_DM_RID_SERVER_BINDING, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_BINDING, 0,
                                         ANJAY_MOCK_DM_STRING(0, "UQ"));
     // get Security Mode
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2,
-                                             ANJAY_DM_RID_SECURITY_MODE, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
                                            ANJAY_DM_RID_SECURITY_MODE, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
@@ -712,9 +690,6 @@ AVS_UNIT_TEST(queue_mode, change) {
                                         ANJAY_MOCK_DM_INT(
                                                 0, ANJAY_UDP_SECURITY_NOSEC));
     // get URI
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SECURITY2,
-                                             ANJAY_DM_RID_SECURITY_SERVER_URI,
-                                             1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
                                            ANJAY_DM_RID_SECURITY_SERVER_URI, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
@@ -722,22 +697,16 @@ AVS_UNIT_TEST(queue_mode, change) {
                                         ANJAY_MOCK_DM_STRING(
                                                 0, "coap://127.0.0.1:5683"));
     // data model for the Update message - just fake an empty one
-    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0,
-                                      ANJAY_IID_INVALID);
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0,
                                       ANJAY_IID_INVALID);
     _anjay_mock_dm_expect_instance_it(anjay, &OBJ, 0, 0, ANJAY_IID_INVALID);
     // lifetime
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0, 1);
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER,
-                                             ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 1,
                                            ANJAY_DM_RID_SERVER_SSID, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_SSID, 0,
                                         ANJAY_MOCK_DM_INT(0, 1));
-    _anjay_mock_dm_expect_resource_supported(anjay, &FAKE_SERVER,
-                                             ANJAY_DM_RID_SERVER_LIFETIME, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 1,
                                            ANJAY_DM_RID_SERVER_LIFETIME, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,

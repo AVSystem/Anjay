@@ -45,8 +45,6 @@
 #define DEV_RES_MEMORY_TOTAL 21                 // int
 #define DEV_RES_EXTDEVINFO 22                   // objlnk
 
-#define DEV_RID_BOUND_ 23
-
 typedef enum {
     DEV_ERR_NO_ERROR = 0,
     DEV_ERR_LOW_BATTERY_POWER,
@@ -87,47 +85,6 @@ static inline dev_repr_t *get_dev(const anjay_dm_object_def_t *const *obj_ptr) {
         return NULL;
     }
     return container_of(obj_ptr, dev_repr_t, def);
-}
-
-static int dev_resource_supported(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_rid_t rid) {
-    (void) anjay; (void) obj_ptr;
-    switch (rid) {
-    case DEV_RES_MANUFACTURER:
-    case DEV_RES_MODEL_NUMBER:
-    case DEV_RES_SERIAL_NUMBER:
-    case DEV_RES_FIRMWARE_VERSION:
-    case DEV_RES_REBOOT:
-    case DEV_RES_FACTORY_RESET:
-    case DEV_RES_AVAILABLE_POWER_SOURCES:
-    case DEV_RES_POWER_SOURCE_VOLTAGE:
-    case DEV_RES_POWER_SOURCE_CURRENT:
-    case DEV_RES_BATTERY_LEVEL:
-    case DEV_RES_MEMORY_FREE:
-    case DEV_RES_ERROR_CODE:
-    case DEV_RES_CURRENT_TIME:
-    case DEV_RES_UTC_OFFSET:
-    case DEV_RES_TIMEZONE:
-    case DEV_RES_DEVICE_TYPE:
-    case DEV_RES_SUPPORTED_BINDING_AND_MODES:
-    case DEV_RES_HARDWARE_VERSION:
-    case DEV_RES_SOFTWARE_VERSION:
-    case DEV_RES_BATTERY_STATUS:
-    case DEV_RES_MEMORY_TOTAL:
-    case DEV_RES_EXTDEVINFO:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int dev_resource_present(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
-                                anjay_iid_t iid,
-                                anjay_rid_t rid) {
-    (void) iid;
-    return dev_resource_supported(anjay, obj_ptr, rid);
 }
 
 static int32_t randint_from_range(int32_t min_value,
@@ -352,12 +309,33 @@ static int dev_dim(anjay_t *anjay,
 
 static const anjay_dm_object_def_t DEVICE = {
     .oid = DEMO_OID_DEVICE,
-    .rid_bound = DEV_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            DEV_RES_MANUFACTURER,
+            DEV_RES_MODEL_NUMBER,
+            DEV_RES_SERIAL_NUMBER,
+            DEV_RES_FIRMWARE_VERSION,
+            DEV_RES_REBOOT,
+            DEV_RES_FACTORY_RESET,
+            DEV_RES_AVAILABLE_POWER_SOURCES,
+            DEV_RES_POWER_SOURCE_VOLTAGE,
+            DEV_RES_POWER_SOURCE_CURRENT,
+            DEV_RES_BATTERY_LEVEL,
+            DEV_RES_MEMORY_FREE,
+            DEV_RES_ERROR_CODE,
+            DEV_RES_CURRENT_TIME,
+            DEV_RES_UTC_OFFSET,
+            DEV_RES_TIMEZONE,
+            DEV_RES_SUPPORTED_BINDING_AND_MODES,
+            DEV_RES_DEVICE_TYPE,
+            DEV_RES_HARDWARE_VERSION,
+            DEV_RES_SOFTWARE_VERSION,
+            DEV_RES_BATTERY_STATUS,
+            DEV_RES_MEMORY_TOTAL,
+            DEV_RES_EXTDEVINFO),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = dev_resource_present,
-        .resource_supported = dev_resource_supported,
+        .resource_present = anjay_dm_resource_present_TRUE,
         .resource_read = dev_read,
         .resource_write = dev_write,
         .resource_execute = dev_execute,

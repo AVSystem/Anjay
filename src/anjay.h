@@ -64,10 +64,17 @@ struct anjay_struct {
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1
 
+#define _anjay_sms_router(Anjay) NULL
+#define _anjay_local_msisdn(Anjay) NULL
+#define _anjay_sms_poll_socket(Anjay) NULL
+
 uint8_t _anjay_make_error_response_code(int handler_result);
 
+anjay_server_connection_t *
+_anjay_get_server_connection(anjay_connection_ref_t ref);
+
 anjay_connection_type_t
-_anjay_get_default_connection_type(const anjay_active_server_info_t *server);
+_anjay_get_default_connection_type(anjay_active_server_info_t *server);
 
 avs_stream_abstract_t *_anjay_get_server_stream(anjay_t *anjay,
                                                 anjay_connection_ref_t ref);

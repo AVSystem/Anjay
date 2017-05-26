@@ -34,7 +34,7 @@ pushd "$PROJECT_ROOT/build/coverage"
     make check
 
     mkdir -p "$PROJECT_ROOT/coverage"
-    gcovr . --html --html-details -o "$PROJECT_ROOT/coverage/coverage.html"
+    gcovr . --html --html-details -r "$PROJECT_ROOT" -o "$PROJECT_ROOT/coverage/coverage.html"
 popd
 
 cat <<EOF

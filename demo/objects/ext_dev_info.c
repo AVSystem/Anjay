@@ -31,8 +31,6 @@
 #define EXT_DEV_RES_GPRS_ULFREQUENCY 9   // int
 #define EXT_DEV_RES_GPRS_DLFREQUENCY 10  // int
 
-#define EXT_DEV_RID_BOUND_ 11
-
 typedef struct {
     const anjay_dm_object_def_t *def;
 } extdev_repr_t;
@@ -42,36 +40,6 @@ static inline extdev_repr_t *get_extdev(const anjay_dm_object_def_t *const *obj_
         return NULL;
     }
     return container_of(obj_ptr, extdev_repr_t, def);
-}
-
-static int dev_resource_supported(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_rid_t rid) {
-    (void) anjay; (void) obj_ptr;
-    switch (rid) {
-    case EXT_DEV_RES_OBU_ID:
-    case EXT_DEV_RES_PLATE_NUMBER:
-    case EXT_DEV_RES_IMEI:
-    case EXT_DEV_RES_IMSI:
-    case EXT_DEV_RES_ICCID:
-    case EXT_DEV_RES_GPRS_RSSI:
-    case EXT_DEV_RES_GPRS_PLMN:
-    case EXT_DEV_RES_GPRS_ULMODULATION:
-    case EXT_DEV_RES_GPRS_DLMODULATION:
-    case EXT_DEV_RES_GPRS_ULFREQUENCY:
-    case EXT_DEV_RES_GPRS_DLFREQUENCY:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int dev_resource_present(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
-                                anjay_iid_t iid,
-                                anjay_rid_t rid) {
-    (void) iid;
-    return dev_resource_supported(anjay, obj_ptr, rid);
 }
 
 static int generate_fake_rssi_value(void) {
@@ -115,12 +83,22 @@ static int dev_read(anjay_t *anjay,
 
 static const anjay_dm_object_def_t EXT_DEV_INFO = {
     .oid = DEMO_OID_EXT_DEV_INFO,
-    .rid_bound = EXT_DEV_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            EXT_DEV_RES_OBU_ID,
+            EXT_DEV_RES_PLATE_NUMBER,
+            EXT_DEV_RES_IMEI,
+            EXT_DEV_RES_IMSI,
+            EXT_DEV_RES_ICCID,
+            EXT_DEV_RES_GPRS_RSSI,
+            EXT_DEV_RES_GPRS_PLMN,
+            EXT_DEV_RES_GPRS_ULMODULATION,
+            EXT_DEV_RES_GPRS_DLMODULATION,
+            EXT_DEV_RES_GPRS_ULFREQUENCY,
+            EXT_DEV_RES_GPRS_DLFREQUENCY),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = dev_resource_present,
-        .resource_supported = dev_resource_supported,
+        .resource_present = anjay_dm_resource_present_TRUE,
         .resource_read = dev_read
     }
 };

@@ -97,19 +97,30 @@ static void assert_instances_equal(const sec_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->iid, b->iid);
     AVS_UNIT_ASSERT_EQUAL_STRING(a->server_uri, b->server_uri);
     AVS_UNIT_ASSERT_EQUAL(a->is_bootstrap, b->is_bootstrap);
-    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->security_mode, (uint32_t) b->security_mode);
+    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->udp_security_mode,
+                          (uint32_t) b->udp_security_mode);
     assert_raw_buffers_equal(&a->public_cert_or_psk_identity,
                              &b->public_cert_or_psk_identity);
     assert_raw_buffers_equal(&a->private_cert_or_psk_key,
                              &b->private_cert_or_psk_key);
     assert_raw_buffers_equal(&a->server_public_key,
                              &b->server_public_key);
+    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->sms_security_mode,
+                          (uint32_t) b->sms_security_mode);
+    assert_raw_buffers_equal(&a->sms_key_params,
+                             &b->sms_key_params);
+    assert_raw_buffers_equal(&a->sms_secret_key,
+                             &b->sms_secret_key);
+    AVS_UNIT_ASSERT_EQUAL_STRING(a->sms_number, b->sms_number);
     AVS_UNIT_ASSERT_EQUAL(a->ssid, b->ssid);
     AVS_UNIT_ASSERT_EQUAL(a->holdoff_s, b->holdoff_s);
     AVS_UNIT_ASSERT_EQUAL(a->bs_timeout_s, b->bs_timeout_s);
 
     AVS_UNIT_ASSERT_EQUAL(a->has_is_bootstrap, b->has_is_bootstrap);
-    AVS_UNIT_ASSERT_EQUAL(a->has_security_mode, b->has_security_mode);
+    AVS_UNIT_ASSERT_EQUAL(a->has_udp_security_mode, b->has_udp_security_mode);
+    AVS_UNIT_ASSERT_EQUAL(a->has_sms_security_mode, b->has_sms_security_mode);
+    AVS_UNIT_ASSERT_EQUAL(a->has_sms_key_params, b->has_sms_key_params);
+    AVS_UNIT_ASSERT_EQUAL(a->has_sms_secret_key, b->has_sms_secret_key);
     AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
 }
 

@@ -296,7 +296,7 @@ class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test):
         # client should abort and retry update in a while
 
         time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECODNS)
-        self.serv = Lwm2mServer(listen_port=listen_port)
+        self.serv = Lwm2mServer(coap.Server(listen_port))
         self.block_recv()
 
 
@@ -311,7 +311,7 @@ class IcmpErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test):
         # client should abort and retry update in a while
 
         time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECODNS)
-        self.serv = Lwm2mServer(listen_port=listen_port)
+        self.serv = Lwm2mServer(coap.Server(listen_port))
         self.block_recv()
 
 
@@ -326,7 +326,7 @@ class IcmpErrorResponseToLastRequestBlock(ClientBlockRequest.Test):
         # client should abort and retry update in a while
 
         time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECODNS)
-        self.serv = Lwm2mServer(listen_port=listen_port)
+        self.serv = Lwm2mServer(coap.Server(listen_port))
         self.block_recv()
 
 

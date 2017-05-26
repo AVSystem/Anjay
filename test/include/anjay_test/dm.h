@@ -19,6 +19,7 @@
 
 #include <avsystem/commons/unit/mocksock.h>
 
+#include <anjay_modules/dm.h>
 #include <anjay_modules/utils.h>
 
 #include <anjay_test/mock_clock.h>
@@ -41,11 +42,6 @@ int _anjay_test_dm_fake_security_instance_present(anjay_t *anjay,
                                                   const anjay_dm_object_def_t *const *obj_ptr,
                                                   anjay_iid_t iid);
 
-int _anjay_test_dm_fake_security_present(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj_ptr,
-                                         anjay_iid_t iid,
-                                         anjay_rid_t rid);
-
 int _anjay_test_dm_fake_security_read(anjay_t *anjay,
                                       const anjay_dm_object_def_t *const *obj_ptr,
                                       anjay_iid_t iid,
@@ -65,7 +61,7 @@ _anjay_test_dm_instance_reset_NOOP(anjay_t *anjay,
 static const anjay_dm_object_def_t *const OBJ =
         &(const anjay_dm_object_def_t) {
             .oid = 42,
-            .rid_bound = 7,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
             .handlers = {
                 ANJAY_MOCK_DM_HANDLERS,
                 .instance_reset = _anjay_test_dm_instance_reset_NOOP
@@ -75,7 +71,7 @@ static const anjay_dm_object_def_t *const OBJ =
 static const anjay_dm_object_def_t *const OBJ_WITH_RESET =
         &(const anjay_dm_object_def_t) {
             .oid = 25,
-            .rid_bound = 7,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
             .handlers = {
                 ANJAY_MOCK_DM_HANDLERS,
                 .instance_reset = _anjay_mock_dm_instance_reset
@@ -85,7 +81,7 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RESET =
 static anjay_dm_object_def_t *const EXECUTE_OBJ =
         &(anjay_dm_object_def_t) {
             .oid = 128,
-            .rid_bound = 7,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
             .handlers = {
                 ANJAY_MOCK_DM_HANDLERS
             }
@@ -94,12 +90,14 @@ static anjay_dm_object_def_t *const EXECUTE_OBJ =
 static const anjay_dm_object_def_t *const FAKE_SECURITY =
         &(const anjay_dm_object_def_t) {
             .oid = 0,
-            .rid_bound = 13,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+                    ANJAY_DM_RID_SECURITY_BOOTSTRAP,
+                    ANJAY_DM_RID_SECURITY_SSID,
+                    ANJAY_DM_RID_SECURITY_BOOTSTRAP_TIMEOUT),
             .handlers = {
                 .instance_it = _anjay_test_dm_fake_security_instance_it,
                 .instance_present = _anjay_test_dm_fake_security_instance_present,
-                .resource_supported = anjay_dm_resource_supported_TRUE,
-                .resource_present = _anjay_test_dm_fake_security_present,
+                .resource_present = anjay_dm_resource_present_TRUE,
                 .resource_read = _anjay_test_dm_fake_security_read,
                 .transaction_begin = anjay_dm_transaction_NOOP,
                 .transaction_validate = anjay_dm_transaction_NOOP,
@@ -111,7 +109,11 @@ static const anjay_dm_object_def_t *const FAKE_SECURITY =
 static const anjay_dm_object_def_t *const FAKE_SECURITY2 =
         &(const anjay_dm_object_def_t) {
             .oid = 0,
-            .rid_bound = 11,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+                    ANJAY_DM_RID_SECURITY_SERVER_URI,
+                    ANJAY_DM_RID_SECURITY_BOOTSTRAP,
+                    ANJAY_DM_RID_SECURITY_MODE,
+                    ANJAY_DM_RID_SECURITY_SSID),
             .handlers = {
                 ANJAY_MOCK_DM_HANDLERS
             }
@@ -120,7 +122,13 @@ static const anjay_dm_object_def_t *const FAKE_SECURITY2 =
 static const anjay_dm_object_def_t *const FAKE_SERVER =
         &(const anjay_dm_object_def_t) {
             .oid = 1,
-            .rid_bound = 9,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+                    ANJAY_DM_RID_SERVER_SSID,
+                    ANJAY_DM_RID_SERVER_LIFETIME,
+                    ANJAY_DM_RID_SERVER_DEFAULT_PMIN,
+                    ANJAY_DM_RID_SERVER_DEFAULT_PMAX,
+                    ANJAY_DM_RID_SERVER_NOTIFICATION_STORING,
+                    ANJAY_DM_RID_SERVER_BINDING),
             .handlers = {
                 ANJAY_MOCK_DM_HANDLERS
             }
@@ -129,7 +137,7 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
 static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
         &(const anjay_dm_object_def_t) {
             .oid = 667,
-            .rid_bound = 8,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(4),
             .handlers = {
                 ANJAY_MOCK_DM_HANDLERS,
                 .resource_operations = _anjay_mock_dm_resource_operations
@@ -181,8 +189,6 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
 #define DM_TEST_EXPECT_READ_NULL_ATTRS(Ssid, Iid, Rid) do { \
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, Iid, 1); \
     if (Rid >= 0) { \
-        _anjay_mock_dm_expect_resource_supported(anjay, &OBJ, (anjay_rid_t) Rid, \
-                                                 1); \
         _anjay_mock_dm_expect_resource_present(anjay, &OBJ, Iid, (anjay_rid_t) Rid, \
                                                1); \
         _anjay_mock_dm_expect_resource_read_attrs( \

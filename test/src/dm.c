@@ -116,23 +116,6 @@ int _anjay_test_dm_fake_security_instance_present(anjay_t *anjay,
     return 0;
 }
 
-int _anjay_test_dm_fake_security_present(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj_ptr,
-                                         anjay_iid_t iid,
-                                         anjay_rid_t rid) {
-    (void) anjay;
-    (void) obj_ptr;
-    (void) iid;
-    switch (rid) {
-    case ANJAY_DM_RID_SECURITY_BOOTSTRAP:
-    case ANJAY_DM_RID_SECURITY_SSID:
-    case ANJAY_DM_RID_SECURITY_BOOTSTRAP_TIMEOUT:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
 int _anjay_test_dm_fake_security_read(anjay_t *anjay,
                                       const anjay_dm_object_def_t *const *obj_ptr,
                                       anjay_iid_t iid,

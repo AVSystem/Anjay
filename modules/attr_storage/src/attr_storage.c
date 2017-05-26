@@ -40,7 +40,6 @@ static anjay_dm_instance_remove_t instance_remove;
 static anjay_dm_instance_read_default_attrs_t instance_read_default_attrs;
 static anjay_dm_instance_write_default_attrs_t instance_write_default_attrs;
 static anjay_dm_resource_present_t resource_present;
-static anjay_dm_resource_supported_t resource_supported;
 static anjay_dm_resource_read_attrs_t resource_read_attrs;
 static anjay_dm_resource_write_attrs_t resource_write_attrs;
 static anjay_dm_transaction_begin_t transaction_begin;
@@ -66,7 +65,6 @@ const anjay_dm_module_t _anjay_attr_storage_MODULE = {
         .instance_read_default_attrs = instance_read_default_attrs,
         .instance_write_default_attrs = instance_write_default_attrs,
         .resource_present = resource_present,
-        .resource_supported = resource_supported,
         .resource_read_attrs = resource_read_attrs,
         .resource_write_attrs = resource_write_attrs,
         .transaction_begin = transaction_begin,
@@ -781,32 +779,6 @@ static int resource_present(anjay_t *anjay,
                 object_ptr ? find_instance(*object_ptr, iid) : NULL;
         if (instance_ptr) {
             remove_resource(fas, object_ptr, instance_ptr, rid);
-        }
-    }
-    return result;
-}
-
-static int resource_supported(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_rid_t rid) {
-    int result = _anjay_dm_resource_supported(anjay, obj_ptr, rid,
-                                              &_anjay_attr_storage_MODULE);
-    if (result == 0) {
-        anjay_attr_storage_t *fas = get_fas(anjay);
-        AVS_LIST(fas_object_entry_t) *object_ptr = find_object(fas,
-                                                               (*obj_ptr)->oid);
-        if (object_ptr) {
-            AVS_LIST(fas_object_entry_t) object = *object_ptr;
-            AVS_LIST(fas_instance_entry_t) *instance_ptr;
-            AVS_LIST(fas_instance_entry_t) instance_helper;
-            AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper,
-                                           &(*object_ptr)->instances) {
-                remove_resource(fas, object_ptr, instance_ptr, rid);
-                if (object != *object_ptr) {
-                    // whole object has been emptied and deleted
-                    break;
-                }
-            }
         }
     }
     return result;

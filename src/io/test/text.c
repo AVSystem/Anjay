@@ -20,7 +20,15 @@
 #include <avsystem/commons/unit/memstream.h>
 #include <avsystem/commons/unit/test.h>
 
+#include <anjay_test/utils.h>
+
 /////////////////////////////////////////////////////////////////////// ENCODING
+
+static void text_out_destroy(anjay_ret_bytes_ctx_t ***ctx) {
+    if (ctx && *ctx && **ctx) {
+        _anjay_base64_ret_bytes_ctx_delete(*ctx);
+    }
+}
 
 #define TEST_ENV(Size) \
     char buf[Size]; \
@@ -28,12 +36,14 @@
     int outctx_errno; \
     text_out_t out = { \
         &TEXT_OUT_VTABLE, \
-        { &TEXT_OUT_BYTES_VTABLE, { 0, 0 }, 0, 0, 0 }, \
+        NULL, \
         &outctx_errno, \
         (avs_stream_abstract_t *) &outbuf, \
         false \
     }; \
-    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf))
+    SCOPED_PTR(anjay_ret_bytes_ctx_t *, text_out_destroy) _ret_bytes = &out.bytes; \
+    (void) _ret_bytes; \
+    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf)) \
 
 static void stringify_buf(avs_stream_outbuf_t *outbuf) {
     outbuf->message_finished = 0;

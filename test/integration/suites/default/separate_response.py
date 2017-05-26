@@ -64,9 +64,11 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
 
         self.serv.send(invalid_req)
 
-        # it should trigger a Reset response
-        self.assertMsgEqual(Lwm2mReset(msg_id=invalid_req.msg_id),
-                            self.serv.recv(timeout_s=1))
+        # it should trigger a Service Not Available response
+        self.assertMsgEqual(
+                Lwm2mErrorResponse.matching(invalid_req)(code=coap.Code.RES_SERVICE_UNAVAILABLE,
+                                                         options=ANY),
+                self.serv.recv(timeout_s=1))
 
         # Separate Response: actual response
         req = Lwm2mChanged(msg_id=next(msg_id_generator),

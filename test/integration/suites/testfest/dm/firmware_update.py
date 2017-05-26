@@ -258,10 +258,64 @@ class Test772_FirmwareUpdate_ErrorCase_FirmwarePackageNotDownloaded(FirmwareUpda
                             res)
 
 
-@unittest.skip("TODO")
 class Test773_FirmwareUpdate_ErrorCase_NotEnoughStorage(FirmwareUpdate.Test):
+    def setUp(self):
+        # limit file size to 100K; enough for persistence file, not
+        # enough for firmware
+        import resource
+        self.prev_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
+        new_limit_b = 100 * 1024
+        resource.setrlimit(resource.RLIMIT_FSIZE, (new_limit_b, self.prev_limit[1]))
+
+        super().setUp()
+
+
+    def tearDown(self):
+        import resource
+        resource.setrlimit(resource.RLIMIT_FSIZE, self.prev_limit)
+
+        super().tearDown()
+
+
     def runTest(self):
-        pass
+        # A WRITE operation from the server on /5/0/0 (Package) with a firmware
+        # package exceeding the device storage memory capacity, is received by
+        # the client
+        # Normal flow:
+        # 1. The server delivers the firmware package to the device through a
+        # WRITE (CoAP PUT/POST) operation on /5/0/0 (Package)
+        self.assertEqual(b'0', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
+
+        demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
+        with open(demo_executable, 'rb') as f:
+            payload = f.read()
+
+        fail_res = self.test_write_block(ResPath.FirmwareUpdate.Package,
+                                         make_firmware_package(payload),
+                                         coap.ContentFormat.APPLICATION_OCTET_STREAM,
+                                         return_on_fail=True)
+        self.assertIsInstance(fail_res, Lwm2mErrorResponse)
+
+        # TODO: not supported
+        # 2. Update Result is set to “0” (Initial value)
+        # 3. When the download starts, State is set to “1” (Downloading)
+        # 4. A READ (CoAP GET) on /5/0/3 (State) provides the status of the
+        # firmware download to the server. The server may send repeated
+        # READs or OBSERVE the resource to determine when the
+        # download is completed.
+        # 5. Before the end of download, the device runs out of storage and
+        # cannot finish the download (State still keeps the value “1”:
+        # Downloading).
+        # 6. The client removes what was downloaded
+
+        # 7. /5/0/3 (State) is set to “0” (Idle)
+        self.assertEqual(b'0', self.test_read(ResPath.FirmwareUpdate.State))
+
+        # 8. /5/0/5 (Update Result) is set to “2” (Not enough storage for the
+        # new firmware package)
+        # 9. The server READs Update Result to know the result of the
+        # firmware update procedure.
+        self.assertEqual(b'2', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
 
 
 class Test774_FirmwareUpdate_ErrorCase_OutOfMemory(FirmwareUpdate.Test):

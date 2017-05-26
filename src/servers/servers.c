@@ -75,7 +75,7 @@ void _anjay_servers_cleanup(anjay_t *anjay,
         _anjay_sched_del(anjay->sched,
                          &servers->inactive->sched_reactivate_handle);
     }
-    AVS_LIST_CLEAR(&servers->nonqueue_sockets);
+    AVS_LIST_CLEAR(&servers->public_sockets);
 }
 
 static bool
@@ -112,31 +112,59 @@ _anjay_connection_get_prepared_socket(anjay_t *anjay,
     return socket;
 }
 
-AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
-    AVS_LIST_CLEAR(&anjay->servers.nonqueue_sockets);
-    AVS_LIST(avs_net_abstract_socket_t *const) *tail_ptr =
-            &anjay->servers.nonqueue_sockets;
+static avs_net_abstract_socket_t *
+get_online_connection_socket(anjay_t *anjay,
+                             anjay_active_server_info_t *server,
+                             anjay_connection_type_t conn_type) {
+    anjay_server_connection_t *connection =
+            _anjay_get_server_connection((anjay_connection_ref_t) {
+                                             .server = server,
+                                             .conn_type = conn_type
+                                         });
+    if (connection
+            && should_connection_be_online(anjay, server->ssid, connection)) {
+        return _anjay_connection_get_prepared_socket(anjay, server, connection);
+    }
+    return NULL;
+}
 
+static int
+add_socket_onto_list(AVS_LIST(avs_net_abstract_socket_t *const) *tail_ptr,
+                     avs_net_abstract_socket_t *socket) {
+    AVS_LIST_INSERT_NEW(avs_net_abstract_socket_t *const, tail_ptr);
+    if (!*tail_ptr) {
+        anjay_log(ERROR, "Out of memory while building socket list");
+        return -1;
+    }
+    *(avs_net_abstract_socket_t **) (intptr_t) *tail_ptr = socket;
+    return 0;
+}
+
+AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
+    AVS_LIST_CLEAR(&anjay->servers.public_sockets);
+    AVS_LIST(avs_net_abstract_socket_t *const) *tail_ptr =
+            &anjay->servers.public_sockets;
+
+    bool sms_active = false;
     anjay_active_server_info_t *server;
     AVS_LIST_FOREACH(server, anjay->servers.active) {
-        if (should_connection_be_online(anjay, server->ssid,
-                                        &server->udp_connection)) {
-            avs_net_abstract_socket_t *socket =
-                    _anjay_connection_get_prepared_socket(
-                            anjay, server, &server->udp_connection);
-            if (!socket) {
-                continue;
-            }
-            AVS_LIST_INSERT_NEW(avs_net_abstract_socket_t *const, tail_ptr);
-            if (!*tail_ptr) {
-                anjay_log(ERROR, "Out of memory while building socket list");
-            } else {
-                *(avs_net_abstract_socket_t **) (intptr_t) *tail_ptr = socket;
-                tail_ptr = AVS_LIST_NEXT_PTR(tail_ptr);
-            }
+        avs_net_abstract_socket_t *udp_socket =
+                get_online_connection_socket(anjay, server,
+                                             ANJAY_CONNECTION_UDP);
+        if (udp_socket && !add_socket_onto_list(tail_ptr, udp_socket)) {
+            tail_ptr = AVS_LIST_NEXT_PTR(tail_ptr);
+        }
+
+        if (get_online_connection_socket(anjay, server, ANJAY_CONNECTION_SMS)) {
+            sms_active = true;
         }
     }
-    return anjay->servers.nonqueue_sockets;
+
+    if (sms_active) {
+        assert(_anjay_sms_router(anjay));
+        add_socket_onto_list(tail_ptr, _anjay_sms_poll_socket(anjay));
+    }
+    return anjay->servers.public_sockets;
 }
 
 anjay_active_server_info_t *

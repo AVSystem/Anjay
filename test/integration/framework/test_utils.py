@@ -197,6 +197,7 @@ class RID:
         ResEmpty = 8
         ResInitIntArray = 9
         ResRawBytes = 10
+        ResOpaqueArray = 11
 
 
 class _Lwm2mResourcePathHelper:

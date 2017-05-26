@@ -18,13 +18,16 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <signal.h>
+
 #include <poll.h>
+#include <unistd.h>
 
 #include <anjay/access_control.h>
 #include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
-#include <unistd.h>
 
 #include "demo.h"
 #include "demo_args.h"
@@ -38,16 +41,18 @@ char **saved_argv;
 static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
                                   const server_connection_args_t *args) {
     anjay_security_object_purge(sec_obj);
-    for (size_t i = 0; i < MAX_SERVERS && args->servers[i].uri; ++i) {
+    const server_entry_t *server;
+    DEMO_FOREACH_SERVER_ENTRY(server, args) {
         anjay_security_instance_t instance;
+        memset(&instance, 0, sizeof(instance));
         instance.ssid = ANJAY_SSID_ANY;
-        if ((instance.bootstrap_server = args->servers[i].is_bootstrap)) {
+        if ((instance.bootstrap_server = server->is_bootstrap)) {
             instance.client_holdoff_s = args->bootstrap_holdoff_s;
             instance.bootstrap_timeout_s = args->bootstrap_timeout_s;
         } else {
             instance.client_holdoff_s = -1;
             instance.bootstrap_timeout_s = -1;
-            instance.ssid = args->servers[i].id;
+            instance.ssid = server->id;
         }
         instance.security_mode = args->security_mode;
 
@@ -55,7 +60,7 @@ static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
          * Note: we can assign pointers by value, as @ref
          * anjay_security_object_add_instance will make a deep copy by itself.
          */
-        instance.server_uri = args->servers[i].uri;
+        instance.server_uri = server->uri;
         instance.public_cert_or_psk_identity = args->public_cert_or_psk_identity;
         instance.public_cert_or_psk_identity_size = args->public_cert_or_psk_identity_size;
         instance.private_cert_or_psk_key = args->private_cert_or_psk_key;
@@ -63,7 +68,7 @@ static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
         instance.server_public_key = args->server_public_key;
         instance.server_public_key_size = args->server_public_key_size;
 
-        anjay_iid_t iid = (anjay_iid_t) args->servers[i].id;
+        anjay_iid_t iid = (anjay_iid_t) server->id;
         if (anjay_security_object_add_instance(sec_obj, &instance, &iid)) {
             demo_log(ERROR, "Cannot add Security Instance");
             return -1;
@@ -75,13 +80,14 @@ static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
 static int server_object_reload(const anjay_dm_object_def_t *const *serv_obj,
                                 const server_connection_args_t *args) {
     anjay_server_object_purge(serv_obj);
-    for (size_t i = 0; i < MAX_SERVERS && args->servers[i].uri; ++i) {
-        if (args->servers[i].is_bootstrap) {
+    const server_entry_t *server;
+    DEMO_FOREACH_SERVER_ENTRY(server, args) {
+        if (server->is_bootstrap) {
             continue;
         }
 
         const anjay_server_instance_t instance = {
-            .ssid = args->servers[i].id,
+            .ssid = server->id,
             .lifetime = args->lifetime,
             .default_min_period = -1,
             .default_max_period = -1,
@@ -89,7 +95,7 @@ static int server_object_reload(const anjay_dm_object_def_t *const *serv_obj,
             .binding = args->binding_mode,
             .notification_storing = true
         };
-        anjay_iid_t iid = (anjay_iid_t) args->servers[i].id;
+        anjay_iid_t iid = (anjay_iid_t) server->id;
         if (anjay_server_object_add_instance(serv_obj, &instance, &iid)) {
             demo_log(ERROR, "Cannot add Server Instance");
             return -1;
@@ -97,6 +103,7 @@ static int server_object_reload(const anjay_dm_object_def_t *const *serv_obj,
     }
     return 0;
 }
+
 const anjay_dm_object_def_t **demo_find_object(anjay_demo_t *demo,
                                                anjay_oid_t oid) {
     AVS_LIST(anjay_demo_object_t) object;
@@ -147,6 +154,72 @@ static void demo_delete(anjay_demo_t *demo) {
     free(demo);
 }
 
+static bool has_bootstrap_server(anjay_demo_t *demo) {
+    const server_entry_t *server;
+    DEMO_FOREACH_SERVER_ENTRY(server, demo->connection_args) {
+        if (server->is_bootstrap) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static size_t count_non_bootstrap_servers(anjay_demo_t *demo) {
+    size_t result = 0;
+    const server_entry_t *server;
+    DEMO_FOREACH_SERVER_ENTRY(server, demo->connection_args) {
+        if (!server->is_bootstrap) {
+            ++result;
+        }
+    }
+    return result;
+}
+
+static int add_default_access_entries(anjay_demo_t *demo) {
+    if (has_bootstrap_server(demo) || count_non_bootstrap_servers(demo) <= 1) {
+        // ACLs are not necessary
+        return 0;
+    }
+
+    const server_entry_t *server;
+    DEMO_FOREACH_SERVER_ENTRY(server, demo->connection_args) {
+        if (anjay_access_control_set_acl(demo->anjay, DEMO_OID_SERVER,
+                                         (anjay_iid_t) server->id, server->id,
+                                         ANJAY_ACCESS_MASK_READ
+                                                 | ANJAY_ACCESS_MASK_WRITE
+                                                 | ANJAY_ACCESS_MASK_EXECUTE)) {
+            return -1;
+        }
+    }
+
+    int result = 0;
+    AVS_LIST(anjay_demo_object_t) object;
+    AVS_LIST_FOREACH(object, demo->objects) {
+        if ((*object->obj_ptr)->oid == DEMO_OID_SECURITY
+                || (*object->obj_ptr)->oid == DEMO_OID_SERVER) {
+            continue;
+        }
+        void *cookie = NULL;
+        anjay_iid_t iid;
+        while (!(result = (*object->obj_ptr)->handlers.instance_it(
+                        demo->anjay, object->obj_ptr, &iid, &cookie))
+                && iid != ANJAY_IID_INVALID) {
+            if (anjay_access_control_set_acl(
+                    demo->anjay,
+                    (*object->obj_ptr)->oid,
+                    iid,
+                    ANJAY_SSID_ANY,
+                    ANJAY_ACCESS_MASK_READ
+                            | ANJAY_ACCESS_MASK_WRITE
+                            | ANJAY_ACCESS_MASK_EXECUTE)) {
+                return -1;
+            }
+        }
+    }
+
+    return result;
+}
+
 static int add_access_entries(anjay_demo_t *demo,
                               const cmdline_args_t *cmdline_args) {
     const AVS_LIST(access_entry_t) it;
@@ -192,6 +265,7 @@ install_object(anjay_demo_t *demo,
 
 static int demo_init(anjay_demo_t *demo,
                      cmdline_args_t *cmdline_args) {
+
     anjay_configuration_t config = {
         .endpoint_name = cmdline_args->endpoint_name,
         .udp_listen_port = cmdline_args->udp_listen_port,
@@ -201,7 +275,7 @@ static int demo_init(anjay_demo_t *demo,
 #ifdef __APPLE__
         .udp_socket_config = {
             .forced_mtu = 1492
-        }
+        },
 #endif
     };
 
@@ -268,7 +342,8 @@ static int demo_init(anjay_demo_t *demo,
 
     demo_reload_servers(demo);
 
-    if (add_access_entries(demo, cmdline_args)) {
+    if (add_default_access_entries(demo)
+            || add_access_entries(demo, cmdline_args)) {
         return -1;
     }
 
@@ -437,6 +512,9 @@ int main(int argc, char *argv[]) {
     if (demo_parse_argv(&cmdline_args, argc, argv)) {
         return -1;
     }
+
+    // do not terminate after exceeding file size
+    signal(SIGXFSZ, SIG_IGN);
 
     anjay_demo_t *demo = demo_new(&cmdline_args);
     if (!demo) {

@@ -80,7 +80,7 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
         self.assertEqual(sum(1 for line in logs.splitlines() if 'connected to ' in line), 1)
 
         # start the server again
-        self.serv = Lwm2mServer(listen_port)
+        self.serv = Lwm2mServer(coap.Server(listen_port))
 
         # the Update failed, wait for retransmission to check if the stream was
         # properly released, i.e. sending another message does not trigger
@@ -198,7 +198,7 @@ class UpdateFallbacksToRegisterAfterLifetimeExpiresTest(test_suite.Lwm2mSingleSe
         self.serv.close()
         time.sleep(self.LIFETIME + 1)
 
-        self.serv = Lwm2mServer(listen_port=port)
+        self.serv = Lwm2mServer(coap.Server(port))
         self.assertDemoRegisters(lifetime=self.LIFETIME, timeout_s=5)
 
 
@@ -258,8 +258,27 @@ class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mSingleServerTest):
         # give the process some time to fail
         time.sleep(1)
 
-        self.serv = Lwm2mServer(listen_port=listen_port)
+        self.serv = Lwm2mServer(coap.Server(listen_port))
         self.serv.set_timeout(timeout_s=1)
 
         # make sure that client retries
         self.assertDemoUpdatesRegistration(timeout_s=5)
+
+
+class ConcurrentRequestWhileWaitingForResponse(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        self.communicate('send-update')
+
+        pkt = self.serv.recv()
+        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
+                                        query=[],
+                                        content=b''),
+                            pkt)
+
+        req = Lwm2mRead('/3/0/0')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_SERVICE_UNAVAILABLE,
+                                                             options=ANY),
+                            self.serv.recv())
+
+        self.serv.send(Lwm2mChanged.matching(pkt)())

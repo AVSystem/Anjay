@@ -53,7 +53,6 @@ typedef struct {
     anjay_oid_t oid;
     anjay_iid_t oiid;
     anjay_ssid_t ssid;
-    bool is_bootstrap;
     anjay_access_mask_t result;
 } get_mask_data_t;
 
@@ -124,9 +123,7 @@ static int get_mask(anjay_t *anjay,
         return -1;
     }
 
-    if ((res_oiid != data->oiid || res_oid != data->oid)
-            || (data->is_bootstrap !=
-                    (res_owner == ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP))) {
+    if (res_oiid != data->oiid || res_oid != data->oid) {
         return ANJAY_DM_FOREACH_CONTINUE;
     }
 
@@ -176,7 +173,6 @@ access_control_mask(anjay_t *anjay,
         .oid = info->oid,
         .oiid = info->iid,
         .ssid = info->ssid,
-        .is_bootstrap = false,
         .result = ANJAY_ACCESS_MASK_NONE
     };
 
@@ -194,7 +190,6 @@ static bool can_instantiate(anjay_t *anjay,
         .oid = info->oid,
         .oiid = ANJAY_IID_INVALID,
         .ssid = info->ssid,
-        .is_bootstrap = true,
         .result = ANJAY_ACCESS_MASK_NONE
     };
 

@@ -47,6 +47,16 @@ typedef struct {
     /** Resource: Server Public Key */
     const uint8_t *server_public_key;
     size_t server_public_key_size;
+    /** Resource: SMS Security Mode */
+    anjay_sms_security_mode_t sms_security_mode;
+    /** Resource: SMS Binding Key Parameters */
+    const uint8_t *sms_key_parameters;
+    size_t sms_key_parameters_size;
+    /** Resource: SMS Binding Secret Key(s) */
+    const uint8_t *sms_secret_key;
+    size_t sms_secret_key_size;
+    /** Resource: LwM2M Server SMS Number */
+    const char *server_sms_number;
 } anjay_security_instance_t;
 
 /**

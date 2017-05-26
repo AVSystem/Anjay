@@ -29,8 +29,6 @@
 #define GEOPOINTS_DESCRIPTION 3 // string
 #define GEOPOINTS_INSIDE      4 // bool
 
-#define GEOPOINTS_RID_BOUND_  5
-
 typedef struct {
     anjay_iid_t iid;
 
@@ -312,7 +310,12 @@ geopoints_instance_reset(anjay_t *anjay,
 
 static const anjay_dm_object_def_t GEOPOINTS = {
     .oid = DEMO_OID_GEOPOINTS,
-    .rid_bound = GEOPOINTS_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            GEOPOINTS_LATITUDE,
+            GEOPOINTS_LONGITUDE,
+            GEOPOINTS_RADIUS,
+            GEOPOINTS_DESCRIPTION,
+            GEOPOINTS_INSIDE),
     .handlers = {
         .instance_it = geopoints_instance_it,
         .instance_present = geopoints_instance_present,
@@ -320,7 +323,6 @@ static const anjay_dm_object_def_t GEOPOINTS = {
         .instance_remove = geopoints_instance_remove,
         .instance_reset = geopoints_instance_reset,
         .resource_present = anjay_dm_resource_present_TRUE,
-        .resource_supported = anjay_dm_resource_supported_TRUE,
         .resource_read = geopoints_resource_read,
         .resource_write = geopoints_resource_write,
         .transaction_begin = geopoints_transaction_begin,

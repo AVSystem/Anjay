@@ -28,6 +28,10 @@
 #include <avsystem/commons/list.h>
 
 #ifdef __cplusplus
+#if __cplusplus >= 201103L
+#include <tuple> // for ANJAY_DM_SUPPORTED_RIDS
+#endif
+
 extern "C" {
 #endif
 
@@ -37,14 +41,31 @@ extern "C" {
 /** Anjay object containing all information required for LwM2M communication. */
 typedef struct anjay_struct anjay_t;
 
+/** Driver for communication over the SMS transport. Used only by the commercial
+ * version of Anjay. */
+typedef struct anjay_smsdrv_struct anjay_smsdrv_t;
+
+/**
+ * Cleans up all resources and releases an SMS driver object.
+ *
+ * NOTE: If an Anjay object has been using the SMS driver, the SMS driver shall
+ * be cleaned up <strong>after</strong> freeing the Anjay object using
+ * @ref anjay_delete.
+ *
+ * @param smsdrv_ptr Pointer to an SMS driver object to delete.
+ */
+void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
+
 typedef struct anjay_configuration {
     /** Endpoint name as presented to the LwM2M server. If not set, defaults
      * to ANJAY_DEFAULT_ENDPOINT_NAME. */
     const char *endpoint_name;
+
     /** UDP port number that all listening sockets will be bound to. It may be
      * left at 0 - in that case, connection with each server will use a freshly
      * generated ephemeral port number. */
     uint16_t udp_listen_port;
+
     /** DTLS version to use for communication. AVS_NET_SSL_VERSION_DEFAULT will
      * be automatically mapped to AVS_NET_SSL_VERSION_TLSv1_2, which is the
      * version mandated by LwM2M specification. */
@@ -69,6 +90,22 @@ typedef struct anjay_configuration {
      * - Value pointed to by the <c>preferred_endpoint</c> will be ignored.
      */
     avs_net_socket_configuration_t udp_socket_config;
+
+    /** Specifies the cellular modem driver to use, enabling the SMS transport
+     * if not NULL.
+     *
+     * NOTE: in the Apache-licensed version of Anjay, this feature is not
+     * supported, this field exists only for API compatibility with the
+     * commercial version, and setting it to non-NULL will cause an error. */
+    anjay_smsdrv_t *sms_driver;
+
+    /** Phone number at which the local device is reachable, formatted as an
+     * MSISDN (international number without neither the international dialing
+     * prefix nor the "+" sign).
+     *
+     * NOTE: Either both <c>sms_driver</c> and <c>local_msisdn</c> have to be
+     * <c>NULL</c>, or both have to be non-<c>NULL</c>. */
+    const char *local_msisdn;
 } anjay_configuration_t;
 
 /**
@@ -947,7 +984,7 @@ typedef int anjay_dm_instance_write_default_attrs_t(anjay_t *anjay,
 
 /**
  * A handler that checks if a Resource has been instantiated in Object Instance,
- * called only if Resource is SUPPORTED (see @ref anjay_dm_resource_supported_t).
+ * called only if Resource is SUPPORTED (see @ref anjay_dm_supported_rids_t).
  *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
@@ -956,8 +993,8 @@ typedef int anjay_dm_instance_write_default_attrs_t(anjay_t *anjay,
  * @param rid     Checked Resource ID.
  *
  * @returns This handler should return:
- * - 1 if the Resource is supported,
- * - 0 if the Resource is not supported,
+ * - 1 if the Resource is present,
+ * - 0 if the Resource is not present,
  * - a negative value in case of error. If it returns one of ANJAY_ERR_
  *   constants, the response message will have an appropriate CoAP response
  *   code. Otherwise, the device will respond with an unspecified (but valid)
@@ -978,26 +1015,6 @@ int anjay_dm_resource_present_TRUE(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid);
-
-/**
- * A handler that checks if a Resource is supported by the Object (@p obj_ptr).
- *
- * @param anjay     Anjay object to operate on.
- * @param obj_ptr   Object definition pointer, as passed to
- *                  @ref anjay_register_object .
- * @param rid       Checked Resource ID.
- *
- * @returns This handler should return:
- * - 1 if the Resource is supported,
- * - 0 if the Resource is not supported,
- * - a negative value in case of error. If it returns one of ANJAY_ERR_
- *   constants, the response message will have an appropriate CoAP response
- *   code. Otherwise, the device will respond with an unspecified (but valid)
- *   error code.
- */
-typedef int anjay_dm_resource_supported_t(anjay_t *anjay,
-                                          const anjay_dm_object_def_t *const *obj_ptr,
-                                          anjay_rid_t rid);
 
 typedef enum {
     ANJAY_DM_RESOURCE_OP_BIT_R = (1 << 0),
@@ -1033,16 +1050,6 @@ anjay_dm_resource_operations_t(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_rid_t rid,
                                anjay_dm_resource_op_mask_t *out);
-
-/**
- * Convenience function to use as the resource_support handler in objects that
- * implement all possible Resources.
- *
- * @returns Always 1.
- */
-int anjay_dm_resource_supported_TRUE(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_rid_t rid);
 
 /**
  * A handler that reads the Resource value, called only if the Resource is
@@ -1331,8 +1338,6 @@ typedef struct {
 
     /** Check if a Resource is present in given Object Instance, @ref anjay_dm_resource_present_t */
     anjay_dm_resource_present_t *resource_present;
-    /** Check if a Resource is supported in given Object, @ref anjay_dm_resource_supported_t */
-    anjay_dm_resource_supported_t *resource_supported;
     /** Returns a mask of supported operations on a given Resource, @ref anjay_dm_resource_operations_t */
     anjay_dm_resource_operations_t *resource_operations;
 
@@ -1360,16 +1365,52 @@ typedef struct {
     anjay_dm_transaction_rollback_t *transaction_rollback;
 } anjay_dm_handlers_t;
 
+/** A simple array-plus-size container for a list of supported Resource IDs. */
+typedef struct {
+    /** Number of element in the array */
+    size_t count;
+    /** Pointer to an array of Resource IDs supported by the object. A Resource
+     * is considered SUPPORTED if it may ever be present within the Object. The
+     * array MUST be exactly <c>count</c> elements long and sorted in strictly
+     * ascending order. */
+    const uint16_t *rids;
+} anjay_dm_supported_rids_t;
+
+#if defined(__cplusplus) && __cplusplus >= 201103L
+#define ANJAY_DM_SUPPORTED_RIDS(...) \
+         { \
+            ::std::tuple_size<decltype(::std::make_tuple(__VA_ARGS__))>::value,\
+            []() -> const uint16_t * { \
+                static const uint16_t rids[] = { __VA_ARGS__ }; \
+                return rids; \
+            }() \
+         }
+#else // __cplusplus
+/**
+ * Convenience macro for initializing @ref anjay_dm_supported_rids_t objects.
+ *
+ * The parameters shall compose a properly sorted list of supported Resource
+ * IDs. The result of the macro is an initializer list suitable for initializing
+ * an object of type <c>anjay_dm_supported_rids_t</c>, like for example the
+ * <c>supported_rids</c> field of @ref anjay_dm_object_def_t. The <c>count</c>
+ * field will be automatically calculated.
+ */
+#define ANJAY_DM_SUPPORTED_RIDS(...) \
+        { \
+            sizeof((const uint16_t[]) { __VA_ARGS__ }) / sizeof(uint16_t), \
+            (const uint16_t[]) { __VA_ARGS__ } \
+        }
+#endif // __cplusplus
+
 /** A struct defining an LwM2M Object. */
 struct anjay_dm_object_def_struct {
     /** Object ID */
     anjay_oid_t oid;
 
-    /** Smallest Resource ID that is invalid for this Object. All requests to
-     * Resources with ID = @ref anjay_dm_object_def_struct#rid_bound
-     * or bigger are discarded without calling the
-     * @ref anjay_dm_handlers_t#resource_present handler. */
-    anjay_rid_t rid_bound;
+    /** List of Resource IDs supported by the object. The
+     * @ref ANJAY_DM_SUPPORTED_RIDS macro is the preferred way of initializing
+     * it. */
+    anjay_dm_supported_rids_t supported_rids;
 
     /** Handler callbacks for this object. */
     anjay_dm_handlers_t handlers;
@@ -1672,6 +1713,16 @@ typedef enum {
     ANJAY_UDP_SECURITY_CERTIFICATE = 2, //< Certificate mode
     ANJAY_UDP_SECURITY_NOSEC = 3 //< NoSec mode
 } anjay_udp_security_mode_t;
+
+/**
+ * Possible values of the SMS Security Mode Resource, as described in the
+ * Security Object definition.
+ */
+typedef enum {
+    ANJAY_SMS_SECURITY_DTLS_PSK = 1, //< DTLS in PSK mode
+    ANJAY_SMS_SECURITY_SECURE_PACKET = 2, //< Secure Packet Structure
+    ANJAY_SMS_SECURITY_NOSEC = 3, //< NoSec mode
+} anjay_sms_security_mode_t;
 
 #define ANJAY_ACCESS_MASK_READ            (1U << 0)
 #define ANJAY_ACCESS_MASK_WRITE           (1U << 1)

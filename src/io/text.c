@@ -29,6 +29,7 @@
 #include <anjay/anjay.h>
 
 #include "../utils.h"
+#include "base64_out.h"
 #include "vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -36,16 +37,8 @@ VISIBILITY_SOURCE_BEGIN
 /////////////////////////////////////////////////////////////////////// ENCODING
 
 typedef struct {
-    const anjay_ret_bytes_ctx_vtable_t *vtable;
-    uint8_t bytes_cached[2];
-    size_t num_bytes_cached;
-    size_t num_bytes_left;
-    bool initialized;
-} text_out_bytes_ctx_t;
-
-typedef struct {
     const anjay_output_ctx_vtable_t *vtable;
-    text_out_bytes_ctx_t bytes;
+    anjay_ret_bytes_ctx_t *bytes;
     int *errno_ptr;
     avs_stream_abstract_t *stream;
     bool finished;
@@ -55,100 +48,19 @@ static int *text_errno_ptr(anjay_output_ctx_t *ctx) {
     return ((text_out_t *) ctx)->errno_ptr;
 }
 
-#define TEXT_CHUNK_SIZE 3 * 64u
-AVS_STATIC_ASSERT(TEXT_CHUNK_SIZE % 3 == 0, chunk_must_be_a_multiple_of_3);
-
-static int text_out_encode_and_write(text_out_bytes_ctx_t *ctx,
-                                     const uint8_t *buffer,
-                                     const size_t buffer_size) {
-    if (!buffer_size) {
-        return 0;
-    }
-    size_t encoded_size = avs_base64_encoded_size(buffer_size);
-    assert(encoded_size <= 4 * (TEXT_CHUNK_SIZE / 3) + 1);
-    char encoded[encoded_size];
-    int retval = avs_base64_encode(encoded, sizeof(encoded), buffer, buffer_size);
-    if (retval) {
-        return retval;
-    }
-    text_out_t *parent = AVS_CONTAINER_OF(ctx, text_out_t, bytes);
-    return avs_stream_write(parent->stream, encoded, sizeof(encoded) - 1);
-}
-
-static int text_out_bytes_flush(text_out_bytes_ctx_t *ctx,
-                                const uint8_t **dataptr,
-                                size_t bytes_to_write) {
-    uint8_t chunk[TEXT_CHUNK_SIZE];
-    while (bytes_to_write > 0) {
-        memcpy(chunk, ctx->bytes_cached, ctx->num_bytes_cached);
-        size_t new_bytes_written =
-                ANJAY_MIN(TEXT_CHUNK_SIZE - ctx->num_bytes_cached,
-                          bytes_to_write);
-        assert(new_bytes_written <= TEXT_CHUNK_SIZE);
-        memcpy(&chunk[ctx->num_bytes_cached], *dataptr, new_bytes_written);
-        *dataptr += new_bytes_written;
-
-        int retval;
-        if ((retval = text_out_encode_and_write(
-                     ctx, chunk, new_bytes_written + ctx->num_bytes_cached))) {
-            return retval;
-        }
-        bytes_to_write -= new_bytes_written;
-        ctx->num_bytes_left -= new_bytes_written;
-        ctx->num_bytes_cached = 0;
-    }
-    return 0;
-}
-
-static int text_out_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
-                                 const void *data,
-                                 size_t size) {
-    text_out_bytes_ctx_t *ctx = (text_out_bytes_ctx_t *) ctx_;
-    if (!ctx->initialized || size > ctx->num_bytes_left) {
-        return -1;
-    }
-    const uint8_t *dataptr = (const uint8_t *) data;
-    size_t bytes_to_store;
-    if (size + ctx->num_bytes_cached < 3) {
-        bytes_to_store = size;
-    } else {
-        bytes_to_store = (ctx->num_bytes_cached + size) % 3;
-    }
-    assert(bytes_to_store <= 2);
-
-    int retval = text_out_bytes_flush(ctx, &dataptr, size - bytes_to_store);
-    if (retval) {
-        return retval;
-    }
-    assert(ctx->num_bytes_cached + bytes_to_store
-               <= sizeof(ctx->bytes_cached));
-    memcpy(&ctx->bytes_cached[ctx->num_bytes_cached], dataptr, bytes_to_store);
-    ctx->num_bytes_cached += bytes_to_store;
-    ctx->num_bytes_left -= bytes_to_store;
-    return 0;
-}
-
-static const anjay_ret_bytes_ctx_vtable_t TEXT_OUT_BYTES_VTABLE = {
-    .append = text_out_bytes_append
-};
-
 static anjay_ret_bytes_ctx_t *text_ret_bytes_begin(anjay_output_ctx_t *ctx_,
                                                    size_t length) {
-    (void) length;
     text_out_t *ctx = (text_out_t *) ctx_;
-    if (!ctx->bytes.initialized) {
-        ctx->bytes.vtable = &TEXT_OUT_BYTES_VTABLE;
-        ctx->bytes.num_bytes_cached = 0;
-        ctx->bytes.num_bytes_left = length;
-        ctx->bytes.initialized = true;
-        return (anjay_ret_bytes_ctx_t *) &ctx->bytes;
+    if (ctx->bytes) {
+        return NULL;
     }
-    return NULL;
+    ctx->bytes = _anjay_base64_ret_bytes_ctx_new(ctx->stream, length);
+    return ctx->bytes;
 }
 
 static int text_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
     text_out_t *ctx = (text_out_t *) ctx_;
-    if (ctx->bytes.initialized) {
+    if (ctx->bytes) {
         return -1;
     }
 
@@ -162,7 +74,7 @@ static int text_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
 
 static int text_ret_i32(anjay_output_ctx_t *ctx_, int32_t value) {
     text_out_t *ctx = (text_out_t *) ctx_;
-    if (ctx->bytes.initialized) {
+    if (ctx->bytes) {
         return -1;
     }
 
@@ -176,7 +88,7 @@ static int text_ret_i32(anjay_output_ctx_t *ctx_, int32_t value) {
 
 static int text_ret_i64(anjay_output_ctx_t *ctx_, int64_t value) {
     text_out_t *ctx = (text_out_t *) ctx_;
-    if (ctx->bytes.initialized) {
+    if (ctx->bytes) {
         return -1;
     }
 
@@ -190,7 +102,7 @@ static int text_ret_i64(anjay_output_ctx_t *ctx_, int64_t value) {
 
 static inline int text_ret_floating_point(text_out_t *ctx, double value,
                                           int precision) {
-    if (ctx->bytes.initialized) {
+    if (ctx->bytes) {
         return -1;
     }
     int retval = -1;
@@ -221,7 +133,7 @@ static int text_ret_bool(anjay_output_ctx_t *ctx, bool value) {
 static int text_ret_objlnk(anjay_output_ctx_t *ctx_,
                            anjay_oid_t oid, anjay_iid_t iid) {
     text_out_t *ctx = (text_out_t *) ctx_;
-    if (ctx->bytes.initialized) {
+    if (ctx->bytes) {
         return -1;
     }
     int retval = -1;
@@ -236,15 +148,12 @@ static int text_ret_objlnk(anjay_output_ctx_t *ctx_,
 
 static int text_ret_close(anjay_output_ctx_t *ctx_) {
     text_out_t *ctx = (text_out_t *) ctx_;
-    if (ctx->bytes.initialized) {
-        ctx->bytes.initialized = false;
-        if (ctx->bytes.num_bytes_left != 0) {
-            return -1;
-        }
-        return text_out_encode_and_write(&ctx->bytes, ctx->bytes.bytes_cached,
-                                         ctx->bytes.num_bytes_cached);
+    int result = 0;
+    if (ctx->bytes) {
+        result = _anjay_base64_ret_bytes_ctx_close(ctx->bytes);
+        _anjay_base64_ret_bytes_ctx_delete(&ctx->bytes);
     }
-    return 0;
+    return result;
 }
 
 static const anjay_output_ctx_vtable_t TEXT_OUT_VTABLE = {

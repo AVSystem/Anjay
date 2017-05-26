@@ -27,18 +27,30 @@ static int ssid_cmp(const void *a, const void *b, size_t element_size) {
 static int validate_instance(sec_instance_t *it) {
     if (!it->server_uri
             || !it->has_is_bootstrap
-            || !it->has_security_mode
+            || !it->has_udp_security_mode
             || (!it->is_bootstrap && !it->has_ssid)) {
         return -1;
     }
-    if (_anjay_sec_validate_security_mode(it->security_mode)) {
-        security_log(ERROR, "Security mode %d not supported",
-                     (int) it->security_mode);
+    if (_anjay_sec_validate_udp_security_mode(it->udp_security_mode)) {
+        security_log(ERROR, "UDP Security mode %d not supported",
+                     (int) it->udp_security_mode);
         return -1;
     }
-    if (it->security_mode != ANJAY_UDP_SECURITY_NOSEC) {
+    if (it->udp_security_mode != ANJAY_UDP_SECURITY_NOSEC) {
         if (!it->public_cert_or_psk_identity.data
                 || !it->private_cert_or_psk_key.data) {
+            return -1;
+        }
+    }
+    if (it->has_sms_security_mode) {
+        if (_anjay_sec_validate_sms_security_mode(it->sms_security_mode)) {
+            security_log(ERROR, "SMS Security mode %d not supported",
+                         (int) it->sms_security_mode);
+            return -1;
+        }
+        if ((it->sms_security_mode == ANJAY_SMS_SECURITY_DTLS_PSK
+                || it->sms_security_mode == ANJAY_SMS_SECURITY_SECURE_PACKET)
+            && (!it->sms_key_params.data || !it->sms_secret_key.data)) {
             return -1;
         }
     }

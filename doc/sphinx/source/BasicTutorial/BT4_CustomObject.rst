@@ -20,7 +20,7 @@ LwM2M Objects are described using the ``anjay_dm_object_def_t`` struct,
 which holds:
 
 - Object ID,
-- an upper bound on Resource IDs that the Object might contain,
+- a list of Resource IDs that the Object might contain,
 - a set of handlers used by the library to access and possibly modify the Object.
 
 .. highlight:: c
@@ -52,8 +52,6 @@ which holds:
 
         /** Check if a Resource is present in given Object Instance, @ref anjay_dm_resource_present_t */
         anjay_dm_resource_present_t *resource_present;
-        /** Check if a Resource is supported in given Object, @ref anjay_dm_resource_supported_t */
-        anjay_dm_resource_supported_t *resource_supported;
         /** Returns a mask of supported operations on a given Resource, @ref anjay_dm_resource_operations_t */
         anjay_dm_resource_operations_t *resource_operations;
 
@@ -81,16 +79,39 @@ which holds:
         anjay_dm_transaction_rollback_t *transaction_rollback;
     } anjay_dm_handlers_t;
 
+    /** A simple array-plus-size container for a list of supported Resource IDs. */
+    typedef struct {
+        /** Number of element in the array */
+        size_t count;
+        /** Pointer to an array of Resource IDs supported by the object. A Resource
+         * is considered SUPPORTED if it may ever be present within the Object. The
+         * array MUST be exactly <c>count</c> elements long and sorted in strictly
+         * ascending order. */
+        const uint16_t *rids;
+    } anjay_dm_supported_rids_t;
+
+    // ...
+    /**
+     * Convenience macro for initializing @ref anjay_dm_supported_rids_t objects.
+     *
+     * The parameters shall compose a properly sorted list of supported Resource
+     * IDs. The result of the macro is an initializer list suitable for initializing
+     * an object of type <c>anjay_dm_supported_rids_t</c>, like for example the
+     * <c>supported_rids</c> field of @ref anjay_dm_object_def_t. The <c>count</c>
+     * field will be automatically calculated.
+     */
+    #define ANJAY_DM_SUPPORTED_RIDS(...) \
+            // ...
+
     /** A struct defining an LwM2M Object. */
     struct anjay_dm_object_def_struct {
         /** Object ID */
         anjay_oid_t oid;
 
-        /** Smallest Resource ID that is invalid for this Object. All requests to
-         * Resources with ID = @ref anjay_dm_object_def_struct#rid_bound
-         * or bigger are discarded without calling the
-         * @ref anjay_dm_handlers_t#resource_present handler. */
-        anjay_rid_t rid_bound;
+        /** List of Resource IDs supported by the object. The
+         * @ref ANJAY_DM_SUPPORTED_RIDS macro is the preferred way of initializing
+         * it. */
+        anjay_dm_supported_rids_t supported_rids;
 
         /** Handler callbacks for this object. */
         anjay_dm_handlers_t handlers;

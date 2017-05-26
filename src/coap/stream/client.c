@@ -83,6 +83,7 @@ _anjay_coap_client_setup_request(coap_client_t *client,
 }
 
 typedef enum check_result {
+    CHECK_UNEXPECTED_CONFIRMABLE = -2,
     CHECK_INVALID_RESPONSE = -1,
     CHECK_OK,
     CHECK_RESET,
@@ -140,7 +141,7 @@ process_separate_response(coap_client_t *client,
         if (!_anjay_coap_common_token_matches(response,
                                               &client->last_request_identity)) {
             coap_log(DEBUG, "invalid response: token mismatch");
-            return CHECK_INVALID_RESPONSE;
+            return CHECK_UNEXPECTED_CONFIRMABLE;
         }
 
         client->state = COAP_CLIENT_STATE_HAS_RESPONSE_CONTENT;
@@ -192,6 +193,10 @@ static int process_received(const anjay_coap_msg_t *response,
     check_result_t result = check_response(client, response);
 
     switch (result) {
+    case CHECK_UNEXPECTED_CONFIRMABLE:
+        *out_error_code = ANJAY_COAP_CODE_SERVICE_UNAVAILABLE;
+        break;
+
     case CHECK_INVALID_RESPONSE:
         break;
 

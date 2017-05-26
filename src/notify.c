@@ -24,12 +24,6 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static void update_ret(int *var, int new_retval) {
-    if (!*var) {
-        *var = new_retval;
-    }
-}
-
 #ifdef WITH_OBSERVE
 static int observe_notify(anjay_t *anjay,
                           anjay_ssid_t origin_ssid,
@@ -48,14 +42,16 @@ static int observe_notify(anjay_t *anjay,
         if (it->instance_set_changes.instance_set_changed) {
             observe_key.iid = ANJAY_IID_INVALID;
             observe_key.rid = ANJAY_RID_EMPTY;
-            update_ret(&ret, _anjay_observe_notify(anjay, &observe_key, true));
+            _anjay_update_ret(&ret,
+                              _anjay_observe_notify(anjay, &observe_key, true));
         } else {
             AVS_LIST(anjay_notify_queue_resource_entry_t) it2;
             AVS_LIST_FOREACH(it2, it->resources_changed) {
                 observe_key.iid = it2->iid;
                 observe_key.rid = it2->rid;
-                update_ret(&ret,
-                           _anjay_observe_notify(anjay, &observe_key, true));
+                _anjay_update_ret(&ret,
+                                  _anjay_observe_notify(anjay, &observe_key,
+                                                        true));
             }
         }
     }
@@ -75,12 +71,13 @@ static int security_modified_notify(
     AVS_LIST(anjay_notify_queue_resource_entry_t) it;
     AVS_LIST_FOREACH(it, security->resources_changed) {
         if (it->iid != last_iid) {
-            update_ret(&ret, _anjay_schedule_socket_update(anjay, it->iid));
+            _anjay_update_ret(&ret,
+                              _anjay_schedule_socket_update(anjay, it->iid));
             last_iid = it->iid;
         }
     }
     if (security->instance_set_changes.instance_set_changed) {
-        update_ret(&ret, _anjay_schedule_reload_sockets(anjay));
+        _anjay_update_ret(&ret, _anjay_schedule_reload_sockets(anjay));
     }
     return ret;
 }
@@ -99,12 +96,12 @@ static int server_modified_notify(anjay_t *anjay,
         int64_t ssid;
         if (_anjay_dm_res_read_i64(anjay, &path, &ssid)
                 || ssid <= 0 || ssid >= UINT16_MAX) {
-            update_ret(&ret, -1);
+            _anjay_update_ret(&ret, -1);
         } else if (_anjay_servers_find_active(&anjay->servers,
                                               (anjay_ssid_t) ssid)) {
-            update_ret(&ret,
-                       anjay_schedule_registration_update(anjay,
-                                                          (anjay_ssid_t) ssid));
+            _anjay_update_ret(&ret,
+                              anjay_schedule_registration_update(
+                                      anjay, (anjay_ssid_t) ssid));
         }
     }
     return ret;
@@ -123,17 +120,18 @@ int _anjay_notify_perform(anjay_t *anjay,
         if (it->oid > 1) {
             break;
         } else if (it->oid == ANJAY_DM_OID_SECURITY) {
-            update_ret(&ret, security_modified_notify(anjay, it));
+            _anjay_update_ret(&ret, security_modified_notify(anjay, it));
         } else if (it->oid == ANJAY_DM_OID_SERVER) {
-            update_ret(&ret, server_modified_notify(anjay, it));
+            _anjay_update_ret(&ret, server_modified_notify(anjay, it));
         }
     }
-    update_ret(&ret, observe_notify(anjay, origin_ssid, queue));
+    _anjay_update_ret(&ret, observe_notify(anjay, origin_ssid, queue));
     AVS_LIST(anjay_dm_installed_module_t) module;
     AVS_LIST_FOREACH(module, anjay->dm.modules) {
         if (module->def->notify_callback) {
-            update_ret(&ret, module->def->notify_callback(
-                                     anjay, origin_ssid, queue, module->arg));
+            _anjay_update_ret(&ret,
+                              module->def->notify_callback(anjay, origin_ssid,
+                                                           queue, module->arg));
         }
     }
     return ret;

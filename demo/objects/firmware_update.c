@@ -39,8 +39,6 @@
 #define FW_RES_UPDATE_PROTOCOL_SUPPORT  8
 #define FW_RES_UPDATE_DELIVERY_METHOD   9
 
-#define FW_RES_BOUND_ 10
-
 typedef enum {
     UPDATE_STATE_IDLE = 0,
     UPDATE_STATE_DOWNLOADING,
@@ -557,7 +555,8 @@ error:
 static int write_firmware_to_file(anjay_t *anjay,
                                   fw_repr_t *fw,
                                   FILE *f,
-                                  anjay_input_ctx_t *ctx) {
+                                  anjay_input_ctx_t *ctx,
+                                  size_t *out_bytes_read) {
     int result = 0;
     size_t written = 0;
     bool finished = false;
@@ -582,7 +581,7 @@ static int write_firmware_to_file(anjay_t *anjay,
         }
         written += bytes_read;
     }
-
+    *out_bytes_read = written;
     demo_log(INFO, "write finished, %lu B written", (unsigned long)written);
     return 0;
 }
@@ -602,7 +601,8 @@ static int expect_no_firmware_content(anjay_input_ctx_t *ctx) {
 
 static int write_firmware(anjay_t *anjay,
                           fw_repr_t *fw,
-                          anjay_input_ctx_t *ctx) {
+                          anjay_input_ctx_t *ctx,
+                          size_t *out_bytes_read) {
     if (fw->state == UPDATE_STATE_DOWNLOADING) {
         demo_log(ERROR,
                  "cannot set Package resource while downloading");
@@ -621,7 +621,7 @@ static int write_firmware(anjay_t *anjay,
         return -1;
     }
 
-    int result = write_firmware_to_file(anjay, fw, f, ctx);
+    int result = write_firmware_to_file(anjay, fw, f, ctx, out_bytes_read);
     fclose(f);
     return result;
 }
@@ -644,32 +644,41 @@ static int fw_write(anjay_t *anjay,
                     reset(anjay, fw);
                 }
             } else {
-                result = write_firmware(anjay, fw, ctx);
+                size_t bytes_read = 0;
+                result = write_firmware(anjay, fw, ctx, &bytes_read);
                 if (result
+                        || !bytes_read
                         || unpack_firmware_in_place(fw)
                         || validate_firmware(anjay, fw)) {
                     // unpack_firmware_in_place/validate_firmware result
                     // deliberately not propagated up: write itself succeeded
                     maybe_delete_firmware_file(fw);
+                    if (!result && !bytes_read) {
+                        // It was an empty message, reset.
+                        reset(anjay, fw);
+                    }
                 }
-                return result;
             }
             return result;
         }
     case FW_RES_PACKAGE_URI:
         {
+            if (fw->state == UPDATE_STATE_DOWNLOADING) {
+                demo_log(ERROR,
+                         "cannot set Package Uri resource while downloading");
+                return ANJAY_ERR_METHOD_NOT_ALLOWED;
+            }
+
             char buffer[sizeof(fw->package_uri)];
             if (anjay_get_string(ctx, buffer, sizeof(buffer)) < 0) {
                 return ANJAY_ERR_INTERNAL;
             }
 
-            if (fw->state == UPDATE_STATE_DOWNLOADED) {
-                if (strlen(buffer) == 0) {
-                    reset(anjay, fw);
-                    return 0;
-                } else {
-                    return ANJAY_ERR_BAD_REQUEST;
-                }
+            if (strlen(buffer) == 0) {
+                reset(anjay, fw);
+                return 0;
+            } else if (fw->state != UPDATE_STATE_IDLE) {
+                return ANJAY_ERR_BAD_REQUEST;
             }
 
             if (!is_supported_protocol(buffer)) {
@@ -790,12 +799,20 @@ static int fw_execute(anjay_t *anjay,
 
 static const anjay_dm_object_def_t FIRMWARE_UPDATE = {
     .oid = DEMO_OID_FIRMWARE_UPDATE,
-    .rid_bound = FW_RES_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            FW_RES_PACKAGE,
+            FW_RES_PACKAGE_URI,
+            FW_RES_UPDATE,
+            FW_RES_STATE,
+            FW_RES_UPDATE_RESULT,
+            FW_RES_PKG_NAME,
+            FW_RES_PKG_VERSION,
+            FW_RES_UPDATE_PROTOCOL_SUPPORT,
+            FW_RES_UPDATE_DELIVERY_METHOD),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
         .resource_present = anjay_dm_resource_present_TRUE,
-        .resource_supported = anjay_dm_resource_supported_TRUE,
         .resource_read = fw_read,
         .resource_write = fw_write,
         .resource_execute = fw_execute,

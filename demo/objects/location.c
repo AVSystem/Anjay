@@ -28,7 +28,6 @@
 #define LOCATION_VELOCITY    4
 #define LOCATION_TIMESTAMP   5
 #define LOCATION_SPEED       6
-#define LOCATION_RID_BOUND_  7
 
 typedef struct {
     double value_mps;
@@ -52,33 +51,6 @@ get_location(const anjay_dm_object_def_t *const *obj_ptr) {
         return NULL;
     }
     return container_of(obj_ptr, location_t, def);
-}
-
-static int location_resource_supported(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       anjay_rid_t rid) {
-    (void) anjay;
-    (void) obj_ptr;
-
-    switch (rid) {
-    case LOCATION_LATITUDE:
-    case LOCATION_LONGITUDE:
-    case LOCATION_ALTITUDE:
-    case LOCATION_RADIUS:
-    case LOCATION_VELOCITY:
-    case LOCATION_TIMESTAMP:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static int location_resource_present(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_iid_t iid,
-                                     anjay_rid_t rid) {
-    (void) iid;
-    return location_resource_supported(anjay, obj_ptr, rid);
 }
 
 static int ret_velocity(anjay_output_ctx_t *ctx, const velocity_t *velocity) {
@@ -311,12 +283,17 @@ static bool update_location(location_t *location) {
 
 static const anjay_dm_object_def_t LOCATION = {
     .oid = DEMO_OID_LOCATION,
-    .rid_bound = LOCATION_RID_BOUND_,
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
+            LOCATION_LATITUDE,
+            LOCATION_LONGITUDE,
+            LOCATION_ALTITUDE,
+            LOCATION_RADIUS,
+            LOCATION_VELOCITY,
+            LOCATION_TIMESTAMP),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = location_resource_present,
-        .resource_supported = location_resource_supported,
+        .resource_present = anjay_dm_resource_present_TRUE,
         .resource_read = location_resource_read
     }
 };

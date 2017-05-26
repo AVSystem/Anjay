@@ -29,22 +29,35 @@ VISIBILITY_SOURCE_BEGIN
 #define persistence_log(level, ...) \
     _anjay_log(security_persistence, level, __VA_ARGS__)
 
-static const char MAGIC[] = { 'S', 'E', 'C', '\0' };
+static const char MAGIC_V0[] = { 'S', 'E', 'C', '\0' };
+static const char MAGIC_V1[] = { 'S', 'E', 'C', '\1' };
 
-static int handle_sized_fields(anjay_persistence_context_t *ctx,
-                               sec_instance_t *element) {
+static int handle_sized_v0_fields(anjay_persistence_context_t *ctx,
+                                  sec_instance_t *element) {
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &element->iid))
             || (retval = anjay_persistence_bool(ctx,
                                                 &element->has_is_bootstrap))
             || (retval = anjay_persistence_bool(ctx,
-                                                &element->has_security_mode))
+                                                &element->has_udp_security_mode))
             || (retval = anjay_persistence_bool(ctx, &element->has_ssid))
             || (retval = anjay_persistence_bool(ctx,
                                                 &element->is_bootstrap))
             || (retval = anjay_persistence_u16(ctx, &element->ssid))
             || (retval = anjay_persistence_u32(ctx, (uint32_t *) &element->holdoff_s))
             || (retval = anjay_persistence_u32(ctx, (uint32_t *) &element->bs_timeout_s)));
+    return retval;
+}
+
+static int handle_sized_v1_fields(anjay_persistence_context_t *ctx,
+                                  sec_instance_t *element) {
+    int retval;
+    (void) ((retval = anjay_persistence_bool(ctx,
+                                             &element->has_sms_security_mode))
+            || (retval = anjay_persistence_bool(ctx,
+                                                &element->has_sms_key_params))
+            || (retval = anjay_persistence_bool(ctx,
+                                                &element->has_sms_secret_key)));
     return retval;
 }
 
@@ -66,12 +79,12 @@ static int restore_raw_buffer(anjay_persistence_context_t *ctx,
     if (retval) {
         return retval;
     }
-    if (size == 0) {
-        return 0;
-    }
     assert(!buffer->data);
     assert(!buffer->size);
     assert(!buffer->capacity);
+    if (size == 0) {
+        return 0;
+    }
     buffer->data = malloc(size);
     if (!buffer->data) {
         persistence_log(ERROR, "Cannot allocate %u bytes", size);
@@ -88,8 +101,7 @@ static int restore_raw_buffer(anjay_persistence_context_t *ctx,
 
 static int store_string(anjay_persistence_context_t *ctx,
                         const char *str) {
-    assert(str);
-    const size_t size = strlen(str) + 1;
+    const size_t size = str ? (strlen(str) + 1) : 0;
     const anjay_raw_buffer_t buffer = {
         .data = (void *) (intptr_t) str,
         .size = size,
@@ -106,7 +118,7 @@ static int restore_string(anjay_persistence_context_t *ctx,
         return retval;
     }
     const char *str = (char *) buffer.data;
-    if (buffer.size == 0 || str[buffer.size-1] != '\0') {
+    if (buffer.size > 0 && str[buffer.size-1] != '\0') {
         persistence_log(ERROR, "Invalid string");
         _anjay_raw_buffer_clear(&buffer);
         return -1;
@@ -118,41 +130,60 @@ static int restore_string(anjay_persistence_context_t *ctx,
 static int store_instance(anjay_persistence_context_t *ctx, void *element_) {
     sec_instance_t *element = (sec_instance_t *) element_;
     int retval = 0;
-    uint16_t security_mode = (uint16_t) element->security_mode;
-    (void) ((retval = handle_sized_fields(ctx, element))
-                || (retval = anjay_persistence_u16(ctx, &security_mode))
+    uint16_t udp_security_mode = (uint16_t) element->udp_security_mode;
+    uint16_t sms_security_mode = (uint16_t) element->sms_security_mode;
+    (void) ((retval = handle_sized_v0_fields(ctx, element))
+                || (retval = anjay_persistence_u16(ctx, &udp_security_mode))
                 || (retval = store_string(ctx, element->server_uri))
                 || (retval = store_raw_buffer(
                         ctx, &element->public_cert_or_psk_identity))
                 || (retval = store_raw_buffer(
                         ctx, &element->private_cert_or_psk_key))
                 || (retval = store_raw_buffer(
-                        ctx, &element->server_public_key)));
+                        ctx, &element->server_public_key))
+                || (retval = handle_sized_v1_fields(ctx, element))
+                || (retval = anjay_persistence_u16(ctx, &sms_security_mode))
+                || (retval = store_raw_buffer(ctx, &element->sms_key_params))
+                || (retval = store_raw_buffer(ctx, &element->sms_secret_key))
+                || (retval = store_string(ctx, element->sms_number)));
     return retval;
 }
 
-static int restore_instance(anjay_persistence_context_t *ctx, void *element_) {
-    sec_instance_t *element = (sec_instance_t *) element_;
+static int restore_instance(anjay_persistence_context_t *ctx,
+                            sec_instance_t *element,
+                            int stream_version) {
     int retval = 0;
-    uint16_t security_mode;
-    (void) ((retval = handle_sized_fields(ctx, element))
-                || (retval = anjay_persistence_u16(ctx, &security_mode))
-                || (retval = restore_string(ctx, &element->server_uri))
-                || (retval = restore_raw_buffer(
-                        ctx, &element->public_cert_or_psk_identity))
-                || (retval = restore_raw_buffer(
-                        ctx, &element->private_cert_or_psk_key))
-                || (retval = restore_raw_buffer(
-                        ctx, &element->server_public_key)));
-    if (retval) {
+    uint16_t udp_security_mode;
+    if ((retval = handle_sized_v0_fields(ctx, element))
+            || (retval = anjay_persistence_u16(ctx, &udp_security_mode))
+            || (retval = restore_string(ctx, &element->server_uri))
+            || (retval = restore_raw_buffer(
+                    ctx, &element->public_cert_or_psk_identity))
+            || (retval = restore_raw_buffer(ctx,
+                                            &element->private_cert_or_psk_key))
+            || (retval = restore_raw_buffer(ctx,
+                                            &element->server_public_key))) {
         return retval;
     }
-    element->security_mode = (anjay_udp_security_mode_t) security_mode;
+    element->udp_security_mode = (anjay_udp_security_mode_t) udp_security_mode;
+    if (stream_version >= 1) {
+        uint16_t sms_security_mode;
+        if ((retval = handle_sized_v1_fields(ctx, element))
+                || (retval = anjay_persistence_u16(ctx, &sms_security_mode))
+                || (retval = restore_raw_buffer(ctx, &element->sms_key_params))
+                || (retval = restore_raw_buffer(ctx, &element->sms_secret_key))
+                || (retval = restore_string(ctx, &element->sms_number))) {
+            return retval;
+        }
+        element->sms_security_mode =
+                (anjay_sms_security_mode_t) sms_security_mode;
+    }
     return 0;
 }
 
 static int restore_instances(anjay_persistence_context_t *ctx,
-                             AVS_LIST(sec_instance_t) *instances) {
+                             AVS_LIST(sec_instance_t) *instances,
+                             int stream_version) {
     uint32_t count;
     int retval = anjay_persistence_u32(ctx, &count);
     if (retval || count > UINT16_MAX) {
@@ -166,7 +197,7 @@ static int restore_instances(anjay_persistence_context_t *ctx,
             persistence_log(ERROR, "Out of memory");
             return -1;
         }
-        if ((retval = restore_instance(ctx, *tail))) {
+        if ((retval = restore_instance(ctx, *tail, stream_version))) {
             return retval;
         }
         tail = AVS_LIST_NEXT_PTR(tail);
@@ -180,7 +211,7 @@ int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
     if (!repr) {
         return -1;
     }
-    int retval = avs_stream_write(out_stream, MAGIC, sizeof(MAGIC));
+    int retval = avs_stream_write(out_stream, MAGIC_V1, sizeof(MAGIC_V1));
     if (retval) {
         return retval;
     }
@@ -204,7 +235,8 @@ int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
     }
     sec_repr_t backup = *repr;
 
-    char magic_header[sizeof(MAGIC)];
+    AVS_STATIC_ASSERT(sizeof(MAGIC_V0) == sizeof(MAGIC_V1), magic_size);
+    char magic_header[sizeof(MAGIC_V1)];
     int retval = avs_stream_read_reliably(in_stream, magic_header,
                                           sizeof(magic_header));
     if (retval) {
@@ -212,7 +244,12 @@ int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
         return retval;
     }
 
-    if (memcmp(magic_header, MAGIC, sizeof(MAGIC))) {
+    int version;
+    if (!memcmp(magic_header, MAGIC_V0, sizeof(MAGIC_V0))) {
+        version = 0;
+    } else if (!memcmp(magic_header, MAGIC_V1, sizeof(MAGIC_V1))) {
+        version = 1;
+    } else {
         persistence_log(ERROR, "Header magic constant mismatch");
         return -1;
     }
@@ -223,7 +260,7 @@ int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
         return -1;
     }
     repr->instances = NULL;
-    retval = restore_instances(restore_ctx, &repr->instances);
+    retval = restore_instances(restore_ctx, &repr->instances, version);
     if (retval || (retval = _anjay_sec_object_validate(repr))) {
         _anjay_sec_destroy_instances(&repr->instances);
         repr->instances = backup.instances;

@@ -35,14 +35,6 @@
 VISIBILITY_SOURCE_BEGIN
 
 static void cancel_client_initiated_bootstrap(anjay_t *anjay) {
-    /* Client-Initiated Bootstrap is normally scheduled at most once during the
-     * entire lifetime of the client process.
-     *
-     * This function is called if bootstrap information is obtained in any way:
-     * when some Bootstrap command is received or after successful registration.
-     * That's why we're marking Client-Initiated Bootstrap as not allowed even
-     * though it may have not even been attempted. */
-    anjay->bootstrap.client_initiated_bootstrap_allowed = false;
     _anjay_sched_del(anjay->sched,
                      &anjay->bootstrap.client_initiated_bootstrap_handle);
 }
@@ -130,11 +122,10 @@ static int write_resource(anjay_t *anjay,
                           anjay_input_ctx_t *in_ctx,
                           void *rid_) {
     anjay_rid_t rid = (anjay_rid_t) (uintptr_t) rid_;
-    int result = _anjay_dm_map_present_result(
-            _anjay_dm_resource_supported(anjay, obj, rid, NULL));
-    if (!result) {
-        result = _anjay_dm_resource_write(anjay, obj, iid, rid, in_ctx, NULL);
+    if (!_anjay_dm_resource_supported(obj, rid)) {
+        return ANJAY_ERR_NOT_FOUND;
     }
+    int result = _anjay_dm_resource_write(anjay, obj, iid, rid, in_ctx, NULL);
     if (!result) {
         result = _anjay_notify_queue_resource_change(
                 &anjay->bootstrap.notification_queue, (*obj)->oid, iid, rid);
@@ -613,8 +604,8 @@ static int send_request_bootstrap(avs_stream_abstract_t *stream,
         .msg_code = ANJAY_COAP_CODE_POST,
         .format = ANJAY_COAP_FORMAT_NONE,
         .uri_path = _anjay_make_string_list("bs", NULL),
-        .uri_query = _anjay_make_query_string_list(NULL, endpoint_name,
-                                                   NULL, ANJAY_BINDING_NONE)
+        .uri_query = _anjay_make_query_string_list(NULL, endpoint_name, NULL,
+                                                   ANJAY_BINDING_NONE, NULL)
     };
 
     int result = -1;
@@ -654,13 +645,16 @@ static int schedule_request_bootstrap(anjay_t *anjay, time_t holdoff_s) {
         anjay_log(ERROR, "Could not schedule Client Initiated Bootstrap");
         return -1;
     }
-    anjay->bootstrap.client_initiated_bootstrap_allowed = false;
     start_bootstrap_if_not_already_started(anjay);
     return 0;
 }
 
 static int request_bootstrap(anjay_t *anjay, void *dummy) {
-    assert(!_anjay_servers_is_connected_to_non_bootstrap(&anjay->servers));
+    if (_anjay_servers_is_connected_to_non_bootstrap(&anjay->servers)) {
+        anjay_log(DEBUG,
+                  "Client Initiated Bootstrap not applicable, not performing");
+        return 0;
+    }
 
     anjay_log(TRACE, "sending Client Initiated Bootstrap");
 
@@ -696,9 +690,7 @@ static int request_bootstrap(anjay_t *anjay, void *dummy) {
 
 int _anjay_bootstrap_account_prepare(anjay_t *anjay) {
     // schedule Client Initiated Bootstrap if not attempted already
-    if (!anjay->bootstrap.client_initiated_bootstrap_allowed
-            || anjay->bootstrap.client_initiated_bootstrap_handle) {
-        // Client Initiated Bootstrap is never scheduled more than once
+    if (anjay->bootstrap.client_initiated_bootstrap_handle) {
         return 0;
     }
 
@@ -731,10 +723,6 @@ int _anjay_bootstrap_update_reconnected(anjay_t *anjay) {
         return schedule_request_bootstrap(anjay, 0);
     }
     return 0;
-}
-
-void _anjay_bootstrap_init(anjay_t *anjay) {
-    anjay->bootstrap.client_initiated_bootstrap_allowed = true;
 }
 
 void _anjay_bootstrap_cleanup(anjay_t *anjay) {

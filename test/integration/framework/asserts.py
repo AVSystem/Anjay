@@ -69,8 +69,9 @@ class Lwm2mAsserts:
         Convenience assert that checks if ACTUAL Lwm2mMsg object matches
         EXPECTED one.
 
-        The EXPECTED may have its MSG_ID, TOKEN, OPTIONS or CONTENT fields set
-        to lwm2m.messages.ANY, in which case the value will not be checked.
+        ACTUAL and EXPECTED may have their MSG_ID, TOKEN, OPTIONS or CONTENT
+        fields set to lwm2m.messages.ANY, in which case the value will not
+        be checked.
         """
         msg_prefix = msg + ': ' if msg else ''
 
@@ -82,16 +83,16 @@ class Lwm2mAsserts:
             self.assertEqual(expected.code, actual.code,
                              msg_prefix + 'unexpected CoAP code')
 
-            if expected.msg_id is not ANY:
+            if expected.msg_id is not ANY and actual.msg_id is not ANY:
                 self.assertEqual(expected.msg_id, actual.msg_id,
                                  msg_prefix + 'unexpected CoAP message ID')
-            if expected.token is not ANY:
+            if expected.token is not ANY and actual.token is not ANY:
                 self.assertEqual(expected.token, actual.token,
                                  msg_prefix + 'unexpected CoAP token')
-            if expected.options is not ANY:
+            if expected.options is not ANY and actual.options is not ANY:
                 self.assertEqual(expected.options, actual.options,
                                  msg_prefix + 'unexpected CoAP option list')
-            if expected.content is not ANY:
+            if expected.content is not ANY and actual.content is not ANY:
                 self.assertEqual(expected.content, actual.content,
                                  msg_prefix + 'unexpected CoAP content')
         except AssertionError as e:

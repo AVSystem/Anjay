@@ -29,6 +29,7 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef enum {
+    ANJAY_ID_OID,
     ANJAY_ID_IID,
     ANJAY_ID_RID,
     ANJAY_ID_RIID
@@ -53,10 +54,22 @@ int _anjay_handle_requested_format(uint16_t *out_ptr,
  * called, making it impossible to determine actual resource format */
 #define ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED   (-0xCE2)
 
+typedef struct {
+    bool has_oid;
+    anjay_oid_t oid;
+
+    bool has_iid;
+    anjay_iid_t iid;
+
+    bool has_rid;
+    anjay_rid_t rid;
+} anjay_uri_path_t;
+
 anjay_output_ctx_t *
 _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
                              int *errno_ptr,
-                             anjay_msg_details_t *details_template);
+                             anjay_msg_details_t *details_template,
+                             const anjay_uri_path_t *uri);
 
 anjay_output_ctx_t *
 _anjay_output_opaque_create(avs_stream_abstract_t *stream,
@@ -75,6 +88,14 @@ anjay_output_ctx_t *
 _anjay_output_tlv_create(avs_stream_abstract_t *stream,
                          int *errno_ptr,
                          anjay_msg_details_t *inout_details);
+
+#ifdef WITH_JSON
+anjay_output_ctx_t *
+_anjay_output_json_create(avs_stream_abstract_t *stream,
+                          int *errno_ptr,
+                          anjay_msg_details_t *inout_details,
+                          const anjay_uri_path_t *uri);
+#endif
 
 int *_anjay_output_ctx_errno_ptr(anjay_output_ctx_t *ctx);
 anjay_output_ctx_t * _anjay_output_object_start(anjay_output_ctx_t *ctx);
