@@ -564,24 +564,11 @@ AVS_UNIT_TEST(notify, min_period) {
     DM_TEST_FINISH;
 }
 
-AVS_UNIT_TEST(notify, range) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 0,
-            .max_period = 365 * 24 * 60 * 60 // a year
-        },
-        .greater_than = 69.0,
-        .less_than = 777.0,
-        .step = ANJAY_ATTRIB_VALUE_NONE
-    };
-    static const anjay_coap_msg_identity_t identity = {
-        .msg_id = 0,
-        .token_size = 0
-    };
-
+AVS_UNIT_TEST(notify, confirmable) {
     ////// INITIALIZATION //////
-    DM_TEST_INIT_WITH_SSIDS(14);
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    DM_TEST_INIT_GENERIC((DM_TEST_DEFAULT_OBJECTS), (14),
+                         (.confirmable_notifications = true));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_observe_put_entry(
             anjay, &(const anjay_observe_key_t) {
                 { 14, ANJAY_CONNECTION_UDP }, 42, 69, 4, ANJAY_COAP_FORMAT_NONE
@@ -590,71 +577,36 @@ AVS_UNIT_TEST(notify, range) {
                 .msg_code = ANJAY_COAP_CODE_CONTENT,
                 .format = ANJAY_COAP_FORMAT_PLAINTEXT,
                 .observe_serial = true
-            }, &identity, 514.0, "514", 3));
-    _anjay_mock_dm_expect_clean();
+            }, &(anjay_coap_msg_identity_t) {}, 514.0, "514", 3));
     assert_observe_size(anjay, 1);
 
-    ////// LESS //////
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    ////// EMPTY SCHEDULER RUN //////
+    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+
+    ////// CONFIRMABLE NOTIFICATION //////
+    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
-    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 42.42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    assert_observe_size(anjay, 1);
-    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
-
-    ////// NON-NUMERIC VALUE //////
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
-    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_STRING(0, "Surprise!"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 42));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     static const char NOTIFY_RESPONSE[] =
-            "\x50\x45\x69\xED" // CoAP header
-            "\x63\xF4\x00\x00" // Observe option
+            "\x40\x45\x69\xED" // CoAP header
+            "\x63\xF9\x00\x00" // Observe option
             "\x60" // Content-Format
-            "\xFF" "Surprise!";
+            "\xFF" "42";
     avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
                                     sizeof(NOTIFY_RESPONSE) - 1);
+    static const char NOTIFY_ACK[] =
+            "\x60\x00\x69\xED";
+    avs_unit_mocksock_input(mocksocks[0], NOTIFY_ACK, sizeof(NOTIFY_ACK) - 1);
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    assert_observe_size(anjay, 1);
-    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
-
-    ////// GREATER //////
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
-    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 918));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    assert_observe_size(anjay, 1);
-    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
-
-    ////// IN RANGE //////
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
-    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 667));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    static const char NOTIFY_RESPONSE2[] =
-            "\x50\x45\x69\xEE" // CoAP header
-            "\x63\xF4\x00\x00" // Observe option
-            "\x60" // Content-Format
-            "\xFF" "667";
-    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE2,
-                                    sizeof(NOTIFY_RESPONSE2) - 1);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    assert_observe_size(anjay, 1);
-    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
 
     DM_TEST_FINISH;
 }
@@ -709,6 +661,17 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
 
+    ////// EVEN LESS //////
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 14.7));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
+
     ////// IN RANGE //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
@@ -736,6 +699,37 @@ AVS_UNIT_TEST(notify, extremes) {
             "\xFF" "1024";
     avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE2,
                                     sizeof(NOTIFY_RESPONSE2) - 1);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
+
+    ////// STILL GREATER //////
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 999));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
+
+    ////// LESS AGAIN //////
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, -69.75));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    static const char NOTIFY_RESPONSE3[] =
+            "\x50\x45\x69\xEF" // CoAP header
+            "\x63\xF4\x00\x00" // Observe option
+            "\x60" // Content-Format
+            "\xFF" "-69.75";
+    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE3,
+                                    sizeof(NOTIFY_RESPONSE3) - 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     assert_observe_size(anjay, 1);
     AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
@@ -793,6 +787,17 @@ AVS_UNIT_TEST(notify, greater_only) {
     assert_observe_size(anjay, 1);
     AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
 
+    ////// EVEN GREATER //////
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 9999));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
+
     ////// LESS //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
@@ -800,6 +805,26 @@ AVS_UNIT_TEST(notify, greater_only) {
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 42));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
+
+    ////// GREATER AGAIN //////
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 77));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    static const char NOTIFY_RESPONSE2[] =
+            "\x50\x45\x69\xEE" // CoAP header
+            "\x63\xF4\x00\x00" // Observe option
+            "\x60" // Content-Format
+            "\xFF" "77";
+    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE2,
+                                    sizeof(NOTIFY_RESPONSE2) - 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     assert_observe_size(anjay, 1);
     AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
@@ -857,13 +882,44 @@ AVS_UNIT_TEST(notify, less_only) {
     assert_observe_size(anjay, 1);
     AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
 
-    ////// LESS //////
+    ////// STILL LESS //////
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 514));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
+
+    ////// GREATER //////
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 9001));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    assert_observe_size(anjay, 1);
+    AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
+
+    ////// LESS AGAIN //////
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
+    expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_INT(0, 69));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
+    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
+    static const char NOTIFY_RESPONSE2[] =
+            "\x50\x45\x69\xEE" // CoAP header
+            "\x63\xF4\x00\x00" // Observe option
+            "\x60" // Content-Format
+            "\xFF" "69";
+    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE2,
+                                    sizeof(NOTIFY_RESPONSE2) - 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     assert_observe_size(anjay, 1);
     AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
@@ -1241,7 +1297,7 @@ static void test_observe_entry(anjay_t *anjay,
 
 static anjay_t *create_test_env(void) {
     anjay_t *anjay = (anjay_t *) calloc(1, sizeof(anjay_t));
-    _anjay_observe_init(anjay);
+    _anjay_observe_init(anjay, false);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 1);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 2);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 9, 4);

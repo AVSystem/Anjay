@@ -15,7 +15,7 @@
  */
 
 #ifndef ANJAY_TEST_MOCK_CLOCK_H
-#define	ANJAY_TEST_MOCK_CLOCK_H
+#define ANJAY_TEST_MOCK_CLOCK_H
 
 #include <time.h>
 
@@ -23,4 +23,4 @@ void _anjay_mock_clock_start(const struct timespec *t);
 void _anjay_mock_clock_advance(const struct timespec *t);
 void _anjay_mock_clock_finish(void);
 
-#endif	/* ANJAY_TEST_MOCK_CLOCK_H */
+#endif /* ANJAY_TEST_MOCK_CLOCK_H */

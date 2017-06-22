@@ -82,17 +82,6 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
                                           sizeof(anjay_request_attributes_t)); \
     } while (0)
 
-#define TEST_PARSE_ATTRIBUTE_IGNORE(Key, Value) \
-    do { \
-        anjay_request_attributes_t attrs; \
-        memset(&attrs, 0, sizeof(attrs)); \
-        AVS_UNIT_ASSERT_SUCCESS(parse_attribute(&attrs, (Key), (Value))); \
-        anjay_request_attributes_t expected; \
-        memset(&expected, 0, sizeof(expected)); \
-        AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &expected, \
-                                          sizeof(anjay_request_attributes_t)); \
-    } while (0)
-
 #define TEST_PARSE_ATTRIBUTE_FAIL(Key, Value) \
     do { \
         anjay_request_attributes_t attrs; \
@@ -140,9 +129,9 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
     TEST_PARSE_ATTRIBUTE_FAIL("st", "moo");
     TEST_PARSE_ATTRIBUTE_FAIL("st", "");
 
-    TEST_PARSE_ATTRIBUTE_IGNORE("unknown", "wa-pa-pa-pa-pa-pa-pow");
-    TEST_PARSE_ATTRIBUTE_IGNORE("unknown", NULL);
-    TEST_PARSE_ATTRIBUTE_IGNORE("unknown", "");
+    TEST_PARSE_ATTRIBUTE_FAIL("unknown", "wa-pa-pa-pa-pa-pa-pow");
+    TEST_PARSE_ATTRIBUTE_FAIL("unknown", NULL);
+    TEST_PARSE_ATTRIBUTE_FAIL("unknown", "");
 }
 
 #undef TEST_PARSE_ATTRIBUTE_SUCCESS
@@ -205,31 +194,28 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
 
+    // duplicate options
+    mock.next_opt_value_string = &(const char*[]){ "pmin=10", "pmin=20", NULL }[0];
+    AVS_UNIT_ASSERT_FAILED(parse_attributes(stream, &attrs));
+
+    mock.next_opt_value_string = &(const char*[]){ "lt=4", "lt=6", NULL }[0];
+    AVS_UNIT_ASSERT_FAILED(parse_attributes(stream, &attrs));
+
     // unrecognized query-string only
     mock.next_opt_value_string = &(const char*[]){ "WhatsTheMeaningOf=Stonehenge", NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &empty_attrs, sizeof(attrs));
+    AVS_UNIT_ASSERT_FAILED(parse_attributes(stream, &attrs));
 
     // unrecognized query-string first
     mock.next_opt_value_string = &(const char*[]){ "WhyDidTheyBuildThe=Stonehenge", "pmax=20", NULL }[0];
-    memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
-    expected_attrs.has_max_period = true;
-    expected_attrs.values.common.max_period = 20;
-    AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
-    ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
+    AVS_UNIT_ASSERT_FAILED(parse_attributes(stream, &attrs));
 
     // unrecognized query-string last
     mock.next_opt_value_string = &(const char*[]){ "gt=30.5", "AllICanThinkOfIsStonehenge", NULL }[0];
-    memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
-    expected_attrs.has_greater_than = true;
-    expected_attrs.values.greater_than = 30.5;
-    AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
-    ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
+    AVS_UNIT_ASSERT_FAILED(parse_attributes(stream, &attrs));
 
     // multiple unrecognized query-strings
     mock.next_opt_value_string = &(const char*[]){ "Stonehenge", "Stonehenge", "LotsOfStonesInARow", NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &empty_attrs, sizeof(attrs));
+    AVS_UNIT_ASSERT_FAILED(parse_attributes(stream, &attrs));
 
     // single query-string among multiple unrecognized ones
     mock.next_opt_value_string = &(const char*[]){
@@ -238,11 +224,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
         "ButAmazinglyThey", "GotThemAllDownInTheSand",
         NULL
     }[0];
-    memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
-    expected_attrs.has_less_than = true;
-    expected_attrs.values.less_than = 40.5;
-    AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
-    ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
+    AVS_UNIT_ASSERT_FAILED(parse_attributes(stream, &attrs));
 
     // invalid query-string value
     mock.next_opt_value_string = &(const char*[]){ "st=What'sTheDealWithStonehenge", NULL }[0];
@@ -262,103 +244,98 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
     avs_stream_abstract_t *stream = (avs_stream_abstract_t*)&mock;
 
     bool is_bs;
-    anjay_oid_t oid;
-    anjay_iid_t iid;
-    anjay_rid_t rid;
-    bool has_oid;
-    bool has_iid;
-    bool has_rid;
+    anjay_uri_path_t uri;
 
     mock.expected_option_number = ANJAY_COAP_OPT_URI_PATH;
 
     // OID only
     mock.next_opt_value_string = &(const char*[]){ "1", NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(has_oid);
-    AVS_UNIT_ASSERT_EQUAL(oid, 1);
-    AVS_UNIT_ASSERT_FALSE(has_iid);
-    AVS_UNIT_ASSERT_FALSE(has_rid);
+    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_EQUAL(uri.oid, 1);
+    AVS_UNIT_ASSERT_FALSE(uri.has_iid);
+    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
 
     // OID+IID
     mock.next_opt_value_string = &(const char*[]){ "2", "3", NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(has_oid);
-    AVS_UNIT_ASSERT_EQUAL(oid, 2);
-    AVS_UNIT_ASSERT_TRUE(has_iid);
-    AVS_UNIT_ASSERT_EQUAL(iid, 3);
-    AVS_UNIT_ASSERT_FALSE(has_rid);
+    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_EQUAL(uri.oid, 2);
+    AVS_UNIT_ASSERT_TRUE(uri.has_iid);
+    AVS_UNIT_ASSERT_EQUAL(uri.iid, 3);
+    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
 
     // OID+IID+RID
     mock.next_opt_value_string = &(const char*[]){ "4", "5", "6", NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(has_oid);
-    AVS_UNIT_ASSERT_EQUAL(oid, 4);
-    AVS_UNIT_ASSERT_TRUE(has_iid);
-    AVS_UNIT_ASSERT_EQUAL(iid, 5);
-    AVS_UNIT_ASSERT_TRUE(has_rid);
-    AVS_UNIT_ASSERT_EQUAL(rid, 6);
+    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_EQUAL(uri.oid, 4);
+    AVS_UNIT_ASSERT_TRUE(uri.has_iid);
+    AVS_UNIT_ASSERT_EQUAL(uri.iid, 5);
+    AVS_UNIT_ASSERT_TRUE(uri.has_rid);
+    AVS_UNIT_ASSERT_EQUAL(uri.rid, 6);
 
     // max valid OID/IID/RID
     mock.next_opt_value_string = &(const char*[]){ "65535", "65534", "65535", NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(has_oid);
-    AVS_UNIT_ASSERT_EQUAL(oid, 65535);
-    AVS_UNIT_ASSERT_TRUE(has_iid);
-    AVS_UNIT_ASSERT_EQUAL(iid, 65534);
-    AVS_UNIT_ASSERT_TRUE(has_rid);
-    AVS_UNIT_ASSERT_EQUAL(rid, 65535);
+    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_EQUAL(uri.oid, 65535);
+    AVS_UNIT_ASSERT_TRUE(uri.has_iid);
+    AVS_UNIT_ASSERT_EQUAL(uri.iid, 65534);
+    AVS_UNIT_ASSERT_TRUE(uri.has_rid);
+    AVS_UNIT_ASSERT_EQUAL(uri.rid, 65535);
 
     // Bootstrap URI
     mock.next_opt_value_string = &(const char*[]){ "bs", NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &uri));
     AVS_UNIT_ASSERT_TRUE(is_bs);
-    AVS_UNIT_ASSERT_FALSE(has_oid);
-    AVS_UNIT_ASSERT_FALSE(has_iid);
-    AVS_UNIT_ASSERT_FALSE(has_rid);
+    AVS_UNIT_ASSERT_FALSE(uri.has_oid);
+    AVS_UNIT_ASSERT_FALSE(uri.has_iid);
+    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
 
     // no Request-Uri
     mock.next_opt_value_string = &(const char*[]){ NULL }[0];
-    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(stream, &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_FALSE(has_oid);
-    AVS_UNIT_ASSERT_FALSE(has_iid);
-    AVS_UNIT_ASSERT_FALSE(has_rid);
+    AVS_UNIT_ASSERT_FALSE(uri.has_oid);
+    AVS_UNIT_ASSERT_FALSE(uri.has_iid);
+    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
 
     // prefix
     mock.next_opt_value_string = &(const char*[]){ "they're taking the hobbits", "to isengard", "7", "8", "9", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 
     // prefix that looks like OID + OID+IID+RID
     mock.next_opt_value_string = &(const char*[]){ "100", "10", "11", "12", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 
     // prefix that looks like OID/IID/RID + string + OID only
     mock.next_opt_value_string = &(const char*[]){ "100", "101", "102", "wololo", "13", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 
     // trailing non-numeric segment
     mock.next_opt_value_string = &(const char*[]){ "14", "NopeChuckTesta", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 
     // invalid OID
     mock.next_opt_value_string = &(const char*[]){ "65536", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 
     // invalid IID
     mock.next_opt_value_string = &(const char*[]){ "15", "65535", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 
     // invalid RID
     mock.next_opt_value_string = &(const char*[]){ "16", "17", "65536", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 
     // BS and something more
     mock.next_opt_value_string = &(const char*[]){ "bs", "1", "2", NULL }[0];
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &has_oid, &oid, &has_iid, &iid, &has_rid, &rid));
+    AVS_UNIT_ASSERT_FAILED(parse_request_uri(stream, &is_bs, &uri));
 }
 
 AVS_UNIT_TEST(parse_headers, parse_action) {
@@ -371,67 +348,59 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
     memset(&details, 0, sizeof(details));
     details.content_format = ANJAY_COAP_FORMAT_NONE;
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_GET;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_GET;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_READ);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_GET;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_GET;
     mock.next_opt_value_uint = ANJAY_COAP_FORMAT_APPLICATION_LINK;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_DISCOVER);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_POST;
-    details.has_iid = true;
-    details.has_rid = true;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_POST;
+    details.uri.has_iid = true;
+    details.uri.has_rid = true;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_EXECUTE);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_POST;
-    details.has_iid = false;
-    details.has_rid = false;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_POST;
+    details.uri.has_iid = false;
+    details.uri.has_rid = false;
     details.content_format = ANJAY_COAP_FORMAT_PLAINTEXT;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_CREATE);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_POST;
-    details.has_iid = true;
-    details.has_rid = false;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_POST;
+    details.uri.has_iid = true;
+    details.uri.has_rid = false;
     details.content_format = ANJAY_COAP_FORMAT_TLV;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_WRITE_UPDATE);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_PUT;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_PUT;
     details.content_format = ANJAY_COAP_FORMAT_NONE;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_WRITE_ATTRIBUTES);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_PUT;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_PUT;
     details.content_format = ANJAY_COAP_FORMAT_PLAINTEXT;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_WRITE);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_DELETE;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_DELETE;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(stream, &details));
-    AVS_UNIT_ASSERT_EQUAL(details.request_code, mock.msg_code);
     AVS_UNIT_ASSERT_EQUAL(details.action, ANJAY_ACTION_DELETE);
 
-    mock.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    mock.msg_code = ANJAY_COAP_CODE_NOT_FOUND;
+    details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+    details.request_code = ANJAY_COAP_CODE_NOT_FOUND;
     AVS_UNIT_ASSERT_FAILED(parse_action(stream, &details));
 }
 

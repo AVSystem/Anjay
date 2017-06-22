@@ -560,8 +560,8 @@ static int receive_next_block_with_timeout(coap_server_t *server,
      * That's a *really* big timeout, but CoAP BLOCK spec suggests that value
      * to be used as a timeout until cached state can be discarded.
      */
-    int32_t timeout_ms =
-            _anjay_coap_exchange_lifetime_ms(&in->transmission_params);
+    int32_t timeout_ms = _anjay_coap_exchange_lifetime_ms(
+            _anjay_coap_socket_get_tx_params(socket));
     while (timeout_ms > 0) {
         int recv_result = -1;
         int result = _anjay_coap_common_recv_msg_with_timeout(

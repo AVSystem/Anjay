@@ -225,6 +225,7 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
             goto exit;
 
         case ANJAY_COAP_SOCKET_ERR_MSG_MALFORMED:
+        case ANJAY_COAP_SOCKET_ERR_DUPLICATE:
         case 0:
             break;
         }

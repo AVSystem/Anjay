@@ -109,6 +109,11 @@ static int cm_resource_read(anjay_t *anjay,
     case CM_RES_LINK_UTILIZATION:
         return anjay_ret_i32(ctx, 50);
     case CM_RES_APN:
+        return (!(array = anjay_ret_array_start(ctx))
+                || anjay_ret_array_index(array, 0)
+                || anjay_ret_string(array, "internet")
+                || anjay_ret_array_finish(array))
+                ? -1 : 0;
         return anjay_ret_string(ctx, "");
     case CM_RES_CELL_ID:
         return anjay_ret_i32(ctx, 12345);

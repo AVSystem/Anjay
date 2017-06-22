@@ -26,8 +26,8 @@ TEST_OBJECT_RES_BYTES_BURST = 7
 
 
 class BlockResponseTest(test_suite.Lwm2mSingleServerTest):
-    def setUp(self, bytes_size=9001):
-        super(BlockResponseTest, self).setUp()
+    def setUp(self, bytes_size=9001, extra_cmdline_args=None):
+        super(BlockResponseTest, self).setUp(extra_cmdline_args=extra_cmdline_args)
         self.make_test_instance()
         self.set_bytes_size(1, bytes_size)
         self.set_bytes_burst(1, 1000)
@@ -221,8 +221,10 @@ class BlockResponseBadBlock1(BlockResponseTest):
         response = self.read_bytes(iid=1, seq_num=1, block_size=512,
                                    options_modifier=opts_modifier)
 
-        # should abort the transfer
-        self.assertEqual(response.code, coap.Code.RES_BAD_OPTION)
+        # should continue the transfer
+        self.assertEqual(response.code, coap.Code.RES_SERVICE_UNAVAILABLE)
+
+        self.read_blocks(iid=1, block_size=512)
 
 
 class BlockResponseBiggerBlockSizeThanData(BlockResponseTest):
@@ -248,6 +250,54 @@ class BlockResponseDifferentBursts(BlockResponseTest):
             response = self.read_bytes(iid=1)
             self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
             self.read_blocks(iid=1)
+
+class BlockResponseToNonBlockRequestRetransmission(BlockResponseTest):
+    def runTest(self):
+        # non-BLOCK request
+        req = Lwm2mRead(ResPath.Test[1].ResBytes)
+        self.serv.send(req)
+
+        # BLOCK response received
+        res = self.serv.recv(timeout_s=5)
+        self.assertIdentityMatches(res, req)
+
+        block_opts = res.get_options(coap.Option.BLOCK2)
+        self.assertNotEqual([], block_opts)
+
+        # retransmit non-BLOCK request
+        self.serv.send(req)
+
+        # should receive the same response as before
+        res2 = self.serv.recv(timeout_s=5)
+        self.assertMsgEqual(res, res2)
+
+        # should be able to continue the transfer
+        self.read_blocks(iid=1, block_size=block_opts[0].block_size(), base_seq=1)
+
+
+class BlockResponseUnrelatedRequestsDoNotAbortTransfer(BlockResponseTest):
+    def runTest(self):
+        # start BLOCK response transfer
+        response = self.read_bytes(iid=1, seq_num=None, block_size=None)
+        self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
+
+        # send unrelated request
+        req = Lwm2mRead(ResPath.Device.SerialNumber)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE),
+                            self.serv.recv())
+
+        # send another unrelated request
+        req = Lwm2mWrite(ResPath.FirmwareUpdate.Package, b'A' * 16,
+                         options=[coap.Option.BLOCK1(seq_num=0, block_size=16, has_more=False)],
+                         format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE),
+                            self.serv.recv())
+
+        # should be able to continue the transfer
+        block_opts = response.get_options(coap.Option.BLOCK2)
+        self.read_blocks(iid=1, block_size=block_opts[0].block_size(), base_seq=1)
 
 
 @unittest.skip("TODO: enable after fixing T1103")

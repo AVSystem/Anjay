@@ -85,11 +85,6 @@ const char *_anjay_coap_msg_code_to_string(uint8_t code,
     return buf;
 }
 
-bool _anjay_coap_msg_is_request(const anjay_coap_msg_t *msg) {
-    return _anjay_coap_msg_code_get_class(&msg->header.code) == 0
-            && _anjay_coap_msg_code_get_detail(&msg->header.code) > 0;
-}
-
 size_t _anjay_coap_msg_get_token(const anjay_coap_msg_t *msg,
                                  anjay_coap_token_t *out_token) {
     size_t token_length = _anjay_coap_msg_header_get_token_length(&msg->header);

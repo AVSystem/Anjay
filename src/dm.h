@@ -43,13 +43,6 @@ struct anjay_dm {
 
 void _anjay_dm_cleanup(anjay_t *anjay);
 
-const char *_anjay_res_path_string__(char *buffer,
-                                     size_t buffer_size,
-                                     const anjay_resource_path_t *path);
-
-#define ANJAY_RES_PATH_STRING(path) \
-        (_anjay_res_path_string__(&(char[32]){0}[0], 32, (path)))
-
 typedef struct {
     bool has_min_period;
     bool has_max_period;
@@ -68,14 +61,7 @@ typedef struct anjay_request_details {
 
     bool is_bs_uri;
 
-    bool has_oid;
-    anjay_oid_t oid;
-
-    bool has_iid;
-    anjay_iid_t iid;
-
-    bool has_rid;
-    anjay_rid_t rid;
+    anjay_uri_path_t uri;
 
     anjay_request_action_t action;
     uint16_t content_format;
@@ -89,13 +75,7 @@ typedef struct {
     anjay_ssid_t ssid;
     uint16_t request_msg_id;
 
-    anjay_oid_t oid;
-
-    bool has_iid;
-    anjay_iid_t iid;
-
-    bool has_rid;
-    anjay_rid_t rid;
+    anjay_uri_path_t uri;
 
     uint16_t requested_format;
     bool observe_serial;
@@ -104,35 +84,19 @@ typedef struct {
 typedef struct {
     anjay_ssid_t ssid;
 
-    bool has_oid;
-    anjay_oid_t oid;
-
-    bool has_iid;
-    anjay_iid_t iid;
-
-    bool has_rid;
-    anjay_rid_t rid;
+    anjay_uri_path_t uri;
 } anjay_dm_write_args_t;
 
 #define DETAILS_TO_DM_WRITE_ARGS(Details) \
         (const anjay_dm_write_args_t) { \
             .ssid = (Details)->ssid, \
-            .has_oid = (Details)->has_oid, \
-            .oid = (Details)->oid, \
-            .has_iid = (Details)->has_iid, \
-            .iid = (Details)->iid, \
-            .has_rid = (Details)->has_rid, \
-            .rid = (Details)->rid \
+            .uri = (Details)->uri \
         }
 
 #define DETAILS_TO_DM_READ_ARGS(Details) \
         (const anjay_dm_read_args_t) { \
             .ssid = (Details)->ssid, \
-            .oid = (Details)->oid, \
-            .has_iid = (Details)->has_iid, \
-            .iid = (Details)->iid, \
-            .has_rid = (Details)->has_rid, \
-            .rid = (Details)->rid, \
+            .uri = (Details)->uri, \
             .requested_format = (Details)->requested_format, \
             .observe_serial = \
                     ((Details)->observe == ANJAY_COAP_OBSERVE_REGISTER) \
@@ -140,8 +104,8 @@ typedef struct {
 
 #define DETAILS_TO_ACTION_INFO(Details) \
         (const anjay_action_info_t) { \
-            .oid = (Details)->oid, \
-            .iid = (Details)->iid, \
+            .oid = (Details)->uri.oid, \
+            .iid = (Details)->uri.iid, \
             .ssid = (Details)->ssid, \
             .action = (Details)->action \
         }
@@ -165,24 +129,17 @@ ssize_t _anjay_dm_read_for_observe(anjay_t *anjay,
 #endif // WITH_OBSERVE
 
 int _anjay_dm_perform_action(anjay_t *anjay,
-                             avs_stream_abstract_t *stream,
                              const anjay_request_details_t *details);
 
-anjay_input_ctx_t *
-_anjay_dm_read_as_input_ctx(anjay_t *anjay, const anjay_resource_path_t *path);
+anjay_input_ctx_t *_anjay_dm_read_as_input_ctx(anjay_t *anjay,
+                                               const anjay_uri_path_t *path);
 
-const char *_anjay_debug_make_obj_path__(char *buffer,
-                                         size_t buffer_size,
-                                         anjay_oid_t oid,
-                                         bool has_iid,
-                                         anjay_iid_t iid,
-                                         bool has_rid,
-                                         anjay_rid_t rid);
+const char *_anjay_debug_make_path__(char *buffer,
+                                     size_t buffer_size,
+                                     const anjay_uri_path_t *uri);
 
-#define ANJAY_DEBUG_MAKE_PATH(details) \
-    (_anjay_debug_make_obj_path__(&(char[32]){0}[0], 32, (details)->oid, \
-                                (details)->has_iid, (details)->iid, \
-                                (details)->has_rid, (details)->rid))
+#define ANJAY_DEBUG_MAKE_PATH(path) \
+    (_anjay_debug_make_path__(&(char[32]){0}[0], 32, (path)))
 
 static inline int _anjay_dm_map_present_result(int result) {
     if (!result) {

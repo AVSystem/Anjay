@@ -263,8 +263,9 @@ static int send_and_update_retry_state(anjay_coap_socket_t *socket,
                                        coap_input_buffer_t *in,
                                        coap_retry_state_t *retry_state) {
     int result = _anjay_coap_socket_send(socket, msg);
-    _anjay_coap_common_update_retry_state(retry_state, &in->transmission_params,
-                                          &in->rand_seed);
+    _anjay_coap_common_update_retry_state(
+            retry_state, _anjay_coap_socket_get_tx_params(socket),
+            &in->rand_seed);
     return result;
 }
 
@@ -294,7 +295,8 @@ static int send_confirmable_with_retry(coap_client_t *client,
 
         coap_log(DEBUG, "timeout reached, next: %d ms",
                  retry_state.recv_timeout_ms);
-    } while (retry_state.retry_count < in->transmission_params.max_retransmit);
+    } while (retry_state.retry_count
+                < _anjay_coap_socket_get_tx_params(socket)->max_retransmit);
 
     assert(result <= 0 || result == COAP_CLIENT_RECEIVE_RESET);
     if (result != 0) {

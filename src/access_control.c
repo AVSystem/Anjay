@@ -33,12 +33,9 @@ static int read_u32(anjay_t *anjay,
                     anjay_rid_t rid,
                     uint32_t *out) {
     int64_t ret;
-    int result = _anjay_dm_res_read_i64(anjay,
-            &(const anjay_resource_path_t) {
-                .oid = ANJAY_DM_OID_ACCESS_CONTROL,
-                .iid = iid,
-                .rid = rid
-            }, &ret);
+    const anjay_uri_path_t uri =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, iid, rid);
+    int result = _anjay_dm_res_read_i64(anjay, &uri, &ret);
     if (result) {
         return result;
     } else if (ret != (uint32_t) ret) {
@@ -127,11 +124,10 @@ static int get_mask(anjay_t *anjay,
         return ANJAY_DM_FOREACH_CONTINUE;
     }
 
-    const anjay_resource_path_t path = (anjay_resource_path_t){
-        .oid = ANJAY_DM_OID_ACCESS_CONTROL,
-        .iid = (anjay_iid_t) ac_iid,
-        .rid = ANJAY_DM_RID_ACCESS_CONTROL_ACL
-    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL,
+                               (anjay_iid_t) ac_iid,
+                               ANJAY_DM_RID_ACCESS_CONTROL_ACL);
 
     anjay_input_ctx_t *ctx = _anjay_dm_read_as_input_ctx(anjay, &path);
     if (!ctx) {

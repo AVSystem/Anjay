@@ -15,7 +15,7 @@
  */
 
 #ifndef ANJAY_TEST_DM_H
-#define	ANJAY_TEST_DM_H
+#define ANJAY_TEST_DM_H
 
 #include <avsystem/commons/unit/mocksock.h>
 
@@ -25,7 +25,7 @@
 #include <anjay_test/mock_clock.h>
 #include <anjay_test/mock_dm.h>
 
-anjay_t *_anjay_test_dm_init(void);
+anjay_t *_anjay_test_dm_init(const anjay_configuration_t *config);
 
 void _anjay_test_dm_unsched_reload_sockets(anjay_t *anjay);
 
@@ -144,16 +144,27 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
             }
         };
 
-#define DM_TEST_ARRAY(...) { __VA_ARGS__ }
+#define DM_TEST_CONFIGURATION(...) \
+        &(anjay_configuration_t) { \
+            .endpoint_name = "urn:dev:os:anjay-test", \
+            .in_buffer_size = 4096, \
+            .out_buffer_size = 4096, \
+            __VA_ARGS__ \
+        }
 
-#define DM_TEST_INIT_GENERIC(Objects, Ssids) \
+#define DM_TEST_ESCAPE_PARENS_IMPL(...) __VA_ARGS__
+#define DM_TEST_ESCAPE_PARENS(...) DM_TEST_ESCAPE_PARENS_IMPL __VA_ARGS__
+
+#define DM_TEST_INIT_GENERIC(Objects, Ssids, AddConfig) \
     _anjay_mock_clock_start(&(const struct timespec) { 1000, 0 }); \
-    anjay_t *anjay = _anjay_test_dm_init(); \
-    const anjay_dm_object_def_t *const *obj_defs[] = DM_TEST_ARRAY Objects; \
+    anjay_t *anjay = _anjay_test_dm_init( \
+            DM_TEST_CONFIGURATION(DM_TEST_ESCAPE_PARENS(AddConfig))); \
+    const anjay_dm_object_def_t *const *obj_defs[] = \
+            { DM_TEST_ESCAPE_PARENS(Objects) }; \
     for (size_t i = 0; i < ANJAY_ARRAY_SIZE(obj_defs); ++i) { \
         AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay, obj_defs[i])); \
     } \
-    anjay_ssid_t ssids[] = DM_TEST_ARRAY Ssids; \
+    anjay_ssid_t ssids[] = { DM_TEST_ESCAPE_PARENS(Ssids) }; \
     avs_net_abstract_socket_t *mocksocks[ANJAY_ARRAY_SIZE(ssids)]; \
     for (size_t i = ANJAY_ARRAY_SIZE(ssids) - 1; \
             i < ANJAY_ARRAY_SIZE(ssids); --i) { \
@@ -174,12 +185,15 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
         (const anjay_dm_object_def_t *const *) &OBJ_WITH_RESET
 
 #define DM_TEST_INIT_WITH_OBJECTS(...) \
-        DM_TEST_INIT_GENERIC( ( __VA_ARGS__ ), ( 1 ) )
+        DM_TEST_INIT_GENERIC((__VA_ARGS__), (1), ())
 
 #define DM_TEST_INIT_WITH_SSIDS(...) \
-        DM_TEST_INIT_GENERIC( ( DM_TEST_DEFAULT_OBJECTS ), ( __VA_ARGS__ ) )
+        DM_TEST_INIT_GENERIC((DM_TEST_DEFAULT_OBJECTS), (__VA_ARGS__), ())
 
 #define DM_TEST_INIT DM_TEST_INIT_WITH_SSIDS(1)
+
+#define DM_TEST_INIT_WITH_CONFIG(...) \
+        DM_TEST_INIT_GENERIC((DM_TEST_DEFAULT_OBJECTS), (1), (__VA_ARGS__))
 
 #define DM_TEST_FINISH _anjay_test_dm_finish(anjay)
 
@@ -203,5 +217,5 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
                                       ANJAY_IID_INVALID); \
 } while (0)
 
-#endif	/* ANJAY_TEST_DM_H */
+#endif /* ANJAY_TEST_DM_H */
 

@@ -29,22 +29,25 @@
 
 AVS_UNIT_TEST(debug, debug_make_path_macro) {
     anjay_request_details_t details;
-    details.oid = 0;
-    details.iid = 1;
-    details.rid = 2;
-    details.has_iid = false;
-    details.has_rid = false;
+    details.uri.oid = 0;
+    details.uri.iid = 1;
+    details.uri.rid = 2;
+    details.uri.has_oid = false;
+    details.uri.has_iid = false;
+    details.uri.has_rid = false;
 
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details), "/0");
-    details.has_iid = true;
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details), "/0/1");
-    details.has_rid = true;
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details), "/0/1/2");
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/");
+    details.uri.has_oid = true;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/0");
+    details.uri.has_iid = true;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/0/1");
+    details.uri.has_rid = true;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/0/1/2");
 
-    details.oid = 65535;
-    details.iid = 65535;
-    details.rid = 65535;
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details),
+    details.uri.oid = 65535;
+    details.uri.iid = 65535;
+    details.uri.rid = 65535;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri),
                                  "/65535/65535/65535");
 }
 
@@ -620,11 +623,35 @@ AVS_UNIT_TEST(dm_write, instance_superfluous_instance) {
     DM_TEST_INIT;
     static const char REQUEST[] =
             "\x40\x03\xFA\x3E" // CoAP header
-            "\xB2" "42" // OID
+            "\xB2" "25" // OID
             "\x02" "69" // IID
             "\x12\x2d\x16"
             "\xFF"
             "\x08\x45\x0a"
+            "\xc1\x00\x0d"
+            "\xc5\x06" "Hello";
+    avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    _anjay_mock_dm_expect_instance_present(anjay, &OBJ_WITH_RESET, 69, 1);
+    _anjay_mock_dm_expect_instance_reset(anjay, &OBJ_WITH_RESET, 69, 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ_WITH_RESET, 69, 0,
+                                         ANJAY_MOCK_DM_INT(0, 13), 0);
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ_WITH_RESET, 69, 6,
+                                         ANJAY_MOCK_DM_STRING(0, "Hello"),
+                                         0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_write, instance_inconsistent_instance) {
+    DM_TEST_INIT;
+    static const char REQUEST[] =
+            "\x40\x03\xFA\x3E" // CoAP header
+            "\xB2" "42" // OID
+            "\x02" "69" // IID == 69
+            "\x12\x2d\x16"
+            "\xFF"
+            "\x08\x4d\x0a" // IID = 77
             "\xc1\x00\x0d"
             "\xc5\x06" "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
@@ -1850,13 +1877,14 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
     { \
         anjay_request_details_t details = { \
             .requested_format = ANJAY_COAP_FORMAT_NONE, \
+            .uri = MAKE_RESOURCE_PATH(1337, 0, 0), \
             .action = __VA_ARGS__ \
         }; \
         AVS_UNIT_ASSERT_FAILED(invoke_action(&anjay, &def_ptr, &details, \
-                                             (anjay_input_ctx_t *) &in_ctx, \
-                                             (avs_stream_abstract_t *)&mock)); \
+                                             (anjay_input_ctx_t *) &in_ctx)); \
     }
 
+    anjay.comm_stream = (avs_stream_abstract_t *) &mock;
     ASSERT_ACTION_FAILS(ANJAY_ACTION_READ)
     ASSERT_ACTION_FAILS(ANJAY_ACTION_DISCOVER)
     ASSERT_ACTION_FAILS(ANJAY_ACTION_WRITE)
@@ -2379,23 +2407,20 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 42, 3, 0,
                                         ANJAY_MOCK_DM_STRING(0, ""));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_res_read(
-            anjay, &(anjay_resource_path_t) { OBJ->oid, 42, 3 },
-            NULL, 0, NULL));
+            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 42, 3), NULL, 0, NULL));
 
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 514, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 514, 4, -1,
                                         ANJAY_MOCK_DM_STRING(-1, "Hello"));
     AVS_UNIT_ASSERT_FAILED(_anjay_dm_res_read(
-            anjay, &(anjay_resource_path_t) { OBJ->oid, 514, 4 },
-            NULL, 0, NULL));
+            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 514, 4), NULL, 0, NULL));
 
     char fake_string = 42;
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 5, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 5, 0,
                                         ANJAY_MOCK_DM_STRING(0, ""));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_res_read_string(
-            anjay, &(anjay_resource_path_t) { OBJ->oid, 69, 5 },
-            &fake_string, 1));
+            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 69, 5), &fake_string, 1));
     AVS_UNIT_ASSERT_EQUAL(fake_string, 0);
 
     fake_string = 69;
@@ -2403,8 +2428,7 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 32, 6, -1,
                                         ANJAY_MOCK_DM_STRING(-1, "Goodbye"));
     AVS_UNIT_ASSERT_FAILED(_anjay_dm_res_read_string(
-            anjay, &(anjay_resource_path_t) { OBJ->oid, 32, 6 },
-            &fake_string, 1));
+            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 32, 6), &fake_string, 1));
     AVS_UNIT_ASSERT_EQUAL(fake_string, 69);
 
     DM_TEST_FINISH;

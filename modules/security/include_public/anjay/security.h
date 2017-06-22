@@ -17,7 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_SECURITY_H
 #define ANJAY_INCLUDE_ANJAY_SECURITY_H
 
-#include <anjay/anjay.h>
+#include <anjay/dm.h>
 
 #include <avsystem/commons/stream.h>
 

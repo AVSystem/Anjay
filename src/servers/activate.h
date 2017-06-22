@@ -15,7 +15,7 @@
  */
 
 #ifndef ANJAY_SERVERS_ACTIVATE_H
-#define	ANJAY_SERVERS_ACTIVATE_H
+#define ANJAY_SERVERS_ACTIVATE_H
 
 #include <anjay_modules/time.h>
 

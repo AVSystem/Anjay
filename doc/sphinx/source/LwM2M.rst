@@ -225,6 +225,8 @@ the following information:
 
 - **Description** - detailed description of the resource.
 
+.. _lwm2m-attributes:
+
 Attributes
 ^^^^^^^^^^
 
@@ -262,12 +264,18 @@ defined in the LwM2M specification:
     at least once every ``pmax`` seconds, even if the value did not change.
 
   - **Greater Than** (``gt``) - applicable only to numeric Resources - if set,
-    notifications will only be sent when the numerical value is greater than the
-    specified threshold. [#gtlt_confusion]_
+    notifications will only be sent when the numerical value starts to be
+    greater than the specified threshold. When the value changes further, but
+    stays above the threshold, notifications will not be sent; for next
+    notification to be sent, the value needs to drop below the threshold and
+    raise above it again.
 
   - **Less Than** (``lt``) - applicable only to numeric Resources - if set,
-    notifications will only be sent when the numerical value is less than the
-    specified threshold. [#gtlt_confusion]_
+    notifications will only be sent when the numerical value starts to be less
+    than the specified threshold. When the value changes further, but stays
+    below the threshold, notifications will not be sent; for next notification
+    to be sent, the value needs to raise above the threshold and drop below it
+    again.
 
   - **Step** (``st``) - applicable only to numeric Resources - if set,
     notifications will only be sent if the numerical value is different from the
@@ -285,17 +293,8 @@ defined in the LwM2M specification:
   - Requirements for either ``gt`` or ``lt`` **and** ``st`` need to be met at
     the same time if they are set at the same time. For example, if both ``gt``
     and ``st`` are set, a notification will only be sent when the new value
-    raises above ``gt`` **and** is also different by at least ``st`` from the
-    previously sent value.
-
-.. rubric:: Notes
-
-.. [#gtlt_confusion] The wording used in the specification for  ``gt`` and
-                     ``lt`` Attributes is somewhat confusing, so their exact
-                     expected semantics are not clear. An `appropriate issue
-                     <https://github.com/OpenMobileAlliance/OMA_LwM2M_for_Developers/issues/191>`_
-                     has been raised on OMA's issue tracker, and Anjay will be
-                     updated when the confusion is cleared.
+    raises above ``gt`` **and** at some point the value differed by at least
+    ``st`` from the previously sent one.
 
 Interfaces
 ----------

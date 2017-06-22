@@ -18,7 +18,7 @@
 #define SERVER_SERVER_H
 #include <config.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 #include <anjay/server.h>
 
 #include <avsystem/commons/log.h>

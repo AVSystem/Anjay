@@ -17,7 +17,7 @@
 #ifndef ANJAY_SERVERS_SERVERS_H
 #define ANJAY_SERVERS_SERVERS_H
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include "../servers.h"
 

@@ -20,6 +20,7 @@
 #include <avsystem/commons/unit/test.h>
 
 #include <anjay_test/coap/stream.h>
+#include <anjay_test/coap/socket.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
@@ -42,9 +43,9 @@ static test_ctx_t setup(size_t in_buffer_size,
     test_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
 
-    avs_unit_mocksock_create(&ctx.mocksock);
+    _anjay_mocksock_create(&ctx.mocksock, 1252, 1252);
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_socket_create(&ctx.socket, ctx.mocksock));
+            _anjay_coap_socket_create(&ctx.socket, ctx.mocksock, 0));
     _anjay_mock_coap_stream_create(&ctx.stream, ctx.socket, in_buffer_size,
                                    out_buffer_size);
 

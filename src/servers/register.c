@@ -195,13 +195,12 @@ static int send_update(anjay_t *anjay,
         .server = server,
         .conn_type = _anjay_get_default_connection_type(server)
     };
-    avs_stream_abstract_t *stream = _anjay_get_server_stream(anjay, connection);
-    if (!stream) {
+    if (_anjay_bind_server_stream(anjay, connection)) {
         anjay_log(ERROR, "could not get stream for server %u", server->ssid);
         return -1;
     }
 
-    int result = _anjay_update_registration(anjay, stream, server);
+    int result = _anjay_update_registration(anjay, server);
     if (result == ANJAY_REGISTRATION_UPDATE_REJECTED) {
         anjay_log(DEBUG, "update rejected for SSID = %u; re-registering",
                   server->ssid);
@@ -212,7 +211,7 @@ static int send_update(anjay_t *anjay,
         _anjay_observe_sched_flush(anjay, server->ssid, connection.conn_type);
     }
 
-    avs_stream_reset(stream);
+    avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream(anjay, connection);
     return result;
 }
@@ -315,13 +314,12 @@ int _anjay_server_register(anjay_t *anjay,
         .server = server,
         .conn_type = _anjay_get_default_connection_type(server)
     };
-    avs_stream_abstract_t *stream = _anjay_get_server_stream(anjay, connection);
-    if (!stream) {
+    if (_anjay_bind_server_stream(anjay, connection)) {
         return -1;
     }
 
-    int result = _anjay_register(anjay, stream, server, anjay->endpoint_name);
-    avs_stream_reset(stream);
+    int result = _anjay_register(anjay, server);
+    avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream(anjay, connection);
 
     if (result) {
@@ -345,19 +343,19 @@ int _anjay_server_deregister(anjay_t *anjay,
         .server = server,
         .conn_type = _anjay_get_default_connection_type(server)
     };
-    avs_stream_abstract_t *stream = _anjay_get_server_stream(anjay, connection);
-    if (!stream) {
+    if (_anjay_bind_server_stream(anjay, connection)) {
         anjay_log(ERROR, "could not get stream for server %u, skipping",
                   server->ssid);
         return 0;
     }
 
-    int result = _anjay_deregister(stream, &server->registration_info);
+    int result = _anjay_deregister(anjay->comm_stream,
+                                   &server->registration_info);
     if (result) {
         anjay_log(ERROR, "could not send De-Register request: %d", result);
     }
 
-    avs_stream_reset(stream);
+    avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream_without_scheduling_queue(anjay);
     return result;
 }

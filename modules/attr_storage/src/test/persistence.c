@@ -32,7 +32,7 @@
         char buf[Size]; \
         avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER; \
         avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf)); \
-        anjay_t *anjay = _anjay_test_dm_init(); \
+        anjay_t *anjay = _anjay_test_dm_init(DM_TEST_CONFIGURATION()); \
         AVS_UNIT_ASSERT_NOT_NULL(anjay); \
         AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay))
 
@@ -229,7 +229,7 @@ AVS_UNIT_TEST(attr_storage_persistence, persist_not_enough_space) {
 #define RESTORE_TEST_INIT(Data) \
         avs_stream_inbuf_t inbuf = AVS_STREAM_INBUF_STATIC_INITIALIZER; \
         avs_stream_inbuf_set_buffer(&inbuf, (Data), sizeof(Data) - 1); \
-        anjay_t *anjay = _anjay_test_dm_init(); \
+        anjay_t *anjay = _anjay_test_dm_init(DM_TEST_CONFIGURATION()); \
         AVS_UNIT_ASSERT_NOT_NULL(anjay); \
         AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay))
 

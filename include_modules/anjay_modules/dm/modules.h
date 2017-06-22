@@ -17,7 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_DM_MODULES_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_DM_MODULES_H
 
-#include <anjay/anjay.h>
+#include <anjay/dm.h>
 
 #include <anjay_modules/notify.h>
 

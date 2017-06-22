@@ -20,7 +20,7 @@
 #include <avsystem/commons/unit/test.h>
 
 #include "bigdata.h"
-#include "anjay/anjay.h"
+#include <anjay/core.h>
 
 #define TEST_ENV(Size) \
     avs_stream_abstract_t *stream = NULL; \

@@ -15,13 +15,13 @@
  */
 
 #ifndef ANJAY_SCHED_H
-#define	ANJAY_SCHED_H
+#define ANJAY_SCHED_H
 
 #include <time.h>
 
 #include <sys/types.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -126,5 +126,5 @@ int _anjay_sched_retryable(anjay_sched_t *sched,
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif	/* ANJAY_SCHED_H */
+#endif /* ANJAY_SCHED_H */
 

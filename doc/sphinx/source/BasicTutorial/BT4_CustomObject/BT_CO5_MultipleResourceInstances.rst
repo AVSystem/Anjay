@@ -45,13 +45,13 @@ and ``resource_read`` handlers.
 To instantiate them one uses functions:
 
 .. highlight:: c
-.. snippet-source:: include_public/anjay/anjay.h
+.. snippet-source:: include_public/anjay/io.h
 
     anjay_input_ctx_t *anjay_get_array(anjay_input_ctx_t *ctx);
 
 and
 
-.. snippet-source:: include_public/anjay/anjay.h
+.. snippet-source:: include_public/anjay/io.h
 
     anjay_output_ctx_t *anjay_ret_array_start(anjay_output_ctx_t *ctx);
 
@@ -282,6 +282,8 @@ In the end, the read handler could look like this:
         }
     }
 
-As always, you can find source code of this tutorial in
-`examples/tutorial/custom-object/multi-instance-resources-dynamic` in Anjay
-source directory.
+.. note::
+
+    Complete code of this example can be found in
+    `examples/tutorial/custom-object/multi-instance-resources-dynamic`
+    subdirectory of main Anjay project repository.

@@ -37,11 +37,10 @@ static int find_server_iid_handler(anjay_t *anjay,
     (void) obj;
     find_iid_args_t *args = (find_iid_args_t*)args_;
     int64_t ssid;
-    const anjay_resource_path_t ssid_path = {
-        .oid = ANJAY_DM_OID_SERVER,
-        .iid = iid,
-        .rid = ANJAY_DM_RID_SERVER_SSID
-    };
+    const anjay_uri_path_t ssid_path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, iid,
+                               ANJAY_DM_RID_SERVER_SSID);
+
     if (_anjay_dm_res_read_i64(anjay, &ssid_path, &ssid)) {
         return -1;
     }
@@ -88,11 +87,9 @@ static int security_iid_find_helper(anjay_t *anjay,
 
     if (!is_bootstrap) {
         int64_t ssid;
-        const anjay_resource_path_t ssid_path = {
-            .oid = ANJAY_DM_OID_SECURITY,
-            .iid = iid,
-            .rid = ANJAY_DM_RID_SECURITY_SSID
-        };
+        const anjay_uri_path_t ssid_path =
+                MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, iid,
+                                   ANJAY_DM_RID_SECURITY_SSID);
 
         if (_anjay_dm_res_read_i64(anjay, &ssid_path, &ssid)) {
             return -1;
@@ -132,11 +129,9 @@ int _anjay_ssid_from_server_iid(anjay_t *anjay,
                                 anjay_iid_t server_iid,
                                 anjay_ssid_t *out_ssid) {
     int64_t ssid;
-    const anjay_resource_path_t ssid_path = {
-        .oid = ANJAY_DM_OID_SERVER,
-        .iid = server_iid,
-        .rid = ANJAY_DM_RID_SERVER_SSID
-    };
+    const anjay_uri_path_t ssid_path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid,
+                               ANJAY_DM_RID_SERVER_SSID);
     if (_anjay_dm_res_read_i64(anjay, &ssid_path, &ssid)) {
         return -1;
     }
@@ -153,9 +148,9 @@ int _anjay_ssid_from_security_iid(anjay_t *anjay,
     }
 
     int64_t _ssid;
-    const anjay_resource_path_t path = {
-        ANJAY_DM_OID_SECURITY, security_iid, ANJAY_DM_RID_SECURITY_SSID
-    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SSID);
 
     if (_anjay_dm_res_read_i64(anjay, &path, &_ssid)
             || _ssid <= 0 || _ssid > UINT16_MAX) {
@@ -171,9 +166,9 @@ int _anjay_ssid_from_security_iid(anjay_t *anjay,
 bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
                                            anjay_iid_t security_iid) {
     bool is_bootstrap;
-    const anjay_resource_path_t path = {
-        ANJAY_DM_OID_SECURITY, security_iid, ANJAY_DM_RID_SECURITY_BOOTSTRAP
-    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_BOOTSTRAP);
 
     if (_anjay_dm_res_read_bool(anjay, &path, &is_bootstrap) || !is_bootstrap) {
         return false;
@@ -188,9 +183,9 @@ struct timespec _anjay_disable_timeout_from_server_iid(anjay_t *anjay,
     static const int32_t DEFAULT_DISABLE_TIMEOUT_S = DAY_IN_S;
 
     int64_t timeout_s;
-    anjay_resource_path_t path = {
-        ANJAY_DM_OID_SERVER, server_iid, ANJAY_DM_RID_SERVER_DISABLE_TIMEOUT
-    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid,
+                               ANJAY_DM_RID_SERVER_DISABLE_TIMEOUT);
 
     if (_anjay_dm_res_read_i64(anjay, &path, &timeout_s) || timeout_s < 0) {
         timeout_s = DEFAULT_DISABLE_TIMEOUT_S;

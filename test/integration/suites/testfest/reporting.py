@@ -26,10 +26,10 @@ class Test301_ObservationAndNotificationOfParameterValues(DataModel.Test):
 
         self.test_observe(ResPath.Device.PowerSourceVoltage,
                           int_array,
-                          pmin=1, pmax=2, gt=0, lt=100000, st=1)
+                          pmin=1, pmax=2, st=1)
         self.test_observe(ResPath.ConnectivityMonitoring.RadioSignalStrength,
                           ValueValidator.float(),
-                          pmin=1, pmax=2, gt=0, lt=100000, st=1)
+                          pmin=1, pmax=2, st=1)
 
         # 1. The server has received the requested information and display of
         #    “Line Voltage” and “Signal Strength” to the user is possible

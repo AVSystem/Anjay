@@ -22,8 +22,9 @@
 #include <avsystem/commons/unit/test.h>
 
 #include <anjay_test/coap/stream.h>
+#include <anjay_test/coap/socket.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 /////////////////////////////////////////////////////////////////////// ENCODING
 
@@ -255,9 +256,9 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
 
 #define TEST_ENV_COMMON(Data) \
     avs_net_abstract_socket_t *mocksock; \
-    avs_unit_mocksock_create(&mocksock); \
+    _anjay_mocksock_create(&mocksock, 1252, 1252); \
     anjay_coap_socket_t *coapsock; \
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&coapsock, mocksock)); \
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&coapsock, mocksock, 0)); \
     avs_unit_mocksock_expect_connect(mocksock, "", ""); \
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", "")); \
     avs_stream_abstract_t *coap = NULL; \

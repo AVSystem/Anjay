@@ -26,7 +26,7 @@
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/base64.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include "../utils.h"
 #include "base64_out.h"

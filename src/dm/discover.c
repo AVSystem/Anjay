@@ -166,7 +166,6 @@ static int discover_resource(anjay_t *anjay,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
                              anjay_ssid_t ssid,
-                             avs_stream_abstract_t *stream,
                              discover_resource_hint_t hint) {
     int32_t resource_dim = -1;
     int result = 0;
@@ -199,15 +198,14 @@ static int discover_resource(anjay_t *anjay,
     if (result) {
         return result;
     }
-    return print_discovered_resource(stream, obj, iid, rid, resource_dim,
-                                     &resource_attributes);
+    return print_discovered_resource(anjay->comm_stream, obj, iid, rid,
+                                     resource_dim, &resource_attributes);
 }
 
 static int discover_instance_resources(anjay_t *anjay,
                                        const anjay_dm_object_def_t *const *obj,
                                        anjay_iid_t iid,
                                        anjay_ssid_t ssid,
-                                       avs_stream_abstract_t *stream,
                                        discover_resource_hint_t hint) {
     int result = 0;
     for (size_t i = 0; i < (*obj)->supported_rids.count; ++i) {
@@ -217,72 +215,60 @@ static int discover_instance_resources(anjay_t *anjay,
         if (result <= 0) {
             continue;
         }
-        result = print_separator(stream);
+        result = print_separator(anjay->comm_stream);
         if (!result) {
             result = discover_resource(anjay, obj, iid,
                                        (*obj)->supported_rids.rids[i],
-                                       ssid, stream, hint);
+                                       ssid, hint);
         }
     }
     return result;
 }
 
-typedef struct {
-    avs_stream_abstract_t *stream;
-    anjay_ssid_t ssid;
-} discover_object_instance_ctx_t;
-
 static int discover_object_instance(anjay_t *anjay,
                                     const anjay_dm_object_def_t *const *obj,
                                     anjay_iid_t iid,
-                                    void *data) {
-    discover_object_instance_ctx_t *ctx =
-            (discover_object_instance_ctx_t *) data;
+                                    void *ssid_ptr) {
     int result = 0;
-    (void) ((result = print_separator(ctx->stream))
-            || (result = print_discovered_instance(ctx->stream, obj, iid,
+    (void) ((result = print_separator(anjay->comm_stream))
+            || (result = print_discovered_instance(anjay->comm_stream, obj, iid,
                                                    &ANJAY_DM_ATTRIBS_EMPTY))
-            || (result = discover_instance_resources(anjay, obj, iid, ctx->ssid,
-                                                     ctx->stream, NO_ATTRIBS)));
+            || (result = discover_instance_resources(
+                    anjay, obj, iid, *(const anjay_ssid_t *) ssid_ptr,
+                    NO_ATTRIBS)));
     return result;
 }
 
 int _anjay_discover_object(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj,
-                           anjay_ssid_t ssid,
-                           avs_stream_abstract_t *stream) {
+                           anjay_ssid_t ssid) {
     anjay_dm_attributes_t object_attributes;
     int result = 0;
     (void) ((result = read_object_level_attributes(anjay, obj, ssid,
                                                    &object_attributes))
-            || (result = print_discovered_object(stream, obj,
+            || (result = print_discovered_object(anjay->comm_stream, obj,
                                                  &object_attributes)));
     if (result) {
         return result;
     }
-    discover_object_instance_ctx_t ctx = {
-        .stream = stream,
-        .ssid = ssid
-    };
     return _anjay_dm_foreach_instance(anjay, obj, discover_object_instance,
-                                      &ctx);
+                                      &ssid);
 }
 
 int _anjay_discover_instance(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
-                             anjay_ssid_t ssid,
-                             avs_stream_abstract_t *stream) {
+                             anjay_ssid_t ssid) {
     anjay_dm_attributes_t instance_attributes;
     int result = 0;
     (void) ((result = read_instance_level_attributes(anjay, obj, iid, ssid,
                                                      &instance_attributes))
-            || (result = print_discovered_instance(stream, obj, iid,
+            || (result = print_discovered_instance(anjay->comm_stream, obj, iid,
                                                    &instance_attributes)));
     if (result) {
         return result;
     }
-    return discover_instance_resources(anjay, obj, iid, ssid, stream,
+    return discover_instance_resources(anjay, obj, iid, ssid,
                                        WITH_RESOURCE_ATTRIBS);
 }
 
@@ -290,9 +276,8 @@ int _anjay_discover_resource(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
-                             anjay_ssid_t ssid,
-                             avs_stream_abstract_t *stream) {
-    return discover_resource(anjay, obj, iid, rid, ssid, stream,
+                             anjay_ssid_t ssid) {
+    return discover_resource(anjay, obj, iid, rid, ssid,
                              WITH_INHERITED_ATTRIBS);
 }
 
@@ -310,11 +295,11 @@ static int
 bootstrap_discover_object_instance(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj,
                                    anjay_iid_t iid,
-                                   void *data) {
-    avs_stream_abstract_t *stream = (avs_stream_abstract_t *) data;
+                                   void *dummy) {
+    (void) dummy;
     int result = 0;
-    (void) ((result = print_separator(stream))
-            || (result = print_discovered_instance(stream, obj, iid,
+    (void) ((result = print_separator(anjay->comm_stream))
+            || (result = print_discovered_instance(anjay->comm_stream, obj, iid,
                                                    &ANJAY_DM_ATTRIBS_EMPTY)));
     if (result) {
         return result;
@@ -323,59 +308,51 @@ bootstrap_discover_object_instance(anjay_t *anjay,
         anjay_ssid_t ssid;
         int query_result = _anjay_ssid_from_security_iid(anjay, iid, &ssid);
         if (!query_result && ssid != ANJAY_SSID_BOOTSTRAP) {
-            result = print_ssid_attr(stream, ssid);
+            result = print_ssid_attr(anjay->comm_stream, ssid);
         }
     }
     if ((*obj)->oid == ANJAY_DM_OID_SERVER) {
         anjay_ssid_t ssid;
         int query_result = _anjay_ssid_from_server_iid(anjay, iid, &ssid);
         if (!query_result) {
-            result = print_ssid_attr(stream, ssid);
+            result = print_ssid_attr(anjay->comm_stream, ssid);
         }
     }
     return result;
 }
 
 int _anjay_bootstrap_discover_object(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj,
-                                     avs_stream_abstract_t *stream) {
-    int result = print_discovered_object(stream, obj, &ANJAY_DM_ATTRIBS_EMPTY);
+                                     const anjay_dm_object_def_t *const *obj) {
+    int result = print_discovered_object(anjay->comm_stream, obj,
+                                         &ANJAY_DM_ATTRIBS_EMPTY);
     if (result) {
         return result;
     }
     return _anjay_dm_foreach_instance(
-            anjay, obj, bootstrap_discover_object_instance, stream);
+            anjay, obj, bootstrap_discover_object_instance, NULL);
 }
-
-typedef struct {
-    avs_stream_abstract_t *stream;
-    bool first_object;
-} bootstrap_discover_ctx_t;
 
 static int bootstrap_discover_object(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj,
-                                     void *data) {
-    bootstrap_discover_ctx_t *ctx = (bootstrap_discover_ctx_t *) data;
+                                     void *first_object_) {
+    bool *first_object = (bool *) first_object_;
     int result = 0;
-    if (ctx->first_object) {
-        ctx->first_object = false;
-        (void) ((result = print_enabler_version(ctx->stream))
-                || (result = print_separator(ctx->stream)));
+    if (*first_object) {
+        *first_object = false;
+        (void) ((result = print_enabler_version(anjay->comm_stream))
+                || (result = print_separator(anjay->comm_stream)));
     } else {
-        result = print_separator(ctx->stream);
+        result = print_separator(anjay->comm_stream);
     }
     if (!result) {
-        result = _anjay_bootstrap_discover_object(anjay, obj, ctx->stream);
+        result = _anjay_bootstrap_discover_object(anjay, obj);
     }
     return result;
 }
 
-int _anjay_bootstrap_discover(anjay_t *anjay, avs_stream_abstract_t *stream) {
-    bootstrap_discover_ctx_t ctx = {
-        .stream = stream,
-        .first_object = true
-    };
+int _anjay_bootstrap_discover(anjay_t *anjay) {
+    bool first_object = true;
     return _anjay_dm_foreach_object(anjay, bootstrap_discover_object,
-                                    &ctx);
+                                    &first_object);
 }
 #endif

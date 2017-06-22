@@ -15,13 +15,13 @@
  */
 
 #ifndef ANJAY_UTILS_H
-#define	ANJAY_UTILS_H
+#define ANJAY_UTILS_H
 
 #include <avsystem/commons/list.h>
 
 #include <anjay_modules/utils.h>
 
-#include <anjay/anjay.h>
+#include <anjay/dm.h>
 
 #include <stdbool.h>
 #include <stddef.h>

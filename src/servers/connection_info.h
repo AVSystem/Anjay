@@ -15,7 +15,7 @@
  */
 
 #ifndef ANJAY_SERVERS_CONNECTION_INFO_H
-#define	ANJAY_SERVERS_CONNECTION_INFO_H
+#define ANJAY_SERVERS_CONNECTION_INFO_H
 
 #include "../anjay.h"
 #include "../utils.h"

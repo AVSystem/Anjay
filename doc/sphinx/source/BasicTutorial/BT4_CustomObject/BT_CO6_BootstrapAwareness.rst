@@ -137,3 +137,9 @@ Server is a matter of setting ``bootstrap_server = true`` on
 It is worth noting that the LwM2M Bootstrap Server has only a Security Object
 instance and no Server Object instances. For that reason, the example project
 deliberately does not initialize any Server Object Instances.
+
+.. note::
+
+    Complete code of this example can be found in
+    `examples/tutorial/custom-object/bootstrap-awareness` subdirectory of main
+    Anjay project repository.

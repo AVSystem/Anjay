@@ -41,6 +41,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .location_update_frequency_s = 1,
     .inbuf_size = 4000,
     .outbuf_size = 4000,
+    .msg_cache_size = 0,
     .fw_updated_marker_path = "/tmp/anjay-fw-updated",
 };
 
@@ -149,6 +150,9 @@ static void print_option_help(const struct option *opt) {
         { 'O', "SIZE", "4000", "Nonnegative integer representing maximum "
                                "size of a non-BLOCK CoAP packet the client "
                                "should be able to send." },
+        { '$', "SIZE", "0", "Size, in bytes, of a buffer reserved for caching "
+                            "sent responses to detect retransmissions. Setting "
+                            "it to 0 disables caching mechanism." },
         { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
     };
@@ -333,6 +337,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "server-uri",                 required_argument, 0, 'u' },
         { "inbuf-size",                 required_argument, 0, 'I' },
         { "outbuf-size",                required_argument, 0, 'O' },
+        { "cache-size",                 required_argument, 0, '$' },
         { "fw-updated-marker-path",     required_argument, 0, 1 },
         { 0, 0, 0, 0 }
     };
@@ -495,6 +500,12 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'O':
             if (parse_i32(optarg, &parsed_args->outbuf_size)
                     || parsed_args->outbuf_size <= 0) {
+                goto error;
+            }
+            break;
+        case '$':
+            if (parse_i32(optarg, &parsed_args->msg_cache_size)
+                    || parsed_args->msg_cache_size < 0) {
                 goto error;
             }
             break;

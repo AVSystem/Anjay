@@ -15,7 +15,7 @@
  */
 
 #ifndef ANJAY_ANJAY_H
-#define	ANJAY_ANJAY_H
+#define ANJAY_ANJAY_H
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/stream.h>
@@ -55,6 +55,7 @@ struct anjay_struct {
 #ifdef WITH_BOOTSTRAP
     anjay_bootstrap_t bootstrap;
 #endif
+    anjay_coap_socket_t *coap_socket;
     avs_stream_abstract_t *comm_stream;
     anjay_scheduled_notify_t scheduled_notify;
 
@@ -76,8 +77,7 @@ _anjay_get_server_connection(anjay_connection_ref_t ref);
 anjay_connection_type_t
 _anjay_get_default_connection_type(anjay_active_server_info_t *server);
 
-avs_stream_abstract_t *_anjay_get_server_stream(anjay_t *anjay,
-                                                anjay_connection_ref_t ref);
+int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref);
 
 void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay);
 
@@ -88,5 +88,5 @@ size_t _anjay_num_non_bootstrap_servers(anjay_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif	/* ANJAY_ANJAY_H */
+#endif /* ANJAY_ANJAY_H */
 

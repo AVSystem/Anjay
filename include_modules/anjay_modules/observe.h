@@ -16,7 +16,7 @@
 
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_OBSERVE_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_OBSERVE_H
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

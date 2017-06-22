@@ -19,7 +19,7 @@
 #include <avsystem/commons/unit/memstream.h>
 #include <avsystem/commons/unit/test.h>
 
-#include "anjay/anjay.h"
+#include <anjay/core.h>
 
 #define TEST_ENV(Data) \
     avs_stream_abstract_t *stream = NULL; \

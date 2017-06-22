@@ -121,10 +121,9 @@ static int get_server_lifetime(anjay_t *anjay,
         return -1;
     }
 
-    const anjay_resource_path_t path = {
-        ANJAY_DM_OID_SERVER, server_iid, ANJAY_DM_RID_SERVER_LIFETIME
-    };
-
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid,
+                               ANJAY_DM_RID_SERVER_LIFETIME);
     int64_t lifetime;
     int read_ret = _anjay_dm_res_read_i64(anjay, &path, &lifetime);
 
@@ -140,9 +139,7 @@ static int get_server_lifetime(anjay_t *anjay,
     return 0;
 }
 
-static int send_register(avs_stream_abstract_t *stream,
-                         const char *endpoint_name,
-                         const char *sms_msisdn,
+static int send_register(anjay_t *anjay,
                          const anjay_update_parameters_t *params) {
     anjay_msg_details_t details = {
         .msg_type = ANJAY_COAP_MSG_CONFIRMABLE,
@@ -150,11 +147,11 @@ static int send_register(avs_stream_abstract_t *stream,
         .format = ANJAY_COAP_FORMAT_APPLICATION_LINK,
         .uri_path = _anjay_make_string_list("rd", NULL),
         .uri_query = _anjay_make_query_string_list(
-                ANJAY_SUPPORTED_ENABLER_VERSION, endpoint_name,
+                ANJAY_SUPPORTED_ENABLER_VERSION, anjay->endpoint_name,
                 &params->lifetime_s,
                 params->binding_mode == ANJAY_BINDING_U ? ANJAY_BINDING_NONE
                                                         : params->binding_mode,
-                sms_msisdn)
+                _anjay_local_msisdn(anjay))
     };
 
     int result = -1;
@@ -163,9 +160,9 @@ static int send_register(avs_stream_abstract_t *stream,
         goto cleanup;
     }
 
-    if (_anjay_coap_stream_setup_request(stream, &details, NULL, 0)
-            || send_objects_list(stream, params->dm)
-            || avs_stream_finish_message(stream)) {
+    if (_anjay_coap_stream_setup_request(anjay->comm_stream, &details, NULL, 0)
+            || send_objects_list(anjay->comm_stream, params->dm)
+            || avs_stream_finish_message(anjay->comm_stream)) {
         anjay_log(ERROR, "could not send Register message");
     } else {
         anjay_log(INFO, "Register sent");
@@ -362,9 +359,7 @@ void _anjay_registration_info_cleanup(anjay_registration_info_t *info) {
 }
 
 int _anjay_register(anjay_t *anjay,
-                    avs_stream_abstract_t *stream,
-                    anjay_active_server_info_t *server,
-                    const char *endpoint_name) {
+                    anjay_active_server_info_t *server) {
     anjay_update_parameters_t new_params;
     if (init_update_parameters(anjay, server, &new_params)) {
         return -1;
@@ -373,9 +368,8 @@ int _anjay_register(anjay_t *anjay,
     AVS_LIST(const anjay_string_t) endpoint_path = NULL;
     int result = -1;
 
-    if (send_register(stream, endpoint_name, _anjay_local_msisdn(anjay),
-                      &new_params)
-            || check_register_response(stream, &endpoint_path)) {
+    if (send_register(anjay, &new_params)
+            || check_register_response(anjay->comm_stream, &endpoint_path)) {
         anjay_log(ERROR, "could not register to server %u", server->ssid);
         goto fail;
     }
@@ -498,7 +492,6 @@ static int check_update_response(avs_stream_abstract_t *stream) {
 }
 
 int _anjay_update_registration(anjay_t *anjay,
-                               avs_stream_abstract_t *stream,
                                anjay_active_server_info_t *server) {
     anjay_update_parameters_t new_params;
     if (init_update_parameters(anjay, server, &new_params)) {
@@ -506,10 +499,11 @@ int _anjay_update_registration(anjay_t *anjay,
     }
 
     int retval = -1;
-    if ((retval = send_update(stream, server->registration_info.endpoint_path,
+    if ((retval = send_update(anjay->comm_stream,
+                              server->registration_info.endpoint_path,
                               &server->registration_info.last_update_params,
                               &new_params))
-            || (retval = check_update_response(stream))) {
+            || (retval = check_update_response(anjay->comm_stream))) {
         anjay_log(ERROR, "could not update registration");
         goto finish;
     }

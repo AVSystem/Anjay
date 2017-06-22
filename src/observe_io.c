@@ -23,25 +23,20 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-#define VARARG_LENGTH_IMPL(_10, _9, _8, _7, _6, _5, _4, _3, _2, _1, N, ...) N
-#define VARARG_LENGTH(...) \
-        VARARG_LENGTH_IMPL(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
-#define VARARG0_IMPL(Arg, ...) Arg
-#define VARARG0(...) VARARG0_IMPL(__VA_ARGS__, _)
-
 #define OTHER_ARGS_DECL1(_)
 #define OTHER_ARGS_DECL2(_, T1) , T1 _arg1__
 #define OTHER_ARGS_DECL3(_, T1, T2) , T1 _arg1__, T2 _arg2__
 
 #define OTHER_ARGS_DECL(...) \
-        AVS_CONCAT(OTHER_ARGS_DECL, VARARG_LENGTH(__VA_ARGS__))(__VA_ARGS__)
+        AVS_CONCAT(OTHER_ARGS_DECL, \
+                   ANJAY_VARARG_LENGTH(__VA_ARGS__))(__VA_ARGS__)
 
 #define OTHER_ARGS_CALL1
 #define OTHER_ARGS_CALL2 , _arg1__
 #define OTHER_ARGS_CALL3 , _arg1__, _arg2__
 
 #define OTHER_ARGS_CALL(...) \
-        AVS_CONCAT(OTHER_ARGS_CALL, VARARG_LENGTH(__VA_ARGS__))
+        AVS_CONCAT(OTHER_ARGS_CALL, ANJAY_VARARG_LENGTH(__VA_ARGS__))
 
 typedef struct {
     const anjay_output_ctx_vtable_t *vtable;
@@ -56,7 +51,8 @@ static Rettype Name (anjay_output_ctx_t *ctx_ \
     observe_out_t *ctx = (observe_out_t *) ctx_; \
     *ctx->out_numeric = NAN; \
     ctx->value_already_returned = true; \
-    return VARARG0(__VA_ARGS__) (ctx->backend OTHER_ARGS_CALL(__VA_ARGS__)); \
+    return ANJAY_VARARG0(__VA_ARGS__) (ctx->backend \
+                                       OTHER_ARGS_CALL(__VA_ARGS__)); \
 }
 
 NON_NUMERIC(anjay_ret_bytes_ctx_t *, observe_bytes_begin,

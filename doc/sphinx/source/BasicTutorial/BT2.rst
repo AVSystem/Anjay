@@ -48,7 +48,7 @@ you may jump to :doc:`BT4_CustomObject` to get more information.
 
 To register an object we are going to use ``anjay_register_object`` function:
 
-.. snippet-source:: include_public/anjay/anjay.h
+.. snippet-source:: include_public/anjay/dm.h
 
     int anjay_register_object(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *def_ptr);

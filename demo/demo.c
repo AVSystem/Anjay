@@ -272,6 +272,7 @@ static int demo_init(anjay_demo_t *demo,
         .dtls_version = AVS_NET_SSL_VERSION_TLSv1_2,
         .in_buffer_size = (size_t) cmdline_args->inbuf_size,
         .out_buffer_size = (size_t) cmdline_args->outbuf_size,
+        .msg_cache_size = (size_t) cmdline_args->msg_cache_size,
 #ifdef __APPLE__
         .udp_socket_config = {
             .forced_mtu = 1492

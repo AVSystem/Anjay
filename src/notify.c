@@ -90,9 +90,9 @@ static int server_modified_notify(anjay_t *anjay,
         if (it->rid != ANJAY_DM_RID_SERVER_BINDING) {
             continue;
         }
-        const anjay_resource_path_t path = {
-            ANJAY_DM_OID_SERVER, it->iid, ANJAY_DM_RID_SERVER_SSID
-        };
+        const anjay_uri_path_t path =
+                MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, it->iid,
+                                   ANJAY_DM_RID_SERVER_SSID);
         int64_t ssid;
         if (_anjay_dm_res_read_i64(anjay, &path, &ssid)
                 || ssid <= 0 || ssid >= UINT16_MAX) {

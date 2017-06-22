@@ -17,9 +17,11 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_IO_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_IO_H
 
+#include <stdint.h>
+
 #include <avsystem/commons/stream.h>
 
-#include <stdint.h>
+#include <anjay/io.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

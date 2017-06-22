@@ -51,6 +51,7 @@ typedef struct anjay_observe_connection_entry_struct
 
 typedef struct {
     AVS_RBTREE(anjay_observe_connection_entry_t) connection_entries;
+    bool confirmable_notifications;
 } anjay_observe_state_t;
 
 typedef struct {
@@ -58,7 +59,6 @@ typedef struct {
     anjay_msg_details_t details;
     anjay_coap_msg_identity_t identity;
     struct timespec timestamp;
-    double numeric;
     const size_t value_length;
     char value[1]; // actually a FAM
 } anjay_observe_resource_value_t;
@@ -76,7 +76,7 @@ typedef struct {
     uint16_t format;
 } anjay_observe_key_t;
 
-int _anjay_observe_init(anjay_t *anjay);
+int _anjay_observe_init(anjay_t *anjay, bool confirmable_notifications);
 
 void _anjay_observe_cleanup(anjay_t *anjay);
 
@@ -107,6 +107,8 @@ anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
 
 #else // WITH_OBSERVE
 
+#define _anjay_observe_init(...) ((int) 0)
+#define _anjay_observe_cleanup(...) ((void) 0)
 #define _anjay_observe_sched_flush(...) ((void) 0)
 
 #endif // WITH_OBSERVE

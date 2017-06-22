@@ -31,23 +31,28 @@ class BufferSizeTest:
                                          auto_register=auto_register)
 
 
-class SmallInputBufferAndManyOptions(BufferSizeTest.Base):
+class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
     def setUp(self):
-        super().setUp(inbuf_size=46)
+        super().setUp(inbuf_size=48)
 
     def runTest(self):
         self.create_instance(self.serv, oid=1337, iid=1)
 
-        def make_optionlist(size):
-            return [coap.Option.URI_QUERY('%d' % i) for i in range(size)]
-
-        pkt = Lwm2mWrite('/1337/1/6', options=make_optionlist(128), content=b'32')
+        pkt = Lwm2mWrite('/1337/1/6',
+                         options=[coap.Option.URI_QUERY('lt=0.' + '0' * 128),
+                                  coap.Option.URI_QUERY('gt=9.' + '0' * 128),
+                                  coap.Option.URI_QUERY('st=1.' + '0' * 128)],
+                         content=b'32')
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_REQUEST_ENTITY_TOO_LARGE),
                             self.serv.recv(timeout_s=1))
 
         # When options do not dominate message size everything works fine.
-        pkt = Lwm2mWrite('/1337/1/6', options=make_optionlist(2), content=b'32')
+        pkt = Lwm2mWrite('/1337/1/6',
+                         options=[coap.Option.URI_QUERY('lt=0.0'),
+                                  coap.Option.URI_QUERY('gt=9.0'),
+                                  coap.Option.URI_QUERY('st=1.0')],
+                         content=b'32')
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.serv.recv(timeout_s=1))
 

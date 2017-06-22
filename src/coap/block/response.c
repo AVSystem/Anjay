@@ -62,18 +62,40 @@ static int block_recv_handler(const anjay_coap_msg_t *msg,
     *out_wait_for_next = false;
 
     anjay_coap_msg_identity_t id = _anjay_coap_common_identity_from_msg(msg);
+    anjay_coap_msg_identity_t prev_id =
+            _anjay_coap_common_identity_from_msg(last_response);
+
+    // Message identity matches last response, it means it must be a duplicate
+    // of the previous request.
+    if (_anjay_coap_common_identity_equal(&id, &prev_id)) {
+        return BLOCK_TRANSFER_RESULT_RETRY;
+    }
+
     _anjay_coap_id_source_static_reset(ctx->id_source, &id);
 
     coap_block_info_t block1;
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK1,
-                                          &block1) || block1.valid) {
-        *out_error_code = -ANJAY_ERR_BAD_OPTION;
+    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK1, &block1)) {
+        // Malformed BLOCK1 option, or multiple BLOCK1 options found.
+        *out_error_code = -ANJAY_ERR_BAD_REQUEST;
+        return -1;
+    } else if (block1.valid) {
+        // BLOCK1 option present: we do not expect it to be set, as
+        // block-wise responses to block-wise requests are not supported.
+        // It must be a part of an unrelated BLOCK-wise request.
+        *out_wait_for_next = true;
+        *out_error_code = -ANJAY_ERR_SERVICE_UNAVAILABLE;
         return -1;
     }
+
     coap_block_info_t block2;
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK2, &block2)
-            || !block2.valid) {
+    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK2, &block2)) {
+        // Malformed BLOCK2 option, or multiple BLOCK2 options found.
         *out_error_code = -ANJAY_ERR_BAD_REQUEST;
+        return -1;
+    } else if (!block2.valid) {
+        // BLOCK2 option missing. It must be an unrelated request.
+        *out_wait_for_next = true;
+        *out_error_code = -ANJAY_ERR_SERVICE_UNAVAILABLE;
         return -1;
     }
 

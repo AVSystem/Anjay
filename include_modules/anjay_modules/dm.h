@@ -24,11 +24,33 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-typedef struct anjay_resource_path {
+typedef struct {
+    bool has_oid;
     anjay_oid_t oid;
+
+    bool has_iid;
     anjay_iid_t iid;
+
+    bool has_rid;
     anjay_rid_t rid;
-} anjay_resource_path_t;
+} anjay_uri_path_t;
+
+#define ASSERT_RESOURCE_PATH(uri) \
+    do {                          \
+        assert((uri).has_oid);    \
+        assert((uri).has_iid);    \
+        assert((uri).has_rid);    \
+    } while (0)
+
+#define MAKE_RESOURCE_PATH(Oid, Iid, Rid) \
+    (anjay_uri_path_t) {                  \
+        .oid = (Oid),                     \
+        .iid = (Iid),                     \
+        .rid = (Rid),                     \
+        .has_oid = true,                  \
+        .has_iid = true,                  \
+        .has_rid = true                   \
+    }
 
 typedef enum anjay_request_action {
     ANJAY_ACTION_READ,
@@ -44,13 +66,13 @@ typedef enum anjay_request_action {
 } anjay_request_action_t;
 
 int _anjay_dm_res_read(anjay_t *anjay,
-                       const anjay_resource_path_t *path,
+                       const anjay_uri_path_t *path,
                        char *buffer,
                        size_t buffer_size,
                        size_t *out_bytes_read);
 
 static inline int _anjay_dm_res_read_string(anjay_t *anjay,
-                                            const anjay_resource_path_t *path,
+                                            const anjay_uri_path_t *path,
                                             char *buffer,
                                             size_t buffer_size) {
     assert(buffer && buffer_size > 0);
@@ -64,7 +86,7 @@ static inline int _anjay_dm_res_read_string(anjay_t *anjay,
 }
 
 static inline int _anjay_dm_res_read_i64(anjay_t *anjay,
-                                         const anjay_resource_path_t *path,
+                                         const anjay_uri_path_t *path,
                                          int64_t *out_value) {
     size_t bytes_read;
     int result = _anjay_dm_res_read(anjay, path, (char *) out_value,
@@ -76,7 +98,7 @@ static inline int _anjay_dm_res_read_i64(anjay_t *anjay,
 }
 
 static inline int _anjay_dm_res_read_bool(anjay_t *anjay,
-                                          const anjay_resource_path_t *path,
+                                          const anjay_uri_path_t *path,
                                           bool *out_value) {
     size_t bytes_read;
     int result = _anjay_dm_res_read(anjay, path, (char *) out_value,

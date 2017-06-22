@@ -21,30 +21,7 @@
 #include <avsystem/commons/unit/test.h>
 
 #include "../log.h"
-
-#define PAYLOAD_MARKER "\xFF"
-
-#define VTTL(version, type, token_length) \
-    ((((version) & 0x03) << 6) | (((type) & 0x03) << 4) | ((token_length) & 0x0f))
-
-static void setup_msg(anjay_coap_msg_t *msg,
-                      uint8_t *content,
-                      size_t content_length) {
-    static const anjay_coap_msg_t TEMPLATE = {
-        .header = {
-            .version_type_token_length = VTTL(1, ANJAY_COAP_MSG_ACKNOWLEDGEMENT, 0),
-            .code = ANJAY_COAP_CODE(3, 4),
-            .message_id = { 5, 6 }
-        }
-    };
-    memset(msg, 0, sizeof(*msg) + content_length);
-    memcpy(msg, &TEMPLATE, sizeof(anjay_coap_msg_t));
-    assert(content || content_length == 0);
-    if (content_length) {
-        memcpy(msg->content, content, content_length);
-    }
-    msg->length = (uint32_t)(sizeof(msg->header) + content_length);
-}
+#include "utils.h"
 
 AVS_UNIT_TEST(coap_msg, header_memory_layout) {
     anjay_coap_msg_t msg = {

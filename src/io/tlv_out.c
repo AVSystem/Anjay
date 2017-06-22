@@ -338,16 +338,6 @@ static anjay_output_ctx_t *tlv_ret_array_start(anjay_output_ctx_t *ctx) {
                            TLV_ID_RID, TLV_ID_RID_ARRAY, TLV_ID_RIID);
 }
 
-static int tlv_ret_array_index(anjay_output_ctx_t *ctx_, anjay_riid_t riid) {
-    tlv_out_t *ctx = (tlv_out_t *) ctx_;
-    if (ctx->slave || ctx->next_id.type != TLV_ID_RIID
-            || ctx->next_id.id >= 0) {
-        return -1;
-    }
-    ctx->next_id.id = riid;
-    return 0;
-}
-
 static int tlv_ret_array_finish(anjay_output_ctx_t *ctx_) {
     tlv_out_t *ctx = (tlv_out_t *) ctx_;
     if (ctx->next_id.type != TLV_ID_RIID) {
@@ -383,7 +373,9 @@ static int tlv_set_id(anjay_output_ctx_t *ctx_,
         ctx->next_id.type = TLV_ID_RID;
         break;
     case ANJAY_ID_RIID:
-        ctx->next_id.type = TLV_ID_RIID;
+        if (ctx->next_id.type != TLV_ID_RIID || ctx->next_id.id >= 0) {
+            return -1;
+        }
         break;
     default:
         return -1;
@@ -414,7 +406,6 @@ static const anjay_output_ctx_vtable_t TLV_OUT_VTABLE = {
     tlv_ret_bool,
     tlv_ret_objlnk,
     tlv_ret_array_start,
-    tlv_ret_array_index,
     tlv_ret_array_finish,
     tlv_ret_object_start,
     tlv_ret_object_finish,

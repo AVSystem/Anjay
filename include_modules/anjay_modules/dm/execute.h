@@ -17,7 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_DM_EXECUTE_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_DM_EXECUTE_H
 
-#include <anjay/anjay.h>
+#include <anjay/io.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

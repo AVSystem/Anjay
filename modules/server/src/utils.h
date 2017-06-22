@@ -20,7 +20,7 @@
 
 #include <assert.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include <anjay_modules/utils.h>
 

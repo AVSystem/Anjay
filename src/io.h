@@ -15,14 +15,15 @@
  */
 
 #ifndef ANJAY_IO_H
-#define	ANJAY_IO_H
+#define ANJAY_IO_H
 
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/stream/stream_outbuf.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include <anjay_modules/io.h>
+#include <anjay_modules/dm.h>
 
 #include "coap/stream.h"
 
@@ -53,17 +54,6 @@ int _anjay_handle_requested_format(uint16_t *out_ptr,
 /* returned from _anjay_output_ctx_destroy if no anjay_ret_* function was
  * called, making it impossible to determine actual resource format */
 #define ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED   (-0xCE2)
-
-typedef struct {
-    bool has_oid;
-    anjay_oid_t oid;
-
-    bool has_iid;
-    anjay_iid_t iid;
-
-    bool has_rid;
-    anjay_rid_t rid;
-} anjay_uri_path_t;
 
 anjay_output_ctx_t *
 _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
@@ -122,4 +112,4 @@ anjay_output_buf_ctx_t _anjay_output_buf_ctx_init(avs_stream_outbuf_t *stream);
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif	/* ANJAY_IO_H */
+#endif /* ANJAY_IO_H */

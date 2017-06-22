@@ -27,7 +27,7 @@
 #include <avsystem/commons/stream/net.h>
 #include <avsystem/commons/stream_v_table.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include <anjay_modules/time.h>
 
@@ -63,15 +63,15 @@ static int init(anjay_t *anjay,
 
     anjay->servers = _anjay_servers_create();
 
-    anjay_coap_socket_t *coap_sock;
-    if (_anjay_coap_socket_create(&coap_sock, NULL)) {
+    if (_anjay_coap_socket_create(&anjay->coap_socket, NULL,
+                                  config->msg_cache_size)) {
         return -1;
     }
 
-    if (_anjay_coap_stream_create(&anjay->comm_stream, coap_sock,
+    if (_anjay_coap_stream_create(&anjay->comm_stream, anjay->coap_socket,
                                   config->in_buffer_size,
                                   config->out_buffer_size)) {
-        _anjay_coap_socket_cleanup(&coap_sock);
+        _anjay_coap_socket_cleanup(&anjay->coap_socket);
         return -1;
     }
 
@@ -80,7 +80,7 @@ static int init(anjay_t *anjay,
         return -1;
     }
 
-    if (_anjay_observe_init(anjay)) {
+    if (_anjay_observe_init(anjay, config->confirmable_notifications)) {
         return -1;
     }
 
@@ -150,12 +150,15 @@ static void split_query_string(char *query,
     }
 }
 
-static int parse_nullable_time(const char *period_str,
+static int parse_nullable_time(const char *key_str,
+                               const char *period_str,
                                bool *out_present,
                                time_t *out_value) {
     long long num;
-    *out_present = false;
-    if (!period_str) {
+    if (*out_present) {
+        anjay_log(ERROR, "Duplicated attribute in query string: %s", key_str);
+        return -1;
+    } else if (!period_str) {
         *out_present = true;
         *out_value = ANJAY_ATTRIB_PERIOD_NONE;
         return 0;
@@ -168,11 +171,14 @@ static int parse_nullable_time(const char *period_str,
     }
 }
 
-static int parse_nullable_double(const char *double_str,
+static int parse_nullable_double(const char *key_str,
+                                 const char *double_str,
                                  bool *out_present,
                                  double *out_value) {
-    *out_present = false;
-    if (!double_str) {
+    if (*out_present) {
+        anjay_log(ERROR, "Duplicated attribute in query string: %s", key_str);
+        return -1;
+    } else if (!double_str) {
         *out_present = true;
         *out_value = ANJAY_ATTRIB_VALUE_NONE;
         return 0;
@@ -187,27 +193,25 @@ static int parse_nullable_double(const char *double_str,
 static int parse_attribute(anjay_request_attributes_t *out_attrs,
                            const char *key,
                            const char *value) {
-    int result = 0;
-
     if (!strcmp(key, ANJAY_ATTR_PMIN)) {
-        result = parse_nullable_time(value, &out_attrs->has_min_period,
-                                     &out_attrs->values.common.min_period);
+        return parse_nullable_time(key, value, &out_attrs->has_min_period,
+                                   &out_attrs->values.common.min_period);
     } else if (!strcmp(key, ANJAY_ATTR_PMAX)) {
-        result = parse_nullable_time(value, &out_attrs->has_max_period,
-                                     &out_attrs->values.common.max_period);
+        return parse_nullable_time(key, value, &out_attrs->has_max_period,
+                                   &out_attrs->values.common.max_period);
     } else if (!strcmp(key, ANJAY_ATTR_GT)) {
-        result = parse_nullable_double(value, &out_attrs->has_greater_than,
-                                       &out_attrs->values.greater_than);
+        return parse_nullable_double(key, value, &out_attrs->has_greater_than,
+                                     &out_attrs->values.greater_than);
     } else if (!strcmp(key, ANJAY_ATTR_LT)) {
-        result = parse_nullable_double(value, &out_attrs->has_less_than,
-                                       &out_attrs->values.less_than);
+        return parse_nullable_double(key, value, &out_attrs->has_less_than,
+                                     &out_attrs->values.less_than);
     } else if (!strcmp(key, ANJAY_ATTR_ST)) {
-        result = parse_nullable_double(value, &out_attrs->has_step,
-                                       &out_attrs->values.step);
+        return parse_nullable_double(key, value, &out_attrs->has_step,
+                                     &out_attrs->values.step);
     } else {
         anjay_log(ERROR, "unrecognized query string: %s = %s", key, value);
+        return -1;
     }
-    return result;
 }
 
 static int parse_attributes(avs_stream_abstract_t *stream,
@@ -331,18 +335,24 @@ static int get_msg_action(anjay_coap_msg_type_t msg_type,
     return result;
 }
 
-static int parse_action(avs_stream_abstract_t *stream,
-                        anjay_request_details_t *inout_details) {
-    if (_anjay_coap_stream_get_msg_type(stream, &inout_details->msg_type)
-            || _anjay_coap_stream_get_code(stream,
-                                           &inout_details->request_code)) {
-        anjay_log(ERROR, "could not get message type or method code");
-        return -1;
+static int parse_type_and_code(avs_stream_abstract_t *stream,
+                               anjay_request_details_t *inout_details) {
+    int result;
+
+    if ((result = _anjay_coap_stream_get_msg_type(stream,
+                                                  &inout_details->msg_type))
+            || (result = _anjay_coap_stream_get_code(
+                    stream, &inout_details->request_code))) {
+        return result;
     }
 
     anjay_log(DEBUG, "CoAP method: %s",
               ANJAY_COAP_CODE_STRING(inout_details->request_code));
+    return 0;
+}
 
+static int parse_action(avs_stream_abstract_t *stream,
+                        anjay_request_details_t *inout_details) {
     if (_anjay_coap_stream_get_option_uint(
             stream, ANJAY_COAP_OPT_ACCEPT, &inout_details->requested_format,
             sizeof(inout_details->requested_format))) {
@@ -353,8 +363,8 @@ static int parse_action(avs_stream_abstract_t *stream,
                           inout_details->request_code,
                           inout_details->requested_format,
                           inout_details->is_bs_uri,
-                          inout_details->has_iid,
-                          inout_details->has_rid,
+                          inout_details->uri.has_iid,
+                          inout_details->uri.has_rid,
                           inout_details->content_format
                                   != ANJAY_COAP_FORMAT_NONE,
                           &inout_details->action);
@@ -403,27 +413,22 @@ static int parse_bs_uri(avs_stream_abstract_t *stream, bool *out_is_bs) {
 }
 
 static int parse_dm_uri(avs_stream_abstract_t *stream,
-                        bool *out_has_oid,
-                        anjay_oid_t *out_oid,
-                        bool *out_has_iid,
-                        anjay_iid_t *out_iid,
-                        bool *out_has_rid,
-                        anjay_rid_t *out_rid) {
+                        anjay_uri_path_t *out_uri) {
     char uri[ANJAY_MAX_URI_SEGMENT_SIZE] = "";
     size_t uri_size;
 
-    *out_has_oid = false;
-    *out_has_iid = false;
-    *out_has_rid = false;
+    out_uri->has_oid = false;
+    out_uri->has_iid = false;
+    out_uri->has_rid = false;
 
     struct {
         uint16_t *id;
         bool *has_id;
         uint16_t max_valid_value;
     } ids[] = {
-        { out_oid, out_has_oid, UINT16_MAX },
-        { out_iid, out_has_iid, UINT16_MAX - 1 },
-        { out_rid, out_has_rid, UINT16_MAX }
+        { &out_uri->oid, &out_uri->has_oid, UINT16_MAX },
+        { &out_uri->iid, &out_uri->has_iid, UINT16_MAX - 1 },
+        { &out_uri->rid, &out_uri->has_rid, UINT16_MAX }
     };
 
     anjay_coap_opt_iterator_t optit = ANJAY_COAP_OPT_ITERATOR_EMPTY;
@@ -456,24 +461,18 @@ static int parse_dm_uri(avs_stream_abstract_t *stream,
 
 static int parse_request_uri(avs_stream_abstract_t *stream,
                              bool *out_is_bs,
-                             bool *out_has_oid,
-                             anjay_oid_t *out_oid,
-                             bool *out_has_iid,
-                             anjay_iid_t *out_iid,
-                             bool *out_has_rid,
-                             anjay_rid_t *out_rid) {
+                             anjay_uri_path_t *out_uri) {
     int result = parse_bs_uri(stream, out_is_bs);
     if (result) {
         return result;
     }
     if (*out_is_bs) {
-        *out_has_oid = false;
-        *out_has_iid = false;
-        *out_has_rid = false;
+        out_uri->has_oid = false;
+        out_uri->has_iid = false;
+        out_uri->has_rid = false;
         return 0;
     } else {
-        return parse_dm_uri(stream, out_has_oid, out_oid, out_has_iid, out_iid,
-                            out_has_rid, out_rid);
+        return parse_dm_uri(stream, out_uri);
     }
 }
 
@@ -501,19 +500,16 @@ static int parse_observe(avs_stream_abstract_t *stream,
     }
 }
 
-static int parse_request_header(avs_stream_abstract_t *stream,
-                                anjay_request_details_t *out_details) {
+static int parse_request_options(avs_stream_abstract_t *stream,
+                                 anjay_request_details_t *out_details) {
     if (parse_observe(stream, &out_details->observe)
-        || parse_request_uri(stream, &out_details->is_bs_uri,
-                             &out_details->has_oid, &out_details->oid,
-                             &out_details->has_iid, &out_details->iid,
-                             &out_details->has_rid, &out_details->rid)
+        || parse_request_uri(stream, &out_details->is_bs_uri, &out_details->uri)
         || parse_attributes(stream, &out_details->attributes)
         || _anjay_coap_stream_get_content_format(stream,
                                                  &out_details->content_format)
         || parse_action(stream, out_details)
         || _anjay_coap_stream_get_request_identity(
-                stream, &out_details->request_identity)) {
+                   stream, &out_details->request_identity)) {
         return -1;
     }
     return 0;
@@ -551,15 +547,13 @@ static bool critical_option_validator(uint8_t msg_code, uint32_t optnum) {
 }
 
 static int handle_request(anjay_t *anjay,
-                          avs_stream_abstract_t *stream,
                           const anjay_request_details_t *details) {
     int result = -1;
 
     if (details->ssid == ANJAY_SSID_BOOTSTRAP) {
-        result = _anjay_bootstrap_perform_action(anjay, anjay->comm_stream,
-                                                 details);
+        result = _anjay_bootstrap_perform_action(anjay, details);
     } else {
-        result = _anjay_dm_perform_action(anjay, anjay->comm_stream, details);
+        result = _anjay_dm_perform_action(anjay, details);
     }
 
     if (result) {
@@ -575,7 +569,7 @@ static int handle_request(anjay_t *anjay,
                       ANJAY_COAP_CODE_STRING(details->request_code));
         }
 
-        if (_anjay_coap_stream_set_error(stream, error_code)) {
+        if (_anjay_coap_stream_set_error(anjay->comm_stream, error_code)) {
             anjay_log(ERROR, "could not setup error response");
             return -1;
         }
@@ -583,7 +577,7 @@ static int handle_request(anjay_t *anjay,
 
     int finish_result = 0;
     if (details->msg_type == ANJAY_COAP_MSG_CONFIRMABLE) {
-        finish_result = avs_stream_finish_message(stream);
+        finish_result = avs_stream_finish_message(anjay->comm_stream);
     }
 
     if (details->ssid != ANJAY_SSID_BOOTSTRAP) {
@@ -593,7 +587,6 @@ static int handle_request(anjay_t *anjay,
 }
 
 static int handle_incoming_message(anjay_t *anjay,
-                                   avs_stream_abstract_t *stream,
                                    anjay_connection_ref_t connection) {
     int result = -1;
     anjay_request_details_t details;
@@ -607,24 +600,33 @@ static int handle_incoming_message(anjay_t *anjay,
         anjay_log(DEBUG, "server ID = %u", details.ssid);
     }
 
-    if (parse_request_header(stream, &details)) {
-        anjay_log(ERROR, "could not parse request header");
-        goto cleanup;
-    }
-
-    if (_anjay_coap_stream_validate_critical_options(
-                stream, critical_option_validator)) {
-        if (_anjay_coap_stream_set_error(stream, -ANJAY_ERR_BAD_OPTION)
-                || avs_stream_finish_message(stream)) {
-            anjay_log(WARNING, "could not send Bad Option response");
+    if ((result = parse_type_and_code(anjay->comm_stream, &details))) {
+        if (result == ANJAY_COAP_SOCKET_ERR_DUPLICATE) {
+            anjay_log(TRACE, "duplicate request received");
+            result = 0;
+        } else {
+            anjay_log(ERROR, "received packet is not a valid CoAP message");
         }
         goto cleanup;
     }
 
-    result = handle_request(anjay, stream, &details);
+    if (parse_request_options(anjay->comm_stream, &details)
+            || _anjay_coap_stream_validate_critical_options(
+                    anjay->comm_stream, critical_option_validator)) {
+        if (_anjay_coap_msg_code_is_request(details.request_code)) {
+            if (_anjay_coap_stream_set_error(anjay->comm_stream,
+                                             -ANJAY_ERR_BAD_OPTION)
+                    || avs_stream_finish_message(anjay->comm_stream)) {
+                anjay_log(WARNING, "could not send Bad Option response");
+            }
+        }
+        goto cleanup;
+    }
+
+    result = handle_request(anjay, &details);
 
 cleanup:
-    avs_stream_reset(stream);
+    avs_stream_reset(anjay->comm_stream);
     return result;
 }
 
@@ -658,8 +660,7 @@ _anjay_get_default_connection_type(anjay_active_server_info_t *server) {
     }
 }
 
-avs_stream_abstract_t *
-_anjay_get_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
+int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
     const coap_transmission_params_t *tx_params;
     switch (ref.conn_type) {
     case ANJAY_CONNECTION_UDP:
@@ -670,7 +671,7 @@ _anjay_get_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
         break;
     default:
         assert(0 && "Should never happen");
-        return NULL;
+        return -1;
     }
 
     anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
@@ -681,10 +682,10 @@ _anjay_get_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
             || _anjay_coap_stream_set_tx_params(anjay->comm_stream,
                                                 tx_params)) {
         anjay_log(ERROR, "could not set stream socket");
-        return NULL;
+        return -1;
     }
 
-    return anjay->comm_stream;
+    return 0;
 }
 
 typedef struct {
@@ -797,16 +798,12 @@ static int udp_serve(anjay_t *anjay,
                                                     ready_socket),
         .conn_type = ANJAY_CONNECTION_UDP
     };
-    if (!connection.server) {
-        return -1;
-    }
-    avs_stream_abstract_t *stream = _anjay_get_server_stream(anjay,
-                                                             connection);
-    if (!stream) {
+    if (!connection.server
+            || _anjay_bind_server_stream(anjay, connection)) {
         return -1;
     }
 
-    int result = handle_incoming_message(anjay, stream, connection);
+    int result = handle_incoming_message(anjay, connection);
     _anjay_release_server_stream(anjay, connection);
     return result;
 }
@@ -868,6 +865,7 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr) {
         assert(0 && "SMS drivers not supported by this version of Anjay");
     }
 }
+
 
 #ifdef ANJAY_TEST
 #include "test/anjay.c"

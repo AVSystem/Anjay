@@ -24,9 +24,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 void _anjay_registration_info_cleanup(anjay_registration_info_t *info);
 
 int _anjay_register(anjay_t *anjay,
-                    avs_stream_abstract_t *stream,
-                    anjay_active_server_info_t *server,
-                    const char *endpoint_name);
+                    anjay_active_server_info_t *server);
 
 #define ANJAY_REGISTRATION_UPDATE_REJECTED 1
 
@@ -38,7 +36,6 @@ int _anjay_register(anjay_t *anjay,
  *   so the Update message should not be retransmitted.
  */
 int _anjay_update_registration(anjay_t *anjay,
-                               avs_stream_abstract_t *stream,
                                anjay_active_server_info_t *server);
 
 int _anjay_deregister(avs_stream_abstract_t *stream,

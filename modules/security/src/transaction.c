@@ -21,6 +21,7 @@ VISIBILITY_SOURCE_BEGIN
 
 static int ssid_cmp(const void *a, const void *b, size_t element_size) {
     assert(element_size == sizeof(anjay_ssid_t));
+    (void) element_size;
     return *((const anjay_ssid_t *) a) - *((const anjay_ssid_t *) b);
 }
 

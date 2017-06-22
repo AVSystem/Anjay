@@ -153,8 +153,6 @@ class OfflineWithObserve(test_suite.Lwm2mSingleServerTest,
     def runTest(self):
         self.create_instance(self.serv, oid=1337)
         self.write_attributes(self.serv, oid=1337, query=['pmin=3'])
-        self.write_attributes(self.serv, oid=1337, iid=1, rid=0,
-                              query=['lt=%d' % (int(time.time()) + 9)])
 
         # Observe timestamp
         pkt = self.observe(self.serv, oid=1337, iid=1, rid=0)
@@ -170,15 +168,7 @@ class OfflineWithObserve(test_suite.Lwm2mSingleServerTest,
 
         self.assertDemoUpdatesRegistration(content=OfflineWithObserve.UPDATED_INSTANCES)
 
-        # Two more notifications left.
+        # notifications now come
         notification = self.serv.recv(timeout_s=3)
         self.assertEquals(notification.type, coap.Type.NON_CONFIRMABLE)
         self.assertEquals(notification.code, coap.Code.RES_CONTENT)
-
-        notification = self.serv.recv(timeout_s=3)
-        self.assertEquals(notification.type, coap.Type.NON_CONFIRMABLE)
-        self.assertEquals(notification.code, coap.Code.RES_CONTENT)
-
-        # And only two.
-        with self.assertRaises(socket.timeout):
-            self.serv.recv(timeout_s=4)

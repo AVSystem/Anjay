@@ -23,7 +23,7 @@
 
 #include <avsystem/commons/stream_v_table.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include "io.h"
 #include "io/vtable.h"
@@ -226,11 +226,7 @@ anjay_output_ctx_t *anjay_ret_array_start(anjay_output_ctx_t *ctx) {
 }
 
 int anjay_ret_array_index(anjay_output_ctx_t *array_ctx, anjay_riid_t index) {
-    if (!array_ctx->vtable->array_index) {
-        set_errno_not_implemented(array_ctx);
-        return -1;
-    }
-    return array_ctx->vtable->array_index(array_ctx, index);
+    return _anjay_output_set_id(array_ctx, ANJAY_ID_RIID, index);
 }
 
 int anjay_ret_array_finish(anjay_output_ctx_t *array_ctx) {

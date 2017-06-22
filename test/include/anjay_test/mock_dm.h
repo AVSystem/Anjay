@@ -15,9 +15,9 @@
  */
 
 #ifndef ANJAY_TEST_MOCK_DM_H
-#define	ANJAY_TEST_MOCK_DM_H
+#define ANJAY_TEST_MOCK_DM_H
 
-#include <anjay/anjay.h>
+#include <anjay/dm.h>
 
 typedef enum {
     MOCK_DATA_NONE,
@@ -122,10 +122,6 @@ struct anjay_mock_dm_data_array_struct {
     .expected_retval = Retval \
 })
 
-#define ANJAY_MOCK_DM_VARARG0_IMPL__(Arg, ...) Arg
-#define ANJAY_MOCK_DM_VARARG0__(...) \
-        ANJAY_MOCK_DM_VARARG0_IMPL__(__VA_ARGS__, _)
-
 #define ANJAY_MOCK_DM_ARRAY_REST__(Arg, ...) __VA_ARGS__
 
 #define ANJAY_MOCK_DM_ARRAY_COMMON__(Type, ...) \
@@ -136,7 +132,7 @@ struct anjay_mock_dm_data_array_struct {
             ANJAY_MOCK_DM_ARRAY_REST__(__VA_ARGS__, NULL) \
         }[0] \
     }, \
-    .expected_retval = ANJAY_MOCK_DM_VARARG0__(__VA_ARGS__) \
+    .expected_retval = ANJAY_VARARG0(__VA_ARGS__) \
 })
 
 #define ANJAY_MOCK_DM_ARRAY(...) \
@@ -145,7 +141,7 @@ struct anjay_mock_dm_data_array_struct {
         ANJAY_MOCK_DM_ARRAY_COMMON__(MOCK_DATA_ARRAY, __VA_ARGS__)
 
 #define ANJAY_MOCK_DM_ARRAY_ENTRY(...) (&(const anjay_mock_dm_data_array_t) { \
-    .index = ANJAY_MOCK_DM_VARARG0__(__VA_ARGS__), \
+    .index = ANJAY_VARARG0(__VA_ARGS__), \
     .value = *ANJAY_MOCK_DM_ARRAY_REST__(__VA_ARGS__) \
 })
 
@@ -294,5 +290,5 @@ void _anjay_mock_dm_expect_resource_write_attrs(anjay_t *anjay,
 void _anjay_mock_dm_expect_clean(void);
 void _anjay_mock_dm_expected_commands_clear(void);
 
-#endif	/* ANJAY_TEST_MOCK_DM_H */
+#endif /* ANJAY_TEST_MOCK_DM_H */
 

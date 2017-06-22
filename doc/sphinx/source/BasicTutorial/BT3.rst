@@ -166,7 +166,7 @@ So, it could be written like this:
                 }
             }
 
-            // Finally run the scheduler (ignoring it's return value, which
+            // Finally run the scheduler (ignoring its return value, which
             // is the amount of tasks executed)
             (void) anjay_sched_run(anjay);
         }

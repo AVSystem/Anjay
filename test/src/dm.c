@@ -20,6 +20,7 @@
 
 #include <anjay_test/dm.h>
 #include <anjay_test/coap/stream.h>
+#include <anjay_test/coap/socket.h>
 
 #include "../../src/anjay.h"
 
@@ -29,13 +30,9 @@
 #include "../../src/servers/servers.h"
 #undef ANJAY_SERVERS_INTERNALS
 
-anjay_t *_anjay_test_dm_init(void) {
+anjay_t *_anjay_test_dm_init(const anjay_configuration_t *config) {
     _anjay_mock_dm_expected_commands_clear();
-    anjay_t *anjay = anjay_new(&(anjay_configuration_t) {
-                                   .endpoint_name = "urn:dev:os:anjay-test",
-                                   .in_buffer_size = 4096,
-                                   .out_buffer_size = 4096
-                               });
+    anjay_t *anjay = anjay_new(config);
     AVS_UNIT_ASSERT_NOT_NULL(anjay);
     _anjay_mock_coap_stream_setup((coap_stream_t *) anjay->comm_stream);
     _anjay_test_dm_unsched_reload_sockets(anjay);
@@ -56,7 +53,7 @@ avs_net_abstract_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
     AVS_UNIT_ASSERT_TRUE(anjay->servers.active != oldservers);
     anjay->servers.active->ssid = ssid;
     avs_net_abstract_socket_t *socket = NULL;
-    avs_unit_mocksock_create(&socket);
+    _anjay_mocksock_create(&socket, 1252, 1252);
     avs_unit_mocksock_expect_connect(socket, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
     anjay->servers.active->udp_connection.conn_priv_data_.socket = socket;

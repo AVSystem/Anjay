@@ -17,7 +17,7 @@
 #ifndef ANJAY_DM_DISCOVER_H
 #define ANJAY_DM_DISCOVER_H
 
-#include <anjay/anjay.h>
+#include <anjay/dm.h>
 #include <avsystem/commons/stream_v_table.h>
 #include <avsystem/commons/stream.h>
 
@@ -33,13 +33,11 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  * @param anjay     ANJAY object to operate on.
  * @param obj       Object on which Discover shall be performed.
  * @param ssid      Short Server ID issuing Discover.
- * @param stream    Stream where results will be written.
  * @return 0 on success, negative value in case of an error.
  */
 int _anjay_discover_object(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj,
-                           anjay_ssid_t ssid,
-                           avs_stream_abstract_t *stream);
+                           anjay_ssid_t ssid);
 
 /**
  * Performs LwM2M Discover operation on Object Instance:
@@ -51,14 +49,12 @@ int _anjay_discover_object(anjay_t *anjay,
  * @param obj       Object whose instance is being queried.
  * @param iid       Instance on which Discover shall be performed.
  * @param ssid      Short Server ID issuing Discover.
- * @param stream    Stream where results will be written.
  * @return 0 on success, negative value in case of an error.
  */
 int _anjay_discover_instance(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
-                             anjay_ssid_t ssid,
-                             avs_stream_abstract_t *stream);
+                             anjay_ssid_t ssid);
 
 /**
  * Performs LwM2M Discover operation on Resource:
@@ -69,15 +65,13 @@ int _anjay_discover_instance(anjay_t *anjay,
  * @param iid       Instance whose resource is being queried.
  * @param rid       Resource on which Discover shall be performed.
  * @param ssid      Short Server ID issuing Discover.
- * @param stream    Stream where results will be written.
  * @return 0 on success, negative value in case of an error.
  */
 int _anjay_discover_resource(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
-                             anjay_ssid_t ssid,
-                             avs_stream_abstract_t *stream);
+                             anjay_ssid_t ssid);
 
 #ifdef WITH_BOOTSTRAP
 /**
@@ -85,20 +79,17 @@ int _anjay_discover_resource(anjay_t *anjay,
  *
  * @param anjay     ANJAY object to operate on.
  * @param obj       Object on which Discover is issued.
- * @param stream    Stream where results will be written.
  * @retrurn 0 on success, negative value in case of an error.
  */
 int _anjay_bootstrap_discover_object(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj,
-                                     avs_stream_abstract_t *stream);
+                                     const anjay_dm_object_def_t *const *obj);
 /**
  * Performs LwM2M Bootstrap Discover operation on the entire data model.
  *
  * @param anjay     ANJAY object to operate on.
- * @param stream    Stream where results will be written.
  * @retrurn 0 on success, negative value in case of an error.
  */
-int _anjay_bootstrap_discover(anjay_t *anjay, avs_stream_abstract_t *stream);
+int _anjay_bootstrap_discover(anjay_t *anjay);
 #endif // WITH_BOOTSTRAP
 
 #endif // WITH_DISCOVER

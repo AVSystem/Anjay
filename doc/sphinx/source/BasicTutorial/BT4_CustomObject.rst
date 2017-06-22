@@ -24,7 +24,7 @@ which holds:
 - a set of handlers used by the library to access and possibly modify the Object.
 
 .. highlight:: c
-.. snippet-source:: include_public/anjay/anjay.h
+.. snippet-source:: include_public/anjay/dm.h
 
     /** A struct containing pointers to Object handlers. */
     typedef struct {

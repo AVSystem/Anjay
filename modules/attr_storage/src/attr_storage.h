@@ -18,7 +18,7 @@
 #define ATTR_STORAGE_H
 
 #include <anjay/attr_storage.h>
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include <anjay_modules/utils.h>
 

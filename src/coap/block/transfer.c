@@ -199,11 +199,12 @@ static int send_block_msg(coap_block_transfer_ctx_t *ctx,
              (unsigned long)_anjay_coap_msg_payload_length(msg),
              ctx->block.has_more);
 
+    const coap_transmission_params_t *tx_params =
+            _anjay_coap_socket_get_tx_params(ctx->socket);
     coap_retry_state_t retry_state = { .retry_count = 0, .recv_timeout_ms = 0 };
     int result = 0;
     do {
-        _anjay_coap_common_update_retry_state(&retry_state,
-                                              &ctx->in->transmission_params,
+        _anjay_coap_common_update_retry_state(&retry_state, tx_params,
                                               &ctx->in->rand_seed);
 
         if ((result = _anjay_coap_socket_send(ctx->socket, msg))) {
@@ -224,8 +225,7 @@ static int send_block_msg(coap_block_transfer_ctx_t *ctx,
 
         coap_log(DEBUG, "timeout reached, next: %d ms",
                  retry_state.recv_timeout_ms);
-    } while (retry_state.retry_count
-                < ctx->in->transmission_params.max_retransmit);
+    } while (retry_state.retry_count < tx_params->max_retransmit);
 
     if (!result) {
         ctx->timed_out = false;

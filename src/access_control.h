@@ -15,7 +15,7 @@
  */
 
 #ifndef ACCESS_CONTROL_H
-#define	ACCESS_CONTROL_H
+#define ACCESS_CONTROL_H
 
 #include "anjay.h"
 #include "dm.h"
@@ -42,4 +42,4 @@ bool _anjay_access_control_action_allowed(anjay_t *anjay,
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif	/* ACCESS_CONTROL_H */
+#endif /* ACCESS_CONTROL_H */

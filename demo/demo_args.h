@@ -37,6 +37,7 @@ typedef struct cmdline_args {
     AVS_LIST(access_entry_t) access_entries;
     int32_t inbuf_size;
     int32_t outbuf_size;
+    int32_t msg_cache_size;
     const char *fw_updated_marker_path;
 } cmdline_args_t;
 

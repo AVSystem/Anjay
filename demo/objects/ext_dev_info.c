@@ -94,7 +94,8 @@ static const anjay_dm_object_def_t EXT_DEV_INFO = {
             EXT_DEV_RES_GPRS_ULMODULATION,
             EXT_DEV_RES_GPRS_DLMODULATION,
             EXT_DEV_RES_GPRS_ULFREQUENCY,
-            EXT_DEV_RES_GPRS_DLFREQUENCY),
+            EXT_DEV_RES_GPRS_DLFREQUENCY
+            ),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,

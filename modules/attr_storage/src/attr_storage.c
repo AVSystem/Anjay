@@ -306,10 +306,8 @@ query_ssid(anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid) {
         return 0;
     }
     int64_t ssid;
-    int result = _anjay_dm_res_read_i64(anjay,
-                                        &(const anjay_resource_path_t) {
-                                            oid, iid, ssid_rid(oid)
-                                        }, &ssid);
+    const anjay_uri_path_t uri = MAKE_RESOURCE_PATH(oid, iid, ssid_rid(oid));
+    int result = _anjay_dm_res_read_i64(anjay, &uri, &ssid);
     if (result || ssid <= 0 || ssid >= UINT16_MAX) {
         fas_log(WARNING, "Could not get valid SSID via /%" PRIu16 "/%" PRIu16,
                 oid, iid);

@@ -24,7 +24,7 @@ from .dm.utils import DataModel, ValueValidator
 class Test201_QueryingBasicInformationInPlainTextFormat(DataModel.Test):
     def runTest(self):
         self.test_read(ResPath.Device.Manufacturer, ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.ModelNumber,  ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
+        self.test_read(ResPath.Device.ModelNumber, ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
         self.test_read(ResPath.Device.SerialNumber, ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
 
         # 1. Server has received the requested information and display of the
@@ -49,14 +49,83 @@ class Test203_QueryingBasicInformationInTLVFormat(DataModel.Test):
         #   - Serial number
 
 
-@unittest.skip("JSON format not implemented")
 class Test204_QueryingBasicInformationInJSONFormat(DataModel.Test):
     def runTest(self):
-        self.test_read(ResPath.Device.Manufacturer, ValueValidator.ascii_string(),
+        import json
+
+        class JsonValidator(ValueValidator):
+            def validate(self, value_bytes):
+                obj = json.loads(value_bytes.decode('utf-8'))
+                unexpected_keys = [k for k in obj if k not in ('bn', 'bt', 'e')]
+                if unexpected_keys:
+                    raise ValueError('unexpected JSON key(s): ' + ', '.join(map(repr, unexpected_keys)))
+
+                base_name = ''
+                if 'bn' in obj:
+                    try:
+                        base_name = str(Lwm2mPath(obj['bn']))
+                    except ValueError as e:
+                        raise ValueError('not a valid JSON base name path: %r (%s)' % (obj['bn'], e))
+
+                if 'bt' in obj:
+                    base_time = obj['bt']
+                    if not isinstance(base_time, float) and not isinstance(base_time, int):
+                        raise ValueError('not a valid JSON base time (float expected): %r' % (base_time,))
+
+                resource_list = obj['e']
+                try:
+                    iter(resource_list)
+                except TypeError:
+                    raise ValueError('not a valid JSON: expected iterable, got %r' % (resource_list,))
+
+                for resource in resource_list:
+                    unexpected_keys = [k for k in resource if k not in ('n', 't', 'v', 'bv', 'ov', 'sv')]
+                    if unexpected_keys:
+                        raise ValueError('unexpected JSON key(s) in e. object: ' + ', '.join(map(repr, unexpected_keys)))
+
+                    if 'n' in resource:
+                        full_path = CoapPath(base_name + resource['n'])
+                        if len(full_path.segments) > 4:
+                            raise ValueError('not a valid JSON response: path too long (%s, base: %s)' % (full_path, base_name))
+
+                        for segment in full_path.segments:
+                            try:
+                                n = int(segment)
+                                if not 0 <= n <= 65535:
+                                    raise ValueError('LwM2M path segment not in range [0; 65535]: %s' % (segment,))
+                            except ValueError as e:
+                                raise ValueError('not an integer: %s' % (segment,), e)
+
+                    if 't' in resource:
+                        if not isinstance(resource['t'], float) and not isinstance(resource['t'], int):
+                            raise ValueError('not a valid JSON time (float expected): %r' % (resource['t'],))
+
+                    num_value_entries = sum(int(k in ('v', 'bv', 'ov', 'sv')) for k in resource)
+                    if num_value_entries != 1:
+                        raise ValueError('not a valid JSON: %d value entries in %s, expected one' % (num_value_entries, ', '.join(resource)))
+
+                    if 'v' in resource:
+                        if not isinstance(resource['v'], float) and not isinstance(resource['v'], int):
+                            raise ValueError('not a valid JSON value (float expected): %r' % (resource['v'],))
+                    if 'bv' in resource:
+                        if not isinstance(resource['bv'], bool):
+                            raise ValueError('not a valid JSON value (boolean expected): %r' % (resource['bv'],))
+                    if 'ov' in resource:
+                        try:
+                            objlnk = [int(x) for x in resource['ov'].split(':')]
+                            if len(objlnk) != 2 or not all(0 <= x <= 65535 for x in objlnk):
+                                raise ValueError
+                        except ValueError:
+                            raise ValueError('not a valid JSON value (objlnk expected): %r' % (resource['ov'],))
+                    if 'sv' in resource:
+                        if not isinstance(resource['sv'], str):
+                            raise ValueError('not a valid JSON value (string expected): %r' % (resource['sv'],))
+
+        self.test_read(ResPath.Device.Manufacturer, JsonValidator(),
                        coap.ContentFormat.APPLICATION_LWM2M_JSON)
-        self.test_read(ResPath.Device.ModelNumber, ValueValidator.ascii_string(),
+        self.test_read(ResPath.Device.ModelNumber, JsonValidator(),
                        coap.ContentFormat.APPLICATION_LWM2M_JSON)
-        self.test_read(ResPath.Device.SerialNumber, ValueValidator.ascii_string(),
+        self.test_read(ResPath.Device.SerialNumber, JsonValidator(),
                        coap.ContentFormat.APPLICATION_LWM2M_JSON)
 
         # 1. Server has received the requested information and display of the

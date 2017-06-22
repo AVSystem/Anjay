@@ -18,7 +18,7 @@
 #define SECURITY_SECURITY_H
 #include <config.h>
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include <avsystem/commons/list.h>
 

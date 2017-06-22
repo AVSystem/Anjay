@@ -21,7 +21,7 @@
 #include <avsystem/commons/stream/stream_inbuf.h>
 
 #include <anjay/access_control.h>
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include "../access_control.h"
 

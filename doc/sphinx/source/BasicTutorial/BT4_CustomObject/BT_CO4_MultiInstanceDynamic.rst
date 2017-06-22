@@ -293,7 +293,7 @@ storage).
 
 Let's have a look on ``anjay_dm_instance_create_t`` handler type signature:
 
-.. snippet-source:: include_public/anjay/anjay.h
+.. snippet-source:: include_public/anjay/dm.h
 
     typedef int anjay_dm_instance_create_t(anjay_t *anjay,
                                            const anjay_dm_object_def_t *const *obj_ptr,
@@ -388,3 +388,8 @@ have to perform anything other than removing the instance from our list.
         return ANJAY_ERR_INTERNAL;
     }
 
+.. note::
+
+    Complete code of this example can be found in
+    `examples/tutorial/custom-object/multi-instance-dynamic` subdirectory
+    of main Anjay project repository.

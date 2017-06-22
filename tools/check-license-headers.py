@@ -23,8 +23,7 @@ import time
 from argparse import ArgumentParser
 from io import StringIO
 
-EXPECTED_COPYRIGHT_FTIME = 'Copyright %Y AVSystem <avsystem@avsystem.com>'
-EXPECTED_COPYRIGHT_RE = re.compile('[0-9]+'.join(map(re.escape, EXPECTED_COPYRIGHT_FTIME.split('%Y'))))
+EXPECTED_COPYRIGHT_HEADER = 'Copyright 2017 AVSystem <avsystem@avsystem.com>'
 
 EXPECTED_LICENSE_LINES = [
     'Licensed under the Apache License, Version 2.0 (the "License");',
@@ -56,7 +55,7 @@ IGNORE_PATTERNS = list(map(re.compile, [
 
 
 def show_license():
-    print(time.strftime(EXPECTED_COPYRIGHT_FTIME))
+    print(EXPECTED_COPYRIGHT_HEADER)
     print('<more copyright lines may follow>')
     print('')
     for line in EXPECTED_LICENSE_LINES:
@@ -83,21 +82,15 @@ def get_file_list(origin_commit):
 
 
 def check_license(filename):
-    def last_from_iterator(it):
-        result = None
-        for value in it:
-            result = value
-        return result
-
     prefix = None
     expected_line = 0
     with open(filename, mode='r', encoding='utf-8', errors='surrogateescape') as f:
         for line in f:
             trimmed = line.strip()
             if prefix is None:
-                found = last_from_iterator(EXPECTED_COPYRIGHT_RE.finditer(trimmed))
-                if found is not None and found.span()[1] == len(trimmed):
-                    prefix = trimmed[:found.span()[0]]
+                found = trimmed.split(EXPECTED_COPYRIGHT_HEADER)
+                if len(found) > 1:
+                    prefix = found[0]
             elif trimmed == (prefix + EXPECTED_LICENSE_LINES[expected_line]).strip():
                 expected_line += 1
                 if expected_line == len(EXPECTED_LICENSE_LINES):

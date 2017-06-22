@@ -29,29 +29,10 @@ static int fail(void) {
 
 typedef struct coap_stream_mock {
     const avs_stream_v_table_t *vtable;
-    anjay_coap_msg_type_t msg_type;
-    uint8_t msg_code;
     uint16_t expected_option_number;
     const char **next_opt_value_string;
     int32_t next_opt_value_uint;
 } coap_stream_mock_t;
-
-static int mock_get_msg_type(avs_stream_abstract_t *stream,
-                             anjay_coap_msg_type_t *out_msg_type) {
-    coap_stream_mock_t *mock = (coap_stream_mock_t*)stream;
-    AVS_UNIT_ASSERT_TRUE(mock->msg_type >= _ANJAY_COAP_MSG_FIRST);
-    AVS_UNIT_ASSERT_TRUE(mock->msg_type <= _ANJAY_COAP_MSG_LAST);
-    *out_msg_type = mock->msg_type;
-    return 0;
-}
-
-static int mock_get_code(avs_stream_abstract_t *stream,
-                         uint8_t *out_code) {
-    coap_stream_mock_t *mock = (coap_stream_mock_t*)stream;
-    AVS_UNIT_ASSERT_NOT_EQUAL(mock->msg_code, -1);
-    *out_code = mock->msg_code;
-    return 0;
-}
 
 static int mock_get_option_uint(avs_stream_abstract_t *stream,
                                 uint16_t option_number,
@@ -130,16 +111,12 @@ static int mock_get_option_string_it(avs_stream_abstract_t *stream,
                     AVS_STREAM_V_TABLE_EXTENSION_NULL \
                 }[0] \
             }, \
-            .msg_type = (anjay_coap_msg_type_t) -1, \
-            .msg_code = (uint8_t)-1, \
             .expected_option_number = 0, \
             .next_opt_value_string = NULL, \
             .next_opt_value_uint = -1 \
         }; \
         AVS_UNIT_MOCK(_anjay_coap_stream_setup_request) = \
                 (AVS_CONFIG_TYPEOF(&_anjay_coap_stream_setup_request)) fail; \
-        AVS_UNIT_MOCK(_anjay_coap_stream_get_msg_type) = mock_get_msg_type; \
-        AVS_UNIT_MOCK(_anjay_coap_stream_get_code) = mock_get_code; \
         AVS_UNIT_MOCK(_anjay_coap_stream_get_option_uint) = \
                 mock_get_option_uint; \
         AVS_UNIT_MOCK(_anjay_coap_stream_get_option_string_it) = \

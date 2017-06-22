@@ -17,7 +17,7 @@
 #ifndef ANJAY_DM_QUERY_H
 #define ANJAY_DM_QUERY_H
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

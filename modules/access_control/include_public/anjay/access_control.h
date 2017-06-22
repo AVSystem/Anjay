@@ -19,7 +19,7 @@
 
 #include <avsystem/commons/stream.h>
 
-#include <anjay/anjay.h>
+#include <anjay/dm.h>
 
 #ifdef __cplusplus
 extern "C" {

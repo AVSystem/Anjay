@@ -33,6 +33,18 @@ class ObserveAttributesTest(test_suite.Lwm2mSingleServerTest,
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=5)
 
+        # Attribute invariants
+        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['st=-1'],
+                              expect_error_code=coap.Code.RES_BAD_REQUEST)
+        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['lt=9', 'gt=4'],
+                              expect_error_code=coap.Code.RES_BAD_REQUEST)
+        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['lt=4', 'gt=9', 'st=3'],
+                              expect_error_code=coap.Code.RES_BAD_REQUEST)
+
+        # unparsable attributes
+        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['lt=invalid'],
+                              expect_error_code=coap.Code.RES_BAD_OPTION)
+
         # Write Attributes
         self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['pmax=2'])
 

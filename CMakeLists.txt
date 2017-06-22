@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.3.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.3.1" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -74,8 +74,10 @@ option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
+option(WITH_MESSAGE_CACHE "Enable support for message caching to detect and automatically handle duplicate messages" ON)
 
 option(WITH_AVS_LOG "Enable logging support" ON)
+
 
 if(WITH_AVS_LOG)
     option(AVS_LOG_WITH_TRACE "Enable TRACE level logging" OFF)
@@ -193,6 +195,9 @@ if(WITH_JSON)
     set(CORE_SOURCES ${CORE_SOURCES}
         src/io/json_out.c)
 endif()
+if(WITH_MESSAGE_CACHE)
+    set(CORE_SOURCES ${CORE_SOURCES} src/coap/msg_cache.c)
+endif()
 set(CORE_PRIVATE_HEADERS
     src/access_control.h
     src/coap/block/request.h
@@ -248,7 +253,10 @@ set(CORE_MODULES_HEADERS
     include_modules/anjay_modules/time.h
     include_modules/anjay_modules/utils.h)
 set(CORE_PUBLIC_HEADERS
-    include_public/anjay/anjay.h)
+    include_public/anjay/anjay.h
+    include_public/anjay/core.h
+    include_public/anjay/dm.h
+    include_public/anjay/io.h)
 
 
 set(ALL_SOURCES
@@ -271,6 +279,7 @@ set(TEST_SOURCES
     src/test/mock_coap_stream_impl.h
     src/test/observe_mock.h
     test/src/coap/stream.c
+    test/src/coap/socket.c
     test/src/dm.c
     test/src/mock_clock.c
     test/src/mock_dm.c
@@ -501,12 +510,11 @@ add_test(NAME test_function_duplicates COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_
 add_test(NAME test_markdown_toc COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-toc.py --check "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 
 add_custom_target(function_duplicates_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_function_duplicates$$'")
-add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc$$'")
+
 add_custom_target(toc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_markdown_toc$$'")
 
 add_dependencies(anjay_unit_check
                  function_duplicates_check
-                 doc_check
                  toc_check)
 
 ################# SYMBOL VALIDATION ############################################
@@ -580,6 +588,8 @@ add_custom_target(doc)
 set(ANJAY_SPHINX_DOC_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source")
 set(ANJAY_SPHINX_DOC_CONF_DIR "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx")
 
+option(WITH_DOC_CHECK "Enables/disables sphinx documentation validation" OFF)
+
 if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
     find_program(SPHINX_BUILD_EXECUTABLE sphinx-build
                  HINTS $ENV{SPHINX_DIR} PATH_SUFFIXES bin)
@@ -599,19 +609,27 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
 
     add_dependencies(doc doc_sphinx)
 
-    # sphinx-based .. snippet-source:: validation
-    add_test(NAME test_doc
-             COMMAND ${SPHINX_BUILD_EXECUTABLE}
-                     -Q -b snippet_source_lint
-                     -c ${ANJAY_SPHINX_DOC_CONF_DIR}
-                     ${ANJAY_SPHINX_DOC_ROOT_DIR}
-                     ${ANJAY_SPHINX_DOC_CONF_DIR}/lint
-             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
-    set_property(TEST test_doc APPEND PROPERTY ENVIRONMENT
-                 "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"
-                 "ANJAY_SPHINX_DOC_ROOT_DIR=${ANJAY_SPHINX_DOC_ROOT_DIR}"
-                 "CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
-                 "SNIPPET_SOURCE_MD5FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/test_examples.md5")
+    if(WITH_DOC_CHECK)
+        if(NOT SPHINX_BUILD_EXECUTABLE)
+            message(FATAL_ERROR "Sphinx not found (this can be suppressed by WITH_DOC_CHECK=OFF)")
+        endif()
+        # sphinx-based .. snippet-source:: validation
+        add_test(NAME test_doc
+                 COMMAND ${SPHINX_BUILD_EXECUTABLE}
+                         -Q -b snippet_source_lint
+                         -c ${ANJAY_SPHINX_DOC_CONF_DIR}
+                         ${ANJAY_SPHINX_DOC_ROOT_DIR}
+                         ${ANJAY_SPHINX_DOC_CONF_DIR}/lint
+                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
+        set_property(TEST test_doc APPEND PROPERTY ENVIRONMENT
+                     "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"
+                     "ANJAY_SPHINX_DOC_ROOT_DIR=${ANJAY_SPHINX_DOC_ROOT_DIR}"
+                     "CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+                     "SNIPPET_SOURCE_MD5FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/test_examples.md5")
+
+        add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc$$'")
+        add_dependencies(anjay_unit_check doc_check)
+    endif()
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in")

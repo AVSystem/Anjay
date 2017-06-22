@@ -55,9 +55,8 @@ static int read_period(anjay_t *anjay,
                       time_t_is_sane);
 
     int64_t value;
-    const anjay_resource_path_t path = {
-        ANJAY_DM_OID_SERVER, server_iid, rid
-    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid, rid);
 
     int result = _anjay_dm_res_read_i64(anjay, &path, &value);
     if (result == ANJAY_ERR_METHOD_NOT_ALLOWED

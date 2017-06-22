@@ -28,10 +28,17 @@
 
 VISIBILITY_SOURCE_BEGIN
 
+typedef struct {
+    double st_init;
+    bool lt_trigger : 1;
+    bool gt_trigger : 1;
+} sync_state_t;
+
 struct anjay_observe_entry_struct {
     const anjay_observe_key_t key;
     anjay_sched_handle_t notify_task;
     struct timespec last_confirmable;
+    sync_state_t sync_state;
 
     // last_sent has ALWAYS EXACTLY one element,
     // but is stored as a list to allow easy moving from unsent
@@ -108,13 +115,14 @@ static int entry_cmp(const void *left, const void *right) {
                          &((const anjay_observe_entry_t *) right)->key);
 }
 
-int _anjay_observe_init(anjay_t *anjay) {
+int _anjay_observe_init(anjay_t *anjay, bool confirmable_notifications) {
     if (!(anjay->observe.connection_entries =
             AVS_RBTREE_NEW(anjay_observe_connection_entry_t,
                            connection_state_cmp))) {
         anjay_log(ERROR, "Could not initialize Observe structures");
         return -1;
     }
+    anjay->observe.confirmable_notifications = confirmable_notifications;
     return 0;
 }
 
@@ -248,7 +256,6 @@ static AVS_LIST(anjay_observe_resource_value_t)
 create_resource_value(const anjay_msg_details_t *details,
                       anjay_observe_entry_t *ref,
                       const anjay_coap_msg_identity_t *identity,
-                      double numeric,
                       const void *data, size_t size) {
     AVS_LIST(anjay_observe_resource_value_t) result =
             (anjay_observe_resource_value_t *) AVS_LIST_NEW_BUFFER(
@@ -260,7 +267,6 @@ create_resource_value(const anjay_msg_details_t *details,
     result->details = *details;
     result->ref = ref;
     result->identity = *identity;
-    result->numeric = numeric;
     AVS_STATIC_ASSERT(sizeof(result->value_length) == sizeof(size),
                       length_size);
     memcpy((void *) (intptr_t) &result->value_length, &size, sizeof(size));
@@ -276,12 +282,10 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
                             anjay_observe_entry_t *entry,
                             const anjay_msg_details_t *details,
                             const anjay_coap_msg_identity_t *identity,
-                            double numeric,
                             const void *data,
                             size_t size) {
     AVS_LIST(anjay_observe_resource_value_t) res_value =
-            create_resource_value(details, entry, identity,
-                                  numeric, data, size);
+            create_resource_value(details, entry, identity, data, size);
     if (!res_value) {
         return -1;
     }
@@ -306,8 +310,7 @@ static int insert_error(anjay_t *anjay,
         .format = ANJAY_COAP_FORMAT_NONE,
         .observe_serial = true
     };
-    return insert_new_value(conn_state, entry, &details, identity,
-                            NAN, NULL, 0);
+    return insert_new_value(conn_state, entry, &details, identity, NULL, 0);
 }
 
 static int get_effective_attrs(anjay_t *anjay,
@@ -382,11 +385,11 @@ static int insert_initial_value(
     // even though we haven't actually sent it ourselves
     if (!(result = get_attrs(anjay, &attrs, &entry->key))
             && (entry->last_sent =
-                    create_resource_value(details, entry, identity,
-                                          numeric, data, size))
+                    create_resource_value(details, entry, identity, data, size))
             && !(result = schedule_trigger(anjay, entry,
                                            attrs.common.max_period))) {
         entry->last_confirmable = realtime_now;
+        entry->sync_state.st_init = numeric;
     } else {
         clear_entry(anjay, conn_state, entry);
     }
@@ -552,7 +555,7 @@ void _anjay_observe_gc(anjay_t *anjay) {
     }
 }
 
-static bool notify_is_forced(const anjay_observe_resource_value_t *value,
+static bool has_pmax_expired(const anjay_observe_resource_value_t *value,
                              const anjay_dm_attributes_t *attrs) {
     if (attrs->max_period >= 0) {
         struct timespec realtime_now;
@@ -565,50 +568,78 @@ static bool notify_is_forced(const anjay_observe_resource_value_t *value,
     return false;
 }
 
-static bool check_range(const anjay_dm_resource_attributes_t *attrs,
-                        double value) {
-    if (!isnan(attrs->greater_than)) {
-        if (!isnan(attrs->less_than)) {
-            if (attrs->less_than < attrs->greater_than) {
-                return value < attrs->less_than || value > attrs->greater_than;
-            } else {
-                return value < attrs->less_than && value > attrs->greater_than;
-            }
-        } else {
-            return value > attrs->greater_than;
-        }
-    } else {
-        if (!isnan(attrs->less_than)) {
-            return value < attrs->less_than;
-        } else {
-            return true;
-        }
-    }
-}
-
-static bool should_update(const anjay_observe_resource_value_t *previous,
-                          const anjay_dm_resource_attributes_t *attrs,
+static bool value_changed(const anjay_observe_resource_value_t *previous,
                           const anjay_msg_details_t *details,
-                          double numeric,
                           const char *data,
                           size_t length) {
-    if (details->format == previous->details.format
-            && length == previous->value_length
-            && memcmp(data, previous->value, length) == 0) {
-        return false;
-    }
+    return details->format != previous->details.format
+            || length != previous->value_length
+            || memcmp(data, previous->value, length) != 0;
+}
 
-    if (isnan(numeric) || (isnan(attrs->greater_than) && isnan(attrs->less_than)
-            && isnan(attrs->step))) {
+static int process_lt(sync_state_t *inout_sync_state,
+                      const anjay_dm_resource_attributes_t *attrs,
+                      double value) {
+    if (isnan(attrs->less_than)) {
+        inout_sync_state->lt_trigger = false;
+        return -1;
+    }
+    bool was_less_than = inout_sync_state->lt_trigger;
+    inout_sync_state->lt_trigger = (value < attrs->less_than);
+    return !was_less_than && inout_sync_state->lt_trigger;
+}
+
+static int process_gt(sync_state_t *inout_sync_state,
+                      const anjay_dm_resource_attributes_t *attrs,
+                      double value) {
+    if (isnan(attrs->greater_than)) {
+        inout_sync_state->gt_trigger = false;
+        return -1;
+    }
+    bool was_greater_than = inout_sync_state->gt_trigger;
+    inout_sync_state->gt_trigger = (value > attrs->greater_than);
+    return !was_greater_than && inout_sync_state->gt_trigger;
+}
+
+static bool process_limits(sync_state_t *inout_sync_state,
+                           const anjay_dm_resource_attributes_t *attrs,
+                           bool pmax_expired,
+                           double value) {
+    int lt = process_lt(inout_sync_state, attrs, value);
+    int gt = process_gt(inout_sync_state, attrs, value);
+    return pmax_expired || lt > 0 || gt > 0 || (lt < 0 && gt < 0);
+}
+
+static bool process_step(sync_state_t *inout_sync_state,
+                         const anjay_dm_resource_attributes_t *attrs,
+                         bool pmax_expired,
+                         double value) {
+    if (pmax_expired || isnan(attrs->step) || isnan(inout_sync_state->st_init)
+            || fabs(value - inout_sync_state->st_init) >= attrs->step) {
+        inout_sync_state->st_init = value;
         return true;
     }
+    return false;
+}
 
-    if (!check_range(attrs, numeric)) {
-        return false;
+static void process_numeric_attributes(sync_state_t *out_new_sync_state,
+                                       bool *out_should_notify,
+                                       const anjay_observe_entry_t *entry,
+                                       const anjay_dm_resource_attributes_t *attrs,
+                                       bool pmax_expired,
+                                       double value) {
+    if (isnan(value)) {
+        out_new_sync_state->st_init = NAN;
+        out_new_sync_state->lt_trigger = false;
+        out_new_sync_state->gt_trigger = false;
+        *out_should_notify = true;
+    } else {
+        *out_new_sync_state = entry->sync_state;
+        *out_should_notify =
+                (process_step(out_new_sync_state, attrs, pmax_expired, value)
+                        && process_limits(out_new_sync_state, attrs,
+                                          pmax_expired, value));
     }
-
-    return (isnan(attrs->step) || isnan(previous->numeric)
-            || fabs(numeric - previous->numeric) >= attrs->step);
 }
 
 static inline ssize_t read_new_value(anjay_t *anjay,
@@ -622,36 +653,42 @@ static inline ssize_t read_new_value(anjay_t *anjay,
             anjay, obj,
             &(const anjay_dm_read_args_t) {
                 .ssid = entry->key.connection.ssid,
-                .oid = entry->key.oid,
-                .has_iid = (entry->key.iid != ANJAY_IID_INVALID),
-                .iid = entry->key.iid,
-                .has_rid = (entry->key.rid >= 0),
-                .rid = (anjay_rid_t) entry->key.rid,
+                .uri = {
+                    .has_oid = true,
+                    .oid = entry->key.oid,
+                    .has_iid = (entry->key.iid != ANJAY_IID_INVALID),
+                    .iid = entry->key.iid,
+                    .has_rid = (entry->key.rid >= 0),
+                    .rid = (anjay_rid_t) entry->key.rid,
+                },
                 .requested_format = entry->key.format,
                 .observe_serial = true
             }, out_details, out_numeric, buffer, size);
 }
 
-static avs_stream_abstract_t *
-get_stream_by_ssid(anjay_t *anjay,
-                   anjay_active_server_info_t **out_server,
-                   anjay_ssid_t ssid,
-                   anjay_connection_type_t conn_type) {
+static int bind_stream_by_ssid(anjay_t *anjay,
+                               anjay_active_server_info_t **out_server,
+                               anjay_ssid_t ssid,
+                               anjay_connection_type_t conn_type) {
     *out_server = _anjay_servers_find_active(&anjay->servers, ssid);
     if (!*out_server) {
-        return NULL;
+        return -1;
     }
     anjay_connection_ref_t ref = {
         .server = *out_server,
         .conn_type = conn_type
     };
-    avs_stream_abstract_t *stream = _anjay_get_server_stream(anjay, ref);
+    int result = _anjay_bind_server_stream(anjay, ref);
     assert(ref.conn_type == conn_type);
-    return stream;
+    return result;
 }
 
-static bool should_use_confirmable(const struct timespec *realtime_now,
+static bool should_use_confirmable(anjay_t *anjay,
+                                   const struct timespec *realtime_now,
                                    const anjay_observe_entry_t *entry) {
+    if (anjay->observe.confirmable_notifications) {
+        return true;
+    }
     struct timespec since_confirmable;
     _anjay_time_diff(&since_confirmable,
                      realtime_now, &entry->last_confirmable);
@@ -689,10 +726,8 @@ static int sched_flush_send_queue(anjay_t *anjay,
 static int send_entry(anjay_t *anjay,
                       anjay_observe_connection_entry_t *conn_state) {
     anjay_active_server_info_t *server;
-    avs_stream_abstract_t *stream =
-            get_stream_by_ssid(anjay, &server,
-                               conn_state->key.ssid, conn_state->key.type);
-    if (!stream) {
+    if (bind_stream_by_ssid(anjay, &server,
+                            conn_state->key.ssid, conn_state->key.type)) {
         return -1;
     }
     int result;
@@ -704,19 +739,20 @@ static int send_entry(anjay_t *anjay,
 
     struct timespec realtime_now;
     clock_gettime(CLOCK_REALTIME, &realtime_now);
-    if (should_use_confirmable(&realtime_now, entry)) {
+    if (should_use_confirmable(anjay, &realtime_now, entry)) {
         details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
     }
 
     (void) ((result = _anjay_coap_stream_setup_request(
-                    stream, &details, &id->token, id->token_size))
-            || (result = avs_stream_write(stream, conn_state->unsent->value,
+                    anjay->comm_stream, &details, &id->token, id->token_size))
+            || (result = avs_stream_write(anjay->comm_stream,
+                                          conn_state->unsent->value,
                                           conn_state->unsent->value_length))
-            || (result = _anjay_coap_stream_get_request_identity(stream,
-                                                                 &notify_id))
-            || (result = avs_stream_finish_message(stream)));
+            || (result = _anjay_coap_stream_get_request_identity(
+                    anjay->comm_stream, &notify_id))
+            || (result = avs_stream_finish_message(anjay->comm_stream)));
 
-    avs_stream_reset(stream);
+    avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream(
             anjay,
             (anjay_connection_ref_t) { server, conn_state->key.type });
@@ -749,11 +785,9 @@ static observe_server_state_t server_state(anjay_t *anjay, anjay_ssid_t ssid) {
 
     anjay_iid_t server_iid;
     if (!_anjay_find_server_iid(anjay, ssid, &server_iid)) {
-        const anjay_resource_path_t path = {
-            ANJAY_DM_OID_SERVER,
-            server_iid,
-            ANJAY_DM_RID_SERVER_NOTIFICATION_STORING
-        };
+        const anjay_uri_path_t path =
+                MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid,
+                                   ANJAY_DM_RID_SERVER_NOTIFICATION_STORING);
         bool storing;
         if (!_anjay_dm_res_read_bool(anjay, &path, &storing) && !storing) {
             // default value is true, use false only if explicitly set
@@ -888,6 +922,20 @@ int _anjay_observe_sched_flush(anjay_t *anjay,
     return sched_flush_send_queue(anjay, conn);
 }
 
+static void update_sync_state(sync_state_t *out,
+                              const sync_state_t *tmp,
+                              int result) {
+    if (!result) {
+        out->st_init = tmp->st_init;
+    }
+    if (!result || !tmp->lt_trigger) {
+        out->lt_trigger = tmp->lt_trigger;
+    }
+    if (!result || !tmp->gt_trigger) {
+        out->gt_trigger = tmp->gt_trigger;
+    }
+}
+
 static int
 update_notification_value(anjay_t *anjay,
                           anjay_observe_connection_entry_t *conn_state,
@@ -908,7 +956,7 @@ update_notification_value(anjay_t *anjay,
         return result;
     }
 
-    bool force = notify_is_forced(newest_value(entry), &attrs.common);
+    bool pmax_expired = has_pmax_expired(newest_value(entry), &attrs.common);
     char buf[ANJAY_MAX_OBSERVABLE_RESOURCE_SIZE];
     anjay_msg_details_t observe_details;
     double numeric = NAN;
@@ -919,12 +967,20 @@ update_notification_value(anjay_t *anjay,
     }
     observe_details.msg_type = ANJAY_COAP_MSG_NON_CONFIRMABLE;
 
-    if (force || should_update(newest_value(entry), &attrs, &observe_details,
-                               numeric, buf, (size_t) size)) {
+    sync_state_t new_sync_state;
+    bool attrs_allow_notif;
+    process_numeric_attributes(&new_sync_state, &attrs_allow_notif,
+                               entry, &attrs, pmax_expired, numeric);
+    if (attrs_allow_notif
+            && (pmax_expired || value_changed(newest_value(entry),
+                                              &observe_details,
+                                              buf, (size_t) size))) {
         result = insert_new_value(conn_state, entry, &observe_details,
-                                  &newest_value(entry)->identity, numeric,
+                                  &newest_value(entry)->identity,
                                   buf, (size_t) size);
     }
+
+    update_sync_state(&entry->sync_state, &new_sync_state, result);
 
     if (schedule_trigger(anjay, entry, attrs.common.max_period)) {
         anjay_log(ERROR, "Could not schedule automatic notification trigger");

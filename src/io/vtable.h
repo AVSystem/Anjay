@@ -17,7 +17,7 @@
 #ifndef ANJAY_IO_VTABLE_H
 #define ANJAY_IO_VTABLE_H
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include "../io.h"
 
@@ -37,8 +37,6 @@ typedef int (*anjay_output_ctx_objlnk_t)(anjay_output_ctx_t *,
                                          anjay_iid_t);
 typedef anjay_output_ctx_t *
 (*anjay_output_ctx_array_start_t)(anjay_output_ctx_t *);
-typedef int (*anjay_output_ctx_array_index_t)(anjay_output_ctx_t *,
-                                              anjay_riid_t);
 typedef int (*anjay_output_ctx_array_finish_t)(anjay_output_ctx_t *);
 typedef anjay_output_ctx_t *
 (*anjay_output_ctx_object_start_t)(anjay_output_ctx_t *);
@@ -58,7 +56,6 @@ typedef struct {
     anjay_output_ctx_boolean_t boolean;
     anjay_output_ctx_objlnk_t objlnk;
     anjay_output_ctx_array_start_t array_start;
-    anjay_output_ctx_array_index_t array_index;
     anjay_output_ctx_array_finish_t array_finish;
     anjay_output_ctx_object_start_t object_start;
     anjay_output_ctx_object_finish_t object_finish;
@@ -108,5 +105,5 @@ typedef struct {
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif	/* ANJAY_IO_VTABLE_H */
+#endif /* ANJAY_IO_VTABLE_H */
 

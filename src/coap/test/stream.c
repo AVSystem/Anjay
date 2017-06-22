@@ -23,6 +23,7 @@
 
 #include <anjay_test/mock_clock.h>
 #include <anjay_test/coap/stream.h>
+#include <anjay_test/coap/socket.h>
 
 #include "servers.h"
 #include "../stream.h"
@@ -167,12 +168,12 @@ AVS_UNIT_TEST(coap_stream, no_payload) {
 
 AVS_UNIT_TEST(coap_stream, msg_id) {
     avs_net_abstract_socket_t *mocksock = NULL;
-    avs_unit_mocksock_create(&mocksock);
+    _anjay_mocksock_create(&mocksock, 1252, 1252);
     avs_unit_mocksock_expect_connect(mocksock, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", ""));
 
     anjay_coap_socket_t *socket = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, mocksock));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, mocksock, 0));
 
     avs_stream_abstract_t *stream = NULL;
     _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -182,8 +183,6 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
                                    .format = ANJAY_COAP_FORMAT_NONE };
 
     {
-        avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_INNER_MTU,
-                                         (avs_net_socket_opt_value_t)(int)1252);
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL, 0));
 
@@ -209,8 +208,6 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
                 _anjay_coap_stream_get_request_identity(stream, &id));
     }
     {
-        avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_INNER_MTU,
-                                         (avs_net_socket_opt_value_t)(int)1252);
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL, 0));
 
@@ -231,8 +228,6 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         anjay_coap_token_t token;
         memcpy(&token, TOKEN, TOKEN_SIZE);
 
-        avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_INNER_MTU,
-                                         (avs_net_socket_opt_value_t)(int)1252);
         AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_setup_request(
                 stream, &details, &token, TOKEN_SIZE));
 
@@ -250,8 +245,6 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
 #undef TOKEN
     }
     {
-        avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_INNER_MTU,
-                                         (avs_net_socket_opt_value_t)(int)1252);
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL, 0));
 
@@ -472,12 +465,12 @@ AVS_UNIT_TEST(coap_stream, receive_garbage) {
 
 AVS_UNIT_TEST(coap_stream, add_observe_option) {
     avs_net_abstract_socket_t *mocksock = NULL;
-    avs_unit_mocksock_create(&mocksock);
+    _anjay_mocksock_create(&mocksock, 1252, 1252);
     avs_unit_mocksock_expect_connect(mocksock, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", ""));
 
     anjay_coap_socket_t *socket = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, mocksock));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, mocksock, 0));
 
     avs_stream_abstract_t *stream = NULL;
     _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -489,8 +482,6 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
     {
         details.observe_serial = true;
         _anjay_mock_clock_start(&(const struct timespec){ 514, 777 << 15 });
-        avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_INNER_MTU,
-                                         (avs_net_socket_opt_value_t)(int)1252);
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL, 0));
         static const char RESPONSE[] = "\x50\x45\x69\xED" // CoAP header
@@ -503,8 +494,6 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
     {
         details.observe_serial = true;
         _anjay_mock_clock_start(&(const struct timespec){ 777, 514 << 15 });
-        avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_OPT_INNER_MTU,
-                                         (avs_net_socket_opt_value_t)(int)1252);
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL, 0));
         static const char RESPONSE[] = "\x50\x45\x69\xEE" // CoAP header
@@ -529,11 +518,11 @@ static test_data_t setup_test(void) {
                         .coap_socket = NULL,
                         .stream = NULL };
 
-    avs_unit_mocksock_create(&data.mock_socket);
+    _anjay_mocksock_create(&data.mock_socket, 1252, 1252);
     avs_unit_mocksock_expect_connect(data.mock_socket, "", "");
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_socket_create(&data.coap_socket, data.mock_socket));
+            _anjay_coap_socket_create(&data.coap_socket, data.mock_socket, 0));
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(data.mock_socket, "", ""));
     _anjay_mock_coap_stream_create(&data.stream, data.coap_socket, 4096, 4096);
 
@@ -573,9 +562,6 @@ AVS_UNIT_TEST(coap_stream, response_empty) {
                                                  ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
                                          .msg_code = ANJAY_COAP_CODE_CHANGED,
                                          .format = ANJAY_COAP_FORMAT_NONE };
-    avs_unit_mocksock_expect_get_opt(test.mock_socket,
-                                     AVS_NET_SOCKET_OPT_INNER_MTU,
-                                     (avs_net_socket_opt_value_t) (int) 1252);
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(test.stream));
@@ -604,9 +590,6 @@ AVS_UNIT_TEST(coap_stream, response_token) {
                                                  ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
                                          .msg_code = ANJAY_COAP_CODE_CHANGED,
                                          .format = ANJAY_COAP_FORMAT_NONE };
-    avs_unit_mocksock_expect_get_opt(test.mock_socket,
-                                     AVS_NET_SOCKET_OPT_INNER_MTU,
-                                     (avs_net_socket_opt_value_t) (int) 1252);
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(test.stream));
@@ -634,9 +617,6 @@ AVS_UNIT_TEST(coap_stream, response_content) {
                                                  ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
                                          .msg_code = ANJAY_COAP_CODE_CHANGED,
                                          .format = ANJAY_COAP_FORMAT_NONE };
-    avs_unit_mocksock_expect_get_opt(test.mock_socket,
-                                     AVS_NET_SOCKET_OPT_INNER_MTU,
-                                     (avs_net_socket_opt_value_t) (int) 1252);
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));
     AVS_UNIT_ASSERT_SUCCESS(
@@ -691,9 +671,6 @@ AVS_UNIT_TEST(coap_stream, response_options) {
         .location_path = _anjay_make_string_list("slychac", "trzask", "bylo",
                                                  "zalozyc", "kask", NULL)
     };
-    avs_unit_mocksock_expect_get_opt(test.mock_socket,
-                                     AVS_NET_SOCKET_OPT_INNER_MTU,
-                                     (avs_net_socket_opt_value_t) (int) 1252);
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(test.stream));
@@ -736,14 +713,14 @@ AVS_UNIT_TEST(coap_stream, fuzz_1_invalid_block_size) {
             "\x00\x01"; // message ID
 
     avs_net_abstract_socket_t *mocksock = NULL;
-    avs_unit_mocksock_create(&mocksock);
+    _anjay_mocksock_create(&mocksock, 1252, 1252);
     avs_unit_mocksock_expect_connect(mocksock, "", "");
     avs_unit_mocksock_input(mocksock, MESSAGE, sizeof(MESSAGE) - 1);
     avs_unit_mocksock_expect_output(mocksock, BAD_OPTION_RES,
                                     sizeof(BAD_OPTION_RES) - 1);
 
     anjay_coap_socket_t *socket = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, mocksock));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, mocksock, 0));
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", ""));
 
     avs_stream_abstract_t *stream = NULL;

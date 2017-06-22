@@ -87,33 +87,33 @@ static void become_client(coap_stream_t *stream) {
     _anjay_coap_client_reset(get_client(stream));
 }
 
-static const anjay_coap_msg_t *get_or_receive_msg(coap_stream_t *stream) {
-    const anjay_coap_msg_t *msg = NULL;
+static int get_or_receive_msg(coap_stream_t *stream,
+                              const anjay_coap_msg_t **out_msg) {
+    int result = 0;
 
     switch (stream->state) {
     case STREAM_STATE_CLIENT:
-        if (_anjay_coap_client_get_or_receive_msg(get_client(stream),
-                                                  &stream->in, stream->socket,
-                                                  &msg)) {
-            reset(stream);
-            msg = NULL;
-        }
+        result = _anjay_coap_client_get_or_receive_msg(get_client(stream),
+                                                       &stream->in,
+                                                       stream->socket, out_msg);
         break;
     case STREAM_STATE_IDLE:
         coap_log(TRACE, "get_or_receive_msg: idle stream, receiving");
         become_server(stream);
         // fall-through
     case STREAM_STATE_SERVER:
-        if (_anjay_coap_server_get_or_receive_msg(get_server(stream),
-                                                  &stream->in, stream->socket,
-                                                  &msg)) {
-            reset(stream);
-            msg = NULL;
-        }
+        result = _anjay_coap_server_get_or_receive_msg(get_server(stream),
+                                                       &stream->in,
+                                                       stream->socket, out_msg);
         break;
     }
 
-    return msg;
+    if (result) {
+        reset(stream);
+        *out_msg = NULL;
+    }
+
+    return result;
 }
 
 static inline void
@@ -235,26 +235,28 @@ static int coap_read(avs_stream_abstract_t *stream_,
     coap_stream_t *stream = (coap_stream_t *)stream_;
     assert(stream->in.buffer);
 
-    int result = -1;
+    const anjay_coap_msg_t *msg;
+    int result = get_or_receive_msg(stream, &msg);
+    if (result) {
+        return result;
+    }
 
-    if (get_or_receive_msg(stream)) {
-        switch (stream->state) {
-        case STREAM_STATE_IDLE:
-            assert(0 && "should never happen");
-            break;
-        case STREAM_STATE_SERVER:
-            result = _anjay_coap_server_read(get_server(stream), &stream->in,
-                                             stream->socket, out_bytes_read,
-                                             out_message_finished,
-                                             buffer, buffer_length);
-            break;
-        case STREAM_STATE_CLIENT:
-            result = _anjay_coap_client_read(get_client(stream), &stream->in,
-                                             stream->socket, out_bytes_read,
-                                             out_message_finished,
-                                             buffer, buffer_length);
-            break;
-        }
+    switch (stream->state) {
+    case STREAM_STATE_IDLE:
+        assert(0 && "should never happen");
+        break;
+    case STREAM_STATE_SERVER:
+        result = _anjay_coap_server_read(get_server(stream), &stream->in,
+                                         stream->socket, out_bytes_read,
+                                         out_message_finished,
+                                         buffer, buffer_length);
+        break;
+    case STREAM_STATE_CLIENT:
+        result = _anjay_coap_client_read(get_client(stream), &stream->in,
+                                         stream->socket, out_bytes_read,
+                                         out_message_finished,
+                                         buffer, buffer_length);
+        break;
     }
 
     if (!result && *out_message_finished) {
@@ -328,7 +330,6 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
     stream->in.buffer_size = in_buffer_size;
     stream->in.buffer = (uint8_t *)malloc(in_buffer_size);
     assert_tx_params_valid(&_anjay_coap_DEFAULT_TX_PARAMS);
-    stream->in.transmission_params = _anjay_coap_DEFAULT_TX_PARAMS;
     stream->in.rand_seed = (anjay_rand_seed_t) time(NULL);
     stream->id_source =
             _anjay_coap_id_source_auto_new((anjay_rand_seed_t) time(NULL), 8);
@@ -356,7 +357,7 @@ int _anjay_coap_stream_get_tx_params(
         coap_transmission_params_t *out_tx_params) {
     coap_stream_t *stream = (coap_stream_t*) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
-    *out_tx_params = stream->in.transmission_params;
+    *out_tx_params = *_anjay_coap_socket_get_tx_params(stream->socket);
     return 0;
 }
 
@@ -366,7 +367,7 @@ int _anjay_coap_stream_set_tx_params(
     coap_stream_t *stream = (coap_stream_t*) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
     assert_tx_params_valid(tx_params);
-    stream->in.transmission_params = *tx_params;
+    _anjay_coap_socket_set_tx_params(stream->socket, tx_params);
     return 0;
 }
 
@@ -442,9 +443,10 @@ int _anjay_coap_stream_get_code(avs_stream_abstract_t *stream_,
     coap_stream_t *stream = (coap_stream_t*)stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
-    const anjay_coap_msg_t *msg = get_or_receive_msg(stream);
-    if (!msg) {
-        return -1;
+    const anjay_coap_msg_t *msg;
+    int result = get_or_receive_msg(stream, &msg);
+    if (result) {
+        return result;
     }
 
     assert(_anjay_coap_msg_is_valid(msg));
@@ -457,9 +459,10 @@ int _anjay_coap_stream_get_msg_type(avs_stream_abstract_t *stream_,
     coap_stream_t *stream = (coap_stream_t*)stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
-    const anjay_coap_msg_t *msg = get_or_receive_msg(stream);
-    if (!msg) {
-        return -1;
+    const anjay_coap_msg_t *msg;
+    int result = get_or_receive_msg(stream, &msg);
+    if (result) {
+        return result;
     }
 
     assert(_anjay_coap_msg_is_valid(msg));
@@ -474,9 +477,10 @@ int _anjay_coap_stream_get_option_uint(avs_stream_abstract_t *stream_,
     coap_stream_t *stream = (coap_stream_t*) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
-    const anjay_coap_msg_t *msg = get_or_receive_msg(stream);
-    if (!msg) {
-        return -1;
+    const anjay_coap_msg_t *msg;
+    int result = get_or_receive_msg(stream, &msg);
+    if (result) {
+        return result;
     }
 
     assert(_anjay_coap_msg_is_valid(msg));
@@ -506,10 +510,12 @@ int _anjay_coap_stream_get_option_string_it(avs_stream_abstract_t *stream_,
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
     if (!it->msg) {
-        const anjay_coap_msg_t *msg = get_or_receive_msg(stream);
-        if (!msg) {
-            return -1;
+        const anjay_coap_msg_t *msg;
+        int result = get_or_receive_msg(stream, &msg);
+        if (result) {
+            return result;
         }
+
         anjay_coap_opt_iterator_t begin = _anjay_coap_opt_begin(msg);
         memcpy(it, &begin, sizeof(*it));
     } else {
@@ -587,13 +593,13 @@ int _anjay_coap_stream_validate_critical_options(
     coap_stream_t *stream = (coap_stream_t*)stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
-    const anjay_coap_msg_t *msg = get_or_receive_msg(stream);
-    if (!msg) {
-        return -1;
+    const anjay_coap_msg_t *msg;
+    int result = get_or_receive_msg(stream, &msg);
+    if (result) {
+        return result;
     }
 
     anjay_coap_opt_iterator_t it = _anjay_coap_opt_begin(msg);
-    int result = 0;
 
     while (!_anjay_coap_opt_end(&it)) {
         if (is_opt_critical(_anjay_coap_opt_number(&it))) {

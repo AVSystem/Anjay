@@ -19,7 +19,7 @@
 #include <avsystem/commons/unit/test.h>
 
 #include <anjay/access_control.h>
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include <anjay_modules/dm/execute.h>
 

@@ -17,7 +17,7 @@
 #ifndef ANJAY_INTERFACE_BOOTSTRAP_H
 #define ANJAY_INTERFACE_BOOTSTRAP_H
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/stream/stream_outbuf.h>
@@ -39,7 +39,6 @@ typedef struct {
 int _anjay_bootstrap_finish(anjay_t *anjay);
 
 int _anjay_bootstrap_perform_action(anjay_t *anjay,
-                                    avs_stream_abstract_t *stream,
                                     const anjay_request_details_t *details);
 
 int _anjay_bootstrap_account_prepare(anjay_t *anjay);

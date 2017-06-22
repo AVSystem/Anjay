@@ -37,7 +37,6 @@ typedef struct coap_input_buffer {
     size_t payload_off;
     size_t payload_size;
 
-    coap_transmission_params_t transmission_params;
     anjay_rand_seed_t rand_seed;
 } coap_input_buffer_t;
 

@@ -151,6 +151,15 @@ static inline bool _anjay_coap_msg_code_is_server_error(uint8_t code) {
     return _anjay_coap_msg_code_get_class(&code) == 5;
 }
 
+static inline bool _anjay_coap_msg_code_is_request(uint8_t code) {
+    return _anjay_coap_msg_code_get_class(&code) == 0
+            && _anjay_coap_msg_code_get_detail(&code) > 0;
+}
+
+static inline bool _anjay_coap_msg_code_is_response(uint8_t code) {
+    return _anjay_coap_msg_code_get_class(&code) > 0;
+}
+
 typedef struct anjay_coap_msg_header {
     uint8_t version_type_token_length;
     uint8_t code;
@@ -224,7 +233,18 @@ static inline uint16_t _anjay_coap_msg_get_id(const anjay_coap_msg_t *msg) {
  * @return true if message is a request message (RFC7252 section 5.1),
  *      false otherwise
  */
-bool _anjay_coap_msg_is_request(const anjay_coap_msg_t *msg);
+static inline bool _anjay_coap_msg_is_request(const anjay_coap_msg_t *msg) {
+    return _anjay_coap_msg_code_is_request(msg->header.code);
+}
+
+/**
+ * @param msg Message to check
+ * @return true if message is a response message (RFC7252 section 5.1),
+ *      false otherwise
+ */
+static inline bool _anjay_coap_msg_is_response(const anjay_coap_msg_t *msg) {
+    return _anjay_coap_msg_code_is_response(msg->header.code);
+}
 
 /**
  * @param msg       Message to retrieve token from.

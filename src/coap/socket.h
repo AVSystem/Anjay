@@ -17,9 +17,10 @@
 #ifndef ANJAY_COAP_SOCKET_H
 #define ANJAY_COAP_SOCKET_H
 
-#include <anjay/anjay.h>
+#include <anjay/core.h>
 
 #include "msg.h"
+#include "utils.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -28,10 +29,14 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define ANJAY_COAP_SOCKET_ERR_NETWORK       (-0x5E3)
 #define ANJAY_COAP_SOCKET_ERR_MSG_TOO_LONG  (-0x5E4)
 
+/** A duplicate request was received and was handled by response cache. */
+#define ANJAY_COAP_SOCKET_ERR_DUPLICATE     (-0x5E5)
+
 typedef struct anjay_coap_socket anjay_coap_socket_t;
 
 int _anjay_coap_socket_create(anjay_coap_socket_t **sock,
-                              avs_net_abstract_socket_t *backend);
+                              avs_net_abstract_socket_t *backend,
+                              size_t msg_cache_size);
 
 int _anjay_coap_socket_close(anjay_coap_socket_t *sock);
 
@@ -67,6 +72,12 @@ int _anjay_coap_socket_recv(anjay_coap_socket_t *sock,
 int _anjay_coap_socket_get_recv_timeout(anjay_coap_socket_t *sock);
 void _anjay_coap_socket_set_recv_timeout(anjay_coap_socket_t *sock,
                                          int timeout_ms);
+
+const coap_transmission_params_t *
+_anjay_coap_socket_get_tx_params(anjay_coap_socket_t *sock);
+void
+_anjay_coap_socket_set_tx_params(anjay_coap_socket_t *sock,
+                                 const coap_transmission_params_t *tx_params);
 
 avs_net_abstract_socket_t *
 _anjay_coap_socket_get_backend(anjay_coap_socket_t *sock);

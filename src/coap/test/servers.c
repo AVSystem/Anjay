@@ -132,6 +132,7 @@ static void spawn_dtls_echo_server(uint16_t port) {
         }
 #endif // __linux__
         execve(args[0], args, NULL);
+        // fall-through
     case -1:
         coap_log(ERROR, "could not start DTLS echo server: %s", strerror(errno));
         coap_log(ERROR, "command: %s %s %s", args[0], args[1], args[2]);
@@ -254,6 +255,7 @@ static void spawn_udp_server(uint16_t port,
         }
 #endif // __linux__
         udp_serve(port, make_response);
+        // fall-through
     case -1:
         coap_log(ERROR, "could not start UDP server on port %u: %s",
                  port, strerror(errno));
@@ -321,7 +323,7 @@ static anjay_coap_socket_t *setup_socket(socket_type_t type,
     // but ensures that bind() and connect() can be used together
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_bind(backend, NULL, NULL));
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(backend, "localhost", port_str));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, backend));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&socket, backend, 0));
 
     return socket;
 }

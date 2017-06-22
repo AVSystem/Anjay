@@ -500,6 +500,9 @@ static int json_ret_object_finish(anjay_output_ctx_t *ctx) {
 static int json_set_id(anjay_output_ctx_t *ctx_,
                        anjay_id_type_t type,
                        uint16_t id) {
+    if (type == ANJAY_ID_RIID) {
+        return json_ret_array_index(ctx_, id);
+    }
     json_out_t *ctx = (json_out_t *) ctx_;
     ctx->next_id.type = type;
     ctx->next_id.id = id;
@@ -541,7 +544,6 @@ static const anjay_output_ctx_vtable_t JSON_OUT_VTABLE = {
     json_ret_bool,
     json_ret_objlnk,
     json_ret_array_start,
-    json_ret_array_index,
     json_ret_array_finish,
     json_ret_object_start,
     json_ret_object_finish,

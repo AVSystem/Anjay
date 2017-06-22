@@ -21,6 +21,8 @@
 
 #include <stdio.h>
 
+#include <avsystem/commons/defs.h>
+
 #ifdef WITH_AVS_LOG
 #include <avsystem/commons/log.h>
 #define _anjay_log(...) avs_log(__VA_ARGS__)
@@ -42,6 +44,13 @@ typedef struct {
     /** Amount of bytes that might be stored in the buffer. */
     size_t capacity;
 } anjay_raw_buffer_t;
+
+#define ANJAY_VARARG_LENGTH_IMPL( \
+        _10, _9, _8, _7, _6, _5, _4, _3, _2, _1, N, ...) N
+#define ANJAY_VARARG_LENGTH(...) \
+        ANJAY_VARARG_LENGTH_IMPL(__VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+#define ANJAY_VARARG0_IMPL(Arg, ...) Arg
+#define ANJAY_VARARG0(...) ANJAY_VARARG0_IMPL(__VA_ARGS__, _)
 
 #define ANJAY_RAW_BUFFER_ON_STACK(Capacity) \
     (anjay_raw_buffer_t) { \

@@ -40,4 +40,4 @@ struct anjay_execute_ctx_struct {
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif	// ANJAY_EXECUTE_H 
+#endif // ANJAY_EXECUTE_H

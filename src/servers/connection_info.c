@@ -82,9 +82,9 @@ _anjay_connection_internal_clean_socket(anjay_server_connection_t *connection) {
 static anjay_binding_mode_t read_binding_mode(anjay_t *anjay,
                                               anjay_ssid_t ssid) {
     char buf[8];
-    anjay_resource_path_t path = {
-        ANJAY_DM_OID_SERVER, ANJAY_IID_INVALID, ANJAY_DM_RID_SERVER_BINDING
-    };
+    anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, ANJAY_IID_INVALID,
+                               ANJAY_DM_RID_SERVER_BINDING);
 
     if (!_anjay_find_server_iid(anjay, ssid, &path.iid)
             && !_anjay_dm_res_read_string(anjay, &path, buf, sizeof(buf))) {
@@ -329,9 +329,9 @@ static int get_udp_security_mode(anjay_t *anjay,
                                  anjay_iid_t security_iid,
                                  anjay_udp_security_mode_t *out_mode) {
     int64_t mode;
-    const anjay_resource_path_t path = {
-        ANJAY_DM_OID_SECURITY, security_iid, ANJAY_DM_RID_SECURITY_MODE
-    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_MODE);
 
     if (_anjay_dm_res_read_i64(anjay, &path, &mode)) {
         anjay_log(ERROR, "could not read LwM2M server security mode");
@@ -377,9 +377,9 @@ static int get_server_uri(anjay_t *anjay,
     enum { MAX_SERVER_URI_LENGTH = 256 };
     char raw_uri[MAX_SERVER_URI_LENGTH];
 
-    const anjay_resource_path_t path = {
-        ANJAY_DM_OID_SECURITY, security_iid, ANJAY_DM_RID_SECURITY_SERVER_URI
-    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SERVER_URI);
 
     if (_anjay_dm_res_read_string(anjay, &path, raw_uri, sizeof(raw_uri))) {
         anjay_log(ERROR, "could not read LwM2M server URI");
@@ -425,13 +425,13 @@ static int get_udp_dtls_keys(anjay_t *anjay,
 
     for (size_t i = 0; i < ANJAY_ARRAY_SIZE(values); ++i) {
         anjay_raw_buffer_t *value = values[i].buffer;
-        const anjay_resource_path_t path = {
-            ANJAY_DM_OID_SECURITY, security_iid, values[i].rid
-        };
+        const anjay_uri_path_t path =
+                MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                                   values[i].rid);
         if (_anjay_dm_res_read(anjay, &path, (char*)value->data,
                                value->capacity, &value->size)
                 && values[i].required) {
-            anjay_log(WARNING, "read %s failed", ANJAY_RES_PATH_STRING(&path));
+            anjay_log(WARNING, "read %s failed", ANJAY_DEBUG_MAKE_PATH(&path));
             return -1;
         }
     }
