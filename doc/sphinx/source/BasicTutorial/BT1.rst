@@ -54,7 +54,7 @@ source file:
 .. note::
 
     We recommend you to look at the doxygen generated
-    `API documentation <../../api/>`_ if something isn't immediately
+    `API documentation <../api/>`_ if something isn't immediately
     clear to you.
 
 Let's just build our minimal client and test that it works:

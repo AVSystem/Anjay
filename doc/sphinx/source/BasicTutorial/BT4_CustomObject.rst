@@ -117,7 +117,7 @@ which holds:
         anjay_dm_handlers_t handlers;
     };
 
-See `API docs <../../api/structanjay__dm__object__def__struct.html>`_ for detailed
+See `API docs <../api/structanjay__dm__object__def__struct.html>`_ for detailed
 information about each of those fields.
 
 These structures themselves may seem intimidating at the first glance. In

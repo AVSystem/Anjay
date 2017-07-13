@@ -197,12 +197,8 @@ _anjay_coap_msg_header_set_type(anjay_coap_msg_header_t *hdr,
 typedef struct anjay_coap_msg {
     uint32_t length; // whole message (header + content)
     anjay_coap_msg_header_t header;
-    uint8_t content[]; // token + opts + payload
+    uint8_t content[1]; // actually a FAM; token + opts + payload
 } anjay_coap_msg_t;
-
-/* There seems to be no portable way to implement alignof()
- * for structs with FAM before C11 */
-#define _ANJAY_COAP_MSG_ALIGNMENT sizeof(uint32_t)
 
 AVS_STATIC_ASSERT(offsetof(anjay_coap_msg_t, header) == 4,
                   no_padding_before_header_field_of_msg_t);

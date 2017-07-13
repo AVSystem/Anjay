@@ -109,23 +109,23 @@ bool _anjay_dm_handler_implemented(anjay_t *anjay,
 int _anjay_dm_object_read_default_attrs(anjay_t *anjay,
                                         const anjay_dm_object_def_t *const *obj_ptr,
                                         anjay_ssid_t ssid,
-                                        anjay_dm_attributes_t *out,
+                                        anjay_dm_internal_attrs_t *out,
                                         const anjay_dm_module_t *current_module) {
     dm_log(TRACE, "object_read_default_attrs /%u", (*obj_ptr)->oid);
     CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
                               object_read_default_attrs,
-                              anjay, obj_ptr, ssid, out);
+                              anjay, obj_ptr, ssid, &out->standard);
 }
 
 int _anjay_dm_object_write_default_attrs(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
                                          anjay_ssid_t ssid,
-                                         const anjay_dm_attributes_t *attrs,
+                                         const anjay_dm_internal_attrs_t *attrs,
                                          const anjay_dm_module_t *current_module) {
     dm_log(TRACE, "object_write_default_attrs /%u", (*obj_ptr)->oid);
     CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
                               object_write_default_attrs,
-                              anjay, obj_ptr, ssid, attrs);
+                              anjay, obj_ptr, ssid, &attrs->standard);
 }
 
 int _anjay_dm_instance_it(anjay_t *anjay,
@@ -191,24 +191,24 @@ int _anjay_dm_instance_read_default_attrs(anjay_t *anjay,
                                           const anjay_dm_object_def_t *const *obj_ptr,
                                           anjay_iid_t iid,
                                           anjay_ssid_t ssid,
-                                          anjay_dm_attributes_t *out,
+                                          anjay_dm_internal_attrs_t *out,
                                           const anjay_dm_module_t *current_module) {
     dm_log(TRACE, "instance_read_default_attrs /%u/%u", (*obj_ptr)->oid, iid);
     CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
                               instance_read_default_attrs,
-                              anjay, obj_ptr, iid, ssid, out);
+                              anjay, obj_ptr, iid, ssid, &out->standard);
 }
 
 int _anjay_dm_instance_write_default_attrs(anjay_t *anjay,
                                            const anjay_dm_object_def_t *const *obj_ptr,
                                            anjay_iid_t iid,
                                            anjay_ssid_t ssid,
-                                           const anjay_dm_attributes_t *attrs,
+                                           const anjay_dm_internal_attrs_t *attrs,
                                            const anjay_dm_module_t *current_module) {
     dm_log(TRACE, "instance_write_default_attrs /%u/%u", (*obj_ptr)->oid, iid);
     CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
                               instance_write_default_attrs,
-                              anjay, obj_ptr, iid, ssid, attrs);
+                              anjay, obj_ptr, iid, ssid, &attrs->standard);
 }
 
 int
@@ -327,12 +327,12 @@ int _anjay_dm_resource_read_attrs(anjay_t *anjay,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_ssid_t ssid,
-                                  anjay_dm_resource_attributes_t *out,
+                                  anjay_dm_internal_res_attrs_t *out,
                                   const anjay_dm_module_t *current_module) {
     anjay_log(TRACE, "resource_read_attrs /%u/%u/%u", (*obj_ptr)->oid, iid, rid);
     CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
                               resource_read_attrs,
-                              anjay, obj_ptr, iid, rid, ssid, out);
+                              anjay, obj_ptr, iid, rid, ssid, &out->standard);
 }
 
 int _anjay_dm_resource_write_attrs(anjay_t *anjay,
@@ -340,12 +340,12 @@ int _anjay_dm_resource_write_attrs(anjay_t *anjay,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
                                    anjay_ssid_t ssid,
-                                   const anjay_dm_resource_attributes_t *attrs,
+                                   const anjay_dm_internal_res_attrs_t *attrs,
                                    const anjay_dm_module_t *current_module) {
     anjay_log(TRACE, "resource_write_attrs /%u/%u/%u", (*obj_ptr)->oid, iid, rid);
     CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
                               resource_write_attrs,
-                              anjay, obj_ptr, iid, rid, ssid, attrs);
+                              anjay, obj_ptr, iid, rid, ssid, &attrs->standard);
 }
 
 static int call_transaction_begin(anjay_t *anjay,

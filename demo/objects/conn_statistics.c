@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
+#include <assert.h>
+#include <inttypes.h>
+#include <string.h>
+
 #include "../objects.h"
 #include "../utils.h"
-#include <inttypes.h>
 
 typedef enum {
     CS_SMS_TX_COUNTER       = 0,
@@ -39,9 +42,7 @@ typedef struct {
 } conn_stats_repr_t;
 
 static conn_stats_repr_t *get_cs(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, conn_stats_repr_t, def);
 }
 
@@ -82,6 +83,7 @@ static int stats_getter(avs_net_socket_interface_name_t *if_name,
 
 static uint64_t first_socket_stats(anjay_t *anjay, const char* stats) {
     avs_net_socket_interface_name_t if_name;
+    memset(&if_name, 0, sizeof(if_name));
     if (ifname_for_first_socket(anjay, &if_name)) {
         return 0;
     }
@@ -231,6 +233,8 @@ const anjay_dm_object_def_t **cs_object_create(void) {
 }
 
 void cs_object_release(const anjay_dm_object_def_t **def) {
-    free(get_cs(def));
+    if (def) {
+        free(get_cs(def));
+    }
 }
 

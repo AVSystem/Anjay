@@ -73,3 +73,11 @@ class BootstrapDiscoverFullMultipleServers(bs.BootstrapServer.Test,
         # No more parameters
         self.assertEqual(1, len(discover_result[len(EXPECTED_PREFIX):].split(b';')))
         self.assertTrue(discover_result.startswith(EXPECTED_PREFIX))
+
+
+class BootstrapDiscoverOnNonexistingObject(bs.BootstrapServer.Test,
+                                           test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
+        self.discover(self.bootstrap_server, oid=42, expect_error_code=coap.Code.RES_NOT_FOUND)
+

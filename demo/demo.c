@@ -246,7 +246,7 @@ install_object(anjay_demo_t *demo,
             AVS_LIST_APPEND_PTR(&demo->objects);
     assert(object_entry && !*object_entry);
     *object_entry = AVS_LIST_NEW_ELEMENT(anjay_demo_object_t);
-    if (!object_entry) {
+    if (!*object_entry) {
         release_func(obj_ptr);
         return -1;
     }
@@ -278,6 +278,7 @@ static int demo_init(anjay_demo_t *demo,
             .forced_mtu = 1492
         },
 #endif
+        .confirmable_notifications = cmdline_args->confirmable_notifications,
     };
 
     demo->connection_args = &cmdline_args->connection_args;
@@ -489,10 +490,18 @@ static void log_handler(avs_log_level_t level,
     gettimeofday(&now, NULL);
 
     struct tm *now_tm = localtime(&now.tv_sec);
+    assert(now_tm);
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", now_tm);
 
     fprintf(stderr, "%s.%06d %s\n",
             timebuf, (int)now.tv_usec, message);
+}
+
+static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {
+    free(cmdline_args->connection_args.public_cert_or_psk_identity);
+    free(cmdline_args->connection_args.private_cert_or_psk_key);
+    free(cmdline_args->connection_args.server_public_key);
+    AVS_LIST_CLEAR(&cmdline_args->access_entries);
 }
 
 int main(int argc, char *argv[]) {
@@ -519,7 +528,7 @@ int main(int argc, char *argv[]) {
 
     anjay_demo_t *demo = demo_new(&cmdline_args);
     if (!demo) {
-        AVS_LIST_CLEAR(&cmdline_args.access_entries);
+        cmdline_args_cleanup(&cmdline_args);
         return -1;
     }
 
@@ -528,10 +537,7 @@ int main(int argc, char *argv[]) {
     demo_log(INFO, "*** ANJAY DEMO STARTUP FINISHED ***");
     serve(demo);
     demo_delete(demo);
-    free(cmdline_args.connection_args.public_cert_or_psk_identity);
-    free(cmdline_args.connection_args.private_cert_or_psk_key);
-    free(cmdline_args.connection_args.server_public_key);
-    AVS_LIST_CLEAR(&cmdline_args.access_entries);
+    cmdline_args_cleanup(&cmdline_args);
     avs_log_reset();
     return 0;
 }

@@ -36,6 +36,7 @@ typedef struct test_ctx {
     avs_stream_abstract_t *stream;
     coap_input_buffer_t *in;
     coap_output_buffer_t *out;
+    anjay_mock_coap_stream_ctx_t mock_stream;
 } test_ctx_t;
 
 static test_ctx_t setup(size_t in_buffer_size,
@@ -46,8 +47,9 @@ static test_ctx_t setup(size_t in_buffer_size,
     _anjay_mocksock_create(&ctx.mocksock, 1252, 1252);
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_socket_create(&ctx.socket, ctx.mocksock, 0));
-    _anjay_mock_coap_stream_create(&ctx.stream, ctx.socket, in_buffer_size,
-                                   out_buffer_size);
+    ctx.mock_stream =
+            _anjay_mock_coap_stream_create(&ctx.stream, ctx.socket,
+                                           in_buffer_size, out_buffer_size);
 
     coap_stream_t *coap_stream = (coap_stream_t*)ctx.stream;
     ctx.in = &coap_stream->in;
@@ -58,6 +60,7 @@ static test_ctx_t setup(size_t in_buffer_size,
 
 static void teardown(test_ctx_t *ctx) {
     avs_stream_cleanup(&ctx->stream);
+    _anjay_mock_coap_stream_cleanup(&ctx->mock_stream);
     memset(ctx, 0, sizeof(*ctx));
 }
 

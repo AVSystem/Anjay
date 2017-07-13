@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -84,9 +85,7 @@ typedef struct fw_repr {
 } fw_repr_t;
 
 static inline fw_repr_t *get_fw(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, fw_repr_t, def);
 }
 
@@ -875,8 +874,8 @@ firmware_update_object_create(iosched_t *iosched,
 }
 
 void firmware_update_object_release(const anjay_dm_object_def_t **def) {
-    fw_repr_t *fw = get_fw(def);
-    if (fw) {
+    if (def) {
+        fw_repr_t *fw = get_fw(def);
         maybe_delete_firmware_file(fw);
         wget_context_delete(&fw->wget_context);
         free(fw);

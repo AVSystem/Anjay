@@ -43,7 +43,9 @@ tags
 __pycache__/
 .gdb_history
 *.orig
+*.egg-info
 *.pyc
+/test/integration/framework/nsh-lwm2m/coap/pymbedtls*
 compile_commands.json
 
 /avs_commons/install

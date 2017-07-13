@@ -639,6 +639,9 @@ static inline bool
 request_attrs_empty(const anjay_request_attributes_t *attrs) {
     return !attrs->has_min_period
             && !attrs->has_max_period
+#ifdef WITH_CON_ATTR
+            && !attrs->custom.has_con
+#endif
             && resource_specific_request_attrs_empty(attrs);
 }
 
@@ -846,36 +849,47 @@ static int dm_write(anjay_t *anjay,
     return retval;
 }
 
-static void update_attrs(anjay_dm_resource_attributes_t *attrs_ptr,
+static void update_attrs(anjay_dm_internal_res_attrs_t *attrs_ptr,
                          const anjay_request_attributes_t *request_attrs) {
     if (request_attrs->has_min_period) {
-        attrs_ptr->common.min_period = request_attrs->values.common.min_period;
+        attrs_ptr->standard.common.min_period =
+                request_attrs->values.standard.common.min_period;
     }
     if (request_attrs->has_max_period) {
-        attrs_ptr->common.max_period = request_attrs->values.common.max_period;
+        attrs_ptr->standard.common.max_period =
+                request_attrs->values.standard.common.max_period;
     }
     if (request_attrs->has_greater_than) {
-        attrs_ptr->greater_than = request_attrs->values.greater_than;
+        attrs_ptr->standard.greater_than =
+                request_attrs->values.standard.greater_than;
     }
     if (request_attrs->has_less_than) {
-        attrs_ptr->less_than = request_attrs->values.less_than;
+        attrs_ptr->standard.less_than =
+                request_attrs->values.standard.less_than;
     }
     if (request_attrs->has_step) {
-        attrs_ptr->step = request_attrs->values.step;
+        attrs_ptr->standard.step = request_attrs->values.standard.step;
     }
+#ifdef WITH_CON_ATTR
+    if (request_attrs->custom.has_con) {
+        attrs_ptr->custom.data.con = request_attrs->values.custom.data.con;
+    }
+#endif
 }
 
-static bool resource_attrs_valid(const anjay_dm_resource_attributes_t *attrs) {
+static bool resource_attrs_valid(const anjay_dm_internal_res_attrs_t *attrs) {
     double step = 0.0;
-    if (!isnan(attrs->step)) {
-        if (attrs->step < 0.0) {
+    if (!isnan(attrs->standard.step)) {
+        if (attrs->standard.step < 0.0) {
             anjay_log(DEBUG, "Attempted to set negative step attribute");
             return false;
         }
-        step = attrs->step;
+        step = attrs->standard.step;
     }
-    if (!isnan(attrs->less_than) && !isnan(attrs->greater_than)
-            && attrs->less_than + 2 * step >= attrs->greater_than) {
+    if (!isnan(attrs->standard.less_than)
+            && !isnan(attrs->standard.greater_than)
+            && attrs->standard.less_than + 2 * step
+                    >= attrs->standard.greater_than) {
         anjay_log(DEBUG, "Attempted to set attributes that fail the "
                          "'lt + 2*st < gt' precondition");
         return false;
@@ -889,7 +903,7 @@ static int dm_write_resource_attrs(anjay_t *anjay,
                                    anjay_rid_t rid,
                                    anjay_ssid_t ssid,
                                    const anjay_request_attributes_t *attributes) {
-    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
+    anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     int result = ensure_resource_supported_and_present(anjay, obj, iid, rid);
 
     if (!result) {
@@ -913,13 +927,15 @@ static int dm_write_instance_attrs(anjay_t *anjay,
                                    anjay_iid_t iid,
                                    anjay_ssid_t ssid,
                                    const anjay_request_attributes_t *attributes) {
-    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
-    int result = _anjay_dm_read_combined_instance_attrs(anjay, obj, iid, ssid,
-                                                        &attrs.common);
+    anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
+    int result = _anjay_dm_read_combined_instance_attrs(
+            anjay, obj, iid, ssid,
+            _anjay_dm_get_internal_attrs(&attrs.standard.common));
     if (!result) {
         update_attrs(&attrs, attributes);
-        result = _anjay_dm_instance_write_default_attrs(anjay, obj, iid, ssid,
-                                                        &attrs.common, NULL);
+        result = _anjay_dm_instance_write_default_attrs(
+                anjay, obj, iid, ssid,
+                _anjay_dm_get_internal_attrs(&attrs.standard.common), NULL);
     }
     return result;
 }
@@ -928,13 +944,15 @@ static int dm_write_object_attrs(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj,
                                  anjay_ssid_t ssid,
                                  const anjay_request_attributes_t *attributes) {
-    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
-    int result = _anjay_dm_read_combined_object_attrs(anjay, obj, ssid,
-                                                      &attrs.common);
+    anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
+    int result = _anjay_dm_read_combined_object_attrs(
+            anjay, obj, ssid,
+            _anjay_dm_get_internal_attrs(&attrs.standard.common));
     if (!result) {
         update_attrs(&attrs, attributes);
-        result = _anjay_dm_object_write_default_attrs(anjay, obj, ssid,
-                                                      &attrs.common, NULL);
+        result = _anjay_dm_object_write_default_attrs(
+                anjay, obj, ssid,
+                _anjay_dm_get_internal_attrs(&attrs.standard.common), NULL);
     }
     return result;
 }

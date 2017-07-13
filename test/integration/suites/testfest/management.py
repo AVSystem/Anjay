@@ -147,14 +147,16 @@ class Test205_SettingBasicInformationInPlainTextFormat(DataModel.Test):
 
         # 1. The server receives the status code “2.04”
         # 2. The resource value has changed according to WRITE request
-        self.test_write_validated(ResPath.Server[1].Lifetime, '123')
+        self.test_write(ResPath.Server[1].Lifetime, '123')
+        self.assertDemoUpdatesRegistration(lifetime=123)
+        self.test_read(ResPath.Server[1].Lifetime, ValueValidator.from_values(b'123'))
         self.test_write_validated(ResPath.Server[1].DefaultMinPeriod, '234')
         self.test_write_validated(ResPath.Server[1].DefaultMaxPeriod, '345')
         self.test_write_validated(ResPath.Server[1].DisableTimeout, '456')
         self.test_write_validated(ResPath.Server[1].NotificationStoring, '1')
 
         self.test_write(ResPath.Server[1].Binding, 'UQ')
-        self.assertDemoUpdatesRegistration(lifetime=123, binding='UQ')  # triggered by Binding change
+        self.assertDemoUpdatesRegistration(binding='UQ')  # triggered by Binding change
         self.assertEqual(b'UQ', self.test_read(ResPath.Server[1].Binding))
 
 

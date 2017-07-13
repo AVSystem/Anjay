@@ -95,7 +95,7 @@ Example usage
 In this example, we are going to setup multiple-server
 environment. We will assign LwM2M Server with SSID 1 the **Create**
 permission on the :doc:`Test Object developed in previous tutorials
-<../BasicTutorial/BT4_CustomObject/BT_CO4_MultiInstanceDynamic>`.
+<../BasicTutorial/BT4_CustomObject/BT_CO5_MultiInstanceDynamic>`.
 
 Additionally, we will allow both LwM2M Servers to read their respective LwM2M
 Server Instances.
@@ -193,4 +193,4 @@ by writing to proper Access Control Instances (i.e. Instances this Server
 is an owner of, which corresponds to instances it has created), but that's
 outside of the scope of this tutorial. We recommend you to look at the LwM2M
 Specification for more details on Access Control Object, as well as at our
-`API docs <../../api>`_.
+`API docs <../api>`_.

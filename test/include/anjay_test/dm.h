@@ -207,12 +207,12 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
                                                1); \
         _anjay_mock_dm_expect_resource_read_attrs( \
                 anjay, &OBJ, Iid, (anjay_rid_t) Rid, Ssid, 0, \
-                &ANJAY_RES_ATTRIBS_EMPTY); \
+                &ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY); \
     } \
     _anjay_mock_dm_expect_instance_read_default_attrs( \
-            anjay, &OBJ, Iid, Ssid, 0, &ANJAY_DM_ATTRIBS_EMPTY); \
-    _anjay_mock_dm_expect_object_read_default_attrs(anjay, &OBJ, Ssid, 0, \
-                                                    &ANJAY_DM_ATTRIBS_EMPTY); \
+            anjay, &OBJ, Iid, Ssid, 0, &ANJAY_DM_INTERNAL_ATTRS_EMPTY); \
+    _anjay_mock_dm_expect_object_read_default_attrs( \
+            anjay, &OBJ, Ssid, 0, &ANJAY_DM_INTERNAL_ATTRS_EMPTY); \
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0, \
                                       ANJAY_IID_INVALID); \
 } while (0)

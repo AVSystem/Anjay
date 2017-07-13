@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.3.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.3.2" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -71,6 +71,10 @@ option(WITH_BLOCK_SEND "Enable support for sending data in CoAP BLOCK mode" ON)
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
 option(WITH_DISCOVER "Enable support for LwM2M Discover operation" ON)
 option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe)" ON)
+if(WITH_OBSERVE)
+    option(WITH_CON_ATTR
+           "Enable support for a custom attribute that controls Confirmable notifications" OFF)
+endif()
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
@@ -245,6 +249,7 @@ set(CORE_PRIVATE_HEADERS
     src/utils.h)
 set(CORE_MODULES_HEADERS
     include_modules/anjay_modules/dm.h
+    include_modules/anjay_modules/dm/attributes.h
     include_modules/anjay_modules/dm/execute.h
     include_modules/anjay_modules/dm/modules.h
     include_modules/anjay_modules/io.h
@@ -274,7 +279,6 @@ set(TEST_SOURCES
     src/coap/test/block_response.c
     src/interface/test/bootstrap_mock.h
     src/io/test/bigdata.h
-    src/test/anjay.h
     src/test/mock_coap_stream.h
     src/test/mock_coap_stream_impl.h
     src/test/observe_mock.h
@@ -337,7 +341,7 @@ set(DEPS_LIBRARIES "")
 set(DEPS_LIBRARIES_WEAK "")
 
 # avs_commons required components.
-set(AVS_COMMONS_COMPONENTS algorithm list vector rbtree buffer net stream)
+set(AVS_COMMONS_COMPONENTS algorithm list vector rbtree buffer net stream utils)
 
 foreach(_component ${AVS_COMMONS_COMPONENTS})
     string(TOUPPER ${_component} _component_uppercase)
@@ -657,6 +661,22 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in")
     add_dependencies(doc doc_doxygen)
 endif()
 
+################# STATIC ANALYSIS ##############################################
+
+option(WITH_STATIC_ANALYSIS "Perform static analysis of the codebase on `make check`" OFF)
+if(WITH_STATIC_ANALYSIS)
+    find_program(SCAN_BUILD_BINARY scan-build)
+    if(NOT SCAN_BUILD_BINARY)
+        message(WARNING "scan-build not found; specify path with -DSCAN_BUILD_BINARY or disable static analysis with -DWITH_STATIC_ANALYSIS=OFF")
+    else()
+        add_custom_target(analyze
+                          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/analyze"
+                                  --output-dir "${CMAKE_CURRENT_BINARY_DIR}/static-analysis"
+                                  --scan-build "${SCAN_BUILD_BINARY}")
+        add_dependencies(check analyze)
+    endif()
+endif()
+
 ################# EXAMPLES #####################################################
 
 set(ANJAY_EXAMPLES_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/examples/build")
@@ -675,6 +695,7 @@ add_custom_command(TARGET examples
                         -B.
                         -DCMAKE_INSTALL_PREFIX="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                         -DWITH_LIBRARY_SHARED=OFF
+                        -DWITH_DEMO=OFF
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})
 

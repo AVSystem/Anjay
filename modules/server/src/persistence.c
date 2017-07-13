@@ -55,7 +55,10 @@ static int handle_sized_fields(anjay_persistence_context_t *ctx,
     return retval;
 }
 
-static int persist_instance(anjay_persistence_context_t *ctx, void *element_) {
+static int persist_instance(anjay_persistence_context_t *ctx,
+                            void *element_,
+                            void *user_data) {
+    (void) user_data;
     server_instance_t *element = (server_instance_t *) element_;
     int retval = 0;
     uint32_t binding = element->data.binding;
@@ -64,7 +67,10 @@ static int persist_instance(anjay_persistence_context_t *ctx, void *element_) {
     return retval;
 }
 
-static int restore_instance(anjay_persistence_context_t *ctx, void *element_) {
+static int restore_instance(anjay_persistence_context_t *ctx,
+                            void *element_,
+                            void *user_data) {
+    (void) user_data;
     server_instance_t *element = (server_instance_t *) element_;
     int retval = 0;
     uint32_t binding;
@@ -108,7 +114,8 @@ int anjay_server_object_persist(const anjay_dm_object_def_t *const *obj,
     }
     retval =
             anjay_persistence_list(ctx, (AVS_LIST(void) *) &repr->instances,
-                                   sizeof(server_instance_t), persist_instance);
+                                   sizeof(server_instance_t),
+                                   persist_instance, NULL);
     anjay_persistence_context_delete(ctx);
     return retval;
 }
@@ -143,7 +150,8 @@ int anjay_server_object_restore(const anjay_dm_object_def_t *const *obj,
     retval =
             anjay_persistence_list(restore_ctx,
                                    (AVS_LIST(void) *) &repr->instances,
-                                   sizeof(server_instance_t), restore_instance);
+                                   sizeof(server_instance_t),
+                                   restore_instance, NULL);
     if (retval || (retval = _anjay_serv_object_validate(repr))) {
         _anjay_serv_destroy_instances(&repr->instances);
         repr->instances = backup.instances;

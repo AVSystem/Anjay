@@ -15,7 +15,6 @@
 case "$TRAVIS_OS_NAME" in
 osx)
     brew install cmake mbedtls wget python3
-    brew install boost-python --with-python3
     python3 -m pip install sphinx sphinx_rtd_theme
 
     # Travis sets CC=gcc for some reason, revert to OSX's default (clang)

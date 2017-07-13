@@ -17,6 +17,7 @@
 #include "../objects.h"
 #include "../utils.h"
 #include "../wget_downloader.h"
+#include <assert.h>
 #include <string.h>
 #include <inttypes.h>
 #include <unistd.h>
@@ -60,9 +61,7 @@ static int64_t timespec_as_us(struct timespec time) {
 }
 
 static download_diag_repr_t *get_diag(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, download_diag_repr_t, def);
 }
 
@@ -307,8 +306,8 @@ download_diagnostics_object_create(iosched_t *iosched) {
 }
 
 void download_diagnostics_object_release(const anjay_dm_object_def_t **def) {
-    download_diag_repr_t *repr = get_diag(def);
-    if (repr) {
+    if (def) {
+        download_diag_repr_t *repr = get_diag(def);
         wget_context_delete(&repr->wget_ctx);
         free(repr);
     }

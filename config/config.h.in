@@ -42,6 +42,7 @@
 #cmakedefine WITH_DISCOVER
 #cmakedefine WITH_OBSERVE
 #cmakedefine WITH_JSON
+#cmakedefine WITH_CON_ATTR
 #cmakedefine WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 #cmakedefine WITH_MESSAGE_CACHE
 

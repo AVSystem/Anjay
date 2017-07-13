@@ -63,7 +63,7 @@ _anjay_coap_msg_info_get_headers_size(const anjay_coap_msg_info_t *info) {
 
 size_t
 _anjay_coap_msg_info_get_storage_size(const anjay_coap_msg_info_t *info) {
-    return sizeof(anjay_coap_msg_t)
+    return offsetof(anjay_coap_msg_t, content)
            + ANJAY_COAP_MAX_TOKEN_LENGTH
            + get_options_size_bytes(info->options_);
 }

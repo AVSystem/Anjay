@@ -83,12 +83,6 @@ if(NOT PYTHONLIBS_FOUND)
 endif()
 unset(_MISSING_PYTHON_MSG)
 
-find_library(BOOST_PYTHON3_LIBRARY
-             NAMES boost_python3 "boost_python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}")
-if(NOT BOOST_PYTHON3_LIBRARY)
-    message(FATAL_ERROR "boost_python for Python 3 is required for integration tests")
-endif()
-
 add_custom_target(pymbedtls COMMAND
                   python3 "${NSH_LWM2M_DIR}/pymbedtls/setup.py" install --install-lib ${PYMBEDTLS_MODULE_DIR})
 

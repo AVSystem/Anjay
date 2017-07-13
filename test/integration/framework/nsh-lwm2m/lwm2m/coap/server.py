@@ -84,14 +84,15 @@ class Server(object):
     def send(self, coap_packet: Packet) -> None:
         self.socket.send(coap_packet.serialize())
 
-    def recv(self, timeout_s: float = -1) -> Packet:
+    def recv_raw(self, timeout_s: float = -1):
         with _override_timeout(self.socket, timeout_s):
             if not self.get_remote_addr():
                 self.listen()
 
-            packet = self.socket.recv(65536)
+            return self.socket.recv(65536)
 
-        return Packet.parse(packet)
+    def recv(self, timeout_s: float = -1) -> Packet:
+        return Packet.parse(self.recv_raw(timeout_s))
 
     def set_timeout(self, timeout_s: float) -> None:
         self.socket_timeout = timeout_s

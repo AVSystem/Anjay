@@ -25,7 +25,10 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int handle_acl_entry(anjay_persistence_context_t *ctx, void *element_) {
+static int handle_acl_entry(anjay_persistence_context_t *ctx,
+                            void *element_,
+                            void *user_data) {
+    (void) user_data;
     acl_entry_t *element = (acl_entry_t *) element_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &element->mask))
@@ -38,13 +41,16 @@ static int handle_acl(anjay_persistence_context_t *ctx,
     int retval = anjay_persistence_bool(ctx, &inst->has_acl);
     if (!retval && inst->has_acl) {
         retval = anjay_persistence_list(ctx, (AVS_LIST(void) *) &inst->acl,
-                                        sizeof(*inst->acl), handle_acl_entry);
+                                        sizeof(*inst->acl),
+                                        handle_acl_entry, NULL);
     }
     return retval;
 }
 
 static int persist_instance(anjay_persistence_context_t *ctx,
-                            void *element_) {
+                            void *element_,
+                            void *user_data) {
+    (void) user_data;
     access_control_instance_t *element = (access_control_instance_t *) element_;
     anjay_iid_t target_iid = (anjay_iid_t) element->target.iid;
     if (target_iid != element->target.iid) {
@@ -167,7 +173,7 @@ int anjay_access_control_persist(anjay_t *anjay,
     retval = anjay_persistence_list(ctx,
                                     (AVS_LIST(void) *) &ac->current.instances,
                                     sizeof(*ac->current.instances),
-                                    persist_instance);
+                                    persist_instance, NULL);
     anjay_persistence_context_delete(ctx);
     return retval;
 }

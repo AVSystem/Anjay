@@ -27,7 +27,7 @@ In this tutorial you will learn:
 - basics of transaction handling in Anjay.
 
 
-Implemented object is based on :doc:`BT_CO2_MultiInstanceReadOnlyFixed`,
+Implemented object is based on :doc:`BT_CO3_MultiInstanceReadOnlyFixed`,
 but this time accepts Write requests.
 
 +-------------+-----------+-----------+
@@ -49,7 +49,7 @@ Each Object Instance has two Resources:
 
 .. note::
 
-    The code is based on :doc:`BT_CO2_MultiInstanceReadOnlyFixed`.
+    The code is based on :doc:`BT_CO3_MultiInstanceReadOnlyFixed`.
 
 
 Simple variant

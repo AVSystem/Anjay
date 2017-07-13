@@ -153,6 +153,8 @@ static void print_option_help(const struct option *opt) {
         { '$', "SIZE", "0", "Size, in bytes, of a buffer reserved for caching "
                             "sent responses to detect retransmissions. Setting "
                             "it to 0 disables caching mechanism." },
+        { 'N', NULL, NULL,
+          "Send notifications as Confirmable messages by default" },
         { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
     };
@@ -338,6 +340,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "inbuf-size",                 required_argument, 0, 'I' },
         { "outbuf-size",                required_argument, 0, 'O' },
         { "cache-size",                 required_argument, 0, '$' },
+        { "confirmable-notifications",  no_argument,       0, 'N' },
         { "fw-updated-marker-path",     required_argument, 0, 1 },
         { 0, 0, 0, 0 }
     };
@@ -508,6 +511,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     || parsed_args->msg_cache_size < 0) {
                 goto error;
             }
+            break;
+        case 'N':
+            parsed_args->confirmable_notifications = true;
             break;
         case 1:
             parsed_args->fw_updated_marker_path = optarg;

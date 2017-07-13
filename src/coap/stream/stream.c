@@ -280,10 +280,7 @@ static int coap_close(avs_stream_abstract_t *stream_) {
         _anjay_coap_socket_cleanup(&stream->socket);
     }
 
-    free(stream->in.buffer);
     stream->in.buffer = NULL;
-
-    free(stream->out.buffer);
     stream->out.buffer = NULL;
 
     _anjay_coap_id_source_release(&stream->id_source);
@@ -308,7 +305,9 @@ static const avs_stream_v_table_t COAP_STREAM_VTABLE = {
 
 int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
                               anjay_coap_socket_t *socket,
+                              uint8_t *in_buffer,
                               size_t in_buffer_size,
+                              uint8_t *out_buffer,
                               size_t out_buffer_size) {
     coap_stream_t *stream = (coap_stream_t *)calloc(1, sizeof(coap_stream_t));
     if (!stream) {
@@ -320,28 +319,17 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
 
     stream->state = STREAM_STATE_IDLE;
 
-    // buffers must be able to hold whole CoAP message + its length;
-    // add a bit of extra space for length so that {in,out}_buffer_size
-    // are exact limits for the CoAP message size
-    const size_t extra_bytes_required = offsetof(anjay_coap_msg_t, header);
-    in_buffer_size += extra_bytes_required;
-    out_buffer_size += extra_bytes_required;
-
     stream->in.buffer_size = in_buffer_size;
-    stream->in.buffer = (uint8_t *)malloc(in_buffer_size);
+    stream->in.buffer = in_buffer;
     assert_tx_params_valid(&_anjay_coap_DEFAULT_TX_PARAMS);
     stream->in.rand_seed = (anjay_rand_seed_t) time(NULL);
+
+    stream->out = _anjay_coap_out_init(out_buffer, out_buffer_size);
+
     stream->id_source =
             _anjay_coap_id_source_auto_new((anjay_rand_seed_t) time(NULL), 8);
-    if (!stream->id_source) {
-        free(stream);
-        return -1;
-    }
 
-    stream->out = _anjay_coap_out_init((uint8_t *) malloc(out_buffer_size),
-                                       out_buffer_size);
-
-    if (!stream->in.buffer || !stream->out.buffer) {
+    if (!stream->in.buffer || !stream->out.buffer || !stream->id_source) {
         coap_close((avs_stream_abstract_t *) stream);
         free(stream);
         return -1;

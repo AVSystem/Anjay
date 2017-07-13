@@ -30,16 +30,26 @@ const anjay_dm_attributes_t ANJAY_DM_ATTRIBS_EMPTY = _ANJAY_DM_ATTRIBS_EMPTY;
 const anjay_dm_resource_attributes_t ANJAY_RES_ATTRIBS_EMPTY =
         _ANJAY_RES_ATTRIBS_EMPTY;
 
+const anjay_dm_internal_attrs_t ANJAY_DM_INTERNAL_ATTRS_EMPTY =
+        _ANJAY_DM_INTERNAL_ATTRS_EMPTY;
+const anjay_dm_internal_res_attrs_t ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY =
+        _ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
+
 static inline void combine_period(time_t *out, time_t other) {
     if (*out < 0) {
         *out = other;
     }
 }
 
-static inline void combine_attrs(anjay_dm_attributes_t *out,
-                                 const anjay_dm_attributes_t *other) {
-    combine_period(&out->min_period, other->min_period);
-    combine_period(&out->max_period, other->max_period);
+static inline void combine_attrs(anjay_dm_internal_attrs_t *out,
+                                 const anjay_dm_internal_attrs_t *other) {
+#ifdef WITH_CON_ATTR
+    if (out->custom.data.con < 0) {
+        out->custom.data.con = other->custom.data.con;
+    }
+#endif
+    combine_period(&out->standard.min_period, other->standard.min_period);
+    combine_period(&out->standard.max_period, other->standard.max_period);
 }
 
 #define TIME_MAX (sizeof(time_t) == 8 ? INT64_MAX : INT32_MAX)
@@ -86,8 +96,8 @@ static int read_combined_period(anjay_t *anjay,
 
 int _anjay_dm_read_combined_server_attrs(anjay_t *anjay,
                                          anjay_ssid_t ssid,
-                                         anjay_dm_attributes_t *out) {
-    if (out->min_period >= 0 && out->max_period >= 0) {
+                                         anjay_dm_internal_attrs_t *out) {
+    if (out->standard.min_period >= 0 && out->standard.max_period >= 0) {
         return 0;
     }
     anjay_iid_t server_iid = ANJAY_IID_INVALID;
@@ -99,15 +109,15 @@ int _anjay_dm_read_combined_server_attrs(anjay_t *anjay,
         int result;
         if ((result = read_combined_period(anjay, server_iid,
                                            ANJAY_DM_RID_SERVER_DEFAULT_PMIN,
-                                           &out->min_period))
+                                           &out->standard.min_period))
             || (result = read_combined_period(anjay, server_iid,
                                               ANJAY_DM_RID_SERVER_DEFAULT_PMAX,
-                                              &out->max_period))) {
+                                              &out->standard.max_period))) {
             return result;
         }
     }
-    if (out->min_period < 0) {
-        out->min_period = ANJAY_DM_DEFAULT_PMIN_VALUE;
+    if (out->standard.min_period < 0) {
+        out->standard.min_period = ANJAY_DM_DEFAULT_PMIN_VALUE;
     }
     return 0;
 }
@@ -117,9 +127,9 @@ int _anjay_dm_read_combined_instance_attrs(
         const anjay_dm_object_def_t *const *obj,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out) {
+        anjay_dm_internal_attrs_t *out) {
     if (!_anjay_dm_attributes_full(out)) {
-        anjay_dm_attributes_t instattrs = ANJAY_DM_ATTRIBS_EMPTY;
+        anjay_dm_internal_attrs_t instattrs = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
         int result = _anjay_dm_instance_read_default_attrs(
                 anjay, obj, iid, ssid, &instattrs, NULL);
         if (result) {
@@ -134,11 +144,11 @@ int _anjay_dm_read_combined_object_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out) {
+        anjay_dm_internal_attrs_t *out) {
     if (!_anjay_dm_attributes_full(out)) {
-        anjay_dm_attributes_t objattrs = ANJAY_DM_ATTRIBS_EMPTY;
-        int result = _anjay_dm_object_read_default_attrs(anjay, obj, ssid,
-                                                         &objattrs, NULL);
+        anjay_dm_internal_attrs_t objattrs = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
+        int result = _anjay_dm_object_read_default_attrs(
+                anjay, obj, ssid, &objattrs, NULL);
         if (result) {
             return result;
         }
@@ -147,31 +157,40 @@ int _anjay_dm_read_combined_object_attrs(
     return 0;
 }
 
-bool _anjay_dm_attributes_empty(const anjay_dm_attributes_t *attrs) {
-    return attrs->min_period < 0
-            && attrs->max_period < 0;
+bool _anjay_dm_attributes_empty(const anjay_dm_internal_attrs_t *attrs) {
+    return attrs->standard.min_period < 0
+            && attrs->standard.max_period < 0
+#ifdef WITH_CON_ATTR
+            && attrs->custom.data.con < 0
+#endif
+            ;
 }
 
 bool _anjay_dm_resource_attributes_empty(
-        const anjay_dm_resource_attributes_t *attrs) {
-    return _anjay_dm_attributes_empty(&attrs->common)
-            && isnan(attrs->greater_than)
-            && isnan(attrs->less_than)
-            && isnan(attrs->step);
+        const anjay_dm_internal_res_attrs_t *attrs) {
+    return _anjay_dm_attributes_empty(
+                    _anjay_dm_get_internal_attrs_const(&attrs->standard.common))
+            && isnan(attrs->standard.greater_than)
+            && isnan(attrs->standard.less_than)
+            && isnan(attrs->standard.step);
 }
 
-bool _anjay_dm_attributes_full(const anjay_dm_attributes_t *attrs) {
-    return attrs->min_period >= 0
-            && attrs->max_period >= 0;
+bool _anjay_dm_attributes_full(const anjay_dm_internal_attrs_t *attrs) {
+    return attrs->standard.min_period >= 0
+            && attrs->standard.max_period >= 0
+#ifdef WITH_CON_ATTR
+            && attrs->custom.data.con >= 0
+#endif
+            ;
 }
 
 int _anjay_dm_effective_attrs(anjay_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
-                              anjay_dm_resource_attributes_t *out) {
+                              anjay_dm_internal_res_attrs_t *out) {
     int result = 0;
     assert(query->rid <= UINT16_MAX);
     assert(!(query->iid == ANJAY_IID_INVALID && query->rid >= 0));
-    *out = ANJAY_RES_ATTRIBS_EMPTY;
+    *out = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
 
     if (query->obj && *query->obj) {
         if (query->rid >= 0) {
@@ -185,18 +204,21 @@ int _anjay_dm_effective_attrs(anjay_t *anjay,
 
         if (query->iid != ANJAY_IID_INVALID) {
             result = _anjay_dm_read_combined_instance_attrs(
-                    anjay, query->obj, query->iid, query->ssid, &out->common);
+                    anjay, query->obj, query->iid, query->ssid,
+                    _anjay_dm_get_internal_attrs(&out->standard.common));
             if (result) {
                 return result;
             }
         }
 
         result = _anjay_dm_read_combined_object_attrs(
-                anjay, query->obj, query->ssid, &out->common);
+                anjay, query->obj, query->ssid,
+                _anjay_dm_get_internal_attrs(&out->standard.common));
     }
     if (!result && query->with_server_level_attrs) {
-        return _anjay_dm_read_combined_server_attrs(anjay, query->ssid,
-                                                    &out->common);
+        return _anjay_dm_read_combined_server_attrs(
+                anjay, query->ssid,
+                _anjay_dm_get_internal_attrs(&out->standard.common));
     }
     return result;
 }

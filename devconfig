@@ -19,7 +19,7 @@ rm -rf avs_commons/git/CMakeFiles
 rm -f avs_commons/git/CMakeCache.txt
 
 if [[ -d '.git' ]]; then
-    echo "Updating submodules" && git submodule update --init || exit 1
+    echo "Updating submodules" && git submodule update --init --recursive || exit 1
 fi
 
 C_FLAGS='-g -std=c99'
@@ -116,15 +116,16 @@ rm -rf CMakeFiles
 cmake -D WITH_AVS_UNIT=ON \
       -D WITH_DEMO=ON \
       -D WITH_EXTRA_WARNINGS=ON \
+      -D WITH_CON_ATTR=ON \
       -D WITH_JSON=ON \
       -D WITH_VALGRIND=${WITH_VALGRIND} \
       -D WITH_INTEGRATION_TESTS=ON \
       -D WITH_DOC_CHECK=ON \
+      -D WITH_STATIC_ANALYSIS=ON \
       -D DTLS_BACKEND="${DTLS_BACKEND}" \
       -D AVS_LOG_WITH_TRACE=ON \
       -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
       -D ANJAY_VERSION="${ANJAY_VERSION}" \
-      ${WITH_MODULE_FLAGS} \
       "${EXTRA_FLAGS[@]}" \
       "$@" -H"$(dirname "$0")" -B. &&
 make clean

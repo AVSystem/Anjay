@@ -17,6 +17,8 @@
 #ifndef ANJAY_TEST_UTILS_H
 #define ANJAY_TEST_UTILS_H
 
+#include <math.h>
+
 #define SCOPED_PTR(Type, Deleter) \
     __attribute__((__cleanup__(Deleter))) Type *
 

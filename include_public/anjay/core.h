@@ -112,6 +112,15 @@ typedef struct anjay_configuration {
      * NOTE: Either both <c>sms_driver</c> and <c>local_msisdn</c> have to be
      * <c>NULL</c>, or both have to be non-<c>NULL</c>. */
     const char *local_msisdn;
+
+    /** If set to true, Anjay will prefer using Concatenated SMS messages when
+     * seding large chunks of data over the SMS transport.
+     *
+     * NOTE: This is only a preference; even if set to true, Concatenated SMS
+     * may not be used e.g. when the SMS driver does not support it; even if set
+     * to false, Concatenated SMS may be used in cases when it is impossible to
+     * split the message in another way, e.g. during DTLS handshake. */
+    bool prefer_multipart_sms;
 } anjay_configuration_t;
 
 /**
@@ -220,17 +229,32 @@ typedef uint16_t anjay_riid_t;
 #define ANJAY_COAP_STATUS(Maj, Min) ((uint8_t) ((Maj << 5) | (Min & 0x1F)))
 
 /** Error values that may be returned from data model handlers. @{ */
+/** Request sent by the LwM2M Server was malformed or contained an invalid
+ * value. */
 #define ANJAY_ERR_BAD_REQUEST                (-ANJAY_COAP_STATUS(4,  0))
+/** LwM2M Server is not allowed to perform the operation due to lack of
+ * necessary access rights. */
 #define ANJAY_ERR_UNAUTHORIZED               (-ANJAY_COAP_STATUS(4,  1))
+/** Low-level CoAP error code; used internally by Anjay when CoAP option values
+ * were invalid. */
 #define ANJAY_ERR_BAD_OPTION                 (-ANJAY_COAP_STATUS(4,  2))
+/** Target of the operation (Object/Instance/Resource) does not exist. */
 #define ANJAY_ERR_NOT_FOUND                  (-ANJAY_COAP_STATUS(4,  4))
+/** Operation is not allowed in current device state or the attempted operation
+ * is invalid for this target (Object/Instance/Resource) */
 #define ANJAY_ERR_METHOD_NOT_ALLOWED         (-ANJAY_COAP_STATUS(4,  5))
+/** Low-level CoAP error code; used internally by Anjay when the client is
+ * unable to encode response in requested content format. */
 #define ANJAY_ERR_NOT_ACCEPTABLE             (-ANJAY_COAP_STATUS(4,  6))
+/** Low-level CoAP error code; used internally by Anjay in case of unrecoverable
+ * problems during block-wise transfer. */
 #define ANJAY_ERR_REQUEST_ENTITY_INCOMPLETE  (-ANJAY_COAP_STATUS(4,  8))
-#define ANJAY_ERR_CONFLICT                   (-ANJAY_COAP_STATUS(4,  9))
-
+/** Unspecified error, no other error code was suitable. */
 #define ANJAY_ERR_INTERNAL                   (-ANJAY_COAP_STATUS(5,  0))
+/** Operation is not implemented by the LwM2M Client. */
 #define ANJAY_ERR_NOT_IMPLEMENTED            (-ANJAY_COAP_STATUS(5,  1))
+/** LwM2M Client is busy processing some other request; LwM2M Server may retry
+ * sending the same request after some delay. */
 #define ANJAY_ERR_SERVICE_UNAVAILABLE        (-ANJAY_COAP_STATUS(5,  3))
 /** @} */
 

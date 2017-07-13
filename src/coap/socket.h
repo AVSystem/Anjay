@@ -31,6 +31,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 /** A duplicate request was received and was handled by response cache. */
 #define ANJAY_COAP_SOCKET_ERR_DUPLICATE     (-0x5E5)
+/** A ping was received and it had been handled in a socket layer. */
+#define ANJAY_COAP_SOCKET_ERR_MSG_WAS_PING  (-0x5E6)
 
 typedef struct anjay_coap_socket anjay_coap_socket_t;
 

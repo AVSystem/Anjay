@@ -67,9 +67,7 @@ typedef struct {
 
 static inline test_repr_t *
 get_test(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, test_repr_t, def);
 }
 
@@ -678,8 +676,8 @@ const anjay_dm_object_def_t **test_object_create(void) {
 }
 
 void test_object_release(const anjay_dm_object_def_t **def) {
-    test_repr_t *repr = get_test(def);
-    if (repr) {
+    if (def) {
+        test_repr_t *repr = get_test(def);
         AVS_LIST_CLEAR(&repr->instances) {
             release_instance(repr->instances);
         }

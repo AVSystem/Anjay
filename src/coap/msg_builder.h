@@ -56,7 +56,7 @@ typedef struct anjay_coap_aligned_msg_buffer anjay_coap_aligned_msg_buffer_t;
 
 static inline anjay_coap_aligned_msg_buffer_t *
 _anjay_coap_ensure_aligned_buffer(void *buffer) {
-    assert((uintptr_t)buffer % _ANJAY_COAP_MSG_ALIGNMENT == 0
+    assert((uintptr_t)buffer % AVS_ALIGNOF(anjay_coap_msg_t) == 0
            && "the buffer MUST have the same alignment as anjay_coap_msg_t");
 
     return (anjay_coap_aligned_msg_buffer_t *)buffer;

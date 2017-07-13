@@ -52,9 +52,7 @@ typedef struct {
 
 static inline geopoints_t *
 get_geopoints(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, geopoints_t, def);
 }
 
@@ -303,6 +301,7 @@ geopoints_instance_reset(anjay_t *anjay,
                          anjay_iid_t iid) {
     (void) anjay;
     geopoint_t *inst = find_instance(get_geopoints(obj_ptr), iid);
+    assert(inst && "could not find instance");
     memset(inst, 0, sizeof(geopoint_t));
     inst->iid = iid;
     return 0;
@@ -346,8 +345,8 @@ geopoints_object_create(anjay_demo_t *demo) {
 }
 
 void geopoints_object_release(const anjay_dm_object_def_t **def) {
-    geopoints_t *geopoints = get_geopoints(def);
-    if (geopoints) {
+    if (def) {
+        geopoints_t *geopoints = get_geopoints(def);
         AVS_LIST_CLEAR(&geopoints->instances);
         AVS_LIST_CLEAR(&geopoints->saved_instances);
         free(geopoints);

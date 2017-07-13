@@ -82,7 +82,7 @@ the implementations of attribute-related handlers in the original objects with
 its own implementation, unless some handlers are actually already implemented
 (set to anything else than ``NULL``). For a detailed description on how does the
 handler replacement behave when only some of the handlers are implemented, refer
-to the `documentation <../../api/attr__storage_8h.html>`_.
+to the `documentation <../api/attr__storage_8h.html>`_.
 
 .. _persistence:
 

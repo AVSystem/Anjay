@@ -68,9 +68,18 @@ static int init(anjay_t *anjay,
         return -1;
     }
 
+    // buffers must be able to hold whole CoAP message + its length;
+    // add a bit of extra space for length so that {in,out}_buffer_size
+    // are exact limits for the CoAP message size
+    const size_t extra_bytes_required = offsetof(anjay_coap_msg_t, header);
+    anjay->in_buffer_size = config->in_buffer_size + extra_bytes_required;
+    anjay->out_buffer_size = config->out_buffer_size + extra_bytes_required;
+    anjay->in_buffer = (uint8_t *) malloc(anjay->in_buffer_size);
+    anjay->out_buffer = (uint8_t *) malloc(anjay->out_buffer_size);
+
     if (_anjay_coap_stream_create(&anjay->comm_stream, anjay->coap_socket,
-                                  config->in_buffer_size,
-                                  config->out_buffer_size)) {
+                                  anjay->in_buffer, anjay->in_buffer_size,
+                                  anjay->out_buffer, anjay->out_buffer_size)) {
         _anjay_coap_socket_cleanup(&anjay->coap_socket);
         return -1;
     }
@@ -121,7 +130,8 @@ void anjay_delete(anjay_t *anjay) {
     anjay_log(TRACE, "deleting anjay object");
 
     _anjay_bootstrap_cleanup(anjay);
-    _anjay_servers_cleanup(anjay, &anjay->servers);
+    _anjay_servers_cleanup(anjay);
+    _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
 
     _anjay_sched_delete(&anjay->sched);
 
@@ -132,6 +142,8 @@ void anjay_delete(anjay_t *anjay) {
     _anjay_observe_cleanup(anjay);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
 
+    free(anjay->in_buffer);
+    free(anjay->out_buffer);
     free(anjay);
 }
 
@@ -156,7 +168,7 @@ static int parse_nullable_time(const char *key_str,
                                time_t *out_value) {
     long long num;
     if (*out_present) {
-        anjay_log(ERROR, "Duplicated attribute in query string: %s", key_str);
+        anjay_log(WARNING, "Duplicated attribute in query string: %s", key_str);
         return -1;
     } else if (!period_str) {
         *out_present = true;
@@ -176,7 +188,7 @@ static int parse_nullable_double(const char *key_str,
                                  bool *out_present,
                                  double *out_value) {
     if (*out_present) {
-        anjay_log(ERROR, "Duplicated attribute in query string: %s", key_str);
+        anjay_log(WARNING, "Duplicated attribute in query string: %s", key_str);
         return -1;
     } else if (!double_str) {
         *out_present = true;
@@ -190,24 +202,57 @@ static int parse_nullable_double(const char *key_str,
     }
 }
 
+#ifdef WITH_CON_ATTR
+static int parse_con(const char *value,
+                     bool *out_present,
+                     anjay_dm_con_attr_t *out_value) {
+    if (*out_present) {
+        anjay_log(WARNING, "Duplicated attribute in query string: con");
+        return -1;
+    } else if (!value) {
+        *out_present = true;
+        *out_value = ANJAY_DM_CON_ATTR_DEFAULT;
+        return 0;
+    } else if (strcmp(value, "0") == 0) {
+        *out_present = true;
+        *out_value = ANJAY_DM_CON_ATTR_NON;
+        return 0;
+    } else if (strcmp(value, "1") == 0) {
+        *out_present = true;
+        *out_value = ANJAY_DM_CON_ATTR_CON;
+        return 0;
+    } else {
+        anjay_log(WARNING, "Invalid con attribute value: %s", value);
+        return -1;
+    }
+}
+#endif // WITH_CON_ATTR
+
 static int parse_attribute(anjay_request_attributes_t *out_attrs,
                            const char *key,
                            const char *value) {
     if (!strcmp(key, ANJAY_ATTR_PMIN)) {
-        return parse_nullable_time(key, value, &out_attrs->has_min_period,
-                                   &out_attrs->values.common.min_period);
+        return parse_nullable_time(
+                key, value, &out_attrs->has_min_period,
+                &out_attrs->values.standard.common.min_period);
     } else if (!strcmp(key, ANJAY_ATTR_PMAX)) {
-        return parse_nullable_time(key, value, &out_attrs->has_max_period,
-                                   &out_attrs->values.common.max_period);
+        return parse_nullable_time(
+                key, value, &out_attrs->has_max_period,
+                &out_attrs->values.standard.common.max_period);
     } else if (!strcmp(key, ANJAY_ATTR_GT)) {
         return parse_nullable_double(key, value, &out_attrs->has_greater_than,
-                                     &out_attrs->values.greater_than);
+                                     &out_attrs->values.standard.greater_than);
     } else if (!strcmp(key, ANJAY_ATTR_LT)) {
         return parse_nullable_double(key, value, &out_attrs->has_less_than,
-                                     &out_attrs->values.less_than);
+                                     &out_attrs->values.standard.less_than);
     } else if (!strcmp(key, ANJAY_ATTR_ST)) {
         return parse_nullable_double(key, value, &out_attrs->has_step,
-                                     &out_attrs->values.step);
+                                     &out_attrs->values.standard.step);
+#ifdef WITH_CON_ATTR
+    } else if (!strcmp(key, ANJAY_CUSTOM_ATTR_CON)) {
+        return parse_con(value, &out_attrs->custom.has_con,
+                         &out_attrs->values.custom.data.con);
+#endif // WITH_CON_ATTR
     } else {
         anjay_log(ERROR, "unrecognized query string: %s = %s", key, value);
         return -1;
@@ -218,7 +263,7 @@ static int parse_attributes(avs_stream_abstract_t *stream,
                             anjay_request_attributes_t *out_attrs) {
     anjay_coap_opt_iterator_t it = ANJAY_COAP_OPT_ITERATOR_EMPTY;
     memset(out_attrs, 0, sizeof(*out_attrs));
-    out_attrs->values = ANJAY_RES_ATTRIBS_EMPTY;
+    out_attrs->values = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
 
     char buffer[ANJAY_MAX_URI_QUERY_SEGMENT_SIZE];
     size_t attr_size;
@@ -604,6 +649,9 @@ static int handle_incoming_message(anjay_t *anjay,
         if (result == ANJAY_COAP_SOCKET_ERR_DUPLICATE) {
             anjay_log(TRACE, "duplicate request received");
             result = 0;
+        } else if (result == ANJAY_COAP_SOCKET_ERR_MSG_WAS_PING) {
+            anjay_log(TRACE, "received CoAP ping");
+            result = 0;
         } else {
             anjay_log(ERROR, "received packet is not a valid CoAP message");
         }
@@ -675,6 +723,11 @@ int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
     }
 
     anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
+    if (!connection) {
+        anjay_log(ERROR, "could not get server connection");
+        return -1;
+    }
+
     avs_net_abstract_socket_t *socket = _anjay_connection_get_prepared_socket(
             anjay, ref.server, connection);
     if (!socket

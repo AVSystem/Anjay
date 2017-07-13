@@ -127,7 +127,10 @@ static int restore_string(anjay_persistence_context_t *ctx,
     return 0;
 }
 
-static int store_instance(anjay_persistence_context_t *ctx, void *element_) {
+static int store_instance(anjay_persistence_context_t *ctx,
+                          void *element_,
+                          void *user_data) {
+    (void) user_data;
     sec_instance_t *element = (sec_instance_t *) element_;
     int retval = 0;
     uint16_t udp_security_mode = (uint16_t) element->udp_security_mode;
@@ -222,7 +225,8 @@ int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
         return -1;
     }
     retval = anjay_persistence_list(ctx, (AVS_LIST(void) *) &repr->instances,
-                                    sizeof(sec_instance_t), store_instance);
+                                    sizeof(sec_instance_t),
+                                    store_instance, NULL);
     anjay_persistence_context_delete(ctx);
     return retval;
 }

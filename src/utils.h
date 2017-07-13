@@ -53,21 +53,6 @@ do { \
 } while (false)
 #endif
 
-typedef struct anjay_url {
-    char protocol[ANJAY_MAX_URL_PROTO_SIZE];
-    char host[ANJAY_MAX_URL_HOSTNAME_SIZE];
-    char port[ANJAY_MAX_URL_PORT_SIZE];
-} anjay_url_t;
-
-int _anjay_parse_url(const char *raw_url, anjay_url_t *parsed_url);
-
-#ifdef ANJAY_TEST
-typedef uint32_t anjay_rand_seed_t;
-#else
-typedef unsigned anjay_rand_seed_t;
-#endif
-uint32_t _anjay_rand32(anjay_rand_seed_t *seed);
-
 typedef struct anjay_string {
     char c_str[1]; // actually a FAM, but a struct must not consist of FAM only
 } anjay_string_t;
@@ -82,6 +67,40 @@ _anjay_make_query_string_list(const char *version,
                               const int64_t *lifetime,
                               anjay_binding_mode_t binding_mode,
                               const char *sms_msisdn);
+
+typedef struct anjay_url {
+    char protocol[ANJAY_MAX_URL_PROTO_SIZE];
+    char host[ANJAY_MAX_URL_HOSTNAME_SIZE];
+    char port[ANJAY_MAX_URL_PORT_SIZE];
+    AVS_LIST(anjay_string_t) uri_path;
+    AVS_LIST(anjay_string_t) uri_query;
+} anjay_url_t;
+
+#define ANJAY_URL_EMPTY                     \
+    (anjay_url_t) {                         \
+        .uri_path = NULL, .uri_query = NULL \
+    }
+
+/**
+ * Parses endpoint name into hostname, path and port number. Additionally
+ * extracts Uri-Path and Uri-Query options as (unsecaped) strings.
+ *
+ * NOTE: @p out_parsed_url MUST be initialized with ANJAY_URL_EMPTY or otherwise
+ * the behavior is undefined.
+ */
+int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url);
+
+/**
+ * Frees any allocated memory by @ref _anjay_parse_url
+ */
+void _anjay_url_cleanup(anjay_url_t *url);
+
+#ifdef ANJAY_TEST
+typedef uint32_t anjay_rand_seed_t;
+#else
+typedef unsigned anjay_rand_seed_t;
+#endif
+uint32_t _anjay_rand32(anjay_rand_seed_t *seed);
 
 static inline bool _anjay_is_power_of_2(size_t value) {
     return value > 0 && !(value & (value - 1));

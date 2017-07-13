@@ -30,7 +30,7 @@ static anjay_coap_msg_t *setup_msg_with_id(void *buffer,
                                            uint16_t msg_id,
                                            const char *payload) {
     anjay_coap_msg_t *msg = (anjay_coap_msg_t *) buffer;
-    setup_msg(msg, payload, strlen(payload));
+    setup_msg(msg, (const uint8_t *) payload, strlen(payload));
 
     uint16_t net_id = htons(msg_id);
     memcpy(msg->header.message_id, &net_id, sizeof(net_id));
@@ -65,7 +65,8 @@ AVS_UNIT_TEST(coap_msg_cache, hit_single) {
     const anjay_coap_msg_t *cached_msg =
             _anjay_coap_msg_cache_get(cache, "host", "port", id);
     AVS_UNIT_ASSERT_NOT_NULL(cached_msg);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, cached_msg, sizeof(*msg));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, cached_msg,
+                                      offsetof(anjay_coap_msg_t, content));
 
     _anjay_coap_msg_cache_release(&cache);
 }
@@ -93,7 +94,7 @@ AVS_UNIT_TEST(coap_msg_cache, hit_multiple) {
                                           (uint16_t)(id + i));
         AVS_UNIT_ASSERT_NOT_NULL(cached_msg);
         AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg[i], cached_msg,
-                                          sizeof(*cached_msg));
+                                          offsetof(anjay_coap_msg_t, content));
     }
 
     _anjay_coap_msg_cache_release(&cache);
@@ -188,9 +189,9 @@ AVS_UNIT_TEST(coap_msg_cache, add_evict) {
     };
     const anjay_coap_msg_t *cached_msg;
 
-    coap_msg_cache_t *cache =
-            _anjay_coap_msg_cache_create((cache_msg_overhead(msg[0])
-                                          + sizeof(anjay_coap_msg_t)) * 2);
+    coap_msg_cache_t *cache = _anjay_coap_msg_cache_create(
+            (cache_msg_overhead(msg[0]) + offsetof(anjay_coap_msg_t, content))
+                    * 2);
 
     // message with another ID removes oldest existing entry if extra space
     // is required
@@ -208,13 +209,15 @@ AVS_UNIT_TEST(coap_msg_cache, add_evict) {
     cached_msg = _anjay_coap_msg_cache_get(cache, "host", "port",
                                            (uint16_t)(id + 1));
     AVS_UNIT_ASSERT_NOT_NULL(cached_msg);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg[1], cached_msg, sizeof(*msg[1]));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg[1], cached_msg,
+                                      offsetof(anjay_coap_msg_t, content));
 
     // newest entry was inserted
     cached_msg = _anjay_coap_msg_cache_get(cache, "host", "port",
                                            (uint16_t)(id + 2));
     AVS_UNIT_ASSERT_NOT_NULL(cached_msg);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg[2], cached_msg, sizeof(*msg[2]));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg[2], cached_msg,
+                                      offsetof(anjay_coap_msg_t, content));
 
     _anjay_coap_msg_cache_release(&cache);
 }
@@ -228,9 +231,9 @@ AVS_UNIT_TEST(coap_msg_cache, add_evict_multiple) {
                           (uint16_t)(id + 2), "\xFF" "foobarbaz"),
     };
 
-    coap_msg_cache_t *cache =
-            _anjay_coap_msg_cache_create((cache_msg_overhead(msg[0])
-                                          + sizeof(anjay_coap_msg_t)) * 2);
+    coap_msg_cache_t *cache = _anjay_coap_msg_cache_create(
+            (cache_msg_overhead(msg[0]) + offsetof(anjay_coap_msg_t, content))
+                    * 2);
 
     // message with another ID removes oldest existing entries if extra space
     // is required
@@ -270,7 +273,7 @@ AVS_UNIT_TEST(coap_msg_cache, add_too_big) {
 
     coap_msg_cache_t *cache =
             _anjay_coap_msg_cache_create(cache_msg_overhead(m1)
-                                         + sizeof(anjay_coap_msg_t));
+                                         + offsetof(anjay_coap_msg_t, content));
 
     // message too long to put into cache should be ignored
     AVS_UNIT_ASSERT_SUCCESS(
@@ -282,7 +285,8 @@ AVS_UNIT_TEST(coap_msg_cache, add_too_big) {
     const anjay_coap_msg_t *cached_msg =
             _anjay_coap_msg_cache_get(cache, "host", "port", id);
     AVS_UNIT_ASSERT_NOT_NULL(cached_msg);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(m1, cached_msg, sizeof(*m1));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(m1, cached_msg,
+                                      offsetof(anjay_coap_msg_t, content));
 
     // "too big" entry was not inserted
     AVS_UNIT_ASSERT_NULL(_anjay_coap_msg_cache_get(cache, "host", "port",
@@ -310,11 +314,13 @@ AVS_UNIT_TEST(coap_msg_cache, multiple_hosts_same_ids) {
     const anjay_coap_msg_t *cached_msg =
             _anjay_coap_msg_cache_get(cache, "h1", "port", id);
     AVS_UNIT_ASSERT_NOT_NULL(cached_msg);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(m1, cached_msg, sizeof(*m1));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(m1, cached_msg,
+                                      offsetof(anjay_coap_msg_t, content));
 
     cached_msg = _anjay_coap_msg_cache_get(cache, "h2", "port", id);
     AVS_UNIT_ASSERT_NOT_NULL(cached_msg);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(m2, cached_msg, sizeof(*m2)
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(m2, cached_msg,
+                                      offsetof(anjay_coap_msg_t, content)
                                       + sizeof("\xFF" "foobarbaz") - 1);
 
     _anjay_coap_msg_cache_release(&cache);

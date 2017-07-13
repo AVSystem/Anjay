@@ -130,7 +130,7 @@ int _anjay_coap_common_send_empty(anjay_coap_socket_t *socket,
     info.identity.msg_id = msg_id;
 
     union {
-        uint8_t buffer[sizeof(anjay_coap_msg_t)];
+        uint8_t buffer[offsetof(anjay_coap_msg_t, content)];
         anjay_coap_msg_t force_align_;
     } aligned_buffer;
     const anjay_coap_msg_t *msg = _anjay_coap_msg_build_without_payload(
@@ -159,7 +159,7 @@ static void send_response(anjay_coap_socket_t *socket,
     }
 
     union {
-        uint8_t buffer[sizeof(anjay_coap_msg_t)
+        uint8_t buffer[offsetof(anjay_coap_msg_t, content)
                        + ANJAY_COAP_MAX_TOKEN_LENGTH
                        + ANJAY_COAP_OPT_INT_MAX_SIZE];
         anjay_coap_msg_t force_align_;
@@ -226,6 +226,7 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
 
         case ANJAY_COAP_SOCKET_ERR_MSG_MALFORMED:
         case ANJAY_COAP_SOCKET_ERR_DUPLICATE:
+        case ANJAY_COAP_SOCKET_ERR_MSG_WAS_PING:
         case 0:
             break;
         }

@@ -68,9 +68,7 @@ typedef struct {
 
 static inline apn_conn_profile_repr_t *
 get_apncp(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, apn_conn_profile_repr_t, def);
 }
 
@@ -298,6 +296,7 @@ apncp_instance_reset(anjay_t *anjay,
                      anjay_iid_t iid) {
     (void) anjay;
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
+    assert(inst && "could not find instance");
     inst->has_auth_type = false;
     inst->has_profile_name = false;
     return 0;
@@ -337,8 +336,8 @@ const anjay_dm_object_def_t **apn_conn_profile_object_create(void) {
 }
 
 void apn_conn_profile_object_release(const anjay_dm_object_def_t **def) {
-    apn_conn_profile_repr_t *apncp = get_apncp(def);
-    if (apncp) {
+    if (def) {
+        apn_conn_profile_repr_t *apncp = get_apncp(def);
         AVS_LIST_CLEAR(&apncp->instances);
         AVS_LIST_CLEAR(&apncp->saved_instances);
         free(apncp);

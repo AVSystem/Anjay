@@ -367,6 +367,12 @@ static bool is_valid_coap_uri(const anjay_url_t *uri,
         return false;
     }
 
+    if (uri->uri_path || uri->uri_query) {
+        anjay_log(ERROR,
+                  "unsupported Uri-Path or Uri-Query in LwM2M server URI");
+        return false;
+    }
+
     return true;
 }
 
@@ -387,11 +393,15 @@ static int get_server_uri(anjay_t *anjay,
     }
 
     const bool use_nosec = (security_mode == ANJAY_UDP_SECURITY_NOSEC);
-    if (_anjay_parse_url(raw_uri, out_uri)
-            || !is_valid_coap_uri(out_uri, use_nosec)) {
+    anjay_url_t uri = ANJAY_URL_EMPTY;
+
+    if (_anjay_parse_url(raw_uri, &uri)
+            || !is_valid_coap_uri(&uri, use_nosec)) {
+        _anjay_url_cleanup(&uri);
         anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
         return -1;
     }
+    *out_uri = uri;
     return 0;
 }
 
@@ -577,7 +587,27 @@ int _anjay_server_refresh(anjay_t *anjay,
     int udp_result = 0, sms_result = 0;
     udp_result = refresh_connection(anjay, &UDP_CONNECTION, server,
                                     &server_info, force_reconnect);
-    return udp_result ? udp_result : sms_result;
+
+    int result = -1;
+    switch (_anjay_get_default_connection_type(server)) {
+    case ANJAY_CONNECTION_UDP:
+        result = udp_result;
+        break;
+    case ANJAY_CONNECTION_SMS:
+        result = sms_result;
+        break;
+    default:
+        assert(0 && "Invalid default connection type");
+    }
+
+    if (!result && (udp_result || sms_result)) {
+        // default connection is OK, but some other failed;
+        // currently, as per spec, the only case in which it might happen
+        // is when we have UDP connectivity, but SMS failed
+        server->needs_reload = true;
+        _anjay_schedule_delayed_reload_servers(anjay);
+    }
+    return result;
 }
 
 static void connection_suspend(anjay_connection_ref_t conn_ref) {

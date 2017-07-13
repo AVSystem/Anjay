@@ -271,7 +271,7 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx, int *out_arg,
  *
  * Function might return 0 when there is nothing more to read or because argument
  * does not have associated value with it, or because the value has already been
- * read / skipeed entirely.
+ * read / skipped entirely.
  *
  * If the function returns buf_size-1, then there might be more data to read.
  *

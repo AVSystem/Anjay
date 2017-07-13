@@ -29,7 +29,9 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
                               anjay_coap_socket_t *socket,
+                              uint8_t *in_buffer,
                               size_t in_buffer_size,
+                              uint8_t *out_buffer,
                               size_t out_buffer_size);
 
 typedef enum {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <poll.h>
@@ -91,9 +92,7 @@ typedef struct {
 
 static inline ip_ping_t *
 get_ip_ping(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, ip_ping_t, def);
 }
 
@@ -452,8 +451,8 @@ const anjay_dm_object_def_t **ip_ping_object_create(iosched_t *iosched) {
 }
 
 void ip_ping_object_release(const anjay_dm_object_def_t **def) {
-    ip_ping_t *ping = get_ip_ping(def);
-    if (ping) {
+    if (def) {
+        ip_ping_t *ping = get_ip_ping(def);
         ip_ping_command_state_cleanup(ping);
         free(ping);
     }

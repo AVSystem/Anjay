@@ -19,6 +19,13 @@ log() {
     echo -e "${FG_BOLD}$0: ${FUNCNAME[1]}:${FG_DEFAULT} $@" >&2
 }
 
+warn() {
+    local COL_YELLOW="\033[33m"
+    local COL_DEFAULT="\033[0m"
+
+    log "${COL_YELLOW}$@${COL_DEFAULT}"
+}
+
 die() {
     local COL_RED="\033[31m"
     local COL_YELLOW="\033[33m"

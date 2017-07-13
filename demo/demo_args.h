@@ -38,6 +38,7 @@ typedef struct cmdline_args {
     int32_t inbuf_size;
     int32_t outbuf_size;
     int32_t msg_cache_size;
+    bool confirmable_notifications;
     const char *fw_updated_marker_path;
 } cmdline_args_t;
 

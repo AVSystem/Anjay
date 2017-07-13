@@ -26,6 +26,8 @@
 
 #include "utils.h"
 
+#include <avsystem/commons/utils.h>
+
 VISIBILITY_SOURCE_BEGIN
 
 static int url_parse_protocol(const char **url, anjay_url_t *parsed_url) {
@@ -124,14 +126,175 @@ static int url_parsed(const char *url) {
     return (*url != '\0');
 }
 
-/**
- * Parse endpoint name into hostname, path and port number.
- */
-int _anjay_parse_url(const char *raw_url, anjay_url_t *parsed_url) {
-    return url_parse_protocol(&raw_url, parsed_url)
-            || url_parse_host(&raw_url, parsed_url)
-            || url_parse_port(&raw_url, parsed_url)
-            || url_parsed(raw_url);
+static int url_unescape_first(const char *data) {
+    if (data[0] == '%' && isxdigit(data[1]) && isxdigit(data[2])) {
+        char ascii[3];
+        ascii[0] = data[1];
+        ascii[1] = data[2];
+        ascii[2] = '\0';
+        return (int) strtoul(ascii, NULL, 16);
+    }
+    return -1;
+}
+
+static int url_unescape(char *data) {
+    char *src = data, *dst = data;
+
+    if (!strchr(data, '%')) {
+        /* nothing to unescape */
+        return 0;
+    }
+
+    while (*src) {
+        if (*src == '%') {
+            int unescaped = url_unescape_first(src);
+            if (unescaped >= 0) {
+                *dst = (char) unescaped;
+                src += 3;
+                dst += 1;
+            } else {
+                anjay_log(ERROR, "bad escape format (%%XX)");
+                return -1;
+            }
+        } else {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+
+    return 0;
+}
+
+typedef enum {
+    URL_PARSE_HINT_NONE,
+    URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR
+} url_parse_chunks_hint_t;
+
+static bool is_valid_url_path_char(char c) {
+    /* Assumes english locale. For more information see RFC3986,
+       Section "3.3. Path" */
+    return isalnum(c)
+           || !!strchr("-._~"        /* unreserved */
+                       "!$&'()*+,;=" /* sub-delims */
+                       ":@",         /* rest of pchar grammar rule */
+                       c);
+}
+
+static bool is_valid_url_query_char(char c) {
+    return is_valid_url_path_char(c) || !!strchr("/?", c);
+}
+
+static bool is_valid_url_part(const char *str,
+                              size_t length,
+                              bool (*is_unescaped_character_valid)(char)) {
+    if (!str) {
+        return false;
+    }
+
+    while (*str && length) {
+        if (is_unescaped_character_valid(*str)) {
+            ++str;
+            --length;
+        } else {
+            if (url_unescape_first(str) < 0) {
+                return false;
+            }
+            const size_t escaped_len = sizeof("%xx") - 1;
+            str += escaped_len;
+            length -= escaped_len;
+        }
+    }
+
+    return !length;
+}
+
+static int url_parse_chunks(const char **url,
+                            char delimiter,
+                            char parser_terminator,
+                            url_parse_chunks_hint_t hint,
+                            bool (*is_unescaped_character_valid)(char),
+                            AVS_LIST(anjay_string_t) *out_chunks) {
+    const char *ptr = *url;
+    do {
+        if ((*ptr == '\0' || *ptr == delimiter || *ptr == parser_terminator)
+            && ptr != *url) {
+            const size_t chunk_len = (size_t)(ptr - *url - 1);
+
+            if (hint == URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR
+                && (*ptr == '\0' || *ptr == parser_terminator) && !chunk_len) {
+                // trailing separator, ignoring
+                *url = ptr;
+                return 0;
+            }
+
+            if (!is_valid_url_part(*url + 1, chunk_len,
+                                   is_unescaped_character_valid)) {
+                return -1;
+            }
+
+            if (out_chunks) {
+                AVS_LIST(anjay_string_t) chunk =
+                    (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(chunk_len + 1);
+                if (!chunk) {
+                    anjay_log(ERROR, "out of memory");
+                    return -1;
+                }
+                AVS_LIST_APPEND(out_chunks, chunk);
+
+                if (chunk_len) {
+                    // skip separator
+                    memcpy(chunk, *url + 1, chunk_len);
+
+                    if (url_unescape(chunk->c_str)) {
+                        return -1;
+                    }
+                }
+            }
+            *url = ptr;
+        }
+
+        if (*ptr == parser_terminator) {
+            *url = ptr;
+            break;
+        }
+        ++ptr;
+    } while (**url);
+    return 0;
+}
+
+int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url) {
+    assert(!out_parsed_url->uri_path);
+    assert(!out_parsed_url->uri_query);
+    if (url_parse_protocol(&raw_url, out_parsed_url)
+        || url_parse_host(&raw_url, out_parsed_url)
+        || url_parse_port(&raw_url, out_parsed_url)) {
+        return -1;
+    }
+
+    if (*raw_url == '/'
+        && url_parse_chunks(
+                   &raw_url, '/', '?', URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR,
+                   is_valid_url_path_char, &out_parsed_url->uri_path)) {
+        goto error;
+    }
+    if (*raw_url == '?'
+        && url_parse_chunks(&raw_url, '&', '\0', URL_PARSE_HINT_NONE,
+                            is_valid_url_query_char,
+                            &out_parsed_url->uri_query)) {
+        goto error;
+    }
+    if (url_parsed(raw_url)) {
+        goto error;
+    }
+    return 0;
+error:
+    _anjay_url_cleanup(out_parsed_url);
+    return -1;
+}
+
+void _anjay_url_cleanup(anjay_url_t *url) {
+    AVS_LIST_CLEAR(&url->uri_path);
+    AVS_LIST_CLEAR(&url->uri_query);
 }
 
 #ifdef ANJAY_TEST
@@ -143,9 +306,9 @@ uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
 
 #else
 
-#if RAND_MAX >= UINT32_MAX
+#if AVS_RAND_MAX >= UINT32_MAX
 #define RAND32_ITERATIONS 1
-#elif RAND_MAX >= UINT16_MAX
+#elif AVS_RAND_MAX >= UINT16_MAX
 #define RAND32_ITERATIONS 2
 #else
 /* standard guarantees RAND_MAX to be at least 32767 */
@@ -156,8 +319,8 @@ uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
     uint32_t result = 0;
     int i;
     for (i = 0; i < RAND32_ITERATIONS; ++i) {
-        result *= (uint32_t) RAND_MAX + 1;
-        result += (uint32_t) rand_r(seed);
+        result *= (uint32_t) AVS_RAND_MAX + 1;
+        result += (uint32_t) avs_rand_r(seed);
     }
     return result;
 }

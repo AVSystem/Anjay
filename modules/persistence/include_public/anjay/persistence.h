@@ -31,7 +31,8 @@ typedef struct anjay_persistence_context_struct anjay_persistence_context_t;
 
 typedef int
 anjay_persistence_handler_collection_element_t(anjay_persistence_context_t *ctx,
-                                               void *element);
+                                               void *element,
+                                               void *user_data);
 
 typedef int anjay_persistence_cleanup_collection_element_t(void *element);
 
@@ -166,28 +167,31 @@ int anjay_persistence_double(anjay_persistence_context_t *ctx,
  * Performs a operation (depending on the @p ctx) on a @p list_ptr, using
  * @p handler for each element.
  *
- * @param ctx           context that determines the actual operation
- * @param list_ptr      pointer to the list containing the data
- * @param element_size  size of single element in the list
- * @param handler       function called for each element of the list
+ * @param ctx              context that determines the actual operation
+ * @param list_ptr         pointer to the list containing the data
+ * @param element_size     size of single element in the list
+ * @param handler          function called for each element of the list
+ * @param handler_user_ptr opaque pointer passed to each call to @p handler
  * @return 0 in case of success, negative value in case of failure
  */
 int anjay_persistence_list(
         anjay_persistence_context_t *ctx,
         AVS_LIST(void) *list_ptr,
         size_t element_size,
-        anjay_persistence_handler_collection_element_t *handler);
+        anjay_persistence_handler_collection_element_t *handler,
+        void *handler_user_ptr);
 
 /**
  * Performs a operation (depending on the @p ctx) on a @p tree, using
  * @p handler for each element.
  *
- * @param ctx           context that determines the actual operation
- * @param tree          tree containing the data
- * @param element_size  size of single element in the tree
- * @param handler       function called for each element of the tree
- * @param cleanup       function called on an element if it could not be
- *                      restored in entirety
+ * @param ctx              context that determines the actual operation
+ * @param tree             tree containing the data
+ * @param element_size     size of single element in the tree
+ * @param handler          function called for each element of the tree
+ * @param handler_user_ptr opaque pointer passed to each call to @p handler
+ * @param cleanup          function called on an element if it could not be
+ *                         restored in entirety
  * @return 0 in case of success, negative value in case of failure
  */
 int anjay_persistence_tree(
@@ -195,6 +199,7 @@ int anjay_persistence_tree(
         AVS_RBTREE(void) tree,
         size_t element_size,
         anjay_persistence_handler_collection_element_t *handler,
+        void *handler_user_ptr,
         anjay_persistence_cleanup_collection_element_t *cleanup);
 
 #ifdef __cplusplus

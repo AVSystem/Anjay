@@ -81,9 +81,7 @@ typedef struct {
 } dev_repr_t;
 
 static inline dev_repr_t *get_dev(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, dev_repr_t, def);
 }
 
@@ -406,5 +404,7 @@ const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
 }
 
 void device_object_release(const anjay_dm_object_def_t **def) {
-    free(get_dev(def));
+    if (def) {
+        free(get_dev(def));
+    }
 }

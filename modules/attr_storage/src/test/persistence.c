@@ -50,13 +50,14 @@
             PERSISTENCE_TEST_FINISH; \
         } while (0)
 
-#define MAGIC_HEADER "FAS\0"
+#define MAGIC_HEADER_V0 "FAS\0"
+#define MAGIC_HEADER_V2 "FAS\2"
 
 AVS_UNIT_TEST(attr_storage_persistence, persist_empty) {
     PERSIST_TEST_INIT(256);
     AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_persist(
             anjay, (avs_stream_abstract_t *) &outbuf));
-    PERSIST_TEST_CHECK(MAGIC_HEADER "\x00\x00\x00\x00");
+    PERSIST_TEST_CHECK(MAGIC_HEADER_V2 "\x00\x00\x00\x00");
 }
 
 #define INSTALL_FAKE_OBJECT(Oid, ...) \
@@ -73,7 +74,7 @@ AVS_UNIT_TEST(attr_storage_persistence, persist_empty) {
 static void write_obj_attrs(anjay_t *anjay,
                             anjay_oid_t oid,
                             anjay_ssid_t ssid,
-                            const anjay_dm_attributes_t *attrs) {
+                            const anjay_dm_internal_attrs_t *attrs) {
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
@@ -85,7 +86,7 @@ static void write_inst_attrs(anjay_t *anjay,
                              anjay_oid_t oid,
                              anjay_iid_t iid,
                              anjay_ssid_t ssid,
-                             const anjay_dm_attributes_t *attrs) {
+                             const anjay_dm_internal_attrs_t *attrs) {
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
@@ -98,7 +99,7 @@ static void write_res_attrs(anjay_t *anjay,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
                             anjay_ssid_t ssid,
-                            const anjay_dm_resource_attributes_t *attrs) {
+                            const anjay_dm_internal_res_attrs_t *attrs) {
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
@@ -108,63 +109,91 @@ static void write_res_attrs(anjay_t *anjay,
 
 static void persist_test_fill(anjay_t *anjay) {
     write_obj_attrs(anjay, 4, 33,
-                    &(const anjay_dm_attributes_t) {
-                        .min_period = 42,
-                        .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                    &(const anjay_dm_internal_attrs_t) {
+                        .custom = {
+                            .data = {
+                                .con = ANJAY_DM_CON_ATTR_NON
+                            }
+                        },
+                        .standard = {
+                            .min_period = 42,
+                            .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                        }
                     });
     write_obj_attrs(anjay, 4, 14,
-                    &(const anjay_dm_attributes_t) {
-                        .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                        .max_period = 3
+                    &(const anjay_dm_internal_attrs_t) {
+                        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                        .standard = {
+                            .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                            .max_period = 3
+                        }
                     });
     write_inst_attrs(anjay, 42, 1, 2,
-                     &(const anjay_dm_attributes_t) {
-                         .min_period = 7,
-                         .max_period = 13
+                     &(const anjay_dm_internal_attrs_t) {
+                         _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                         .standard = {
+                             .min_period = 7,
+                             .max_period = 13
+                         }
                      });
     write_res_attrs(anjay, 42, 1, 3, 2,
-                    &(const anjay_dm_resource_attributes_t) {
-                        .common = {
-                            .min_period = ANJAY_ATTRIB_PERIOD_NONE,
-                            .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                    &(const anjay_dm_internal_res_attrs_t) {
+                        .custom = {
+                            .data = {
+                                .con = ANJAY_DM_CON_ATTR_CON
+                            }
                         },
-                        .greater_than = 1.0,
-                        .less_than = -1.0,
-                        .step = ANJAY_ATTRIB_VALUE_NONE
+                        .standard = {
+                            .common = {
+                                .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+                                .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                            },
+                            .greater_than = 1.0,
+                            .less_than = -1.0,
+                            .step = ANJAY_ATTRIB_VALUE_NONE
+                        }
                     });
     write_res_attrs(anjay, 42, 1, 3, 7,
-                    &(const anjay_dm_resource_attributes_t) {
-                        .common = {
-                            .min_period = 1,
-                            .max_period = 14
-                        },
-                        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .step = ANJAY_ATTRIB_VALUE_NONE
+                    &(const anjay_dm_internal_res_attrs_t) {
+                        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                        .standard = {
+                            .common = {
+                                .min_period = 1,
+                                .max_period = 14
+                            },
+                            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+                            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+                            .step = ANJAY_ATTRIB_VALUE_NONE
+                        }
                     });
     write_res_attrs(anjay, 517, 516, 515, 514,
-                    &(const anjay_dm_resource_attributes_t) {
-                        .common = {
-                            .min_period = 33,
-                            .max_period = ANJAY_ATTRIB_PERIOD_NONE
-                        },
-                        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-                        .step = 42.0
+                    &(const anjay_dm_internal_res_attrs_t) {
+                        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                        .standard = {
+                            .common = {
+                                .min_period = 33,
+                                .max_period = ANJAY_ATTRIB_PERIOD_NONE
+                            },
+                            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+                            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+                            .step = 42.0
+                        }
                     });
 }
 
 static const char PERSIST_TEST_DATA[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V2
         "\x00\x00\x00\x03" // 3 objects
             "\x00\x04" // OID 4
                 "\x00\x00\x00\x02" // 2 object-level default attrs
                     "\x00\x0E" // SSID 14
                         "\xFF\xFF\xFF\xFF" // min period
                         "\x00\x00\x00\x03" // max period
+                        "\xFF" // confirmable
                     "\x00\x21" // SSID 33
                         "\x00\x00\x00\x2A" // min period
                         "\xFF\xFF\xFF\xFF" // max period
+                        "\x00" // confirmable
                 "\x00\x00\x00\x00" // 0 instance entries
             "\x00\x2A" // OID 42
                 "\x00\x00\x00\x00" // 0 object-level default attrs
@@ -174,6 +203,7 @@ static const char PERSIST_TEST_DATA[] =
                             "\x00\x02" // SSID 2
                                 "\x00\x00\x00\x07" // min period
                                 "\x00\x00\x00\x0D" // max period
+                                "\xFF" // confirmable
                         "\x00\x00\x00\x01" // 1 resource entry
                             "\x00\x03" // RID 3
                                 "\x00\x00\x00\x02" // 2 attr entries
@@ -183,12 +213,14 @@ static const char PERSIST_TEST_DATA[] =
                     /* greater than */  "\x3F\xF0\x00\x00\x00\x00\x00\x00"
                     /* less than */     "\xBF\xF0\x00\x00\x00\x00\x00\x00"
                     /* step */          "\x7F\xF8\x00\x00\x00\x00\x00\x00"
+                                        "\x01" // confirmable
                                     "\x00\x07" // SSID 7
                                         "\x00\x00\x00\x01" // min period
                                         "\x00\x00\x00\x0E" // max period
                     /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
                     /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
                     /* step */          "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                                        "\xFF" // confirmable
             "\x02\x05" // OID 517
                 "\x00\x00\x00\x00" // 0 object-level default attrs
                 "\x00\x00\x00\x01" // 1 instance entry
@@ -202,7 +234,8 @@ static const char PERSIST_TEST_DATA[] =
                                         "\xFF\xFF\xFF\xFF" // max period
                     /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
                     /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                    /* step */          "\x40\x45\x00\x00\x00\x00\x00\x00";
+                    /* step */          "\x40\x45\x00\x00\x00\x00\x00\x00"
+                                        "\xFF"; // confirmable
 
 AVS_UNIT_TEST(attr_storage_persistence, persist_full) {
     PERSIST_TEST_INIT(512);
@@ -267,7 +300,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_one_object) {
                     test_instance_entry(
                             1,
                             test_default_attrlist(
-                                    test_default_attrs(2, 7, 13),
+                                    test_default_attrs(
+                                            2, 7, 13,
+                                            ANJAY_DM_CON_ATTR_DEFAULT),
                                     NULL),
                             test_resource_entry(
                                     3,
@@ -277,14 +312,16 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_one_object) {
                                             ANJAY_ATTRIB_PERIOD_NONE,
                                             1.0,
                                             -1.0,
-                                            ANJAY_ATTRIB_VALUE_NONE),
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_DM_CON_ATTR_CON),
                                     test_resource_attrs(
                                             7,
                                             1,
                                             14,
                                             ANJAY_ATTRIB_VALUE_NONE,
                                             ANJAY_ATTRIB_VALUE_NONE,
-                                            ANJAY_ATTRIB_VALUE_NONE),
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_DM_CON_ATTR_DEFAULT),
                                     NULL),
                             NULL),
                     NULL));
@@ -301,9 +338,12 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
 
     // this will be cleared
     write_inst_attrs(anjay, 69, 68, 67,
-                     &(const anjay_dm_attributes_t) {
-                         .min_period = 66,
-                         .max_period = 65
+                     &(const anjay_dm_internal_attrs_t) {
+                         _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                         .standard = {
+                             .min_period = 66,
+                             .max_period = 65
+                         }
                      });
 
     _anjay_mock_dm_expect_instance_it(anjay, &OBJ4, 0, 0,
@@ -327,9 +367,10 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
             test_object_entry(
                     4,
                     test_default_attrlist(
-                            test_default_attrs(14, ANJAY_ATTRIB_PERIOD_NONE, 3),
-                            test_default_attrs(33,
-                                               42, ANJAY_ATTRIB_PERIOD_NONE),
+                            test_default_attrs(14, ANJAY_ATTRIB_PERIOD_NONE, 3,
+                                               ANJAY_DM_CON_ATTR_DEFAULT),
+                            test_default_attrs(33, 42, ANJAY_ATTRIB_PERIOD_NONE,
+                                               ANJAY_DM_CON_ATTR_NON),
                             NULL),
                     NULL));
 
@@ -340,7 +381,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
                     test_instance_entry(
                             1,
                             test_default_attrlist(
-                                    test_default_attrs(2, 7, 13),
+                                    test_default_attrs(
+                                            2, 7, 13,
+                                            ANJAY_DM_CON_ATTR_DEFAULT),
                                     NULL),
                             test_resource_entry(
                                     3,
@@ -350,14 +393,16 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
                                             ANJAY_ATTRIB_PERIOD_NONE,
                                             1.0,
                                             -1.0,
-                                            ANJAY_ATTRIB_VALUE_NONE),
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_DM_CON_ATTR_CON),
                                     test_resource_attrs(
                                             7,
                                             1,
                                             14,
                                             ANJAY_ATTRIB_VALUE_NONE,
                                             ANJAY_ATTRIB_VALUE_NONE,
-                                            ANJAY_ATTRIB_VALUE_NONE),
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_DM_CON_ATTR_DEFAULT),
                                     NULL),
                             NULL),
                     NULL));
@@ -372,12 +417,14 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
                             NULL,
                             test_resource_entry(
                                     515,
-                                    test_resource_attrs(514,
-                                                        33,
-                                                        ANJAY_ATTRIB_PERIOD_NONE,
-                                                        ANJAY_ATTRIB_VALUE_NONE,
-                                                        ANJAY_ATTRIB_VALUE_NONE,
-                                                        42.0),
+                                    test_resource_attrs(
+                                            514,
+                                            33,
+                                            ANJAY_ATTRIB_PERIOD_NONE,
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            ANJAY_ATTRIB_VALUE_NONE,
+                                            42.0,
+                                            ANJAY_DM_CON_ATTR_DEFAULT),
                                     NULL),
                             NULL),
                     NULL));
@@ -385,7 +432,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
 }
 
 static const char CLEARING_TEST_DATA[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V0
         "\x00\x00\x00\x02" // 2 objects
             "\x00\x2A" // OID 42
                 "\x00\x00\x00\x00" // 0 object-level default attrs
@@ -474,7 +521,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_no_present_resources) {
 }
 
 static const char RESTORE_BROKEN_DATA[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V0
         "\x00\x00\x00\x03" // 3 objects
             "\x00\x04" // OID 4
                 "\x00\x00\x00\x02" // 2 object-level default attrs
@@ -520,9 +567,12 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_broken_stream) {
 
     // this will be cleared
     write_inst_attrs(anjay, 517, 518, 519,
-                     &(const anjay_dm_attributes_t) {
-                         .min_period = 520,
-                         .max_period = 521,
+                     &(const anjay_dm_internal_attrs_t) {
+                         _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                         .standard = {
+                             .min_period = 520,
+                             .max_period = 521,
+                         }
                      });
 
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore(
@@ -533,7 +583,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_broken_stream) {
 }
 
 static const char INSANE_TEST_DATA[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V0
         "\x00\x00\x00\x03" // 3 objects
             "\x00\x04" // OID 4
                 "\x00\x00\x00\x02" // 2 object-level default attrs
@@ -592,9 +642,12 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_insane_data) {
 
     // this will be cleared
     write_inst_attrs(anjay, 517, 518, 519,
-                     &(const anjay_dm_attributes_t) {
-                         .min_period = 520,
-                         .max_period = 521
+                     &(const anjay_dm_internal_attrs_t) {
+                         _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                         .standard = {
+                             .min_period = 520,
+                             .max_period = 521
+                         }
                      });
 
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore(
@@ -605,7 +658,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_insane_data) {
 }
 
 static const char TEST_DATA_WITH_EMPTY_OID_ATTRS[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V0
         "\x00\x00\x00\x01" // 3 objects
             "\x00\x04" // OID 4
                 "\x00\x00\x00\x02" // 2 object-level default attrs
@@ -621,7 +674,7 @@ static const char TEST_DATA_WITH_EMPTY_OID_ATTRS[] =
 
 
 static const char TEST_DATA_WITH_EMPTY_IID_ATTRS[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V0
         "\x00\x00\x00\x01" // 3 objects
             "\x00\x2A" // OID 42
                 "\x00\x00\x00\x00" // 0 object-level default attrs
@@ -644,7 +697,7 @@ static const char TEST_DATA_WITH_EMPTY_IID_ATTRS[] =
                     /* step */          "\x7f\xf8\x00\x00\x00\x00\x00\x00";
 
 static const char TEST_DATA_WITH_EMPTY_RID_ATTRS[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V0
         "\x00\x00\x00\x01" // 3 objects
             "\x02\x05" // OID 517
                 "\x00\x00\x00\x00" // 0 object-level default attrs
@@ -697,7 +750,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_data_with_bad_magic) {
 }
 
 static const char TEST_DATA_DUPLICATE_OID[] =
-        MAGIC_HEADER
+        MAGIC_HEADER_V0
         "\x00\x00\x00\x02" // 2 objects
             "\x00\x04" // OID 4
                 "\x00\x00\x00\x01" // 1 object-level default attr
@@ -718,9 +771,12 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_duplicate_oid) {
 
     // this will be cleared
     write_inst_attrs(anjay, 4, 5, 6,
-                     &(const anjay_dm_attributes_t) {
-                         .min_period = 7,
-                         .max_period = 8
+                     &(const anjay_dm_internal_attrs_t) {
+                         _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+                         .standard = {
+                             .min_period = 7,
+                             .max_period = 8
+                         }
                      });
 
     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_restore(

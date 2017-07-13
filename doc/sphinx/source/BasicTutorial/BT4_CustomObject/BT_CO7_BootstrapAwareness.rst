@@ -54,7 +54,7 @@ Example: bootstrap-writable Resource
 ------------------------------------
 
 As an example, we will modify the Test Object from
-:doc:`BT_CO3_FixedInstanceWritable` to prevent changing the value of ``Label``
+:doc:`BT_CO4_FixedInstanceWritable` to prevent changing the value of ``Label``
 Resource by non-bootstrap servers:
 
 +-------------+-----------+-----------+

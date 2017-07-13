@@ -77,7 +77,7 @@ static int security_modified_notify(
         }
     }
     if (security->instance_set_changes.instance_set_changed) {
-        _anjay_update_ret(&ret, _anjay_schedule_reload_sockets(anjay));
+        _anjay_update_ret(&ret, _anjay_schedule_reload_servers(anjay));
     }
     return ret;
 }
@@ -87,7 +87,8 @@ static int server_modified_notify(anjay_t *anjay,
     int ret = 0;
     AVS_LIST(anjay_notify_queue_resource_entry_t) it;
     AVS_LIST_FOREACH(it, server->resources_changed) {
-        if (it->rid != ANJAY_DM_RID_SERVER_BINDING) {
+        if (it->rid != ANJAY_DM_RID_SERVER_BINDING
+                && it->rid != ANJAY_DM_RID_SERVER_LIFETIME) {
             continue;
         }
         const anjay_uri_path_t path =

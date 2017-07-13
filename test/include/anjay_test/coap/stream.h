@@ -25,9 +25,25 @@
 
 void _anjay_mock_coap_stream_setup(coap_stream_t *stream);
 
-void _anjay_mock_coap_stream_create(avs_stream_abstract_t **stream_,
-                                    anjay_coap_socket_t *socket,
-                                    size_t in_buffer_size,
-                                    size_t out_buffer_size);
+typedef struct {
+    uint8_t *in_buffer;
+    uint8_t *out_buffer;
+} anjay_mock_coap_stream_ctx_t;
+
+static inline void
+_anjay_mock_coap_stream_cleanup(anjay_mock_coap_stream_ctx_t *ctx) {
+    free(ctx->in_buffer);
+    free(ctx->out_buffer);
+}
+
+#define SCOPED_MOCK_COAP_STREAM(Name)                             \
+    __attribute__((__cleanup__(_anjay_mock_coap_stream_cleanup))) \
+            anjay_mock_coap_stream_ctx_t Name
+
+anjay_mock_coap_stream_ctx_t
+_anjay_mock_coap_stream_create(avs_stream_abstract_t **stream_,
+                               anjay_coap_socket_t *socket,
+                               size_t in_buffer_size,
+                               size_t out_buffer_size);
 
 #endif /* ANJAY_TEST_COAP_STREAM_H */

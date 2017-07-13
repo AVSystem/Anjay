@@ -180,6 +180,8 @@ present if the Client supports more than one LwM2M Server connection at once.
 Implementation of this object is readily available in Anjay's ``access_control``
 module.
 
+.. _lwm2m-resources:
+
 Resources
 ^^^^^^^^^
 
@@ -360,6 +362,8 @@ Server. The protocol also allows the bootstrap information to be pre-provisioned
 at the factory, or read from a smart-card. In those cases, an attempt to contact
 a Bootstrap Server may not even be made.
 
+.. _lwm2m-registration-interface:
+
 Registration Interface
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -405,10 +409,14 @@ client/server relationship on the CoAP layer is reversible at any time.
 The Device Management and Service Enablement interface defines the following
 commands:
 
+.. _lwm2m-discover:
+
 - **Discover** (CoAP **GET Accept: application/link-format**) allows the Server
   to get a list of all supported and present Objects, Object Instances and
   Resources, and to read Attributes_ attached to them. Data stored in Resources
   is not returned.
+
+.. _lwm2m-read:
 
 - **Read** (CoAP **GET** other than the above) reads data - either from a single
   Resource, entire Object Instance, or even a whole Object at once.

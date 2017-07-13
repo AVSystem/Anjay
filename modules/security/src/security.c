@@ -27,9 +27,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 sec_repr_t *_anjay_sec_get(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return AVS_CONTAINER_OF(obj_ptr, sec_repr_t, def);
 }
 

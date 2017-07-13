@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-#include <boost/python.hpp>
+#include <pybind11/pybind11.h>
+#include <pybind11/eval.h>
+#include <pybind11/stl.h>
+
+#include <type_traits>
 
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
@@ -33,20 +37,10 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
-using namespace boost::python;
+namespace py = pybind11;
 using namespace std;
 
 namespace {
-
-struct bytes_converter {
-    static PyObject *convert(const vector<uint8_t> &bytes) {
-        return PyBytes_FromStringAndSize((const char*)&bytes[0], bytes.size());
-    }
-
-    static PyTypeObject *get_pytype() {
-        return &PyBytes_Type;
-    }
-};
 
 void debug_mbedtls(void * /*ctx*/, int /*level*/, const char *file, int line, const char *str) {
     fprintf(stderr, "%s:%04d: %s", file, line, str);
@@ -66,6 +60,21 @@ string mbedtls_error_string(int error) {
     char buf[1024];
     mbedtls_strerror(error, buf, sizeof(buf));
     return string(buf) + " (" + to_hex(error) + ")";
+}
+
+template <typename Result, typename... Args>
+typename enable_if<!is_void<Result>::value, Result>::type
+call_method(py::object py_object, const char *name, Args &&... args) {
+    auto f = py_object.attr(name);
+    auto result = f(forward<Args>(args)...);
+    return py::cast<Result>(result);
+}
+
+template <typename Result, typename... Args>
+typename enable_if<is_void<Result>::value>::type
+call_method(py::object py_object, const char *name, Args &&... args) {
+    auto f = py_object.attr(name);
+    (void) f(forward<Args>(args)...);
 }
 
 } // namespace
@@ -94,16 +103,18 @@ struct Socket {
     vector<uint8_t> psk_key;
     vector<int> psk_ciphersuites;
 
-    object py_socket;
+    py::object py_socket;
     Type type;
 
     static int _send(void *socket_,
                      const unsigned char *buf,
                      size_t len) {
-        Socket *socket = (Socket*)socket_;
-        object py_buf = object(handle<>(PyMemoryView_FromMemory((char*)buf, len, PyBUF_READ)));
+        Socket *socket = (Socket *) socket_;
 
-        call_method<void>(socket->py_socket.ptr(), "sendall", py_buf);
+        call_method<void>(socket->py_socket, "sendall",
+                          py::reinterpret_borrow<py::object>(
+                                  PyMemoryView_FromMemory((char *) buf, len,
+                                                          PyBUF_READ)));
         return (int)len;
     }
 
@@ -112,22 +123,28 @@ struct Socket {
                      size_t len,
                      uint32_t timeout_ms) {
         Socket *socket = (Socket*)socket_;
-        object py_buf = object(handle<>(PyMemoryView_FromMemory((char*)buf, len, PyBUF_WRITE)));
 
-        // this may be double or None, so "object" type needs to be used
-        object orig_timeout_s = call_method<object>(socket->py_socket.ptr(), "gettimeout");
+        py::object py_buf = py::reinterpret_borrow<py::object>(
+                PyMemoryView_FromMemory((char *) buf, len, PyBUF_WRITE));
+
+        // this may be double or None, so "py::object" type needs to be used
+        py::object orig_timeout_s =
+                call_method<py::object>(socket->py_socket, "gettimeout");
+
         // also, timeout == 0 sets a python socket in nonblocking mode
-        // None (object()) has to be used instead to set infinite timeout
-        object new_timeout = timeout_ms == 0 ? object()
-                                             : object((double)timeout_ms / 1000.0);
-
-        call_method<void>(socket->py_socket.ptr(), "settimeout", new_timeout);
+        // None has to be used instead to set infinite timeout
+        if (timeout_ms == 0) {
+            call_method<void>(socket->py_socket, "settimeout", py::none());
+        } else {
+            call_method<void>(socket->py_socket, "settimeout", timeout_ms / 1000.0);
+        }
         int bytes_received;
 
         try {
-            bytes_received = call_method<int>(socket->py_socket.ptr(), "recv_into", py_buf);
-            call_method<void>(socket->py_socket.ptr(), "settimeout", orig_timeout_s);
-        } catch (const error_already_set &) {
+            bytes_received =
+                    call_method<int>(socket->py_socket, "recv_into", py_buf);
+            call_method<void>(socket->py_socket, "settimeout", orig_timeout_s);
+        } catch (const py::error_already_set &) {
             // TODO: assume any error is EAGAIN
             bytes_received = MBEDTLS_ERR_SSL_TIMEOUT;
 
@@ -135,7 +152,8 @@ struct Socket {
             PyObject *e, *v, *t;
             PyErr_Fetch(&e, &v, &t);
 
-            call_method<void>(socket->py_socket.ptr(), "settimeout", orig_timeout_s);
+            call_method<void>(socket->py_socket, "settimeout",
+                              orig_timeout_s);
 
             PyErr_Restore(e, v, t);
         }
@@ -162,7 +180,7 @@ struct Socket {
         return HandshakeResult::Finished;
     }
 
-    Socket(object py_socket_,
+    Socket(py::object py_socket_,
            Type type_,
            const string &psk_identity_,
            const string &psk_key_,
@@ -239,27 +257,7 @@ struct Socket {
         }
     }
 
-    Socket(object py_socket,
-           Type type,
-           const string &psk_identity,
-           const string &psk_key):
-        Socket(py_socket, type, psk_identity, psk_key, false)
-    {}
-
-    Socket(object py_socket,
-           const string &psk_identity,
-           const string &psk_key,
-           bool debug):
-        Socket(py_socket, Socket::Type::Client, psk_identity, psk_key, debug)
-    {}
-
-    Socket(object py_socket,
-           const string &psk_identity,
-           const string &psk_key):
-        Socket(py_socket, Socket::Type::Client, psk_identity, psk_key, false)
-    {}
-
-    void connect(object address_port) {
+    void connect(py::tuple address_port) {
         HandshakeResult hs_result;
 
         do {
@@ -268,16 +266,15 @@ struct Socket {
                 throw runtime_error("mbedtls_ssl_sssion_reset failed: "
                                     + mbedtls_error_string(result));
             }
-
-            const char *address = extract<const char *>(address_port[0]);
+            string address = py::cast<string>(address_port[0]);
             result = mbedtls_ssl_set_client_transport_id(
-                    &context, (const unsigned char *) address, len(address_port[0]));
+                    &context, (const unsigned char *) address.c_str(), address.length());
             if (result) {
                 throw runtime_error("mbedtls_ssl_set_client_transport_id failed: "
                                     + mbedtls_error_string(result));
             }
 
-            call_method<void>(py_socket.ptr(), "connect", address_port);
+            call_method<void>(py_socket, "connect", address_port);
             hs_result = _do_handshake();
         } while (hs_result == HandshakeResult::HelloVerifyRequired);
     }
@@ -303,7 +300,7 @@ struct Socket {
         }
     }
 
-    vector<uint8_t> recv(int) {
+    py::bytes recv(int) {
         unsigned char buffer[65536];
 
         int result = 0;
@@ -314,28 +311,29 @@ struct Socket {
 
         if (result < 0) {
             if (result == MBEDTLS_ERR_SSL_TIMEOUT) {
-                throw_error_already_set();
+                throw py::error_already_set();
             } else {
                 throw runtime_error("mbedtls_ssl_read failed: "
                                     + mbedtls_error_string(result));
             }
         }
 
-        return vector<uint8_t>(buffer, buffer + result);
+        return py::bytes(reinterpret_cast<const char *>(buffer), result);
     }
 
-    void settimeout(object timeout_s_or_none) {
+    void settimeout(py::object timeout_s_or_none) {
         uint32_t timeout_ms = 0; // no timeout
 
-        if (timeout_s_or_none != object()) {
-            timeout_ms = (uint32_t)(extract<double>(timeout_s_or_none) * 1000.0);
+        if (!timeout_s_or_none.is(py::none())) {
+            timeout_ms =
+                    (uint32_t)(py::cast<double>(timeout_s_or_none) * 1000.0);
         }
 
         mbedtls_ssl_conf_read_timeout(&config, timeout_ms);
     }
 
-    object __getattr__(object name) {
-        return call_method<object>(py_socket.ptr(), "__getattribute__", name);
+    py::object __getattr__(py::object name) {
+        return call_method<py::object>(py_socket, "__getattribute__", name);
     }
 
     template<typename... Args>
@@ -345,7 +343,7 @@ struct Socket {
 };
 
 class ServerSocket {
-    void enable_reuse(const object &socket) {
+    void enable_reuse(const py::object &socket) {
         // Socket binding reuse on *nixes is crazy.
         // See http://stackoverflow.com/a/14388707 for details.
         //
@@ -364,22 +362,22 @@ class ServerSocket {
         // at all, so we can always just set SO_REUSEADDR and see what happens.
         // It may or may not work, but at least it'll compile ;)
 #ifdef SO_REUSEADDR
-        call_method<void>(socket.ptr(), "setsockopt", SOL_SOCKET, SO_REUSEADDR, 1);
+        call_method<void>(socket, "setsockopt", SOL_SOCKET, SO_REUSEADDR, 1);
 #endif
 #if !defined(__linux__) && defined(SO_REUSEPORT)
-        call_method<void>(socket.ptr(), "setsockopt", SOL_SOCKET, SO_REUSEPORT, 1);
+        call_method<void>(socket, "setsockopt", SOL_SOCKET, SO_REUSEPORT, 1);
 #endif
     }
 
 public:
-    object py_socket;
+    py::object py_socket;
 
     string psk_identity;
     string psk_key;
 
     bool debug;
 
-    ServerSocket(object py_socket_,
+    ServerSocket(py::object py_socket_,
                  const string &psk_identity_,
                  const string &psk_key_,
                  bool debug_):
@@ -394,17 +392,21 @@ public:
     Socket *accept() {
         // use old socket to communicate with client
         // create a new one for listening
-        object bound_addr = call_method<object>(py_socket.ptr(), "getsockname");
-        object data__remote_addr = call_method<object>(py_socket.ptr(), "recvfrom", 1, (int)MSG_PEEK);
-        object remote_addr = extract<object>(data__remote_addr[1]);
+        py::object bound_addr = call_method<py::object>(py_socket, "getsockname");
+        py::tuple data__remote_addr =
+                call_method<py::tuple>(py_socket, "recvfrom", 1,
+                                             (int) MSG_PEEK);
+        py::tuple remote_addr =
+                py::cast<py::tuple>(data__remote_addr[1]);
 
-        object client_py_sock = eval("socket.socket(socket.AF_INET, socket.SOCK_DGRAM)");
+        py::object client_py_sock =
+                py::eval("socket.socket(socket.AF_INET, socket.SOCK_DGRAM)");
         enable_reuse(client_py_sock);
-        call_method<void>(client_py_sock.ptr(), "bind", bound_addr);
+        call_method<void>(client_py_sock, "bind", bound_addr);
 
         swap(py_socket, client_py_sock);
 
-        call_method<void>(client_py_sock.ptr(), "connect", remote_addr);
+        call_method<void>(client_py_sock, "connect", remote_addr);
 
         Socket *client_sock = new Socket(client_py_sock, Socket::Type::Server,
                                          psk_identity, psk_key, debug);
@@ -412,48 +414,43 @@ public:
         return client_sock;
     }
 
-    ServerSocket(object py_socket,
+    ServerSocket(py::object py_socket,
                  const string &psk_identity,
                  const string &psk_key):
         ServerSocket(py_socket, psk_identity, psk_key, false)
     {}
 
-    object __getattr__(object name) {
-        return call_method<object>(py_socket.ptr(), "__getattribute__", name);
+    py::object __getattr__(py::object name) {
+        return call_method<py::object>(py_socket, "__getattribute__", name);
     }
 };
 
 } // namespace ssl
 
-BOOST_PYTHON_MODULE(pymbedtls) {
+PYBIND11_MODULE(pymbedtls, m) {
     using namespace ssl;
 
-    to_python_converter<vector<uint8_t>, bytes_converter, true>();
-
-    class_<ServerSocket>("ServerSocket", init<object, const string &, const string &, bool>())
-        .def(init<object, const string &, const string &>())
-        .def("accept", &ServerSocket::accept, return_value_policy<manage_new_object>())
-        .def("__getattr__", &ServerSocket::__getattr__);
+    py::class_<ServerSocket>(m, "ServerSocket")
+        .def(py::init<py::object, const string &, const string &, bool>())
+        .def("accept", &ServerSocket::accept, py::return_value_policy::take_ownership)
+        .def("__getattr__", &ServerSocket::__getattr__)
     ;
 
-    scope socket_scope =
-        class_<Socket>("Socket", init<object, Socket::Type, const string &, const string &, bool>())
-            .def(init<object, Socket::Type, const string &, const string &>())
-            .def(init<object, const string &, const string &, bool>())
-            .def(init<object, const string &, const string &>())
-            .def("connect", &Socket::connect)
-            .def("send", &Socket::send)
-            .def("sendall", &Socket::send)
-            .def("sendto", &Socket::fail<string, object>)
-            .def("recv", &Socket::recv)
-            .def("recv_into", &Socket::fail<object>)
-            .def("recvfrom", &Socket::fail<int>)
-            .def("recvfrom_into", &Socket::fail<object>)
-            .def("settimeout", &Socket::settimeout)
-            .def("__getattr__", &Socket::__getattr__)
+    auto socket_scope = py::class_<Socket>(m, "Socket")
+        .def(py::init<py::object, Socket::Type, const string &, const string &, bool>())
+        .def("connect", &Socket::connect)
+        .def("send", &Socket::send)
+        .def("sendall", &Socket::send)
+        .def("sendto", &Socket::fail<string, py::object>)
+        .def("recv", &Socket::recv)
+        .def("recv_into", &Socket::fail<py::object>)
+        .def("recvfrom", &Socket::fail<int>)
+        .def("recvfrom_into", &Socket::fail<py::object>)
+        .def("settimeout", &Socket::settimeout)
+        .def("__getattr__", &Socket::__getattr__)
     ;
 
-    enum_<Socket::Type>("Type")
+    py::enum_<Socket::Type>(socket_scope, "Type")
         .value("Client", Socket::Type::Client)
         .value("Server", Socket::Type::Server)
         .export_values()

@@ -108,6 +108,7 @@ typedef struct {
 typedef struct {
     anjay_ssid_t ssid; // or ANJAY_SSID_BOOTSTRAP
 
+    bool needs_reload;
     anjay_server_connection_t udp_connection;
 
     anjay_registration_info_t registration_info;
@@ -125,7 +126,6 @@ typedef struct {
 typedef struct {
     AVS_LIST(anjay_active_server_info_t) active;
     AVS_LIST(anjay_inactive_server_info_t) inactive;
-    anjay_sched_handle_t reload_sockets_sched_job_handle;
 
     AVS_LIST(avs_net_abstract_socket_t *const) public_sockets;
 } anjay_servers_t;
@@ -143,15 +143,14 @@ typedef struct {
 
 static inline anjay_servers_t
 _anjay_servers_create(void) {
-    return (anjay_servers_t){ NULL, NULL, NULL, NULL };
+    return (anjay_servers_t){ NULL, NULL, NULL };
 }
 
 /**
- * Clears up the @p servers struct, sending De-Register messages for each
- * active server and releasing any allocated resources.
+ * Clears up the <c>anjay->servers</c> struct, sending De-Register messages for
+ * each active server and releasing any allocated resources.
  */
-void _anjay_servers_cleanup(anjay_t *anjay,
-                            anjay_servers_t *servers);
+void _anjay_servers_cleanup(anjay_t *anjay);
 
 /**
  * Returns an active server object associated with given @p socket .
@@ -169,7 +168,9 @@ _anjay_servers_find_by_udp_socket(anjay_servers_t *servers,
 anjay_active_server_info_t *_anjay_servers_find_active(anjay_servers_t *servers,
                                                        anjay_ssid_t ssid);
 
-int _anjay_schedule_reload_sockets(anjay_t *anjay);
+int _anjay_schedule_reload_servers(anjay_t *anjay);
+
+int _anjay_schedule_delayed_reload_servers(anjay_t *anjay);
 
 int _anjay_schedule_socket_update(anjay_t *anjay,
                                   anjay_iid_t security_iid);

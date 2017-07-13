@@ -59,12 +59,15 @@ static void start_bootstrap_if_not_already_started(anjay_t *anjay) {
 }
 
 static int commit_bootstrap(anjay_t *anjay) {
-    if (_anjay_dm_transaction_validate(anjay)) {
-        return ANJAY_ERR_NOT_ACCEPTABLE;
-    } else {
-        anjay->bootstrap.in_progress = false;
-        return _anjay_dm_transaction_finish_without_validation(anjay, 0);
+    if (anjay->bootstrap.in_progress) {
+        if (_anjay_dm_transaction_validate(anjay)) {
+            return ANJAY_ERR_NOT_ACCEPTABLE;
+        } else {
+            anjay->bootstrap.in_progress = false;
+            return _anjay_dm_transaction_finish_without_validation(anjay, 0);
+        }
     }
+    return 0;
 }
 
 static void abort_bootstrap(anjay_t *anjay) {
@@ -405,6 +408,9 @@ static int bootstrap_discover(anjay_t *anjay,
     if (details->uri.has_oid) {
         const anjay_dm_object_def_t *const *obj =
                 _anjay_dm_find_object_by_oid(anjay, details->uri.oid);
+        if (!obj) {
+            return ANJAY_ERR_NOT_FOUND;
+        }
         return _anjay_bootstrap_discover_object(anjay, obj);
     }
     return _anjay_bootstrap_discover(anjay);
@@ -475,12 +481,8 @@ static int schedule_bootstrap_timeout(anjay_t *anjay) {
     return 0;
 }
 
-int _anjay_bootstrap_finish(anjay_t *anjay) {
+static int bootstrap_finish_impl(anjay_t *anjay, bool perform_timeout) {
     anjay_log(TRACE, "Bootstrap Sequence finished");
-
-    if (!anjay->bootstrap.in_progress) {
-        return 0;
-    }
 
     cancel_client_initiated_bootstrap(anjay);
     int retval = commit_bootstrap(anjay);
@@ -494,7 +496,9 @@ int _anjay_bootstrap_finish(anjay_t *anjay) {
         anjay_log(ERROR, "Could not post-process data model after bootstrap");
     } else {
         _anjay_notify_clear_queue(&anjay->bootstrap.notification_queue);
-        retval = schedule_bootstrap_timeout(anjay);
+        if (perform_timeout) {
+            retval = schedule_bootstrap_timeout(anjay);
+        }
     }
     if (retval) {
         anjay_log(ERROR,
@@ -502,6 +506,17 @@ int _anjay_bootstrap_finish(anjay_t *anjay) {
         start_bootstrap_if_not_already_started(anjay);
     }
     return retval;
+}
+
+static int bootstrap_finish(anjay_t *anjay) {
+    return bootstrap_finish_impl(anjay, true);
+}
+
+int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay) {
+    if (!anjay->bootstrap.in_progress) {
+        return 0;
+    }
+    return bootstrap_finish_impl(anjay, false);
 }
 
 int _anjay_bootstrap_object_write(anjay_t *anjay,
@@ -549,15 +564,7 @@ static int invoke_action(anjay_t *anjay,
     case ANJAY_ACTION_DISCOVER:
         return bootstrap_discover(anjay, details);
     case ANJAY_ACTION_BOOTSTRAP_FINISH:
-        // _anjay_bootstrap_finish() is also called when Bootstrap Sequence is
-        // finished via means other than Bootstrap Server communication.
-        // It is a no-op if Client- or Server-Initiated Bootstrap is not
-        // currently in progress. But we want proper purge semantics even if the
-        // Bootstrap Server derps and sends Bootstrap Finish without doing
-        // anything beforehand. That's why we're calling
-        // start_bootstrap_if_not_already_started() first.
-        start_bootstrap_if_not_already_started(anjay);
-        return _anjay_bootstrap_finish(anjay);
+        return bootstrap_finish(anjay);
     default:
         anjay_log(ERROR, "Invalid action for Bootstrap Interface");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;

@@ -28,12 +28,12 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {
     anjay_ssid_t ssid;
-    anjay_dm_attributes_t attrs;
+    anjay_dm_internal_attrs_t attrs;
 } fas_default_attrs_t;
 
 typedef struct {
     anjay_ssid_t ssid;
-    anjay_dm_resource_attributes_t attrs;
+    anjay_dm_internal_res_attrs_t attrs;
 } fas_resource_attrs_t;
 
 typedef struct {
@@ -144,12 +144,13 @@ static inline void *get_attrs_ptr(void *generic_attrs,
 typedef bool is_empty_func_t(const void *attrs);
 
 static bool default_attrs_empty(const void *attrs) {
-    return _anjay_dm_attributes_empty((const anjay_dm_attributes_t *) attrs);
+    return _anjay_dm_attributes_empty(
+            (const anjay_dm_internal_attrs_t *) attrs);
 }
 
 static bool resource_attrs_empty(const void *attrs) {
     return _anjay_dm_resource_attributes_empty(
-            (const anjay_dm_resource_attributes_t *) attrs);
+            (const anjay_dm_internal_res_attrs_t *) attrs);
 }
 
 int _anjay_attr_storage_compare_u16ids(const void *a, const void *b,

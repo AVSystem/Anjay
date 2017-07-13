@@ -40,9 +40,9 @@ anjay_t *_anjay_test_dm_init(const anjay_configuration_t *config) {
 }
 
 void _anjay_test_dm_unsched_reload_sockets(anjay_t *anjay) {
-    if (anjay->servers.reload_sockets_sched_job_handle) {
+    if (anjay->reload_servers_sched_job_handle) {
         AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_del(
-                anjay->sched, &anjay->servers.reload_sockets_sched_job_handle));
+                anjay->sched, &anjay->reload_servers_sched_job_handle));
     }
 }
 

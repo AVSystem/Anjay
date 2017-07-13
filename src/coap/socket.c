@@ -174,6 +174,12 @@ static int try_send_cached_response(anjay_coap_socket_t *sock,
 
 #endif // WITH_MESSAGE_CACHE
 
+static inline bool is_coap_ping(const anjay_coap_msg_t *msg) {
+    return _anjay_coap_msg_header_get_type(&msg->header)
+                   == ANJAY_COAP_MSG_CONFIRMABLE
+           && msg->header.code == ANJAY_COAP_CODE_EMPTY;
+}
+
 int _anjay_coap_socket_recv(anjay_coap_socket_t *sock,
                             anjay_coap_msg_t *out_msg,
                             size_t msg_capacity) {
@@ -196,6 +202,13 @@ int _anjay_coap_socket_recv(anjay_coap_socket_t *sock,
     }
 
     coap_log(TRACE, "recv: %s", ANJAY_COAP_MSG_SUMMARY(out_msg));
+
+    if (is_coap_ping(out_msg)) {
+        _anjay_coap_common_send_empty(sock, ANJAY_COAP_MSG_RESET,
+                                      _anjay_coap_msg_get_id(out_msg));
+        return ANJAY_COAP_SOCKET_ERR_MSG_WAS_PING;
+    }
+
     if (!try_send_cached_response(sock, out_msg)) {
         return ANJAY_COAP_SOCKET_ERR_DUPLICATE;
     }

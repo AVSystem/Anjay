@@ -131,11 +131,11 @@ static void after_download(short revents, void *args) {
     (void) revents;
     wget_context_t *ctx = (wget_context_t *) args;
 
-    if (getc(ctx->pipe) != EOF) {
-        demo_log(WARNING, "unexpected wget output after download finished");
-    }
-
     if (ctx->pipe) {
+        if (getc(ctx->pipe) != EOF) {
+            demo_log(WARNING, "unexpected wget output after download finished");
+        }
+
         int status = pclose(ctx->pipe);
         int exit_status = INT_MIN;
         ctx->pipe = NULL;

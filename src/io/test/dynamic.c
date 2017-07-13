@@ -262,7 +262,8 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
     avs_unit_mocksock_expect_connect(mocksock, "", ""); \
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", "")); \
     avs_stream_abstract_t *coap = NULL; \
-    _anjay_mock_coap_stream_create(&coap, coapsock, 256, 256); \
+    SCOPED_MOCK_COAP_STREAM(mock_coap_stream_ctx) = \
+            _anjay_mock_coap_stream_create(&coap, coapsock, 256, 256); \
     avs_unit_mocksock_input(mocksock, Data, sizeof(Data) - 1)
 
 #define TEST_ENV(Data) \

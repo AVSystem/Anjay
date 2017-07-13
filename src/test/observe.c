@@ -375,16 +375,17 @@ static void expect_read_res_attrs(anjay_t *anjay,
                                   anjay_ssid_t ssid,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
-                                  const anjay_dm_resource_attributes_t *attrs) {
+                                  const anjay_dm_internal_res_attrs_t *attrs) {
     _anjay_mock_dm_expect_instance_present(anjay, obj_ptr, iid, 1);
     _anjay_mock_dm_expect_resource_present(anjay, obj_ptr, iid, rid, 1);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, obj_ptr, iid, rid, ssid, 0,
                                               attrs);
-    if (!_anjay_dm_attributes_full(&attrs->common)) {
+    if (!_anjay_dm_attributes_full(
+            _anjay_dm_get_internal_attrs_const(&attrs->standard.common))) {
         _anjay_mock_dm_expect_instance_read_default_attrs(
-                anjay, obj_ptr, iid, ssid, 0, &ANJAY_DM_ATTRIBS_EMPTY);
+                anjay, obj_ptr, iid, ssid, 0, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
         _anjay_mock_dm_expect_object_read_default_attrs(
-                anjay, obj_ptr, ssid, 0, &ANJAY_DM_ATTRIBS_EMPTY);
+                anjay, obj_ptr, ssid, 0, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
     }
 }
 
@@ -401,14 +402,16 @@ static void expect_read_res(anjay_t *anjay,
 static void notify_max_period_test(const char *con_notify_ack,
                                    size_t con_notify_ack_size,
                                    size_t observe_size_after_ack) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 1,
-            .max_period = 10
-        },
-        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-        .step = ANJAY_ATTRIB_VALUE_NONE
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 1,
+                .max_period = 10
+            },
+            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+            .step = ANJAY_ATTRIB_VALUE_NONE
+        }
     };
     static const anjay_coap_msg_identity_t identity = {
         .msg_id = 0,
@@ -496,14 +499,16 @@ AVS_UNIT_TEST(notify, max_period) {
 }
 
 AVS_UNIT_TEST(notify, min_period) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 10,
-            .max_period = 365 * 24 * 60 * 60 // a year
-        },
-        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-        .step = ANJAY_ATTRIB_VALUE_NONE
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 10,
+                .max_period = 365 * 24 * 60 * 60 // a year
+            },
+            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+            .step = ANJAY_ATTRIB_VALUE_NONE
+        }
     };
     static const anjay_coap_msg_identity_t identity = {
         .msg_id = 0,
@@ -612,14 +617,16 @@ AVS_UNIT_TEST(notify, confirmable) {
 }
 
 AVS_UNIT_TEST(notify, extremes) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 0,
-            .max_period = 365 * 24 * 60 * 60 // a year
-        },
-        .greater_than = 777.0,
-        .less_than = 69.0,
-        .step = ANJAY_ATTRIB_VALUE_NONE
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 0,
+                .max_period = 365 * 24 * 60 * 60 // a year
+            },
+            .greater_than = 777.0,
+            .less_than = 69.0,
+            .step = ANJAY_ATTRIB_VALUE_NONE
+        }
     };
     static const anjay_coap_msg_identity_t identity = {
         .msg_id = 0,
@@ -738,14 +745,16 @@ AVS_UNIT_TEST(notify, extremes) {
 }
 
 AVS_UNIT_TEST(notify, greater_only) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 0,
-            .max_period = 365 * 24 * 60 * 60 // a year
-        },
-        .greater_than = 69.0,
-        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-        .step = ANJAY_ATTRIB_VALUE_NONE
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 0,
+                .max_period = 365 * 24 * 60 * 60 // a year
+            },
+            .greater_than = 69.0,
+            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+            .step = ANJAY_ATTRIB_VALUE_NONE
+        }
     };
     static const anjay_coap_msg_identity_t identity = {
         .msg_id = 0,
@@ -833,14 +842,16 @@ AVS_UNIT_TEST(notify, greater_only) {
 }
 
 AVS_UNIT_TEST(notify, less_only) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 0,
-            .max_period = 365 * 24 * 60 * 60 // a year
-        },
-        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-        .less_than = 777.0,
-        .step = ANJAY_ATTRIB_VALUE_NONE
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 0,
+                .max_period = 365 * 24 * 60 * 60 // a year
+            },
+            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+            .less_than = 777.0,
+            .step = ANJAY_ATTRIB_VALUE_NONE
+        }
     };
     static const anjay_coap_msg_identity_t identity = {
         .msg_id = 0,
@@ -928,14 +939,16 @@ AVS_UNIT_TEST(notify, less_only) {
 }
 
 AVS_UNIT_TEST(notify, step) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 0,
-            .max_period = 365 * 24 * 60 * 60 // a year
-        },
-        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-        .step = 10.0
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 0,
+                .max_period = 365 * 24 * 60 * 60 // a year
+            },
+            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+            .step = 10.0
+        }
     };
     static const anjay_coap_msg_identity_t identity = {
         .msg_id = 0,
@@ -1123,14 +1136,16 @@ AVS_UNIT_TEST(notify, step) {
 }
 
 AVS_UNIT_TEST(notify, multiple_formats) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 1,
-            .max_period = 10
-        },
-        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-        .step = ANJAY_ATTRIB_VALUE_NONE
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 1,
+                .max_period = 10
+            },
+            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+            .step = ANJAY_ATTRIB_VALUE_NONE
+        }
     };
     static anjay_coap_msg_identity_t identity = {
         .msg_id = 0,
@@ -1779,7 +1794,7 @@ AVS_UNIT_TEST(notify, storing_of_errors) {
     // error during attribute reading
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, -1);
     _anjay_mock_dm_expect_object_read_default_attrs(
-            anjay, &OBJ, 14, -1, &ANJAY_DM_ATTRIBS_EMPTY);
+            anjay, &OBJ, 14, -1, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
@@ -1824,7 +1839,7 @@ AVS_UNIT_TEST(notify, no_storing_of_errors) {
     // error during attribute reading
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, -1);
     _anjay_mock_dm_expect_object_read_default_attrs(
-            anjay, &OBJ, 14, -1, &ANJAY_DM_ATTRIBS_EMPTY);
+            anjay, &OBJ, 14, -1, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
@@ -1851,7 +1866,7 @@ AVS_UNIT_TEST(notify, reconnect) {
     // error during attribute reading
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, -1);
     _anjay_mock_dm_expect_object_read_default_attrs(
-            anjay, &OBJ, 14, -1, &ANJAY_DM_ATTRIBS_EMPTY);
+            anjay, &OBJ, 14, -1, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);

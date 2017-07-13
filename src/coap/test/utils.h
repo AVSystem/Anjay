@@ -36,7 +36,7 @@ static void setup_msg(anjay_coap_msg_t *msg,
         }
     };
     memset(msg, 0, sizeof(*msg) + content_length);
-    memcpy(msg, &TEMPLATE, sizeof(anjay_coap_msg_t));
+    memcpy(msg, &TEMPLATE, offsetof(anjay_coap_msg_t, content));
     assert(content || content_length == 0);
     if (content_length) {
         memcpy(msg->content, content, content_length);

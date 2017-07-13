@@ -36,7 +36,7 @@ typedef struct {
     anjay_notify_queue_t notification_queue;
 } anjay_bootstrap_t;
 
-int _anjay_bootstrap_finish(anjay_t *anjay);
+int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay);
 
 int _anjay_bootstrap_perform_action(anjay_t *anjay,
                                     const anjay_request_details_t *details);
@@ -49,7 +49,7 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay);
 
 #else
 
-#define _anjay_bootstrap_finish(anjay) ((void) 0)
+#define _anjay_bootstrap_notify_regular_connection_available(anjay) ((void) 0)
 
 #define _anjay_bootstrap_perform_action(...) (-1)
 

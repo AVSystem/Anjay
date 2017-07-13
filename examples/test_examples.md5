@@ -11,10 +11,11 @@ b94c68088be5371ed25866e720830261  examples/tutorial/custom-object/multi-instance
 e16d1c1718295c6c99cf98c2762f1646  examples/tutorial/custom-object/notifications/src/main.c
 83279af37925e90de25d396130a4f4af  examples/tutorial/custom-object/read-only-multiple-fixed/src/main.c
 12fb0189c8b89baa0235c305a6a6620f  examples/tutorial/custom-object/read-only/src/main.c
+2d94d278db8e067d584835de0275adaf  examples/tutorial/custom-object/read-only-with-executable/src/main.c
 1e22ffd8a9e8b919250e30e513408fda  examples/tutorial/custom-object/writable-multiple-fixed/src/main.c
 c68062f5b94d4afc183fcf810f31cee0  examples/tutorial/custom-object/writable-multiple-fixed-transactional/src/main.c
 c95e3eb7cdfb00b929623fb065ebda81  include_public/anjay/dm.h
-f1ab6454896a93494663793089d2d296  include_public/anjay/io.h
+67f04d2e8aa7921856ed6741d7dca6fc  include_public/anjay/io.h
 8c807c6e880af9afb835ecf4821e6e57  modules/access_control/include_public/anjay/access_control.h
 6e2da9c7d73c37768e3c048debcd6b4e  modules/attr_storage/include_public/anjay/attr_storage.h
 e82ae01a48b4ba530c7241ecd21501e2  modules/security/include_public/anjay/security.h

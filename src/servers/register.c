@@ -333,7 +333,7 @@ int _anjay_server_register(anjay_t *anjay,
     }
 
     _anjay_observe_sched_flush(anjay, server->ssid, connection.conn_type);
-    _anjay_bootstrap_finish(anjay);
+    _anjay_bootstrap_notify_regular_connection_available(anjay);
     return 0;
 }
 

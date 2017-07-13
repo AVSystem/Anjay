@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <stdio.h>
 
 #include "../demo.h"
@@ -34,9 +35,7 @@ typedef struct {
 
 static inline cell_connectivity_repr_t *
 get_cell(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, cell_connectivity_repr_t, def);
 }
 
@@ -162,5 +161,7 @@ cell_connectivity_object_create(anjay_demo_t *demo) {
 }
 
 void cell_connectivity_object_release(const anjay_dm_object_def_t **def) {
-    free(get_cell(def));
+    if (def) {
+        free(get_cell(def));
+    }
 }

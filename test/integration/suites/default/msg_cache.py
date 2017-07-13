@@ -92,6 +92,7 @@ class MultipleServerCacheTest(test_suite.Lwm2mTest):
         self.servers[1].send(s1_req)
         s1_res = self.servers[1].recv()
         self.assertMsgEqual(Lwm2mChanged.matching(s1_req)(), s1_res)
+        self.assertDemoUpdatesRegistration(self.servers[1], lifetime=60)
 
         # we should still be able to get both responses after retransmitting
         self.servers[0].send(s0_req)

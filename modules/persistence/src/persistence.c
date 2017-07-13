@@ -45,12 +45,14 @@ typedef int
 persistence_handler_list_t(anjay_persistence_context_t *ctx,
                            AVS_LIST(void) *list_ptr,
                            size_t element_size,
-                           anjay_persistence_handler_collection_element_t *handler);
+                           anjay_persistence_handler_collection_element_t *handler,
+                           void *handler_user_ptr);
 typedef int
 persistence_handler_tree_t(anjay_persistence_context_t *ctx,
                            AVS_RBTREE(void) tree,
                            size_t element_size,
                            anjay_persistence_handler_collection_element_t *handler,
+                           void *handler_user_ptr,
                            anjay_persistence_cleanup_collection_element_t *cleanup);
 
 struct anjay_persistence_context_struct {
@@ -107,7 +109,8 @@ static int persist_double(anjay_persistence_context_t *ctx, double *value) {
 static int persist_list(anjay_persistence_context_t *ctx,
                         AVS_LIST(void) *list_ptr,
                         size_t element_size,
-                        anjay_persistence_handler_collection_element_t *handler) {
+                        anjay_persistence_handler_collection_element_t *handler,
+                        void *handler_user_ptr) {
     (void) element_size;
     size_t count = AVS_LIST_SIZE(*list_ptr);
     uint32_t count32 = (uint32_t) count;
@@ -118,7 +121,7 @@ static int persist_list(anjay_persistence_context_t *ctx,
     if (!retval) {
         AVS_LIST(void) element;
         AVS_LIST_FOREACH(element, *list_ptr) {
-            if ((retval = handler(ctx, element))) {
+            if ((retval = handler(ctx, element, handler_user_ptr))) {
                 break;
             }
         }
@@ -130,6 +133,7 @@ static int persist_tree(anjay_persistence_context_t *ctx,
                         AVS_RBTREE(void) tree,
                         size_t element_size,
                         anjay_persistence_handler_collection_element_t *handler,
+                        void *handler_user_ptr,
                         anjay_persistence_cleanup_collection_element_t *cleanup) {
     (void) element_size; (void) cleanup;
     size_t count = AVS_RBTREE_SIZE(tree);
@@ -141,7 +145,7 @@ static int persist_tree(anjay_persistence_context_t *ctx,
     if (!retval) {
         AVS_RBTREE_ELEM(void) element;
         AVS_RBTREE_FOREACH(element, tree) {
-            if ((retval = handler(ctx, element))) {
+            if ((retval = handler(ctx, element, handler_user_ptr))) {
                 break;
             }
         }
@@ -218,7 +222,8 @@ static int restore_double(anjay_persistence_context_t *ctx, double *out) {
 static int restore_list(anjay_persistence_context_t *ctx,
                         AVS_LIST(void) *list_ptr,
                         size_t element_size,
-                        anjay_persistence_handler_collection_element_t *handler) {
+                        anjay_persistence_handler_collection_element_t *handler,
+                        void *handler_user_ptr) {
     uint32_t count;
     int retval = restore_u32(ctx, &count);
     if (!retval) {
@@ -231,7 +236,7 @@ static int restore_list(anjay_persistence_context_t *ctx,
             }
             AVS_LIST_INSERT(insert_ptr, element);
             insert_ptr = AVS_LIST_NEXT_PTR(insert_ptr);
-            if ((retval = handler(ctx, element))) {
+            if ((retval = handler(ctx, element, handler_user_ptr))) {
                 return retval;
             }
         }
@@ -243,6 +248,7 @@ static int restore_tree(anjay_persistence_context_t *ctx,
                         AVS_RBTREE(void) tree,
                         size_t element_size,
                         anjay_persistence_handler_collection_element_t *handler,
+                        void *handler_user_ptr,
                         anjay_persistence_cleanup_collection_element_t *cleanup) {
     uint32_t count;
     int retval = restore_u32(ctx, &count);
@@ -254,7 +260,7 @@ static int restore_tree(anjay_persistence_context_t *ctx,
                 persistence_log(ERROR, "Out of memory");
                 return -1;
             }
-            if (!(retval = handler(ctx, element))) {
+            if (!(retval = handler(ctx, element, handler_user_ptr))) {
                 if (AVS_RBTREE_INSERT(tree, element) != element) {
                     retval = -1;
                 }
@@ -339,11 +345,12 @@ static int ignore_time(anjay_persistence_context_t *ctx, time_t *out) {
 
 static int ignore_collection(
         anjay_persistence_context_t *ctx,
-        anjay_persistence_handler_collection_element_t *handler) {
+        anjay_persistence_handler_collection_element_t *handler,
+        void *handler_user_ptr) {
     uint32_t count;
     int retval = restore_u32(ctx, &count);
     while (!retval && count--) {
-        retval = handler(ctx, NULL);
+        retval = handler(ctx, NULL, handler_user_ptr);
     }
     return retval;
 }
@@ -351,18 +358,20 @@ static int ignore_collection(
 static int ignore_list(anjay_persistence_context_t *ctx,
                        AVS_LIST(void) *list_ptr,
                        size_t element_size,
-                       anjay_persistence_handler_collection_element_t *handler) {
+                       anjay_persistence_handler_collection_element_t *handler,
+                       void *handler_user_ptr) {
     (void) list_ptr; (void) element_size;
-    return ignore_collection(ctx, handler);
+    return ignore_collection(ctx, handler, handler_user_ptr);
 }
 
 static int ignore_tree(anjay_persistence_context_t *ctx,
                        AVS_RBTREE(void) tree,
                        size_t element_size,
                        anjay_persistence_handler_collection_element_t *handler,
+                       void *handler_user_ptr,
                        anjay_persistence_cleanup_collection_element_t *cleanup) {
     (void) tree; (void) element_size; (void) cleanup;
-    return ignore_collection(ctx, handler);
+    return ignore_collection(ctx, handler, handler_user_ptr);
 }
 
 #define INIT_IGNORE_CONTEXT(Stream) { \
@@ -471,11 +480,13 @@ int anjay_persistence_double(anjay_persistence_context_t *ctx,
 int anjay_persistence_list(anjay_persistence_context_t *ctx,
                            AVS_LIST(void) *list_ptr,
                            size_t element_size,
-                           anjay_persistence_handler_collection_element_t *handler) {
+                           anjay_persistence_handler_collection_element_t *handler,
+                           void *handler_user_ptr) {
     if (!ctx) {
         return -1;
     }
-    return ctx->handle_list(ctx, list_ptr, element_size, handler);
+    return ctx->handle_list(ctx, list_ptr, element_size,
+                            handler, handler_user_ptr);
 }
 
 int anjay_persistence_tree(
@@ -483,11 +494,13 @@ int anjay_persistence_tree(
         AVS_RBTREE(void) tree,
         size_t element_size,
         anjay_persistence_handler_collection_element_t *handler,
+        void *handler_user_ptr,
         anjay_persistence_cleanup_collection_element_t *cleanup) {
     if (!ctx) {
         return -1;
     }
-    return ctx->handle_tree(ctx, tree, element_size, handler, cleanup);
+    return ctx->handle_tree(ctx, tree, element_size,
+                            handler, handler_user_ptr, cleanup);
 }
 
 #ifdef ANJAY_TEST

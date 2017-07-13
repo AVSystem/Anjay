@@ -45,26 +45,10 @@ class UpdateTest(test_suite.Lwm2mSingleServerTest):
         pkt = self.serv.recv()
 
         self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), pkt)
-
-        # update lifetime on the server
-        self.communicate('send-update')
-        pkt = self.serv.recv()
-
-        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                        query=['lt=' + str(LIFETIME)],
-                                        content=b''),
-                            pkt)
-
-        self.serv.send(Lwm2mChanged.matching(pkt)())
+        self.assertDemoUpdatesRegistration(lifetime=LIFETIME)
 
         # wait for auto-scheduled Update
-        pkt = self.serv.recv(timeout_s=LIFETIME)
-        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                        query=[],
-                                        content=b''),
-                            pkt)
-
-        self.serv.send(Lwm2mChanged.matching(pkt)())
+        self.assertDemoUpdatesRegistration(timeout_s=LIFETIME)
 
 
 class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
@@ -282,3 +266,19 @@ class ConcurrentRequestWhileWaitingForResponse(test_suite.Lwm2mSingleServerTest)
                             self.serv.recv())
 
         self.serv.send(Lwm2mChanged.matching(pkt)())
+
+
+class UpdateAfterLifetimeChange(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        req = Lwm2mWrite('/1/1/1', b'5')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.assertDemoUpdatesRegistration(lifetime=5)
+        # Next update should be there shortly
+        self.assertDemoUpdatesRegistration(timeout_s=5)
+
+        req = Lwm2mWrite('/1/1/1', b'86400')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+        self.assertDemoUpdatesRegistration(lifetime=86400)

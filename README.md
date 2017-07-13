@@ -100,14 +100,14 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 -   Optional dependencies (required for tests):
     -   C++ compiler with C++11 support,
     -   [Python 3.5+](https://www.python.org/),
-    -   [boost::python](https://www.boost.org/doc/libs/release/libs/python/).
+    -   [pybind11](https://github.com/pybind/pybind11) - included in the repository as a subproject.
 
 To install everything on Ubuntu 16.04 LTS:
 
 ``` sh
 sudo apt-get install git build-essential cmake libmbedtls-dev wget
 # Optionally for tests:
-sudo apt-get install libboost-python-dev libpython3-dev libssl-dev python3
+sudo apt-get install libpython3-dev libssl-dev python3
 ```
 
 Or on macOS Sierra with [Homebrew](https://brew.sh/):
@@ -115,7 +115,7 @@ Or on macOS Sierra with [Homebrew](https://brew.sh/):
 ``` sh
 brew install cmake mbedtls wget
 # Optionally for tests:
-brew install python3 && brew install boost-python --with-python3
+brew install python3
 ```
 
 ### Running the demo client

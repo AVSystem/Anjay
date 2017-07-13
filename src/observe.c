@@ -305,7 +305,8 @@ static int insert_error(anjay_t *anjay,
                         int outer_result) {
     _anjay_sched_del(anjay->sched, &entry->notify_task);
     const anjay_msg_details_t details = {
-        .msg_type = ANJAY_COAP_MSG_NON_CONFIRMABLE,
+        .msg_type = anjay->observe.confirmable_notifications
+                ? ANJAY_COAP_MSG_CONFIRMABLE : ANJAY_COAP_MSG_NON_CONFIRMABLE,
         .msg_code = _anjay_make_error_response_code(outer_result),
         .format = ANJAY_COAP_FORMAT_NONE,
         .observe_serial = true
@@ -314,7 +315,7 @@ static int insert_error(anjay_t *anjay,
 }
 
 static int get_effective_attrs(anjay_t *anjay,
-                               anjay_dm_resource_attributes_t *out_attrs,
+                               anjay_dm_internal_res_attrs_t *out_attrs,
                                const anjay_dm_object_def_t *const *obj,
                                const anjay_observe_key_t *key) {
     assert(!obj || !*obj || (*obj)->oid == key->oid);
@@ -357,7 +358,7 @@ static int get_effective_attrs(anjay_t *anjay,
 }
 
 static inline int get_attrs(anjay_t *anjay,
-                            anjay_dm_resource_attributes_t *out_attrs,
+                            anjay_dm_internal_res_attrs_t *out_attrs,
                             const anjay_observe_key_t *key) {
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, key->oid);
@@ -380,14 +381,14 @@ static int insert_initial_value(
     clock_gettime(CLOCK_REALTIME, &realtime_now);
 
     int result;
-    anjay_dm_resource_attributes_t attrs;
+    anjay_dm_internal_res_attrs_t attrs;
     // we assume that the initial value should be treated as sent,
     // even though we haven't actually sent it ourselves
     if (!(result = get_attrs(anjay, &attrs, &entry->key))
             && (entry->last_sent =
                     create_resource_value(details, entry, identity, data, size))
             && !(result = schedule_trigger(anjay, entry,
-                                           attrs.common.max_period))) {
+                                           attrs.standard.common.max_period))) {
         entry->last_confirmable = realtime_now;
         entry->sync_state.st_init = numeric;
     } else {
@@ -683,12 +684,8 @@ static int bind_stream_by_ssid(anjay_t *anjay,
     return result;
 }
 
-static bool should_use_confirmable(anjay_t *anjay,
-                                   const struct timespec *realtime_now,
-                                   const anjay_observe_entry_t *entry) {
-    if (anjay->observe.confirmable_notifications) {
-        return true;
-    }
+static bool confirmable_required(const struct timespec *realtime_now,
+                                 const anjay_observe_entry_t *entry) {
     struct timespec since_confirmable;
     _anjay_time_diff(&since_confirmable,
                      realtime_now, &entry->last_confirmable);
@@ -739,7 +736,8 @@ static int send_entry(anjay_t *anjay,
 
     struct timespec realtime_now;
     clock_gettime(CLOCK_REALTIME, &realtime_now);
-    if (should_use_confirmable(anjay, &realtime_now, entry)) {
+    if (details.msg_type != ANJAY_COAP_MSG_CONFIRMABLE
+            && confirmable_required(&realtime_now, entry)) {
         details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
     }
 
@@ -848,10 +846,10 @@ static void schedule_all_triggers(anjay_t *anjay,
     AVS_RBTREE_ELEM(anjay_observe_entry_t) entry;
     AVS_RBTREE_FOREACH(entry, conn->entries) {
         if (!entry->notify_task) {
-            anjay_dm_resource_attributes_t attrs;
+            anjay_dm_internal_res_attrs_t attrs;
             if (get_attrs(anjay, &attrs, &entry->key)
                     || schedule_trigger(anjay, entry,
-                                        attrs.common.max_period)) {
+                                        attrs.standard.common.max_period)) {
                 anjay_log(ERROR,
                           "Could not schedule automatic notification trigger");
             }
@@ -950,13 +948,14 @@ update_notification_value(anjay_t *anjay,
         return ANJAY_ERR_NOT_FOUND;
     }
 
-    anjay_dm_resource_attributes_t attrs;
+    anjay_dm_internal_res_attrs_t attrs;
     int result = get_effective_attrs(anjay, &attrs, obj, &entry->key);
     if (result) {
         return result;
     }
 
-    bool pmax_expired = has_pmax_expired(newest_value(entry), &attrs.common);
+    bool pmax_expired = has_pmax_expired(newest_value(entry),
+                                         &attrs.standard.common);
     char buf[ANJAY_MAX_OBSERVABLE_RESOURCE_SIZE];
     anjay_msg_details_t observe_details;
     double numeric = NAN;
@@ -965,12 +964,21 @@ update_notification_value(anjay_t *anjay,
     if (size < 0) {
         return (int) size;
     }
-    observe_details.msg_type = ANJAY_COAP_MSG_NON_CONFIRMABLE;
+#ifdef WITH_CON_ATTR
+    if (attrs.custom.data.con >= 0) {
+        observe_details.msg_type = (attrs.custom.data.con > 0)
+                ? ANJAY_COAP_MSG_CONFIRMABLE : ANJAY_COAP_MSG_NON_CONFIRMABLE;
+    } else
+#endif // WITH_CON_ATTR
+    {
+        observe_details.msg_type = anjay->observe.confirmable_notifications
+                ? ANJAY_COAP_MSG_CONFIRMABLE : ANJAY_COAP_MSG_NON_CONFIRMABLE;
+    }
 
     sync_state_t new_sync_state;
     bool attrs_allow_notif;
     process_numeric_attributes(&new_sync_state, &attrs_allow_notif,
-                               entry, &attrs, pmax_expired, numeric);
+                               entry, &attrs.standard, pmax_expired, numeric);
     if (attrs_allow_notif
             && (pmax_expired || value_changed(newest_value(entry),
                                               &observe_details,
@@ -982,7 +990,7 @@ update_notification_value(anjay_t *anjay,
 
     update_sync_state(&entry->sync_state, &new_sync_state, result);
 
-    if (schedule_trigger(anjay, entry, attrs.common.max_period)) {
+    if (schedule_trigger(anjay, entry, attrs.standard.common.max_period)) {
         anjay_log(ERROR, "Could not schedule automatic notification trigger");
     }
 
@@ -1018,11 +1026,11 @@ static int trigger_observe(anjay_t *anjay, void *entry_) {
 static inline int notify_entry(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                anjay_observe_entry_t *entry) {
-    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
+    anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     time_t period = 0;
     if (!get_effective_attrs(anjay, &attrs, obj, &entry->key)
-            && attrs.common.min_period > 0) {
-        period = attrs.common.min_period;
+            && attrs.standard.common.min_period > 0) {
+        period = attrs.standard.common.min_period;
     }
     return schedule_trigger(anjay, entry, period);
 }

@@ -28,9 +28,10 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-#define HANDLE_LIST(Type, Ctx, ListPtr) \
+#define HANDLE_LIST(Type, Ctx, ListPtr, ...) \
         anjay_persistence_list((Ctx), (AVS_LIST(void) *) (ListPtr), \
-                               sizeof(**(ListPtr)), handle_##Type)
+                               sizeof(**(ListPtr)), \
+                               handle_##Type, __VA_ARGS__)
 
 //// DATA STRUCTURE HANDLERS ///////////////////////////////////////////////////
 
@@ -52,48 +53,109 @@ static int handle_resource_attributes(anjay_persistence_context_t *ctx,
     return retval;
 }
 
-static int handle_default_attrs(anjay_persistence_context_t *ctx, void *attrs_) {
+static int handle_custom_attributes(anjay_persistence_context_t *ctx,
+                                    anjay_dm_internal_attrs_t *attrs,
+                                    int version) {
+    int retval = 0;
+    int8_t con = ANJAY_DM_CON_ATTR_DEFAULT;
+    if (version >= 2) {
+#ifdef WITH_CON_ATTR
+        con = (int8_t) attrs->custom.data.con;
+#endif // WITH_CON_ATTR
+        retval = anjay_persistence_bytes(ctx, (uint8_t *) &con, 1);
+    }
+#ifdef WITH_CON_ATTR
+    if (!retval) {
+        switch (con) {
+        case ANJAY_DM_CON_ATTR_DEFAULT:
+        case ANJAY_DM_CON_ATTR_NON:
+        case ANJAY_DM_CON_ATTR_CON:
+            attrs->custom.data.con = (anjay_dm_con_attr_t) con;
+            break;
+        default:
+            retval = -1;
+        }
+    }
+#endif // WITH_CON_ATTR
+    return retval;
+}
+
+static int handle_internal_attrs(anjay_persistence_context_t *ctx,
+                                 anjay_dm_internal_attrs_t *attrs,
+                                 int version) {
+    int retval;
+    (void) ((retval = handle_dm_attributes(ctx, &attrs->standard))
+            || (retval = handle_custom_attributes(ctx, attrs, version)));
+    return retval;
+}
+
+static int handle_internal_res_attrs(anjay_persistence_context_t *ctx,
+                                     anjay_dm_internal_res_attrs_t *attrs,
+                                     int version) {
+    int retval;
+    (void) ((retval = handle_resource_attributes(ctx, &attrs->standard))
+            || (retval = handle_custom_attributes(
+                    ctx, _anjay_dm_get_internal_attrs(&attrs->standard.common),
+                    version)));
+    return retval;
+}
+
+static int handle_default_attrs(anjay_persistence_context_t *ctx,
+                                void *attrs_,
+                                void *version_as_ptr) {
     fas_default_attrs_t *attrs = (fas_default_attrs_t *) attrs_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &attrs->ssid))
-            || (retval = handle_dm_attributes(ctx, &attrs->attrs)));
+            || (retval = handle_internal_attrs(
+                    ctx, &attrs->attrs, (int) (intptr_t) version_as_ptr)));
     return retval;
 }
 
-static int handle_resource_attrs(anjay_persistence_context_t *ctx, void *attrs_) {
+static int handle_resource_attrs(anjay_persistence_context_t *ctx,
+                                 void *attrs_,
+                                 void *version_as_ptr) {
     fas_resource_attrs_t *attrs = (fas_resource_attrs_t *) attrs_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &attrs->ssid))
-            || (retval = handle_resource_attributes(ctx, &attrs->attrs)));
+            || (retval = handle_internal_res_attrs(
+                    ctx, &attrs->attrs, (int) (intptr_t) version_as_ptr)));
     return retval;
 }
 
-static int handle_resource_entry(anjay_persistence_context_t *ctx, void *resource_) {
+static int handle_resource_entry(anjay_persistence_context_t *ctx,
+                                 void *resource_,
+                                 void *version_as_ptr) {
     fas_resource_entry_t *resource = (fas_resource_entry_t *) resource_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &resource->rid))
-            || (retval = HANDLE_LIST(resource_attrs, ctx, &resource->attrs)));
+            || (retval = HANDLE_LIST(resource_attrs, ctx, &resource->attrs,
+                                     version_as_ptr)));
     return retval;
 }
 
-static int handle_instance_entry(anjay_persistence_context_t *ctx, void *instance_) {
+static int handle_instance_entry(anjay_persistence_context_t *ctx,
+                                 void *instance_,
+                                 void *version_as_ptr) {
     fas_instance_entry_t *instance = (fas_instance_entry_t *) instance_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &instance->iid))
             || (retval = HANDLE_LIST(default_attrs, ctx,
-                                     &instance->default_attrs))
+                                     &instance->default_attrs, version_as_ptr))
             || (retval = HANDLE_LIST(resource_entry, ctx,
-                                     &instance->resources)));
+                                     &instance->resources, version_as_ptr)));
     return retval;
 }
 
-static int handle_object(anjay_persistence_context_t *ctx, void *object_) {
+static int handle_object(anjay_persistence_context_t *ctx,
+                         void *object_,
+                         void *version_as_ptr) {
     fas_object_entry_t *object = (fas_object_entry_t *) object_;
     int retval;
     (void) ((retval = anjay_persistence_u16(ctx, &object->oid))
             || (retval = HANDLE_LIST(default_attrs, ctx,
-                                     &object->default_attrs))
-            || (retval = HANDLE_LIST(instance_entry, ctx, &object->instances)));
+                                     &object->default_attrs, version_as_ptr))
+            || (retval = HANDLE_LIST(instance_entry, ctx, &object->instances,
+                                     version_as_ptr)));
     return retval;
 }
 
@@ -285,17 +347,17 @@ static int clear_nonexistent_entries(anjay_t *anjay,
  * NOTE: The last byte is supposed to be a version number.
  *
  * Known versions are:
- * - 0: used in development versions and currently
+ * - 0: used in development versions and up to Anjay 1.3.1
  * - 1: briefly used and released as part of Anjay 1.0.0, when the attributes
  *   were temporarily unified (i.e., Objects could have lt/gt/st attributes)
- *
- * Thus, if you ever need to bump the version number, change it to \2.
+ * - 2: current version
  */
-static const char MAGIC[] = { 'F', 'A', 'S', '\0' };
+static const char MAGIC_V0[] = { 'F', 'A', 'S', '\0' };
+static const char MAGIC_V2[] = { 'F', 'A', 'S', '\2' };
 
 int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *out) {
-    int retval = avs_stream_write(out, MAGIC, sizeof(MAGIC));
+    int retval = avs_stream_write(out, MAGIC_V2, sizeof(MAGIC_V2));
     if (retval) {
         return retval;
     }
@@ -304,7 +366,7 @@ int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
         fas_log(ERROR, "Out of memory");
         return -1;
     }
-    retval = HANDLE_LIST(object, ctx, &attr_storage->objects);
+    retval = HANDLE_LIST(object, ctx, &attr_storage->objects, (void *) 2);
     anjay_persistence_context_delete(ctx);
     return retval;
 }
@@ -318,29 +380,38 @@ int _anjay_attr_storage_restore_inner(anjay_t *anjay,
         return (retval < 0) ? retval : 0;
     }
 
-    char magic_buffer[sizeof(MAGIC)];
+    AVS_STATIC_ASSERT(sizeof(MAGIC_V0) == sizeof(MAGIC_V2), magic_size);
+    char magic_buffer[sizeof(MAGIC_V2)];
     retval = avs_stream_read_reliably(in, magic_buffer, sizeof(magic_buffer));
     if (retval) {
         return retval;
-    } else if (memcmp(MAGIC, magic_buffer, sizeof(MAGIC))) {
+    }
+
+    intptr_t version;
+    if (!memcmp(magic_buffer, MAGIC_V0, sizeof(MAGIC_V0))) {
+        version = 0;
+    } else if (!memcmp(magic_buffer, MAGIC_V2, sizeof(MAGIC_V2))) {
+        version = 2;
+    } else {
         fas_log(ERROR, "Magic value mismatch");
         return -1;
+    }
+
+    anjay_persistence_context_t *ctx =
+            anjay_persistence_restore_context_new(in);
+    if (!ctx) {
+        fas_log(ERROR, "Out of memory");
+        retval = -1;
     } else {
-        anjay_persistence_context_t *ctx =
-                anjay_persistence_restore_context_new(in);
-        if (!ctx) {
-            fas_log(ERROR, "Out of memory");
-            retval = -1;
-        } else {
-            (void) ((retval = HANDLE_LIST(object, ctx, &attr_storage->objects))
-                    || (retval = (is_attr_storage_sane(attr_storage) ? 0 : -1))
-                    || (retval = clear_nonexistent_entries(anjay,
-                                                           attr_storage)));
-            anjay_persistence_context_delete(ctx);
-        }
-        if (retval) {
-            _anjay_attr_storage_clear(attr_storage);
-        }
+        (void) ((retval = HANDLE_LIST(object, ctx, &attr_storage->objects,
+                                      (void *) version))
+                || (retval = (is_attr_storage_sane(attr_storage) ? 0 : -1))
+                || (retval = clear_nonexistent_entries(anjay,
+                                                       attr_storage)));
+        anjay_persistence_context_delete(ctx);
+    }
+    if (retval) {
+        _anjay_attr_storage_clear(attr_storage);
     }
     return retval;
 }

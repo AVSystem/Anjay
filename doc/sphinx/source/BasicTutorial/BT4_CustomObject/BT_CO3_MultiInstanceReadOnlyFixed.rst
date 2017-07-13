@@ -168,7 +168,7 @@ two more handlers are required:
         }
 
     For more details see `anjay_dm_instance_it_t documentation
-    <../../api/anjay_8h.html>`_.
+    <../../api/dm_8h.html>`_.
 
 
 .. topic:: Why is enumerating Object Instances necessary?

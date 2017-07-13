@@ -26,7 +26,7 @@ In this tutorial you will learn:
 
 - basics of the ``AVS_LIST`` utility library.
 
-Implemented object will be roughly based on :doc:`BT_CO3_FixedInstanceWritable`.
+Implemented object will be roughly based on :doc:`BT_CO4_FixedInstanceWritable`.
 
 +-------------+-----------+-----------+
 | Name        | Object ID | Instances |
@@ -44,7 +44,7 @@ As before, each Object Instance has two Resources:
 | Value | 1           | Read/Write | Single    | Mandatory | Integer |
 +-------+-------------+------------+-----------+-----------+---------+
 
-The code is based on :doc:`previous tutorial <BT_CO3_FixedInstanceWritable>`, yet in this
+The code is based on :doc:`previous tutorial <BT_CO4_FixedInstanceWritable>`, yet in this
 chapter all Test object related code was moved to a separate files to keep
 everything clean.
 

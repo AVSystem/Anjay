@@ -73,14 +73,16 @@ class Test555_ServerObject_SettingTheWritableResources(DataModel.Test):
         # 1. The server receives the status code “2.04”
         # 2. The resource value has changed according to WRITE request
         # (both checked by test_write_validated)
-        self.test_write_validated(ResPath.Server[1].Lifetime, '60')
+        self.test_write(ResPath.Server[1].Lifetime, '60')
+        self.assertDemoUpdatesRegistration(lifetime=60)
+        self.test_read(ResPath.Server[1].Lifetime, ValueValidator.from_values(b'60'))
         self.test_write_validated(ResPath.Server[1].DefaultMinPeriod, '5')
         self.test_write_validated(ResPath.Server[1].DefaultMaxPeriod, '15')
         self.test_write_validated(ResPath.Server[1].DisableTimeout, '120')
         self.test_write_validated(ResPath.Server[1].NotificationStoring, '1')
 
         self.test_write(ResPath.Server[1].Binding, 'UQ')
-        self.assertDemoUpdatesRegistration(lifetime=60, binding='UQ')  # triggered by Binding change
+        self.assertDemoUpdatesRegistration(binding='UQ')  # triggered by Binding change
         self.assertEqual(b'UQ', self.test_read(ResPath.Server[1].Binding))
 
         # TODO: ugly workaround to avoid 93s delay in queue_exec; see T858

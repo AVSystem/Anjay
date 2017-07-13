@@ -49,7 +49,10 @@ typedef struct {
     bool has_greater_than;
     bool has_less_than;
     bool has_step;
-    anjay_dm_resource_attributes_t values;
+#ifdef WITH_CUSTOM_ATTRIBUTES
+    anjay_dm_custom_request_attribute_flags_t custom;
+#endif
+    anjay_dm_internal_res_attrs_t values;
 } anjay_request_attributes_t;
 
 typedef struct anjay_request_details {

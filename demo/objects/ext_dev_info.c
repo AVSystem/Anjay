@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <unistd.h>
 
 #include "../objects.h"
@@ -36,9 +37,7 @@ typedef struct {
 } extdev_repr_t;
 
 static inline extdev_repr_t *get_extdev(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, extdev_repr_t, def);
 }
 
@@ -116,7 +115,9 @@ const anjay_dm_object_def_t **ext_dev_info_object_create(void) {
 }
 
 void ext_dev_info_object_release(const anjay_dm_object_def_t **def) {
-    free(get_extdev(def));
+    if (def) {
+        free(get_extdev(def));
+    }
 }
 
 void ext_dev_info_notify_time_dependent(anjay_t *anjay,

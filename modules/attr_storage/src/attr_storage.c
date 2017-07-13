@@ -464,7 +464,7 @@ static int remove_instances_after_iteration(anjay_t *anjay,
 
 static void read_default_attrs(AVS_LIST(fas_default_attrs_t) attrs,
                                anjay_ssid_t ssid,
-                               anjay_dm_attributes_t *out) {
+                               anjay_dm_internal_attrs_t *out) {
     AVS_LIST_ITERATE(attrs) {
         if (attrs->ssid == ssid) {
             *out = attrs->attrs;
@@ -473,12 +473,12 @@ static void read_default_attrs(AVS_LIST(fas_default_attrs_t) attrs,
             break;
         }
     }
-    *out = ANJAY_DM_ATTRIBS_EMPTY;
+    *out = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
 }
 
 static void read_resource_attrs(AVS_LIST(fas_resource_attrs_t) attrs,
                                 anjay_ssid_t ssid,
-                                anjay_dm_resource_attributes_t *out) {
+                                anjay_dm_internal_res_attrs_t *out) {
     AVS_LIST_ITERATE(attrs) {
         if (attrs->ssid == ssid) {
             *out = attrs->attrs;
@@ -487,7 +487,7 @@ static void read_resource_attrs(AVS_LIST(fas_resource_attrs_t) attrs,
             break;
         }
     }
-    *out = ANJAY_RES_ATTRIBS_EMPTY;
+    *out = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
 }
 
 static int write_attrs_impl(anjay_attr_storage_t *fas,
@@ -539,7 +539,8 @@ static int write_attrs_impl(anjay_attr_storage_t *fas,
 static int object_read_default_attrs(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj_ptr,
                                      anjay_ssid_t ssid,
-                                     anjay_dm_attributes_t *out) {
+                                     anjay_dm_attributes_t *out_) {
+    anjay_dm_internal_attrs_t *out = _anjay_dm_get_internal_attrs(out_);
     if (implements_any_object_default_attrs_handlers(anjay, obj_ptr)) {
         return _anjay_dm_object_read_default_attrs(anjay, obj_ptr, ssid, out,
                                                    &_anjay_attr_storage_MODULE);
@@ -554,7 +555,9 @@ static int object_read_default_attrs(anjay_t *anjay,
 static int object_write_default_attrs(anjay_t *anjay,
                                       const anjay_dm_object_def_t *const *obj_ptr,
                                       anjay_ssid_t ssid,
-                                      const anjay_dm_attributes_t *attrs) {
+                                      const anjay_dm_attributes_t *attrs_) {
+    const anjay_dm_internal_attrs_t *attrs =
+            _anjay_dm_get_internal_attrs_const(attrs_);
     if (implements_any_object_default_attrs_handlers(anjay, obj_ptr)) {
         return _anjay_dm_object_write_default_attrs(anjay, obj_ptr, ssid, attrs,
                                                     &_anjay_attr_storage_MODULE);
@@ -575,7 +578,8 @@ static int instance_read_default_attrs(anjay_t *anjay,
                                        const anjay_dm_object_def_t *const *obj_ptr,
                                        anjay_iid_t iid,
                                        anjay_ssid_t ssid,
-                                       anjay_dm_attributes_t *out) {
+                                       anjay_dm_attributes_t *out_) {
+    anjay_dm_internal_attrs_t *out = _anjay_dm_get_internal_attrs(out_);
     if (implements_any_instance_default_attrs_handlers(anjay, obj_ptr)) {
         return _anjay_dm_instance_read_default_attrs(
                 anjay, obj_ptr, iid, ssid, out, &_anjay_attr_storage_MODULE);
@@ -593,7 +597,9 @@ static int instance_write_default_attrs(anjay_t *anjay,
                                         const anjay_dm_object_def_t *const *obj_ptr,
                                         anjay_iid_t iid,
                                         anjay_ssid_t ssid,
-                                        const anjay_dm_attributes_t *attrs) {
+                                        const anjay_dm_attributes_t *attrs_) {
+    const anjay_dm_internal_attrs_t *attrs =
+            _anjay_dm_get_internal_attrs_const(attrs_);
     if (implements_any_instance_default_attrs_handlers(anjay, obj_ptr)) {
         return _anjay_dm_instance_write_default_attrs(
                 anjay, obj_ptr, iid, ssid, attrs, &_anjay_attr_storage_MODULE);
@@ -626,7 +632,8 @@ static int resource_read_attrs(anjay_t *anjay,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
                                anjay_ssid_t ssid,
-                               anjay_dm_resource_attributes_t *out) {
+                               anjay_dm_resource_attributes_t *out_) {
+    anjay_dm_internal_res_attrs_t *out = _anjay_dm_get_internal_res_attrs(out_);
     if (implements_any_resource_attrs_handlers(anjay, obj_ptr)) {
         return _anjay_dm_resource_read_attrs(anjay, obj_ptr, iid, rid, ssid,
                                              out, &_anjay_attr_storage_MODULE);
@@ -646,7 +653,9 @@ static int resource_write_attrs(anjay_t *anjay,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
                                 anjay_ssid_t ssid,
-                                const anjay_dm_resource_attributes_t *attrs) {
+                                const anjay_dm_resource_attributes_t *attrs_) {
+    const anjay_dm_internal_res_attrs_t *attrs =
+            _anjay_dm_get_internal_res_attrs_const(attrs_);
     if (implements_any_resource_attrs_handlers(anjay, obj_ptr)) {
         return _anjay_dm_resource_write_attrs(anjay, obj_ptr, iid, rid, ssid,
                                               attrs,

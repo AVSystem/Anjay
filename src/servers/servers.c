@@ -50,32 +50,28 @@ void _anjay_server_cleanup(anjay_t *anjay, anjay_active_server_info_t *server) {
     connection_cleanup(anjay, &server->udp_connection);
 }
 
-static void active_servers_delete_and_deregister(
-        anjay_t *anjay,
-        AVS_LIST(anjay_active_server_info_t) *servers_ptr) {
+static void active_servers_delete_and_deregister(anjay_t *anjay) {
     anjay_log(TRACE, "servers_delete_and_deregister");
 
-    AVS_LIST_CLEAR(servers_ptr) {
-        if ((*servers_ptr)->ssid != ANJAY_SSID_BOOTSTRAP) {
-            _anjay_server_deregister(anjay, *servers_ptr);
+    AVS_LIST_CLEAR(&anjay->servers.active) {
+        if (anjay->servers.active->ssid != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_server_deregister(anjay, anjay->servers.active);
         }
-        _anjay_server_cleanup(anjay, *servers_ptr);
+        _anjay_server_cleanup(anjay, anjay->servers.active);
     }
 }
 
-void _anjay_servers_cleanup(anjay_t *anjay,
-                            anjay_servers_t *servers) {
+void _anjay_servers_cleanup(anjay_t *anjay) {
     anjay_log(TRACE, "cleanup servers: %lu active, %lu inactive",
-              (unsigned long)AVS_LIST_SIZE(servers->active),
-              (unsigned long)AVS_LIST_SIZE(servers->inactive));
+              (unsigned long) AVS_LIST_SIZE(anjay->servers.active),
+              (unsigned long) AVS_LIST_SIZE(anjay->servers.inactive));
 
-    _anjay_sched_del(anjay->sched, &servers->reload_sockets_sched_job_handle);
-    active_servers_delete_and_deregister(anjay, &servers->active);
-    AVS_LIST_CLEAR(&servers->inactive) {
+    active_servers_delete_and_deregister(anjay);
+    AVS_LIST_CLEAR(&anjay->servers.inactive) {
         _anjay_sched_del(anjay->sched,
-                         &servers->inactive->sched_reactivate_handle);
+                         &anjay->servers.inactive->sched_reactivate_handle);
     }
-    AVS_LIST_CLEAR(&servers->public_sockets);
+    AVS_LIST_CLEAR(&anjay->servers.public_sockets);
 }
 
 static bool
@@ -189,7 +185,7 @@ int _anjay_schedule_socket_update(anjay_t *anjay,
             && (server = _anjay_servers_find_active(&anjay->servers, ssid))) {
         server->udp_connection.needs_socket_update = true;
     }
-    return _anjay_schedule_reload_sockets(anjay);
+    return _anjay_schedule_reload_servers(anjay);
 }
 
 #ifdef WITH_BOOTSTRAP

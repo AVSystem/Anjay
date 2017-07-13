@@ -22,10 +22,10 @@
 #include <stdio.h>
 
 #include <anjay_test/dm.h>
+#include <anjay_test/utils.h>
 
 #include "../sched.h"
 
-#include "anjay.h"
 #include "mock_coap_stream_impl.h"
 
 AVS_UNIT_GLOBAL_INIT(verbose) {
@@ -90,42 +90,43 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
     } while (0);
 
 AVS_UNIT_TEST(parse_headers, parse_attribute) {
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", "123",
-                                 common.min_period, has_min_period, 123);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", NULL,
-                                 common.min_period, has_min_period, -1);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", "123", standard.common.min_period,
+                                 has_min_period, 123);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", NULL, standard.common.min_period,
+                                 has_min_period, -1);
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "123.4");
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "woof");
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", "234",
-                                 common.max_period, has_max_period, 234);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", NULL,
-                                 common.max_period, has_max_period, -1);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", "234", standard.common.max_period,
+                                 has_max_period, 234);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", NULL, standard.common.max_period,
+                                 has_max_period, -1);
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "234.5");
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "meow");
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345",
-                                 greater_than, has_greater_than, 345.0);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345.6",
-                                 greater_than, has_greater_than, 345.6);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", NULL,
-                                 greater_than, has_greater_than, NAN);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345", standard.greater_than,
+                                 has_greater_than, 345.0);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345.6", standard.greater_than,
+                                 has_greater_than, 345.6);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", NULL, standard.greater_than,
+                                 has_greater_than, NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("gt", "tweet");
     TEST_PARSE_ATTRIBUTE_FAIL("gt", "");
 
     TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456",
-                                 less_than, has_less_than, 456.0);
+                                 standard.less_than, has_less_than, 456.0);
     TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456.7",
-                                 less_than, has_less_than, 456.7);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", NULL, less_than, has_less_than, NAN);
+                                 standard.less_than, has_less_than, 456.7);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", NULL, standard.less_than,
+                                 has_less_than, NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("lt", "squeak");
     TEST_PARSE_ATTRIBUTE_FAIL("lt", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567",   step, has_step, 567.0);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567.8", step, has_step, 567.8);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", NULL,    step, has_step, NAN);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567",   standard.step, has_step, 567.0);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567.8", standard.step, has_step, 567.8);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", NULL,    standard.step, has_step, NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("st", "moo");
     TEST_PARSE_ATTRIBUTE_FAIL("st", "");
 
@@ -139,13 +140,17 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
 
 #define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
     do { \
-        AVS_UNIT_ASSERT_EQUAL(actual.common.min_period, \
-                              expected.common.min_period); \
-        AVS_UNIT_ASSERT_EQUAL(actual.common.max_period, \
-                              expected.common.max_period); \
-        ASSERT_DOUBLE_EQUAL(actual.greater_than, expected.greater_than); \
-        ASSERT_DOUBLE_EQUAL(actual.less_than, expected.less_than); \
-        ASSERT_DOUBLE_EQUAL(actual.step, expected.step); \
+        AVS_UNIT_ASSERT_EQUAL(actual.custom.data.con, \
+                              expected.custom.data.con); \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.common.min_period, \
+                              expected.standard.common.min_period); \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.common.max_period, \
+                              expected.standard.common.max_period); \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.greater_than, \
+                              expected.standard.greater_than); \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.less_than, \
+                              expected.standard.less_than); \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.step, expected.standard.step); \
     } while (0)
 
 #define ASSERT_ATTRIBUTES_EQUAL(actual, expected) \
@@ -156,6 +161,7 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
                               expected.has_greater_than); \
         AVS_UNIT_ASSERT_EQUAL(actual.has_less_than, expected.has_less_than); \
         AVS_UNIT_ASSERT_EQUAL(actual.has_step, expected.has_step); \
+        AVS_UNIT_ASSERT_EQUAL(actual.custom.has_con, expected.custom.has_con); \
         ASSERT_ATTRIBUTE_VALUES_EQUAL(actual.values, expected.values); \
     } while (0)
 
@@ -166,7 +172,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     anjay_request_attributes_t attrs;
     anjay_request_attributes_t empty_attrs;
     memset(&empty_attrs, 0, sizeof(empty_attrs));
-    empty_attrs.values = ANJAY_RES_ATTRIBS_EMPTY;
+    empty_attrs.values = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     anjay_request_attributes_t expected_attrs;
 
     mock.expected_option_number = ANJAY_COAP_OPT_URI_QUERY;
@@ -180,7 +186,7 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     mock.next_opt_value_string = &(const char*[]){ "pmin=10", NULL }[0];
     memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
     expected_attrs.has_min_period = true;
-    expected_attrs.values.common.min_period = 10;
+    expected_attrs.values.standard.common.min_period = 10;
     AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
 
@@ -188,9 +194,9 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     mock.next_opt_value_string = &(const char*[]){ "pmin=10", "pmax=20", NULL }[0];
     memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
     expected_attrs.has_min_period = true;
-    expected_attrs.values.common.min_period = 10;
+    expected_attrs.values.standard.common.min_period = 10;
     expected_attrs.has_max_period = true;
-    expected_attrs.values.common.max_period = 20;
+    expected_attrs.values.standard.common.max_period = 20;
     AVS_UNIT_ASSERT_SUCCESS(parse_attributes(stream, &attrs));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
 
@@ -237,7 +243,6 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
 
 #undef ASSERT_ATTRIBUTES_EQUAL
 #undef ASSERT_ATTRIBUTE_VALUES_EQUAL
-#undef ASSERT_DOUBLE_EQUAL
 
 AVS_UNIT_TEST(parse_headers, parse_uri) {
     DECLARE_COAP_STREAM_MOCK(mock);
@@ -439,14 +444,16 @@ static time_t sched_time_to_next_s(anjay_sched_t *sched) {
 }
 
 AVS_UNIT_TEST(queue_mode, behaviour) {
-    static const anjay_dm_resource_attributes_t ATTRS = {
-        .common = {
-            .min_period = 0,
-            .max_period = 9001
-        },
-        .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-        .less_than = ANJAY_ATTRIB_VALUE_NONE,
-        .step = ANJAY_ATTRIB_VALUE_NONE
+    static const anjay_dm_internal_res_attrs_t ATTRS = {
+        .standard = {
+            .common = {
+                .min_period = 0,
+                .max_period = 9001
+            },
+            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
+            .less_than = ANJAY_ATTRIB_VALUE_NONE,
+            .step = ANJAY_ATTRIB_VALUE_NONE
+        }
     };
 
     ////// INIT //////

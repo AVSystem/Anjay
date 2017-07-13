@@ -46,7 +46,7 @@ struct coap_msg_cache {
 typedef struct cache_entry {
     endpoint_t *endpoint;
     struct timespec expiration_time;
-    const char data[]; // anjay_coap_msg_t + padding
+    const char data[1]; // actually a FAM: anjay_coap_msg_t + padding
 } cache_entry_t;
 
 /* Ensure that if cache_entry_t is properly aligned, one can safely cast
@@ -165,7 +165,8 @@ static void cache_put_entry(coap_msg_cache_t *cache,
     };
 
     int res;
-    res = avs_buffer_append_bytes(cache->buffer, &entry, sizeof(entry));
+    res = avs_buffer_append_bytes(cache->buffer, &entry,
+                                  offsetof(cache_entry_t, data));
     assert(!res);
     res = avs_buffer_append_bytes(cache->buffer, msg, msg_size);
     assert(!res);
@@ -346,7 +347,7 @@ const anjay_coap_msg_t *_anjay_coap_msg_cache_get(coap_msg_cache_t *cache,
     assert(!entry_expired(entry, &now));
 
     coap_log(TRACE, "msg_cache hit (id = %u)", msg_id);
-    return entry ? entry_msg(entry) : NULL;
+    return entry_msg(entry);
 }
 
 void _anjay_coap_msg_cache_debug_print(const coap_msg_cache_t *cache) {
@@ -373,7 +374,8 @@ void _anjay_coap_msg_cache_debug_print(const coap_msg_cache_t *cache) {
         coap_log(DEBUG, "endpoint: %s:%s",
                  entry->endpoint->addr, entry->endpoint->port);
         coap_log(DEBUG, "expiration time: %zd:%09zu",
-                 entry->expiration_time.tv_sec, entry->expiration_time.tv_nsec);
+                 (ssize_t) entry->expiration_time.tv_sec,
+                 (size_t) entry->expiration_time.tv_nsec);
         _anjay_coap_msg_debug_print(entry_msg(entry));
     }
 }

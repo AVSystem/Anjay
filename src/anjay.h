@@ -49,6 +49,7 @@ struct anjay_struct {
     anjay_dm_t dm;
     uint16_t udp_listen_port;
     anjay_servers_t servers;
+    anjay_sched_handle_t reload_servers_sched_job_handle;
 #ifdef WITH_OBSERVE
     anjay_observe_state_t observe;
 #endif
@@ -61,6 +62,11 @@ struct anjay_struct {
 
     const char *endpoint_name;
     anjay_transaction_state_t transaction_state;
+
+    uint8_t *in_buffer;
+    size_t in_buffer_size;
+    uint8_t *out_buffer;
+    size_t out_buffer_size;
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1

@@ -70,9 +70,13 @@ def ensure_dir(dir_path):
 
 
 class Lwm2mDmOperations(Lwm2mAsserts):
-    def _perform_action(self, server, request, expected_response):
+    DEFAULT_OPERATION_TIMEOUT_S = 5
+
+    def _perform_action(self, server, request, expected_response, timeout_s=None):
         server.send(request)
-        res = server.recv(timeout_s=5)
+        if timeout_s is None:
+            timeout_s = self.DEFAULT_OPERATION_TIMEOUT_S
+        res = server.recv(timeout_s=timeout_s)
         self.assertMsgEqual(expected_response, res)
         return res
 
@@ -84,52 +88,52 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         else:
             return Lwm2mErrorResponse.matching(req)(code=expect_error_code)
 
-    def create_instance(self, server, oid, iid=None, expect_error_code=None):
+    def create_instance(self, server, oid, iid=None, expect_error_code=None, **kwargs):
         instance_tlv = None if iid is None else TLV.make_instance(instance_id=iid).serialize()
         req = Lwm2mCreate('/%d' % oid, instance_tlv)
         expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
-    def delete_instance(self, server, oid, iid, expect_error_code=None):
+    def delete_instance(self, server, oid, iid, expect_error_code=None, **kwargs):
         req = Lwm2mDelete('/%d/%d' % (oid, iid))
         expected_res = self._make_expected_res(req, Lwm2mDeleted, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
-    def read_path(self, server, path, expect_error_code=None, accept=None):
+    def read_path(self, server, path, expect_error_code=None, accept=None, **kwargs):
         req = Lwm2mRead(path, accept=accept)
         expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
-    def read_resource(self, server, oid, iid, rid, expect_error_code=None, accept=None):
+    def read_resource(self, server, oid, iid, rid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d/%d/%d' % (oid, iid, rid), expect_error_code,
-                              accept=accept)
+                              accept=accept, **kwargs)
 
-    def read_instance(self, server, oid, iid, expect_error_code=None, accept=None):
+    def read_instance(self, server, oid, iid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d/%d' % (oid, iid), expect_error_code,
-                              accept=accept)
+                              accept=accept, **kwargs)
 
-    def read_object(self, server, oid, expect_error_code=None, accept=None):
-        return self.read_path(server, '/%d' % oid, expect_error_code, accept=accept)
+    def read_object(self, server, oid, expect_error_code=None, accept=None, **kwargs):
+        return self.read_path(server, '/%d' % oid, expect_error_code, accept=accept, **kwargs)
 
-    def write_instance(self, server, oid, iid, content=b'', partial=False, expect_error_code=None):
+    def write_instance(self, server, oid, iid, content=b'', partial=False, expect_error_code=None, **kwargs):
         req = Lwm2mWrite('/%d/%d' % (oid, iid), content,
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
                          update=partial)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
     def write_resource(self, server, oid, iid, rid, content=b'', partial=False,
                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
-                       expect_error_code=None):
+                       expect_error_code=None, **kwargs):
         req = Lwm2mWrite('/%d/%d/%d' % (oid, iid, rid), content, format=format,
                          update=partial)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
-    def execute_resource(self, server, oid, iid, rid, content='', expect_error_code=None):
+    def execute_resource(self, server, oid, iid, rid, content='', expect_error_code=None, **kwargs):
         req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid), content=content)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
     @staticmethod
     def make_path(*args):
@@ -142,20 +146,20 @@ class Lwm2mDmOperations(Lwm2mAsserts):
 
         return '/' + '/'.join(map(lambda arg: '%d' % arg, ensure_valid_path(list(args))))
 
-    def discover(self, server, oid=None, iid=None, rid=None, expect_error_response=None):
+    def discover(self, server, oid=None, iid=None, rid=None, expect_error_code=None, **kwargs):
         req = Lwm2mDiscover(self.make_path(oid, iid, rid))
-        expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_response)
-        return self._perform_action(server, req, expected_res)
+        expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
-    def observe(self, server, oid=None, iid=None, rid=None, expect_error_code=None):
-        req = Lwm2mObserve(Lwm2mDmOperations.make_path(oid, iid, rid))
+    def observe(self, server, oid=None, iid=None, rid=None, expect_error_code=None, **kwargs):
+        req = Lwm2mObserve(Lwm2mDmOperations.make_path(oid, iid, rid), **kwargs)
         expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
-    def write_attributes(self, server, oid=None, iid=None, rid=None, query=[], expect_error_code=None):
+    def write_attributes(self, server, oid=None, iid=None, rid=None, query=[], expect_error_code=None, **kwargs):
         req = Lwm2mWriteAttributes(Lwm2mDmOperations.make_path(oid, iid, rid), query=query)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
-        return self._perform_action(server, req, expected_res)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
 
 class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
@@ -295,7 +299,10 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             for serv in self.servers:
                 self.assertDemoRegisters(serv, version=version, lifetime=lifetime)
 
-    def teardown_demo_with_servers(self, auto_deregister=True, *args, **kwargs):
+    def teardown_demo_with_servers(self,
+                                   auto_deregister=True,
+                                   shutdown_timeout_s=5.0,
+                                   *args, **kwargs):
         """
         Attempts to gracefully shut down the demo. If that doesn't work, demo
         is terminated forcefully. All servers from self.servers, as well as
@@ -310,7 +317,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         try:
             self.request_demo_shutdown(*args, **kwargs)
         finally:
-            self.terminate_demo()
+            self.terminate_demo(timeout_s=shutdown_timeout_s)
             for serv in self.servers:
                 serv.close()
 
@@ -348,10 +355,10 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             out += read_with_timeout(self.demo_process.log_file, partial_timeout)
         return out.decode(errors='replace')
 
-    def _terminate_demo(self, demo):
+    def _terminate_demo(self, demo, timeout_s):
         cleanup_actions = [
-            (5.0, lambda _: None),  # check if the demo already stopped
-            (5.0, lambda demo: demo.terminate()),
+            (timeout_s, lambda _: None),  # check if the demo already stopped
+            (timeout_s, lambda demo: demo.terminate()),
             (None, lambda demo: demo.kill())
         ]
 
@@ -365,13 +372,13 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 break
         return -1
 
-    def terminate_demo(self):
+    def terminate_demo(self, timeout_s=5.0):
         if self.demo_process is None:
             return
 
         exc = sys.exc_info()
         try:
-            return_value = self._terminate_demo(self.demo_process)
+            return_value = self._terminate_demo(self.demo_process, timeout_s)
             self.assertEqual(return_value, 0, 'demo terminated with nonzero exit code')
         except:
             if not exc[1]: raise

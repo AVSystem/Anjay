@@ -31,7 +31,7 @@
 
 static anjay_coap_msg_t *make_msg_template(void *buffer,
                                            size_t buffer_size) {
-    assert(buffer_size >= sizeof(anjay_coap_msg_t));
+    assert(buffer_size >= offsetof(anjay_coap_msg_t, content));
 
     anjay_coap_msg_t *msg = (anjay_coap_msg_t *)buffer;
 
@@ -50,19 +50,24 @@ static anjay_coap_msg_t *make_msg_template_with_data(void *buffer,
                                                      const void *data,
                                                      size_t data_size) {
     anjay_coap_msg_t *msg =
-            make_msg_template(buffer, sizeof(anjay_coap_msg_t) + data_size);
+            make_msg_template(buffer,
+                              offsetof(anjay_coap_msg_t, content) + data_size);
 
     memcpy(msg->content, data, data_size);
     return msg;
 }
 
-#define MSG_TEMPLATE(DataSize) \
-    make_msg_template(alloca(sizeof(anjay_coap_msg_t) + (DataSize)), \
-                      sizeof(anjay_coap_msg_t) + DataSize)
+#define DECLARE_MSG_TEMPLATE(VarName, SizeVarName, DataSize) \
+    const size_t SizeVarName = \
+            offsetof(anjay_coap_msg_t, content) + (DataSize); \
+    anjay_coap_msg_t *VarName = make_msg_template(alloca(SizeVarName), \
+                                                  SizeVarName)
 
-#define MSG_TEMPLATE_WITH_DATA(Data, DataSize) \
-    make_msg_template_with_data(alloca(sizeof(anjay_coap_msg_t) + (DataSize)), \
-                                (Data), (DataSize))
+#define DECLARE_MSG_TEMPLATE_WITH_DATA(VarName, SizeVarName, Data) \
+    const size_t SizeVarName = \
+            offsetof(anjay_coap_msg_t, content) + sizeof(Data) - 1; \
+    anjay_coap_msg_t *VarName = make_msg_template_with_data( \
+            alloca(SizeVarName), (Data), sizeof(Data) - 1)
 
 #define INFO_WITH_DUMMY_HEADER \
     _anjay_coap_msg_info_init(); \
@@ -77,7 +82,7 @@ static anjay_coap_msg_t *make_msg_template_with_data(void *buffer,
     info.identity.msg_id = extract_u16((HeaderPtr)->message_id)
 
 AVS_UNIT_TEST(coap_builder, header_only) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE(0);
+    DECLARE_MSG_TEMPLATE(msg_tpl, msg_tpl_size, 0);
     anjay_coap_msg_info_t info =
             INFO_WITH_HEADER(&msg_tpl->header);
 
@@ -88,13 +93,16 @@ AVS_UNIT_TEST(coap_builder, header_only) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
     free(storage);
 }
 
 AVS_UNIT_TEST(coap_info, token) {
     anjay_coap_token_t TOKEN = {"A Token"};
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA(&TOKEN, ANJAY_COAP_MAX_TOKEN_LENGTH);
+    const size_t msg_tpl_size =
+            offsetof(anjay_coap_msg_t, content) + ANJAY_COAP_MAX_TOKEN_LENGTH;
+    anjay_coap_msg_t *msg_tpl = make_msg_template_with_data(
+            alloca(msg_tpl_size), &TOKEN, ANJAY_COAP_MAX_TOKEN_LENGTH);
     _anjay_coap_msg_header_set_token_length(&msg_tpl->header, sizeof(TOKEN));
 
     anjay_coap_msg_info_t info =
@@ -114,7 +122,7 @@ AVS_UNIT_TEST(coap_info, token) {
 }
 
 AVS_UNIT_TEST(coap_builder, option_empty) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA("\x00", 1);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size, "\x00");
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_empty(&info, 0));
 
@@ -125,14 +133,14 @@ AVS_UNIT_TEST(coap_builder, option_empty) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg) + 1);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
 
     _anjay_coap_msg_info_reset(&info);
     free(storage);
 }
 
 AVS_UNIT_TEST(coap_builder, option_opaque) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA("\x00" "foo", sizeof("\x00" "foo") - 1);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size, "\x00" "foo");
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)msg_tpl->content, 3);
 
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
@@ -145,7 +153,7 @@ AVS_UNIT_TEST(coap_builder, option_opaque) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg) + sizeof("\x00" "foo") - 1);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
 
     _anjay_coap_msg_info_reset(&info);
     free(storage);
@@ -158,7 +166,7 @@ AVS_UNIT_TEST(coap_builder, option_multiple_ints) {
                             + sizeof(uint8_t) + sizeof(uint64_t)
                             + sizeof(uint8_t) + sizeof(uint8_t)
                             + sizeof(uint8_t);
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE(content_length);
+    DECLARE_MSG_TEMPLATE(msg_tpl, msg_tpl_size, content_length);
 
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[0], 1);
     msg_tpl->content[1] = 0x10;
@@ -198,7 +206,7 @@ AVS_UNIT_TEST(coap_builder, option_multiple_ints) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg) + content_length);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
 
     _anjay_coap_msg_info_reset(&info);
     free(storage);
@@ -206,7 +214,7 @@ AVS_UNIT_TEST(coap_builder, option_multiple_ints) {
 
 AVS_UNIT_TEST(coap_builder, option_content_format) {
     uint32_t content_length = sizeof(uint8_t) + sizeof(uint16_t);
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE(content_length);
+    DECLARE_MSG_TEMPLATE(msg_tpl, msg_tpl_size, content_length);
     _anjay_coap_opt_set_short_length((anjay_coap_opt_t *)&msg_tpl->content[0], 2);
     _anjay_coap_opt_set_short_delta((anjay_coap_opt_t *)&msg_tpl->content[0], ANJAY_COAP_OPT_CONTENT_FORMAT);
     memcpy(&msg_tpl->content[1], &(uint16_t){htons(ANJAY_COAP_FORMAT_TLV)}, 2);
@@ -221,7 +229,7 @@ AVS_UNIT_TEST(coap_builder, option_content_format) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg) + content_length);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
 
     _anjay_coap_msg_info_reset(&info);
     free(storage);
@@ -230,7 +238,7 @@ AVS_UNIT_TEST(coap_builder, option_content_format) {
 #define PAYLOAD "trololo"
 
 AVS_UNIT_TEST(coap_builder, payload_only) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA("\xFF" PAYLOAD, sizeof("\xFF" PAYLOAD) - 1);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size, "\xFF" PAYLOAD);
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
 
     size_t storage_size = _anjay_coap_msg_info_get_storage_size(&info)
@@ -248,7 +256,7 @@ AVS_UNIT_TEST(coap_builder, payload_only) {
 
     const anjay_coap_msg_t *msg = _anjay_coap_msg_builder_get_msg(&builder);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl) + sizeof("\xFF" PAYLOAD) - 1);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
     free(storage);
 }
 
@@ -259,7 +267,8 @@ AVS_UNIT_TEST(coap_builder, payload_only) {
 #define PAYLOAD_SIZE (sizeof(PAYLOAD1 PAYLOAD2) - 1)
 
 AVS_UNIT_TEST(coap_builder, incremental_payload) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA("\xFF" PAYLOAD1 PAYLOAD2, 1 + PAYLOAD_SIZE);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size,
+                                   "\xFF" PAYLOAD1 PAYLOAD2);
 
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
 
@@ -279,7 +288,7 @@ AVS_UNIT_TEST(coap_builder, incremental_payload) {
 
     const anjay_coap_msg_t *msg = _anjay_coap_msg_builder_get_msg(&builder);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl) + 1 + PAYLOAD_SIZE);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
     free(storage);
 }
 
@@ -289,10 +298,10 @@ AVS_UNIT_TEST(coap_builder, incremental_payload) {
 
 #define OPT_EXT_DELTA1 "\xD0\x00"
 #define OPT_EXT_DELTA2 "\xE0\x00\x00"
-#define OPTS_SIZE (sizeof(OPT_EXT_DELTA1 OPT_EXT_DELTA2) - 1)
 
 AVS_UNIT_TEST(coap_builder, option_ext_number) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA(OPT_EXT_DELTA1 OPT_EXT_DELTA2, OPTS_SIZE);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size,
+                                   OPT_EXT_DELTA1 OPT_EXT_DELTA2);
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_empty(&info, 13));
@@ -305,7 +314,7 @@ AVS_UNIT_TEST(coap_builder, option_ext_number) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl) + OPTS_SIZE);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
 
     _anjay_coap_msg_info_reset(&info);
     free(storage);
@@ -313,7 +322,6 @@ AVS_UNIT_TEST(coap_builder, option_ext_number) {
 
 #undef OPT_EXT_DELTA1
 #undef OPT_EXT_DELTA2
-#undef OPTS_SIZE
 
 #define ZEROS_8 "\x00\x00\x00\x00\x00\x00\x00\x00"
 #define ZEROS_64 ZEROS_8 ZEROS_8 ZEROS_8 ZEROS_8 ZEROS_8 ZEROS_8 ZEROS_8 ZEROS_8
@@ -324,10 +332,10 @@ AVS_UNIT_TEST(coap_builder, option_ext_number) {
 
 #define OPT_EXT_LENGTH1 "\x0D\x00"
 #define OPT_EXT_LENGTH2 "\x0E\x00\x00"
-#define OPTS_SIZE (sizeof(OPT_EXT_LENGTH1 ZEROS_13 OPT_EXT_LENGTH2 ZEROS_269) - 1)
 
 AVS_UNIT_TEST(coap_builder, option_ext_length) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA(OPT_EXT_LENGTH1 ZEROS_13 OPT_EXT_LENGTH2 ZEROS_269, OPTS_SIZE);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size,
+                                   OPT_EXT_LENGTH1 ZEROS_13 OPT_EXT_LENGTH2 ZEROS_269);
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_opaque(&info, 0, ZEROS_13, sizeof(ZEROS_13) - 1));
@@ -340,7 +348,7 @@ AVS_UNIT_TEST(coap_builder, option_ext_length) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl) + OPTS_SIZE);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
 
     _anjay_coap_msg_info_reset(&info);
     free(storage);
@@ -348,12 +356,11 @@ AVS_UNIT_TEST(coap_builder, option_ext_length) {
 
 #undef OPT_EXT_LENGTH1
 #undef OPT_EXT_LENGTH2
-#undef OPTS_SIZE
 
 #define STRING "SomeString"
 
 AVS_UNIT_TEST(coap_builder, opt_string) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA("\x0A" STRING, 1 + sizeof(STRING) - 1);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size, "\x0A" STRING);
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_info_opt_string(&info, 0, STRING));
@@ -365,7 +372,7 @@ AVS_UNIT_TEST(coap_builder, opt_string) {
             _anjay_coap_ensure_aligned_buffer(storage), storage_size,
             &info);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl) + sizeof(STRING));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
 
     _anjay_coap_msg_info_reset(&info);
     free(storage);
@@ -392,7 +399,7 @@ AVS_UNIT_TEST(coap_builder, opt_string_too_long) {
 #undef DATA_65536
 
 AVS_UNIT_TEST(coap_builder, payload_call_with_zero_size) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE(0);
+    DECLARE_MSG_TEMPLATE(msg_tpl, msg_tpl_size, 0);
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
 
     size_t storage_size = _anjay_coap_msg_info_get_storage_size(&info);
@@ -407,14 +414,14 @@ AVS_UNIT_TEST(coap_builder, payload_call_with_zero_size) {
     AVS_UNIT_ASSERT_EQUAL(0, _anjay_coap_msg_builder_payload(&builder, "", 0));
     const anjay_coap_msg_t *msg = _anjay_coap_msg_builder_get_msg(&builder);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
     free(storage);
 }
 
 #define PAYLOAD "And IiiiiiiiiiiiiiiIIIiiiii will alllwayyyyyys crash youuuuUUUUuuu"
 
 AVS_UNIT_TEST(coap_builder, payload_call_with_zero_size_then_nonzero) {
-    anjay_coap_msg_t *msg_tpl = MSG_TEMPLATE_WITH_DATA("\xFF" PAYLOAD, 1 + sizeof(PAYLOAD) - 1);
+    DECLARE_MSG_TEMPLATE_WITH_DATA(msg_tpl, msg_tpl_size, "\xFF" PAYLOAD);
 
     anjay_coap_msg_info_t info = INFO_WITH_HEADER(&msg_tpl->header);
 
@@ -434,7 +441,7 @@ AVS_UNIT_TEST(coap_builder, payload_call_with_zero_size_then_nonzero) {
 
     const anjay_coap_msg_t *msg = _anjay_coap_msg_builder_get_msg(&builder);
 
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, sizeof(*msg_tpl));
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(msg, msg_tpl, msg_tpl_size);
     free(storage);
 }
 

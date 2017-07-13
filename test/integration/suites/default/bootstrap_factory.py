@@ -46,10 +46,10 @@ class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor
         with self.assertRaises(socket.timeout):
             print(self.bootstrap_server.recv(timeout_s=4))
 
-        # now the Bootstrap Server Account should be gone
-        self.assertEqual(1, self._get_socket_count())
+        # Bootstrap Finish did not arrive, so Bootstrap Server timeout is not applicable here - no change
+        self.assertEqual(2, self._get_socket_count())
 
-        # Registration Update shall not include changes, because only Security changed
+        # Registration Update shall not include changes
         self.communicate('send-update')
         self.assertDemoUpdatesRegistration()
 
@@ -58,5 +58,5 @@ class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor
         res = self.serv.recv()
         self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
 
+        self.assertIn(b'</0/1/', res.content)
         self.assertIn(b'</0/2/', res.content)
-        self.assertNotIn(b'</0/1/', res.content)

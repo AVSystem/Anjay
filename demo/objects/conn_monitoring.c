@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <assert.h>
+
 #include "../objects.h"
 #include "../utils.h"
 
@@ -35,9 +37,7 @@ typedef struct {
 
 static inline conn_monitoring_repr_t *
 get_cm(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, conn_monitoring_repr_t, def);
 }
 
@@ -114,7 +114,6 @@ static int cm_resource_read(anjay_t *anjay,
                 || anjay_ret_string(array, "internet")
                 || anjay_ret_array_finish(array))
                 ? -1 : 0;
-        return anjay_ret_string(ctx, "");
     case CM_RES_CELL_ID:
         return anjay_ret_i32(ctx, 12345);
     case CM_RES_SMNC:
@@ -180,7 +179,9 @@ const anjay_dm_object_def_t **cm_object_create(void) {
 }
 
 void cm_object_release(const anjay_dm_object_def_t **def) {
-    free(get_cm(def));
+    if (def) {
+        free(get_cm(def));
+    }
 }
 
 void cm_notify_time_dependent(anjay_t *anjay,

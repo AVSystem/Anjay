@@ -17,6 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_DM_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_DM_H
 
+#include <anjay_modules/dm/attributes.h>
 #include <anjay_modules/dm/modules.h>
 
 #include <assert.h>
@@ -173,12 +174,12 @@ bool _anjay_dm_handler_implemented(anjay_t *anjay,
 int _anjay_dm_object_read_default_attrs(anjay_t *anjay,
                                         const anjay_dm_object_def_t *const *obj_ptr,
                                         anjay_ssid_t ssid,
-                                        anjay_dm_attributes_t *out,
+                                        anjay_dm_internal_attrs_t *out,
                                         const anjay_dm_module_t *current_module);
 int _anjay_dm_object_write_default_attrs(anjay_t *anjay,
                                          const anjay_dm_object_def_t *const *obj_ptr,
                                          anjay_ssid_t ssid,
-                                         const anjay_dm_attributes_t *attrs,
+                                         const anjay_dm_internal_attrs_t *attrs,
                                          const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_it(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
@@ -206,13 +207,13 @@ int _anjay_dm_instance_read_default_attrs(anjay_t *anjay,
                                           const anjay_dm_object_def_t *const *obj_ptr,
                                           anjay_iid_t iid,
                                           anjay_ssid_t ssid,
-                                          anjay_dm_attributes_t *out,
+                                          anjay_dm_internal_attrs_t *out,
                                           const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_write_default_attrs(anjay_t *anjay,
                                            const anjay_dm_object_def_t *const *obj_ptr,
                                            anjay_iid_t iid,
                                            anjay_ssid_t ssid,
-                                           const anjay_dm_attributes_t *attrs,
+                                           const anjay_dm_internal_attrs_t *attrs,
                                            const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_present(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
@@ -263,14 +264,14 @@ int _anjay_dm_resource_read_attrs(anjay_t *anjay,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_ssid_t ssid,
-                                  anjay_dm_resource_attributes_t *out,
+                                  anjay_dm_internal_res_attrs_t *out,
                                   const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_write_attrs(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
                                    anjay_ssid_t ssid,
-                                   const anjay_dm_resource_attributes_t *attrs,
+                                   const anjay_dm_internal_res_attrs_t *attrs,
                                    const anjay_dm_module_t *current_module);
 
 int _anjay_dm_delegate_transaction_begin(anjay_t *anjay,
@@ -344,11 +345,11 @@ _anjay_dm_find_object_by_oid(anjay_t *anjay, anjay_oid_t oid);
 
 bool _anjay_dm_ssid_exists(anjay_t *anjay, anjay_ssid_t ssid);
 
-bool _anjay_dm_attributes_empty(const anjay_dm_attributes_t *attrs);
+bool _anjay_dm_attributes_empty(const anjay_dm_internal_attrs_t *attrs);
 bool _anjay_dm_resource_attributes_empty(
-        const anjay_dm_resource_attributes_t *attrs);
+        const anjay_dm_internal_res_attrs_t *attrs);
 
-bool _anjay_dm_attributes_full(const anjay_dm_attributes_t *attrs);
+bool _anjay_dm_attributes_full(const anjay_dm_internal_attrs_t *attrs);
 
 #define ANJAY_DM_OID_SECURITY 0
 #define ANJAY_DM_OID_SERVER 1

@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "../objects.h"
 #include "../utils.h"
+
+#include <avsystem/commons/utils.h>
 
 #define LOCATION_LATITUDE    0
 #define LOCATION_LONGITUDE   1
@@ -47,9 +50,7 @@ typedef struct {
 
 static inline location_t *
 get_location(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
+    assert(obj_ptr);
     return container_of(obj_ptr, location_t, def);
 }
 
@@ -156,7 +157,7 @@ static void get_meters_per_degree(double *out_m_per_deg_lat,
 }
 
 static double rand_double(unsigned *seed, double min, double max) {
-    return min + (max - min) * rand_r(seed) / (double) RAND_MAX;
+    return min + (max - min) * avs_rand_r(seed) / (double) AVS_RAND_MAX;
 }
 
 static void calculate_velocity(velocity_t *out,
@@ -215,7 +216,7 @@ static int try_parse_location_line(location_t *location,
         goto invalid;
     }
 
-    if ((size_t) chars_read != line_length) {
+    if ((size_t) chars_read < line_length) {
         int more_chars_read;
         scanf_result = sscanf(line + chars_read, ", %lf , %lf %n",
                               &vel_mps, &vel_bearing_deg_cw_n,
@@ -316,7 +317,9 @@ const anjay_dm_object_def_t **location_object_create(void) {
 }
 
 void location_object_release(const anjay_dm_object_def_t **def) {
-    free(get_location(def));
+    if (def) {
+        free(get_location(def));
+    }
 }
 
 void location_notify_time_dependent(anjay_t *anjay,

@@ -158,3 +158,40 @@ connect to the specified Server.  It is because we have not implemented
 an :doc:`event loop <BT3>` yet. It may be a little bit more complicated, as
 you'll see in the next chapter, but the example event loop will be provided,
 so that one can just copypaste it and run the Client finally.
+
+Enabling LwM2M Discover on Objects
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+    LwM2M Specification requires support of LwM2M Discover, therefore we do
+    **recommend** to read this section and enable discovery support for all
+    objects by default.
+
+When a LwM2M Client registers to an LwM2M Server, it is often desired by the
+LwM2M Server to get an overview of the entire Data Model. While :ref:`LwM2M
+Register <lwm2m-registration-interface>` brings some information about Data
+Model tree (by listing registered Objects and their Instances in the payload),
+it does not contain any information about :ref:`Resources <lwm2m-resources>`.
+
+Server-side, the resource discovery could be implemented as :ref:`LwM2M
+Read <lwm2m-read>`, or :ref:`LwM2M Discover <lwm2m-discover>`, executed for
+each Object.
+
+The former could be suboptimal though, if resources happen to be
+long. Therefore allowing the Server to use the LwM2M Discover could be
+beneficial in terms of performance as well as bandwidth consumption.
+
+Anjay supports the LwM2M Discover operation, but it must be ensured
+that :ref:`Attributes <lwm2m-attributes>` for a given Data Model entity
+could be read. However, as you may have noticed: we did not implement any
+attribute-related handlers in this tutorial, and thus an attempt to perform
+an LwM2M Discover will result in `Method Not Allowed` response.
+
+Lucky for us, this could be fixed quickly as Anjay comes with :doc:`Attribute
+Storage <../AdvancedTutorial/AT1>` module, that contains pre-implemented
+attribute handlers. Installing it is enough to enable LwM2M Discover.
+
+.. note::
+    Of course, one can implement all attribute-related handles on their own
+    (if needed), though we believe Attribute Storage should be sufficient
+    for most use cases.

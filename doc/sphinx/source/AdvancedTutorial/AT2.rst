@@ -74,7 +74,7 @@ support persistence:
 
 .. note::
     All of the mentioned objects have complicated semantics, which is why you
-    should refer to their `documentation <../../api>`_ for more details on how persistence
+    should refer to their `documentation <../api>`_ for more details on how persistence
     functions behave under different conditions.
 
 Example
@@ -183,4 +183,4 @@ startup (if a valid persistence file exists).
 Persistence API
 ---------------
 
-Please refer to the `documentation of the Persistence module <../../api/persistence_8h.html>`_.
+Please refer to the `documentation of the Persistence module <../api/persistence_8h.html>`_.

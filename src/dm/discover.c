@@ -36,6 +36,19 @@ print_time_attr(avs_stream_abstract_t *stream, const char *name, time_t t) {
     return avs_stream_write_f(stream, ";%s=%lu", name, (unsigned long) t);
 }
 
+#ifdef WITH_CON_ATTR
+static int print_con_attr(avs_stream_abstract_t *stream,
+                          anjay_dm_con_attr_t value) {
+    if (value < 0) {
+        return 0;
+    }
+    return avs_stream_write_f(stream, ";" ANJAY_CUSTOM_ATTR_CON "=%d",
+                              (int) value);
+}
+#else // WITH_CON_ATTR
+#define print_con_attr(...) 0
+#endif // WITH_CON_ATTR
+
 static int print_double_attr(avs_stream_abstract_t *stream,
                              const char *name,
                              double value) {
@@ -46,38 +59,41 @@ static int print_double_attr(avs_stream_abstract_t *stream,
 }
 
 static int print_attrs(avs_stream_abstract_t *stream,
-                       const anjay_dm_attributes_t *attrs) {
+                       const anjay_dm_internal_attrs_t *attrs) {
     int result = 0;
     (void) ((result = print_time_attr(stream, ANJAY_ATTR_PMIN,
-                                      attrs->min_period))
+                                      attrs->standard.min_period))
             || (result = print_time_attr(stream, ANJAY_ATTR_PMAX,
-                                         attrs->max_period)));
+                                         attrs->standard.max_period))
+            || (result = print_con_attr(stream, attrs->custom.data.con)));
     return result;
 }
 
 static int print_resource_attrs(avs_stream_abstract_t *stream,
                                 int32_t resource_dim,
-                                const anjay_dm_resource_attributes_t *attrs) {
+                                const anjay_dm_internal_res_attrs_t *attrs) {
     int result = 0;
     if (resource_dim >= 0) {
         result = avs_stream_write_f(stream, ";dim=%" PRIu32,
                                     (uint32_t) resource_dim);
     }
     if (!result) {
-        (void) ((result = print_attrs(stream, &attrs->common))
+        (void) ((result = print_attrs(stream,
+                                      _anjay_dm_get_internal_attrs_const(
+                                              &attrs->standard.common)))
                 || (result = print_double_attr(stream, ANJAY_ATTR_GT,
-                                               attrs->greater_than))
+                                               attrs->standard.greater_than))
                 || (result = print_double_attr(stream, ANJAY_ATTR_LT,
-                                               attrs->less_than))
+                                               attrs->standard.less_than))
                 || (result = print_double_attr(stream, ANJAY_ATTR_ST,
-                                               attrs->step)));
+                                               attrs->standard.step)));
     }
     return result;
 }
 
 static int print_discovered_object(avs_stream_abstract_t *stream,
                                    const anjay_dm_object_def_t *const *obj,
-                                   const anjay_dm_attributes_t *attrs) {
+                                   const anjay_dm_internal_attrs_t *attrs) {
     int retval = avs_stream_write_f(stream, "</%" PRIu16 ">", (*obj)->oid);
     if (retval) {
         return retval;
@@ -88,7 +104,7 @@ static int print_discovered_object(avs_stream_abstract_t *stream,
 static int print_discovered_instance(avs_stream_abstract_t *stream,
                                      const anjay_dm_object_def_t *const *obj,
                                      anjay_iid_t iid,
-                                     const anjay_dm_attributes_t *attrs) {
+                                     const anjay_dm_internal_attrs_t *attrs) {
     int retval = avs_stream_write_f(stream, "</%" PRIu16 "/%" PRIu16 ">",
                                     (*obj)->oid, iid);
     if (retval) {
@@ -102,7 +118,7 @@ static int print_discovered_resource(avs_stream_abstract_t *stream,
                                      anjay_iid_t iid,
                                      anjay_rid_t rid,
                                      int32_t resource_dim,
-                                     const anjay_dm_resource_attributes_t *attrs) {
+                                     const anjay_dm_internal_res_attrs_t *attrs) {
     int retval =
             avs_stream_write_f(stream, "</%" PRIu16 "/%" PRIu16 "/%" PRIu16 ">",
                                (*obj)->oid, iid, rid);
@@ -119,8 +135,8 @@ static int print_separator(avs_stream_abstract_t *stream) {
 static int read_object_level_attributes(anjay_t *anjay,
                                         const anjay_dm_object_def_t *const *obj,
                                         anjay_ssid_t ssid,
-                                        anjay_dm_attributes_t *out) {
-    *out = ANJAY_DM_ATTRIBS_EMPTY;
+                                        anjay_dm_internal_attrs_t *out) {
+    *out = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
     return _anjay_dm_object_read_default_attrs(anjay, obj, ssid, out, NULL);
 }
 
@@ -129,8 +145,8 @@ read_instance_level_attributes(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                anjay_iid_t iid,
                                anjay_ssid_t ssid,
-                               anjay_dm_attributes_t *out) {
-    *out = ANJAY_DM_ATTRIBS_EMPTY;
+                               anjay_dm_internal_attrs_t *out) {
+    *out = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
     return _anjay_dm_read_combined_instance_attrs(anjay, obj, iid, ssid, out);
 }
 
@@ -174,8 +190,8 @@ static int discover_resource(anjay_t *anjay,
         result = read_resource_dim(anjay, obj, iid, rid, &resource_dim);
     }
 
-    anjay_dm_resource_attributes_t resource_attributes
-            = ANJAY_RES_ATTRIBS_EMPTY;
+    anjay_dm_internal_res_attrs_t resource_attributes
+            = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     if (hint == WITH_RESOURCE_ATTRIBS) {
         result = _anjay_dm_resource_read_attrs(
                 anjay, obj, iid, rid, ssid, &resource_attributes, NULL);
@@ -231,8 +247,9 @@ static int discover_object_instance(anjay_t *anjay,
                                     void *ssid_ptr) {
     int result = 0;
     (void) ((result = print_separator(anjay->comm_stream))
-            || (result = print_discovered_instance(anjay->comm_stream, obj, iid,
-                                                   &ANJAY_DM_ATTRIBS_EMPTY))
+            || (result = print_discovered_instance(
+                    anjay->comm_stream, obj, iid,
+                    &ANJAY_DM_INTERNAL_ATTRS_EMPTY))
             || (result = discover_instance_resources(
                     anjay, obj, iid, *(const anjay_ssid_t *) ssid_ptr,
                     NO_ATTRIBS)));
@@ -242,7 +259,7 @@ static int discover_object_instance(anjay_t *anjay,
 int _anjay_discover_object(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj,
                            anjay_ssid_t ssid) {
-    anjay_dm_attributes_t object_attributes;
+    anjay_dm_internal_attrs_t object_attributes;
     int result = 0;
     (void) ((result = read_object_level_attributes(anjay, obj, ssid,
                                                    &object_attributes))
@@ -259,7 +276,7 @@ int _anjay_discover_instance(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
                              anjay_ssid_t ssid) {
-    anjay_dm_attributes_t instance_attributes;
+    anjay_dm_internal_attrs_t instance_attributes;
     int result = 0;
     (void) ((result = read_instance_level_attributes(anjay, obj, iid, ssid,
                                                      &instance_attributes))
@@ -299,8 +316,9 @@ bootstrap_discover_object_instance(anjay_t *anjay,
     (void) dummy;
     int result = 0;
     (void) ((result = print_separator(anjay->comm_stream))
-            || (result = print_discovered_instance(anjay->comm_stream, obj, iid,
-                                                   &ANJAY_DM_ATTRIBS_EMPTY)));
+            || (result = print_discovered_instance(
+                    anjay->comm_stream, obj, iid,
+                    &ANJAY_DM_INTERNAL_ATTRS_EMPTY)));
     if (result) {
         return result;
     }
@@ -324,7 +342,7 @@ bootstrap_discover_object_instance(anjay_t *anjay,
 int _anjay_bootstrap_discover_object(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj) {
     int result = print_discovered_object(anjay->comm_stream, obj,
-                                         &ANJAY_DM_ATTRIBS_EMPTY);
+                                         &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
     if (result) {
         return result;
     }

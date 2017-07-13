@@ -20,24 +20,14 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-#define _ANJAY_DM_ATTRIBS_EMPTY { \
-        .min_period = ANJAY_ATTRIB_PERIOD_NONE, \
-        .max_period = ANJAY_ATTRIB_PERIOD_NONE \
-    }
-
-#define _ANJAY_RES_ATTRIBS_EMPTY { \
-        .common = _ANJAY_DM_ATTRIBS_EMPTY, \
-        .greater_than = ANJAY_ATTRIB_VALUE_NONE, \
-        .less_than = ANJAY_ATTRIB_VALUE_NONE, \
-        .step = ANJAY_ATTRIB_VALUE_NONE \
-    }
-
 #define ANJAY_ATTR_PMIN "pmin"
 #define ANJAY_ATTR_PMAX "pmax"
 #define ANJAY_ATTR_GT "gt"
 #define ANJAY_ATTR_LT "lt"
 #define ANJAY_ATTR_ST "st"
 #define ANJAY_ATTR_SSID "ssid"
+
+#define ANJAY_CUSTOM_ATTR_CON "con"
 
 typedef struct {
     /** Object whose Instance is being queried. */
@@ -83,7 +73,7 @@ typedef struct {
  */
 int _anjay_dm_effective_attrs(anjay_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
-                              anjay_dm_resource_attributes_t *out);
+                              anjay_dm_internal_res_attrs_t *out);
 
 /**
  * Reads attributes assigned to the Instance (if *out has at least one unset
@@ -97,7 +87,7 @@ int _anjay_dm_read_combined_instance_attrs(
         const anjay_dm_object_def_t *const *obj,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out);
+        anjay_dm_internal_attrs_t *out);
 /**
  * Reads attributes assigned to the Object (if *out has at least one unset
  * attribute) and combines them with *out.
@@ -106,14 +96,14 @@ int _anjay_dm_read_combined_object_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out);
+        anjay_dm_internal_attrs_t *out);
 /**
  * Reads Default Minimum Period and Default Maximum Period (if *out has not
  * set at least one of them) and combines them with *out.
  */
 int _anjay_dm_read_combined_server_attrs(anjay_t *anjay,
                                          anjay_ssid_t ssid,
-                                         anjay_dm_attributes_t *out);
+                                         anjay_dm_internal_attrs_t *out);
 
 VISIBILITY_PRIVATE_HEADER_END
 

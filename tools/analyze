@@ -1,0 +1,98 @@
+#!/bin/bash
+#
+# Copyright 2017 AVSystem <avsystem@avsystem.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+
+. "$ROOT_DIR/tools/utils.sh"
+
+OUTPUT_DIR="$ROOT_DIR/scan-build-result"
+NUM_JOBS="$(nproc)"
+SCAN_BUILD="$(readlink -f "$(which scan-build)")"
+
+print_help() {
+    cat <<EOF >&2
+NAME
+    $0 - Run scan-build analysis tool on the repository.
+
+SYNOPSIS
+    $0 [ OPTIONS... ]
+
+OPTIONS
+    -j, --jobs N
+            - run build in N parallel jobs.
+              Default: $NUM_JOBS
+    -o, --output-dir DIR
+            - save issue report in DIR.
+              Default: $OUTPUT_DIR
+    -s, --scan-build PATH
+            - path to the scan-build executable.
+              Default: $SCAN_BUILD
+    -h, --help
+            - print this message and exit.
+EOF
+}
+
+while [[ "$#" > 0 ]]; do
+    case "$1" in
+        --jobs|-j)         shift; NUM_JOBS="$1"; ;;
+        --output-dir|-o)   shift; OUTPUT_DIR="$(readlink -m "$1")" ;;
+        --scan-build|-s)   shift; SCAN_BUILD="$(readlink -f "$1")" ;;
+        --help|-h|*)
+            print_help
+            exit 0
+            ;;
+    esac
+
+    shift
+done
+
+[[ "$SCAN_BUILD" ]] || die "scan-build not found, use --scan-build"
+
+cat <<EOF
+Using configuration:
+- output dir: $OUTPUT_DIR
+- jobs: $NUM_JOBS
+- scan-build: $SCAN_BUILD
+
+EOF
+
+TMPDIR="$(mktemp -d)"
+atexit "rm -rf '$TMPDIR'"
+
+analyze() {
+    scan-build --status-bugs -o "$OUTPUT_DIR" "$ROOT_DIR/devconfig" \
+        && scan-build --status-bugs -o "$OUTPUT_DIR" make -j"$NUM_JOBS"
+}
+
+
+cd "$TMPDIR"
+if ! analyze; then
+    warn "scan-build found some issues, report: $OUTPUT_DIR"
+
+    # Some browsers (e.g. chromium) have problems starting up when CWD does not
+    # exist. Since $TMPDIR is removed as soon as the script exits, and xdg-open
+    # returns early before the browser even starts, it is possible that CWD
+    # is gone at the point browser starts.
+    # To avoid that problem, we change CWD to something existing before calling
+    # xdg-open.
+    cd "$HOME"
+
+    # open newest index.html
+    xdg-open "file://$(find "$OUTPUT_DIR" -name index.html | xargs ls -t | head -1)"
+fi

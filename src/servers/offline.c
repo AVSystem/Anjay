@@ -38,8 +38,7 @@ static int enter_offline_job(anjay_t *anjay,
         disable_connection(&server->udp_connection);
         _anjay_sched_del(anjay->sched, &server->sched_update_handle);
     }
-    _anjay_sched_del(anjay->sched,
-                     &anjay->servers.reload_sockets_sched_job_handle);
+    _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
     anjay->offline = true;
     return 0;
 }
@@ -58,7 +57,7 @@ int anjay_enter_offline(anjay_t *anjay) {
 
 static int exit_offline_job(anjay_t *anjay, void *dummy) {
     (void) dummy;
-    int result = _anjay_schedule_reload_sockets(anjay);
+    int result = _anjay_schedule_reload_servers(anjay);
     if (result) {
         return result;
     }
