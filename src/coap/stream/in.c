@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "../utils.h"
+#include "../block_utils.h"
 #include "../log.h"
 
 VISIBILITY_SOURCE_BEGIN

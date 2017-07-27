@@ -69,11 +69,14 @@ class CacheTest(test_suite.Lwm2mSingleServerTest,
 
 class MultipleServerCacheTest(test_suite.Lwm2mTest):
     def setUp(self):
-        self.setup_demo_with_servers(num_servers=2,
+        self.setup_demo_with_servers(servers=2,
                                      extra_cmdline_args=['--cache-size', '4096'])
 
         self.servers[0].set_timeout(timeout_s=1)
         self.servers[1].set_timeout(timeout_s=1)
+
+    def tearDown(self):
+        self.teardown_demo_with_servers()
 
     def runTest(self):
         s0_req = Lwm2mRead(ResPath.Device.SerialNumber)

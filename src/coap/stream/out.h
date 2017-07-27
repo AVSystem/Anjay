@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "../utils.h"
+#include "../block_utils.h"
 #include "../msg.h"
 #include "../msg_builder.h"
 #include "../socket.h"

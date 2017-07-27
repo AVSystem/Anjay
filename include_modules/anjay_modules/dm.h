@@ -36,6 +36,19 @@ typedef struct {
     anjay_rid_t rid;
 } anjay_uri_path_t;
 
+static inline bool _anjay_uri_path_equal(const anjay_uri_path_t *left,
+                                         const anjay_uri_path_t *right) {
+    return (left->has_oid
+                    ? (right->has_oid && left->oid == right->oid)
+                    : !right->has_oid)
+            && (left->has_iid
+                    ? (right->has_iid && left->iid == right->iid)
+                    : !right->has_iid)
+            && (left->has_rid
+                    ? (right->has_rid && left->rid == right->rid)
+                    : !right->has_rid);
+}
+
 #define ASSERT_RESOURCE_PATH(uri) \
     do {                          \
         assert((uri).has_oid);    \
@@ -381,6 +394,9 @@ bool _anjay_dm_attributes_full(const anjay_dm_internal_attrs_t *attrs);
 #define ANJAY_DM_RID_ACCESS_CONTROL_OIID 1
 #define ANJAY_DM_RID_ACCESS_CONTROL_ACL 2
 #define ANJAY_DM_RID_ACCESS_CONTROL_OWNER 3
+
+/** NOTE: Returns ANJAY_SSID_BOOTSTRAP if there is no active connection. */
+anjay_ssid_t _anjay_dm_current_ssid(anjay_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

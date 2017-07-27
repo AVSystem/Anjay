@@ -59,6 +59,7 @@ static int handle_custom_attributes(anjay_persistence_context_t *ctx,
     int retval = 0;
     int8_t con = ANJAY_DM_CON_ATTR_DEFAULT;
     if (version >= 2) {
+        (void) attrs;
 #ifdef WITH_CON_ATTR
         con = (int8_t) attrs->custom.data.con;
 #endif // WITH_CON_ATTR

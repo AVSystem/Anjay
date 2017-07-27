@@ -16,14 +16,14 @@
 
 set -e
 
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+. "$(dirname "$0")/utils.sh"
+ROOT_DIR="$(dirname "$(dirname "$(canonicalize "$0")")")"
 
 . "$ROOT_DIR/tools/utils.sh"
 
 OUTPUT_DIR="$ROOT_DIR/scan-build-result"
-NUM_JOBS="$(nproc)"
-SCAN_BUILD="$(readlink -f "$(which scan-build)")"
+NUM_JOBS="$(num_processors)"
+SCAN_BUILD="$(canonicalize "$(which scan-build)")"
 
 print_help() {
     cat <<EOF >&2
@@ -51,8 +51,8 @@ EOF
 while [[ "$#" > 0 ]]; do
     case "$1" in
         --jobs|-j)         shift; NUM_JOBS="$1"; ;;
-        --output-dir|-o)   shift; OUTPUT_DIR="$(readlink -m "$1")" ;;
-        --scan-build|-s)   shift; SCAN_BUILD="$(readlink -f "$1")" ;;
+        --output-dir|-o)   shift; OUTPUT_DIR="$(mkdir -p "$1"; canonicalize "$1")" ;;
+        --scan-build|-s)   shift; SCAN_BUILD="$(canonicalize "$1")" ;;
         --help|-h|*)
             print_help
             exit 0
@@ -76,8 +76,9 @@ TMPDIR="$(mktemp -d)"
 atexit "rm -rf '$TMPDIR'"
 
 analyze() {
-    scan-build --status-bugs -o "$OUTPUT_DIR" "$ROOT_DIR/devconfig" \
-        && scan-build --status-bugs -o "$OUTPUT_DIR" make -j"$NUM_JOBS"
+    "$SCAN_BUILD" --status-bugs -o "$OUTPUT_DIR" \
+        "$ROOT_DIR/devconfig -DSCAN_BUILD_BINARY="$SCAN_BUILD"" \
+        && "$SCAN_BUILD" --status-bugs -o "$OUTPUT_DIR" make -j"$NUM_JOBS"
 }
 
 
@@ -94,5 +95,10 @@ if ! analyze; then
     cd "$HOME"
 
     # open newest index.html
-    xdg-open "file://$(find "$OUTPUT_DIR" -name index.html | xargs ls -t | head -1)"
+    REPORT="file://$(find "$OUTPUT_DIR" -name index.html | xargs ls -t | head -1)"
+    if command -v xdg-open > /dev/null; then
+        open "$REPORT"
+    else
+        xdg-open "$REPORT"
+    fi
 fi

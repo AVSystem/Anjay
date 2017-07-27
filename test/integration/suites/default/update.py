@@ -16,8 +16,16 @@
 
 import socket
 import time
+import unittest
 
 from framework.lwm2m_test import *
+
+try:
+    import dpkt
+
+    _DPKT_AVAILABLE = True
+except ImportError:
+    _DPKT_AVAILABLE = False
 
 
 class UpdateTest(test_suite.Lwm2mSingleServerTest):
@@ -51,7 +59,21 @@ class UpdateTest(test_suite.Lwm2mSingleServerTest):
         self.assertDemoUpdatesRegistration(timeout_s=LIFETIME)
 
 
+@unittest.skipUnless(_DPKT_AVAILABLE and test_suite.Lwm2mTest.dumpcap_available(),
+                     'This test involves parsing PCAP file')
 class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
+    def _read_pcap(self):
+        with open(self.dumpcap_file_path, 'rb') as f:
+            r = dpkt.pcapng.Reader(f)
+            return [dpkt.ethernet.Ethernet(pkt[1]).data for pkt in r.readpkts()]
+
+    def _find_icmp_unreach(self):
+        result = []
+        for pkt in self._read_pcap():
+            if isinstance(pkt, dpkt.ip.IP) and isinstance(pkt.data, dpkt.icmp.ICMP) and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach):
+                result.append(pkt)
+        return result
+
     def runTest(self):
         # close the server socket, so that demo receives Port Unreachable in response
         # to the next packet
@@ -59,9 +81,14 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
         self.serv.socket.close()
 
         self.communicate('send-update')
-        logs = self.read_logs_for(1)
-        # assert that there was exactly one reconnect attempt
-        self.assertEqual(sum(1 for line in logs.splitlines() if 'connected to ' in line), 1)
+
+        for _ in range(100):
+            unreach = self._find_icmp_unreach()
+            if len(unreach) > 0:
+                break
+            time.sleep(0.1)
+        else:
+            self.fail('demo did not attempt to reconnect or ICMP Packet Unreachable not generated')
 
         # start the server again
         self.serv = Lwm2mServer(coap.Server(listen_port))
@@ -90,6 +117,10 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
         #    timeout), which is too little (see 5.), and failed.
         self.assertDemoUpdatesRegistration(timeout_s=5)
 
+    def tearDown(self):
+        super().tearDown()
+        self.assertEqual(len(self._find_icmp_unreach()), 1)
+
 
 class ReconnectTest(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
@@ -114,7 +145,7 @@ class ReconnectTest(test_suite.Lwm2mSingleServerTest):
 
 class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self):
-        self.setup_demo_with_servers(num_servers=0, bootstrap_server=True)
+        self.setup_demo_with_servers(servers=0, bootstrap_server=True)
 
     def runTest(self):
         self.bootstrap_server.set_timeout(timeout_s=1)

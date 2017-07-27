@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import struct
+import typing
 
 
 def indent(text, indent='  '):
@@ -90,13 +91,13 @@ class TLV:
 
     @staticmethod
     def make_instance(instance_id: int,
-                      content: bytes = b''):
+                      content: typing.Iterable['TLV'] = None):
         """
         Creates an Object Instance TLV.
         instance_id -- ID of the Object Instance
         resources   -- serialized list of TLV resources
         """
-        return TLV(TLVType.INSTANCE, instance_id, content)
+        return TLV(TLVType.INSTANCE, instance_id, content or [])
 
     @staticmethod
     def _encode_resource_value(content: int or float or str or bytes):

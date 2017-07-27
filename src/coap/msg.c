@@ -17,9 +17,10 @@
 #include <config.h>
 
 #include "msg.h"
-
-#include "log.h"
 #include "msg_internal.h"
+#include "log.h"
+#include "msg_opt.h"
+
 #include "../utils.h"
 
 #include <string.h>
@@ -143,43 +144,6 @@ static const uint8_t *coap_opt_find_end(const anjay_coap_msg_t *msg) {
         _anjay_coap_opt_next(&optit);
     }
     return (const uint8_t *)optit.curr_opt;
-}
-
-size_t _anjay_coap_msg_count_opts(const anjay_coap_msg_t *msg) {
-    size_t num_opts = 0;
-
-    for (anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
-            !_anjay_coap_opt_end(&optit);
-            _anjay_coap_opt_next(&optit)) {
-        ++num_opts;
-    }
-
-    return num_opts;
-}
-
-int _anjay_coap_msg_find_unique_opt(const anjay_coap_msg_t *msg,
-                                    uint16_t opt_number,
-                                    const anjay_coap_opt_t **out_opt) {
-    *out_opt = NULL;
-
-    for (anjay_coap_opt_iterator_t it = _anjay_coap_opt_begin(msg);
-            !_anjay_coap_opt_end(&it);
-            _anjay_coap_opt_next(&it)) {
-        uint32_t curr_opt_number = _anjay_coap_opt_number(&it);
-
-        if (curr_opt_number == opt_number) {
-            if (*out_opt) {
-                // multiple options with such opt_number
-                return -1;
-            }
-
-            *out_opt = it.curr_opt;
-        } else if (curr_opt_number > opt_number) {
-            break;
-        }
-    }
-
-    return *out_opt ? 0 : -1;
 }
 
 const void *_anjay_coap_msg_payload(const anjay_coap_msg_t *msg) {

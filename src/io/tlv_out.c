@@ -25,6 +25,7 @@
 #include <avsystem/commons/stream.h>
 
 #include "../io.h"
+#include "../coap/content_format.h"
 #include "tlv.h"
 #include "vtable.h"
 

@@ -37,6 +37,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define BLOCK_TRANSFER_RESULT_RETRY 1
 
 /**
+ * @param      opaque_arg        Opaque argument, passed along with the handler.
  * @param      msg               Received message. It is guaranteed to never
  *                               be NULL.
  * @param      sent_msg          Last message sent by the library that was a
@@ -63,7 +64,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *         NOTE: returning a negative value from this handler is NOT equivalent
  *         to aborting the transfer. For that, use @p out_wait_for_next .
  */
-typedef int block_recv_handler_t(const anjay_coap_msg_t *msg,
+typedef int block_recv_handler_t(void *opaque_arg,
+                                 const anjay_coap_msg_t *msg,
                                  const anjay_coap_msg_t *sent_msg,
                                  coap_block_transfer_ctx_t *ctx,
                                  bool *out_wait_for_next,
@@ -82,6 +84,7 @@ struct coap_block_transfer_ctx {
     coap_id_source_t *id_source;
 
     block_recv_handler_t *block_recv_handler;
+    void *block_recv_handler_arg;
 };
 
 coap_block_transfer_ctx_t *
@@ -91,7 +94,8 @@ _anjay_coap_block_transfer_new(uint16_t max_block_size,
                                anjay_coap_socket_t *socket,
                                coap_block_type_t block_type,
                                coap_id_source_t *id_source,
-                               block_recv_handler_t *recv_msg_handler);
+                               block_recv_handler_t *block_recv_handler,
+                               void *block_recv_handler_arg);
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -563,9 +563,8 @@ AVS_UNIT_TEST(bootstrap_delete, bs) {
 }
 
 static int assert_null_notify_perform(anjay_t *anjay,
-                                      anjay_ssid_t origin_ssid,
                                       anjay_notify_queue_t queue) {
-    (void) anjay; (void) origin_ssid;
+    (void) anjay;
     AVS_UNIT_ASSERT_NULL(queue);
     return 0;
 }
@@ -598,9 +597,8 @@ AVS_UNIT_TEST(bootstrap_finish, success) {
 }
 
 static int fail_notify_perform(anjay_t *anjay,
-                               anjay_ssid_t origin_ssid,
                                anjay_notify_queue_t queue) {
-    (void) anjay; (void) origin_ssid; (void) queue;
+    (void) anjay; (void) queue;
     return -1;
 }
 

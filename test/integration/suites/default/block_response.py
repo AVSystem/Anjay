@@ -275,6 +275,34 @@ class BlockResponseToNonBlockRequestRetransmission(BlockResponseTest):
         self.read_blocks(iid=1, block_size=block_opts[0].block_size(), base_seq=1)
 
 
+class BlockResponseOutOfOrder(BlockResponseTest):
+    def runTest(self):
+        # RFC 7959 does not define the expected behaviour when a CoAP client attempt to retrieve a block that is past
+        # the end of the resource. Various CoAP implementations (taken from http://coap.technology/impls.html) behave
+        # differently:
+        #
+        # - Erbium (http://people.inf.ethz.ch/mkovatsc/erbium.php) - 4.02 Bad Option
+        # - Lobaro CoAP (http://www.lobaro.com/portfolio/lobaro-coap/) - 4.02 Bad Option
+        # - MR-CoAP (https://github.com/MR-CoAP/CoAP) - 4.00 Bad Request
+        # - Californium (http://www.eclipse.org/californium/) - success with empty content and Block2.More=false
+        #
+        # Anjay generates the resource contents on the fly, so it cannot even know the size of the resource in advance
+        # and does not accept request for any sequence number other than either the previously retrieved one or the one
+        # after it (retransmission or continuation).
+        #
+        # And it actually sends Reset upon receiving unexpected block number. We are not sure whether it makes any
+        # sense, but here's a test for that.
+
+        response = self.read_bytes(iid=1, seq_num=None, block_size=None)
+        self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
+
+        response = self.read_bytes(iid=1, seq_num=42, block_size=1024)
+        self.assertIsInstance(response, Lwm2mReset)
+
+        # should be able to continue the transfer
+        self.read_blocks(iid=1, block_size=1024, base_seq=1)
+
+
 class BlockResponseUnrelatedRequestsDoNotAbortTransfer(BlockResponseTest):
     def runTest(self):
         # start BLOCK response transfer
@@ -300,7 +328,6 @@ class BlockResponseUnrelatedRequestsDoNotAbortTransfer(BlockResponseTest):
         self.read_blocks(iid=1, block_size=block_opts[0].block_size(), base_seq=1)
 
 
-@unittest.skip("TODO: enable after fixing T1103")
 class BlockResponseUnexpectedServerRequestInTheMiddleOfTransfer(BlockResponseTest):
     def runTest(self):
         response = self.read_bytes(iid=1, seq_num=None, block_size=None)
@@ -317,3 +344,20 @@ class BlockResponseUnexpectedServerRequestInTheMiddleOfTransfer(BlockResponseTes
         # continue reading block-wise response
         self.read_blocks(iid=1, block_size=1024)
 
+
+class BlockResponseUnexpectedBlockServerRequestInTheMiddleOfTransfer(BlockResponseTest):
+    def runTest(self):
+        response = self.read_bytes(iid=1, seq_num=None, block_size=None)
+        self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
+
+        # send an unrelated request during a block-wise transfer
+        # use BLOCK2 Option to not trigger heuristic based on it
+        req = Lwm2mRead('/3/0/0', options=[coap.Option.BLOCK2(seq_num=0, has_more=0, block_size=1024)])
+        self.serv.send(req)
+        res = self.serv.recv()
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE),
+                            res)
+        self.assertEqual(1, len(res.get_options(coap.Option.MAX_AGE)))
+
+        # continue reading block-wise response
+        self.read_blocks(iid=1, block_size=1024)

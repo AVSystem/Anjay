@@ -1,6 +1,7 @@
 # Anjay LwM2M library [<img align="right" height="50px" src="https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSoiMy6rnzARUEdR0OjHmPGxTeiAMLBFlUYwIB9baWYWmuUwTbo">](http://www.avsystem.com/)
 
 [![Build Status](https://travis-ci.org/AVSystem/Anjay.svg?branch=master)](https://travis-ci.org/AVSystem/Anjay)
+[![Coverity Status](https://scan.coverity.com/projects/13206/badge.svg)](https://scan.coverity.com/projects/avsystem-anjay)
 
 ## What is Anjay?
 
@@ -100,14 +101,15 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 -   Optional dependencies (required for tests):
     -   C++ compiler with C++11 support,
     -   [Python 3.5+](https://www.python.org/),
-    -   [pybind11](https://github.com/pybind/pybind11) - included in the repository as a subproject.
+    -   [pybind11](https://github.com/pybind/pybind11) - included in the repository as a subproject,
+    -   [scan-build](https://clang-analyzer.llvm.org/scan-build.html) - for static analysis.
 
 To install everything on Ubuntu 16.04 LTS:
 
 ``` sh
 sudo apt-get install git build-essential cmake libmbedtls-dev wget
 # Optionally for tests:
-sudo apt-get install libpython3-dev libssl-dev python3
+sudo apt-get install libpython3-dev libssl-dev python3 clang
 ```
 
 Or on macOS Sierra with [Homebrew](https://brew.sh/):
@@ -115,7 +117,8 @@ Or on macOS Sierra with [Homebrew](https://brew.sh/):
 ``` sh
 brew install cmake mbedtls wget
 # Optionally for tests:
-brew install python3
+brew install python3 openssl llvm
+pip3 install sphinx sphinx_rtd_theme
 ```
 
 ### Running the demo client
@@ -169,10 +172,17 @@ To start the demo client:
 
 **NOTE**: When establishing a DTLS connection, the URI MUST use "coaps://". In NoSec mode (default), the URI MUST use "<coap://>".
 
-Running tests:
-
+Running tests on Linux:
 ``` sh
 ./devconfig && make check
+```
+
+Running tests on macOS Sierra:
+``` sh
+# If the scan-build script is located somewhere else, then you need to
+# specify a different SCAN_BUILD_BINARY. Below, we are assumming scan-build
+# comes from an llvm package, installed via homebrew.
+./devconfig -DSCAN_BUILD_BINARY=/usr/local/Cellar/llvm/*/bin/scan-build && make check
 ```
 
 ## License

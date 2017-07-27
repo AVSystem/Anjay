@@ -19,6 +19,7 @@
 #include <anjay_modules/dm.h>
 #include <anjay_modules/notify.h>
 
+#include "coap/content_format.h"
 #include "anjay.h"
 #include "observe.h"
 
@@ -26,11 +27,10 @@ VISIBILITY_SOURCE_BEGIN
 
 #ifdef WITH_OBSERVE
 static int observe_notify(anjay_t *anjay,
-                          anjay_ssid_t origin_ssid,
                           anjay_notify_queue_t queue) {
     anjay_observe_key_t observe_key = {
         .connection = {
-            .ssid = origin_ssid,
+            .ssid = _anjay_dm_current_ssid(anjay),
             .type = ANJAY_CONNECTION_WILDCARD
         },
         .format = ANJAY_COAP_FORMAT_NONE
@@ -109,9 +109,7 @@ static int server_modified_notify(anjay_t *anjay,
 }
 
 int _anjay_notify_perform(anjay_t *anjay,
-                          anjay_ssid_t origin_ssid,
                           anjay_notify_queue_t queue) {
-    assert(origin_ssid != ANJAY_SSID_ANY);
     if (!queue) {
         return 0;
     }
@@ -126,22 +124,21 @@ int _anjay_notify_perform(anjay_t *anjay,
             _anjay_update_ret(&ret, server_modified_notify(anjay, it));
         }
     }
-    _anjay_update_ret(&ret, observe_notify(anjay, origin_ssid, queue));
+    _anjay_update_ret(&ret, observe_notify(anjay, queue));
     AVS_LIST(anjay_dm_installed_module_t) module;
     AVS_LIST_FOREACH(module, anjay->dm.modules) {
         if (module->def->notify_callback) {
             _anjay_update_ret(&ret,
-                              module->def->notify_callback(anjay, origin_ssid,
-                                                           queue, module->arg));
+                              module->def->notify_callback(anjay, queue,
+                                                           module->arg));
         }
     }
     return ret;
 }
 
 int _anjay_notify_flush(anjay_t *anjay,
-                        anjay_ssid_t origin_ssid,
                         anjay_notify_queue_t *queue_ptr) {
-    int result = _anjay_notify_perform(anjay, origin_ssid, *queue_ptr);
+    int result = _anjay_notify_perform(anjay, *queue_ptr);
     _anjay_notify_clear_queue(queue_ptr);
     return result;
 }
@@ -319,8 +316,7 @@ void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue) {
 
 static int notify_clb(anjay_t *anjay, void *dummy) {
     (void) dummy;
-    return _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP,
-                               &anjay->scheduled_notify.queue);
+    return _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
 }
 
 static int reschedule_notify(anjay_t *anjay) {

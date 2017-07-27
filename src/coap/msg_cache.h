@@ -21,6 +21,7 @@
 #include <stdint.h>
 
 #include "msg.h"
+#include "tx_params.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -80,7 +81,7 @@ int _anjay_coap_msg_cache_add(coap_msg_cache_t *cache,
                               const char *remote_addr,
                               const char *remote_port,
                               const anjay_coap_msg_t *msg,
-                              const coap_transmission_params_t *tx_params);
+                              const anjay_coap_tx_params_t *tx_params);
 
 /**
  * Looks up @p cache for a message with given @p msg_id and returns it if found.

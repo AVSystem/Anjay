@@ -23,67 +23,89 @@ osx_image: xcode8.2
 services:
   - docker
 
+env:
+  global:
+  # COVERITY_SCAN_TOKEN
+  - secure: "nD0RN+Vc6bzdRHLSUb2flx3Z0ggigeflPpudi1EarjDXthJeW0W6yvEiQMavdBBiOGwkbYn+BAOpPT4RxRUyEgbejBoBbI9cl9Km7C1qhc5tlWEsH3gmAdX1vuwwtpHI3d9lTm03tCKPEd1xzMZ2zpmsFvSFbWUOaKBzzr9BbHoupFshQDIrmGjUReAH00GBWNFebbTImbKAqZGiFJHVIJ/0sgdsGpcr1Yaq36DKWv5/JYALaei/G+p0/sXGWs8HXv8bESoa9+i6Kh5/KSdZORQ6mXj3MrEfAt0KjKAe9Ld0EE6JwySLTFEBplRxj43GT4np8UtOD8XYX3NI5i2icVBf25KUBoDdSB4P8LO5oHxgH+04UWi787KOwa/jifFSGBt3YHGxVVPOj/SuQKqRELcZ4snj9wOWaMmIfVYzH7Ar6hsWAAVyB+j22notZoAuMtkE22z4hrsld8JbWwJyq4PWxQyYZZrq+6BXbFby3muuguavuAaFTr/4lj2BX/6ZLnv5VbUwkd9Qsylddf8Cpz/lnVb8DD1NK4ZfkIH4r6kt4GC7fkTI1lyLpb9sfiHJyf7DF+OsZBn5T6t9x3v9gUkTCMWfiLOcNEjOvb+8GoOtI3Yda8ngzz3Ca0l+bBOV1pcD+2AVKMdSlZk5OG4wc4xGBVQxAUNfdCpVbT8/7vg="
+  # COVERITY_EMAIL
+  - secure: "EZTeRk2ZMKN3O3wye6O3nfCDAheuYwEcg/wODoltYfRo9I9lB0XSy9HBXwwd0/NVa5lQRI1ZvNzE9kfqDMx32brXeBOzP31PNFmQUQ47Fl8eEyJ8PCkUTVs8UWosRcsU0xVSZa6PW6OzV/CrYyPNceCwnJL73d8e1b5oCYIkEc2C4wAG922EqBwPP9r1exbztkU4dGB7u7b+MkLv+ymBz57SAV9AGx7hn8B4c0SjP8gWS5u/yoXfy8Ybfez4iQwN+PI7gkemxdBB0n5QmCj7WEm7iEhI7SWXfifC27DSYhH6qihlvIJWBegB+2CjHUd18Fd3HGrSUORzHqNG3gC11g+lk6zbNXbcuuP4/U475D/EOvQJSGIROrHk0qTQ+G8BGywLuDghtFNwTdK4RoB76ZkSvErXr2GghQQw3IBVzWp+Dz4ZEdiRVMXVBiPa8RuA5DqCnU5iqrcGcsFcsHpH3qJ/fuGa0AxQEKqM3MlEBupMmtHOsQ6s9QDWZUvzEtva1iRKz4fyFYCqaT7rvPkn22WtvdemNLR6kD3evRkSv7Z1SY5ZcgYtVut98hCVYwxm4qrsFESU6QuHFExO4XFcghY4iZaapYpZKxARGWXamGwsoYFhoQkMeILTQJot+4XKFxTwRTbglOJCbEbzRet2OdrXtDLfDDc8RT6ouex2DXM="
+
 matrix:
   include:
-  - os: osx
-    env: DEVCONFIG_FLAGS=--with-asan
+  - stage: test
+    os: osx
+    env: DEVCONFIG_FLAGS="--with-asan --without-analysis"
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=gcc-4.7
          ANJAY_CXX=g++
          PYMBEDTLS_CC=gcc
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=gcc-4.8
          ANJAY_CXX=g++
          PYMBEDTLS_CC=gcc
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=gcc-4.9
          ANJAY_CXX=g++
          PYMBEDTLS_CC=gcc
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=gcc-5
          ANJAY_CXX=g++-5
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=clang-3.5
          ANJAY_CXX=clang++-3.5
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=clang-3.6
          ANJAY_CXX=clang++-3.6
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=clang-3.7
          ANJAY_CXX=clang++-3.7
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=clang-3.8
          ANJAY_CXX=clang++-3.8
-         DEVCONFIG_FLAGS=--with-valgrind
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=ubuntu-16.04
 
-  - os: linux
+  - stage: test
+    os: linux
     env: ANJAY_CC=gcc
          ANJAY_CXX=g++
-         DEVCONFIG_FLAGS=--with-valgrind -DPython_ADDITIONAL_VERSIONS=3.5
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=centos7
+
+  - stage: coverity
+    os: linux
+    env: DOCKER_IMAGE=coverity
+         DEVCONFIG_FLAGS="--without-analysis"
 
 before_script:
   - source travis/prepare.sh

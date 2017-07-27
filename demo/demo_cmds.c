@@ -239,6 +239,69 @@ static void cmd_unregister_object(anjay_demo_t *demo, const char *args_string) {
     demo_log(ERROR, "No such object to unregister: %d", oid);
 }
 
+static int dl_write_next_block(anjay_t *anjay,
+                               const uint8_t *data,
+                               size_t data_size,
+                               const anjay_etag_t *etag,
+                               void *user_data) {
+    (void) anjay;
+    (void) etag;
+
+    FILE *f = (FILE *) user_data;
+    if (fwrite(data, data_size, 1, f) != 1) {
+        demo_log(ERROR, "fwrite() failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+static void dl_finished(anjay_t *anjay,
+                        int result,
+                        void *user_data) {
+    (void) anjay;
+    fclose((FILE *)user_data);
+    demo_log(INFO, "download finished, result == %d", result);
+}
+
+static void cmd_download(anjay_demo_t *demo, const char *args_string) {
+    char url[256];
+    char target_file[256];
+    char psk_identity[256] = "";
+    char psk_key[256] = "";
+
+    if (sscanf(args_string, "%255s %255s %255s %255s", url, target_file,
+               psk_identity, psk_key) < 2) {
+        demo_log(ERROR, "invalid URL or target file in: %s", args_string);
+        return;
+    }
+
+    FILE *f = fopen(target_file, "wb");
+    if (!f) {
+        demo_log(ERROR, "could not open file: %s", target_file);
+        return;
+    }
+
+    avs_net_psk_t psk = {
+        .psk = psk_key,
+        .psk_size = strlen(psk_key),
+        .identity = psk_identity,
+        .identity_size = strlen(psk_identity)
+    };
+    anjay_download_config_t cfg = {
+        .url = url,
+        .on_next_block = dl_write_next_block,
+        .on_download_finished = dl_finished,
+        .user_data = f,
+        .security_info = avs_net_security_info_from_psk(psk)
+    };
+
+    if (anjay_download(demo->anjay, &cfg) == NULL) {
+        demo_log(ERROR, "could not schedule download");
+        fclose(f);
+    }
+}
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -278,6 +341,9 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Executes anjay_notify_* on a specified path"),
     CMD_HANDLER("unregister-object", "oid", cmd_unregister_object,
                 "Unregister an LwM2M Object"),
+    CMD_HANDLER("download", "url target_file [psk_identity psk_key]",
+                cmd_download,
+                "Download a file from given CoAP URL to target_file."),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
 };
 #undef CMD_HANDLER

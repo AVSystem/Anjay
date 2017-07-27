@@ -30,6 +30,12 @@ typedef void *anjay_sched_handle_t;
 
 typedef struct anjay_sched_struct anjay_sched_t;
 
+/**
+ * @param anjay Pointer to the Anjay object, passed to scheduled jobs. Not
+ *              dereferenced by the scheduler object.
+ *
+ * @returns Created scheduler object, or NULL if there is not enough memory.
+ */
 anjay_sched_t *_anjay_sched_new(anjay_t *anjay);
 ssize_t _anjay_sched_run(anjay_sched_t *sched);
 void _anjay_sched_delete(anjay_sched_t **sched_ptr);

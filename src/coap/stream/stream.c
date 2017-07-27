@@ -26,6 +26,7 @@
 #include "../log.h"
 
 #include "../id_source/auto.h"
+#include "../content_format.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -114,21 +115,6 @@ static int get_or_receive_msg(coap_stream_t *stream,
     }
 
     return result;
-}
-
-static inline void
-assert_tx_params_valid(const coap_transmission_params_t *tx_params) {
-    (void) tx_params;
-
-    // ACK_TIMEOUT below 1 second would violate the guidelines of [RFC5405].
-    // -- RFC 7252, 4.8.1
-    assert(tx_params->ack_timeout_ms >= 1000);
-
-    // ACK_RANDOM_FACTOR MUST NOT be decreased below 1.0, and it SHOULD have
-    // a value that is sufficiently different from 1.0 to provide some
-    // protection from synchronization effects.
-    // -- RFC 7252, 4.8.1
-    assert(tx_params->ack_random_factor > 1.0);
 }
 
 static int setup_response(avs_stream_abstract_t *stream_,
@@ -321,7 +307,6 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
 
     stream->in.buffer_size = in_buffer_size;
     stream->in.buffer = in_buffer;
-    assert_tx_params_valid(&_anjay_coap_DEFAULT_TX_PARAMS);
     stream->in.rand_seed = (anjay_rand_seed_t) time(NULL);
 
     stream->out = _anjay_coap_out_init(out_buffer, out_buffer_size);
@@ -342,7 +327,7 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
 
 int _anjay_coap_stream_get_tx_params(
         avs_stream_abstract_t *stream_,
-        coap_transmission_params_t *out_tx_params) {
+        anjay_coap_tx_params_t *out_tx_params) {
     coap_stream_t *stream = (coap_stream_t*) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
     *out_tx_params = *_anjay_coap_socket_get_tx_params(stream->socket);
@@ -351,10 +336,10 @@ int _anjay_coap_stream_get_tx_params(
 
 int _anjay_coap_stream_set_tx_params(
         avs_stream_abstract_t *stream_,
-        const coap_transmission_params_t *tx_params) {
+        const anjay_coap_tx_params_t *tx_params) {
     coap_stream_t *stream = (coap_stream_t*) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
-    assert_tx_params_valid(tx_params);
+    assert(_anjay_coap_tx_params_valid(tx_params, NULL));
     _anjay_coap_socket_set_tx_params(stream->socket, tx_params);
     return 0;
 }
@@ -426,111 +411,18 @@ int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream_,
     return 0;
 }
 
-int _anjay_coap_stream_get_code(avs_stream_abstract_t *stream_,
-                                uint8_t *out_code) {
+int _anjay_coap_stream_get_incoming_msg(avs_stream_abstract_t *stream_,
+                                        const anjay_coap_msg_t **out_msg) {
     coap_stream_t *stream = (coap_stream_t*)stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
-    const anjay_coap_msg_t *msg;
-    int result = get_or_receive_msg(stream, &msg);
+    int result = get_or_receive_msg(stream, out_msg);
     if (result) {
         return result;
     }
 
-    assert(_anjay_coap_msg_is_valid(msg));
-    *out_code = msg->header.code;
+    assert(_anjay_coap_msg_is_valid(*out_msg));
     return 0;
-}
-
-int _anjay_coap_stream_get_msg_type(avs_stream_abstract_t *stream_,
-                                    anjay_coap_msg_type_t *out_msg_type) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
-    assert(stream->vtable == &COAP_STREAM_VTABLE);
-
-    const anjay_coap_msg_t *msg;
-    int result = get_or_receive_msg(stream, &msg);
-    if (result) {
-        return result;
-    }
-
-    assert(_anjay_coap_msg_is_valid(msg));
-    *out_msg_type = _anjay_coap_msg_header_get_type(&msg->header);
-    return 0;
-}
-
-int _anjay_coap_stream_get_option_uint(avs_stream_abstract_t *stream_,
-                                       uint16_t option_number,
-                                       void *out_fmt,
-                                       size_t out_fmt_size) {
-    coap_stream_t *stream = (coap_stream_t*) stream_;
-    assert(stream->vtable == &COAP_STREAM_VTABLE);
-
-    const anjay_coap_msg_t *msg;
-    int result = get_or_receive_msg(stream, &msg);
-    if (result) {
-        return result;
-    }
-
-    assert(_anjay_coap_msg_is_valid(msg));
-
-    const anjay_coap_opt_t *opt;
-    if (_anjay_coap_msg_find_unique_opt(msg, option_number, &opt)) {
-        if (opt) {
-            coap_log(DEBUG, "multiple instances of option %d found",
-                     option_number);
-            return -1;
-        } else {
-            coap_log(TRACE, "option %d not found", option_number);
-            return ANJAY_COAP_OPTION_MISSING;
-        }
-    }
-
-    return _anjay_coap_opt_uint_value(opt, out_fmt, out_fmt_size);
-}
-
-int _anjay_coap_stream_get_option_string_it(avs_stream_abstract_t *stream_,
-                                            uint16_t option_number,
-                                            anjay_coap_opt_iterator_t *it,
-                                            size_t *out_bytes_read,
-                                            char *buffer,
-                                            size_t buffer_size) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
-    assert(stream->vtable == &COAP_STREAM_VTABLE);
-
-    if (!it->msg) {
-        const anjay_coap_msg_t *msg;
-        int result = get_or_receive_msg(stream, &msg);
-        if (result) {
-            return result;
-        }
-
-        anjay_coap_opt_iterator_t begin = _anjay_coap_opt_begin(msg);
-        memcpy(it, &begin, sizeof(*it));
-    } else {
-        _anjay_coap_opt_next(it);
-    }
-
-    for (; !_anjay_coap_opt_end(it); _anjay_coap_opt_next(it)) {
-        if (_anjay_coap_opt_number(it) == option_number) {
-            return _anjay_coap_opt_string_value(it->curr_opt, out_bytes_read,
-                                                buffer, buffer_size);
-        }
-    }
-
-    return 1;
-}
-
-int _anjay_coap_stream_get_content_format(avs_stream_abstract_t *stream,
-                                          uint16_t *out_value) {
-    int result = _anjay_coap_stream_get_option_u16(
-            stream, ANJAY_COAP_OPT_CONTENT_FORMAT, out_value);
-
-    if (result == ANJAY_COAP_OPTION_MISSING) {
-        *out_value = ANJAY_COAP_FORMAT_NONE;
-        return 0;
-    }
-
-    return result;
 }
 
 int _anjay_coap_stream_get_request_identity(avs_stream_abstract_t *stream_,
@@ -556,51 +448,13 @@ int _anjay_coap_stream_get_request_identity(avs_stream_abstract_t *stream_,
     return 0;
 }
 
-static bool is_opt_critical(uint32_t opt_number) {
-    return opt_number % 2;
-}
-
-static bool is_critical_opt_valid(uint8_t msg_code, uint32_t opt_number,
-            anjay_coap_stream_critical_option_validator_t fallback_validator) {
-    switch (opt_number) {
-    case ANJAY_COAP_OPT_BLOCK1:
-        return msg_code == ANJAY_COAP_CODE_PUT
-            || msg_code == ANJAY_COAP_CODE_POST;
-    case ANJAY_COAP_OPT_BLOCK2:
-        return msg_code == ANJAY_COAP_CODE_GET
-            || msg_code == ANJAY_COAP_CODE_PUT
-            || msg_code == ANJAY_COAP_CODE_POST;
-    default:
-        return fallback_validator(msg_code, opt_number);
-    }
-}
-
-int _anjay_coap_stream_validate_critical_options(
+void _anjay_coap_stream_set_block_request_validator(
         avs_stream_abstract_t *stream_,
-        anjay_coap_stream_critical_option_validator_t validator) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+        anjay_coap_block_request_validator_t *validator,
+        void *validator_arg) {
+    coap_stream_t *stream = (coap_stream_t*) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
-    const anjay_coap_msg_t *msg;
-    int result = get_or_receive_msg(stream, &msg);
-    if (result) {
-        return result;
-    }
-
-    anjay_coap_opt_iterator_t it = _anjay_coap_opt_begin(msg);
-
-    while (!_anjay_coap_opt_end(&it)) {
-        if (is_opt_critical(_anjay_coap_opt_number(&it))) {
-            uint32_t opt_number = _anjay_coap_opt_number(&it);
-
-            if (!is_critical_opt_valid(msg->header.code, opt_number, validator)) {
-                coap_log(DEBUG, "warning: invalid critical option in query %s: %u",
-                         ANJAY_COAP_CODE_STRING(msg->header.code), opt_number);
-                result = -1;
-            }
-        }
-        _anjay_coap_opt_next(&it);
-    }
-
-    return result;
+    _anjay_coap_server_set_block_request_relation_validator(
+            get_server(stream), validator, validator_arg);
 }

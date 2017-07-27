@@ -160,6 +160,8 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
         assert(_anjay_sms_router(anjay));
         add_socket_onto_list(tail_ptr, _anjay_sms_poll_socket(anjay));
     }
+
+    _anjay_downloader_get_sockets(&anjay->downloader, tail_ptr);
     return anjay->servers.public_sockets;
 }
 

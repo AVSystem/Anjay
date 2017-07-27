@@ -311,8 +311,8 @@ def pack_block(seq_num: int,
 
 Option.IF_NONE_MATCH   = Option(5)
 
-Option.IF_MATCH        = OptionConstructor(Option, 1, id)
-Option.ETAG            = OptionConstructor(Option, 4, id)
+Option.IF_MATCH        = OptionConstructor(Option, 1, lambda x: x)
+Option.ETAG            = OptionConstructor(Option, 4, lambda x: x)
 
 Option.URI_HOST        = OptionConstructor(StringOption, 3,  lambda string: bytes(string, 'ascii'))
 Option.LOCATION_PATH   = OptionConstructor(StringOption, 8,  lambda string: bytes(string, 'ascii'))

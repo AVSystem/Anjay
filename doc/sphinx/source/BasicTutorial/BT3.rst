@@ -87,7 +87,7 @@ on every iteration.
 
 But that would introduce unnecessary waste of CPU time, wouldn't it? Right,
 and this issue is addressed by ``anjay_sched_calculate_wait_time_ms()``
-which returns amount of milliseconds before the next scheduled job. In the
+which returns number of milliseconds before the next scheduled job. In the
 next example we will use this value as a ``poll()`` timeout.
 
 Enough talking, time to write some code.
@@ -167,7 +167,7 @@ So, it could be written like this:
             }
 
             // Finally run the scheduler (ignoring its return value, which
-            // is the amount of tasks executed)
+            // is the number of tasks executed)
             (void) anjay_sched_run(anjay);
         }
         return 0;

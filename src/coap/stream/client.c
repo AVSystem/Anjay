@@ -23,6 +23,7 @@
 #include <anjay_modules/time.h>
 
 #include "../log.h"
+#include "../tx_params.h"
 #include "../block/request.h"
 #include "stream.h"
 
@@ -112,7 +113,7 @@ req_sent_process_response(coap_client_t *client,
             // request ACKed, response in a separate message
             client->state = COAP_CLIENT_STATE_HAS_SEPARATE_ACK;
             return CHECK_OK;
-        } else if (!_anjay_coap_common_token_matches(
+        } else if (!_anjay_coap_msg_token_matches(
                 response, &client->last_request_identity)) {
             coap_log(DEBUG, "invalid response: token mismatch");
             return CHECK_INVALID_RESPONSE;
@@ -138,8 +139,8 @@ process_separate_response(coap_client_t *client,
 
     switch (type) {
     case ANJAY_COAP_MSG_CONFIRMABLE:
-        if (!_anjay_coap_common_token_matches(response,
-                                              &client->last_request_identity)) {
+        if (!_anjay_coap_msg_token_matches(response,
+                                           &client->last_request_identity)) {
             coap_log(DEBUG, "invalid response: token mismatch");
             return CHECK_UNEXPECTED_CONFIRMABLE;
         }
@@ -243,9 +244,8 @@ static int accept_response_with_timeout(coap_client_t *client,
             coap_log(TRACE, "Separate response received; sending ACK");
 
             const anjay_coap_msg_t *msg = _anjay_coap_in_get_message(in);
-            _anjay_coap_common_send_empty(socket,
-                                          ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
-                                          _anjay_coap_msg_get_id(msg));
+            _anjay_coap_send_empty(socket, ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+                                   _anjay_coap_msg_get_id(msg));
         }
         return 0;
 
@@ -263,9 +263,9 @@ static int send_and_update_retry_state(anjay_coap_socket_t *socket,
                                        coap_input_buffer_t *in,
                                        coap_retry_state_t *retry_state) {
     int result = _anjay_coap_socket_send(socket, msg);
-    _anjay_coap_common_update_retry_state(
-            retry_state, _anjay_coap_socket_get_tx_params(socket),
-            &in->rand_seed);
+    _anjay_coap_update_retry_state(retry_state,
+                                   _anjay_coap_socket_get_tx_params(socket),
+                                   &in->rand_seed);
     return result;
 }
 

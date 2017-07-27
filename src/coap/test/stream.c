@@ -27,7 +27,9 @@
 #include <anjay_test/utils.h>
 
 #include "servers.h"
+#include "../msg_opt.h"
 #include "../stream.h"
+#include "../content_format.h"
 
 #define TEST_PORT_UDP_ECHO 4322
 #define TEST_PORT_UDP_ACK 4323
@@ -60,68 +62,71 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, DATA, sizeof(DATA)));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
 
+    const anjay_coap_msg_t *msg;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_incoming_msg(stream, &msg));
+
     char buffer[sizeof(DATA) + 16] = "";
     size_t bytes_read;
     char message_finished;
     uint16_t format;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_uint(
-            stream, ANJAY_COAP_OPT_CONTENT_FORMAT, &format, sizeof(format)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_get_option_uint(
+            msg, ANJAY_COAP_OPT_CONTENT_FORMAT, &format, sizeof(format)));
     AVS_UNIT_ASSERT_EQUAL(format, details.format);
 
     anjay_coap_opt_iterator_t optit = ANJAY_COAP_OPT_ITERATOR_EMPTY;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_string_it(
-            stream, ANJAY_COAP_OPT_URI_PATH, &optit, &bytes_read, buffer,
-            sizeof(buffer)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_get_option_string_it(
+            msg, ANJAY_COAP_OPT_URI_PATH, &optit, &bytes_read,
+            buffer, sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_path, 0))->c_str) + 1);
     AVS_UNIT_ASSERT_EQUAL_STRING(
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_path, 0))->c_str);
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_string_it(
-            stream, ANJAY_COAP_OPT_URI_PATH, &optit, &bytes_read, buffer,
-            sizeof(buffer)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_get_option_string_it(
+            msg, ANJAY_COAP_OPT_URI_PATH, &optit, &bytes_read,
+            buffer, sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_path, 1))->c_str) + 1);
     AVS_UNIT_ASSERT_EQUAL_STRING(
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_path, 1))->c_str);
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_string_it(
-            stream, ANJAY_COAP_OPT_URI_PATH, &optit, &bytes_read, buffer,
-            sizeof(buffer)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_get_option_string_it(
+            msg, ANJAY_COAP_OPT_URI_PATH, &optit, &bytes_read,
+            buffer, sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_path, 2))->c_str) + 1);
     AVS_UNIT_ASSERT_EQUAL_STRING(
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_path, 2))->c_str);
 
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_stream_get_option_string_it(
-                                  stream, ANJAY_COAP_OPT_URI_PATH, &optit,
+    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_get_option_string_it(
+                                  msg, ANJAY_COAP_OPT_URI_PATH, &optit,
                                   &bytes_read, buffer, sizeof(buffer)),
                           ANJAY_COAP_OPTION_MISSING);
 
     memset(&optit, 0, sizeof(optit));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_string_it(
-            stream, ANJAY_COAP_OPT_URI_QUERY, &optit, &bytes_read, buffer,
-            sizeof(buffer)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_get_option_string_it(
+            msg, ANJAY_COAP_OPT_URI_QUERY, &optit, &bytes_read,
+            buffer, sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_query, 0))->c_str) + 1);
     AVS_UNIT_ASSERT_EQUAL_STRING(
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_query, 0))->c_str);
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_option_string_it(
-            stream, ANJAY_COAP_OPT_URI_QUERY, &optit, &bytes_read, buffer,
-            sizeof(buffer)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_get_option_string_it(
+            msg, ANJAY_COAP_OPT_URI_QUERY, &optit, &bytes_read,
+            buffer, sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_query, 1))->c_str) + 1);
     AVS_UNIT_ASSERT_EQUAL_STRING(
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_query, 1))->c_str);
 
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_stream_get_option_string_it(
-                                  stream, ANJAY_COAP_OPT_URI_QUERY, &optit,
+    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_get_option_string_it(
+                                  msg, ANJAY_COAP_OPT_URI_QUERY, &optit,
                                   &bytes_read, buffer, sizeof(buffer)),
                           ANJAY_COAP_OPTION_MISSING);
 
@@ -284,9 +289,9 @@ AVS_UNIT_TEST(coap_stream, read_some) {
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, DATA, sizeof(DATA) - 1));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
 
-    uint8_t code;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_code(stream, &code));
-    AVS_UNIT_ASSERT_EQUAL(details.msg_code, code);
+    const anjay_coap_msg_t *msg;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_incoming_msg(stream, &msg));
+    AVS_UNIT_ASSERT_EQUAL(details.msg_code, msg->header.code);
 
     char message_finished;
     size_t bytes_read;
@@ -557,9 +562,9 @@ static void mock_receive_request(test_data_t *test,
                                  size_t request_size) {
     avs_unit_mocksock_input(test->mock_socket, request, request_size);
 
-    anjay_coap_msg_type_t type;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_stream_get_msg_type(test->stream, &type));
+    const anjay_coap_msg_t *msg;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_incoming_msg(test->stream,
+                                                                &msg));
 }
 
 AVS_UNIT_TEST(coap_stream, response_empty) {

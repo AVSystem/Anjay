@@ -21,6 +21,8 @@
 
 #include <avsystem/commons/unit/test.h>
 
+#include "../content_format.h"
+
 #define RANDOM_MSGID ((uint16_t)4)
 #define RANDOM_MSGID_NBO ((uint16_t){htons(RANDOM_MSGID)})
 #define RANDOM_MSGID_INIT { ((const uint8_t*)&RANDOM_MSGID_NBO)[0], \

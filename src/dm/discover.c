@@ -134,20 +134,20 @@ static int print_separator(avs_stream_abstract_t *stream) {
 
 static int read_object_level_attributes(anjay_t *anjay,
                                         const anjay_dm_object_def_t *const *obj,
-                                        anjay_ssid_t ssid,
                                         anjay_dm_internal_attrs_t *out) {
     *out = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
-    return _anjay_dm_object_read_default_attrs(anjay, obj, ssid, out, NULL);
+    return _anjay_dm_object_read_default_attrs(
+            anjay, obj, _anjay_dm_current_ssid(anjay), out, NULL);
 }
 
 static int
 read_instance_level_attributes(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                anjay_iid_t iid,
-                               anjay_ssid_t ssid,
                                anjay_dm_internal_attrs_t *out) {
     *out = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
-    return _anjay_dm_read_combined_instance_attrs(anjay, obj, iid, ssid, out);
+    return _anjay_dm_read_combined_instance_attrs(
+            anjay, obj, iid, _anjay_dm_current_ssid(anjay), out);
 }
 
 static int read_resource_dim(anjay_t *anjay,
@@ -181,7 +181,6 @@ static int discover_resource(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
-                             anjay_ssid_t ssid,
                              discover_resource_hint_t hint) {
     int32_t resource_dim = -1;
     int result = 0;
@@ -194,14 +193,15 @@ static int discover_resource(anjay_t *anjay,
             = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     if (hint == WITH_RESOURCE_ATTRIBS) {
         result = _anjay_dm_resource_read_attrs(
-                anjay, obj, iid, rid, ssid, &resource_attributes, NULL);
+                anjay, obj, iid, rid, _anjay_dm_current_ssid(anjay),
+                &resource_attributes, NULL);
     } else if (hint == WITH_INHERITED_ATTRIBS) {
         anjay_dm_attrs_query_details_t details =
                 (anjay_dm_attrs_query_details_t) {
                     .obj = obj,
                     .iid = iid,
                     .rid = rid,
-                    .ssid = ssid,
+                    .ssid = _anjay_dm_current_ssid(anjay),
                     /**
                      * Spec says we care about inherited attributes from Object
                      * and Instance levels only.
@@ -221,7 +221,6 @@ static int discover_resource(anjay_t *anjay,
 static int discover_instance_resources(anjay_t *anjay,
                                        const anjay_dm_object_def_t *const *obj,
                                        anjay_iid_t iid,
-                                       anjay_ssid_t ssid,
                                        discover_resource_hint_t hint) {
     int result = 0;
     for (size_t i = 0; i < (*obj)->supported_rids.count; ++i) {
@@ -234,8 +233,7 @@ static int discover_instance_resources(anjay_t *anjay,
         result = print_separator(anjay->comm_stream);
         if (!result) {
             result = discover_resource(anjay, obj, iid,
-                                       (*obj)->supported_rids.rids[i],
-                                       ssid, hint);
+                                       (*obj)->supported_rids.rids[i], hint);
         }
     }
     return result;
@@ -244,24 +242,23 @@ static int discover_instance_resources(anjay_t *anjay,
 static int discover_object_instance(anjay_t *anjay,
                                     const anjay_dm_object_def_t *const *obj,
                                     anjay_iid_t iid,
-                                    void *ssid_ptr) {
+                                    void *dummy) {
+    (void) dummy;
     int result = 0;
     (void) ((result = print_separator(anjay->comm_stream))
             || (result = print_discovered_instance(
                     anjay->comm_stream, obj, iid,
                     &ANJAY_DM_INTERNAL_ATTRS_EMPTY))
-            || (result = discover_instance_resources(
-                    anjay, obj, iid, *(const anjay_ssid_t *) ssid_ptr,
-                    NO_ATTRIBS)));
+            || (result = discover_instance_resources(anjay, obj, iid,
+                                                     NO_ATTRIBS)));
     return result;
 }
 
 int _anjay_discover_object(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj,
-                           anjay_ssid_t ssid) {
+                           const anjay_dm_object_def_t *const *obj) {
     anjay_dm_internal_attrs_t object_attributes;
     int result = 0;
-    (void) ((result = read_object_level_attributes(anjay, obj, ssid,
+    (void) ((result = read_object_level_attributes(anjay, obj,
                                                    &object_attributes))
             || (result = print_discovered_object(anjay->comm_stream, obj,
                                                  &object_attributes)));
@@ -269,33 +266,29 @@ int _anjay_discover_object(anjay_t *anjay,
         return result;
     }
     return _anjay_dm_foreach_instance(anjay, obj, discover_object_instance,
-                                      &ssid);
+                                      NULL);
 }
 
 int _anjay_discover_instance(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
-                             anjay_iid_t iid,
-                             anjay_ssid_t ssid) {
+                             anjay_iid_t iid) {
     anjay_dm_internal_attrs_t instance_attributes;
     int result = 0;
-    (void) ((result = read_instance_level_attributes(anjay, obj, iid, ssid,
+    (void) ((result = read_instance_level_attributes(anjay, obj, iid,
                                                      &instance_attributes))
             || (result = print_discovered_instance(anjay->comm_stream, obj, iid,
                                                    &instance_attributes)));
     if (result) {
         return result;
     }
-    return discover_instance_resources(anjay, obj, iid, ssid,
-                                       WITH_RESOURCE_ATTRIBS);
+    return discover_instance_resources(anjay, obj, iid, WITH_RESOURCE_ATTRIBS);
 }
 
 int _anjay_discover_resource(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
-                             anjay_rid_t rid,
-                             anjay_ssid_t ssid) {
-    return discover_resource(anjay, obj, iid, rid, ssid,
-                             WITH_INHERITED_ATTRIBS);
+                             anjay_rid_t rid) {
+    return discover_resource(anjay, obj, iid, rid, WITH_INHERITED_ATTRIBS);
 }
 
 #ifdef WITH_BOOTSTRAP

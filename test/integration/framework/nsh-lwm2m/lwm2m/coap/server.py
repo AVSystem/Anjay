@@ -116,6 +116,9 @@ class Server(object):
         except socket.error:
             return None
 
+    def security_mode(self):
+        return 'nosec'
+
 
 class DtlsServer(Server):
     def __init__(self, psk_identity, psk_key, listen_port=0, debug=False):
@@ -168,3 +171,6 @@ class DtlsServer(Server):
 
     def get_listen_port(self) -> int:
         return self.server_socket.getsockname()[1]
+
+    def security_mode(self):
+        return 'psk'

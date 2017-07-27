@@ -25,6 +25,12 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+typedef enum {
+    ANJAY_CONNECTION_UDP,
+    ANJAY_CONNECTION_SMS,
+    ANJAY_CONNECTION_WILDCARD
+} anjay_connection_type_t;
+
 typedef struct {
     anjay_oid_t oid;
     AVS_LIST(anjay_iid_t) instances;
@@ -38,6 +44,7 @@ typedef struct {
 
 typedef struct {
     AVS_LIST(const anjay_string_t) endpoint_path;
+    anjay_connection_type_t conn_type;
     struct timespec expire_time;
     anjay_update_parameters_t last_update_params;
 } anjay_registration_info_t;
@@ -130,11 +137,10 @@ typedef struct {
     AVS_LIST(avs_net_abstract_socket_t *const) public_sockets;
 } anjay_servers_t;
 
-typedef enum {
-    ANJAY_CONNECTION_UDP,
-    ANJAY_CONNECTION_SMS,
-    ANJAY_CONNECTION_WILDCARD
-} anjay_connection_type_t;
+typedef struct {
+    anjay_ssid_t ssid;
+    anjay_connection_type_t type;
+} anjay_connection_key_t;
 
 typedef struct {
     anjay_active_server_info_t *server;
@@ -191,6 +197,11 @@ _anjay_server_cached_binding_mode(anjay_active_server_info_t *server);
 
 anjay_server_connection_mode_t
 _anjay_connection_current_mode(anjay_connection_ref_t ref);
+
+bool _anjay_connection_is_online(anjay_connection_ref_t ref);
+
+int _anjay_server_setup_registration_connection(
+        anjay_active_server_info_t *server);
 
 avs_net_abstract_socket_t *
 _anjay_connection_get_prepared_socket(anjay_t *anjay,

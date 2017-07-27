@@ -27,6 +27,7 @@
 #include <avsystem/commons/stream.h>
 
 #include "../io.h"
+#include "../coap/content_format.h"
 #include "base64_out.h"
 #include "vtable.h"
 

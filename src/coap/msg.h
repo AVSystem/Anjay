@@ -23,43 +23,12 @@
 #include <avsystem/commons/defs.h>
 
 #include "opt.h"
-#include "utils.h"
+#include "parse_utils.h"
+#include "msg_identity.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #define ANJAY_COAP_MSG_MIN_SIZE ((unsigned) sizeof(anjay_coap_msg_header_t))
-#define ANJAY_COAP_MSG_BLOCK_MIN_SIZE (1 << 4)
-#define ANJAY_COAP_MSG_BLOCK_MAX_SIZE (1 << 10)
-#define ANJAY_COAP_MAX_TOKEN_LENGTH 8
-
-// Technically, CoAP options may contain up to 2 bytes of extended option number
-// and up to 2 bytes of extended length. This should never be required for BLOCK
-// options. Why? 2-byte extended values are required for interpreting values
-// >= 269. BLOCK uses 23/27 option numbers and allows up to 3 content bytes.
-// Therefore correct BLOCK options will use at most 1 byte for extended number
-// (since wrapping is not allowed) and will never use extended length field.
-#define ANJAY_COAP_OPT_BLOCK_MAX_SIZE (1    /* option header   */ \
-                                       + 1  /* extended number */ \
-                                       + 3) /* block option value */
-
-#define ANJAY_COAP_OPT_INT_MAX_SIZE (1 /* option header */ \
-                                     + 2 /* extended number */ \
-                                     + 2 /* extended length */ \
-                                     + sizeof(uint64_t))
-
-typedef struct {
-    char bytes[ANJAY_COAP_MAX_TOKEN_LENGTH];
-} anjay_coap_token_t;
-
-#define ANJAY_COAP_TOKEN_EMPTY ((anjay_coap_token_t){{0}})
-
-typedef struct anjay_coap_msg_identity {
-    uint16_t msg_id;
-    anjay_coap_token_t token;
-    size_t token_size;
-} anjay_coap_msg_identity_t;
-
-#define ANJAY_COAP_MSG_IDENTITY_EMPTY ((anjay_coap_msg_identity_t){0,{{0}},0})
 
 typedef enum anjay_coap_msg_type {
     ANJAY_COAP_MSG_CONFIRMABLE,
@@ -205,7 +174,7 @@ AVS_STATIC_ASSERT(offsetof(anjay_coap_msg_t, header) == 4,
 AVS_STATIC_ASSERT(offsetof(anjay_coap_msg_t, content) == 8,
                   no_padding_before_content_field_of_msg_t);
 
-typedef struct anjay_coap_opt_iterator {
+typedef struct {
     const anjay_coap_msg_t *const msg;
     const anjay_coap_opt_t *curr_opt;
     uint32_t prev_opt_number;
@@ -251,6 +220,29 @@ size_t _anjay_coap_msg_get_token(const anjay_coap_msg_t *msg,
                                  anjay_coap_token_t *out_token);
 
 /**
+ * @param msg Message to retrieve identity from.
+ * @returns @ref anjay_coap_msg_identity_t object with message ID and token.
+ */
+static inline anjay_coap_msg_identity_t
+_anjay_coap_msg_get_identity(const anjay_coap_msg_t *msg) {
+    anjay_coap_msg_identity_t id;
+    memset(&id, 0, sizeof(id));
+    id.msg_id = _anjay_coap_msg_get_id(msg);
+    id.token_size = _anjay_coap_msg_get_token(msg, &id.token);
+    return id;
+}
+
+static inline
+bool _anjay_coap_msg_token_matches(const anjay_coap_msg_t *msg,
+                                   const anjay_coap_msg_identity_t *id) {
+    anjay_coap_token_t msg_token;
+    size_t msg_token_size = _anjay_coap_msg_get_token(msg, &msg_token);
+
+    return _anjay_coap_token_equal(&msg_token, msg_token_size,
+                                   &id->token, id->token_size);
+}
+
+/**
  * @param msg Message to iterate over.
  * @returns An CoAP Option iterator object.
  */
@@ -279,35 +271,6 @@ bool _anjay_coap_opt_end(const anjay_coap_opt_iterator_t *optit);
  * @returns Number of the option currently pointed to by @p optit
  */
 uint32_t _anjay_coap_opt_number(const anjay_coap_opt_iterator_t *optit);
-
-/**
- * Returns the number of CoAP Options in the message. Note: this iterates over
- * all the options (O(n) complexty).
- *
- * Note: this function is NOT SAFE to use on invalid messages.
- *
- * @param msg Message to operate on.
- * @returns Number of CoAP options in the @p msg.
- */
-size_t _anjay_coap_msg_count_opts(const anjay_coap_msg_t *msg);
-
-/**
- * Note: this function is NOT SAFE to use on invalid messages.
- *
- * @param      msg        Message to operate on.
- * @param      opt_number Number of the option to find.
- * @param[out] out_opt    Returned option. Set to the first option with given
- *                        number present in @p msg or to NULL if such option was
- *                        not found.
- *
- * @returns 0 if the option was found and is unique,
- *          -1 if the option does not exist or multiple options with given
- *          @p opt_number were found. Inspect @p out_opt to determine which
- *          one was the case.
- */
-int _anjay_coap_msg_find_unique_opt(const anjay_coap_msg_t *msg,
-                                    uint16_t opt_number,
-                                    const anjay_coap_opt_t **out_opt);
 
 /**
  * Note: this function is NOT SAFE to use on invalid messages.

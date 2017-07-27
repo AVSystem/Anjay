@@ -15,11 +15,11 @@
 # limitations under the License.
 
 import inspect
-import io
 import os
 import re
+import shutil
 import subprocess
-import sys
+import threading
 import time
 import unittest
 
@@ -185,8 +185,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def set_config(self, config):
         self.config = config
 
-    def log_filename(self):
-        return os.path.join(self.suite_name(), self.test_name() + '.log')
+    def log_filename(self, extension='.log'):
+        return os.path.join(self.suite_name(), self.test_name() + extension)
 
     def test_name(self):
         return self.__class__.__name__
@@ -201,22 +201,30 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         name = name.lstrip('/')
         return name
 
-    def make_demo_args(self,
-                       servers,
-                       security_mode='nosec'):
+    def make_demo_args(self, servers):
         """
         Helper method for easy generation of demo executable arguments.
         """
+        security_modes = set(serv.security_mode() for serv in servers)
+
+        self.assertLessEqual(len(security_modes), 1, 'Attempted to mix security modes')
+
+        security_mode = next(iter(security_modes), 'nosec')
+        if security_mode == 'nosec':
+            protocol = 'coap'
+        else:
+            protocol = 'coaps'
+
         args = ['--security-mode', security_mode]
 
         for serv in servers:
-            args += ['--server-uri', 'coap://127.0.0.1:%d' % (serv.get_listen_port(),)]
+            args += ['--server-uri', '%s://127.0.0.1:%d' % (protocol, serv.get_listen_port(),)]
 
         return args
 
-    def logs_path(self, log_type, log_root=None):
+    def logs_path(self, log_type, log_root=None, **kwargs):
         dir_path = os.path.join(log_root or self.config.logs_path, log_type.lower())
-        log_path = os.path.join(dir_path, self.log_filename())
+        log_path = os.path.join(dir_path, self.log_filename(**kwargs))
         ensure_dir(os.path.dirname(log_path))
         return log_path
 
@@ -230,16 +238,17 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         return valgrind_list
 
-    def start_demo(self, cmdline_args, timeout_s=30):
+    def _start_demo(self, cmdline_args, timeout_s=30):
         """
         Starts the demo executable with given CMDLINE_ARGS.
         """
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
         demo_args = self._get_valgrind_args() + [demo_executable] + cmdline_args
 
+        import shlex
         console_log_path = self.logs_path('console')
         console = open(console_log_path, 'wb')
-        console.write((' '.join(demo_args) + '\n\n').encode('utf-8'))
+        console.write((' '.join(map(shlex.quote, demo_args)) + '\n\n').encode('utf-8'))
         console.flush()
 
         import subprocess
@@ -259,57 +268,183 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 timeout_s=timeout_s) is None:
                 raise self.failureException('demo executable did not start in time')
 
+    DUMPCAP_COMMAND = 'dumpcap'
+
+    @staticmethod
+    def dumpcap_available():
+        return shutil.which(Lwm2mTest.DUMPCAP_COMMAND) is not None
+
+    def _start_dumpcap(self, udp_ports):
+        self.dumpcap_process = None
+        if not self.dumpcap_available():
+            return
+
+        udp_ports = list(udp_ports)
+
+        def _filter_expr():
+            """
+            Generates a pcap_compile()-compatible filter program so that dumpcap will only capture packets that are
+            actually relevant to the current tests.
+
+            Captured packets will include:
+            - UDP datagrams sent or received on any of the udp_ports
+            - ICMP Port Unreachable messages generated in response to a UDP datagram sent or received on any of the
+              udp_ports
+            """
+            if len(udp_ports) == 0:
+                return ''
+
+            # filter expression for "source or destination UDP port is any of udp_ports"
+            udp_filter = ' or '.join('(udp port %s)' % (port,) for port in udp_ports)
+
+            # below is the generation of filter expression for the ICMP messages
+            #
+            # note that icmp[N] syntax accesses Nth byte since the beginning of ICMP header
+            # and icmp[N:M] syntax accesses M-byte value starting at icmp[N]
+            # - icmp[0] - ICMP types; 3 ~ Destination Unreachable
+            # - icmp[1] - ICMP code; for Destination Unreachable: 3 ~ Destination port unreachable
+            # - icmp[8] is the first byte of the IP header of copy of the packet that caused the error
+            #   - icmp[17] is the IP protocol number; 17 ~ UDP
+            #   - IPv4 header is normally 20 bytes long (we don't anticipate options), so UDP header starts at icmp[28]
+            #   - icmp[28:2] is the source UDP port of the original packet
+            #   - icmp[30:2] is the destination UDP port of the original packet
+            icmp_pu_filter = ' or '.join(
+                '(icmp[28:2] = 0x%04x) or (icmp[30:2] = 0x%04x)' % (port, port) for port in udp_ports)
+            return '%s or ((icmp[0] = 3) and (icmp[1] = 3) and (icmp[17] = 17) and (%s))' % (udp_filter, icmp_pu_filter)
+
+        self.dumpcap_file_path = self.logs_path('pcap', extension='.pcapng')
+        self.dumpcap_process = subprocess.Popen(
+            [self.DUMPCAP_COMMAND, '-w', self.dumpcap_file_path, '-i', 'lo', '-f', _filter_expr()],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            bufsize=1)
+
+        # It takes a little while (around 0.5-0.6 seconds on a normal PC) for dumpcap to initialize and actually start
+        # capturing packets. We want all relevant packets captured, so we need to wait until dumpcap reports it's ready.
+        # Also, if we haven't done this, there would be a possibility that _terminate_dumpcap() would be called before
+        # full initialization of dumpcap - it would then essentially ignore the SIGTERM and our test would hang waiting
+        # for dumpcap's termination that would never come.
+        while True:
+            line = self.dumpcap_process.stderr.readline()
+            if line.startswith(b'File:'):
+                break
+
+        def _reader_func():
+            try:
+                while True:
+                    data = self.dumpcap_process.stderr.read()
+                    if len(data) == 0:  # EOF
+                        break
+            except:
+                pass
+
+        self.dumpcap_stderr_reader_thread = threading.Thread(target=_reader_func)
+        self.dumpcap_stderr_reader_thread.start()
+
     def setup_demo_with_servers(self,
-                                num_servers=1,
+                                servers=1,
+                                num_servers_passed=None,
                                 bootstrap_server=False,
                                 extra_cmdline_args=[],
                                 auto_register=True,
                                 version=DEMO_LWM2M_VERSION,
                                 lifetime=None):
         """
-        Starts the demo process with NUM_SERVERS regular pre-configured servers,
-        accessible through self.servers array.
+        Starts the demo process and creates any required auxiliary objects (such as Lwm2mServer objects) or processes.
 
-        If BOOTSTRAP_SERVER is true, self.bootstrap_server is initialized to
-        an Lwm2mServer instance and the demo is executed with --bootstrap
-        option.
+        :param servers:
+        Lwm2mServer objects that shall be accessible to the test - they will be accessible through the self.servers
+        list. May be either an iterable of Lwm2mServer objects, or an integer - in the latter case, an appropriate
+        number of Lwm2mServer objects will be created.
 
-        Any EXTRA_CMDLINE_ARGS are appended to the demo command line.
+        :param num_servers_passed:
+        If passed, it shall be an integer that controls how many of the servers configured through the servers argument,
+        will be passed to demo's command line. All of them are passed by default. This option may be useful if some
+        servers are meant to be later configured e.g. via the Bootstrap Interface.
 
-        If AUTO_REGISTER is True, the function waits until demo registers to
-        all initialized regular servers.
+        :param bootstrap_server:
+        Boolean value that controls whether to create a Bootstrap Server Lwm2mServer object. If true, it will be stored
+        in self.bootstrap_server. The bootstrap server is not included in anything related to the servers and
+        num_servers_passed arguments.
+
+        :param extra_cmdline_args:
+        List of command line arguments to pass to the demo process in addition to the ones generated from other
+        arguments.
+
+        :param auto_register:
+        If true (default), self.assertDemoRegisters() will be called for each server provisioned via the command line.
+
+        :param version:
+        Passed down to self.assertDemoRegisters() if auto_register is true
+
+        :param lifetime:
+        Passed down to self.assertDemoRegisters() if auto_register is true
+
+        :return: None
         """
         demo_args = []
 
-        self.servers = [Lwm2mServer() for _ in range(num_servers)]
+        if isinstance(servers, int):
+            self.servers = [Lwm2mServer() for _ in range(servers)]
+        else:
+            self.servers = list(servers)
+
+        servers_passed = self.servers
+        if num_servers_passed is not None:
+            servers_passed = servers_passed[:num_servers_passed]
 
         if bootstrap_server:
             self.bootstrap_server = Lwm2mServer()
             demo_args += ['--bootstrap']
-            servers = [self.bootstrap_server] + self.servers
+            all_servers = [self.bootstrap_server] + self.servers
+            all_servers_passed = [self.bootstrap_server] + servers_passed
         else:
-            servers = self.servers
+            all_servers = self.servers
+            all_servers_passed = servers_passed
 
-        demo_args += self.make_demo_args(servers)
+        self._start_dumpcap(server.get_listen_port() for server in all_servers)
+
+        demo_args += self.make_demo_args(all_servers_passed)
         demo_args += extra_cmdline_args
 
-        self.start_demo(demo_args)
+        self._start_demo(demo_args)
 
         if auto_register:
-            for serv in self.servers:
+            for serv in servers_passed:
                 self.assertDemoRegisters(serv, version=version, lifetime=lifetime)
 
     def teardown_demo_with_servers(self,
                                    auto_deregister=True,
                                    shutdown_timeout_s=5.0,
-                                   *args, **kwargs):
+                                   *args,
+                                   **kwargs):
         """
-        Attempts to gracefully shut down the demo. If that doesn't work, demo
-        is terminated forcefully. All servers from self.servers, as well as
-        self.bootstrap_server are closed if they exist.
+        Shuts down the demo process, either by:
+        - closing its standard input ("Ctrl+D" on its command line)
+        - sending SIGTERM to it
+        - sending SIGKILL to it
+        Each of the above methods is tried one after another.
 
-        If AUTO_DEREGISTER is True, the function ensures that demo correctly
-        de-registers from all servers in self.servers list.
+        :param auto_deregister:
+        If true (default), self.assertDemoDeregisters() is called before shutting down for each server in the
+        self.servers list (unless overridden by the deregister_servers argument).
+
+        :param shutdown_timeout_s:
+        Number of seconds to wait after each attempted method of shutting down the demo process before moving to the
+        next one (close input -> SIGTERM -> SIGKILL).
+
+        :param deregister_servers:
+        If auto_deregister is true, specifies the list of servers to call self.assertDemoDeregisters() on, overriding
+        the default self.servers.
+
+        :param args:
+        Any other positional arguments to this function are passed down to self.assertDemoDeregisters().
+
+        :param kwargs:
+        Any other keyword arguments to this function are passed down to self.assertDemoDeregisters().
+
+        :return: None
         """
         if auto_deregister and not 'deregister_servers' in kwargs:
             kwargs = kwargs.copy()
@@ -317,12 +452,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         try:
             self.request_demo_shutdown(*args, **kwargs)
         finally:
-            self.terminate_demo(timeout_s=shutdown_timeout_s)
+            self._terminate_demo(timeout_s=shutdown_timeout_s)
             for serv in self.servers:
                 serv.close()
 
             if self.bootstrap_server:
                 self.bootstrap_server.close()
+
+            self._terminate_dumpcap()
 
     def seek_demo_log_to_end(self):
         self.demo_process.log_file.seek(os.fstat(self.demo_process.log_file.fileno()).st_size)
@@ -355,7 +492,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             out += read_with_timeout(self.demo_process.log_file, partial_timeout)
         return out.decode(errors='replace')
 
-    def _terminate_demo(self, demo, timeout_s):
+    def _terminate_demo_impl(self, demo, timeout_s):
         cleanup_actions = [
             (timeout_s, lambda _: None),  # check if the demo already stopped
             (timeout_s, lambda demo: demo.terminate()),
@@ -372,19 +509,35 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 break
         return -1
 
-    def terminate_demo(self, timeout_s=5.0):
+    def _terminate_demo(self, timeout_s=5.0):
         if self.demo_process is None:
             return
 
         exc = sys.exc_info()
         try:
-            return_value = self._terminate_demo(self.demo_process, timeout_s)
+            return_value = self._terminate_demo_impl(self.demo_process, timeout_s)
             self.assertEqual(return_value, 0, 'demo terminated with nonzero exit code')
         except:
             if not exc[1]: raise
         finally:
             self.demo_process.log_file.close()
             self.demo_process.log_file_write.close()
+
+    def _terminate_dumpcap(self):
+        if self.dumpcap_process is None:
+            return
+
+        # wait until all packets are written
+        last_size = -1
+        size = 0
+        while size != last_size:
+            time.sleep(0.5)
+            last_size = size
+            size = os.stat(self.dumpcap_file_path).st_size
+
+        self.dumpcap_process.terminate()
+        self.dumpcap_process.wait()
+        self.dumpcap_stderr_reader_thread.join()
 
     def request_demo_shutdown(self, deregister_servers=[], *args, **kwargs):
         """
@@ -428,7 +581,7 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         if extra_cmdline_args is not None:
             extra_args += extra_cmdline_args
 
-        self.setup_demo_with_servers(num_servers=1,
+        self.setup_demo_with_servers(servers=1,
                                      extra_cmdline_args=extra_args,
                                      auto_register=auto_register,
                                      lifetime=lifetime)

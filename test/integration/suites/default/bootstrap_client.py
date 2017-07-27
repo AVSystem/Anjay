@@ -20,26 +20,13 @@ from framework.lwm2m.tlv import TLV
 from framework.lwm2m_test import *
 
 
-class BootstrapClientTest(test_suite.Lwm2mTest):
+class BootstrapClientTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self):
-        self.bootstrap_server = Lwm2mServer()
-        self.serv = Lwm2mServer()
-
-        demo_args = (self.make_demo_args([self.bootstrap_server])
-                     + ['--bootstrap',
-                        '--bootstrap-holdoff', '3',
-                        '--bootstrap-timeout', '3'])
-        self.start_demo(demo_args)
-
-    def tearDown(self):
-        try:
-            self.request_demo_shutdown()
-            self.assertDemoDeregisters(server=self.serv)
-        finally:
-            self.bootstrap_server.close()
-            self.serv.close()
-
-            self.terminate_demo()
+        self.setup_demo_with_servers(servers=1,
+                                     num_servers_passed=0,
+                                     bootstrap_server=True,
+                                     extra_cmdline_args=['--bootstrap-holdoff', '3',
+                                                         '--bootstrap-timeout', '3'])
 
     def runTest(self):
         # for the first 3 seconds, the client should wait for Server Initiated Bootstrap
@@ -115,27 +102,12 @@ class BootstrapClientTest(test_suite.Lwm2mTest):
             print(self.bootstrap_server.recv(timeout_s=1))
 
 
-class ClientBootstrapNotSentAfterDisableWithinHoldoffTest(test_suite.Lwm2mTest):
+class ClientBootstrapNotSentAfterDisableWithinHoldoffTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self):
-        self.bootstrap_server = Lwm2mServer()
-        self.serv = Lwm2mServer()
-
-        demo_args = (self.make_demo_args([self.bootstrap_server, self.serv])
-                     + ['--bootstrap',
-                        '--bootstrap-holdoff', '3',
-                        '--bootstrap-timeout', '3'])
-        self.start_demo(demo_args)
-        self.assertDemoRegisters(self.serv)
-
-    def tearDown(self):
-        try:
-            self.request_demo_shutdown()
-            self.assertDemoDeregisters(server=self.serv)
-        finally:
-            self.bootstrap_server.close()
-            self.serv.close()
-
-            self.terminate_demo()
+        self.setup_demo_with_servers(servers=1,
+                                     bootstrap_server=True,
+                                     extra_cmdline_args=['--bootstrap-holdoff', '3',
+                                                         '--bootstrap-timeout', '3'])
 
     def runTest(self):
         # set Disable Timeout to 5
@@ -159,19 +131,11 @@ class ClientBootstrapNotSentAfterDisableWithinHoldoffTest(test_suite.Lwm2mTest):
 
 class ClientBootstrapBacksOffAfterErrorResponse(test_suite.Lwm2mTest):
     def setUp(self):
-        self.bootstrap_server = Lwm2mServer()
-
-        demo_args = (self.make_demo_args([self.bootstrap_server])
-                     + ['--bootstrap'])
-        self.start_demo(demo_args)
+        self.setup_demo_with_servers(servers=0,
+                                     bootstrap_server=True)
 
     def tearDown(self):
-        try:
-            self.request_demo_shutdown()
-        finally:
-            self.bootstrap_server.close()
-
-            self.terminate_demo()
+        self.teardown_demo_with_servers()
 
     def runTest(self):
         req = self.bootstrap_server.recv()
@@ -188,19 +152,11 @@ class ClientBootstrapBacksOffAfterErrorResponse(test_suite.Lwm2mTest):
 
 class ClientBootstrapReconnect(test_suite.Lwm2mTest):
     def setUp(self):
-        self.bootstrap_server = Lwm2mServer()
-
-        demo_args = (self.make_demo_args([self.bootstrap_server])
-                     + ['--bootstrap'])
-        self.start_demo(demo_args)
+        self.setup_demo_with_servers(servers=0,
+                                     bootstrap_server=True)
 
     def tearDown(self):
-        try:
-            self.request_demo_shutdown()
-        finally:
-            self.bootstrap_server.close()
-
-            self.terminate_demo()
+        self.teardown_demo_with_servers()
 
     def runTest(self):
         req = self.bootstrap_server.recv()
@@ -217,8 +173,11 @@ class ClientBootstrapReconnect(test_suite.Lwm2mTest):
 
 class BootstrapNonwritableResources(test_suite.Lwm2mTest):
     def setUp(self):
-        self.setup_demo_with_servers(num_servers=0,
+        self.setup_demo_with_servers(servers=0,
                                      bootstrap_server=True)
+
+    def tearDown(self):
+        self.teardown_demo_with_servers()
 
     def runTest(self):
         pkt = self.bootstrap_server.recv()
@@ -241,8 +200,11 @@ class BootstrapNonwritableResources(test_suite.Lwm2mTest):
 
 class MultipleBootstrapSecurityInstancesNotAllowed(test_suite.Lwm2mTest):
     def setUp(self):
-        self.setup_demo_with_servers(num_servers=0,
+        self.setup_demo_with_servers(servers=0,
                                      bootstrap_server=True)
+
+    def tearDown(self):
+        self.teardown_demo_with_servers()
 
     def runTest(self):
         pkt = self.bootstrap_server.recv()

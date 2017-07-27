@@ -20,7 +20,7 @@
 #include <anjay/core.h>
 
 #include "msg.h"
-#include "utils.h"
+#include "tx_params.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -75,17 +75,46 @@ int _anjay_coap_socket_get_recv_timeout(anjay_coap_socket_t *sock);
 void _anjay_coap_socket_set_recv_timeout(anjay_coap_socket_t *sock,
                                          int timeout_ms);
 
-const coap_transmission_params_t *
+const anjay_coap_tx_params_t *
 _anjay_coap_socket_get_tx_params(anjay_coap_socket_t *sock);
 void
 _anjay_coap_socket_set_tx_params(anjay_coap_socket_t *sock,
-                                 const coap_transmission_params_t *tx_params);
+                                 const anjay_coap_tx_params_t *tx_params);
 
 avs_net_abstract_socket_t *
 _anjay_coap_socket_get_backend(anjay_coap_socket_t *sock);
 
 void _anjay_coap_socket_set_backend(anjay_coap_socket_t *sock,
                                     avs_net_abstract_socket_t *backend);
+
+/**
+ * Auxiliary functions for sending simple messages.
+ * @{
+ */
+
+/**
+ * Sends an Empty message with given values of @p msg_type and @p msg_id.
+ */
+int _anjay_coap_send_empty(anjay_coap_socket_t *socket,
+                           anjay_coap_msg_type_t msg_type,
+                           uint16_t msg_id);
+
+/**
+ * Responds with error specified as @p error_code to the message @p msg.
+ */
+void _anjay_coap_send_error(anjay_coap_socket_t *socket,
+                            const anjay_coap_msg_t *msg,
+                            uint8_t error_code);
+
+/**
+ * Responds with a Service Unavailable messages, with Max-Age option set to
+ * @p retry_after_ms converted to seconds.
+ */
+void _anjay_coap_send_service_unavailable(anjay_coap_socket_t *socket,
+                                          const anjay_coap_msg_t *msg,
+                                          int32_t retry_after_ms);
+
+/** @} */
 
 VISIBILITY_PRIVATE_HEADER_END
 

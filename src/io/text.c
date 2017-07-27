@@ -28,6 +28,7 @@
 
 #include <anjay/core.h>
 
+#include "../coap/content_format.h"
 #include "../utils.h"
 #include "base64_out.h"
 #include "vtable.h"

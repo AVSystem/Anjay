@@ -47,15 +47,13 @@ typedef AVS_LIST(anjay_notify_queue_object_entry_t) anjay_notify_queue_t;
 
 /**
  * Performs all the actions necessary due to all the changes in the data model
- * specified by the <c>queue</c>. <c>origin_ssid</c> specifies the SSID of the
- * server that performed them.
+ * specified by the <c>queue</c>.
  *
- * If the changes are spurious and don't originate from any server, it is
- * equivalent to change performed by the Bootstrap Server, so
- * <c>ANJAY_SSID_BOOTSTRAP</c> shall be passed.
+ * Note that sending Observe notifications and updating the Access Control
+ * Object require knowing which server (if any) performed the changes.
+ * @ref _anjay_dm_current_ssid will be called to determine it.
  */
 int _anjay_notify_perform(anjay_t *anjay,
-                          anjay_ssid_t origin_ssid,
                           anjay_notify_queue_t queue);
 
 /**
@@ -63,7 +61,6 @@ int _anjay_notify_perform(anjay_t *anjay,
  * afterwards (regardless of success or failure).
  */
 int _anjay_notify_flush(anjay_t *anjay,
-                        anjay_ssid_t origin_ssid,
                         anjay_notify_queue_t *queue_ptr);
 
 int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
@@ -94,7 +91,6 @@ int _anjay_notify_instance_created(anjay_t *anjay,
                                    anjay_iid_t iid);
 
 typedef int anjay_notify_callback_t(anjay_t *anjay,
-                                    anjay_ssid_t origin_ssid,
                                     anjay_notify_queue_t queue,
                                     void *data);
 

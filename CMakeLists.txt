@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.3.2" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.3.3" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -66,6 +66,7 @@ option(WITH_DEMO "Compile DEMO applications" ON)
 option(WITH_LIBRARY_SHARED "Compile Anjay as shared library" ON)
 
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
+option(WITH_BLOCK_DOWNLOAD "Enable support for CoAP(S) downloads" ON)
 option(WITH_BLOCK_RECEIVE "Enable support for receiving CoAP BLOCK transfers" ON)
 option(WITH_BLOCK_SEND "Enable support for sending data in CoAP BLOCK mode" ON)
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
@@ -82,10 +83,10 @@ option(WITH_MESSAGE_CACHE "Enable support for message caching to detect and auto
 
 option(WITH_AVS_LOG "Enable logging support" ON)
 
+cmake_dependent_option(AVS_LOG_WITH_TRACE "Enable TRACE level logging" OFF WITH_AVS_LOG OFF)
+cmake_dependent_option(WITH_INTERNAL_LOGS "Enable logging from inside AVSystem Commons libraries" ON WITH_AVS_LOG OFF)
+cmake_dependent_option(WITH_INTERNAL_TRACE "Enable TRACE-level logs inside AVSystem Commons libraries" ON AVS_LOG_WITH_TRACE OFF)
 
-if(WITH_AVS_LOG)
-    option(AVS_LOG_WITH_TRACE "Enable TRACE level logging" OFF)
-endif()
 
 # -fvisibility, #pragma GCC visibility
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c
@@ -137,6 +138,7 @@ set(CORE_SOURCES
     src/coap/msg.c
     src/coap/msg_info.c
     src/coap/msg_builder.c
+    src/coap/msg_opt.c
     src/coap/block_builder.c
     src/coap/opt.c
     src/coap/socket.c
@@ -148,7 +150,8 @@ set(CORE_SOURCES
     src/coap/stream/out.c
     src/coap/stream/server.c
     src/coap/stream/stream.c
-    src/coap/utils.c
+    src/coap/block_utils.c
+    src/coap/tx_params.c
     src/interface/register.c
     src/io/base64_out.c
     src/io/dynamic.c
@@ -177,6 +180,9 @@ set(CORE_SOURCES
     src/utils.c)
 if(WITH_ACCESS_CONTROL)
     set(CORE_SOURCES ${CORE_SOURCES} src/access_control.c)
+endif()
+if(WITH_BLOCK_DOWNLOAD)
+    set(CORE_SOURCES ${CORE_SOURCES} src/downloader.c)
 endif()
 if(WITH_BLOCK_SEND)
     set(CORE_SOURCES ${CORE_SOURCES}
@@ -217,6 +223,7 @@ set(CORE_PRIVATE_HEADERS
     src/coap/msg_builder.h
     src/coap/msg_info.h
     src/coap/msg_internal.h
+    src/coap/msg_opt.h
     src/coap/opt.h
     src/coap/socket.h
     src/coap/stream.h
@@ -226,7 +233,9 @@ set(CORE_PRIVATE_HEADERS
     src/coap/stream/out.h
     src/coap/stream/server.h
     src/coap/stream/stream.h
-    src/coap/utils.h
+    src/coap/parse_utils.h
+    src/coap/block_utils.h
+    src/coap/tx_params.h
     src/dm.h
     src/dm/attributes.h
     src/dm/discover.h
@@ -279,8 +288,6 @@ set(TEST_SOURCES
     src/coap/test/block_response.c
     src/interface/test/bootstrap_mock.h
     src/io/test/bigdata.h
-    src/test/mock_coap_stream.h
-    src/test/mock_coap_stream_impl.h
     src/test/observe_mock.h
     test/src/coap/stream.c
     test/src/coap/socket.c
@@ -667,7 +674,7 @@ option(WITH_STATIC_ANALYSIS "Perform static analysis of the codebase on `make ch
 if(WITH_STATIC_ANALYSIS)
     find_program(SCAN_BUILD_BINARY scan-build)
     if(NOT SCAN_BUILD_BINARY)
-        message(WARNING "scan-build not found; specify path with -DSCAN_BUILD_BINARY or disable static analysis with -DWITH_STATIC_ANALYSIS=OFF")
+        message(FATAL_ERROR "scan-build not found; specify path with -DSCAN_BUILD_BINARY or disable static analysis with -DWITH_STATIC_ANALYSIS=OFF")
     else()
         add_custom_target(analyze
                           COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/analyze"

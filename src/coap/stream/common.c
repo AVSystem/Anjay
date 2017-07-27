@@ -22,6 +22,7 @@
 
 #include "common.h"
 #include "../log.h"
+#include "../msg_opt.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -55,32 +56,6 @@ static int add_observe_option(anjay_coap_msg_info_t *info,
     }
 }
 
-int _anjay_coap_common_get_block_info(const anjay_coap_msg_t *msg,
-                                      coap_block_type_t type,
-                                      coap_block_info_t *out_info) {
-    assert(msg);
-    assert(out_info);
-    uint16_t opt_number = type == COAP_BLOCK1
-            ? ANJAY_COAP_OPT_BLOCK1
-            : ANJAY_COAP_OPT_BLOCK2;
-    const anjay_coap_opt_t *opt;
-    memset(out_info, 0, sizeof(*out_info));
-    if (_anjay_coap_msg_find_unique_opt(msg, opt_number, &opt)) {
-        if (opt) {
-            int num = opt_number == ANJAY_COAP_OPT_BLOCK1 ? 1 : 2;
-            coap_log(ERROR, "multiple BLOCK%d options found", num);
-            return -1;
-        }
-        return 0;
-    }
-    out_info->type = type;
-    out_info->valid = !_anjay_coap_opt_block_seq_number(opt, &out_info->seq_num)
-            && !_anjay_coap_opt_block_has_more(opt, &out_info->has_more)
-            && !_anjay_coap_opt_block_size(opt, &out_info->size);
-
-    return out_info->valid ? 0 : -1;
-}
-
 int _anjay_coap_common_fill_msg_info(anjay_coap_msg_info_t *info,
                                      const anjay_msg_details_t *details,
                                      const anjay_coap_msg_identity_t *identity,
@@ -109,90 +84,6 @@ int _anjay_coap_common_fill_msg_info(anjay_coap_msg_info_t *info,
     }
 
     return _anjay_coap_msg_info_opt_block(info, block_info);
-}
-
-bool _anjay_coap_common_token_matches(const anjay_coap_msg_t *msg,
-                                      const anjay_coap_msg_identity_t *id) {
-    anjay_coap_token_t msg_token;
-    size_t msg_token_size = _anjay_coap_msg_get_token(msg, &msg_token);
-
-    return _anjay_coap_common_tokens_equal(&msg_token, msg_token_size,
-                                           &id->token, id->token_size);
-}
-
-int _anjay_coap_common_send_empty(anjay_coap_socket_t *socket,
-                                  anjay_coap_msg_type_t msg_type,
-                                  uint16_t msg_id) {
-    anjay_coap_msg_info_t info = _anjay_coap_msg_info_init();
-
-    info.type = msg_type;
-    info.code = ANJAY_COAP_CODE_EMPTY;
-    info.identity.msg_id = msg_id;
-
-    union {
-        uint8_t buffer[offsetof(anjay_coap_msg_t, content)];
-        anjay_coap_msg_t force_align_;
-    } aligned_buffer;
-    const anjay_coap_msg_t *msg = _anjay_coap_msg_build_without_payload(
-            _anjay_coap_ensure_aligned_buffer(&aligned_buffer),
-            sizeof(aligned_buffer), &info);
-    assert(msg);
-
-    return _anjay_coap_socket_send(socket, msg);
-}
-
-static void send_response(anjay_coap_socket_t *socket,
-                          const anjay_coap_msg_t *msg,
-                          uint8_t code,
-                          const uint32_t *max_age) {
-    anjay_coap_msg_info_t info = _anjay_coap_msg_info_init();
-
-    info.type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT;
-    info.code = code;
-    info.identity.msg_id = _anjay_coap_msg_get_id(msg);
-    info.identity.token_size = _anjay_coap_msg_get_token(msg,
-                                                         &info.identity.token);
-
-    if (max_age && _anjay_coap_msg_info_opt_u32(&info, ANJAY_COAP_OPT_MAX_AGE,
-                                                *max_age)) {
-        coap_log(WARNING, "unable to add Max-Age option to response");
-    }
-
-    union {
-        uint8_t buffer[offsetof(anjay_coap_msg_t, content)
-                       + ANJAY_COAP_MAX_TOKEN_LENGTH
-                       + ANJAY_COAP_OPT_INT_MAX_SIZE];
-        anjay_coap_msg_t force_align_;
-    } aligned_buffer;
-    const anjay_coap_msg_t *error = _anjay_coap_msg_build_without_payload(
-            _anjay_coap_ensure_aligned_buffer(&aligned_buffer),
-            sizeof(aligned_buffer), &info);
-    assert(error);
-
-    if (_anjay_coap_socket_send(socket, error)) {
-        coap_log(WARNING, "failed to send error message");
-    }
-
-    _anjay_coap_msg_info_reset(&info);
-}
-
-void _anjay_coap_common_send_error(anjay_coap_socket_t *socket,
-                                   const anjay_coap_msg_t *msg,
-                                   uint8_t error_code) {
-    send_response(socket, msg, error_code, NULL);
-}
-
-void _anjay_coap_common_send_service_unavailable(anjay_coap_socket_t *socket,
-                                                 const anjay_coap_msg_t *msg,
-                                                 int32_t retry_after_ms) {
-    uint32_t ms_to_retry_after =
-        retry_after_ms >= 0 ? (uint32_t)retry_after_ms : 0;
-
-    // round up to nearest full second
-    uint32_t s_to_retry_after = (ms_to_retry_after + 999) / 1000;
-
-    send_response(socket, msg, ANJAY_COAP_CODE_SERVICE_UNAVAILABLE,
-                  &s_to_retry_after);
 }
 
 int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
@@ -251,14 +142,14 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
             if (!error_code) {
                 if (_anjay_coap_msg_header_get_type(&msg->header)
                         == ANJAY_COAP_MSG_CONFIRMABLE) {
-                    _anjay_coap_common_send_empty(socket, ANJAY_COAP_MSG_RESET,
-                                                  _anjay_coap_msg_get_id(msg));
+                    _anjay_coap_send_empty(socket, ANJAY_COAP_MSG_RESET,
+                                           _anjay_coap_msg_get_id(msg));
                 }
             } else if (error_code == ANJAY_COAP_CODE_SERVICE_UNAVAILABLE) {
-                _anjay_coap_common_send_service_unavailable(
-                        socket, msg, *inout_timeout_ms);
+                _anjay_coap_send_service_unavailable(socket, msg,
+                                                     *inout_timeout_ms);
             } else {
-                _anjay_coap_common_send_error(socket, msg, error_code);
+                _anjay_coap_send_error(socket, msg, error_code);
             }
         }
     }
@@ -271,19 +162,4 @@ exit:
 
     assert(result <= 0);
     return result;
-}
-
-void _anjay_coap_common_update_retry_state(
-        coap_retry_state_t *retry_state,
-        const coap_transmission_params_t *tx_params,
-        anjay_rand_seed_t *rand_seed) {
-    ++retry_state->retry_count;
-    if (retry_state->retry_count == 1) {
-        uint32_t delta = (uint32_t) (tx_params->ack_timeout_ms *
-                (tx_params->ack_random_factor - 1.0));
-        retry_state->recv_timeout_ms = tx_params->ack_timeout_ms +
-                (int32_t) (_anjay_rand32(rand_seed) % delta);
-    } else {
-        retry_state->recv_timeout_ms *= 2;
-    }
 }

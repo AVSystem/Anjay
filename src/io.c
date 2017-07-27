@@ -27,6 +27,7 @@
 
 #include "io.h"
 #include "io/vtable.h"
+#include "coap/content_format.h"
 
 VISIBILITY_SOURCE_BEGIN
 

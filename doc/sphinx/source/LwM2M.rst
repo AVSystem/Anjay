@@ -265,19 +265,12 @@ defined in the LwM2M specification:
   - **Maximum Period** (``pmax``) - if set, notifications will *always* be sent
     at least once every ``pmax`` seconds, even if the value did not change.
 
-  - **Greater Than** (``gt``) - applicable only to numeric Resources - if set,
-    notifications will only be sent when the numerical value starts to be
-    greater than the specified threshold. When the value changes further, but
-    stays above the threshold, notifications will not be sent; for next
-    notification to be sent, the value needs to drop below the threshold and
-    raise above it again.
-
-  - **Less Than** (``lt``) - applicable only to numeric Resources - if set,
-    notifications will only be sent when the numerical value starts to be less
-    than the specified threshold. When the value changes further, but stays
-    below the threshold, notifications will not be sent; for next notification
-    to be sent, the value needs to raise above the threshold and drop below it
-    again.
+  - **Greater Than** (``gt``) and **Less Than** (``lt``) - applicable only to
+    numeric Resources - if set, notifications will only be sent when the value
+    changes from below to above or from above to below the specified threshold.
+    Contrary to what the names of these Attributes might suggest, there is no
+    semantic difference between the two - both behave as equivalent
+    bi-directional thresholds.
 
   - **Step** (``st``) - applicable only to numeric Resources - if set,
     notifications will only be sent if the numerical value is different from the
@@ -292,11 +285,11 @@ defined in the LwM2M specification:
     requirements for ``gt``, ``lt`` and ``st`` are met, a notification will
     never be sent more often than once every ``pmin`` seconds.
 
-  - Requirements for either ``gt`` or ``lt`` **and** ``st`` need to be met at
-    the same time if they are set at the same time. For example, if both ``gt``
-    and ``st`` are set, a notification will only be sent when the new value
-    raises above ``gt`` **and** at some point the value differed by at least
-    ``st`` from the previously sent one.
+  - Requirements for just at least one of ``gt``, ``lt`` or ``st`` need to be
+    met if they are set at the same time. For example, if the new value differs
+    by at least ``st`` from the previously sent one, it does not need to cross
+    either of the ``lt``/``gt`` thresholds - the ``st`` condition alone is
+    enough to trigger sending notification.
 
 Interfaces
 ----------

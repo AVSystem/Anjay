@@ -23,6 +23,7 @@
 #include <avsystem/commons/stream.h>
 
 #include "../io.h"
+#include "../coap/content_format.h"
 #include "vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -303,9 +304,11 @@ _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
 int _anjay_input_dynamic_create(anjay_input_ctx_t **out,
                                 avs_stream_abstract_t **stream_ptr,
                                 bool autoclose) {
+    const anjay_coap_msg_t *msg;
     uint16_t format;
-    int result = _anjay_coap_stream_get_content_format(*stream_ptr, &format);
-    if (result) {
+    int result;
+    if ((result = _anjay_coap_stream_get_incoming_msg(*stream_ptr, &msg))
+            || (result = _anjay_coap_msg_get_content_format(msg, &format))) {
         return result;
     }
     switch (_anjay_translate_legacy_content_format(format)) {

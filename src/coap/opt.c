@@ -24,6 +24,8 @@
 
 #include "log.h"
 #include "msg_internal.h"
+#include "parse_utils.h"
+#include "block_utils.h"
 
 VISIBILITY_SOURCE_BEGIN
 

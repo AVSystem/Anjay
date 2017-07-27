@@ -19,8 +19,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
-#include "utils.h"
+#include <stddef.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -42,6 +41,27 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define ANJAY_COAP_OPT_PROXY_URI 35
 #define ANJAY_COAP_OPT_PROXY_SCHEME 39
 #define ANJAY_COAP_OPT_SIZE1 60
+
+// Technically, CoAP options may contain up to 2 bytes of extended option number
+// and up to 2 bytes of extended length. This should never be required for BLOCK
+// options. Why? 2-byte extended values are required for interpreting values
+// >= 269. BLOCK uses 23/27 option numbers and allows up to 3 content bytes.
+// Therefore correct BLOCK options will use at most 1 byte for extended number
+// (since wrapping is not allowed) and will never use extended length field.
+#define ANJAY_COAP_OPT_BLOCK_MAX_SIZE (1    /* option header   */ \
+                                       + 1  /* extended number */ \
+                                       + 3) /* block option value */
+
+#define ANJAY_COAP_OPT_INT_MAX_SIZE (1 /* option header */ \
+                                     + 2 /* extended number */ \
+                                     + 2 /* extended length */ \
+                                     + sizeof(uint64_t))
+
+// ETag option has number 4, which means it will never use "extended number"
+// format. Since the maximum allowed option size is 8, it won't ever use the
+// "extended length" either.
+#define ANJAY_COAP_OPT_ETAG_MAX_SIZE (1 /* option header */ \
+                                      + 8) /* max ETag length */
 
 typedef struct anjay_coap_opt {
     /**

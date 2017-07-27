@@ -153,8 +153,9 @@ static void reset(anjay_t *anjay,
 }
 
 static bool is_supported_protocol(const char *protocol) {
-    return !strncasecmp(protocol, "http", 4)
-           || !strncasecmp(protocol, "https", 5);
+    return !strncasecmp(protocol, "http://", 7)
+           || !strncasecmp(protocol, "https://", 8)
+           || !strncasecmp(protocol, "coap://", 7);
 }
 
 void firmware_update_set_package_path(anjay_t *anjay,
@@ -200,6 +201,7 @@ static int fw_read(anjay_t *anjay,
             return ANJAY_ERR_INTERNAL;
         }
         static const int32_t supported_protocols[] = {
+            0, /* CoAP */
             2, /* HTTP 1.1 */
             3, /* HTTPS 1.1 */
         };
@@ -479,6 +481,23 @@ static fw_update_result_t result_from_wget_code(wget_result_t result) {
     }
 }
 
+static void preprocess_firmware(anjay_t *anjay,
+                                fw_repr_t *fw) {
+    if (unpack_firmware_in_place(fw)) {
+        set_state(anjay, fw, UPDATE_STATE_IDLE);
+        set_update_result(anjay, fw,
+                          UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE);
+        return;
+    }
+
+    if (validate_firmware(anjay, fw)) {
+        // specific state/update result set by validate_firmware itself
+        return;
+    }
+
+    demo_log(INFO, "firmware downloaded successfully");
+}
+
 typedef struct {
     anjay_t *anjay;
     struct fw_repr *fw;
@@ -500,27 +519,11 @@ static void wget_finish_callback(wget_result_t result,
         return;
     }
 
-    if (unpack_firmware_in_place(fw)) {
-        set_state(anjay, fw, UPDATE_STATE_IDLE);
-        set_update_result(anjay, fw,
-                          UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE);
-        return;
-    }
-
-    if (validate_firmware(anjay, fw)) {
-        // specific state/update result set by validate_firmware itself
-        return;
-    }
-
-    demo_log(INFO, "firmware downloaded successfully");
+    preprocess_firmware(anjay, fw);
 }
 
-static int schedule_download_in_background(anjay_t *anjay,
-                                           fw_repr_t *fw) {
-    if (maybe_create_firmware_file(fw)) {
-        return -1;
-    }
-
+static int schedule_background_wget_download(anjay_t *anjay,
+                                             fw_repr_t *fw) {
     wget_handler_args_t *args =
             (wget_handler_args_t*)calloc(1, sizeof(wget_handler_args_t));
     if (!args) {
@@ -546,9 +549,108 @@ static int schedule_download_in_background(anjay_t *anjay,
     return 0;
 
 error:
-    maybe_delete_firmware_file(fw);
     free(args);
     return -1;
+}
+
+typedef struct {
+    FILE *file;
+    fw_repr_t *fw;
+} coap_download_args_t;
+
+static int coap_write_block(anjay_t *anjay,
+                            const uint8_t *data,
+                            size_t data_size,
+                            const anjay_etag_t *etag,
+                            void *args_) {
+    (void) anjay;
+    (void) etag;
+
+    coap_download_args_t *args = (coap_download_args_t *) args_;
+    if (fwrite(data, data_size, 1, args->file) != 1) {
+        demo_log(ERROR, "could not write firmware");
+        return -1;
+    }
+
+    return 0;
+}
+
+static void coap_download_finished(anjay_t *anjay,
+                                   int result,
+                                   void *args_) {
+    (void) anjay;
+
+    coap_download_args_t *args = (coap_download_args_t *) args_;
+    fclose(args->file);
+
+    if (!result) {
+        preprocess_firmware(anjay, args->fw);
+    } else {
+        set_state(anjay, args->fw, UPDATE_STATE_IDLE);
+        set_update_result(anjay, args->fw, UPDATE_RESULT_FAILED);
+        maybe_delete_firmware_file(args->fw);
+        demo_log(ERROR, "download failed: result = %d", result);
+    }
+
+    free(args);
+}
+
+static int schedule_background_anjay_download(anjay_t *anjay,
+                                              fw_repr_t *fw) {
+    coap_download_args_t *args = (coap_download_args_t *)
+            calloc(1, sizeof(coap_download_args_t));
+    if (!args) {
+        goto error;
+    }
+
+    args->fw = fw;
+    args->file = fopen(fw->next_target_path, "wb");
+    if (!args->file) {
+        goto error;
+    }
+
+    anjay_download_config_t cfg = {
+        .url = fw->package_uri,
+        .on_next_block = coap_write_block,
+        .on_download_finished = coap_download_finished,
+        .user_data = args
+    };
+
+    anjay_download_handle_t handle = anjay_download(anjay, &cfg);
+    if (!handle) {
+        goto error;
+    }
+
+    set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
+    set_state(anjay, fw, UPDATE_STATE_DOWNLOADING);
+    demo_log(INFO, "download started: %s -> %s",
+             fw->package_uri, fw->next_target_path);
+    return 0;
+
+error:
+    set_update_result(anjay, fw, UPDATE_RESULT_FAILED);
+    if (args && args->file) {
+        fclose(args->file);
+        maybe_delete_firmware_file(fw);
+    }
+    free(args);
+    return -1;
+}
+
+static int
+schedule_download_in_background(anjay_t *anjay,
+                                fw_repr_t *fw,
+                                int (*schedule_dl)(anjay_t *, fw_repr_t *)) {
+    if (maybe_create_firmware_file(fw)) {
+        return -1;
+    }
+
+    if (schedule_dl(anjay, fw)) {
+        maybe_delete_firmware_file(fw);
+        return -1;
+    }
+
+    return 0;
 }
 
 static int write_firmware_to_file(anjay_t *anjay,
@@ -691,7 +793,13 @@ static int fw_write(anjay_t *anjay,
                 return ANJAY_ERR_INTERNAL;
             }
 
-            if (schedule_download_in_background(anjay, fw)) {
+            int (*schedule_download_func)(anjay_t *, fw_repr_t *) =
+                    strncasecmp(buffer, "coap://", 7)
+                        ? schedule_background_wget_download
+                        : schedule_background_anjay_download;
+
+            if (schedule_download_in_background(anjay, fw,
+                                                schedule_download_func)) {
                 return ANJAY_ERR_INTERNAL;
             }
 

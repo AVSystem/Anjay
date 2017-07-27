@@ -68,6 +68,14 @@ current_git_branch_hash() {
     git rev-parse --short HEAD
 }
 
+num_processors() {
+    if command -v nproc > /dev/null; then
+        nproc
+    else
+        sysctl -n hw.ncpu
+    fi
+}
+
 if [[ ! "$ATEXIT_SETUP" ]]; then
     ATEXIT_SETUP=1
     ATEXIT_SCHEDULED=()

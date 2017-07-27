@@ -27,21 +27,23 @@
 #include "../dm/query.h"
 #include "../utils.h"
 #include "../coap/msg.h"
+#include "../coap/msg_opt.h"
 #include "../coap/stream.h"
+#include "../coap/content_format.h"
 
 VISIBILITY_SOURCE_BEGIN
 
 static AVS_LIST(const anjay_string_t)
-get_endpoint_path(avs_stream_abstract_t *stream) {
-    anjay_coap_opt_iterator_t it = ANJAY_COAP_OPT_ITERATOR_EMPTY;
+get_endpoint_path(const anjay_coap_msg_t *msg) {
     AVS_LIST(const anjay_string_t) path = NULL;
 
     int result;
     char buffer[ANJAY_MAX_URI_SEGMENT_SIZE];
     size_t attr_size;
 
-    while ((result = _anjay_coap_stream_get_option_string_it(
-                    stream, ANJAY_COAP_OPT_LOCATION_PATH, &it,
+    anjay_coap_opt_iterator_t it = ANJAY_COAP_OPT_ITERATOR_EMPTY;
+    while ((result = _anjay_coap_msg_get_option_string_it(
+                    msg, ANJAY_COAP_OPT_LOCATION_PATH, &it,
                     &attr_size, buffer, sizeof(buffer) - 1)) == 0) {
         buffer[attr_size] = '\0';
 
@@ -178,20 +180,20 @@ cleanup:
 static int
 check_register_response(avs_stream_abstract_t *stream,
                         AVS_LIST(const anjay_string_t) *out_endpoint_path) {
-    uint8_t response_code;
-    if (_anjay_coap_stream_get_code(stream, &response_code)) {
-        anjay_log(ERROR, "could not get response code");
+    const anjay_coap_msg_t *response;
+    if (_anjay_coap_stream_get_incoming_msg(stream, &response)) {
+        anjay_log(ERROR, "could not get response");
         return -1;
     }
 
-    if (response_code != ANJAY_COAP_CODE_CREATED) {
+    if (response->header.code != ANJAY_COAP_CODE_CREATED) {
         anjay_log(ERROR, "server responded with %s (expected %s)",
-                  ANJAY_COAP_CODE_STRING(response_code),
+                  ANJAY_COAP_CODE_STRING(response->header.code),
                   ANJAY_COAP_CODE_STRING(ANJAY_COAP_CODE_CREATED));
         return -1;
     }
 
-    AVS_LIST(const anjay_string_t) endpoint_path = get_endpoint_path(stream);
+    AVS_LIST(const anjay_string_t) endpoint_path = get_endpoint_path(response);
     if (!endpoint_path) {
         anjay_log(ERROR, "server did not specify a location");
         return -1;
@@ -310,15 +312,16 @@ static void cleanup_update_parameters(anjay_update_parameters_t *params) {
 }
 
 static int init_update_parameters(anjay_t *anjay,
-                                  anjay_active_server_info_t *server,
                                   anjay_update_parameters_t *out_params) {
     if (query_dm(anjay, &out_params->dm)) {
         goto error;
     }
-    if (get_server_lifetime(anjay, server->ssid, &out_params->lifetime_s)) {
+    if (get_server_lifetime(anjay, _anjay_dm_current_ssid(anjay),
+                            &out_params->lifetime_s)) {
         goto error;
     }
-    out_params->binding_mode = _anjay_server_cached_binding_mode(server);
+    out_params->binding_mode = _anjay_server_cached_binding_mode(
+            anjay->current_connection.server);
     if (out_params->binding_mode == ANJAY_BINDING_NONE) {
         goto error;
     }
@@ -358,10 +361,9 @@ void _anjay_registration_info_cleanup(anjay_registration_info_t *info) {
     cleanup_update_parameters(&info->last_update_params);
 }
 
-int _anjay_register(anjay_t *anjay,
-                    anjay_active_server_info_t *server) {
+int _anjay_register(anjay_t *anjay) {
     anjay_update_parameters_t new_params;
-    if (init_update_parameters(anjay, server, &new_params)) {
+    if (init_update_parameters(anjay, &new_params)) {
         return -1;
     }
 
@@ -370,13 +372,16 @@ int _anjay_register(anjay_t *anjay,
 
     if (send_register(anjay, &new_params)
             || check_register_response(anjay->comm_stream, &endpoint_path)) {
-        anjay_log(ERROR, "could not register to server %u", server->ssid);
+        anjay_log(ERROR, "could not register to server %u",
+                  _anjay_dm_current_ssid(anjay));
         goto fail;
     }
 
-    _anjay_registration_info_cleanup(&server->registration_info);
-    registration_info_init(&server->registration_info,
-                           &endpoint_path, &new_params);
+    _anjay_registration_info_cleanup(
+            &anjay->current_connection.server->registration_info);
+    registration_info_init(
+            &anjay->current_connection.server->registration_info,
+            &endpoint_path, &new_params);
     result = 0;
 
 fail:
@@ -410,10 +415,11 @@ static bool dm_caches_equal(AVS_LIST(anjay_dm_cache_object_t) left,
     return !(left || right);
 }
 
-static int send_update(avs_stream_abstract_t *stream,
-                       AVS_LIST(const anjay_string_t) endpoint_path,
-                       const anjay_update_parameters_t *old_params,
+static int send_update(anjay_t *anjay,
                        const anjay_update_parameters_t *new_params) {
+    const anjay_active_server_info_t *server = anjay->current_connection.server;
+    const anjay_update_parameters_t *old_params =
+            &server->registration_info.last_update_params;
     const int64_t *lifetime_s_ptr = NULL;
     assert(new_params->lifetime_s >= 0);
     if (new_params->lifetime_s != old_params->lifetime_s) {
@@ -432,16 +438,18 @@ static int send_update(avs_stream_abstract_t *stream,
         .format = dm_changed_since_last_update
                     ? ANJAY_COAP_FORMAT_APPLICATION_LINK
                     : ANJAY_COAP_FORMAT_NONE,
-        .uri_path = endpoint_path,
+        .uri_path = server->registration_info.endpoint_path,
         .uri_query = _anjay_make_query_string_list(NULL, NULL, lifetime_s_ptr,
                                                    binding_mode, NULL)
     };
 
     int result = -1;
-    if ((result = _anjay_coap_stream_setup_request(stream, &details, NULL, 0))
+    if ((result = _anjay_coap_stream_setup_request(anjay->comm_stream, &details,
+                                                   NULL, 0))
             || (dm_changed_since_last_update
-                && (result = send_objects_list(stream, new_params->dm)))
-            || (result = avs_stream_finish_message(stream))) {
+                && (result = send_objects_list(anjay->comm_stream,
+                                               new_params->dm)))
+            || (result = avs_stream_finish_message(anjay->comm_stream))) {
         anjay_log(ERROR, "could not send Update message");
     } else {
         anjay_log(INFO, "Update sent");
@@ -454,16 +462,16 @@ static int send_update(avs_stream_abstract_t *stream,
 }
 
 static int check_update_response(avs_stream_abstract_t *stream) {
-    uint8_t response_code;
-    if (_anjay_coap_stream_get_code(stream, &response_code)) {
-        anjay_log(ERROR, "could not get response code");
+    const anjay_coap_msg_t *response;
+    if (_anjay_coap_stream_get_incoming_msg(stream, &response)) {
+        anjay_log(ERROR, "could not get response");
         return -1;
     }
 
-    if (response_code == ANJAY_COAP_CODE_CHANGED) {
+    if (response->header.code == ANJAY_COAP_CODE_CHANGED) {
         anjay_log(INFO, "registration successfully updated");
         return 0;
-    } else if (_anjay_coap_msg_code_is_client_error(response_code)) {
+    } else if (_anjay_coap_msg_code_is_client_error(response->header.code)) {
         /* 4.xx (client error) response means that a server received a request
          * it considers invalid, so retransmission of the same message will
          * most likely fail again. That may happen if:
@@ -476,7 +484,7 @@ static int check_update_response(avs_stream_abstract_t *stream) {
          * Otherwise, we might as well do the same, as server is required to
          * replace client registration information in such case. */
         anjay_log(DEBUG, "Update rejected: %s",
-                  ANJAY_COAP_CODE_STRING(response_code));
+                  ANJAY_COAP_CODE_STRING(response->header.code));
         return ANJAY_REGISTRATION_UPDATE_REJECTED;
     } else {
         /* Any other response is either an 5.xx (server error), in which case
@@ -485,30 +493,27 @@ static int check_update_response(avs_stream_abstract_t *stream) {
          * with retransmitted Updates until the server implementer notices
          * something is wrong. */
         anjay_log(ERROR, "server responded with %s (expected %s)",
-                  ANJAY_COAP_CODE_STRING(response_code),
+                  ANJAY_COAP_CODE_STRING(response->header.code),
                   ANJAY_COAP_CODE_STRING(ANJAY_COAP_CODE_CHANGED));
         return -1;
     }
 }
 
-int _anjay_update_registration(anjay_t *anjay,
-                               anjay_active_server_info_t *server) {
+int _anjay_update_registration(anjay_t *anjay) {
     anjay_update_parameters_t new_params;
-    if (init_update_parameters(anjay, server, &new_params)) {
+    if (init_update_parameters(anjay, &new_params)) {
         return -1;
     }
 
     int retval = -1;
-    if ((retval = send_update(anjay->comm_stream,
-                              server->registration_info.endpoint_path,
-                              &server->registration_info.last_update_params,
-                              &new_params))
+    if ((retval = send_update(anjay, &new_params))
             || (retval = check_update_response(anjay->comm_stream))) {
         anjay_log(ERROR, "could not update registration");
         goto finish;
     }
 
-    update_registration_info(&server->registration_info, &new_params);
+    update_registration_info(
+            &anjay->current_connection.server->registration_info, &new_params);
     retval = 0;
 
 finish:
@@ -517,15 +522,15 @@ finish:
 }
 
 static int check_deregister_response(avs_stream_abstract_t *stream) {
-    uint8_t response_code;
-    if (_anjay_coap_stream_get_code(stream, &response_code)) {
-        anjay_log(ERROR, "could not get response code");
+    const anjay_coap_msg_t *response;
+    if (_anjay_coap_stream_get_incoming_msg(stream, &response)) {
+        anjay_log(ERROR, "could not get response");
         return -1;
     }
 
-    if (response_code != ANJAY_COAP_CODE_DELETED) {
+    if (response->header.code != ANJAY_COAP_CODE_DELETED) {
         anjay_log(ERROR, "server responded with %s (expected %s)",
-                  ANJAY_COAP_CODE_STRING(response_code),
+                  ANJAY_COAP_CODE_STRING(response->header.code),
                   ANJAY_COAP_CODE_STRING(ANJAY_COAP_CODE_DELETED));
         return -1;
     }
@@ -533,19 +538,19 @@ static int check_deregister_response(avs_stream_abstract_t *stream) {
     return 0;
 }
 
-int _anjay_deregister(avs_stream_abstract_t *stream,
-                      const anjay_registration_info_t *registration_info) {
+int _anjay_deregister(anjay_t *anjay) {
     anjay_msg_details_t details = {
         .msg_type = ANJAY_COAP_MSG_CONFIRMABLE,
         .msg_code = ANJAY_COAP_CODE_DELETE,
         .format = ANJAY_COAP_FORMAT_NONE,
-        .uri_path = registration_info->endpoint_path
+        .uri_path = anjay->current_connection.server->registration_info.endpoint_path
     };
 
     int result;
-    if ((result = _anjay_coap_stream_setup_request(stream, &details, NULL, 0))
-            || (result = avs_stream_finish_message(stream))
-            || (result = check_deregister_response(stream))) {
+    if ((result = _anjay_coap_stream_setup_request(anjay->comm_stream, &details,
+                                                   NULL, 0))
+            || (result = avs_stream_finish_message(anjay->comm_stream))
+            || (result = check_deregister_response(anjay->comm_stream))) {
         anjay_log(ERROR, "Could not perform De-registration");
     } else {
         anjay_log(INFO, "De-register sent");

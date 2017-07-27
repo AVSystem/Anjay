@@ -27,6 +27,7 @@
 
 #include "servers.h"
 #include "utils.h"
+#include "downloader.h"
 #include "interface/bootstrap.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -56,8 +57,10 @@ struct anjay_struct {
 #ifdef WITH_BOOTSTRAP
     anjay_bootstrap_t bootstrap;
 #endif
+    anjay_coap_tx_params_t udp_tx_params;
     anjay_coap_socket_t *coap_socket;
     avs_stream_abstract_t *comm_stream;
+    anjay_connection_ref_t current_connection;
     anjay_scheduled_notify_t scheduled_notify;
 
     const char *endpoint_name;
@@ -67,6 +70,10 @@ struct anjay_struct {
     size_t in_buffer_size;
     uint8_t *out_buffer;
     size_t out_buffer_size;
+
+#ifdef WITH_BLOCK_DOWNLOAD
+    anjay_downloader_t downloader;
+#endif // WITH_BLOCK_DOWNLOAD
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1
@@ -80,15 +87,11 @@ uint8_t _anjay_make_error_response_code(int handler_result);
 anjay_server_connection_t *
 _anjay_get_server_connection(anjay_connection_ref_t ref);
 
-anjay_connection_type_t
-_anjay_get_default_connection_type(anjay_active_server_info_t *server);
-
 int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref);
 
 void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay);
 
-void _anjay_release_server_stream(anjay_t *anjay,
-                                  anjay_connection_ref_t connection);
+void _anjay_release_server_stream(anjay_t *anjay);
 
 size_t _anjay_num_non_bootstrap_servers(anjay_t *anjay);
 

@@ -112,6 +112,22 @@ static inline void _anjay_update_ret(int *var, int new_retval) {
     }
 }
 
+avs_net_abstract_socket_t *
+_anjay_create_connected_udp_socket(anjay_t *anjay,
+                                   avs_net_socket_type_t type,
+                                   const char *bind_port,
+                                   const void *config,
+                                   const anjay_url_t *uri);
+
+static inline size_t _anjay_max_power_of_2_not_greater_than(size_t bound) {
+    int exponent = -1;
+    while (bound) {
+        bound >>= 1;
+        ++exponent;
+    }
+    return (exponent >= 0) ? ((size_t) 1 << exponent) : 0;
+}
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // ANJAY_UTILS_H

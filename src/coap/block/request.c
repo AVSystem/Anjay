@@ -46,8 +46,8 @@ static bool response_token_matches(const anjay_coap_msg_t *request,
     anjay_coap_token_t res_token;
     size_t res_token_size = _anjay_coap_msg_get_token(response, &res_token);
 
-    return _anjay_coap_common_tokens_equal(&req_token, req_token_size,
-                                           &res_token, res_token_size);
+    return _anjay_coap_token_equal(&req_token, req_token_size,
+                                   &res_token, res_token_size);
 }
 
 static bool is_matching_response(const anjay_coap_msg_t *msg,
@@ -105,15 +105,15 @@ static int block_request_update_block_option(coap_block_transfer_ctx_t *ctx,
 static int handle_block_options(const anjay_coap_msg_t *msg,
                                 coap_block_transfer_ctx_t *ctx) {
     coap_block_info_t block1;
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK1,
-                                          &block1) || !block1.valid) {
+    if (_anjay_coap_get_block_info(msg, COAP_BLOCK1, &block1)
+            || !block1.valid) {
         coap_log(DEBUG, "BLOCK1 missing or invalid in response to block-wise "
                  "request");
         return -1;
     }
     coap_block_info_t block2;
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK2,
-                                          &block2) || block2.valid) {
+    if (_anjay_coap_get_block_info(msg, COAP_BLOCK2, &block2)
+            || block2.valid) {
         coap_log(DEBUG, "block-wise responses to block-wise requests are not "
                  "supported");
         return -1;
@@ -152,19 +152,21 @@ static int handle_matching_response(const anjay_coap_msg_t *msg,
     if (_anjay_coap_msg_header_get_type(&msg->header)
             == ANJAY_COAP_MSG_CONFIRMABLE) {
         // Confirmable Separate Response: we need to send ACK
-        _anjay_coap_common_send_empty(ctx->socket,
-                                      ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
-                                      _anjay_coap_msg_get_id(msg));
+        _anjay_coap_send_empty(ctx->socket, ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+                               _anjay_coap_msg_get_id(msg));
     }
 
     return result;
 }
 
-static int continue_block_request(const anjay_coap_msg_t *msg,
+static int continue_block_request(void *ignored,
+                                  const anjay_coap_msg_t *msg,
                                   const anjay_coap_msg_t *request,
                                   coap_block_transfer_ctx_t *ctx,
                                   bool *out_wait_for_next,
                                   uint8_t *out_error_code) {
+    (void) ignored;
+
     if (is_separate_ack(msg, request)) {
         // Empty ACK to a request: wait for Separate Response
         *out_wait_for_next = true;
@@ -196,5 +198,5 @@ _anjay_coap_block_request_new(uint16_t max_block_size,
                               coap_id_source_t *id_source) {
     return _anjay_coap_block_transfer_new(max_block_size, in, out, socket,
                                           COAP_BLOCK1, id_source,
-                                          continue_block_request);
+                                          continue_block_request, NULL);
 }

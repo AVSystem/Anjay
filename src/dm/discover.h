@@ -32,12 +32,10 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *
  * @param anjay     ANJAY object to operate on.
  * @param obj       Object on which Discover shall be performed.
- * @param ssid      Short Server ID issuing Discover.
  * @return 0 on success, negative value in case of an error.
  */
 int _anjay_discover_object(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj,
-                           anjay_ssid_t ssid);
+                           const anjay_dm_object_def_t *const *obj);
 
 /**
  * Performs LwM2M Discover operation on Object Instance:
@@ -48,13 +46,11 @@ int _anjay_discover_object(anjay_t *anjay,
  * @param anjay     ANJAY object to operate on.
  * @param obj       Object whose instance is being queried.
  * @param iid       Instance on which Discover shall be performed.
- * @param ssid      Short Server ID issuing Discover.
  * @return 0 on success, negative value in case of an error.
  */
 int _anjay_discover_instance(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
-                             anjay_iid_t iid,
-                             anjay_ssid_t ssid);
+                             anjay_iid_t iid);
 
 /**
  * Performs LwM2M Discover operation on Resource:
@@ -64,14 +60,12 @@ int _anjay_discover_instance(anjay_t *anjay,
  * @param obj       Object whose resource is being queried.
  * @param iid       Instance whose resource is being queried.
  * @param rid       Resource on which Discover shall be performed.
- * @param ssid      Short Server ID issuing Discover.
  * @return 0 on success, negative value in case of an error.
  */
 int _anjay_discover_resource(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
-                             anjay_rid_t rid,
-                             anjay_ssid_t ssid);
+                             anjay_rid_t rid);
 
 #ifdef WITH_BOOTSTRAP
 /**

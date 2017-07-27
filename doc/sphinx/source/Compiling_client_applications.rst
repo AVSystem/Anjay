@@ -27,7 +27,10 @@ Anjay uses CMake for project configuration. To compile the library with default 
 
 
 Cross-compiling
-~~~~~~~~~~~~~~~
+---------------
+
+ARM Cortex-M3-powered STM3220
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 First, prepare a CMake toolchain file (see `CMake documentation <https://cmake.org/cmake/help/v3.0/manual/cmake-toolchains.7.html#cross-compiling>`_), then pass :code:`CMAKE_TOOLCHAIN_FILE` when configuring Anjay:
 
@@ -51,6 +54,81 @@ An example CMake toolchain file for an ARM Cortex-M3-powered STM3220 platform ma
     set(CMAKE_C_FLAGS "-mcpu=cortex-m3 -mthumb -msoft-float -ffunction-sections -fdata-sections -fno-common -fmessage-length=0 -std=gnu99 --specs=nosys.specs" CACHE STRING "" FORCE)
 
     set(CMAKE_EXE_LINKER_FLAGS "-Wl,-gc-sections")
+
+
+Android
+~~~~~~~
+
+Compliation on Android platform is rather straightforward. First you have to get `Android NDK
+<https://developer.android.com/ndk/index.html>`_. To configure Anjay you
+have to pass ``CMAKE_TOOLCHAIN_FILE`` from the NDK (we assume that
+``ANDROID_NDK`` variable contains a path to the folder where Android NDK
+is extracted):
+
+.. code-block:: bash
+
+    cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+          -DDTLS_BACKEND="" \
+          -DANDROID_ALLOW_UNDEFINED_SYMBOLS=ON \
+          -DANDROID_PLATFORM=android-18 \
+          -DANDROID_ABI=armeabi .
+
+After that Anjay can be compiled as usual via `make`.
+
+.. note::
+
+    Android platforms older than `android-18` are not supported.
+
+
+.. note::
+
+    ``ANDROID_ALLOW_UNDEFINED_SYMBOLS`` is set, so that unresolved symbols
+    required by the `libanjay.so` are not reported during the linking
+    stage. They shall be resolved by providing dependencies to the final
+    exectuable as it is illustrated in the next section.
+
+Note that we did not set any ``DTLS_BACKEND`` and therefore Anjay is compiled
+without DTLS support. To enable DTLS support you have to provide a value
+to ``DTLS_BACKEND`` (see `README.md <https://github.com/AVSystem/Anjay>`_
+for more details) along with specific variable indicating where the required
+DTLS libraries are to be found, i.e. one of:
+
+    - ``OPENSSL_ROOT_DIR`` (as `FindOpenSSL.cmake` suggests),
+    - ``MBEDTLS_ROOT_DIR``,
+    - ``TINYDTLS_ROOT_DIR``
+
+depending on the chosen backend.
+
+.. topic:: Example compilation with mbed TLS backend
+
+    First, we compile mbed TLS on Android:
+
+    .. code-block:: bash
+
+        $ git clone https://github.com/ARMmbed/mbedtls -b mbedtls-2.5.0
+        $ cd mbedtls
+        $ cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+                -DANDROID_PLATFORM=android-18 \
+                -DANDROID_ABI=armeabi \
+                -DENABLE_TESTING=OFF \
+                -DCMAKE_INSTALL_PREFIX=/tmp/mbedtls/install .
+        $ make
+        $ make install
+
+    We then go back to the Anjay source directory, to reconfigure Anjay to use
+    mbed TLS binaries (we strongly suggest to clean all kind of CMake caches
+    before proceeding, as it may not work otherwise):
+
+    .. code-block:: bash
+
+        cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+              -DDTLS_BACKEND="mbedtls" \
+              -DMBEDTLS_ROOT_DIR=/tmp/mbedtls/install \
+              -DANDROID_ALLOW_UNDEFINED_SYMBOLS=ON \
+              -DANDROID_PLATFORM=android-18 \
+              -DANDROID_ABI=armeabi .
+
+    And finally, we run `make`, finishing the whole procedure.
 
 
 Installing the library

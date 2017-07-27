@@ -20,5 +20,6 @@
 #include <anjay/core.h>
 #include <anjay/dm.h>
 #include <anjay/io.h>
+#include <anjay/download.h>
 
 #endif /*ANJAY_INCLUDE_ANJAY_ANJAY_H*/

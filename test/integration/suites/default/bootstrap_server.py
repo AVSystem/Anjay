@@ -24,7 +24,7 @@ class BootstrapServer:
     class Test(test_suite.Lwm2mTest):
         def setUp(self):
             extra_args = ['--bootstrap-holdoff', '3']
-            self.setup_demo_with_servers(num_servers=0,
+            self.setup_demo_with_servers(servers=0,
                                          bootstrap_server=True,
                                          extra_cmdline_args=extra_args)
 

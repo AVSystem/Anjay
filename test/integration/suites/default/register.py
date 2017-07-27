@@ -112,7 +112,7 @@ class RegisterWithLostSeparateAck(Register.TestCase):
 class RegisterWithBlock(test_suite.Lwm2mSingleServerTest):
     def setUp(self):
         extra_args = '-I 64 -O 128'.split()
-        self.setup_demo_with_servers(num_servers=1,
+        self.setup_demo_with_servers(servers=1,
                                      extra_cmdline_args=extra_args,
                                      auto_register=False)
 

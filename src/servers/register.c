@@ -133,7 +133,7 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
             // reconnect the socket.
             _anjay_connection_suspend((anjay_connection_ref_t) {
                 .server = server,
-                .conn_type = _anjay_get_default_connection_type(server)
+                .conn_type = server->registration_info.conn_type
             });
         }
     }
@@ -193,14 +193,14 @@ static int send_update(anjay_t *anjay,
                        anjay_active_server_info_t *server) {
     anjay_connection_ref_t connection = {
         .server = server,
-        .conn_type = _anjay_get_default_connection_type(server)
+        .conn_type = server->registration_info.conn_type
     };
     if (_anjay_bind_server_stream(anjay, connection)) {
         anjay_log(ERROR, "could not get stream for server %u", server->ssid);
         return -1;
     }
 
-    int result = _anjay_update_registration(anjay, server);
+    int result = _anjay_update_registration(anjay);
     if (result == ANJAY_REGISTRATION_UPDATE_REJECTED) {
         anjay_log(DEBUG, "update rejected for SSID = %u; re-registering",
                   server->ssid);
@@ -208,21 +208,43 @@ static int send_update(anjay_t *anjay,
     } else if (result != 0) {
         anjay_log(ERROR, "could not send registration update: %d", result);
     } else {
-        _anjay_observe_sched_flush(anjay, server->ssid, connection.conn_type);
+        _anjay_observe_sched_flush_current_connection(anjay);
     }
 
     avs_stream_reset(anjay->comm_stream);
-    _anjay_release_server_stream(anjay, connection);
+    _anjay_release_server_stream(anjay);
     return result;
 }
 
 int _anjay_server_update_or_reregister(anjay_t *anjay,
                                        anjay_active_server_info_t *server) {
-    struct timespec remaining =
-            _anjay_register_time_remaining(&server->registration_info);
-    if (_anjay_time_before(&remaining, &ANJAY_TIME_ZERO)) {
-        anjay_log(DEBUG, "Registration Lifetime expired for SSID = %u, "
-                  "forcing re-register", server->ssid);
+    bool needs_reregister = false;
+
+    if (server->registration_info.conn_type == ANJAY_CONNECTION_WILDCARD
+            || !_anjay_connection_is_online(
+                        (anjay_connection_ref_t) {
+                            .server = server,
+                            .conn_type = server->registration_info.conn_type
+                        })) {
+        anjay_log(INFO, "No valid existing connection to Registration Interface"
+                  " for SSID = %u, re-registering", server->ssid);
+        needs_reregister = true;
+        if (_anjay_server_setup_registration_connection(server)) {
+            return -1;
+        }
+    }
+
+    if (!needs_reregister) {
+        struct timespec remaining =
+                _anjay_register_time_remaining(&server->registration_info);
+        if (_anjay_time_before(&remaining, &ANJAY_TIME_ZERO)) {
+            anjay_log(DEBUG, "Registration Lifetime expired for SSID = %u, "
+                      "forcing re-register", server->ssid);
+            needs_reregister = true;
+        }
+    }
+
+    if (needs_reregister) {
         return force_server_reregister(anjay, server);
     } else {
         return send_update(anjay, server);
@@ -310,47 +332,48 @@ int _anjay_schedule_server_reconnect(anjay_t *anjay,
 
 int _anjay_server_register(anjay_t *anjay,
                            anjay_active_server_info_t *server) {
+    if (_anjay_server_setup_registration_connection(server)) {
+        return -1;
+    }
     anjay_connection_ref_t connection = {
         .server = server,
-        .conn_type = _anjay_get_default_connection_type(server)
+        .conn_type = server->registration_info.conn_type
     };
     if (_anjay_bind_server_stream(anjay, connection)) {
         return -1;
     }
 
-    int result = _anjay_register(anjay, server);
+    int result = _anjay_register(anjay);
     avs_stream_reset(anjay->comm_stream);
-    _anjay_release_server_stream(anjay, connection);
 
-    if (result) {
-        return -1;
+    if (!result) {
+        _anjay_sched_del(anjay->sched, &server->sched_update_handle);
+        if (schedule_next_update(anjay, &server->sched_update_handle, server)) {
+            anjay_log(WARNING, "could not schedule Update for server %u",
+                      server->ssid);
+        }
+
+        _anjay_observe_sched_flush_current_connection(anjay);
+        _anjay_bootstrap_notify_regular_connection_available(anjay);
     }
-
-    _anjay_sched_del(anjay->sched, &server->sched_update_handle);
-    if (schedule_next_update(anjay, &server->sched_update_handle, server)) {
-        anjay_log(WARNING, "could not schedule Update for server %u",
-                  server->ssid);
-    }
-
-    _anjay_observe_sched_flush(anjay, server->ssid, connection.conn_type);
-    _anjay_bootstrap_notify_regular_connection_available(anjay);
-    return 0;
+    _anjay_release_server_stream(anjay);
+    return result;
 }
 
 int _anjay_server_deregister(anjay_t *anjay,
                              anjay_active_server_info_t *server) {
     anjay_connection_ref_t connection = {
         .server = server,
-        .conn_type = _anjay_get_default_connection_type(server)
+        .conn_type = server->registration_info.conn_type
     };
-    if (_anjay_bind_server_stream(anjay, connection)) {
+    if (connection.conn_type >= ANJAY_CONNECTION_WILDCARD
+            || _anjay_bind_server_stream(anjay, connection)) {
         anjay_log(ERROR, "could not get stream for server %u, skipping",
                   server->ssid);
         return 0;
     }
 
-    int result = _anjay_deregister(anjay->comm_stream,
-                                   &server->registration_info);
+    int result = _anjay_deregister(anjay);
     if (result) {
         anjay_log(ERROR, "could not send De-Register request: %d", result);
     }

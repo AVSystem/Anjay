@@ -76,7 +76,7 @@ class Test102_RegistrationUpdate(test_suite.Lwm2mSingleServerTest):
 
 class Test103_Deregistration(test_suite.Lwm2mSingleServerTest):
     def tearDown(self):
-        pass
+        self.teardown_demo_with_servers(auto_deregister=False)
 
     def runTest(self):
         self.request_demo_shutdown()

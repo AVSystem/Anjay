@@ -39,7 +39,7 @@ typedef struct {
 int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay);
 
 int _anjay_bootstrap_perform_action(anjay_t *anjay,
-                                    const anjay_request_details_t *details);
+                                    const anjay_request_t *request);
 
 int _anjay_bootstrap_account_prepare(anjay_t *anjay);
 

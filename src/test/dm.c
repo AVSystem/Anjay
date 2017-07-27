@@ -25,29 +25,28 @@
 
 #include "../anjay.h"
 #include "../io/vtable.h"
-#include "mock_coap_stream_impl.h"
 
 AVS_UNIT_TEST(debug, debug_make_path_macro) {
-    anjay_request_details_t details;
-    details.uri.oid = 0;
-    details.uri.iid = 1;
-    details.uri.rid = 2;
-    details.uri.has_oid = false;
-    details.uri.has_iid = false;
-    details.uri.has_rid = false;
+    anjay_request_t request;
+    request.uri.oid = 0;
+    request.uri.iid = 1;
+    request.uri.rid = 2;
+    request.uri.has_oid = false;
+    request.uri.has_iid = false;
+    request.uri.has_rid = false;
 
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/");
-    details.uri.has_oid = true;
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/0");
-    details.uri.has_iid = true;
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/0/1");
-    details.uri.has_rid = true;
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri), "/0/1/2");
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/");
+    request.uri.has_oid = true;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/0");
+    request.uri.has_iid = true;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/0/1");
+    request.uri.has_rid = true;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/0/1/2");
 
-    details.uri.oid = 65535;
-    details.uri.iid = 65535;
-    details.uri.rid = 65535;
-    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&details.uri),
+    request.uri.oid = 65535;
+    request.uri.iid = 65535;
+    request.uri.rid = 65535;
+    AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri),
                                  "/65535/65535/65535");
 }
 
@@ -1854,20 +1853,40 @@ static int mock_get_id(anjay_input_ctx_t *in_ctx,
     return 0;
 }
 
+static int fail(void) {
+    AVS_UNIT_ASSERT_TRUE(false);
+    return -1;
+}
+
+typedef struct coap_stream_mock {
+    const avs_stream_v_table_t *vtable;
+} coap_stream_mock_t;
+
 AVS_UNIT_TEST(dm_operations, unimplemented) {
     anjay_t anjay;
     memset(&anjay, 0, sizeof(anjay));
 
-    DECLARE_COAP_STREAM_MOCK(mock);
-    avs_stream_v_table_t vtable = *mock.vtable;
-    anjay_coap_stream_ext_t ext =
-            *(const anjay_coap_stream_ext_t*)vtable.extension_list[0].data;
-
-    ext.setup_response = (anjay_coap_stream_setup_response_t*)succeed;
-    vtable.extension_list = &(const avs_stream_v_table_extension_t[]) {
-        { ANJAY_COAP_STREAM_EXTENSION, &ext }
-    }[0];
-    mock.vtable = &vtable;
+    coap_stream_mock_t mock = { \
+        .vtable = &(const avs_stream_v_table_t) {
+            .write =          (avs_stream_write_t) fail,
+            .finish_message = (avs_stream_finish_message_t) fail,
+            .read =           (avs_stream_read_t) fail,
+            .peek =           (avs_stream_peek_t) fail,
+            .reset =          (avs_stream_reset_t) fail,
+            .close =          (avs_stream_close_t) fail,
+            .get_errno =      (avs_stream_errno_t) fail,
+            .extension_list = &(const avs_stream_v_table_extension_t[]) {
+                {
+                    ANJAY_COAP_STREAM_EXTENSION,
+                    &(anjay_coap_stream_ext_t) {
+                        .setup_response =
+                                (anjay_coap_stream_setup_response_t *) succeed
+                    }
+                },
+                AVS_STREAM_V_TABLE_EXTENSION_NULL
+            }[0]
+        }
+    };
 
     uint16_t OBJ_SUPPORTED_RIDS[31337];
     for (size_t i = 0; i < ANJAY_ARRAY_SIZE(OBJ_SUPPORTED_RIDS); ++i) {
@@ -1904,16 +1923,21 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
 
 #define ASSERT_ACTION_FAILS(...) \
     { \
-        anjay_request_details_t details = { \
+        anjay_coap_msg_identity_t request_identity = { 0 }; \
+        anjay_request_t request = { \
             .requested_format = ANJAY_COAP_FORMAT_NONE, \
             .uri = MAKE_RESOURCE_PATH(1337, 0, 0), \
             .action = __VA_ARGS__ \
         }; \
-        AVS_UNIT_ASSERT_FAILED(invoke_action(&anjay, &def_ptr, &details, \
+        AVS_UNIT_ASSERT_FAILED(invoke_action(&anjay, &def_ptr, \
+                                             &request_identity, &request, \
                                              (anjay_input_ctx_t *) &in_ctx)); \
     }
 
     anjay.comm_stream = (avs_stream_abstract_t *) &mock;
+    anjay.current_connection.server = &(anjay_active_server_info_t) {
+        .ssid = 0
+    };
     ASSERT_ACTION_FAILS(ANJAY_ACTION_READ)
     ASSERT_ACTION_FAILS(ANJAY_ACTION_DISCOVER)
     ASSERT_ACTION_FAILS(ANJAY_ACTION_WRITE)

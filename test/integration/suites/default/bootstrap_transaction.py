@@ -21,12 +21,10 @@ from framework.lwm2m_test import *
 
 class BootstrapTransactionTest(test_suite.Lwm2mTest):
     def setUp(self):
-        self.bootstrap_server = Lwm2mServer()
-        self.servers = [Lwm2mServer()]
-
-        demo_args = (self.make_demo_args([self.bootstrap_server])
-                     + ['--bootstrap', '--bootstrap-timeout', '-1'])
-        self.start_demo(demo_args)
+        self.setup_demo_with_servers(servers=1,
+                                     num_servers_passed=0,
+                                     bootstrap_server=True,
+                                     extra_cmdline_args=['--bootstrap-timeout', '-1'])
 
     def tearDown(self):
         self.teardown_demo_with_servers(auto_deregister=False)

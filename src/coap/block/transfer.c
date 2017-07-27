@@ -29,15 +29,6 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static size_t max_power_of_2_not_greater_than(size_t bound) {
-    int exponent = -1;
-    while (bound) {
-        bound >>= 1;
-        ++exponent;
-    }
-    return (exponent >= 0) ? ((size_t) 1 << exponent) : 0;
-}
-
 static size_t mtu_enforced_payload_capacity(const coap_output_buffer_t *out) {
     size_t headers_overhead =
            _anjay_coap_msg_info_get_max_mtu_overhead(&out->info)
@@ -69,7 +60,8 @@ static uint16_t calculate_proposed_block_size(uint16_t original_block_size,
             buffer_size_enforced_payload_capacity(out));
 
     size_t max_block_size = (payload_capacity_considering_mtu > 0)
-            ? max_power_of_2_not_greater_than(payload_capacity_considering_mtu)
+            ? _anjay_max_power_of_2_not_greater_than(
+                    payload_capacity_considering_mtu)
             : 0;
 
     if (max_block_size < ANJAY_COAP_MSG_BLOCK_MIN_SIZE) {
@@ -95,7 +87,8 @@ _anjay_coap_block_transfer_new(uint16_t max_block_size,
                                anjay_coap_socket_t *socket,
                                coap_block_type_t block_type,
                                coap_id_source_t *id_source,
-                               block_recv_handler_t *block_recv_handler) {
+                               block_recv_handler_t *block_recv_handler,
+                               void *block_recv_handler_arg) {
     assert(in);
     assert(out);
     assert(socket);
@@ -129,7 +122,8 @@ _anjay_coap_block_transfer_new(uint16_t max_block_size,
             .size = block_size_considering_mtu
         },
         .id_source = id_source,
-        .block_recv_handler = block_recv_handler
+        .block_recv_handler = block_recv_handler,
+        .block_recv_handler_arg = block_recv_handler_arg
     };
 
     out->info = _anjay_coap_msg_info_init();
@@ -154,7 +148,8 @@ static int block_recv(const anjay_coap_msg_t *msg,
                       bool *out_wait_for_next,
                       uint8_t *out_error_code) {
     block_recv_data_t *data = (block_recv_data_t *)data_;
-    return data->ctx->block_recv_handler(msg, data->sent_msg, data->ctx,
+    return data->ctx->block_recv_handler(data->ctx->block_recv_handler_arg,
+                                         msg, data->sent_msg, data->ctx,
                                          out_wait_for_next, out_error_code);
 }
 
@@ -199,13 +194,13 @@ static int send_block_msg(coap_block_transfer_ctx_t *ctx,
              (unsigned long)_anjay_coap_msg_payload_length(msg),
              ctx->block.has_more);
 
-    const coap_transmission_params_t *tx_params =
+    const anjay_coap_tx_params_t *tx_params =
             _anjay_coap_socket_get_tx_params(ctx->socket);
     coap_retry_state_t retry_state = { .retry_count = 0, .recv_timeout_ms = 0 };
     int result = 0;
     do {
-        _anjay_coap_common_update_retry_state(&retry_state, tx_params,
-                                              &ctx->in->rand_seed);
+        _anjay_coap_update_retry_state(&retry_state, tx_params,
+                                       &ctx->in->rand_seed);
 
         if ((result = _anjay_coap_socket_send(ctx->socket, msg))) {
             coap_log(ERROR, "cannot send block message");

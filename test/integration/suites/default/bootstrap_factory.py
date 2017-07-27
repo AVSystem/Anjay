@@ -25,7 +25,7 @@ class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor
 
     def setUp(self):
         extra_args = ['--bootstrap-timeout', '5']
-        self.setup_demo_with_servers(num_servers=1,
+        self.setup_demo_with_servers(servers=1,
                                      bootstrap_server=True,
                                      extra_cmdline_args=extra_args)
 

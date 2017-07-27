@@ -81,7 +81,7 @@ library about that fact:
     anjay_notify_changed(anjay, 1234, 0, 1);
 
     // Finally run the scheduler (ignoring its return value, which
-    // is the amount of tasks executed)
+    // is the number of tasks executed)
 
 One more thing to consider is setting up LwM2M attribute handlers - we'll leave
 that to the Attribute Storage module:

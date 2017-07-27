@@ -30,6 +30,7 @@
 #include <anjay_modules/notify.h>
 
 #include "coap/msg.h"
+#include "coap/content_format.h"
 #include "dm.h"
 #include "dm/discover.h"
 #include "dm/execute.h"
@@ -41,10 +42,6 @@
 #include "access_control.h"
 
 VISIBILITY_SOURCE_BEGIN
-
-#ifdef ANJAY_TEST
-#include "test/mock_coap_stream.h"
-#endif
 
 static int validate_supported_rids(const anjay_dm_object_def_t *obj_def) {
     if (obj_def->supported_rids.count != 0 && !obj_def->supported_rids.rids) {
@@ -166,7 +163,7 @@ int anjay_unregister_object(anjay_t *anjay,
     anjay_notify_queue_t notify = NULL;
     if (_anjay_notify_queue_instance_set_unknown_change(&notify,
                                                         (*def_ptr)->oid)
-            || _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP, &notify)) {
+            || _anjay_notify_flush(anjay, &notify)) {
         anjay_log(WARNING, "could not perform notifications about "
                            "removed object %" PRIu16, (*def_ptr)->oid);
     }
@@ -511,14 +508,15 @@ static int dm_read(anjay_t *anjay,
 }
 
 #ifdef WITH_OBSERVE
-static void build_observe_key(anjay_observe_key_t *result,
-                              const anjay_request_details_t *details) {
-    result->connection.ssid = details->ssid;
-    result->connection.type = details->conn_type;
-    result->oid = details->uri.oid;
-    result->iid = (details->uri.has_iid ? details->uri.iid : ANJAY_IID_INVALID);
-    result->rid = (details->uri.has_rid ? details->uri.rid : ANJAY_RID_EMPTY);
-    result->format = details->requested_format;
+static void build_observe_key(anjay_t *anjay,
+                              anjay_observe_key_t *result,
+                              const anjay_request_t *request) {
+    result->connection.ssid = _anjay_dm_current_ssid(anjay);
+    result->connection.type = anjay->current_connection.conn_type;
+    result->oid = request->uri.oid;
+    result->iid = (request->uri.has_iid ? request->uri.iid : ANJAY_IID_INVALID);
+    result->rid = (request->uri.has_rid ? request->uri.rid : ANJAY_RID_EMPTY);
+    result->format = request->requested_format;
 }
 
 static anjay_output_ctx_t *
@@ -564,25 +562,24 @@ ssize_t _anjay_dm_read_for_observe(anjay_t *anjay,
 
 static int dm_observe(anjay_t *anjay,
                       const anjay_dm_object_def_t *const *obj,
-                      const anjay_request_details_t *details) {
-    anjay_log(DEBUG, "Observe %s", ANJAY_DEBUG_MAKE_PATH(&details->uri));
-    assert(details->uri.has_oid);
+                      const anjay_coap_msg_identity_t *request_identity,
+                      const anjay_request_t *request) {
+    anjay_log(DEBUG, "Observe %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    assert(request->uri.has_oid);
     char buf[ANJAY_MAX_OBSERVABLE_RESOURCE_SIZE];
     double numeric = NAN;
     anjay_msg_details_t observe_details;
-    ssize_t size = _anjay_dm_read_for_observe(anjay, obj,
-                                              &DETAILS_TO_DM_READ_ARGS(details),
-                                              &observe_details,
-                                              &numeric,
-                                              buf, sizeof(buf));
+    ssize_t size = _anjay_dm_read_for_observe(
+            anjay, obj, &REQUEST_TO_DM_READ_ARGS(anjay, request),
+            &observe_details, &numeric, buf, sizeof(buf));
     if (size < 0) {
         return (int) size;
     }
     anjay_observe_key_t key;
-    build_observe_key(&key, details);
+    build_observe_key(anjay, &key, request);
     int result;
     if ((result = _anjay_observe_put_entry(anjay, &key, &observe_details,
-                                           &details->request_identity,
+                                           request_identity,
                                            numeric, buf, (size_t) size))
             || (result = _anjay_coap_stream_setup_response(anjay->comm_stream,
                                                            &observe_details))
@@ -601,18 +598,20 @@ static int dm_observe(anjay_t *anjay,
 
 static int dm_read_or_observe(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj,
-                              const anjay_request_details_t *details) {
-    if (details->observe == ANJAY_COAP_OBSERVE_REGISTER) {
-        return dm_observe(anjay, obj, details);
+                              const anjay_coap_msg_identity_t *request_identity,
+                              const anjay_request_t *request) {
+    if (request->observe == ANJAY_COAP_OBSERVE_REGISTER) {
+        return dm_observe(anjay, obj, request_identity, request);
     } else {
 #ifdef WITH_OBSERVE
-        if (details->observe == ANJAY_COAP_OBSERVE_DEREGISTER) {
+        if (request->observe == ANJAY_COAP_OBSERVE_DEREGISTER) {
             anjay_observe_key_t key;
-            build_observe_key(&key, details);
+            build_observe_key(anjay, &key, request);
             _anjay_observe_remove_entry(anjay, &key);
         }
 #endif // WITH_OBSERVE
-        const anjay_dm_read_args_t read_args = DETAILS_TO_DM_READ_ARGS(details);
+        const anjay_dm_read_args_t read_args =
+                REQUEST_TO_DM_READ_ARGS(anjay, request);
         int out_ctx_errno = 0;
         anjay_output_ctx_t *out_ctx = dm_read_spawn_ctx(
                 anjay->comm_stream, &out_ctx_errno, &read_args);
@@ -648,8 +647,8 @@ request_attrs_empty(const anjay_request_attributes_t *attrs) {
 #ifdef WITH_DISCOVER
 static int dm_discover(anjay_t *anjay,
                        const anjay_dm_object_def_t *const *obj,
-                       const anjay_request_details_t *details) {
-    anjay_log(DEBUG, "Discover %s", ANJAY_DEBUG_MAKE_PATH(&details->uri));
+                       const anjay_request_t *request) {
+    anjay_log(DEBUG, "Discover %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     /* Access Control check is omitted here, because dm_discover is always
      * allowed. */
     int result = _anjay_coap_stream_setup_response(anjay->comm_stream,
@@ -664,27 +663,25 @@ static int dm_discover(anjay_t *anjay,
         return result;
     }
 
-    if (details->uri.has_iid) {
-        if (!(result = ensure_instance_present(anjay, obj, details->uri.iid))) {
-            if (details->uri.has_rid) {
+    if (request->uri.has_iid) {
+        if (!(result = ensure_instance_present(anjay, obj, request->uri.iid))) {
+            if (request->uri.has_rid) {
                 if (!(result = ensure_resource_supported_and_present(
-                        anjay, obj, details->uri.iid, details->uri.rid))) {
+                        anjay, obj, request->uri.iid, request->uri.rid))) {
                     result = _anjay_discover_resource(
-                            anjay, obj,
-                            details->uri.iid, details->uri.rid, details->ssid);
+                            anjay, obj, request->uri.iid, request->uri.rid);
                 }
             } else {
-                result = _anjay_discover_instance(anjay, obj, details->uri.iid,
-                                                  details->ssid);
+                result = _anjay_discover_instance(anjay, obj, request->uri.iid);
             }
         }
     } else {
-        result = _anjay_discover_object(anjay, obj, details->ssid);
+        result = _anjay_discover_object(anjay, obj);
     }
 
     if (result) {
         anjay_log(ERROR, "Discover %s failed!",
-                  ANJAY_DEBUG_MAKE_PATH(&details->uri));
+                  ANJAY_DEBUG_MAKE_PATH(&request->uri));
     }
     return result;
 }
@@ -797,53 +794,53 @@ static int write_instance(anjay_t *anjay,
 
 static int dm_write(anjay_t *anjay,
                     const anjay_dm_object_def_t *const *obj,
-                    const anjay_dm_write_args_t *args,
+                    const anjay_uri_path_t *uri,
                     anjay_input_ctx_t *in_ctx,
                     anjay_request_action_t action,
                     uint16_t content_format) {
-    anjay_log(DEBUG, "Write %s", ANJAY_DEBUG_MAKE_PATH(&args->uri));
-    if (!args->uri.has_iid) {
+    anjay_log(DEBUG, "Write %s", ANJAY_DEBUG_MAKE_PATH(uri));
+    if (!uri->has_iid) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
     anjay_notify_queue_t notify_queue = NULL;
-    int retval = ensure_instance_present(anjay, obj, args->uri.iid);
+    int retval = ensure_instance_present(anjay, obj, uri->iid);
     if (!retval) {
         const anjay_action_info_t action_info = {
-            .oid = args->uri.oid,
-            .iid = args->uri.iid,
-            .ssid = args->ssid,
+            .oid = uri->oid,
+            .iid = uri->iid,
+            .ssid = _anjay_dm_current_ssid(anjay),
             .action = action
         };
         if (!_anjay_access_control_action_allowed(anjay, &action_info)) {
             return ANJAY_ERR_UNAUTHORIZED;
         }
 
-        if (args->uri.has_rid) {
+        if (uri->has_rid) {
             const uint16_t format =
                     _anjay_translate_legacy_content_format(content_format);
             if (format == ANJAY_COAP_FORMAT_TLV) {
                 retval = _anjay_dm_check_if_tlv_rid_matches_uri_rid(in_ctx,
-                                                                    args->uri.rid);
+                                                                    uri->rid);
             }
 
             if (!retval) {
-                retval = write_resource(anjay, obj, args->uri.iid, args->uri.rid,
+                retval = write_resource(anjay, obj, uri->iid, uri->rid,
                                         in_ctx, &notify_queue);
             }
         } else {
             if (action != ANJAY_ACTION_WRITE_UPDATE) {
-                retval = _anjay_dm_instance_reset(anjay, obj, args->uri.iid, NULL);
+                retval = _anjay_dm_instance_reset(anjay, obj, uri->iid, NULL);
             }
             if (!retval) {
-                retval = write_instance(anjay, obj, args->uri.iid,
+                retval = write_instance(anjay, obj, uri->iid,
                                         in_ctx, &notify_queue,
                                         WRITE_INSTANCE_FAIL_ON_UNSUPPORTED);
             }
         }
     }
     if (!retval) {
-        retval = _anjay_notify_perform(anjay, args->ssid, notify_queue);
+        retval = _anjay_notify_perform(anjay, notify_queue);
     }
     _anjay_notify_clear_queue(&notify_queue);
     return retval;
@@ -901,22 +898,23 @@ static int dm_write_resource_attrs(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
-                                   anjay_ssid_t ssid,
                                    const anjay_request_attributes_t *attributes) {
     anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     int result = ensure_resource_supported_and_present(anjay, obj, iid, rid);
 
     if (!result) {
-        result = _anjay_dm_resource_read_attrs(anjay, obj, iid, rid, ssid,
-                                               &attrs, NULL);
+        result = _anjay_dm_resource_read_attrs(
+                anjay, obj, iid, rid, _anjay_dm_current_ssid(anjay),
+                &attrs, NULL);
     }
     if (!result) {
         update_attrs(&attrs, attributes);
         if (!resource_attrs_valid(&attrs)) {
             result = ANJAY_ERR_BAD_REQUEST;
         } else {
-            result = _anjay_dm_resource_write_attrs(anjay, obj, iid, rid, ssid,
-                                                    &attrs, NULL);
+            result = _anjay_dm_resource_write_attrs(
+                    anjay, obj, iid, rid, _anjay_dm_current_ssid(anjay),
+                    &attrs, NULL);
         }
     }
     return result;
@@ -925,16 +923,15 @@ static int dm_write_resource_attrs(anjay_t *anjay,
 static int dm_write_instance_attrs(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj,
                                    anjay_iid_t iid,
-                                   anjay_ssid_t ssid,
                                    const anjay_request_attributes_t *attributes) {
     anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     int result = _anjay_dm_read_combined_instance_attrs(
-            anjay, obj, iid, ssid,
+            anjay, obj, iid, _anjay_dm_current_ssid(anjay),
             _anjay_dm_get_internal_attrs(&attrs.standard.common));
     if (!result) {
         update_attrs(&attrs, attributes);
         result = _anjay_dm_instance_write_default_attrs(
-                anjay, obj, iid, ssid,
+                anjay, obj, iid, _anjay_dm_current_ssid(anjay),
                 _anjay_dm_get_internal_attrs(&attrs.standard.common), NULL);
     }
     return result;
@@ -942,16 +939,15 @@ static int dm_write_instance_attrs(anjay_t *anjay,
 
 static int dm_write_object_attrs(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj,
-                                 anjay_ssid_t ssid,
                                  const anjay_request_attributes_t *attributes) {
     anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     int result = _anjay_dm_read_combined_object_attrs(
-            anjay, obj, ssid,
+            anjay, obj, _anjay_dm_current_ssid(anjay),
             _anjay_dm_get_internal_attrs(&attrs.standard.common));
     if (!result) {
         update_attrs(&attrs, attributes);
         result = _anjay_dm_object_write_default_attrs(
-                anjay, obj, ssid,
+                anjay, obj, _anjay_dm_current_ssid(anjay),
                 _anjay_dm_get_internal_attrs(&attrs.standard.common), NULL);
     }
     return result;
@@ -959,39 +955,49 @@ static int dm_write_object_attrs(anjay_t *anjay,
 
 static int dm_write_attributes(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
-                               const anjay_request_details_t *details) {
+                               const anjay_request_t *request) {
     anjay_log(DEBUG, "Write Attributes %s",
-              ANJAY_DEBUG_MAKE_PATH(&details->uri));
-    assert(details->uri.has_oid);
-    if (request_attrs_empty(&details->attributes)) {
+              ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    assert(request->uri.has_oid);
+    if (request_attrs_empty(&request->attributes)) {
         return 0;
     }
-    if (!details->uri.has_rid
-            && !resource_specific_request_attrs_empty(&details->attributes)) {
+    if (!request->uri.has_rid
+            && !resource_specific_request_attrs_empty(&request->attributes)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
     int result;
-    if (details->uri.has_iid) {
-        if (!(result = ensure_instance_present(anjay, obj, details->uri.iid))) {
-            if (details->uri.has_rid) {
-                result = dm_write_resource_attrs(anjay, obj, details->uri.iid,
-                                                 details->uri.rid, details->ssid,
-                                                 &details->attributes);
+    if (request->uri.has_iid) {
+        if (!(result = ensure_instance_present(anjay, obj, request->uri.iid))) {
+
+            const anjay_action_info_t info = {
+                .iid = request->uri.iid,
+                .oid = request->uri.oid,
+                .ssid = _anjay_dm_current_ssid(anjay),
+                /* The attributes make sense for an Instance only if it is
+                   readable for a specified Server. */
+                .action = ANJAY_ACTION_READ
+            };
+
+            if (!_anjay_access_control_action_allowed(anjay, &info)) {
+                result = ANJAY_ERR_UNAUTHORIZED;
+            } else if (request->uri.has_rid) {
+                result = dm_write_resource_attrs(anjay, obj, request->uri.iid,
+                                                 request->uri.rid,
+                                                 &request->attributes);
             } else {
-                result = dm_write_instance_attrs(anjay, obj, details->uri.iid,
-                                                 details->ssid,
-                                                 &details->attributes);
+                result = dm_write_instance_attrs(anjay, obj, request->uri.iid,
+                                                 &request->attributes);
             }
         }
     } else {
-        result = dm_write_object_attrs(anjay, obj, details->ssid,
-                                       &details->attributes);
+        result = dm_write_object_attrs(anjay, obj, &request->attributes);
     }
 #ifdef WITH_OBSERVE
     if (!result) {
         // ensure that new attributes are "seen" by the observe code
         anjay_observe_key_t key;
-        build_observe_key(&key, details);
+        build_observe_key(anjay, &key, request);
         key.format = ANJAY_COAP_FORMAT_NONE;
         result = _anjay_observe_notify(anjay, &key, false);
     }
@@ -1001,35 +1007,35 @@ static int dm_write_attributes(anjay_t *anjay,
 
 static int dm_execute(anjay_t *anjay,
                       const anjay_dm_object_def_t *const *obj,
-                      const anjay_request_details_t *details,
+                      const anjay_request_t *request,
                       anjay_input_ctx_t *in_ctx) {
-    anjay_log(DEBUG, "Execute %s", ANJAY_DEBUG_MAKE_PATH(&details->uri));
-    assert(details->uri.has_oid);
-    if (!details->uri.has_iid || !details->uri.has_rid) {
+    anjay_log(DEBUG, "Execute %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    assert(request->uri.has_oid);
+    if (!request->uri.has_iid || !request->uri.has_rid) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
-    int retval = ensure_instance_present(anjay, obj, details->uri.iid);
+    int retval = ensure_instance_present(anjay, obj, request->uri.iid);
     if (!retval) {
         retval = ensure_resource_supported_and_present(anjay, obj,
-                                         details->uri.iid, details->uri.rid);
+                                         request->uri.iid, request->uri.rid);
     }
     if (!retval) {
-        if (!_anjay_access_control_action_allowed(anjay,
-                &DETAILS_TO_ACTION_INFO(details))) {
+        if (!_anjay_access_control_action_allowed(
+                anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
             return ANJAY_ERR_UNAUTHORIZED;
         }
 
-        if (!has_resource_operation_bit(anjay, obj, details->uri.rid,
+        if (!has_resource_operation_bit(anjay, obj, request->uri.rid,
                                         ANJAY_DM_RESOURCE_OP_BIT_E)) {
             anjay_log(ERROR, "Execute %s is not supported",
-                      ANJAY_DEBUG_MAKE_PATH(&details->uri));
+                      ANJAY_DEBUG_MAKE_PATH(&request->uri));
             return ANJAY_ERR_METHOD_NOT_ALLOWED;
         }
 
         anjay_execute_ctx_t* execute_ctx = _anjay_execute_ctx_create(in_ctx);
-        retval = _anjay_dm_resource_execute(anjay, obj, details->uri.iid,
-                                            details->uri.rid, execute_ctx, NULL);
+        retval = _anjay_dm_resource_execute(anjay, obj, request->uri.iid,
+                                            request->uri.rid, execute_ctx, NULL);
         _anjay_execute_ctx_destroy(&execute_ctx);
     }
     return retval;
@@ -1067,10 +1073,10 @@ static int set_create_response_location(anjay_oid_t oid,
 static int dm_create_inner(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj,
                            anjay_iid_t *new_iid_ptr,
-                           anjay_ssid_t ssid,
                            anjay_input_ctx_t *in_ctx) {
     anjay_iid_t proposed_iid = *new_iid_ptr;
-    int result = _anjay_dm_instance_create(anjay, obj, new_iid_ptr, ssid, NULL);
+    int result = _anjay_dm_instance_create(
+            anjay, obj, new_iid_ptr, _anjay_dm_current_ssid(anjay), NULL);
     if (result || *new_iid_ptr == ANJAY_IID_INVALID) {
         anjay_log(DEBUG, "Instance Create handler for object %" PRIu16
                          " failed", (*obj)->oid);
@@ -1095,7 +1101,6 @@ static int dm_create_inner(anjay_t *anjay,
 static int dm_create_with_explicit_iid(anjay_t *anjay,
                                        const anjay_dm_object_def_t *const *obj,
                                        anjay_iid_t *new_iid_ptr,
-                                       anjay_ssid_t ssid,
                                        anjay_input_ctx_t *in_ctx) {
     if (*new_iid_ptr == ANJAY_IID_INVALID) {
         return ANJAY_ERR_BAD_REQUEST;
@@ -1111,7 +1116,7 @@ static int dm_create_with_explicit_iid(anjay_t *anjay,
         return result;
     }
     anjay_input_ctx_t *nested_ctx = _anjay_input_nested_ctx(in_ctx);
-    result = dm_create_inner(anjay, obj, new_iid_ptr, ssid, nested_ctx);
+    result = dm_create_inner(anjay, obj, new_iid_ptr, nested_ctx);
     if (!result) {
         anjay_id_type_t id_type;
         uint16_t id;
@@ -1130,15 +1135,15 @@ static int dm_create_with_explicit_iid(anjay_t *anjay,
 
 static int dm_create(anjay_t *anjay,
                      const anjay_dm_object_def_t *const *obj,
-                     const anjay_request_details_t *details,
+                     const anjay_request_t *request,
                      anjay_input_ctx_t *in_ctx) {
-    anjay_log(DEBUG, "Create %s", ANJAY_DEBUG_MAKE_PATH(&details->uri));
-    if (details->uri.has_rid) {
+    anjay_log(DEBUG, "Create %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    if (request->uri.has_rid) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
-    if (!_anjay_access_control_action_allowed(anjay,
-            &DETAILS_TO_ACTION_INFO(details))) {
+    if (!_anjay_access_control_action_allowed(
+            anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
         return ANJAY_ERR_UNAUTHORIZED;
     }
 
@@ -1149,10 +1154,9 @@ static int dm_create(anjay_t *anjay,
                                      &stream_first_id_type, &stream_first_id);
     if (!result && stream_first_id_type == ANJAY_ID_IID) {
         new_iid = stream_first_id;
-        result = dm_create_with_explicit_iid(anjay, obj, &new_iid, details->ssid,
-                                             in_ctx);
+        result = dm_create_with_explicit_iid(anjay, obj, &new_iid, in_ctx);
     } else if (!result || result == ANJAY_GET_INDEX_END) {
-        result = dm_create_inner(anjay, obj, &new_iid, details->ssid, in_ctx);
+        result = dm_create_inner(anjay, obj, &new_iid, in_ctx);
     }
     if (!result) {
         anjay_log(DEBUG, "created: /%u/%u", (*obj)->oid, new_iid);
@@ -1164,48 +1168,45 @@ static int dm_create(anjay_t *anjay,
     if (!result) {
         anjay_notify_queue_t notify_queue = NULL;
         (void) ((result = _anjay_notify_queue_instance_created(&notify_queue,
-                                                               details->uri.oid,
+                                                               request->uri.oid,
                                                                new_iid))
-                || (result = _anjay_notify_flush(anjay, details->ssid,
-                                                 &notify_queue)));
+                || (result = _anjay_notify_flush(anjay, &notify_queue)));
     }
     return result;
 }
 
 static int dm_delete(anjay_t *anjay,
                      const anjay_dm_object_def_t *const *obj,
-                     const anjay_request_details_t *details) {
-    anjay_log(DEBUG, "Delete %s", ANJAY_DEBUG_MAKE_PATH(&details->uri));
-    if (!details->uri.has_iid || details->uri.has_rid) {
+                     const anjay_request_t *request) {
+    anjay_log(DEBUG, "Delete %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    if (!request->uri.has_iid || request->uri.has_rid) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
-    int retval = ensure_instance_present(anjay, obj, details->uri.iid);
+    int retval = ensure_instance_present(anjay, obj, request->uri.iid);
     if (!retval) {
-        if (!_anjay_access_control_action_allowed(anjay,
-                &DETAILS_TO_ACTION_INFO(details))) {
+        if (!_anjay_access_control_action_allowed(
+                anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
             return ANJAY_ERR_UNAUTHORIZED;
         }
-        retval = _anjay_dm_instance_remove(anjay, obj, details->uri.iid, NULL);
+        retval = _anjay_dm_instance_remove(anjay, obj, request->uri.iid, NULL);
     }
     if (!retval) {
         anjay_notify_queue_t notify_queue = NULL;
-        (void) ((retval = _anjay_notify_queue_instance_removed(&notify_queue,
-                                                               details->uri.oid,
-                                                               details->uri.iid))
-                || (retval = _anjay_notify_flush(anjay, details->ssid,
-                                                 &notify_queue)));
+        (void) ((retval = _anjay_notify_queue_instance_removed(
+                        &notify_queue, request->uri.oid, request->uri.iid))
+                || (retval = _anjay_notify_flush(anjay, &notify_queue)));
     }
     return retval;
 }
 
-static int dm_cancel_observe(anjay_t *anjay,
-                             const anjay_request_details_t *details) {
+static int
+dm_cancel_observe(anjay_t *anjay,
+                  const anjay_coap_msg_identity_t *request_identity) {
     (void) anjay;
-    anjay_log(DEBUG, "Cancel Observe %04" PRIX16,
-              details->request_identity.msg_id);
+    anjay_log(DEBUG, "Cancel Observe %04" PRIX16, request_identity->msg_id);
 #ifdef WITH_OBSERVE
-    _anjay_observe_remove_by_msg_id(anjay, details->request_identity.msg_id);
+    _anjay_observe_remove_by_msg_id(anjay, request_identity->msg_id);
 #endif // WITH_OBSERVE
     return 0;
 }
@@ -1224,23 +1225,23 @@ int _anjay_dm_check_if_tlv_rid_matches_uri_rid(anjay_input_ctx_t *in_ctx,
 
 static int invoke_transactional_action(anjay_t *anjay,
                                        const anjay_dm_object_def_t *const *obj,
-                                       const anjay_request_details_t *details,
+                                       const anjay_request_t *request,
                                        anjay_input_ctx_t *in_ctx) {
     _anjay_dm_transaction_begin(anjay);
     int retval = 0;
-    switch (details->action) {
+    switch (request->action) {
     case ANJAY_ACTION_WRITE:
     case ANJAY_ACTION_WRITE_UPDATE:
         assert(in_ctx);
-        retval = dm_write(anjay, obj, &DETAILS_TO_DM_WRITE_ARGS(details),
-                          in_ctx, details->action, details->content_format);
+        retval = dm_write(anjay, obj, &request->uri, in_ctx, request->action,
+                          request->content_format);
         break;
     case ANJAY_ACTION_CREATE:
         assert(in_ctx);
-        retval = dm_create(anjay, obj, details, in_ctx);
+        retval = dm_create(anjay, obj, request, in_ctx);
         break;
     case ANJAY_ACTION_DELETE:
-        retval = dm_delete(anjay, obj, details);
+        retval = dm_delete(anjay, obj, request);
         break;
     default:
         anjay_log(ERROR, "invalid transactional action");
@@ -1252,25 +1253,26 @@ static int invoke_transactional_action(anjay_t *anjay,
 
 static int invoke_action(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj,
-                         const anjay_request_details_t *details,
+                         const anjay_coap_msg_identity_t *request_identity,
+                         const anjay_request_t *request,
                          anjay_input_ctx_t *in_ctx) {
-    switch (details->action) {
+    switch (request->action) {
     case ANJAY_ACTION_READ:
-        return dm_read_or_observe(anjay, obj, details);
+        return dm_read_or_observe(anjay, obj, request_identity, request);
     case ANJAY_ACTION_DISCOVER:
-        return dm_discover(anjay, obj, details);
+        return dm_discover(anjay, obj, request);
     case ANJAY_ACTION_WRITE:
     case ANJAY_ACTION_WRITE_UPDATE:
     case ANJAY_ACTION_CREATE:
     case ANJAY_ACTION_DELETE:
-        return invoke_transactional_action(anjay, obj, details, in_ctx);
+        return invoke_transactional_action(anjay, obj, request, in_ctx);
     case ANJAY_ACTION_WRITE_ATTRIBUTES:
-        return dm_write_attributes(anjay, obj, details);
+        return dm_write_attributes(anjay, obj, request);
     case ANJAY_ACTION_EXECUTE:
         assert(in_ctx);
-        return dm_execute(anjay, obj, details, in_ctx);
+        return dm_execute(anjay, obj, request, in_ctx);
     case ANJAY_ACTION_CANCEL_OBSERVE:
-        return dm_cancel_observe(anjay, details);
+        return dm_cancel_observe(anjay, request_identity);
     default:
         anjay_log(ERROR, "Invalid action for Management Interface");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -1278,35 +1280,36 @@ static int invoke_action(anjay_t *anjay,
 }
 
 int _anjay_dm_perform_action(anjay_t *anjay,
-                             const anjay_request_details_t *details) {
+                             const anjay_coap_msg_identity_t *request_identity,
+                             const anjay_request_t *request) {
     const anjay_dm_object_def_t *const *obj = NULL;
-    if (details->uri.has_oid) {
-        if (!(obj = _anjay_dm_find_object_by_oid(anjay, details->uri.oid))
+    if (request->uri.has_oid) {
+        if (!(obj = _anjay_dm_find_object_by_oid(anjay, request->uri.oid))
                 || !*obj) {
-            anjay_log(ERROR, "Object not found: %u", details->uri.oid);
+            anjay_log(ERROR, "Object not found: %u", request->uri.oid);
             return ANJAY_ERR_NOT_FOUND;
         }
-    } else if (details->action != ANJAY_ACTION_CANCEL_OBSERVE) {
+    } else if (request->action != ANJAY_ACTION_CANCEL_OBSERVE) {
         anjay_log(ERROR, "at least Object ID must be present in Uri-Path");
         return ANJAY_ERR_BAD_REQUEST;
     }
 
     anjay_msg_details_t msg_details = {
         .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
-        .msg_code = make_success_response_code(details->action),
+        .msg_code = make_success_response_code(request->action),
         .format = ANJAY_COAP_FORMAT_NONE
     };
 
     anjay_input_ctx_t *in_ctx = NULL;
     int result;
-    if ((result = prepare_input_context(anjay->comm_stream, details->action,
+    if ((result = prepare_input_context(anjay->comm_stream, request->action,
                                         &in_ctx))
             || (result = _anjay_coap_stream_setup_response(anjay->comm_stream,
                                                            &msg_details))) {
         return result;
     }
 
-    result = invoke_action(anjay, obj, details, in_ctx);
+    result = invoke_action(anjay, obj, request_identity, request, in_ctx);
     if (_anjay_input_ctx_destroy(&in_ctx)) {
         anjay_log(ERROR, "input ctx cleanup failed");
     }
@@ -1440,6 +1443,11 @@ _anjay_dm_read_as_input_ctx(anjay_t *anjay, const anjay_uri_path_t *path) {
     }
     assert(!membuf);
     return out;
+}
+
+anjay_ssid_t _anjay_dm_current_ssid(anjay_t *anjay) {
+    return anjay->current_connection.server
+            ? anjay->current_connection.server->ssid : ANJAY_SSID_BOOTSTRAP;
 }
 
 #ifdef ANJAY_TEST

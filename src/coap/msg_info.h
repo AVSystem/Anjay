@@ -22,6 +22,7 @@
 #include <avsystem/commons/list.h>
 
 #include "msg.h"
+#include "block_utils.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -106,29 +107,6 @@ _anjay_coap_msg_info_get_packet_storage_size(const anjay_coap_msg_info_t *info,
 void _anjay_coap_msg_info_opt_remove_by_number(anjay_coap_msg_info_t *info,
                                                uint16_t option_number);
 
-/** Auxiliary constants for common Content-Format Option values */
-
-#define ANJAY_COAP_FORMAT_APPLICATION_LINK 40
-
-#define ANJAY_COAP_FORMAT_PLAINTEXT 0
-#define ANJAY_COAP_FORMAT_OPAQUE 42
-#define ANJAY_COAP_FORMAT_TLV 11542
-#define ANJAY_COAP_FORMAT_JSON 11543
-
-#ifdef WITH_LEGACY_CONTENT_FORMAT_SUPPORT
-#define ANJAY_COAP_FORMAT_LEGACY_PLAINTEXT 1541
-#define ANJAY_COAP_FORMAT_LEGACY_TLV 1542
-#define ANJAY_COAP_FORMAT_LEGACY_JSON 1543
-#define ANJAY_COAP_FORMAT_LEGACY_OPAQUE 1544
-#endif // WITH_LEGACY_CONTENT_FORMAT_SUPPORT
-
-/**
- * A magic value used to indicate the absence of the Content-Format option.
- * Mainly used during CoAP message parsing, passing it to the info object does
- * nothing.
- * */
-#define ANJAY_COAP_FORMAT_NONE 65535
-
 /**
  * Adds a Content-Format Option (@ref ANJAY_COAP_OPT_CONTENT_FORMAT = 12) to the
  * message being built.
@@ -142,24 +120,6 @@ void _anjay_coap_msg_info_opt_remove_by_number(anjay_coap_msg_info_t *info,
  */
 int _anjay_coap_msg_info_opt_content_format(anjay_coap_msg_info_t *info,
                                             uint16_t format);
-
-typedef enum {
-    COAP_BLOCK1,
-    COAP_BLOCK2
-} coap_block_type_t;
-
-static inline uint16_t
-_anjay_coap_opt_num_from_block_type(coap_block_type_t type) {
-    return type == COAP_BLOCK1 ? ANJAY_COAP_OPT_BLOCK1 : ANJAY_COAP_OPT_BLOCK2;
-}
-
-typedef struct coap_block_info {
-    coap_block_type_t type;
-    bool valid;
-    uint32_t seq_num;
-    bool has_more;
-    uint16_t size;
-} coap_block_info_t;
 
 /**
  * Adds the Block1 or Block2 Option to the message being built.

@@ -21,6 +21,7 @@
 #include <avsystem/commons/stream.h>
 
 #include "vtable.h"
+#include "../coap/content_format.h"
 
 VISIBILITY_SOURCE_BEGIN
 

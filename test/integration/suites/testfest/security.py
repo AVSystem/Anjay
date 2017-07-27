@@ -26,13 +26,11 @@ class Test401_UDPChannelSecurity_PreSharedKeyMode(DataModel.Test):
     PSK_KEY = b'test-key'
 
     def setUp(self):
-        self.servers = [Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY))]
-
-        args = ['--security-mode', 'psk',
-                '--identity', str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
-                '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii'),
-                '--server-uri', 'coaps://127.0.0.1:%d' % (self.serv.get_listen_port(),)]
-        self.start_demo(cmdline_args=args)
+        self.setup_demo_with_servers(servers=[Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY))],
+                                     extra_cmdline_args=['--identity',
+                                                         str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
+                                                         '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
+                                     auto_register=False)
 
     def runTest(self):
         # a. Registration message (COAP POST) is sent from client to server.

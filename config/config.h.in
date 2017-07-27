@@ -36,6 +36,7 @@
 
 #cmakedefine WITH_ACCESS_CONTROL
 #cmakedefine WITH_AVS_LOG
+#cmakedefine WITH_BLOCK_DOWNLOAD
 #cmakedefine WITH_BLOCK_RECEIVE
 #cmakedefine WITH_BLOCK_SEND
 #cmakedefine WITH_BOOTSTRAP

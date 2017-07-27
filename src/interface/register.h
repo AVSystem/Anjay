@@ -23,8 +23,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 void _anjay_registration_info_cleanup(anjay_registration_info_t *info);
 
-int _anjay_register(anjay_t *anjay,
-                    anjay_active_server_info_t *server);
+int _anjay_register(anjay_t *anjay);
 
 #define ANJAY_REGISTRATION_UPDATE_REJECTED 1
 
@@ -35,11 +34,9 @@ int _anjay_register(anjay_t *anjay,
  * - ANJAY_REGISTRATION_UPDATE_REJECTED if the server responded with 4.xx error
  *   so the Update message should not be retransmitted.
  */
-int _anjay_update_registration(anjay_t *anjay,
-                               anjay_active_server_info_t *server);
+int _anjay_update_registration(anjay_t *anjay);
 
-int _anjay_deregister(avs_stream_abstract_t *stream,
-                      const anjay_registration_info_t *registration_info);
+int _anjay_deregister(anjay_t *anjay);
 
 /**
  * @returns Amount of time from now until the server registration expires.

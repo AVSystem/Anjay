@@ -25,6 +25,7 @@
 #include <anjay_modules/io.h>
 #include <anjay_modules/dm.h>
 
+#include "coap/msg_opt.h"
 #include "coap/stream.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN

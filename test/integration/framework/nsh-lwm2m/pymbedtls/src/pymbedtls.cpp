@@ -105,6 +105,7 @@ struct Socket {
 
     py::object py_socket;
     Type type;
+    bool in_handshake;
 
     static int _send(void *socket_,
                      const unsigned char *buf,
@@ -144,24 +145,34 @@ struct Socket {
             bytes_received =
                     call_method<int>(socket->py_socket, "recv_into", py_buf);
             call_method<void>(socket->py_socket, "settimeout", orig_timeout_s);
-        } catch (const py::error_already_set &) {
+        } catch (py::error_already_set &err) {
             // TODO: assume any error is EAGAIN
             bytes_received = MBEDTLS_ERR_SSL_TIMEOUT;
-
-            // temporarily clear the error so that `settimeout()` call can succeed
-            PyObject *e, *v, *t;
-            PyErr_Fetch(&e, &v, &t);
 
             call_method<void>(socket->py_socket, "settimeout",
                               orig_timeout_s);
 
-            PyErr_Restore(e, v, t);
+            if (!socket->in_handshake) {
+                err.restore();
+            }
         }
 
         return bytes_received;
     }
 
     HandshakeResult _do_handshake() {
+        class HandshakeRaii {
+            Socket &self_;
+        public:
+            HandshakeRaii(Socket &self) : self_(self) {
+                self_.in_handshake = true;
+            }
+
+            ~HandshakeRaii() {
+                self_.in_handshake = false;
+            }
+        } handshake_raii_(*this);
+
         for (;;) {
             int result = mbedtls_ssl_handshake(&context);
             if (result == 0) {
@@ -186,7 +197,8 @@ struct Socket {
            const string &psk_key_,
            bool debug):
         py_socket(py_socket_),
-        type(type_)
+        type(type_),
+        in_handshake(false)
     {
         copy(psk_identity_.begin(), psk_identity_.end(),
              back_inserter(psk_identity));
@@ -257,7 +269,17 @@ struct Socket {
         }
     }
 
-    void connect(py::tuple address_port) {
+    void connect(py::tuple address_port, py::object handshake_timeouts_s_) {
+        if (!handshake_timeouts_s_.is_none()) {
+            auto handshake_timeouts_s =
+                    py::cast<py::tuple>(handshake_timeouts_s_);
+            auto min = py::cast<double>(handshake_timeouts_s[0]);
+            auto max = py::cast<double>(handshake_timeouts_s[1]);
+            mbedtls_ssl_conf_handshake_timeout(&config,
+                                               uint32_t(min * 1000.0),
+                                               uint32_t(max * 1000.0));
+        }
+
         HandshakeResult hs_result;
 
         do {
@@ -389,7 +411,7 @@ public:
         enable_reuse(py_socket);
     }
 
-    Socket *accept() {
+    Socket *accept(py::object handshake_timeouts_s) {
         // use old socket to communicate with client
         // create a new one for listening
         py::object bound_addr = call_method<py::object>(py_socket, "getsockname");
@@ -410,7 +432,7 @@ public:
 
         Socket *client_sock = new Socket(client_py_sock, Socket::Type::Server,
                                          psk_identity, psk_key, debug);
-        client_sock->connect(remote_addr);
+        client_sock->connect(remote_addr, handshake_timeouts_s);
         return client_sock;
     }
 
@@ -432,13 +454,16 @@ PYBIND11_MODULE(pymbedtls, m) {
 
     py::class_<ServerSocket>(m, "ServerSocket")
         .def(py::init<py::object, const string &, const string &, bool>())
-        .def("accept", &ServerSocket::accept, py::return_value_policy::take_ownership)
+        .def("accept", &ServerSocket::accept,
+            py::return_value_policy::take_ownership,
+            py::arg("handshake_timeouts_s") = py::none())
         .def("__getattr__", &ServerSocket::__getattr__)
     ;
 
     auto socket_scope = py::class_<Socket>(m, "Socket")
         .def(py::init<py::object, Socket::Type, const string &, const string &, bool>())
-        .def("connect", &Socket::connect)
+        .def("connect", &Socket::connect,
+             py::arg("address_port"), py::arg("handshake_timeouts_s") = py::none())
         .def("send", &Socket::send)
         .def("sendall", &Socket::send)
         .def("sendto", &Socket::fail<string, py::object>)

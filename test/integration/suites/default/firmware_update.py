@@ -16,11 +16,12 @@
 
 import http
 import http.server
-import threading
 import os
+import threading
 import time
 
 from framework.lwm2m_test import *
+from framework.coap_file_server import CoapFileServerThread
 
 UPDATE_STATE_IDLE = 0
 UPDATE_STATE_DOWNLOADING = 1
@@ -164,6 +165,37 @@ class FirmwareUpdate:
 
             # there should be exactly one request
             self.assertEqual(['/firmware'], self.requests)
+
+    class TestWithCoapServer(Test):
+        def write_firmware_and_wait_for_download(self, firmware_uri: str):
+            # Write /5/0/1 (Firmware URI)
+            req = Lwm2mWrite('/5/0/1', firmware_uri)
+            self.serv.send(req)
+            self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                                self.serv.recv(timeout_s=1))
+
+            # wait until client downloads the firmware
+            ready = False
+            for _ in range(10):
+                time.sleep(0.5)
+
+                if self.read_state() == UPDATE_STATE_DOWNLOADED:
+                    break
+            else:
+                self.fail('firmware still not downloaded')
+
+        def setUp(self):
+            super().setUp()
+
+            self.server_thread = CoapFileServerThread()
+            self.server_thread.start()
+            self.file_server = self.server_thread.file_server
+
+        def tearDown(self):
+            try:
+                super().tearDown()
+            finally:
+                self.server_thread.join()
 
 
 class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
@@ -382,3 +414,20 @@ class FirmwareUpdateResetInIdleState(FirmwareUpdate.Test):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+
+
+class FirmwareUpdateCoapUri(FirmwareUpdate.TestWithCoapServer):
+    def tearDown(self):
+        super().tearDown()
+
+        # there should be exactly one request
+        self.assertEqual(1, len(self.file_server.requests))
+        self.assertMsgEqual(CoapGet('/firmware',
+                                    options=[coap.Option.BLOCK2(seq_num=0,
+                                                                has_more=False,
+                                                                block_size=1024)]),
+                            self.file_server.requests[0])
+
+    def runTest(self):
+        self.file_server.set_resource('/firmware', make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT))
+        self.write_firmware_and_wait_for_download(self.file_server.get_resource_uri('/firmware'))

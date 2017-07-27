@@ -16,8 +16,7 @@ set(ANJAY_VERSION "@ANJAY_VERSION@")
 
 get_filename_component(CURR_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
 
-find_package(avs_commons REQUIRED COMPONENTS @AVS_COMMONS_COMPONENTS@
-             HINTS "${CURR_DIR}/../.." NO_DEFAULT_PATH)
+find_package(avs_commons REQUIRED COMPONENTS @AVS_COMMONS_COMPONENTS@)
 
 include(${CURR_DIR}/@PROJECT_NAME@-targets.cmake)
 

@@ -88,6 +88,18 @@ AVS_UNIT_TEST(coap_msg, payload) {
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(_anjay_coap_msg_payload(msg), content + 1, sizeof(content) - 2);
 }
 
+static size_t count_opts(const anjay_coap_msg_t *msg) {
+    size_t num_opts = 0;
+
+    for (anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
+            !_anjay_coap_opt_end(&optit);
+            _anjay_coap_opt_next(&optit)) {
+        ++num_opts;
+    }
+
+    return num_opts;
+}
+
 AVS_UNIT_TEST(coap_msg, options) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -164,7 +176,7 @@ AVS_UNIT_TEST(coap_msg, validate_valid) {
     setup_msg(msg, NULL, 0);
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 0);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 0);
 }
 
 AVS_UNIT_TEST(coap_msg, validate_empty) {
@@ -203,15 +215,15 @@ AVS_UNIT_TEST(coap_msg, validate_unrecognized_version) {
 
     _anjay_coap_msg_header_set_version(&msg->header, 0);
     AVS_UNIT_ASSERT_FALSE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 0);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 0);
 
     _anjay_coap_msg_header_set_version(&msg->header, 2);
     AVS_UNIT_ASSERT_FALSE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 0);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 0);
 
     _anjay_coap_msg_header_set_version(&msg->header, 3);
     AVS_UNIT_ASSERT_FALSE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 0);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 0);
 }
 
 AVS_UNIT_TEST(coap_msg, validate_with_token) {
@@ -222,7 +234,7 @@ AVS_UNIT_TEST(coap_msg, validate_with_token) {
     msg->header.version_type_token_length = VTTL(1, 0, sizeof(content));
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 0);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 0);
 }
 
 AVS_UNIT_TEST(coap_msg, validate_invalid_token_length) {
@@ -253,7 +265,7 @@ AVS_UNIT_TEST(coap_msg, validate_null_opt) {
     setup_msg(msg, opts, sizeof(opts) - 1);
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 1);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 1);
 
     anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
     AVS_UNIT_ASSERT_TRUE(optit.msg == msg);
@@ -277,7 +289,7 @@ AVS_UNIT_TEST(coap_msg, validate_opt_ext_delta_byte) {
     setup_msg(msg, opts, sizeof(opts) - 1);
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 1);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 1);
 
     anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
     AVS_UNIT_ASSERT_TRUE(optit.msg == msg);
@@ -301,7 +313,7 @@ AVS_UNIT_TEST(coap_msg, validate_opt_ext_delta_short) {
     setup_msg(msg, opts, sizeof(opts) - 1);
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 1);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 1);
 
     anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
     AVS_UNIT_ASSERT_TRUE(optit.msg == msg);
@@ -325,7 +337,7 @@ AVS_UNIT_TEST(coap_msg, validate_opt_ext_length_byte) {
     #undef OPTS_SIZE
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 1);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 1);
 
     anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
     AVS_UNIT_ASSERT_TRUE(optit.msg == msg);
@@ -349,7 +361,7 @@ AVS_UNIT_TEST(coap_msg, validate_opt_ext_length_short) {
     setup_msg(msg, opts, 3 + (256 + ANJAY_COAP_EXT_U16_BASE));
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 1);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 1);
 
     anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
     AVS_UNIT_ASSERT_TRUE(optit.msg == msg);
@@ -373,7 +385,7 @@ AVS_UNIT_TEST(coap_msg, validate_multiple_opts) {
     setup_msg(msg, opts, sizeof(opts) - 1);
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 3);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 3);
 
     anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
 
@@ -422,7 +434,7 @@ AVS_UNIT_TEST(coap_msg, validate_payload) {
     setup_msg(msg, content, sizeof(content) - 1);
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 0);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 0);
 }
 
 AVS_UNIT_TEST(coap_msg, validate_payload_marker_only) {
@@ -432,7 +444,7 @@ AVS_UNIT_TEST(coap_msg, validate_payload_marker_only) {
     setup_msg(msg, content, sizeof(content) - 1);
 
     AVS_UNIT_ASSERT_FALSE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 0);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 0);
 }
 
 AVS_UNIT_TEST(coap_msg, validate_full) {
@@ -446,7 +458,7 @@ AVS_UNIT_TEST(coap_msg, validate_full) {
     msg->header.version_type_token_length = VTTL(1, 0, 8);
 
     AVS_UNIT_ASSERT_TRUE(_anjay_coap_msg_is_valid(msg));
-    AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_count_opts(msg), 3);
+    AVS_UNIT_ASSERT_EQUAL(count_opts(msg), 3);
     AVS_UNIT_ASSERT_EQUAL(_anjay_coap_msg_payload_length(msg), sizeof("foo bar baz"));
 }
 

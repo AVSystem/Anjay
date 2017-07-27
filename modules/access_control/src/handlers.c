@@ -407,11 +407,12 @@ static int remove_ac_instance_by_target(anjay_t *anjay,
 
 static int perform_adds_and_removes(anjay_t *anjay,
                                     access_control_t *ac,
-                                    anjay_ssid_t origin_ssid,
                                     anjay_notify_queue_t incoming_queue,
                                     anjay_notify_queue_t *local_queue_ptr) {
     assert(_anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL)
             == &ac->obj_def);
+
+    const anjay_ssid_t origin_ssid = _anjay_dm_current_ssid(anjay);
 
     AVS_LIST(access_control_instance_t) acs_to_insert = NULL;
     AVS_LIST(access_control_instance_t) *acs_to_insert_append_ptr
@@ -461,7 +462,6 @@ static int perform_adds_and_removes(anjay_t *anjay,
 }
 
 static int sync_on_notify(anjay_t *anjay,
-                          anjay_ssid_t origin_ssid,
                           anjay_notify_queue_t incoming_queue,
                           void *data) {
     access_control_t *ac = (access_control_t *) data;
@@ -471,7 +471,7 @@ static int sync_on_notify(anjay_t *anjay,
 
     bool might_caused_orphaned_ac_instances;
     bool have_adds_or_removes;
-    what_changed(origin_ssid, incoming_queue,
+    what_changed(_anjay_dm_current_ssid(anjay), incoming_queue,
                  &might_caused_orphaned_ac_instances, &have_adds_or_removes);
     if (!might_caused_orphaned_ac_instances && !have_adds_or_removes) {
         return 0;
@@ -486,11 +486,11 @@ static int sync_on_notify(anjay_t *anjay,
                                                                  &local_queue);
     }
     if (!result && have_adds_or_removes) {
-        result = perform_adds_and_removes(anjay, ac, origin_ssid,
+        result = perform_adds_and_removes(anjay, ac,
                                           incoming_queue, &local_queue);
     }
     if (!result) {
-        result = _anjay_notify_flush(anjay, origin_ssid, &local_queue);
+        result = _anjay_notify_flush(anjay, &local_queue);
     } else {
         _anjay_notify_clear_queue(&local_queue);
     }

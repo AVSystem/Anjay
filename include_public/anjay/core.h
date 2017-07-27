@@ -48,6 +48,38 @@ typedef struct anjay_smsdrv_struct anjay_smsdrv_t;
  */
 void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
 
+typedef struct {
+    /** RFC 7252: ACK_TIMEOUT */
+    avs_net_timeout_t ack_timeout_ms;
+    /** RFC 7252: ACK_RANDOM_FACTOR */
+    double ack_random_factor;
+    /** RFC 7252: MAX_RETRANSMIT */
+    unsigned max_retransmit;
+} anjay_coap_tx_params_t;
+
+/**
+ * Default transmission params recommended by the CoAP specification (RFC 7252).
+ */
+#define ANJAY_COAP_DEFAULT_UDP_TX_PARAMS \
+    {                                    \
+        /* .ack_timeout_ms = */ 2000,    \
+        /* .ack_random_factor = */ 1.5,  \
+        /* .max_retransmit = */ 4        \
+    }
+
+/**
+ * Default transmission params for SMS connections.
+ *
+ * This set of parameters ensures MAX_TRANSMIT_WAIT is equal to the default
+ * (i.e. CoAP specified) MAX_TRANSMIT_WAIT, while disabling retransmissions.
+ */
+#define ANJAY_COAP_DEFAULT_SMS_TX_PARAMS \
+    {                                    \
+        /* .ack_timeout_ms = */ 62000,   \
+        /* .ack_random_factor = */ 1.5,  \
+        /* .max_retransmit = */ 0        \
+    }
+
 typedef struct anjay_configuration {
     /** Endpoint name as presented to the LwM2M server. If not set, defaults
      * to ANJAY_DEFAULT_ENDPOINT_NAME. */
@@ -92,6 +124,30 @@ typedef struct anjay_configuration {
      * - Value pointed to by the <c>preferred_endpoint</c> will be ignored.
      */
     avs_net_socket_configuration_t udp_socket_config;
+
+    /**
+     * Configuration of the CoAP transmission params for UDP connection, as per
+     * RFC 7252.
+     *
+     * If NULL, the default configuration @ref ANJAY_COAP_DEFAULT_UDP_TX_PARAMS
+     * will be selected.
+     *
+     * NOTE: Parameters are copied during @ref anjay_new() and cannot be
+     * modified later on.
+     */
+    const anjay_coap_tx_params_t *udp_tx_params;
+
+    /**
+     * Configuration of the CoAP transmission params for SMS connection, as per
+     * RFC 7252.
+     *
+     * If NULL, the default configuration @ref ANJAY_COAP_DEFAULT_SMS_TX_PARAMS
+     * will be selected.
+     *
+     * NOTE: Parameters are copied during @ref anjay_new() and cannot be
+     * modified later on.
+     */
+    const anjay_coap_tx_params_t *sms_tx_params;
 
     /** Controls whether Notify operations are conveyed using Confirmable CoAP
      * messages by default. */

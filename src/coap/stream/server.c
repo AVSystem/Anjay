@@ -25,7 +25,8 @@
 #include <inttypes.h>
 
 #include "../log.h"
-#include "../utils.h"
+#include "../block_utils.h"
+#include "../content_format.h"
 #include "../msg_internal.h"
 #include "../id_source/static.h"
 #include "stream.h"
@@ -55,7 +56,21 @@ void _anjay_coap_server_reset(coap_server_t *server) {
     AVS_LIST_CLEAR(&server->expected_block_opts);
     server->curr_block.valid = false;
     clear_error(server);
+#ifdef WITH_BLOCK_SEND
+    memset(&server->block_relation_validator, 0,
+           sizeof(server->block_relation_validator));
+#endif // WITH_BLOCK_SEND
 }
+
+#ifdef WITH_BLOCK_SEND
+void _anjay_coap_server_set_block_request_relation_validator(
+        coap_server_t *server,
+        anjay_coap_block_request_validator_t *validator,
+        void *validator_arg) {
+    server->block_relation_validator.validator = validator;
+    server->block_relation_validator.validator_arg = validator_arg;
+}
+#endif // WITH_BLOCK_SEND
 
 const anjay_coap_msg_identity_t *
 _anjay_coap_server_get_request_identity(const coap_server_t *server) {
@@ -230,8 +245,8 @@ static process_result_t process_initial_request(coap_server_t *server,
 
     coap_block_info_t block1;
     coap_block_info_t block2;
-    int result1 = _anjay_coap_common_get_block_info(msg, COAP_BLOCK1, &block1);
-    int result2 = _anjay_coap_common_get_block_info(msg, COAP_BLOCK2, &block2);
+    int result1 = _anjay_coap_get_block_info(msg, COAP_BLOCK1, &block1);
+    int result2 = _anjay_coap_get_block_info(msg, COAP_BLOCK2, &block2);
     if (result1 || result2) {
         _anjay_coap_server_set_error(server, -ANJAY_ERR_BAD_REQUEST);
         return PROCESS_INITIAL_INVALID_REQUEST;
@@ -267,12 +282,12 @@ static process_result_t process_initial_request(coap_server_t *server,
         }
 
         if (block1.valid
-                && block_store_critical_options(&server->expected_block_opts, msg,
-                                                ANJAY_COAP_OPT_BLOCK1)) {
+                && block_store_critical_options(&server->expected_block_opts,
+                                                msg, ANJAY_COAP_OPT_BLOCK1)) {
             return PROCESS_INITIAL_INVALID_REQUEST;
         }
     }
-    server->request_identity = _anjay_coap_common_identity_from_msg(msg);
+    server->request_identity = _anjay_coap_msg_get_identity(msg);
 
     assert(!is_server_reset(server));
     return PROCESS_INITIAL_OK;
@@ -299,8 +314,8 @@ static int receive_request(coap_server_t *server,
          * Due to Size1 Option semantics being not clear enough we don't
          * inform Server about supported message size.
          */
-        _anjay_coap_common_send_error(socket, partial_msg,
-                                      ANJAY_COAP_CODE_REQUEST_ENTITY_TOO_LARGE);
+        _anjay_coap_send_error(socket, partial_msg,
+                               ANJAY_COAP_CODE_REQUEST_ENTITY_TOO_LARGE);
     }
 
     if (result) {
@@ -313,11 +328,11 @@ static int receive_request(coap_server_t *server,
         if (!server->last_error_code) {
             if (_anjay_coap_msg_header_get_type(&msg->header)
                     == ANJAY_COAP_MSG_CONFIRMABLE) {
-                _anjay_coap_common_send_empty(socket, ANJAY_COAP_MSG_RESET,
-                                              _anjay_coap_msg_get_id(msg));
+                _anjay_coap_send_empty(socket, ANJAY_COAP_MSG_RESET,
+                                       _anjay_coap_msg_get_id(msg));
             }
         } else {
-            _anjay_coap_common_send_error(socket, msg, server->last_error_code);
+            _anjay_coap_send_error(socket, msg, server->last_error_code);
         }
         return -1;
     case PROCESS_INITIAL_OK:
@@ -411,12 +426,12 @@ static int retrieve_block_options(const anjay_coap_msg_t *msg,
                                   coap_block_info_t *out_block2) {
     int result = 0;
 
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK1, out_block1)) {
+    if (_anjay_coap_get_block_info(msg, COAP_BLOCK1, out_block1)) {
         coap_log(DEBUG, "block-wise transfer - BLOCK1 invalid");
         result = -1;
     }
 
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK2, out_block2)) {
+    if (_anjay_coap_get_block_info(msg, COAP_BLOCK2, out_block2)) {
         coap_log(DEBUG, "block-wise transfer - BLOCK2 invalid");
         result = -1;
     }
@@ -457,11 +472,10 @@ static process_block_result_t process_next_block(coap_server_t *server,
     uint32_t offset = get_block_offset(&new_block);
     uint32_t expected_offset =
             get_block_offset(&server->curr_block) + server->curr_block.size;
-    anjay_coap_msg_identity_t msg_identity = _anjay_coap_common_identity_from_msg(msg);
+    anjay_coap_msg_identity_t msg_identity = _anjay_coap_msg_get_identity(msg);
 
     if (offset != expected_offset) {
-        if (_anjay_coap_common_identity_equal(&server->request_identity,
-                                              &msg_identity)
+        if (_anjay_coap_identity_equal(&server->request_identity, &msg_identity)
                 && blocks_equal(&server->curr_block, &new_block)) {
             return PROCESS_BLOCK_DUPLICATE;
         }
@@ -543,7 +557,7 @@ static int receive_next_block(const anjay_coap_msg_t *msg,
     case PROCESS_BLOCK_OK:
     case PROCESS_BLOCK_DUPLICATE:
     case PROCESS_BLOCK_REJECT_ABORT:
-        server->request_identity = _anjay_coap_common_identity_from_msg(msg);
+        server->request_identity = _anjay_coap_msg_get_identity(msg);
         *out_wait_for_next = false;
         break;
     }
@@ -560,7 +574,7 @@ static int receive_next_block_with_timeout(coap_server_t *server,
      * That's a *really* big timeout, but CoAP BLOCK spec suggests that value
      * to be used as a timeout until cached state can be discarded.
      */
-    int32_t timeout_ms = _anjay_coap_exchange_lifetime_ms(
+    int32_t timeout_ms = (int32_t)_anjay_coap_exchange_lifetime_ms(
             _anjay_coap_socket_get_tx_params(socket));
     while (timeout_ms > 0) {
         int recv_result = -1;
@@ -674,9 +688,9 @@ static int block_write(coap_server_t *server,
         if (!server->static_id_source) {
             return -1;
         }
-        server->block_ctx =
-                _anjay_coap_block_response_new(block_size, in, out, socket,
-                                               server->static_id_source);
+        server->block_ctx = _anjay_coap_block_response_new(
+                block_size, in, out, socket, server->static_id_source,
+                &server->block_relation_validator);
 
         if (!server->block_ctx) {
             _anjay_coap_id_source_release(&server->static_id_source);

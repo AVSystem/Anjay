@@ -366,22 +366,20 @@ class Lwm2mDeregister(Lwm2mMsg):
         return 'De-register ' + self.get_full_uri()
 
 
-class Lwm2mRead(Lwm2mMsg):
+class CoapGet(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
         return (pkt.type == coap.Type.CONFIRMABLE
-                and pkt.code == coap.Code.REQ_GET
-                and is_lwm2m_nonempty_path(pkt.get_uri_path())
-                and not is_link_format(pkt))
+                and pkt.code == coap.Code.REQ_GET)
 
     def __init__(self,
-                 path: str or Lwm2mNonemptyPath,
+                 path: str or CoapPath,
                  accept: coap.AcceptOption = None,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
                  options: List[coap.Option] = ANY):
         if isinstance(path, str):
-            path = Lwm2mNonemptyPath(path)
+            path = CoapPath(path)
 
         if isinstance(accept, int):
             accept = coap.Option.ACCEPT(accept)
@@ -394,6 +392,37 @@ class Lwm2mRead(Lwm2mMsg):
                              path.to_uri_options(),
                              ([accept] if accept is not None else []),
                              options))
+
+    def summary(self):
+        text = 'GET ' + self.get_full_uri()
+
+        accept = self.get_options(coap.Option.ACCEPT)
+        if accept:
+            accept_vals = [x.content_to_int() for x in accept]
+            text += ': accept ' + ', '.join(map(coap.ContentFormat.to_str, accept_vals))
+
+        return text
+
+
+
+class Lwm2mRead(CoapGet):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        return (CoapGet._pkt_matches(pkt)
+                and is_lwm2m_nonempty_path(pkt.get_uri_path())
+                and not is_link_format(pkt))
+
+    def __init__(self,
+                 path: str or Lwm2mNonemptyPath,
+                 accept: coap.AcceptOption = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
+        if isinstance(path, str):
+            path = Lwm2mNonemptyPath(path)
+
+        super().__init__(path=path, accept=accept, msg_id=msg_id,
+                         token=token, options=options)
 
     def summary(self):
         text = 'Read ' + self.get_full_uri()
@@ -454,11 +483,10 @@ class Lwm2mObserve(Lwm2mRead):
         return text
 
 
-class Lwm2mDiscover(Lwm2mMsg):
+class Lwm2mDiscover(CoapGet):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.CONFIRMABLE
-                and pkt.code == coap.Code.REQ_GET
+        return (CoapGet._pkt_matches(pkt)
                 and is_lwm2m_nonempty_path(pkt.get_uri_path())
                 and is_link_format(pkt))
 
@@ -467,17 +495,11 @@ class Lwm2mDiscover(Lwm2mMsg):
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
                  options: List[coap.Option] = ANY):
-        if isinstance(path, str):
-            path = Lwm2mPath(path)
-
-        super().__init__(type=coap.Type.CONFIRMABLE,
-                         code=coap.Code.REQ_GET,
+        super().__init__(path=path,
                          msg_id=msg_id,
                          token=token,
-                         options=concat_if_not_any(
-                             path.to_uri_options(),
-                             [coap.Option.ACCEPT.APPLICATION_LINK],
-                             options))
+                         accept=coap.Option.ACCEPT.APPLICATION_LINK,
+                         options=options)
 
     def summary(self):
         return 'Discover ' + self.get_full_uri()

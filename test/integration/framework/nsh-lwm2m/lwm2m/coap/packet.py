@@ -181,8 +181,7 @@ class Packet(object):
         for opt in self.options:
             if opt.matches(Option.URI_PATH):
                 path.append(opt.content.decode('ascii'))
-        if path:
-            return '/' + '/'.join(path)
+        return '/' + '/'.join(path)
 
     def get_location_path(self):
         path = []
@@ -240,3 +239,9 @@ class Packet(object):
                 options_str,
                 ('%d bytes' % len(self.content)) if self.content is not ANY else str(self.content)
             ))
+
+    def __eq__(self, rhs: 'Packet'):
+        return ((type(self), self.version, self.type, self.code, self.msg_id,
+                 self.token, self.options, self.content)
+                == (type(rhs), rhs.version, rhs.type, rhs.code, rhs.msg_id,
+                    rhs.token, rhs.options, rhs.content))

@@ -59,17 +59,13 @@ typedef struct {
     anjay_msg_details_t details;
     anjay_coap_msg_identity_t identity;
     struct timespec timestamp;
+    double numeric;
     const size_t value_length;
     char value[1]; // actually a FAM
 } anjay_observe_resource_value_t;
 
 typedef struct {
-    anjay_ssid_t ssid;
-    anjay_connection_type_t type;
-} anjay_observe_connection_key_t;
-
-typedef struct {
-    anjay_observe_connection_key_t connection;
+    anjay_connection_key_t connection;
     anjay_oid_t oid;
     anjay_iid_t iid;
     int32_t rid;
@@ -94,9 +90,7 @@ void _anjay_observe_remove_entry(anjay_t *anjay,
 void _anjay_observe_remove_by_msg_id(anjay_t *anjay,
                                      uint16_t notify_id);
 
-int _anjay_observe_sched_flush(anjay_t *anjay,
-                               anjay_ssid_t ssid,
-                               anjay_connection_type_t conn_type);
+int _anjay_observe_sched_flush_current_connection(anjay_t *anjay);
 
 int _anjay_observe_notify(anjay_t *anjay,
                           const anjay_observe_key_t *origin_key,
@@ -109,7 +103,7 @@ anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
 
 #define _anjay_observe_init(...) ((int) 0)
 #define _anjay_observe_cleanup(...) ((void) 0)
-#define _anjay_observe_sched_flush(...) ((void) 0)
+#define _anjay_observe_sched_flush_current_connection(...) ((void) 0)
 
 #endif // WITH_OBSERVE
 

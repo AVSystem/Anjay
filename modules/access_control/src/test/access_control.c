@@ -25,6 +25,7 @@
 
 #include <anjay_test/dm.h>
 
+#include "../../../../src/anjay.h"
 #include "../access_control.h"
 
 #define TEST_OID 0x100
@@ -56,7 +57,11 @@ AVS_UNIT_TEST(access_control, set_acl) {
         anjay_notify_queue_t queue = NULL;
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_notify_queue_instance_created(&queue, TEST->oid, iid));
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_flush(anjay, ssid, &queue));
+        anjay->current_connection.server = anjay->servers.active;
+        anjay->current_connection.conn_type = ANJAY_CONNECTION_UDP;
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_flush(anjay, &queue));
+        memset(&anjay->current_connection, 0,
+               sizeof(anjay->current_connection));
     }
 
     // NULL AC object ptr

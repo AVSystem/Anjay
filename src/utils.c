@@ -463,6 +463,47 @@ fail:
     return NULL;
 }
 
+avs_net_abstract_socket_t *
+_anjay_create_connected_udp_socket(anjay_t *anjay,
+                                   avs_net_socket_type_t type,
+                                   const char *bind_port,
+                                   const void *config,
+                                   const anjay_url_t *uri) {
+    (void) anjay;
+
+    avs_net_abstract_socket_t *socket = NULL;
+
+    switch (type) {
+    case AVS_NET_UDP_SOCKET:
+    case AVS_NET_DTLS_SOCKET:
+        if (avs_net_socket_create(&socket, type, config)) {
+            anjay_log(ERROR, "could not create CoAP socket");
+            goto fail;
+        }
+
+        if (bind_port && *bind_port
+                && avs_net_socket_bind(socket, NULL, bind_port)) {
+            anjay_log(ERROR, "could not bind socket to port %s", bind_port);
+            goto fail;
+        }
+
+        if (avs_net_socket_connect(socket, uri->host, uri->port)) {
+            anjay_log(ERROR, "could not connect to %s:%s",
+                      uri->host, uri->port);
+            goto fail;
+        }
+
+        return socket;
+    default:
+        anjay_log(ERROR, "unsupported socket type requested: %d", type);
+        return NULL;
+    }
+
+fail:
+    avs_net_socket_cleanup(&socket);
+    return NULL;
+}
+
 #ifdef ANJAY_TEST
 #include "test/utils.c"
 #endif // ANJAY_TEST

@@ -110,9 +110,9 @@ class AccessControl:
                                               accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
                 self.assertEqual(expected_tlv, read_tlv.content)
 
-        def setUp(self, num_servers=2, **kwargs):
-            extra_args = sum((['--access-entry', '1337', str(ssid)] for ssid in range(2, num_servers + 1)), [])
-            self.setup_demo_with_servers(num_servers=num_servers,
+        def setUp(self, servers=2, **kwargs):
+            extra_args = sum((['--access-entry', '1337', str(ssid)] for ssid in range(2, servers + 1)), [])
+            self.setup_demo_with_servers(servers=servers,
                                          extra_cmdline_args=extra_args,
                                          **kwargs)
 
@@ -150,6 +150,18 @@ class ReadTest(AccessControl.Test):
                            expect_error_code=coap.Code.RES_UNAUTHORIZED)
         self.read_instance(server=self.servers[0], oid=TEST_OID, iid=1,
                            expect_error_code=coap.Code.RES_UNAUTHORIZED)
+
+
+class WriteAttributesTest(AccessControl.Test):
+    def runTest(self):
+        self.create_instance(server=self.servers[1], oid=TEST_OID)
+
+        # SSID 2 can perform Write-Attributes
+        self.write_attributes(server=self.servers[1], oid=TEST_OID, iid=1, query=['pmin=500'])
+
+        # SSID 1 can't, as it cannot Read
+        self.write_attributes(server=self.servers[0], oid=TEST_OID, iid=1, query=['pmin=600'],
+                              expect_error_code=coap.Code.RES_UNAUTHORIZED)
 
 
 class ChangingReadFlagsMatterTest(AccessControl.Test):
@@ -370,7 +382,7 @@ class EveryoneHasReadAccessToAcoInstancesTest(AccessControl.Test):
 
 class UnbootstrappingOnlyOneOwnerTest(AccessControl.Test):
     def setUp(self):
-        super().setUp(num_servers=3)
+        super().setUp(servers=3)
 
     def runTest(self):
         self.create_instance(server=self.servers[2], oid=TEST_OID)
@@ -389,7 +401,7 @@ class UnbootstrappingOnlyOneOwnerTest(AccessControl.Test):
 
 class UnbootstrappingOwnerElection(AccessControl.Test):
     def setUp(self):
-        super().setUp(num_servers=3)
+        super().setUp(servers=3)
 
     def runTest(self):
         self.create_instance(server=self.servers[2], oid=TEST_OID)

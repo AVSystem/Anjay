@@ -55,12 +55,54 @@ typedef struct {
     anjay_dm_internal_res_attrs_t values;
 } anjay_request_attributes_t;
 
-typedef struct anjay_request_details {
-    anjay_ssid_t ssid; // or ANJAY_SSID_BOOTSTRAP
-    anjay_connection_type_t conn_type;
+static inline bool _anjay_double_attr_equal(double left, double right) {
+    return isnan(left) ? isnan(right) : (left == right);
+}
+
+static inline bool
+_anjay_request_attributes_equal(const anjay_request_attributes_t *left,
+                                const anjay_request_attributes_t *right) {
+    return (left->has_min_period
+                    ? (right->has_min_period
+                            && left->values.standard.common.min_period
+                                    == right->values.standard.common.min_period)
+                    : !right->has_min_period)
+            && (left->has_max_period
+                    ? (right->has_max_period
+                            && left->values.standard.common.max_period
+                                    == right->values.standard.common.max_period)
+                    : !right->has_max_period)
+            && (left->has_greater_than
+                    ? (right->has_greater_than
+                            && _anjay_double_attr_equal(
+                                    left->values.standard.greater_than,
+                                    right->values.standard.greater_than))
+                    : !right->has_greater_than)
+            && (left->has_less_than
+                    ? (right->has_less_than
+                            && _anjay_double_attr_equal(
+                                    left->values.standard.less_than,
+                                    right->values.standard.less_than))
+                    : !right->has_less_than)
+            && (left->has_step
+                    ? (right->has_step
+                            && _anjay_double_attr_equal(
+                                    left->values.standard.step,
+                                    right->values.standard.step))
+                    : !right->has_step)
+#ifdef WITH_CON_ATTR
+            && (left->custom.has_con
+                    ? (right->custom.has_con
+                            && left->values.custom.data.con
+                                    == right->values.custom.data.con)
+                    : !right->custom.has_con)
+#endif // WITH_CON_ATTR
+            ;
+}
+
+typedef struct {
     anjay_coap_msg_type_t msg_type;
     uint8_t request_code;
-    anjay_coap_msg_identity_t request_identity;
 
     bool is_bs_uri;
 
@@ -72,7 +114,21 @@ typedef struct anjay_request_details {
     anjay_coap_observe_t observe;
 
     anjay_request_attributes_t attributes;
-} anjay_request_details_t;
+} anjay_request_t;
+
+static inline bool _anjay_request_equal(const anjay_request_t *left,
+                                        const anjay_request_t *right) {
+    return left->msg_type == right->msg_type
+            && left->request_code == right->request_code
+            && left->is_bs_uri == right->is_bs_uri
+            && _anjay_uri_path_equal(&left->uri, &right->uri)
+            && left->action == right->action
+            && left->content_format == right->content_format
+            && left->requested_format == right->requested_format
+            && left->observe == right->observe
+            && _anjay_request_attributes_equal(&left->attributes,
+                                               &right->attributes);
+}
 
 typedef struct {
     anjay_ssid_t ssid;
@@ -84,33 +140,21 @@ typedef struct {
     bool observe_serial;
 } anjay_dm_read_args_t;
 
-typedef struct {
-    anjay_ssid_t ssid;
-
-    anjay_uri_path_t uri;
-} anjay_dm_write_args_t;
-
-#define DETAILS_TO_DM_WRITE_ARGS(Details) \
-        (const anjay_dm_write_args_t) { \
-            .ssid = (Details)->ssid, \
-            .uri = (Details)->uri \
-        }
-
-#define DETAILS_TO_DM_READ_ARGS(Details) \
+#define REQUEST_TO_DM_READ_ARGS(Anjay, Request) \
         (const anjay_dm_read_args_t) { \
-            .ssid = (Details)->ssid, \
-            .uri = (Details)->uri, \
-            .requested_format = (Details)->requested_format, \
+            .ssid = _anjay_dm_current_ssid(Anjay), \
+            .uri = (Request)->uri, \
+            .requested_format = (Request)->requested_format, \
             .observe_serial = \
-                    ((Details)->observe == ANJAY_COAP_OBSERVE_REGISTER) \
+                    ((Request)->observe == ANJAY_COAP_OBSERVE_REGISTER) \
         }
 
-#define DETAILS_TO_ACTION_INFO(Details) \
+#define REQUEST_TO_ACTION_INFO(Anjay, Request) \
         (const anjay_action_info_t) { \
-            .oid = (Details)->uri.oid, \
-            .iid = (Details)->uri.iid, \
-            .ssid = (Details)->ssid, \
-            .action = (Details)->action \
+            .oid = (Request)->uri.oid, \
+            .iid = (Request)->uri.iid, \
+            .ssid = _anjay_dm_current_ssid(Anjay), \
+            .action = (Request)->action \
         }
 
 int _anjay_dm_transaction_validate(anjay_t *anjay);
@@ -132,7 +176,8 @@ ssize_t _anjay_dm_read_for_observe(anjay_t *anjay,
 #endif // WITH_OBSERVE
 
 int _anjay_dm_perform_action(anjay_t *anjay,
-                             const anjay_request_details_t *details);
+                             const anjay_coap_msg_identity_t *request_identity,
+                             const anjay_request_t *request);
 
 anjay_input_ctx_t *_anjay_dm_read_as_input_ctx(anjay_t *anjay,
                                                const anjay_uri_path_t *path);

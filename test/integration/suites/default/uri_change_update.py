@@ -19,23 +19,13 @@ from framework.lwm2m_test import *
 
 class UriChangeUpdateTest(test_suite.Lwm2mTest):
     def setUp(self):
-        self.servers = [Lwm2mServer(), Lwm2mServer()]
-        self.bootstrap_server = Lwm2mServer()
-
-        demo_args = (self.make_demo_args([self.bootstrap_server, self.servers[0]])
-                     + ['--bootstrap'])
-        self.start_demo(demo_args)
+        self.setup_demo_with_servers(servers=2,
+                                     num_servers_passed=1,
+                                     bootstrap_server=True,
+                                     auto_register=False)
 
     def tearDown(self):
-        try:
-            self.request_demo_shutdown()
-            self.assertDemoDeregisters(self.servers[1])
-        finally:
-            self.bootstrap_server.close()
-            self.servers[0].close()
-            self.servers[1].close()
-
-            self.terminate_demo()
+        self.teardown_demo_with_servers(deregister_servers=[self.servers[1]])
 
     def runTest(self):
         regular_serv1_uri = 'coap://127.0.0.1:%d' % self.servers[0].get_listen_port()

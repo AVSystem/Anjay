@@ -32,6 +32,11 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #ifdef WITH_BLOCK_SEND
 
+typedef struct {
+    anjay_coap_block_request_validator_t *validator;
+    void *validator_arg;
+} anjay_coap_block_request_validator_ctx_t;
+
 /**
  * Creates a block response object.
  *
@@ -47,15 +52,18 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *                                 this function.
  * @param socket                   The CoAP socket used to send/receive blocks.
  * @param id_source                CoAP id source for the block responses.
+ * @param validator_ctx            Request relation validator context.
  *
  * @returns Created block_response object on success, NULL on failure.
  */
 coap_block_transfer_ctx_t *
-_anjay_coap_block_response_new(uint16_t max_block_size,
-                               coap_input_buffer_t *in,
-                               coap_output_buffer_t *out,
-                               anjay_coap_socket_t *socket,
-                               coap_id_source_t *id_source);
+_anjay_coap_block_response_new(
+        uint16_t max_block_size,
+        coap_input_buffer_t *in,
+        coap_output_buffer_t *out,
+        anjay_coap_socket_t *socket,
+        coap_id_source_t *id_source,
+        anjay_coap_block_request_validator_ctx_t *validator_ctx);
 
 anjay_coap_msg_identity_t
 _anjay_coap_block_response_last_request_id(coap_block_transfer_ctx_t *ctx);

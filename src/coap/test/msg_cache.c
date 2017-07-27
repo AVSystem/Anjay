@@ -23,8 +23,8 @@
 #include "../msg_cache.h"
 #include "utils.h"
 
-static const coap_transmission_params_t *tx_params =
-        &_anjay_coap_DEFAULT_TX_PARAMS;
+static const anjay_coap_tx_params_t tx_params =
+        ANJAY_COAP_DEFAULT_UDP_TX_PARAMS;
 
 static anjay_coap_msg_t *setup_msg_with_id(void *buffer,
                                            uint16_t msg_id,
@@ -44,7 +44,7 @@ AVS_UNIT_TEST(coap_msg_cache, null) {
 
     AVS_UNIT_ASSERT_NULL(_anjay_coap_msg_cache_create(0));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_coap_msg_cache_add(NULL, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(NULL, "host", "port", msg, &tx_params));
     AVS_UNIT_ASSERT_NULL(_anjay_coap_msg_cache_get(NULL, "host", "port", id));
 
     // these should not crash
@@ -59,7 +59,7 @@ AVS_UNIT_TEST(coap_msg_cache, hit_single) {
     anjay_coap_msg_t *msg = setup_msg_with_id(alloca(sizeof(*msg)), id, "");
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_msg_cache_add(cache, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", msg, &tx_params));
 
     // request message existing in cache
     const anjay_coap_msg_t *cached_msg =
@@ -84,7 +84,7 @@ AVS_UNIT_TEST(coap_msg_cache, hit_multiple) {
     for (size_t i = 0; i < ANJAY_ARRAY_SIZE(msg); ++i) {
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_msg_cache_add(cache, "host", "port",
-                                          msg[i], tx_params));
+                                          msg[i], &tx_params));
     }
 
     // request message existing in cache
@@ -109,7 +109,7 @@ AVS_UNIT_TEST(coap_msg_cache, hit_expired) {
     _anjay_mock_clock_start(&(struct timespec){ 100, 0 });
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_msg_cache_add(cache, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", msg, &tx_params));
     _anjay_mock_clock_advance(&(struct timespec){ 247, 0 });
 
     // request expired message existing in cache
@@ -136,7 +136,7 @@ AVS_UNIT_TEST(coap_msg_cache, miss_non_empty) {
     anjay_coap_msg_t *msg = setup_msg_with_id(alloca(sizeof(*msg)), id, "");
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_msg_cache_add(cache, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", msg, &tx_params));
 
     // request message not in cache
     AVS_UNIT_ASSERT_NULL(_anjay_coap_msg_cache_get(cache, "host", "port",
@@ -154,9 +154,9 @@ AVS_UNIT_TEST(coap_msg_cache, add_existing) {
     // replacing existing non-expired cached messages with updated ones
     // is not allowed
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_msg_cache_add(cache, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", msg, &tx_params));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_coap_msg_cache_add(cache, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", msg, &tx_params));
 
     _anjay_coap_msg_cache_release(&cache);
 }
@@ -171,10 +171,10 @@ AVS_UNIT_TEST(coap_msg_cache, add_existing_expired) {
 
     // replacing existing expired cached messages is not allowed
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_msg_cache_add(cache, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", msg, &tx_params));
     _anjay_mock_clock_advance(&(struct timespec){ 247, 0 });
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_msg_cache_add(cache, "host", "port", msg, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", msg, &tx_params));
 
     _anjay_coap_msg_cache_release(&cache);
     _anjay_mock_clock_finish();
@@ -196,11 +196,11 @@ AVS_UNIT_TEST(coap_msg_cache, add_evict) {
     // message with another ID removes oldest existing entry if extra space
     // is required
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "host", "port",
-                                                      msg[0], tx_params));
+                                                      msg[0], &tx_params));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "host", "port",
-                                                      msg[1], tx_params));
+                                                      msg[1], &tx_params));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "host", "port",
-                                                      msg[2], tx_params));
+                                                      msg[2], &tx_params));
 
     // oldest entry was removed
     AVS_UNIT_ASSERT_NULL(_anjay_coap_msg_cache_get(cache, "host", "port", id));
@@ -238,11 +238,11 @@ AVS_UNIT_TEST(coap_msg_cache, add_evict_multiple) {
     // message with another ID removes oldest existing entries if extra space
     // is required
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "host", "port",
-                                                      msg[0], tx_params));
+                                                      msg[0], &tx_params));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "host", "port",
-                                                      msg[1], tx_params));
+                                                      msg[1], &tx_params));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "host", "port",
-                                                      msg[2], tx_params));
+                                                      msg[2], &tx_params));
 
     // oldest entries were removed
     AVS_UNIT_ASSERT_NULL(_anjay_coap_msg_cache_get(cache, "host", "port", id));
@@ -277,9 +277,9 @@ AVS_UNIT_TEST(coap_msg_cache, add_too_big) {
 
     // message too long to put into cache should be ignored
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_msg_cache_add(cache, "host", "port", m1, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", m1, &tx_params));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_coap_msg_cache_add(cache, "host", "port", m2, tx_params));
+            _anjay_coap_msg_cache_add(cache, "host", "port", m2, &tx_params));
 
     // previously-added entry is still there
     const anjay_coap_msg_t *cached_msg =
@@ -306,9 +306,9 @@ AVS_UNIT_TEST(coap_msg_cache, multiple_hosts_same_ids) {
     coap_msg_cache_t *cache = _anjay_coap_msg_cache_create(4096);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "h1", "port",
-                                                      m1, tx_params));
+                                                      m1, &tx_params));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_msg_cache_add(cache, "h2", "port",
-                                                      m2, tx_params));
+                                                      m2, &tx_params));
 
     // both entries should be present despite having identical IDs
     const anjay_coap_msg_t *cached_msg =

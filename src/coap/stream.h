@@ -54,21 +54,19 @@ typedef int
 anjay_coap_stream_setup_response_t(avs_stream_abstract_t *stream,
                                    const anjay_msg_details_t *details);
 
-#define ANJAY_COAP_OPTION_MISSING 1
-
-typedef bool
-anjay_coap_stream_critical_option_validator_t(uint8_t msg_code, uint32_t optnum);
+typedef int anjay_coap_block_request_validator_t(const anjay_coap_msg_t *msg,
+                                                 void *arg);
 
 typedef struct anjay_coap_stream_ext {
     anjay_coap_stream_setup_response_t *setup_response;
 } anjay_coap_stream_ext_t;
 
 int _anjay_coap_stream_get_tx_params(avs_stream_abstract_t *stream,
-                                     coap_transmission_params_t *out_tx_params);
+                                     anjay_coap_tx_params_t *out_tx_params);
 
 int _anjay_coap_stream_set_tx_params(
         avs_stream_abstract_t *stream,
-        const coap_transmission_params_t *tx_params);
+        const anjay_coap_tx_params_t *tx_params);
 
 int _anjay_coap_stream_setup_response(avs_stream_abstract_t *stream,
                                       const anjay_msg_details_t *details);
@@ -82,49 +80,20 @@ int _anjay_coap_stream_setup_request(
 int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream,
                                  uint8_t code);
 
-int _anjay_coap_stream_get_code(avs_stream_abstract_t *stream,
-                                uint8_t *out_code);
-int _anjay_coap_stream_get_msg_type(avs_stream_abstract_t *stream,
-                                    anjay_coap_msg_type_t *out_type);
+/** NOTE: Pointer acquired with this function is only valid until receiving next
+ * CoAP packet. Note that this might mean invalidation during the same stream
+ * exchange if block transfer is in progress. */
+int _anjay_coap_stream_get_incoming_msg(avs_stream_abstract_t *stream,
+                                        const anjay_coap_msg_t **out_msg);
 
-/** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
-int _anjay_coap_stream_get_option_uint(avs_stream_abstract_t *stream,
-                                       uint16_t option_number,
-                                       void *out_value,
-                                       size_t out_value_size);
-/** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
-static inline int
-_anjay_coap_stream_get_option_u16(avs_stream_abstract_t *stream,
-                                  uint16_t option_number,
-                                  uint16_t *out_value) {
-    return _anjay_coap_stream_get_option_uint(stream, option_number,
-                                              out_value, sizeof(*out_value));
-}
-/** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
-static inline int
-_anjay_coap_stream_get_option_u32(avs_stream_abstract_t *stream,
-                                  uint16_t option_number,
-                                  uint32_t *out_value) {
-    return _anjay_coap_stream_get_option_uint(stream, option_number,
-                                              out_value, sizeof(*out_value));
-}
-/** returns: -1 on error, 0 on success, ANJAY_COAP_OPTION_MISSING if option missing */
-int _anjay_coap_stream_get_option_string_it(avs_stream_abstract_t *stream,
-                                            uint16_t option_number,
-                                            anjay_coap_opt_iterator_t *it,
-                                            size_t *out_bytes_read,
-                                            char *buffer,
-                                            size_t buffer_size);
 int _anjay_coap_stream_get_request_identity(
         avs_stream_abstract_t *stream,
         anjay_coap_msg_identity_t *out_identity);
 
-int _anjay_coap_stream_validate_critical_options(avs_stream_abstract_t *stream,
-                        anjay_coap_stream_critical_option_validator_t validator);
-
-/** defaults to ANJAY_COAP_FORMAT_PLAINTEXT if contet format is not specified */
-int _anjay_coap_stream_get_content_format(avs_stream_abstract_t *stream,
-                                          uint16_t *out_value);
+void _anjay_coap_stream_set_block_request_validator(
+        avs_stream_abstract_t *stream,
+        anjay_coap_block_request_validator_t *validator,
+        void *validator_arg);
 
 VISIBILITY_PRIVATE_HEADER_END
 

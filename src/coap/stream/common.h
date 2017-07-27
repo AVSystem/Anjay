@@ -28,77 +28,10 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-/**
- * Attempts to obtain block info of given block @p type. Possible return values
- * along with @p out_info->valid values are shown in the table below.
- *
- * +-----------------------+----------------+-----------------+
- * |        Option         |  Return value  | out_info->valid |
- * +-----------------------+----------------+-----------------+
- * |   Present and valid   |       0        |      true       |
- * +-----------------------+----------------+-----------------+
- * | Present and malformed |      -1        |      false      |
- * +-----------------------+----------------+-----------------+
- * |        Doubled        |      -1        |      false      |
- * +-----------------------+----------------+-----------------+
- * |      Not present      |       0        |      false      |
- * +-----------------------+----------------+-----------------+
- */
-int _anjay_coap_common_get_block_info(const anjay_coap_msg_t *msg,
-                                      coap_block_type_t type,
-                                      coap_block_info_t *out_info);
-
 int _anjay_coap_common_fill_msg_info(anjay_coap_msg_info_t *info,
                                      const anjay_msg_details_t *details,
                                      const anjay_coap_msg_identity_t *identity,
                                      const coap_block_info_t *block_info);
-
-static inline bool
-_anjay_coap_common_tokens_equal(const anjay_coap_token_t *first,
-                                size_t first_size,
-                                const anjay_coap_token_t *second,
-                                size_t second_size) {
-    return first_size == second_size
-        && !memcmp(first->bytes, second->bytes, first_size);
-}
-
-bool _anjay_coap_common_token_matches(const anjay_coap_msg_t *msg,
-                                      const anjay_coap_msg_identity_t *id);
-
-static inline anjay_coap_msg_identity_t
-_anjay_coap_common_identity_from_msg(const anjay_coap_msg_t *msg) {
-    anjay_coap_msg_identity_t id;
-    memset(&id, 0, sizeof(id));
-    id.msg_id = _anjay_coap_msg_get_id(msg);
-    id.token_size = _anjay_coap_msg_get_token(msg, &id.token);
-    return id;
-}
-
-static inline
-bool _anjay_coap_common_identity_equal(const anjay_coap_msg_identity_t *a,
-                                       const anjay_coap_msg_identity_t *b) {
-    return a->msg_id == b->msg_id
-        && a->token_size == b->token_size
-        && !memcmp(&a->token, &b->token, a->token_size);
-}
-
-/**
- * Sends an Empty message with given values of @p msg_type and @p msg_id.
- */
-int _anjay_coap_common_send_empty(anjay_coap_socket_t *socket,
-                                  anjay_coap_msg_type_t msg_type,
-                                  uint16_t msg_id);
-
-/**
- * Responds with error specified as @p error_code to the message @p msg.
- */
-void _anjay_coap_common_send_error(anjay_coap_socket_t *socket,
-                                   const anjay_coap_msg_t *msg,
-                                   uint8_t error_code);
-
-void _anjay_coap_common_send_service_unavailable(anjay_coap_socket_t *socket,
-                                                 const anjay_coap_msg_t *msg,
-                                                 int32_t retry_after_ms);
 
 /**
  * @param      msg               Received message. It is guaranteed to never
@@ -148,16 +81,6 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
                                              recv_msg_handler_t *handle_msg,
                                              void *handle_msg_data,
                                              int *out_handler_result);
-
-typedef struct {
-    unsigned retry_count;
-    int32_t recv_timeout_ms;
-} coap_retry_state_t;
-
-void _anjay_coap_common_update_retry_state(
-        coap_retry_state_t *retry_state,
-        const coap_transmission_params_t *tx_params,
-        anjay_rand_seed_t *rand_seed);
 
 VISIBILITY_PRIVATE_HEADER_END
 

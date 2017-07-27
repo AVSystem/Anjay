@@ -24,6 +24,7 @@
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
+#include "../content_format.h"
 #include "../socket.h"
 #include "../stream.h"
 #include "../stream/stream.h"
@@ -117,7 +118,7 @@ static size_t block_size_for_buffer_size_and_mtu(size_t out_buffer_size,
     coap_block_transfer_ctx_t *ctx =
             _anjay_coap_block_response_new(ANJAY_COAP_MSG_BLOCK_MAX_SIZE,
                                            test.in, test.out, test.socket,
-                                           FAKE_ID_SOURCE);
+                                           FAKE_ID_SOURCE, NULL);
 
     size_t block_size = 0;
     if (ctx) {

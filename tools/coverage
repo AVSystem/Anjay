@@ -30,7 +30,7 @@ mkdir -p "$PROJECT_ROOT/build/coverage"
 pushd "$PROJECT_ROOT/build/coverage"
     mkdir -p "$PROJECT_ROOT/build/coverage"
     "$PROJECT_ROOT/devconfig" --c-flags "-std=c99 -D_POSIX_C_SOURCE=200809L -g -fprofile-arcs -ftest-coverage" -D CMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
-    make -j$(nproc || sysctl -n hw.ncpu)
+    make -j$(num_processors)
     make check
 
     mkdir -p "$PROJECT_ROOT/coverage"

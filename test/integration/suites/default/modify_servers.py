@@ -21,19 +21,13 @@ from framework.lwm2m_test import *
 
 class ModifyServersTest(test_suite.Lwm2mTest):
     def setUp(self):
-        self.servers = [Lwm2mServer(), Lwm2mServer()]
-        self.start_demo(self.make_demo_args(self.servers))
+        self.setup_demo_with_servers(servers=2, auto_register=False)
 
     def tearDown(self):
-        try:
-            self.request_demo_shutdown()
-
-            self.assertDemoDeregisters(server=self.servers[0], path='/rd/demo')
-            self.assertDemoDeregisters(server=self.servers[1], path='/rd/server3')
-        finally:
-            for serv in self.servers:
-                serv.close()
-            self.terminate_demo()
+        self.request_demo_shutdown()
+        self.assertDemoDeregisters(self.servers[0], path='/rd/demo')
+        self.assertDemoDeregisters(self.servers[1], path='/rd/server3')
+        self.teardown_demo_with_servers(auto_deregister=False)
 
     def runTest(self):
         self.assertDemoRegisters(server=self.servers[0], location='/rd/demo')

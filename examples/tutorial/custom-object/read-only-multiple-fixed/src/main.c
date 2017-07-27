@@ -198,7 +198,7 @@ int main_loop(anjay_t *anjay) {
         }
 
         // Finally run the scheduler (ignoring its return value, which
-        // is the amount of tasks executed)
+        // is the number of tasks executed)
         (void) anjay_sched_run(anjay);
     }
     return 0;

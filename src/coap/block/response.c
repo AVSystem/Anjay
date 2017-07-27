@@ -52,29 +52,33 @@ static int handle_block_size_renegotiation(coap_block_transfer_ctx_t *ctx,
     return 0;
 }
 
-static int block_recv_handler(const anjay_coap_msg_t *msg,
+static int block_recv_handler(void *validator_ctx_,
+                              const anjay_coap_msg_t *msg,
                               const anjay_coap_msg_t *last_response,
                               coap_block_transfer_ctx_t *ctx,
                               bool *out_wait_for_next,
                               uint8_t *out_error_code) {
+    anjay_coap_block_request_validator_ctx_t *validator_ctx =
+            (anjay_coap_block_request_validator_ctx_t *)validator_ctx_;
+
     (void) last_response;
 
     *out_wait_for_next = false;
 
-    anjay_coap_msg_identity_t id = _anjay_coap_common_identity_from_msg(msg);
+    anjay_coap_msg_identity_t id = _anjay_coap_msg_get_identity(msg);
     anjay_coap_msg_identity_t prev_id =
-            _anjay_coap_common_identity_from_msg(last_response);
+            _anjay_coap_msg_get_identity(last_response);
 
     // Message identity matches last response, it means it must be a duplicate
     // of the previous request.
-    if (_anjay_coap_common_identity_equal(&id, &prev_id)) {
+    if (_anjay_coap_identity_equal(&id, &prev_id)) {
         return BLOCK_TRANSFER_RESULT_RETRY;
     }
 
     _anjay_coap_id_source_static_reset(ctx->id_source, &id);
 
     coap_block_info_t block1;
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK1, &block1)) {
+    if (_anjay_coap_get_block_info(msg, COAP_BLOCK1, &block1)) {
         // Malformed BLOCK1 option, or multiple BLOCK1 options found.
         *out_error_code = -ANJAY_ERR_BAD_REQUEST;
         return -1;
@@ -88,12 +92,14 @@ static int block_recv_handler(const anjay_coap_msg_t *msg,
     }
 
     coap_block_info_t block2;
-    if (_anjay_coap_common_get_block_info(msg, COAP_BLOCK2, &block2)) {
+    if (_anjay_coap_get_block_info(msg, COAP_BLOCK2, &block2)) {
         // Malformed BLOCK2 option, or multiple BLOCK2 options found.
         *out_error_code = -ANJAY_ERR_BAD_REQUEST;
         return -1;
-    } else if (!block2.valid) {
-        // BLOCK2 option missing. It must be an unrelated request.
+    } else if (!block2.valid // no BLOCK2 option - must be an unrelated request
+            || (validator_ctx && validator_ctx->validator
+                    && validator_ctx->validator(
+                            msg, validator_ctx->validator_arg))) {
         *out_wait_for_next = true;
         *out_error_code = -ANJAY_ERR_SERVICE_UNAVAILABLE;
         return -1;
@@ -120,14 +126,16 @@ static int block_recv_handler(const anjay_coap_msg_t *msg,
 }
 
 coap_block_transfer_ctx_t *
-_anjay_coap_block_response_new(uint16_t max_block_size,
-                               coap_input_buffer_t *in,
-                               coap_output_buffer_t *out,
-                               anjay_coap_socket_t *socket,
-                               coap_id_source_t *id_source) {
+_anjay_coap_block_response_new(
+        uint16_t max_block_size,
+        coap_input_buffer_t *in,
+        coap_output_buffer_t *out,
+        anjay_coap_socket_t *socket,
+        coap_id_source_t *id_source,
+        anjay_coap_block_request_validator_ctx_t *validator_ctx) {
     return _anjay_coap_block_transfer_new(max_block_size, in, out, socket,
                                           COAP_BLOCK2, id_source,
-                                          block_recv_handler);
+                                          block_recv_handler, validator_ctx);
 }
 
 anjay_coap_msg_identity_t

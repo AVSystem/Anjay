@@ -26,7 +26,7 @@ class BufferSizeTest:
             extra_args = '-I %d -O %d' % (inbuf_size, outbuf_size)
             if endpoint is not None:
                 extra_args += ' -e %s' % endpoint
-            self.setup_demo_with_servers(num_servers=1,
+            self.setup_demo_with_servers(servers=1,
                                          extra_cmdline_args=extra_args.split(),
                                          auto_register=auto_register)
 

@@ -26,7 +26,6 @@
 #include "msg_cache.h"
 #include "msg.h"
 #include "log.h"
-#include "utils.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -287,7 +286,7 @@ int _anjay_coap_msg_cache_add(coap_msg_cache_t *cache,
                               const char *remote_addr,
                               const char *remote_port,
                               const anjay_coap_msg_t *msg,
-                              const coap_transmission_params_t *tx_params) {
+                              const anjay_coap_tx_params_t *tx_params) {
     if (!cache) {
         return -1;
     }
@@ -319,8 +318,9 @@ int _anjay_coap_msg_cache_add(coap_msg_cache_t *cache,
     cache_free_bytes(cache, cap_req);
 
     struct timespec expiration_time = now;
-    _anjay_time_add_ms(&expiration_time,
-                       _anjay_coap_exchange_lifetime_ms(tx_params));
+    const struct timespec exchange_lifetime =
+            _anjay_coap_exchange_lifetime(tx_params);
+    _anjay_time_add(&expiration_time, &exchange_lifetime);
 
     cache_put_entry(cache, &expiration_time, ep, msg);
     return 0;

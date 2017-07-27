@@ -64,6 +64,7 @@ typedef struct coap_server {
 
 #ifdef WITH_BLOCK_SEND
     coap_block_transfer_ctx_t *block_ctx;
+    anjay_coap_block_request_validator_ctx_t block_relation_validator;
 #endif
     coap_id_source_t *static_id_source;
 
@@ -78,6 +79,17 @@ typedef struct coap_server {
 } coap_server_t;
 
 void _anjay_coap_server_reset(coap_server_t *server);
+
+#ifdef WITH_BLOCK_SEND
+void _anjay_coap_server_set_block_request_relation_validator(
+        coap_server_t *server,
+        anjay_coap_block_request_validator_t *validator,
+        void *validator_arg);
+#else // WITH_BLOCK_SEND
+#define _anjay_coap_server_set_block_request_relation_validator( \
+                Server, Validator, Arg) \
+        ((void) (Server), (void) (Validator), (void) (Arg))
+#endif // WITH_BLOCK_SEND
 
 /**
  * @returns identity of the current request or NULL if there is no request.
