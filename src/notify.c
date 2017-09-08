@@ -15,11 +15,13 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <anjay_modules/dm.h>
 #include <anjay_modules/notify.h>
 
 #include "coap/content_format.h"
+
 #include "anjay.h"
 #include "observe.h"
 
@@ -33,7 +35,7 @@ static int observe_notify(anjay_t *anjay,
             .ssid = _anjay_dm_current_ssid(anjay),
             .type = ANJAY_CONNECTION_WILDCARD
         },
-        .format = ANJAY_COAP_FORMAT_NONE
+        .format = AVS_COAP_FORMAT_NONE
     };
     int ret = 0;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;

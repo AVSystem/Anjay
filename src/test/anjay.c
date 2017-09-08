@@ -352,32 +352,32 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
 AVS_UNIT_TEST(parse_headers, parse_action) {
     anjay_request_t request;
     memset(&request, 0, sizeof(request));
-    request.content_format = ANJAY_COAP_FORMAT_NONE;
+    request.content_format = AVS_COAP_FORMAT_NONE;
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_GET;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_GET;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_READ);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_GET;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_GET;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0),
                      ACCEPT(ANJAY_COAP_FORMAT_APPLICATION_LINK), NO_PAYLOAD),
             &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_DISCOVER);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_POST;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_POST;
     request.uri.has_iid = true;
     request.uri.has_rid = true;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_EXECUTE);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_POST;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_POST;
     request.uri.has_iid = false;
     request.uri.has_rid = false;
     request.content_format = ANJAY_COAP_FORMAT_PLAINTEXT;
@@ -385,8 +385,8 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_CREATE);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_POST;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_POST;
     request.uri.has_iid = true;
     request.uri.has_rid = false;
     request.content_format = ANJAY_COAP_FORMAT_TLV;
@@ -394,28 +394,28 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_WRITE_UPDATE);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_PUT;
-    request.content_format = ANJAY_COAP_FORMAT_NONE;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_PUT;
+    request.content_format = AVS_COAP_FORMAT_NONE;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_WRITE_ATTRIBUTES);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_PUT;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_PUT;
     request.content_format = ANJAY_COAP_FORMAT_PLAINTEXT;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_WRITE);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_DELETE;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_DELETE;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_DELETE);
 
-    request.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
-    request.request_code = ANJAY_COAP_CODE_NOT_FOUND;
+    request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
+    request.request_code = AVS_COAP_CODE_NOT_FOUND;
     AVS_UNIT_ASSERT_FAILED(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
 }

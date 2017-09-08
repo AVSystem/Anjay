@@ -21,13 +21,14 @@
 
 #include "transfer.h"
 
-#include "../socket.h"
+#include <avsystem/commons/coap/block_builder.h>
+#include <avsystem/commons/coap/ctx.h>
+#include <avsystem/commons/coap/msg_builder.h>
+#include <avsystem/commons/coap/msg_info.h>
+
+#include "../stream/common.h"
 #include "../stream/in.h"
 #include "../stream/out.h"
-
-#include "../msg_info.h"
-#include "../msg_builder.h"
-#include "../block_builder.h"
 
 #include "../id_source/id_source.h"
 
@@ -65,8 +66,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *         to aborting the transfer. For that, use @p out_wait_for_next .
  */
 typedef int block_recv_handler_t(void *opaque_arg,
-                                 const anjay_coap_msg_t *msg,
-                                 const anjay_coap_msg_t *sent_msg,
+                                 const avs_coap_msg_t *msg,
+                                 const avs_coap_msg_t *sent_msg,
                                  coap_block_transfer_ctx_t *ctx,
                                  bool *out_wait_for_next,
                                  uint8_t *out_error_code);
@@ -75,11 +76,12 @@ struct coap_block_transfer_ctx {
     bool timed_out;
     uint32_t num_sent_blocks;
 
-    anjay_coap_socket_t *socket;
+    avs_coap_ctx_t *coap_ctx;
+    avs_net_abstract_socket_t *socket;
     coap_input_buffer_t *in;
-    anjay_coap_msg_info_t info;
-    anjay_coap_block_builder_t block_builder;
-    coap_block_info_t block;
+    avs_coap_msg_info_t info;
+    avs_coap_block_builder_t block_builder;
+    avs_coap_block_info_t block;
 
     coap_id_source_t *id_source;
 
@@ -89,10 +91,8 @@ struct coap_block_transfer_ctx {
 
 coap_block_transfer_ctx_t *
 _anjay_coap_block_transfer_new(uint16_t max_block_size,
-                               coap_input_buffer_t *in,
-                               coap_output_buffer_t *out,
-                               anjay_coap_socket_t *socket,
-                               coap_block_type_t block_type,
+                               coap_stream_common_t *stream_data,
+                               avs_coap_block_type_t block_type,
                                coap_id_source_t *id_source,
                                block_recv_handler_t *block_recv_handler,
                                void *block_recv_handler_arg);

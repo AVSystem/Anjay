@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <anjay_modules/time.h>
 
@@ -180,7 +181,7 @@ bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
 
 struct timespec _anjay_disable_timeout_from_server_iid(anjay_t *anjay,
                                                        anjay_iid_t server_iid) {
-    static const int32_t DEFAULT_DISABLE_TIMEOUT_S = DAY_IN_S;
+    static const int32_t DEFAULT_DISABLE_TIMEOUT_S = NUM_SECONDS_IN_A_DAY;
 
     int64_t timeout_s;
     const anjay_uri_path_t path =
@@ -193,7 +194,5 @@ struct timespec _anjay_disable_timeout_from_server_iid(anjay_t *anjay,
         timeout_s = INT32_MAX;
     }
 
-    struct timespec disable_timeout;
-    _anjay_time_from_s(&disable_timeout, (int32_t) timeout_s);
-    return disable_timeout;
+    return avs_time_from_s((int32_t) timeout_s);
 }

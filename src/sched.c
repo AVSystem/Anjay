@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -52,7 +53,7 @@ anjay_sched_t *_anjay_sched_new(anjay_t *anjay) {
 
 static anjay_sched_entry_t *fetch_task(anjay_sched_t *sched,
                                        const struct timespec *now) {
-    if (sched->entries && !_anjay_time_before(now, &sched->entries->when)) {
+    if (sched->entries && !avs_time_before(now, &sched->entries->when)) {
         return AVS_LIST_DETACH(&sched->entries);
     } else {
         return NULL;
@@ -60,9 +61,9 @@ static anjay_sched_entry_t *fetch_task(anjay_sched_t *sched,
 }
 
 static void update_backoff(anjay_sched_retryable_backoff_t *cfg) {
-    _anjay_time_add(&cfg->delay, &cfg->delay);
+    cfg->delay = avs_time_add(&cfg->delay, &cfg->delay);
 
-    if (_anjay_time_before(&cfg->max_delay, &cfg->delay)) {
+    if (avs_time_before(&cfg->max_delay, &cfg->delay)) {
         cfg->delay = cfg->max_delay;
     }
 }
@@ -77,7 +78,8 @@ static void execute_task(anjay_sched_t *sched,
     /* make sure the task is detached */
     assert(AVS_LIST_NEXT(entry) == NULL);
 
-    sched_log(TRACE, "executing task %p", (void*)entry);
+    sched_log(TRACE, "executing task %p (clb=%p)",
+              (void *) entry, (void *) (intptr_t) entry->clb);
 
     anjay_sched_handle_t handle = NULL;
     if (entry->handle_ptr) {
@@ -174,7 +176,7 @@ insert_entry(anjay_sched_t *sched,
     }
 
     AVS_LIST_FOREACH_PTR(entry_ptr, &sched->entries) {
-        if (_anjay_time_before(&entry->when, &(*entry_ptr)->when)) {
+        if (avs_time_before(&entry->when, &(*entry_ptr)->when)) {
             break;
         }
     }
@@ -228,8 +230,8 @@ sched_delayed(anjay_sched_t *sched,
     sched_log(TRACE, "current time %" PRId64 ".%09ld",
               (int64_t) sched_time.tv_sec, sched_time.tv_nsec);
 
-    if (_anjay_time_is_valid(&delay)) {
-        _anjay_time_add(&sched_time, &delay);
+    if (avs_time_is_valid(&delay)) {
+        sched_time = avs_time_add(&sched_time, &delay);
     }
     sched_log(TRACE,
              "job scheduled at %" PRId64 ".%09ld (+%" PRId64 ".%09ld); type %d",
@@ -322,7 +324,7 @@ int _anjay_sched_time_to_next(anjay_sched_t *sched, struct timespec *delay) {
 
     AVS_LIST_FOREACH(elem, sched->entries) {
         if (delay) {
-            _anjay_time_diff(delay, &elem->when, &now);
+            *delay = avs_time_diff(&elem->when, &now);
             if (delay->tv_sec < 0) {
                 delay->tv_sec = 0;
                 delay->tv_nsec = 0;

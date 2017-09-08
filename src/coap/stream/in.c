@@ -16,6 +16,8 @@
 
 #include <config.h>
 
+#include <avsystem/commons/coap/block_utils.h>
+
 #define ANJAY_COAP_STREAM_INTERNALS
 
 #include "in.h"
@@ -26,19 +28,17 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "../block_utils.h"
 #include "../log.h"
 
 VISIBILITY_SOURCE_BEGIN
 
 int _anjay_coap_in_get_next_message(coap_input_buffer_t *in,
-                                    anjay_coap_socket_t *socket) {
-    int result = _anjay_coap_socket_recv(socket,
-                                         (anjay_coap_msg_t *)in->buffer,
-                                         in->buffer_size);
+                                    avs_coap_ctx_t *ctx,
+                                    avs_net_abstract_socket_t *socket) {
+    int result = avs_coap_ctx_recv(ctx, socket, (avs_coap_msg_t *) in->buffer,
+                                   in->buffer_size);
     if (result) {
-        int error =
-                avs_net_socket_errno(_anjay_coap_socket_get_backend(socket));
+        int error = avs_net_socket_errno(socket);
         if (error) {
             coap_log(ERROR, "recv returned %d (%s)", result, strerror(error));
         } else {
@@ -47,11 +47,11 @@ int _anjay_coap_in_get_next_message(coap_input_buffer_t *in,
         return result;
     }
 
-    const anjay_coap_msg_t *msg = _anjay_coap_in_get_message(in);
+    const avs_coap_msg_t *msg = _anjay_coap_in_get_message(in);
 
     in->payload_off = 0;
-    in->payload = (const uint8_t *)_anjay_coap_msg_payload(msg);
-    in->payload_size = _anjay_coap_msg_payload_length(msg);
+    in->payload = (const uint8_t *)avs_coap_msg_payload(msg);
+    in->payload_size = avs_coap_msg_payload_length(msg);
 
     return 0;
 }
@@ -62,7 +62,7 @@ void _anjay_coap_in_read(coap_input_buffer_t *in,
                          void *buffer,
                          size_t buffer_length) {
     size_t bytes_available = _anjay_coap_in_get_bytes_available(in);
-    size_t bytes_to_copy = ANJAY_MIN(buffer_length, bytes_available);
+    size_t bytes_to_copy = AVS_MIN(buffer_length, bytes_available);
     memcpy(buffer, in->payload + in->payload_off, bytes_to_copy);
     in->payload_off += bytes_to_copy;
 

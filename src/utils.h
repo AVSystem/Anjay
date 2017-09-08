@@ -25,9 +25,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <unistd.h>
 
-#include <sys/types.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -101,10 +99,6 @@ typedef uint32_t anjay_rand_seed_t;
 typedef unsigned anjay_rand_seed_t;
 #endif
 uint32_t _anjay_rand32(anjay_rand_seed_t *seed);
-
-static inline bool _anjay_is_power_of_2(size_t value) {
-    return value > 0 && !(value & (value - 1));
-}
 
 static inline void _anjay_update_ret(int *var, int new_retval) {
     if (!*var) {

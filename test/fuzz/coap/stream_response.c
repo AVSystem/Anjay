@@ -21,6 +21,8 @@
 #include <assert.h>
 
 #include <avsystem/commons/socket_v_table.h>
+#include <avsystem/commons/coap/ctx.h>
+#include <avsystem/commons/stream/net.h>
 
 #include "../../../src/coap/stream.h"
 
@@ -81,7 +83,7 @@ mock_socket_t mock_socket_struct = {
 };
 
 enum {
-    OP_GET_MSG_TYPE,
+    OP_GET_INCOMING_MSG,
     OP_SETUP_RESPONSE,
     OP_WRITE,
     OP_FINISH_MESSAGE,
@@ -97,10 +99,12 @@ static void perform_op(FILE *cmd_stream,
     }
 
     switch (cmd) {
-    case OP_GET_MSG_TYPE:
+    case OP_GET_INCOMING_MSG:
         {
-            anjay_coap_msg_type_t type;
-            _anjay_coap_stream_get_msg_type(stream, &type);
+            const avs_coap_msg_t *msg;
+            if (_anjay_coap_stream_get_incoming_msg(stream, &msg) == 0) {
+                assert(avs_coap_msg_is_valid(msg));
+            }
         }
     case OP_SETUP_RESPONSE:
         {
@@ -155,14 +159,19 @@ int main(int argc, char **argv) {
 
     avs_net_abstract_socket_t *mock_socket =
             (avs_net_abstract_socket_t*)&mock_socket_struct;
-    anjay_coap_socket_t *sock;
+    avs_coap_ctx_t *coap = NULL;
     avs_stream_abstract_t *stream = NULL;
+
+    uint8_t in_buffer[65536];
+    uint8_t out_buffer[65536];
 
     int retval = -1;
 
-    if (_anjay_coap_socket_create(&sock, mock_socket)
-            || _anjay_coap_stream_create(&stream, sock,
-                                         UINT16_MAX + 1, UINT16_MAX + 1)) {
+    if (avs_coap_ctx_create(&coap, 0)
+            || _anjay_coap_stream_create(&stream, coap,
+                                         in_buffer, sizeof(in_buffer),
+                                         out_buffer, sizeof(out_buffer))
+            || avs_stream_net_setsock(stream, mock_socket)) {
         goto exit;
     }
 

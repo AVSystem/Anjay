@@ -57,8 +57,8 @@ struct anjay_struct {
 #ifdef WITH_BOOTSTRAP
     anjay_bootstrap_t bootstrap;
 #endif
-    anjay_coap_tx_params_t udp_tx_params;
-    anjay_coap_socket_t *coap_socket;
+    avs_coap_tx_params_t udp_tx_params;
+    avs_coap_ctx_t *coap_ctx;
     avs_stream_abstract_t *comm_stream;
     anjay_connection_ref_t current_connection;
     anjay_scheduled_notify_t scheduled_notify;

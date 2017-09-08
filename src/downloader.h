@@ -22,6 +22,7 @@
 #include <avsystem/commons/net.h>
 
 #include "sched.h"
+#include "utils.h"
 #include "coap/id_source/id_source.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -30,7 +31,7 @@ typedef struct anjay_download_ctx anjay_download_ctx_t;
 
 typedef struct {
     coap_id_source_t *id_source;
-    uint32_t rand_seed;
+    anjay_rand_seed_t rand_seed;
 
     uintptr_t next_id;
     AVS_LIST(anjay_download_ctx_t) downloads;

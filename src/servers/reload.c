@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include "../dm/query.h"
 

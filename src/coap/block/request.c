@@ -15,7 +15,9 @@
  */
 
 #include <config.h>
+
 #include <string.h>
+#include <inttypes.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
@@ -29,40 +31,36 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static bool is_separate_ack(const anjay_coap_msg_t *msg,
-                            const anjay_coap_msg_t *request) {
-    anjay_coap_msg_type_t type = _anjay_coap_msg_header_get_type(&msg->header);
+static bool is_separate_ack(const avs_coap_msg_t *msg,
+                            const avs_coap_msg_t *request) {
+    avs_coap_msg_type_t type = avs_coap_msg_get_type(msg);
 
-    return type == ANJAY_COAP_MSG_ACKNOWLEDGEMENT
-            && msg->header.code == ANJAY_COAP_CODE_EMPTY
-            && _anjay_coap_msg_get_id(request) == _anjay_coap_msg_get_id(msg);
+    return type == AVS_COAP_MSG_ACKNOWLEDGEMENT
+            && avs_coap_msg_get_code(msg) == AVS_COAP_CODE_EMPTY
+            && avs_coap_msg_get_id(request) == avs_coap_msg_get_id(msg);
 }
 
-static bool response_token_matches(const anjay_coap_msg_t *request,
-                                   const anjay_coap_msg_t *response) {
-    anjay_coap_token_t req_token;
-    size_t req_token_size = _anjay_coap_msg_get_token(request, &req_token);
+static bool response_token_matches(const avs_coap_msg_t *request,
+                                   const avs_coap_msg_t *response) {
+    avs_coap_token_t req_token = avs_coap_msg_get_token(request);
+    avs_coap_token_t res_token = avs_coap_msg_get_token(response);
 
-    anjay_coap_token_t res_token;
-    size_t res_token_size = _anjay_coap_msg_get_token(response, &res_token);
-
-    return _anjay_coap_token_equal(&req_token, req_token_size,
-                                   &res_token, res_token_size);
+    return avs_coap_token_equal(&req_token, &res_token);
 }
 
-static bool is_matching_response(const anjay_coap_msg_t *msg,
-                                 const anjay_coap_msg_t *request) {
-    anjay_coap_msg_type_t type = _anjay_coap_msg_header_get_type(&msg->header);
+static bool is_matching_response(const avs_coap_msg_t *msg,
+                                 const avs_coap_msg_t *request) {
+    avs_coap_msg_type_t type = avs_coap_msg_get_type(msg);
 
-    if (type == ANJAY_COAP_MSG_RESET) {
-        return _anjay_coap_msg_get_id(request) == _anjay_coap_msg_get_id(msg);
+    if (type == AVS_COAP_MSG_RESET) {
+        return avs_coap_msg_get_id(request) == avs_coap_msg_get_id(msg);
     }
 
     // Message ID must match only in case of Piggybacked Response
-    if (type == ANJAY_COAP_MSG_ACKNOWLEDGEMENT) {
-        if (_anjay_coap_msg_get_id(request) != _anjay_coap_msg_get_id(msg)) {
+    if (type == AVS_COAP_MSG_ACKNOWLEDGEMENT) {
+        if (avs_coap_msg_get_id(request) != avs_coap_msg_get_id(msg)) {
             coap_log(DEBUG, "unexpected msg id %u in ACK message",
-                     _anjay_coap_msg_get_id(msg));
+                     avs_coap_msg_get_id(msg));
             return false;
         }
     }
@@ -76,7 +74,7 @@ static bool is_matching_response(const anjay_coap_msg_t *msg,
 }
 
 static int block_request_update_block_option(coap_block_transfer_ctx_t *ctx,
-                                             const coap_block_info_t *block) {
+                                             const avs_coap_block_info_t *block) {
     if (block->size == ctx->block.size) {
         ++ctx->block.seq_num;
         return 0;
@@ -102,17 +100,17 @@ static int block_request_update_block_option(coap_block_transfer_ctx_t *ctx,
     return 0;
 }
 
-static int handle_block_options(const anjay_coap_msg_t *msg,
+static int handle_block_options(const avs_coap_msg_t *msg,
                                 coap_block_transfer_ctx_t *ctx) {
-    coap_block_info_t block1;
-    if (_anjay_coap_get_block_info(msg, COAP_BLOCK1, &block1)
+    avs_coap_block_info_t block1;
+    if (avs_coap_get_block_info(msg, AVS_COAP_BLOCK1, &block1)
             || !block1.valid) {
         coap_log(DEBUG, "BLOCK1 missing or invalid in response to block-wise "
                  "request");
         return -1;
     }
-    coap_block_info_t block2;
-    if (_anjay_coap_get_block_info(msg, COAP_BLOCK2, &block2)
+    avs_coap_block_info_t block2;
+    if (avs_coap_get_block_info(msg, AVS_COAP_BLOCK2, &block2)
             || block2.valid) {
         coap_log(DEBUG, "block-wise responses to block-wise requests are not "
                  "supported");
@@ -120,18 +118,18 @@ static int handle_block_options(const anjay_coap_msg_t *msg,
     }
 
     if (block1.seq_num != ctx->block.seq_num) {
-        coap_log(DEBUG, "mismatched block number: got %u, expected %u",
-                 block1.seq_num, ctx->block.seq_num);
+        coap_log(DEBUG, "mismatched block number: got %" PRIu32 ", expected %"
+                 PRIu32, block1.seq_num, ctx->block.seq_num);
         return -1;
     }
 
     return block_request_update_block_option(ctx, &block1);
 }
 
-static int handle_matching_block_response(const anjay_coap_msg_t *msg,
+static int handle_matching_block_response(const avs_coap_msg_t *msg,
                                           coap_block_transfer_ctx_t *ctx) {
-    if (_anjay_coap_msg_code_is_client_error(msg->header.code)
-            || _anjay_coap_msg_code_is_server_error(msg->header.code)) {
+    if (avs_coap_msg_code_is_client_error(avs_coap_msg_get_code(msg))
+            || avs_coap_msg_code_is_server_error(avs_coap_msg_get_code(msg))) {
         coap_log(DEBUG, "block-wise transfer: error response");
         return -1;
     }
@@ -139,9 +137,9 @@ static int handle_matching_block_response(const anjay_coap_msg_t *msg,
     return handle_block_options(msg, ctx);
 }
 
-static int handle_matching_response(const anjay_coap_msg_t *msg,
+static int handle_matching_response(const avs_coap_msg_t *msg,
                                     coap_block_transfer_ctx_t *ctx) {
-    if (_anjay_coap_msg_header_get_type(&msg->header) == ANJAY_COAP_MSG_RESET) {
+    if (avs_coap_msg_get_type(msg) == AVS_COAP_MSG_RESET) {
         // Reset response to our request: abort the transfer
         coap_log(DEBUG, "block-wise transfer: Reset response");
         return -1;
@@ -149,19 +147,19 @@ static int handle_matching_response(const anjay_coap_msg_t *msg,
 
     int result = handle_matching_block_response(msg, ctx);
 
-    if (_anjay_coap_msg_header_get_type(&msg->header)
-            == ANJAY_COAP_MSG_CONFIRMABLE) {
+    if (avs_coap_msg_get_type(msg) == AVS_COAP_MSG_CONFIRMABLE) {
         // Confirmable Separate Response: we need to send ACK
-        _anjay_coap_send_empty(ctx->socket, ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
-                               _anjay_coap_msg_get_id(msg));
+        avs_coap_ctx_send_empty(ctx->coap_ctx, ctx->socket,
+                                AVS_COAP_MSG_ACKNOWLEDGEMENT,
+                                avs_coap_msg_get_id(msg));
     }
 
     return result;
 }
 
 static int continue_block_request(void *ignored,
-                                  const anjay_coap_msg_t *msg,
-                                  const anjay_coap_msg_t *request,
+                                  const avs_coap_msg_t *msg,
+                                  const avs_coap_msg_t *request,
                                   coap_block_transfer_ctx_t *ctx,
                                   bool *out_wait_for_next,
                                   uint8_t *out_error_code) {
@@ -180,10 +178,9 @@ static int continue_block_request(void *ignored,
 
     // message unrelated to the block-wise transfer; reject and wait for next
     *out_wait_for_next = true;
-    if (_anjay_coap_msg_header_get_type(&msg->header)
-            == ANJAY_COAP_MSG_CONFIRMABLE) {
-        if (_anjay_coap_msg_is_request(msg)) {
-            *out_error_code = ANJAY_COAP_CODE_SERVICE_UNAVAILABLE;
+    if (avs_coap_msg_get_type(msg) == AVS_COAP_MSG_CONFIRMABLE) {
+        if (avs_coap_msg_is_request(msg)) {
+            *out_error_code = AVS_COAP_CODE_SERVICE_UNAVAILABLE;
         }
     }
 
@@ -192,11 +189,9 @@ static int continue_block_request(void *ignored,
 
 coap_block_transfer_ctx_t *
 _anjay_coap_block_request_new(uint16_t max_block_size,
-                              coap_input_buffer_t *in,
-                              coap_output_buffer_t *out,
-                              anjay_coap_socket_t *socket,
+                              coap_stream_common_t *stream_data,
                               coap_id_source_t *id_source) {
-    return _anjay_coap_block_transfer_new(max_block_size, in, out, socket,
-                                          COAP_BLOCK1, id_source,
+    return _anjay_coap_block_transfer_new(max_block_size, stream_data,
+                                          AVS_COAP_BLOCK1, id_source,
                                           continue_block_request, NULL);
 }

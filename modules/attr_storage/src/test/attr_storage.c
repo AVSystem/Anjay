@@ -1908,3 +1908,202 @@ AVS_UNIT_TEST(attr_storage, parallel_iterations) {
 
     DM_ATTR_STORAGE_TEST_FINISH;
 }
+
+AVS_UNIT_TEST(set_attribs, fail_on_null_attribs) {
+    DM_TEST_INIT_WITH_OBJECTS(&OBJ_NOATTRS, &FAKE_SECURITY2);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay));
+
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_attr_storage_set_object_attrs(anjay, 1, OBJ_NOATTRS->oid, NULL));
+    AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_instance_attrs(
+            anjay, 1, OBJ_NOATTRS->oid, 30, NULL));
+    AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_resource_attrs(
+            anjay, 1, OBJ_NOATTRS->oid, 30, 50, NULL));
+    DM_TEST_FINISH;
+}
+
+static const anjay_dm_attributes_t *FAKE_DM_ATTRS =
+        (anjay_dm_attributes_t *) -1;
+static const anjay_dm_resource_attributes_t *FAKE_DM_RES_ATTRS =
+        (anjay_dm_resource_attributes_t *) -1;
+
+AVS_UNIT_TEST(set_attribs, fail_on_invalid_ssid) {
+    DM_TEST_INIT_WITH_OBJECTS(&OBJ_NOATTRS, &FAKE_SECURITY2);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay));
+
+    const anjay_ssid_t SSIDS_TO_TEST[] = {
+        ANJAY_SSID_ANY,
+        ANJAY_SSID_BOOTSTRAP,
+        341
+    };
+    // Assumming no Security Instances
+    for (int i = 0; i < (int) AVS_ARRAY_SIZE(SSIDS_TO_TEST); ++i) {
+        // object
+        // attempt to query SSID
+        if (SSIDS_TO_TEST[i] != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0,
+                                              ANJAY_IID_INVALID);
+        }
+        AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_object_attrs(
+                anjay, SSIDS_TO_TEST[i], OBJ_NOATTRS->oid, FAKE_DM_ATTRS));
+
+        // instance
+        // attempt to query SSID
+        if (SSIDS_TO_TEST[i] != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0,
+                                              ANJAY_IID_INVALID);
+        }
+        AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_instance_attrs(
+                anjay, SSIDS_TO_TEST[i], OBJ_NOATTRS->oid, 0, FAKE_DM_ATTRS));
+
+        // resource
+        // attempt to query SSID
+        if (SSIDS_TO_TEST[i] != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0,
+                                              ANJAY_IID_INVALID);
+        }
+        AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_resource_attrs(
+                anjay, SSIDS_TO_TEST[i], OBJ_NOATTRS->oid, 0, 0,
+                FAKE_DM_RES_ATTRS));
+    }
+
+    // Assumming one Security Instance, but Bootstrap
+    for (int i = 0; i < (int) AVS_ARRAY_SIZE(SSIDS_TO_TEST); ++i) {
+        // object
+        // attempt to query SSID
+        if (SSIDS_TO_TEST[i] != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0, 1);
+            _anjay_mock_dm_expect_resource_present(
+                    anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
+            _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                                ANJAY_DM_RID_SECURITY_BOOTSTRAP, 0,
+                                                ANJAY_MOCK_DM_BOOL(0, true));
+
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 1, 0,
+                                              ANJAY_IID_INVALID);
+            _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                                   ANJAY_DM_RID_SECURITY_SSID, 0);
+        }
+        AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_object_attrs(
+                anjay, SSIDS_TO_TEST[i], OBJ_NOATTRS->oid, FAKE_DM_ATTRS));
+
+        // instance
+        // attempt to query SSID
+        if (SSIDS_TO_TEST[i] != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0, 1);
+            _anjay_mock_dm_expect_resource_present(
+                    anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
+            _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                                ANJAY_DM_RID_SECURITY_BOOTSTRAP, 0,
+                                                ANJAY_MOCK_DM_BOOL(0, true));
+
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 1, 0,
+                                              ANJAY_IID_INVALID);
+            _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                                   ANJAY_DM_RID_SECURITY_SSID, 0);
+        }
+        AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_instance_attrs(
+                anjay, SSIDS_TO_TEST[i], OBJ_NOATTRS->oid, 0, FAKE_DM_ATTRS));
+
+        // resource
+        // attempt to query SSID
+        if (SSIDS_TO_TEST[i] != ANJAY_SSID_BOOTSTRAP) {
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0, 1);
+            _anjay_mock_dm_expect_resource_present(
+                    anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
+            _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                                ANJAY_DM_RID_SECURITY_BOOTSTRAP, 0,
+                                                ANJAY_MOCK_DM_BOOL(0, true));
+
+            _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 1, 0,
+                                              ANJAY_IID_INVALID);
+            _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                                   ANJAY_DM_RID_SECURITY_SSID, 0);
+        }
+        AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_resource_attrs(
+                anjay, SSIDS_TO_TEST[i], OBJ_NOATTRS->oid, 0, 0,
+                FAKE_DM_RES_ATTRS));
+    }
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(set_attribs, fail_on_invalid_object) {
+    DM_TEST_INIT_WITH_SSIDS(1);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay));
+
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_attr_storage_set_object_attrs(anjay, 1, 5, FAKE_DM_ATTRS));
+    AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_instance_attrs(
+            anjay, 1, 5, 1, FAKE_DM_ATTRS));
+    AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_resource_attrs(
+            anjay, 1, 5, 1, 0, FAKE_DM_RES_ATTRS));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(set_attribs, fail_on_invalid_iid) {
+    DM_TEST_INIT_WITH_OBJECTS(&OBJ_NOATTRS, &FAKE_SECURITY2);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay));
+
+    // attempt to query SSID
+    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                           ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                        ANJAY_DM_RID_SECURITY_BOOTSTRAP, 0,
+                                        ANJAY_MOCK_DM_BOOL(0, false));
+
+    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                           ANJAY_DM_RID_SECURITY_SSID, 1);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                        ANJAY_DM_RID_SECURITY_SSID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+
+    AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_instance_attrs(
+            anjay, 1, OBJ_NOATTRS->oid, ANJAY_IID_INVALID, FAKE_DM_ATTRS));
+
+    // attempt to query SSID
+    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                           ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                        ANJAY_DM_RID_SECURITY_BOOTSTRAP, 0,
+                                        ANJAY_MOCK_DM_BOOL(0, false));
+
+    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                           ANJAY_DM_RID_SECURITY_SSID, 1);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                        ANJAY_DM_RID_SECURITY_SSID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+
+     AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_resource_attrs(
+            anjay, 1, OBJ_NOATTRS->oid, ANJAY_IID_INVALID, 1, FAKE_DM_RES_ATTRS));
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(set_attribs, fail_on_invalid_rid) {
+    DM_TEST_INIT_WITH_OBJECTS(&OBJ_NOATTRS, &FAKE_SECURITY2);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay));
+
+    // attempt to query SSID
+    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SECURITY2, 0, 0, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                           ANJAY_DM_RID_SECURITY_BOOTSTRAP, 1);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                        ANJAY_DM_RID_SECURITY_BOOTSTRAP, 0,
+                                        ANJAY_MOCK_DM_BOOL(0, false));
+
+    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                           ANJAY_DM_RID_SECURITY_SSID, 1);
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
+                                        ANJAY_DM_RID_SECURITY_SSID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+
+    _anjay_mock_dm_expect_instance_present(anjay, &OBJ_NOATTRS, 1, 1);
+    _anjay_mock_dm_expect_resource_present(anjay, &OBJ_NOATTRS, 1, 1, 0);
+    AVS_UNIT_ASSERT_FAILED(anjay_attr_storage_set_resource_attrs(
+            anjay, 1, OBJ_NOATTRS->oid, 1, 1, FAKE_DM_RES_ATTRS));
+
+    DM_TEST_FINISH;
+}

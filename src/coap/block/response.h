@@ -21,9 +21,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <avsystem/commons/coap/msg.h>
+#include <avsystem/commons/coap/ctx.h>
+
 #include "transfer.h"
-#include "../msg.h"
-#include "../socket.h"
+
+#include "../stream/common.h"
 #include "../stream/in.h"
 #include "../stream/out.h"
 #include "../id_source/id_source.h"
@@ -42,13 +45,10 @@ typedef struct {
  *
  * @param max_block_size           Maximum block size the client is willing to
  *                                 handle.
- * @param in                       Input buffer to store requests for further
- *                                 blocks of the response.
- * @param out                      Output buffer containing the part of a
- *                                 response created so far. It is consumed in
- *                                 the process of creating the block_response
- *                                 object and MUST NOT be used without
- *                                 reintializing it after a successful call to
+ * @param stream_data              Internal structure of the CoAP stream for
+ *                                 which the block request is performed. The
+ *                                 <c>out</c> field MUST NOT be used without
+ *                                 reinitializing after a successful call to
  *                                 this function.
  * @param socket                   The CoAP socket used to send/receive blocks.
  * @param id_source                CoAP id source for the block responses.
@@ -59,20 +59,18 @@ typedef struct {
 coap_block_transfer_ctx_t *
 _anjay_coap_block_response_new(
         uint16_t max_block_size,
-        coap_input_buffer_t *in,
-        coap_output_buffer_t *out,
-        anjay_coap_socket_t *socket,
+        coap_stream_common_t *stream_data,
         coap_id_source_t *id_source,
         anjay_coap_block_request_validator_ctx_t *validator_ctx);
 
-anjay_coap_msg_identity_t
+avs_coap_msg_identity_t
 _anjay_coap_block_response_last_request_id(coap_block_transfer_ctx_t *ctx);
 
 #else
 
 #define _anjay_coap_block_response_last_request_id(...) \
         (assert(0 && "should never happen"), \
-         (anjay_coap_msg_identity_t) { .msg_id = 0 })
+         (avs_coap_msg_identity_t) { .msg_id = 0 })
 
 #endif
 

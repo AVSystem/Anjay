@@ -25,6 +25,7 @@ CPackSourceConfig.cmake
 CTestTestfile.cmake
 Testing/
 config.h
+posix-config.h
 anjay-*.cmake
 Doxyfile
 /doc/sphinx/source/conf.py
@@ -39,6 +40,7 @@ Makefile
 tags
 .ycm_extra_conf.py
 .ycm_extra_conf.pyc
+/test/codegen/*.c
 /test/integration/build
 __pycache__/
 .gdb_history

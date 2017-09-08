@@ -19,6 +19,7 @@
 #include <anjay/persistence.h>
 
 #include <string.h>
+#include <inttypes.h>
 
 #include "server.h"
 #include "transaction.h"
@@ -88,7 +89,7 @@ static int restore_instance(anjay_persistence_context_t *ctx,
             element->data.binding = (anjay_binding_mode_t) binding;
             break;
         default:
-            persistence_log(ERROR, "Invalid binding mode: %u", binding);
+            persistence_log(ERROR, "Invalid binding mode: %" PRIu32, binding);
             retval = -1;
             break;
         }

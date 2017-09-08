@@ -19,12 +19,12 @@
 
 #include <limits.h>
 
-#include <avsystem/commons/stream.h>
+#include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/list.h>
+#include <avsystem/commons/stream.h>
 
 #include <anjay_modules/dm.h>
 
-#include "coap/msg.h"
 #include "coap/stream.h"
 #include "observe.h"
 #include "dm/attributes.h"
@@ -101,7 +101,7 @@ _anjay_request_attributes_equal(const anjay_request_attributes_t *left,
 }
 
 typedef struct {
-    anjay_coap_msg_type_t msg_type;
+    avs_coap_msg_type_t msg_type;
     uint8_t request_code;
 
     bool is_bs_uri;
@@ -176,7 +176,7 @@ ssize_t _anjay_dm_read_for_observe(anjay_t *anjay,
 #endif // WITH_OBSERVE
 
 int _anjay_dm_perform_action(anjay_t *anjay,
-                             const anjay_coap_msg_identity_t *request_identity,
+                             const avs_coap_msg_identity_t *request_identity,
                              const anjay_request_t *request);
 
 anjay_input_ctx_t *_anjay_dm_read_as_input_ctx(anjay_t *anjay,

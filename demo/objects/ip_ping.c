@@ -23,7 +23,7 @@
 #include "../iosched.h"
 #include "../utils.h"
 
-#include <anjay_modules/utils.h>
+#include <avsystem/commons/utils.h>
 
 #define IP_PING_HOSTNAME       0
 #define IP_PING_REPETITIONS    1
@@ -321,12 +321,12 @@ static ip_ping_state_t start_ip_ping(anjay_t *anjay,
         timeout_s = 1;
     }
 
-    if (_anjay_snprintf(command, sizeof(command),
-                        "ping -q -c %u -Q 0x%x -W %u -s %u %s 2>&1",
-                        ping->configuration.repetitions,
-                        ping->configuration.dscp << 2, timeout_s,
-                        ping->configuration.block_size,
-                        ping->configuration.hostname)
+    if (avs_simple_snprintf(command, sizeof(command),
+                            "ping -q -c %u -Q 0x%x -W %u -s %u %s 2>&1",
+                            ping->configuration.repetitions,
+                            ping->configuration.dscp << 2, timeout_s,
+                            ping->configuration.block_size,
+                            ping->configuration.hostname)
         < 0) {
         demo_log(ERROR, "Cannot prepare ping command");
         return IP_PING_STATE_ERROR_INTERNAL;

@@ -17,6 +17,9 @@
 #ifndef ANJAY_COAP_CONTENT_FORMAT_H
 #define ANJAY_COAP_CONTENT_FORMAT_H
 
+/* for AVS_COAP_FORMAT_NONE */
+#include <avsystem/commons/coap/msg_info.h>
+
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 /** Auxiliary constants for common Content-Format Option values */
@@ -34,13 +37,6 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define ANJAY_COAP_FORMAT_LEGACY_JSON 1543
 #define ANJAY_COAP_FORMAT_LEGACY_OPAQUE 1544
 #endif // WITH_LEGACY_CONTENT_FORMAT_SUPPORT
-
-/**
- * A magic value used to indicate the absence of the Content-Format option.
- * Mainly used during CoAP message parsing, passing it to the info object does
- * nothing.
- * */
-#define ANJAY_COAP_FORMAT_NONE 65535
 
 VISIBILITY_PRIVATE_HEADER_END
 

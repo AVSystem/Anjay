@@ -79,18 +79,16 @@ of them should be run at this particular moment) and executes them if
 necessary.
 
 The requirement of regularly invoking ``anjay_sched_run()`` is a direct
-consequence of Anjay being a single-threaded application. It is not a
-problem however, as you may call ``anjay_sched_run()`` in the event loop,
-that you would have to write anyway to (for instance) handle input events
-of some kind. So, in the event loop you could call ``anjay_sched_run()``
-on every iteration.
+consequence of Anjay being a single-threaded application. It is not a problem
+however, as you may call ``anjay_sched_run()`` repeatedly in the main program
+loop that you would have to write anyway.
 
-But that would introduce unnecessary waste of CPU time, wouldn't it? Right,
-and this issue is addressed by ``anjay_sched_calculate_wait_time_ms()``
-which returns number of milliseconds before the next scheduled job. In the
-next example we will use this value as a ``poll()`` timeout.
-
-Enough talking, time to write some code.
+Unfortunately, a naive implementation could cause unnecessary waste of CPU
+time. This problem is addressed by ``anjay_sched_calculate_wait_time_ms()``
+which returns the number of milliseconds before the next scheduled job -
+so, unless there is a communication going on, it would be the amount of
+time the CPU can sleep. In the next example we will use this value as a
+``poll()`` timeout.
 
 .. _basic-event-loop:
 

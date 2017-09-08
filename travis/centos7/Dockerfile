@@ -18,7 +18,8 @@ RUN yum install -y https://centos7.iuscommunity.org/ius-release.rpm
 RUN yum install -y which git make cmake3 boost-python-devel mbedtls-devel openssl openssl-devel wget python-sphinx python-sphinx_rtd_theme valgrind valgrind-devel gcc gcc-c++
 # required to compile pybind11
 RUN yum install -y python-tools
-RUN yum install -y python35u python35u-devel
+RUN yum install -y python35u python35u-devel python35u-pip
+RUN python3.5 -m pip install cryptography
 RUN ln -s /usr/bin/cmake3 /usr/bin/cmake
 RUN ln -s /usr/bin/python3.5 /usr/bin/python3
 COPY . /Anjay

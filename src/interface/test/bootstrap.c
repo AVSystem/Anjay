@@ -657,7 +657,7 @@ AVS_UNIT_TEST(bootstrap_invalid, invalid) {
 }
 
 static long long time_to_ns(struct timespec ts) {
-    return ts.tv_sec * (long long) NS_IN_S + ts.tv_nsec;
+    return ts.tv_sec * (long long) NUM_NANOSECONDS_IN_A_SECOND + ts.tv_nsec;
 }
 
 AVS_UNIT_TEST(bootstrap_backoff, backoff) {

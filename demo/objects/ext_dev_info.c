@@ -15,10 +15,12 @@
  */
 
 #include <assert.h>
-#include <unistd.h>
+#include <time.h>
 
 #include "../objects.h"
 #include "../utils.h"
+
+#include <anjay/stats.h>
 
 #define EXT_DEV_RES_OBU_ID 0             // string
 #define EXT_DEV_RES_PLATE_NUMBER 1       // string
@@ -31,9 +33,15 @@
 #define EXT_DEV_RES_GPRS_DLMODULATION 8  // string
 #define EXT_DEV_RES_GPRS_ULFREQUENCY 9   // int
 #define EXT_DEV_RES_GPRS_DLFREQUENCY 10  // int
+#define EXT_DEV_RES_RX_BYTES 11          // uint64
+#define EXT_DEV_RES_TX_BYTES 12          // uint64
+#define EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS 13 // uint64
+#define EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS 14 // uint64
+#define EXT_DEV_RES_UPTIME 15            // double
 
 typedef struct {
     const anjay_dm_object_def_t *def;
+    struct timespec init_time;
 } extdev_repr_t;
 
 static inline extdev_repr_t *get_extdev(const anjay_dm_object_def_t *const *obj_ptr) {
@@ -50,7 +58,7 @@ static int dev_read(anjay_t *anjay,
                     anjay_iid_t iid,
                     anjay_rid_t rid,
                     anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) obj_ptr; (void) iid;
+    (void) anjay; (void) iid;
 
     switch (rid) {
     case EXT_DEV_RES_OBU_ID:
@@ -75,6 +83,26 @@ static int dev_read(anjay_t *anjay,
         return anjay_ret_i32(ctx, 1950);
     case EXT_DEV_RES_GPRS_DLFREQUENCY:
         return anjay_ret_i32(ctx, 2140);
+    case EXT_DEV_RES_RX_BYTES:
+        return anjay_ret_i64(ctx, (int64_t) anjay_get_rx_bytes(anjay));
+    case EXT_DEV_RES_TX_BYTES:
+        return anjay_ret_i64(ctx, (int64_t) anjay_get_tx_bytes(anjay));
+    case EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS:
+        return anjay_ret_i64(
+                ctx, (int64_t) anjay_get_num_incoming_retransmissions(anjay));
+    case EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS:
+        return anjay_ret_i64(
+                ctx, (int64_t) anjay_get_num_outgoing_retransmissions(anjay));
+    case EXT_DEV_RES_UPTIME: {
+        struct timespec curr_time;
+        if (clock_gettime(CLOCK_MONOTONIC, &curr_time)) {
+            return ANJAY_ERR_INTERNAL;
+        }
+        struct timespec diff =
+                avs_time_diff(&curr_time, &get_extdev(obj_ptr)->init_time);
+
+        return anjay_ret_double(ctx, (double) diff.tv_sec + (double) diff.tv_nsec / 1e9);
+    }
     default:
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -93,8 +121,12 @@ static const anjay_dm_object_def_t EXT_DEV_INFO = {
             EXT_DEV_RES_GPRS_ULMODULATION,
             EXT_DEV_RES_GPRS_DLMODULATION,
             EXT_DEV_RES_GPRS_ULFREQUENCY,
-            EXT_DEV_RES_GPRS_DLFREQUENCY
-            ),
+            EXT_DEV_RES_GPRS_DLFREQUENCY,
+            EXT_DEV_RES_RX_BYTES,
+            EXT_DEV_RES_TX_BYTES,
+            EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS,
+            EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS,
+            EXT_DEV_RES_UPTIME),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -104,12 +136,18 @@ static const anjay_dm_object_def_t EXT_DEV_INFO = {
 };
 
 const anjay_dm_object_def_t **ext_dev_info_object_create(void) {
-    extdev_repr_t *repr = (extdev_repr_t*)calloc(1, sizeof(extdev_repr_t));
+    struct timespec init_time;
+    if (clock_gettime(CLOCK_MONOTONIC, &init_time)) {
+        return NULL;
+    }
+
+    extdev_repr_t *repr = (extdev_repr_t *) calloc(1, sizeof(extdev_repr_t));
     if (!repr) {
         return NULL;
     }
 
     repr->def = &EXT_DEV_INFO;
+    repr->init_time = init_time;
 
     return &repr->def;
 }
@@ -123,4 +161,5 @@ void ext_dev_info_object_release(const anjay_dm_object_def_t **def) {
 void ext_dev_info_notify_time_dependent(anjay_t *anjay,
                                         const anjay_dm_object_def_t **def) {
     anjay_notify_changed(anjay, (*def)->oid, 0, EXT_DEV_RES_GPRS_RSSI);
+    anjay_notify_changed(anjay, (*def)->oid, 0, EXT_DEV_RES_UPTIME);
 }

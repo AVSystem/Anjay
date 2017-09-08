@@ -1125,7 +1125,7 @@ AVS_UNIT_TEST(dm_execute, invalid_input) {
     };
 
     EXECUTE_OBJ->handlers.resource_execute = invalid_input_execute;
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(invalid_inputs); i++) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(invalid_inputs); i++) {
         DM_TEST_INIT;
         size_t input_len = strlen(invalid_inputs[i]);
         size_t pattern_len = sizeof(request_pattern) - 1;
@@ -1178,7 +1178,7 @@ AVS_UNIT_TEST(dm_execute, valid_input) {
     };
 
     EXECUTE_OBJ->handlers.resource_execute = valid_input_execute;
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(valid_inputs); i++) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(valid_inputs); i++) {
         DM_TEST_INIT;
         size_t input_len = strlen(valid_inputs[i]);
         size_t pattern_len = sizeof(request_pattern) - 1;
@@ -1868,7 +1868,7 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
 
     coap_stream_mock_t mock = { \
         .vtable = &(const avs_stream_v_table_t) {
-            .write =          (avs_stream_write_t) fail,
+            .write_some =     (avs_stream_write_some_t) fail,
             .finish_message = (avs_stream_finish_message_t) fail,
             .read =           (avs_stream_read_t) fail,
             .peek =           (avs_stream_peek_t) fail,
@@ -1889,14 +1889,14 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
     };
 
     uint16_t OBJ_SUPPORTED_RIDS[31337];
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(OBJ_SUPPORTED_RIDS); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(OBJ_SUPPORTED_RIDS); ++i) {
         OBJ_SUPPORTED_RIDS[i] = (anjay_rid_t) i;
     }
 
     const anjay_dm_object_def_t OBJ_DEF = {
         .oid = 1337,
         .supported_rids = {
-            .count = ANJAY_ARRAY_SIZE(OBJ_SUPPORTED_RIDS),
+            .count = AVS_ARRAY_SIZE(OBJ_SUPPORTED_RIDS),
             .rids = OBJ_SUPPORTED_RIDS
         }
     };
@@ -1923,9 +1923,9 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
 
 #define ASSERT_ACTION_FAILS(...) \
     { \
-        anjay_coap_msg_identity_t request_identity = { 0 }; \
+        avs_coap_msg_identity_t request_identity = { 0 }; \
         anjay_request_t request = { \
-            .requested_format = ANJAY_COAP_FORMAT_NONE, \
+            .requested_format = AVS_COAP_FORMAT_NONE, \
             .uri = MAKE_RESOURCE_PATH(1337, 0, 0), \
             .action = __VA_ARGS__ \
         }; \

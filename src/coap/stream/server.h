@@ -23,6 +23,7 @@
 #include "../stream.h"
 #include "../block/response.h"
 #include "../id_source/id_source.h"
+#include "common.h"
 #include "in.h"
 #include "out.h"
 
@@ -57,10 +58,12 @@ typedef enum coap_server_state {
 } coap_server_state_t;
 
 typedef struct coap_server {
+    coap_stream_common_t common;
+
     coap_server_state_t state;
 
     // only valid if state != COAP_SERVER_STATE_RESET
-    anjay_coap_msg_identity_t request_identity;
+    avs_coap_msg_identity_t request_identity;
 
 #ifdef WITH_BLOCK_SEND
     coap_block_transfer_ctx_t *block_ctx;
@@ -70,7 +73,7 @@ typedef struct coap_server {
 
     // only valid if state == COAP_SERVER_STATE_HAS_BLOCK1_REQUEST or
     // state == COAP_SERVER_STATE_HAS_BLOCK2_REQUEST
-    coap_block_info_t curr_block;
+    avs_coap_block_info_t curr_block;
 
     uint32_t expected_block_offset;
     AVS_LIST(coap_block_optbuf_t) expected_block_opts;
@@ -94,12 +97,10 @@ void _anjay_coap_server_set_block_request_relation_validator(
 /**
  * @returns identity of the current request or NULL if there is no request.
  */
-const anjay_coap_msg_identity_t *
+const avs_coap_msg_identity_t *
 _anjay_coap_server_get_request_identity(const coap_server_t *server);
 
 int _anjay_coap_server_setup_response(coap_server_t *server,
-                                      coap_output_buffer_t *out,
-                                      anjay_coap_socket_t *socket,
                                       const anjay_msg_details_t *details);
 
 /**
@@ -109,25 +110,22 @@ int _anjay_coap_server_setup_response(coap_server_t *server,
 void _anjay_coap_server_set_error(coap_server_t *server, uint8_t code);
 
 /**
- * Sends the response prepared in the @p out buffer, unless the error code
- * was set using the set_error call. In that case, the error response is sent.
+ * Sends the response prepared in the <c>server->common.out</c> buffer, unless
+ * the error code was set using the set_error call. In that case, the error
+ * response is sent.
  *
  * @returns 0 on success, a negative value in case of error.
  */
-int _anjay_coap_server_finish_response(coap_server_t *server,
-                                       coap_output_buffer_t *out,
-                                       anjay_coap_socket_t *socket);
+int _anjay_coap_server_finish_response(coap_server_t *server);
 
 /**
  * Returns the currently handled request. If there is none, attempts to receive
- * one from @p socket into the @p in buffer.
+ * one from the configured socket into the input buffer.
  *
  * NOTE: this function succeeds if a Reset message is received, allowing it to
  * be handled by the upper layer.
  *
  * @param      server  Server state object.
- * @param      in      Input buffer used to store the request in.
- * @param      socket  Socket to read a request from in required.
  * @param[out] out_msg Filled with the current request.
  *
  * @returns:
@@ -135,30 +133,23 @@ int _anjay_coap_server_finish_response(coap_server_t *server,
  * - a negative value on error. In that case @p out_msg is set to NULL.
  */
 int _anjay_coap_server_get_or_receive_msg(coap_server_t *server,
-                                          coap_input_buffer_t *in,
-                                          anjay_coap_socket_t *socket,
-                                          const anjay_coap_msg_t **out_msg);
+                                          const avs_coap_msg_t **out_msg);
 
 /**
  * Reads the request payload, requesting and receiving additional blocks if
  * required. May wait for more packets if block-wise request is being handled.
- * In that case the call may send packets through @p socket to acknowledge or
+ * In that case the call may send packets through the socket to acknowledge or
  * reject incoming packets.
  *
  * @returns 0 on success, a negative value in case of error.
  */
 int _anjay_coap_server_read(coap_server_t *server,
-                            coap_input_buffer_t *in,
-                            anjay_coap_socket_t *socket,
                             size_t *out_bytes_read,
                             char *out_message_finished,
                             void *buffer,
                             size_t buffer_length);
 
 int _anjay_coap_server_write(coap_server_t *server,
-                             coap_input_buffer_t *in,
-                             coap_output_buffer_t *out,
-                             anjay_coap_socket_t *socket,
                              const void *data,
                              size_t data_length);
 

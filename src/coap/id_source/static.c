@@ -24,10 +24,10 @@ VISIBILITY_SOURCE_BEGIN
 
 typedef struct coap_static_id_src {
     coap_id_source_t base;
-    anjay_coap_msg_identity_t id;
+    avs_coap_msg_identity_t id;
 } coap_static_id_src_t;
 
-static anjay_coap_msg_identity_t
+static avs_coap_msg_identity_t
 id_src_static_get(coap_id_source_t *self_) {
     coap_static_id_src_t *self = (coap_static_id_src_t *)self_;
     return self->id;
@@ -39,7 +39,7 @@ static const coap_id_source_vt_t *const ID_SRC_STATIC_VTABLE =
     };
 
 coap_id_source_t *
-_anjay_coap_id_source_new_static(const anjay_coap_msg_identity_t *id) {
+_anjay_coap_id_source_new_static(const avs_coap_msg_identity_t *id) {
     coap_static_id_src_t *src = (coap_static_id_src_t *)
             malloc(sizeof(coap_static_id_src_t));
     if (!src) {
@@ -55,7 +55,7 @@ _anjay_coap_id_source_new_static(const anjay_coap_msg_identity_t *id) {
 
 void
 _anjay_coap_id_source_static_reset(coap_id_source_t *self_,
-                                   const anjay_coap_msg_identity_t *new_id) {
+                                   const avs_coap_msg_identity_t *new_id) {
     assert(self_->vtable == ID_SRC_STATIC_VTABLE);
 
     coap_static_id_src_t *self = (coap_static_id_src_t *)self_;

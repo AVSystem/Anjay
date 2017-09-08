@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -100,10 +101,10 @@ static int url_parse_port(const char **url, anjay_url_t *parsed_url) {
 
     if (*raw_url == ':') {
         ++raw_url; /* move after ':' */
-        while ((port < port_limit) && isdigit(*raw_url)) {
+        while ((port < port_limit) && isdigit((unsigned char) *raw_url)) {
             *port++ = *raw_url++;
         }
-        if (isdigit(*raw_url)) {
+        if (isdigit((unsigned char) *raw_url)) {
             anjay_log(ERROR, "port too long");
             return -1;
         }
@@ -127,7 +128,9 @@ static int url_parsed(const char *url) {
 }
 
 static int url_unescape_first(const char *data) {
-    if (data[0] == '%' && isxdigit(data[1]) && isxdigit(data[2])) {
+    if (data[0] == '%'
+            && isxdigit((unsigned char) data[1])
+            && isxdigit((unsigned char) data[2])) {
         char ascii[3];
         ascii[0] = data[1];
         ascii[1] = data[2];
@@ -173,7 +176,7 @@ typedef enum {
 static bool is_valid_url_path_char(char c) {
     /* Assumes english locale. For more information see RFC3986,
        Section "3.3. Path" */
-    return isalnum(c)
+    return isalnum((unsigned char) c)
            || !!strchr("-._~"        /* unreserved */
                        "!$&'()*+,;=" /* sub-delims */
                        ":@",         /* rest of pchar grammar rule */
@@ -326,23 +329,6 @@ uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
 }
 #endif
 
-ssize_t _anjay_snprintf(char *buffer,
-                        size_t buffer_size,
-                        const char *fmt,
-                        ...) {
-    ssize_t result = 0;
-    va_list args;
-    va_start(args, fmt);
-
-    result = vsnprintf(buffer, buffer_size, fmt, args);
-    if (result < 0 || (size_t) result >= buffer_size) {
-        result = -1;
-    }
-
-    va_end(args);
-    return result;
-}
-
 AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
                                                        ... /* strings */) {
     va_list list;
@@ -384,7 +370,7 @@ static struct {
 };
 
 const char *anjay_binding_mode_as_str(anjay_binding_mode_t binding_mode) {
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(BINDING_MODE_AS_STR); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_MODE_AS_STR); ++i) {
         if (BINDING_MODE_AS_STR[i].binding == binding_mode) {
             return BINDING_MODE_AS_STR[i].str;
         }
@@ -393,7 +379,7 @@ const char *anjay_binding_mode_as_str(anjay_binding_mode_t binding_mode) {
 }
 
 anjay_binding_mode_t anjay_binding_mode_from_str(const char *str) {
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(BINDING_MODE_AS_STR); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_MODE_AS_STR); ++i) {
         if (strcmp(str, BINDING_MODE_AS_STR[i].str) == 0) {
             return BINDING_MODE_AS_STR[i].binding;
         }
@@ -409,7 +395,8 @@ static int append_string_query_arg(AVS_LIST(const anjay_string_t) *list,
     AVS_LIST(anjay_string_t) arg =
             (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(size);
 
-    if (!arg || _anjay_snprintf(arg->c_str, size, "%s=%s", name, value) < 0) {
+    if (!arg
+        || avs_simple_snprintf(arg->c_str, size, "%s=%s", name, value) < 0) {
         AVS_LIST_CLEAR(&arg);
     } else {
         AVS_LIST_APPEND(list, arg);
@@ -439,8 +426,8 @@ _anjay_make_query_string_list(const char *version,
         size_t lt_size = sizeof("lt=") + 16;
         AVS_LIST(anjay_string_t) lt =
                 (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(lt_size);
-        if (!lt || _anjay_snprintf(lt->c_str, lt_size,
-                                   "lt=%" PRId64, *lifetime) < 0) {
+        if (!lt || avs_simple_snprintf(lt->c_str, lt_size,
+                                       "lt=%" PRId64, *lifetime) < 0) {
             goto fail;
         }
         AVS_LIST_APPEND(&list, lt);

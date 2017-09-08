@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <assert.h>
 #include <inttypes.h>
@@ -23,14 +24,17 @@
 #include <stdio.h>
 
 #include <anjay/core.h>
-#include <avsystem/commons/stream_v_table.h>
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/stream/stream_membuf.h>
+#include <avsystem/commons/stream_v_table.h>
+#include <avsystem/commons/utils.h>
 
 #include <anjay_modules/notify.h>
 
-#include "coap/msg.h"
+#include <avsystem/commons/coap/msg.h>
+
 #include "coap/content_format.h"
+
 #include "dm.h"
 #include "dm/discover.h"
 #include "dm/execute.h"
@@ -222,14 +226,14 @@ input_ctx_for_action(anjay_request_action_t action) {
 
 static uint8_t make_success_response_code(anjay_request_action_t action) {
     switch (action) {
-    case ANJAY_ACTION_READ:             return ANJAY_COAP_CODE_CONTENT;
-    case ANJAY_ACTION_DISCOVER:         return ANJAY_COAP_CODE_CONTENT;
-    case ANJAY_ACTION_WRITE:            return ANJAY_COAP_CODE_CHANGED;
-    case ANJAY_ACTION_WRITE_UPDATE:     return ANJAY_COAP_CODE_CHANGED;
-    case ANJAY_ACTION_WRITE_ATTRIBUTES: return ANJAY_COAP_CODE_CHANGED;
-    case ANJAY_ACTION_EXECUTE:          return ANJAY_COAP_CODE_CHANGED;
-    case ANJAY_ACTION_CREATE:           return ANJAY_COAP_CODE_CREATED;
-    case ANJAY_ACTION_DELETE:           return ANJAY_COAP_CODE_DELETED;
+    case ANJAY_ACTION_READ:             return AVS_COAP_CODE_CONTENT;
+    case ANJAY_ACTION_DISCOVER:         return AVS_COAP_CODE_CONTENT;
+    case ANJAY_ACTION_WRITE:            return AVS_COAP_CODE_CHANGED;
+    case ANJAY_ACTION_WRITE_UPDATE:     return AVS_COAP_CODE_CHANGED;
+    case ANJAY_ACTION_WRITE_ATTRIBUTES: return AVS_COAP_CODE_CHANGED;
+    case ANJAY_ACTION_EXECUTE:          return AVS_COAP_CODE_CHANGED;
+    case ANJAY_ACTION_CREATE:           return AVS_COAP_CODE_CREATED;
+    case ANJAY_ACTION_DELETE:           return AVS_COAP_CODE_DELETED;
     default:                            break;
     }
     return (uint8_t)(-ANJAY_ERR_INTERNAL);
@@ -270,10 +274,10 @@ const char *_anjay_debug_make_path__(char *buffer,
     do {
         ssize_t result;
         if (*id_ptr) {
-            result = _anjay_snprintf(buffer + offset, buffer_size - offset,
-                                     "/%u", **id_ptr);
+            result = avs_simple_snprintf(buffer + offset, buffer_size - offset,
+                                         "/%u", **id_ptr);
         } else {
-            result = _anjay_snprintf(buffer, buffer_size, "%s", "/");
+            result = avs_simple_snprintf(buffer, buffer_size, "%s", "/");
         }
         if (result < 0) {
             assert(0 && "should never happen");
@@ -454,7 +458,7 @@ dm_read_spawn_ctx(avs_stream_abstract_t *stream,
     }
 
     anjay_msg_details_t msg_details = {
-        .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
         .format = requested_format,
         .msg_code = make_success_response_code(ANJAY_ACTION_READ),
         .observe_serial = details->observe_serial
@@ -562,7 +566,7 @@ ssize_t _anjay_dm_read_for_observe(anjay_t *anjay,
 
 static int dm_observe(anjay_t *anjay,
                       const anjay_dm_object_def_t *const *obj,
-                      const anjay_coap_msg_identity_t *request_identity,
+                      const avs_coap_msg_identity_t *request_identity,
                       const anjay_request_t *request) {
     anjay_log(DEBUG, "Observe %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     assert(request->uri.has_oid);
@@ -577,15 +581,22 @@ static int dm_observe(anjay_t *anjay,
     }
     anjay_observe_key_t key;
     build_observe_key(anjay, &key, request);
+    int put_entry_result = _anjay_observe_put_entry(
+            anjay, &key, &observe_details, request_identity, numeric,
+            buf, (size_t) size);
+    if (put_entry_result) {
+        // we are unable to create the observation entry, but we can still
+        // process the request as usual; compare RFC 7641, section 4.1
+        observe_details.observe_serial = false;
+    }
     int result;
-    if ((result = _anjay_observe_put_entry(anjay, &key, &observe_details,
-                                           request_identity,
-                                           numeric, buf, (size_t) size))
-            || (result = _anjay_coap_stream_setup_response(anjay->comm_stream,
-                                                           &observe_details))
+    if ((result = _anjay_coap_stream_setup_response(anjay->comm_stream,
+                                                    &observe_details))
             || (result = avs_stream_write(anjay->comm_stream,
                                           buf, (size_t) size))) {
-        _anjay_observe_remove_entry(anjay, &key);
+        if (!put_entry_result) {
+            _anjay_observe_remove_entry(anjay, &key);
+        }
     }
     return result;
 }
@@ -598,7 +609,7 @@ static int dm_observe(anjay_t *anjay,
 
 static int dm_read_or_observe(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj,
-                              const anjay_coap_msg_identity_t *request_identity,
+                              const avs_coap_msg_identity_t *request_identity,
                               const anjay_request_t *request) {
     if (request->observe == ANJAY_COAP_OBSERVE_REGISTER) {
         return dm_observe(anjay, obj, request_identity, request);
@@ -653,7 +664,7 @@ static int dm_discover(anjay_t *anjay,
      * allowed. */
     int result = _anjay_coap_stream_setup_response(anjay->comm_stream,
             &(anjay_msg_details_t) {
-                .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+                .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
                 .msg_code = make_success_response_code(ANJAY_ACTION_DISCOVER),
                 .format = ANJAY_COAP_FORMAT_APPLICATION_LINK
             });
@@ -998,7 +1009,7 @@ static int dm_write_attributes(anjay_t *anjay,
         // ensure that new attributes are "seen" by the observe code
         anjay_observe_key_t key;
         build_observe_key(anjay, &key, request);
-        key.format = ANJAY_COAP_FORMAT_NONE;
+        key.format = AVS_COAP_FORMAT_NONE;
         result = _anjay_observe_notify(anjay, &key, false);
     }
 #endif // WITH_OBSERVE
@@ -1047,17 +1058,21 @@ static int set_create_response_location(anjay_oid_t oid,
     AVS_STATIC_ASSERT(((anjay_oid_t) -1) == 65535, oid_is_u16);
     AVS_STATIC_ASSERT(((anjay_iid_t) -1) == 65535, iid_is_u16);
     char oid_str[6], iid_str[6];
-    int result = (_anjay_snprintf(oid_str, sizeof(oid_str),
-                                  "%" PRIu16, oid) < 0 ? -1 : 0);
+    int result =
+            avs_simple_snprintf(oid_str, sizeof(oid_str), "%" PRIu16, oid) < 0
+                    ? -1
+                    : 0;
     if (!result) {
-        result = (_anjay_snprintf(iid_str, sizeof(iid_str),
-                                  "%" PRIu16, iid) < 0 ? -1 : 0);
+        result = avs_simple_snprintf(iid_str, sizeof(iid_str), "%" PRIu16, iid)
+                                 < 0
+                         ? -1
+                         : 0;
     }
     if (!result) {
         anjay_msg_details_t msg_details = {
-            .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+            .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
             .msg_code = make_success_response_code(ANJAY_ACTION_CREATE),
-            .format = ANJAY_COAP_FORMAT_NONE,
+            .format = AVS_COAP_FORMAT_NONE,
             .location_path = _anjay_make_string_list(oid_str, iid_str, NULL)
         };
         if (!msg_details.location_path) {
@@ -1202,7 +1217,7 @@ static int dm_delete(anjay_t *anjay,
 
 static int
 dm_cancel_observe(anjay_t *anjay,
-                  const anjay_coap_msg_identity_t *request_identity) {
+                  const avs_coap_msg_identity_t *request_identity) {
     (void) anjay;
     anjay_log(DEBUG, "Cancel Observe %04" PRIX16, request_identity->msg_id);
 #ifdef WITH_OBSERVE
@@ -1253,7 +1268,7 @@ static int invoke_transactional_action(anjay_t *anjay,
 
 static int invoke_action(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj,
-                         const anjay_coap_msg_identity_t *request_identity,
+                         const avs_coap_msg_identity_t *request_identity,
                          const anjay_request_t *request,
                          anjay_input_ctx_t *in_ctx) {
     switch (request->action) {
@@ -1280,7 +1295,7 @@ static int invoke_action(anjay_t *anjay,
 }
 
 int _anjay_dm_perform_action(anjay_t *anjay,
-                             const anjay_coap_msg_identity_t *request_identity,
+                             const avs_coap_msg_identity_t *request_identity,
                              const anjay_request_t *request) {
     const anjay_dm_object_def_t *const *obj = NULL;
     if (request->uri.has_oid) {
@@ -1295,9 +1310,9 @@ int _anjay_dm_perform_action(anjay_t *anjay,
     }
 
     anjay_msg_details_t msg_details = {
-        .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
         .msg_code = make_success_response_code(request->action),
-        .format = ANJAY_COAP_FORMAT_NONE
+        .format = AVS_COAP_FORMAT_NONE
     };
 
     anjay_input_ctx_t *in_ctx = NULL;

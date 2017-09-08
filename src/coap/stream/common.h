@@ -17,10 +17,11 @@
 #ifndef SRC_COAP_STREAM_COMMON_H
 #define SRC_COAP_STREAM_COMMON_H
 
-#include "../stream.h"
-#include "../msg_builder.h"
+#include <avsystem/commons/coap/msg_builder.h>
 
+#include "../stream.h"
 #include "in.h"
+#include "out.h"
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
 #error "Headers from coap/stream are not meant to be included from outside"
@@ -28,10 +29,18 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-int _anjay_coap_common_fill_msg_info(anjay_coap_msg_info_t *info,
+typedef struct coap_stream_common {
+    avs_coap_ctx_t *coap_ctx;
+    avs_net_abstract_socket_t *socket;
+
+    coap_input_buffer_t in;
+    coap_output_buffer_t out;
+} coap_stream_common_t;
+
+int _anjay_coap_common_fill_msg_info(avs_coap_msg_info_t *info,
                                      const anjay_msg_details_t *details,
-                                     const anjay_coap_msg_identity_t *identity,
-                                     const coap_block_info_t *block_info);
+                                     const avs_coap_msg_identity_t *identity,
+                                     const avs_coap_block_info_t *block_info);
 
 /**
  * @param      msg               Received message. It is guaranteed to never
@@ -52,12 +61,13 @@ int _anjay_coap_common_fill_msg_info(anjay_coap_msg_info_t *info,
  *         function will be propagated up by the
  *         @ref _coap_common_with_recv_timeout .
  */
-typedef int recv_msg_handler_t(const anjay_coap_msg_t *msg,
+typedef int recv_msg_handler_t(const avs_coap_msg_t *msg,
                                void *data,
                                bool *out_wait_for_next,
                                uint8_t *out_error_code);
 
 /**
+ * @param        coap_ctx           Context to use for CoAP message handling.
  * @param        socket             Socket to wait on.
  * @param        in                 Input buffer for the incoming message.
  * @param[inout] timeout_ms         Maximum time to wait for a message. Will be
@@ -75,7 +85,8 @@ typedef int recv_msg_handler_t(const anjay_coap_msg_t *msg,
  * - COAP_RECV_MSG_WITH_TIMEOUT_EXPIRED if the timeout expires,
  * - a negative value in case of error.
  */
-int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
+int _anjay_coap_common_recv_msg_with_timeout(avs_coap_ctx_t *ctx,
+                                             avs_net_abstract_socket_t *socket,
                                              coap_input_buffer_t *in,
                                              int32_t *inout_timeout_ms,
                                              recv_msg_handler_t *handle_msg,

@@ -15,10 +15,14 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <inttypes.h>
 
+#include <avsystem/commons/coap/msg.h>
+#include <avsystem/commons/coap/msg_opt.h>
 #include <avsystem/commons/stream.h>
+#include <avsystem/commons/utils.h>
 
 #include <anjay_modules/time.h>
 
@@ -26,24 +30,23 @@
 #include "../dm.h"
 #include "../dm/query.h"
 #include "../utils.h"
-#include "../coap/msg.h"
-#include "../coap/msg_opt.h"
-#include "../coap/stream.h"
+
 #include "../coap/content_format.h"
+#include "../coap/stream.h"
 
 VISIBILITY_SOURCE_BEGIN
 
 static AVS_LIST(const anjay_string_t)
-get_endpoint_path(const anjay_coap_msg_t *msg) {
+get_endpoint_path(const avs_coap_msg_t *msg) {
     AVS_LIST(const anjay_string_t) path = NULL;
 
     int result;
     char buffer[ANJAY_MAX_URI_SEGMENT_SIZE];
     size_t attr_size;
 
-    anjay_coap_opt_iterator_t it = ANJAY_COAP_OPT_ITERATOR_EMPTY;
-    while ((result = _anjay_coap_msg_get_option_string_it(
-                    msg, ANJAY_COAP_OPT_LOCATION_PATH, &it,
+    avs_coap_opt_iterator_t it = AVS_COAP_OPT_ITERATOR_EMPTY;
+    while ((result = avs_coap_msg_get_option_string_it(
+                    msg, AVS_COAP_OPT_LOCATION_PATH, &it,
                     &attr_size, buffer, sizeof(buffer) - 1)) == 0) {
         buffer[attr_size] = '\0';
 
@@ -58,7 +61,7 @@ get_endpoint_path(const anjay_coap_msg_t *msg) {
         AVS_LIST_APPEND(&path, segment);
     }
 
-    if (result == ANJAY_COAP_OPTION_MISSING) {
+    if (result == AVS_COAP_OPTION_MISSING) {
         return path;
     }
 
@@ -73,8 +76,8 @@ static const char *assemble_endpoint_path(char *buffer,
     size_t off = 0;
     AVS_LIST(const anjay_string_t) segment;
     AVS_LIST_FOREACH(segment, path) {
-        ssize_t result = _anjay_snprintf(buffer + off, buffer_size - off,
-                                         "/%s", segment->c_str);
+        ssize_t result = avs_simple_snprintf(buffer + off, buffer_size - off,
+                                             "/%s", segment->c_str);
         if (result < 0) {
             return "<ERROR>";
         }
@@ -144,8 +147,8 @@ static int get_server_lifetime(anjay_t *anjay,
 static int send_register(anjay_t *anjay,
                          const anjay_update_parameters_t *params) {
     anjay_msg_details_t details = {
-        .msg_type = ANJAY_COAP_MSG_CONFIRMABLE,
-        .msg_code = ANJAY_COAP_CODE_POST,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE,
+        .msg_code = AVS_COAP_CODE_POST,
         .format = ANJAY_COAP_FORMAT_APPLICATION_LINK,
         .uri_path = _anjay_make_string_list("rd", NULL),
         .uri_query = _anjay_make_query_string_list(
@@ -162,7 +165,7 @@ static int send_register(anjay_t *anjay,
         goto cleanup;
     }
 
-    if (_anjay_coap_stream_setup_request(anjay->comm_stream, &details, NULL, 0)
+    if (_anjay_coap_stream_setup_request(anjay->comm_stream, &details, NULL)
             || send_objects_list(anjay->comm_stream, params->dm)
             || avs_stream_finish_message(anjay->comm_stream)) {
         anjay_log(ERROR, "could not send Register message");
@@ -180,16 +183,16 @@ cleanup:
 static int
 check_register_response(avs_stream_abstract_t *stream,
                         AVS_LIST(const anjay_string_t) *out_endpoint_path) {
-    const anjay_coap_msg_t *response;
+    const avs_coap_msg_t *response;
     if (_anjay_coap_stream_get_incoming_msg(stream, &response)) {
         anjay_log(ERROR, "could not get response");
         return -1;
     }
 
-    if (response->header.code != ANJAY_COAP_CODE_CREATED) {
+    if (avs_coap_msg_get_code(response) != AVS_COAP_CODE_CREATED) {
         anjay_log(ERROR, "server responded with %s (expected %s)",
-                  ANJAY_COAP_CODE_STRING(response->header.code),
-                  ANJAY_COAP_CODE_STRING(ANJAY_COAP_CODE_CREATED));
+                  AVS_COAP_CODE_STRING(avs_coap_msg_get_code(response)),
+                  AVS_COAP_CODE_STRING(AVS_COAP_CODE_CREATED));
         return -1;
     }
 
@@ -433,11 +436,11 @@ static int send_update(anjay_t *anjay,
     bool dm_changed_since_last_update =
             !dm_caches_equal(old_params->dm, new_params->dm);
     anjay_msg_details_t details = {
-        .msg_type = ANJAY_COAP_MSG_CONFIRMABLE,
-        .msg_code = ANJAY_COAP_CODE_POST,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE,
+        .msg_code = AVS_COAP_CODE_POST,
         .format = dm_changed_since_last_update
                     ? ANJAY_COAP_FORMAT_APPLICATION_LINK
-                    : ANJAY_COAP_FORMAT_NONE,
+                    : AVS_COAP_FORMAT_NONE,
         .uri_path = server->registration_info.endpoint_path,
         .uri_query = _anjay_make_query_string_list(NULL, NULL, lifetime_s_ptr,
                                                    binding_mode, NULL)
@@ -445,7 +448,7 @@ static int send_update(anjay_t *anjay,
 
     int result = -1;
     if ((result = _anjay_coap_stream_setup_request(anjay->comm_stream, &details,
-                                                   NULL, 0))
+                                                   NULL))
             || (dm_changed_since_last_update
                 && (result = send_objects_list(anjay->comm_stream,
                                                new_params->dm)))
@@ -462,16 +465,17 @@ static int send_update(anjay_t *anjay,
 }
 
 static int check_update_response(avs_stream_abstract_t *stream) {
-    const anjay_coap_msg_t *response;
+    const avs_coap_msg_t *response;
     if (_anjay_coap_stream_get_incoming_msg(stream, &response)) {
         anjay_log(ERROR, "could not get response");
         return -1;
     }
 
-    if (response->header.code == ANJAY_COAP_CODE_CHANGED) {
+    const uint8_t code = avs_coap_msg_get_code(response);
+    if (code == AVS_COAP_CODE_CHANGED) {
         anjay_log(INFO, "registration successfully updated");
         return 0;
-    } else if (_anjay_coap_msg_code_is_client_error(response->header.code)) {
+    } else if (avs_coap_msg_code_is_client_error(code)) {
         /* 4.xx (client error) response means that a server received a request
          * it considers invalid, so retransmission of the same message will
          * most likely fail again. That may happen if:
@@ -484,7 +488,7 @@ static int check_update_response(avs_stream_abstract_t *stream) {
          * Otherwise, we might as well do the same, as server is required to
          * replace client registration information in such case. */
         anjay_log(DEBUG, "Update rejected: %s",
-                  ANJAY_COAP_CODE_STRING(response->header.code));
+                  AVS_COAP_CODE_STRING(code));
         return ANJAY_REGISTRATION_UPDATE_REJECTED;
     } else {
         /* Any other response is either an 5.xx (server error), in which case
@@ -493,8 +497,8 @@ static int check_update_response(avs_stream_abstract_t *stream) {
          * with retransmitted Updates until the server implementer notices
          * something is wrong. */
         anjay_log(ERROR, "server responded with %s (expected %s)",
-                  ANJAY_COAP_CODE_STRING(response->header.code),
-                  ANJAY_COAP_CODE_STRING(ANJAY_COAP_CODE_CHANGED));
+                  AVS_COAP_CODE_STRING(code),
+                  AVS_COAP_CODE_STRING(AVS_COAP_CODE_CHANGED));
         return -1;
     }
 }
@@ -522,16 +526,17 @@ finish:
 }
 
 static int check_deregister_response(avs_stream_abstract_t *stream) {
-    const anjay_coap_msg_t *response;
+    const avs_coap_msg_t *response;
     if (_anjay_coap_stream_get_incoming_msg(stream, &response)) {
         anjay_log(ERROR, "could not get response");
         return -1;
     }
 
-    if (response->header.code != ANJAY_COAP_CODE_DELETED) {
+    const uint8_t code = avs_coap_msg_get_code(response);
+    if (code != AVS_COAP_CODE_DELETED) {
         anjay_log(ERROR, "server responded with %s (expected %s)",
-                  ANJAY_COAP_CODE_STRING(response->header.code),
-                  ANJAY_COAP_CODE_STRING(ANJAY_COAP_CODE_DELETED));
+                  AVS_COAP_CODE_STRING(code),
+                  AVS_COAP_CODE_STRING(AVS_COAP_CODE_DELETED));
         return -1;
     }
 
@@ -540,15 +545,15 @@ static int check_deregister_response(avs_stream_abstract_t *stream) {
 
 int _anjay_deregister(anjay_t *anjay) {
     anjay_msg_details_t details = {
-        .msg_type = ANJAY_COAP_MSG_CONFIRMABLE,
-        .msg_code = ANJAY_COAP_CODE_DELETE,
-        .format = ANJAY_COAP_FORMAT_NONE,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE,
+        .msg_code = AVS_COAP_CODE_DELETE,
+        .format = AVS_COAP_FORMAT_NONE,
         .uri_path = anjay->current_connection.server->registration_info.endpoint_path
     };
 
     int result;
     if ((result = _anjay_coap_stream_setup_request(anjay->comm_stream, &details,
-                                                   NULL, 0))
+                                                   NULL))
             || (result = avs_stream_finish_message(anjay->comm_stream))
             || (result = check_deregister_response(anjay->comm_stream))) {
         anjay_log(ERROR, "Could not perform De-registration");
@@ -563,8 +568,5 @@ _anjay_register_time_remaining(const anjay_registration_info_t *info) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
 
-    struct timespec diff;
-    _anjay_time_diff(&diff, &info->expire_time, &now);
-
-    return diff;
+    return avs_time_diff(&info->expire_time, &now);
 }

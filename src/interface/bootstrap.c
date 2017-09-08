@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <inttypes.h>
 
@@ -22,11 +23,12 @@
 #include <anjay_modules/interface/bootstrap.h>
 
 #include "bootstrap.h"
+#include "../coap/content_format.h"
 #include "../anjay.h"
 #include "../io.h"
 #include "../dm/discover.h"
 #include "../dm/query.h"
-#include "../coap/content_format.h"
+
 #include "anjay_modules/time.h"
 
 #ifdef ANJAY_TEST
@@ -105,10 +107,10 @@ static void bootstrap_remove_notify_changed(anjay_t *anjay,
 
 static uint8_t make_success_response_code(anjay_request_action_t action) {
     switch (action) {
-    case ANJAY_ACTION_WRITE:            return ANJAY_COAP_CODE_CHANGED;
-    case ANJAY_ACTION_DELETE:           return ANJAY_COAP_CODE_DELETED;
-    case ANJAY_ACTION_DISCOVER:         return ANJAY_COAP_CODE_CONTENT;
-    case ANJAY_ACTION_BOOTSTRAP_FINISH: return ANJAY_COAP_CODE_CHANGED;
+    case ANJAY_ACTION_WRITE:            return AVS_COAP_CODE_CHANGED;
+    case ANJAY_ACTION_DELETE:           return AVS_COAP_CODE_DELETED;
+    case ANJAY_ACTION_DISCOVER:         return AVS_COAP_CODE_CONTENT;
+    case ANJAY_ACTION_BOOTSTRAP_FINISH: return AVS_COAP_CODE_CHANGED;
     default:                            break;
     }
     return (uint8_t)(-ANJAY_ERR_INTERNAL);
@@ -571,9 +573,9 @@ static int invoke_action(anjay_t *anjay,
 int _anjay_bootstrap_perform_action(anjay_t *anjay,
                                     const anjay_request_t *request) {
     anjay_msg_details_t msg_details = {
-        .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
         .msg_code = make_success_response_code(request->action),
-        .format = ANJAY_COAP_FORMAT_NONE
+        .format = AVS_COAP_FORMAT_NONE
     };
 
     int result = _anjay_coap_stream_setup_response(anjay->comm_stream,
@@ -586,16 +588,17 @@ int _anjay_bootstrap_perform_action(anjay_t *anjay,
 }
 
 static int check_request_bootstrap_response(avs_stream_abstract_t *stream) {
-    const anjay_coap_msg_t *response;
+    const avs_coap_msg_t *response;
     if (_anjay_coap_stream_get_incoming_msg(stream, &response)) {
         anjay_log(ERROR, "could not get response");
         return -1;
     }
 
-    if (response->header.code != ANJAY_COAP_CODE_CHANGED) {
+    const uint8_t code = avs_coap_msg_get_code(response);
+    if (code != AVS_COAP_CODE_CHANGED) {
         anjay_log(ERROR, "server responded with %s (expected %s)",
-                  ANJAY_COAP_CODE_STRING(response->header.code),
-                  ANJAY_COAP_CODE_STRING(ANJAY_COAP_CODE_CHANGED));
+                  AVS_COAP_CODE_STRING(code),
+                  AVS_COAP_CODE_STRING(AVS_COAP_CODE_CHANGED));
         return -1;
     }
 
@@ -605,9 +608,9 @@ static int check_request_bootstrap_response(avs_stream_abstract_t *stream) {
 static int send_request_bootstrap(avs_stream_abstract_t *stream,
                                   const char *endpoint_name) {
     anjay_msg_details_t details = {
-        .msg_type = ANJAY_COAP_MSG_CONFIRMABLE,
-        .msg_code = ANJAY_COAP_CODE_POST,
-        .format = ANJAY_COAP_FORMAT_NONE,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE,
+        .msg_code = AVS_COAP_CODE_POST,
+        .format = AVS_COAP_FORMAT_NONE,
         .uri_path = _anjay_make_string_list("bs", NULL),
         .uri_query = _anjay_make_query_string_list(NULL, endpoint_name, NULL,
                                                    ANJAY_BINDING_NONE, NULL)
@@ -619,7 +622,7 @@ static int send_request_bootstrap(avs_stream_abstract_t *stream,
         goto cleanup;
     }
 
-    if ((result = _anjay_coap_stream_setup_request(stream, &details, NULL, 0))
+    if ((result = _anjay_coap_stream_setup_request(stream, &details, NULL))
             || (result = avs_stream_finish_message(stream))
             || (result = check_request_bootstrap_response(stream))) {
         anjay_log(ERROR, "could not request bootstrap");
@@ -667,7 +670,7 @@ static int request_bootstrap(anjay_t *anjay, void *dummy) {
 
     anjay_active_server_info_t *server =
             _anjay_servers_find_active(&anjay->servers, ANJAY_SSID_BOOTSTRAP);
-    if (_anjay_server_setup_registration_connection(server)) {
+    if (!server || _anjay_server_setup_registration_connection(server)) {
         return -1;
     }
     anjay_connection_ref_t connection = {
@@ -682,7 +685,7 @@ static int request_bootstrap(anjay_t *anjay, void *dummy) {
 
     int result = send_request_bootstrap(anjay->comm_stream,
                                         anjay->endpoint_name);
-    if (result == ANJAY_COAP_SOCKET_ERR_NETWORK) {
+    if (result == AVS_COAP_CTX_ERR_NETWORK) {
         anjay_log(ERROR, "network communication error while "
                          "sending Request Bootstrap");
         _anjay_schedule_server_reconnect(anjay, server);

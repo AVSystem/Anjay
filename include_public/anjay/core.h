@@ -20,8 +20,9 @@
 #include <stdint.h>
 #include <time.h>
 
-#include <avsystem/commons/net.h>
+#include <avsystem/commons/coap/tx_params.h>
 #include <avsystem/commons/list.h>
+#include <avsystem/commons/net.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,15 +48,6 @@ typedef struct anjay_smsdrv_struct anjay_smsdrv_t;
  * @param smsdrv_ptr Pointer to an SMS driver object to delete.
  */
 void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
-
-typedef struct {
-    /** RFC 7252: ACK_TIMEOUT */
-    avs_net_timeout_t ack_timeout_ms;
-    /** RFC 7252: ACK_RANDOM_FACTOR */
-    double ack_random_factor;
-    /** RFC 7252: MAX_RETRANSMIT */
-    unsigned max_retransmit;
-} anjay_coap_tx_params_t;
 
 /**
  * Default transmission params recommended by the CoAP specification (RFC 7252).
@@ -135,7 +127,7 @@ typedef struct anjay_configuration {
      * NOTE: Parameters are copied during @ref anjay_new() and cannot be
      * modified later on.
      */
-    const anjay_coap_tx_params_t *udp_tx_params;
+    const avs_coap_tx_params_t *udp_tx_params;
 
     /**
      * Configuration of the CoAP transmission params for SMS connection, as per
@@ -147,7 +139,7 @@ typedef struct anjay_configuration {
      * NOTE: Parameters are copied during @ref anjay_new() and cannot be
      * modified later on.
      */
-    const anjay_coap_tx_params_t *sms_tx_params;
+    const avs_coap_tx_params_t *sms_tx_params;
 
     /** Controls whether Notify operations are conveyed using Confirmable CoAP
      * messages by default. */

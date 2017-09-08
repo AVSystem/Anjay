@@ -70,6 +70,69 @@ int anjay_attr_storage_persist(anjay_t *anjay,
 int anjay_attr_storage_restore(anjay_t *anjay,
                                avs_stream_abstract_t *in_stream);
 
+/**
+ * Sets Object level attributes for the specified @p ssid.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid  SSID for which given Attributes shall be set (must be a valid
+ *              SSID corresponding to one of the non-Bootstrap LwM2M Servers).
+ * @param oid   Object ID for which given Attributes shall be set.
+ * @param attrs Attributes to be set (MUST NOT be NULL).
+ *
+ * NOTE: This function will fail if the object has object_read_default_attrs or
+ * object_write_default_attrs handler implemented.
+ *
+ * @returns 0 on success, negative value in case of an error.
+ */
+int anjay_attr_storage_set_object_attrs(anjay_t *anjay,
+                                        anjay_ssid_t ssid,
+                                        anjay_oid_t oid,
+                                        const anjay_dm_attributes_t *attrs);
+/**
+ * Sets Instance level attributes for the specified @p ssid.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid  SSID for which given Attributes shall be set (must be a valid
+ *              SSID corresponding to one of the non-Bootstrap LwM2M Servers).
+ * @param oid   Object ID for which given Attributes shall be set.
+ * @param iid   Instance ID for which given Attributes shall be set.
+ * @param attrs Attributes to be set (MUST NOT be NULL).
+ *
+ * NOTE: This function will fail if the object has instance_read_default_attrs
+ * or instance_write_default_attrs handler implemented.
+ *
+ * @returns 0 on success, negative value in case of an error.
+ */
+int anjay_attr_storage_set_instance_attrs(anjay_t *anjay,
+                                          anjay_ssid_t ssid,
+                                          anjay_oid_t oid,
+                                          anjay_iid_t iid,
+                                          const anjay_dm_attributes_t *attrs);
+
+/**
+ * Sets Resource level attributes for the specified @p ssid.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid  SSID for which given Attributes shall be set (must be a valid
+ *              SSID corresponding to one of the non-Bootstrap LwM2M Servers).
+ * @param oid   Object ID owning the specified Instance.
+ * @param iid   Instance ID owning the specified Resource.
+ * @param rid   Resource ID for which given Attributes shall be set.
+ * @param attrs Attributes to be set (MUST NOT be NULL).
+ *
+ * NOTE: This function will fail if the object has resource_read_attrs
+ * or resource_write_attrs handler implemented.
+ *
+ * @returns 0 on success, negative value in case of an error.
+ */
+int anjay_attr_storage_set_resource_attrs(
+        anjay_t *anjay,
+        anjay_ssid_t ssid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        const anjay_dm_resource_attributes_t *attrs);
+
 #ifdef __cplusplus
 }
 #endif

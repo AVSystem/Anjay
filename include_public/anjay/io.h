@@ -17,7 +17,6 @@
 #ifndef ANJAY_INCLUDE_ANJAY_IO_H
 #define ANJAY_INCLUDE_ANJAY_IO_H
 
-#include <sys/types.h>
 
 #include <anjay/core.h>
 

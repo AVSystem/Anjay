@@ -22,8 +22,9 @@
 
 #include <avsystem/commons/stream.h>
 
-#include "../io.h"
 #include "../coap/content_format.h"
+#include "../io.h"
+
 #include "vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -93,7 +94,7 @@ static anjay_output_ctx_t *spawn_backend(dynamic_out_t *ctx, uint16_t format) {
 #endif
     default:
         anjay_log(ERROR, "Unsupported output format: %" PRIu16, format);
-        *ctx->errno_ptr = -ANJAY_COAP_CODE_NOT_ACCEPTABLE;
+        *ctx->errno_ptr = -AVS_COAP_CODE_NOT_ACCEPTABLE;
         return NULL;
     }
 }
@@ -291,7 +292,7 @@ _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
     ctx->details = *details_template;
     ctx->id = -1;
     ctx->uri = *uri;
-    if (ctx->details.format != ANJAY_COAP_FORMAT_NONE
+    if (ctx->details.format != AVS_COAP_FORMAT_NONE
             && !ensure_backend(ctx, ctx->details.format)) {
         free(ctx);
         return NULL;
@@ -304,11 +305,11 @@ _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
 int _anjay_input_dynamic_create(anjay_input_ctx_t **out,
                                 avs_stream_abstract_t **stream_ptr,
                                 bool autoclose) {
-    const anjay_coap_msg_t *msg;
+    const avs_coap_msg_t *msg;
     uint16_t format;
     int result;
     if ((result = _anjay_coap_stream_get_incoming_msg(*stream_ptr, &msg))
-            || (result = _anjay_coap_msg_get_content_format(msg, &format))) {
+            || (result = avs_coap_msg_get_content_format(msg, &format))) {
         return result;
     }
     switch (_anjay_translate_legacy_content_format(format)) {

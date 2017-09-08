@@ -15,10 +15,10 @@
  */
 
 #include <config.h>
-
-#include <sys/types.h>
+#include <posix-config.h>
 
 #include <avsystem/commons/stream_v_table.h>
+#include <avsystem/commons/utils.h>
 
 #include "../utils.h"
 #include "tlv.h"
@@ -60,7 +60,7 @@ static int tlv_get_some_bytes(anjay_input_ctx_t *ctx_,
     }
     char stream_finished;
     *out_bytes_read = 0;
-    buf_size = ANJAY_MIN(buf_size, ctx->length - ctx->bytes_read);
+    buf_size = AVS_MIN(buf_size, ctx->length - ctx->bytes_read);
     int retval = avs_stream_read((avs_stream_abstract_t *) &ctx->stream,
                                  out_bytes_read, &stream_finished,
                                  out_buf, buf_size);
@@ -75,20 +75,16 @@ static int tlv_get_some_bytes(anjay_input_ctx_t *ctx_,
     return 0;
 }
 
-static int tlv_read_to_end(anjay_input_ctx_t *ctx_,
+static int tlv_read_to_end(anjay_input_ctx_t *ctx,
                            size_t *out_bytes_read,
                            void *out_buf,
                            size_t buf_size) {
-    tlv_in_t *ctx = (tlv_in_t *) ctx_;
-    if (ctx->id >= 0 && ctx->bytes_read) {
-        return -1;
-    }
     bool message_finished;
     char *ptr = (char *) out_buf;
     char *endptr = ptr + buf_size;
     do {
         size_t bytes_read = 0;
-        int retval = tlv_get_some_bytes(ctx_, &bytes_read, &message_finished,
+        int retval = tlv_get_some_bytes(ctx, &bytes_read, &message_finished,
                                         ptr, (size_t) (endptr - ptr));
         if (retval) {
             return retval;
@@ -96,7 +92,18 @@ static int tlv_read_to_end(anjay_input_ctx_t *ctx_,
         ptr += bytes_read;
     } while (!message_finished && ptr < endptr);
     *out_bytes_read = (size_t) (ptr - (char *) out_buf);
-    return message_finished ? 0 : -1;
+    return message_finished ? 0 : ANJAY_BUFFER_TOO_SHORT;
+}
+
+static int tlv_read_whole_entry(anjay_input_ctx_t *ctx_,
+                                size_t *out_bytes_read,
+                                void *out_buf,
+                                size_t buf_size) {
+    tlv_in_t *ctx = (tlv_in_t *) ctx_;
+    if (ctx->id >= 0 && ctx->bytes_read) {
+        return -1;
+    }
+    return tlv_read_to_end(ctx_, out_bytes_read, out_buf, buf_size);
 }
 
 static int tlv_get_string(anjay_input_ctx_t *ctx,
@@ -115,11 +122,8 @@ static int tlv_get_string(anjay_input_ctx_t *ctx,
 static int tlv_get_i##Bits (anjay_input_ctx_t *ctx, int##Bits##_t *value) { \
     uint8_t bytes[Bits / 8]; \
     size_t bytes_read = 0; \
-    int retval = tlv_read_to_end(ctx, &bytes_read, bytes, sizeof(bytes)); \
-    if (retval) { \
-        return retval; \
-    } \
-    if (!_anjay_is_power_of_2(bytes_read)) { \
+    if (tlv_read_whole_entry(ctx, &bytes_read, bytes, sizeof(bytes)) \
+            || !avs_is_power_of_2(bytes_read)) { \
         return -1; \
     } \
     *value = (bytes_read > 0 && ((int8_t) bytes[0]) < 0) ? -1 : 0; \
@@ -140,9 +144,8 @@ static int tlv_get_##Type (anjay_input_ctx_t *ctx, Type *value) { \
         uint64_t f64; \
     } data; \
     size_t bytes_read = 0; \
-    int retval = tlv_read_to_end(ctx, &bytes_read, &data, 8); \
-    if (retval) { \
-        return retval; \
+    if (tlv_read_whole_entry(ctx, &bytes_read, &data, 8)) { \
+        return -1; \
     } \
     switch (bytes_read) { \
     case 4: \
@@ -162,10 +165,7 @@ DEF_GETF(double)
 static int tlv_get_bool(anjay_input_ctx_t *ctx, bool *value) {
     char raw;
     size_t bytes_read = 0;
-    int retval = tlv_read_to_end(ctx, &bytes_read, &raw, 1);
-    if (retval) {
-        return retval;
-    } else if (bytes_read != 1) {
+    if (tlv_read_whole_entry(ctx, &bytes_read, &raw, 1) || bytes_read != 1) {
         return -1;
     }
     switch (raw) {
@@ -185,9 +185,8 @@ static int tlv_get_objlnk(anjay_input_ctx_t *ctx,
     AVS_STATIC_ASSERT(sizeof(uint16_t[2]) == 4, uint16_t_array_size);
     uint16_t raw[2];
     size_t bytes_read = 0;
-    int retval = tlv_read_to_end(ctx, &bytes_read, raw, 4);
-    if (retval) {
-        return retval;
+    if (tlv_read_whole_entry(ctx, &bytes_read, raw, 4)) {
+        return -1;
     } else if (bytes_read != 4) {
         return ANJAY_ERR_BAD_REQUEST;
     }

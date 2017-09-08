@@ -15,6 +15,8 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
+
 #include <stdint.h>
 #include <inttypes.h>
 

@@ -19,7 +19,6 @@
 
 #include <time.h>
 
-#include <sys/types.h>
 
 #include <anjay/core.h>
 

@@ -49,8 +49,8 @@ Caching mechanism
 -----------------
 
 Anjay provides a built-in message cache (as an optional feature), that can be
-(and is, by default) enabled at a compile time (via ``WITH_MESSAGE_CACHE``
-CMake option).
+(and is, by default) enabled at a compile time (via
+``WITH_AVS_COAP_MESSAGE_CACHE`` CMake option).
 
 When the request is received, Anjay checks if there exists an appropriate
 response to it in the cache already. In case there is one, it is
@@ -60,6 +60,7 @@ placing response in the cache for future use.
 .. note::
     Cached response, matching a specific CoAP Request is identified by the
     following triplet:
+
      - CoAP Message Token,
      - CoAP Message ID,
      - Server endpoint name (host and port).

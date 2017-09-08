@@ -27,7 +27,8 @@ Contents:
    Compiling_client_applications
    BasicTutorial
    AdvancedTutorial
-   Embedded_IP
+   Tools
+   PortingGuideForNonPOSIXPlatforms
    Commercial_support
 
 Links

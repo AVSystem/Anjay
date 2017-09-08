@@ -15,9 +15,9 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <stdio.h>
-#include <netinet/in.h>
 
 #include <anjay/persistence.h>
 

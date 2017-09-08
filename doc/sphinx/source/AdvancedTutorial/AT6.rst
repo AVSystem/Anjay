@@ -16,6 +16,8 @@
 Other library features
 ======================
 
+.. _coap-pull-download:
+
 CoAP PULL download
 ------------------
 

@@ -22,11 +22,11 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 coap_id_source_t *
-_anjay_coap_id_source_new_static(const anjay_coap_msg_identity_t *id);
+_anjay_coap_id_source_new_static(const avs_coap_msg_identity_t *id);
 
 void
 _anjay_coap_id_source_static_reset(coap_id_source_t *self_,
-                                   const anjay_coap_msg_identity_t *new_id);
+                                   const avs_coap_msg_identity_t *new_id);
 
 VISIBILITY_PRIVATE_HEADER_END
 

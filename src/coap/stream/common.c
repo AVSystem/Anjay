@@ -15,23 +15,25 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
 #include <anjay_modules/time.h>
 
+#include <avsystem/commons/coap/msg_opt.h>
+
 #include "common.h"
 #include "../log.h"
-#include "../msg_opt.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-static int add_string_options(anjay_coap_msg_info_t *info,
+static int add_string_options(avs_coap_msg_info_t *info,
                               uint16_t option_number,
                               AVS_LIST(const anjay_string_t) values) {
     AVS_LIST(const anjay_string_t) it;
     AVS_LIST_FOREACH(it, values) {
-        if (_anjay_coap_msg_info_opt_string(info, option_number, it->c_str)) {
+        if (avs_coap_msg_info_opt_string(info, option_number, it->c_str)) {
             return -1;
         }
     }
@@ -39,7 +41,7 @@ static int add_string_options(anjay_coap_msg_info_t *info,
     return 0;
 }
 
-static int add_observe_option(anjay_coap_msg_info_t *info,
+static int add_observe_option(avs_coap_msg_info_t *info,
                               bool observe) {
     if (observe) {
         struct timespec now;
@@ -49,32 +51,31 @@ static int add_observe_option(anjay_coap_msg_info_t *info,
         // Should satisfy the requirements given in OBSERVE 3.4 and 4.4
         uint32_t value = (uint32_t) ((now.tv_sec & 0x1FF) << 15)
                 | (uint32_t) (now.tv_nsec >> 15);
-        return _anjay_coap_msg_info_opt_u32(info,
-                                            ANJAY_COAP_OPT_OBSERVE, value);
+        return avs_coap_msg_info_opt_u32(info, AVS_COAP_OPT_OBSERVE, value);
     } else {
         return 0;
     }
 }
 
-int _anjay_coap_common_fill_msg_info(anjay_coap_msg_info_t *info,
+int _anjay_coap_common_fill_msg_info(avs_coap_msg_info_t *info,
                                      const anjay_msg_details_t *details,
-                                     const anjay_coap_msg_identity_t *identity,
-                                     const coap_block_info_t *block_info) {
+                                     const avs_coap_msg_identity_t *identity,
+                                     const avs_coap_block_info_t *block_info) {
     assert(details);
     assert(identity);
 
-    _anjay_coap_msg_info_reset(info);
+    avs_coap_msg_info_reset(info);
 
     info->type = details->msg_type;
     info->code = details->msg_code;
     info->identity = *identity;
     if (add_observe_option(info, details->observe_serial)
-            || add_string_options(info, ANJAY_COAP_OPT_LOCATION_PATH,
+            || add_string_options(info, AVS_COAP_OPT_LOCATION_PATH,
                                   details->location_path)
-            || add_string_options(info, ANJAY_COAP_OPT_URI_PATH,
+            || add_string_options(info, AVS_COAP_OPT_URI_PATH,
                                   details->uri_path)
-            || _anjay_coap_msg_info_opt_content_format(info, details->format)
-            || add_string_options(info, ANJAY_COAP_OPT_URI_QUERY,
+            || avs_coap_msg_info_opt_content_format(info, details->format)
+            || add_string_options(info, AVS_COAP_OPT_URI_QUERY,
                                   details->uri_query)) {
         return -1;
     }
@@ -83,17 +84,34 @@ int _anjay_coap_common_fill_msg_info(anjay_coap_msg_info_t *info,
         return 0;
     }
 
-    return _anjay_coap_msg_info_opt_block(info, block_info);
+    return avs_coap_msg_info_opt_block(info, block_info);
 }
 
-int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
+static void set_socket_timeout(avs_net_abstract_socket_t *socket,
+                               avs_net_timeout_t timeout_ms) {
+    if (avs_net_socket_set_opt(socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
+                               (avs_net_socket_opt_value_t) {
+                                   .recv_timeout = timeout_ms
+                               })) {
+        assert(0 && "could not set socket recv timeout");
+        coap_log(ERROR, "could not set socket recv timeout");
+    }
+}
+
+int _anjay_coap_common_recv_msg_with_timeout(avs_coap_ctx_t *ctx,
+                                             avs_net_abstract_socket_t *socket,
                                              coap_input_buffer_t *in,
                                              int32_t *inout_timeout_ms,
                                              recv_msg_handler_t *handle_msg,
                                              void *handle_msg_data,
                                              int *out_handler_result) {
-    const int original_recv_timeout =
-            _anjay_coap_socket_get_recv_timeout(socket);
+    avs_net_socket_opt_value_t original_recv_timeout;
+    if (avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
+                               &original_recv_timeout)) {
+        assert(0 && "could not get socket recv timeout");
+        coap_log(ERROR, "could not get socket recv timeout");
+        return -1;
+    }
 
     struct timespec start_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -102,33 +120,36 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
     int result = 0;
 
     while (*inout_timeout_ms > 0) {
-        AVS_STATIC_ASSERT(sizeof(int) >= sizeof(int32_t),
+        AVS_STATIC_ASSERT(sizeof(avs_net_timeout_t) >= sizeof(int32_t),
                           timeout_limit_too_small_to_be_coap_compliant_t);
 
-        _anjay_coap_socket_set_recv_timeout(socket, (int)*inout_timeout_ms);
+        set_socket_timeout(socket, *inout_timeout_ms);
 
-        result = _anjay_coap_in_get_next_message(in, socket);
+        result = _anjay_coap_in_get_next_message(in, ctx, socket);
         switch (result) {
-        case ANJAY_COAP_SOCKET_ERR_TIMEOUT:
+        case AVS_COAP_CTX_ERR_TIMEOUT:
             *inout_timeout_ms = 0;
             // fall-through
         default:
             goto exit;
 
-        case ANJAY_COAP_SOCKET_ERR_MSG_MALFORMED:
-        case ANJAY_COAP_SOCKET_ERR_DUPLICATE:
-        case ANJAY_COAP_SOCKET_ERR_MSG_WAS_PING:
+        case AVS_COAP_CTX_ERR_MSG_MALFORMED:
+        case AVS_COAP_CTX_ERR_DUPLICATE:
+        case AVS_COAP_CTX_ERR_MSG_WAS_PING:
         case 0:
             break;
         }
 
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
-        *inout_timeout_ms = (int32_t)(initial_timeout_ms
-                                      - _anjay_time_diff_ms(&now, &start_time));
+        ssize_t time_elapsed_ms;
+        if (avs_time_diff_ms(&time_elapsed_ms, &now, &start_time)) {
+            time_elapsed_ms = 0;
+        }
+        *inout_timeout_ms = (int32_t)(initial_timeout_ms - time_elapsed_ms);
 
         if (!result) {
-            const anjay_coap_msg_t *msg = _anjay_coap_in_get_message(in);
+            const avs_coap_msg_t *msg = _anjay_coap_in_get_message(in);
             bool wait_for_next = true;
             uint8_t error_code = 0;
 
@@ -140,25 +161,24 @@ int _anjay_coap_common_recv_msg_with_timeout(anjay_coap_socket_t *socket,
             }
 
             if (!error_code) {
-                if (_anjay_coap_msg_header_get_type(&msg->header)
-                        == ANJAY_COAP_MSG_CONFIRMABLE) {
-                    _anjay_coap_send_empty(socket, ANJAY_COAP_MSG_RESET,
-                                           _anjay_coap_msg_get_id(msg));
+                if (avs_coap_msg_get_type(msg) == AVS_COAP_MSG_CONFIRMABLE) {
+                    avs_coap_ctx_send_empty(ctx, socket, AVS_COAP_MSG_RESET,
+                                            avs_coap_msg_get_id(msg));
                 }
-            } else if (error_code == ANJAY_COAP_CODE_SERVICE_UNAVAILABLE) {
-                _anjay_coap_send_service_unavailable(socket, msg,
-                                                     *inout_timeout_ms);
+            } else if (error_code == AVS_COAP_CODE_SERVICE_UNAVAILABLE) {
+                avs_coap_ctx_send_service_unavailable(ctx, socket, msg,
+                                                      *inout_timeout_ms);
             } else {
-                _anjay_coap_send_error(socket, msg, error_code);
+                avs_coap_ctx_send_error(ctx, socket, msg, error_code);
             }
         }
     }
 
     *inout_timeout_ms = 0;
-    result = ANJAY_COAP_SOCKET_ERR_TIMEOUT;
+    result = AVS_COAP_CTX_ERR_TIMEOUT;
 
 exit:
-    _anjay_coap_socket_set_recv_timeout(socket, original_recv_timeout);
+    set_socket_timeout(socket, original_recv_timeout.recv_timeout);
 
     assert(result <= 0);
     return result;

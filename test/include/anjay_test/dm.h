@@ -68,6 +68,16 @@ static const anjay_dm_object_def_t *const OBJ =
             }
         };
 
+static const anjay_dm_object_def_t *const OBJ_NOATTRS =
+        &(const anjay_dm_object_def_t) {
+            .oid = 93,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
+            .handlers = {
+                ANJAY_MOCK_DM_HANDLERS_NOATTRS,
+                .instance_reset = _anjay_test_dm_instance_reset_NOOP
+            }
+        };
+
 static const anjay_dm_object_def_t *const OBJ_WITH_RESET =
         &(const anjay_dm_object_def_t) {
             .oid = 25,
@@ -161,13 +171,13 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
             DM_TEST_CONFIGURATION(DM_TEST_ESCAPE_PARENS(AddConfig))); \
     const anjay_dm_object_def_t *const *obj_defs[] = \
             { DM_TEST_ESCAPE_PARENS(Objects) }; \
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(obj_defs); ++i) { \
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(obj_defs); ++i) { \
         AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay, obj_defs[i])); \
     } \
     anjay_ssid_t ssids[] = { DM_TEST_ESCAPE_PARENS(Ssids) }; \
-    avs_net_abstract_socket_t *mocksocks[ANJAY_ARRAY_SIZE(ssids)]; \
-    for (size_t i = ANJAY_ARRAY_SIZE(ssids) - 1; \
-            i < ANJAY_ARRAY_SIZE(ssids); --i) { \
+    avs_net_abstract_socket_t *mocksocks[AVS_ARRAY_SIZE(ssids)]; \
+    for (size_t i = AVS_ARRAY_SIZE(ssids) - 1; \
+            i < AVS_ARRAY_SIZE(ssids); --i) { \
         mocksocks[i] = _anjay_test_dm_install_socket(anjay, ssids[i]); \
         avs_unit_mocksock_enable_recv_timeout_getsetopt(mocksocks[i], 1000); \
         avs_unit_mocksock_enable_inner_mtu_getopt(mocksocks[i], 1252); \

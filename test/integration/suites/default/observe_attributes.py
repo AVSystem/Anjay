@@ -95,3 +95,23 @@ class ObserveWithMultipleServers(ac.AccessControl.Test):
         pkt = self.servers[1].recv(timeout_s=2)
         self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
         self.assertEqual(pkt.content, b'2')
+
+class ObserveWithDefaultAttributesTest(test_suite.Lwm2mSingleServerTest,
+                                       test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=1337, iid=0)
+        # Observe: Counter
+        counter_pkt = self.observe(self.serv, oid=1337, iid=0, rid=1)
+        # no message should arrive here
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=5)
+
+        # Attributes set via public API
+        self.communicate('set-attrs /1337/0/1 pmax=1 pmin=1')
+        # And should now start arriving each second
+        pkt = self.serv.recv(timeout_s=2)
+        self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
+        self.assertEqual(pkt.content, counter_pkt.content)
+        # Up until they're reset
+        self.communicate('set-attrs /1337/0/1')

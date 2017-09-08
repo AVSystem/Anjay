@@ -19,6 +19,7 @@
 #include <anjay/persistence.h>
 
 #include <string.h>
+#include <inttypes.h>
 
 #include "security.h"
 #include "transaction.h"
@@ -87,7 +88,7 @@ static int restore_raw_buffer(anjay_persistence_context_t *ctx,
     }
     buffer->data = malloc(size);
     if (!buffer->data) {
-        persistence_log(ERROR, "Cannot allocate %u bytes", size);
+        persistence_log(ERROR, "Cannot allocate %" PRIu32 " bytes", size);
         return -1;
     }
     buffer->size = size;

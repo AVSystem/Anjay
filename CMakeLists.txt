@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.3.3" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.4.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -52,9 +52,11 @@ include(TestBigEndian)
 test_big_endian(ANJAY_BIG_ENDIAN)
 
 # compilation flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
-if(NOT APPLE)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_POSIX_C_SOURCE=200809L")
+if(NOT CMAKE_VERSION VERSION_LESS 3.1)
+    set(CMAKE_C_STANDARD 99)
+    set(CMAKE_C_EXTENSIONS OFF)
+elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
 endif()
 
 option(WITH_EXTRA_WARNINGS "Enable extra compilation warnings" OFF)
@@ -62,15 +64,28 @@ if(WITH_EXTRA_WARNINGS)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra -Winit-self -Wmissing-declarations -Wc++-compat -Wsign-conversion -Wconversion -Wcast-qual -Wno-variadic-macros -Wno-long-long")
 endif()
 
-option(WITH_DEMO "Compile DEMO applications" ON)
+option(WITH_POSIX "Enable use of system-installed POSIX APIs" ON)
+if(WITH_POSIX)
+    # macOS is weird and _POSIX_C_SOURCE causes a lot of things to disappear
+    if(NOT APPLE)
+        add_definitions(-D_POSIX_C_SOURCE=200809L)
+        set(CMAKE_REQUIRED_DEFINITIONS -D_POSIX_C_SOURCE=200809L)
+    endif()
+else()
+    set(POSIX_COMPAT_HEADER "" CACHE STRING "POSIX compatibility header path")
+endif()
+
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/PosixFeatures.cmake)
+
+cmake_dependent_option(WITH_DEMO "Compile DEMO applications" ON WITH_POSIX OFF)
 option(WITH_LIBRARY_SHARED "Compile Anjay as shared library" ON)
 
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
-option(WITH_BLOCK_DOWNLOAD "Enable support for CoAP(S) downloads" ON)
 option(WITH_BLOCK_RECEIVE "Enable support for receiving CoAP BLOCK transfers" ON)
 option(WITH_BLOCK_SEND "Enable support for sending data in CoAP BLOCK mode" ON)
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
 option(WITH_DISCOVER "Enable support for LwM2M Discover operation" ON)
+option(WITH_DOWNLOADER "Enable support for downloader API" ON)
 option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe)" ON)
 if(WITH_OBSERVE)
     option(WITH_CON_ATTR
@@ -79,7 +94,9 @@ endif()
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
-option(WITH_MESSAGE_CACHE "Enable support for message caching to detect and automatically handle duplicate messages" ON)
+
+cmake_dependent_option(WITH_BLOCK_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
+cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF WITH_DOWNLOADER OFF)
 
 option(WITH_AVS_LOG "Enable logging support" ON)
 
@@ -87,6 +104,7 @@ cmake_dependent_option(AVS_LOG_WITH_TRACE "Enable TRACE level logging" OFF WITH_
 cmake_dependent_option(WITH_INTERNAL_LOGS "Enable logging from inside AVSystem Commons libraries" ON WITH_AVS_LOG OFF)
 cmake_dependent_option(WITH_INTERNAL_TRACE "Enable TRACE-level logs inside AVSystem Commons libraries" ON AVS_LOG_WITH_TRACE OFF)
 
+option(WITH_NET_STATS "Enable measuring amount of LwM2M traffic" ON)
 
 # -fvisibility, #pragma GCC visibility
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c
@@ -135,13 +153,6 @@ endmacro()
 ################# CODE #########################################################
 
 set(CORE_SOURCES
-    src/coap/msg.c
-    src/coap/msg_info.c
-    src/coap/msg_builder.c
-    src/coap/msg_opt.c
-    src/coap/block_builder.c
-    src/coap/opt.c
-    src/coap/socket.c
     src/coap/id_source/auto.c
     src/coap/id_source/static.c
     src/coap/stream/client.c
@@ -150,8 +161,6 @@ set(CORE_SOURCES
     src/coap/stream/out.c
     src/coap/stream/server.c
     src/coap/stream/stream.c
-    src/coap/block_utils.c
-    src/coap/tx_params.c
     src/interface/register.c
     src/io/base64_out.c
     src/io/dynamic.c
@@ -181,8 +190,17 @@ set(CORE_SOURCES
 if(WITH_ACCESS_CONTROL)
     set(CORE_SOURCES ${CORE_SOURCES} src/access_control.c)
 endif()
+if(WITH_DOWNLOADER)
+    set(CORE_SOURCES ${CORE_SOURCES}
+        src/downloader/downloader.c)
+endif()
 if(WITH_BLOCK_DOWNLOAD)
-    set(CORE_SOURCES ${CORE_SOURCES} src/downloader.c)
+    set(CORE_SOURCES ${CORE_SOURCES}
+        src/downloader/coap.c)
+endif()
+if(WITH_HTTP_DOWNLOAD)
+    set(CORE_SOURCES ${CORE_SOURCES}
+        src/downloader/http.c)
 endif()
 if(WITH_BLOCK_SEND)
     set(CORE_SOURCES ${CORE_SOURCES}
@@ -205,27 +223,15 @@ if(WITH_JSON)
     set(CORE_SOURCES ${CORE_SOURCES}
         src/io/json_out.c)
 endif()
-if(WITH_MESSAGE_CACHE)
-    set(CORE_SOURCES ${CORE_SOURCES} src/coap/msg_cache.c)
-endif()
 set(CORE_PRIVATE_HEADERS
     src/access_control.h
     src/coap/block/request.h
     src/coap/block/response.h
     src/coap/block/transfer.h
     src/coap/block/transfer_impl.h
-    src/coap/block_builder.h
     src/coap/id_source/id_source.h
     src/coap/id_source/auto.h
     src/coap/id_source/static.h
-    src/coap/log.h
-    src/coap/msg.h
-    src/coap/msg_builder.h
-    src/coap/msg_info.h
-    src/coap/msg_internal.h
-    src/coap/msg_opt.h
-    src/coap/opt.h
-    src/coap/socket.h
     src/coap/stream.h
     src/coap/stream/client.h
     src/coap/stream/common.h
@@ -233,9 +239,6 @@ set(CORE_PRIVATE_HEADERS
     src/coap/stream/out.h
     src/coap/stream/server.h
     src/coap/stream/stream.h
-    src/coap/parse_utils.h
-    src/coap/block_utils.h
-    src/coap/tx_params.h
     src/dm.h
     src/dm/attributes.h
     src/dm/discover.h
@@ -348,7 +351,10 @@ set(DEPS_LIBRARIES "")
 set(DEPS_LIBRARIES_WEAK "")
 
 # avs_commons required components.
-set(AVS_COMMONS_COMPONENTS algorithm list vector rbtree buffer net stream utils)
+set(AVS_COMMONS_COMPONENTS algorithm coap list vector rbtree buffer net stream utils)
+if(WITH_HTTP_DOWNLOAD)
+    list(APPEND AVS_COMMONS_COMPONENTS http)
+endif()
 
 foreach(_component ${AVS_COMMONS_COMPONENTS})
     string(TOUPPER ${_component} _component_uppercase)
@@ -416,6 +422,8 @@ include_directories(${PUBLIC_INCLUDE_DIRS}
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in"
                "${CMAKE_CURRENT_BINARY_DIR}/config/config.h")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/posix-config.h.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/config/posix-config.h")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/config")
 
 if(WITH_LIBRARY_SHARED)
@@ -464,10 +472,6 @@ if(WITH_DEMO)
 endif()
 
 ################# TEST ########################################################
-
-if(WITH_AVS_UNIT)
-    add_subdirectory(tools)
-endif()
 
 macro(add_anjay_test NAME)
     add_executable(${NAME}_test EXCLUDE_FROM_ALL ${ARGN})
@@ -556,11 +560,10 @@ endif()
 if(WITH_AVS_UNIT)
     include_directories(test/include)
     add_anjay_test(${PROJECT_NAME} ${ABSOLUTE_TEST_SOURCES})
-    add_dependencies(${PROJECT_NAME}_test dtls_echo_server)
     target_link_libraries(${PROJECT_NAME}_test ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
 endif()
 
-option(WITH_INTEGRATION_TESTS "Enable integration tests" OFF)
+cmake_dependent_option(WITH_INTEGRATION_TESTS "Enable integration tests" OFF WITH_DEMO OFF)
 if(WITH_INTEGRATION_TESTS)
     add_subdirectory(test/integration)
 endif()

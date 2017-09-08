@@ -46,7 +46,7 @@ int _anjay_serv_fetch_binding(anjay_input_ctx_t *ctx,
     char buf[16];
     int retval;
     if ((retval = anjay_get_string(ctx, buf, sizeof(buf)))) {
-        return ANJAY_ERR_BAD_REQUEST;
+        return retval;
     }
     *out_binding = anjay_binding_mode_from_str(buf);
     return 0;

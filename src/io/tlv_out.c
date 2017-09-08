@@ -15,17 +15,16 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <assert.h>
 #include <string.h>
 
-#include <sys/types.h>
-
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/stream.h>
 
-#include "../io.h"
 #include "../coap/content_format.h"
+#include "../io.h"
 #include "tlv.h"
 #include "vtable.h"
 

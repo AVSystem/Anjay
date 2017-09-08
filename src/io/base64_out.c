@@ -60,7 +60,7 @@ static int base64_ret_bytes_flush(base64_ret_bytes_ctx_t *ctx,
     while (bytes_to_write > 0) {
         memcpy(chunk, ctx->bytes_cached, ctx->num_bytes_cached);
         size_t new_bytes_written =
-                ANJAY_MIN(TEXT_CHUNK_SIZE - ctx->num_bytes_cached,
+                AVS_MIN(TEXT_CHUNK_SIZE - ctx->num_bytes_cached,
                           bytes_to_write);
         assert(new_bytes_written <= TEXT_CHUNK_SIZE);
         memcpy(&chunk[ctx->num_bytes_cached], *dataptr, new_bytes_written);

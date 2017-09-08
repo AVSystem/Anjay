@@ -15,19 +15,19 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <inttypes.h>
 #include <stdlib.h>
-
-#include <sys/types.h>
 
 #include <avsystem/commons/stream_v_table.h>
 
 #include <anjay/core.h>
 
+#include "coap/content_format.h"
+
 #include "io.h"
 #include "io/vtable.h"
-#include "coap/content_format.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -113,7 +113,7 @@ uint16_t _anjay_translate_legacy_content_format(uint16_t format) {
 
 int _anjay_handle_requested_format(uint16_t *out_ptr,
                                    uint16_t new_value) {
-    if (*out_ptr == ANJAY_COAP_FORMAT_NONE) {
+    if (*out_ptr == AVS_COAP_FORMAT_NONE) {
         *out_ptr = new_value;
     } else if (_anjay_translate_legacy_content_format(*out_ptr) != new_value) {
         return ANJAY_OUTCTXERR_FORMAT_MISMATCH;
@@ -354,7 +354,7 @@ static int bytes_stream_close(avs_stream_abstract_t *stream) {
 
 avs_stream_abstract_t *_anjay_input_bytes_stream(anjay_input_ctx_t *ctx) {
     static const avs_stream_v_table_t VTABLE = {
-        (avs_stream_write_t) unimplemented,
+        (avs_stream_write_some_t) unimplemented,
         (avs_stream_finish_message_t) unimplemented,
         bytes_stream_read,
         (avs_stream_peek_t) unimplemented,

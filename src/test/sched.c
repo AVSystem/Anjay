@@ -115,16 +115,15 @@ AVS_UNIT_TEST(sched, sched_del) {
 
 static void assert_executes_after_delay(sched_test_env_t *env,
                                         struct timespec delay) {
-    struct timespec epsilon;
-    _anjay_time_from_ms(&epsilon, 1 * 1000 * 1000);
+    struct timespec epsilon = avs_time_from_ms(1 * 1000 * 1000);
 
     struct timespec time_to_next;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(env->sched,
                                                       &time_to_next));
 
-    AVS_UNIT_ASSERT_TRUE(_anjay_time_before(&time_to_next, &delay));
-    _anjay_time_diff(&delay, &delay, &epsilon);
-    AVS_UNIT_ASSERT_TRUE(_anjay_time_before(&delay, &time_to_next));
+    AVS_UNIT_ASSERT_TRUE(avs_time_before(&time_to_next, &delay));
+    delay = avs_time_diff(&delay, &epsilon);
+    AVS_UNIT_ASSERT_TRUE(avs_time_before(&delay, &time_to_next));
 
     _anjay_mock_clock_advance(&time_to_next);
     AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env->sched));
@@ -157,13 +156,13 @@ AVS_UNIT_TEST(sched, retryable_retry) {
     AVS_UNIT_ASSERT_NOT_NULL(task);
 
     // second retry
-    _anjay_time_add(&delay, &delay);
+    delay = avs_time_add(&delay, &delay);
     assert_executes_after_delay(&env, delay);
     AVS_UNIT_ASSERT_EQUAL(3, counter);
     AVS_UNIT_ASSERT_NOT_NULL(task);
 
     // third retry
-    _anjay_time_add(&delay, &delay);
+    delay = avs_time_add(&delay, &delay);
     assert_executes_after_delay(&env, delay);
     AVS_UNIT_ASSERT_EQUAL(4, counter);
     AVS_UNIT_ASSERT_NOT_NULL(task);
@@ -298,7 +297,7 @@ AVS_UNIT_TEST(sched, retryable_job_handle_nullification) {
     AVS_UNIT_ASSERT_NOT_NULL(global.task);
 
     // Success (n == 2)
-    _anjay_time_add(&delay, &delay);
+    delay = avs_time_add(&delay, &delay);
     assert_executes_after_delay(&env, delay);
     AVS_UNIT_ASSERT_EQUAL(2, global.n);
     AVS_UNIT_ASSERT_NULL(global.task);

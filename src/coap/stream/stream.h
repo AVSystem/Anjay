@@ -19,9 +19,8 @@
 
 #include <avsystem/commons/stream_v_table.h>
 
-#include "in.h"
-#include "out.h"
 #include "client.h"
+#include "common.h"
 #include "server.h"
 
 #include "../id_source/id_source.h"
@@ -38,22 +37,20 @@ typedef enum coap_stream_state {
     STREAM_STATE_SERVER
 } coap_stream_state_t;
 
+typedef union {
+    coap_stream_common_t common;
+    coap_client_t client;
+    coap_server_t server;
+} coap_stream_data_t;
+
 typedef struct coap_stream {
     const avs_stream_v_table_t *vtable;
 
-    anjay_coap_socket_t *socket;
-
-    coap_input_buffer_t in;
-    coap_output_buffer_t out;
+    coap_id_source_t *id_source;
 
     coap_stream_state_t state;
 
-    coap_id_source_t *id_source;
-
-    struct state_data {
-        coap_client_t client;
-        coap_server_t server;
-    } state_data;
+    coap_stream_data_t data;
 } coap_stream_t;
 
 VISIBILITY_PRIVATE_HEADER_END

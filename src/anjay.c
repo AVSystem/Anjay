@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <assert.h>
 #include <math.h>
@@ -28,6 +29,7 @@
 #include <avsystem/commons/stream_v_table.h>
 
 #include <anjay/core.h>
+#include <anjay/stats.h>
 
 #include <anjay_modules/time.h>
 
@@ -36,8 +38,8 @@
 #include "dm.h"
 #include "io.h"
 #include "downloader.h"
-#include "coap/stream.h"
 #include "coap/content_format.h"
+#include "coap/stream.h"
 #include "coap/id_source/auto.h"
 #include "interface/bootstrap.h"
 #include "interface/register.h"
@@ -62,7 +64,7 @@ static int init(anjay_t *anjay,
 
     const char *error_msg;
     if (config->udp_tx_params) {
-        if (!_anjay_coap_tx_params_valid(config->udp_tx_params, &error_msg)) {
+        if (!avs_coap_tx_params_valid(config->udp_tx_params, &error_msg)) {
             anjay_log(ERROR, "UDP CoAP transmission parameters are invalid: %s",
                       error_msg);
             return -1;
@@ -70,30 +72,29 @@ static int init(anjay_t *anjay,
         anjay->udp_tx_params = *config->udp_tx_params;
     } else {
         anjay->udp_tx_params =
-                (anjay_coap_tx_params_t) ANJAY_COAP_DEFAULT_UDP_TX_PARAMS;
+                (avs_coap_tx_params_t) ANJAY_COAP_DEFAULT_UDP_TX_PARAMS;
     }
 
 
     anjay->servers = _anjay_servers_create();
 
-    if (_anjay_coap_socket_create(&anjay->coap_socket, NULL,
-                                  config->msg_cache_size)) {
+    if (avs_coap_ctx_create(&anjay->coap_ctx, config->msg_cache_size)) {
         return -1;
     }
 
     // buffers must be able to hold whole CoAP message + its length;
     // add a bit of extra space for length so that {in,out}_buffer_size
     // are exact limits for the CoAP message size
-    const size_t extra_bytes_required = offsetof(anjay_coap_msg_t, header);
+    const size_t extra_bytes_required = offsetof(avs_coap_msg_t, content);
     anjay->in_buffer_size = config->in_buffer_size + extra_bytes_required;
     anjay->out_buffer_size = config->out_buffer_size + extra_bytes_required;
     anjay->in_buffer = (uint8_t *) malloc(anjay->in_buffer_size);
     anjay->out_buffer = (uint8_t *) malloc(anjay->out_buffer_size);
 
-    if (_anjay_coap_stream_create(&anjay->comm_stream, anjay->coap_socket,
+    if (_anjay_coap_stream_create(&anjay->comm_stream, anjay->coap_ctx,
                                   anjay->in_buffer, anjay->in_buffer_size,
                                   anjay->out_buffer, anjay->out_buffer_size)) {
-        _anjay_coap_socket_cleanup(&anjay->coap_socket);
+        avs_coap_ctx_cleanup(&anjay->coap_ctx);
         return -1;
     }
 
@@ -119,7 +120,7 @@ static int init(anjay_t *anjay,
 
 #ifdef WITH_BLOCK_DOWNLOAD
     coap_id_source_t *id_source =
-            _anjay_coap_id_source_auto_new(0, ANJAY_COAP_MAX_TOKEN_LENGTH);
+            _anjay_coap_id_source_auto_new(0, AVS_COAP_MAX_TOKEN_LENGTH);
     if (!id_source) {
         return -1;
     }
@@ -290,7 +291,7 @@ static int parse_attribute(anjay_request_attributes_t *out_attrs,
     }
 }
 
-static int parse_attributes(const anjay_coap_msg_t *msg,
+static int parse_attributes(const avs_coap_msg_t *msg,
                             anjay_request_attributes_t *out_attrs) {
     memset(out_attrs, 0, sizeof(*out_attrs));
     out_attrs->values = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
@@ -299,9 +300,9 @@ static int parse_attributes(const anjay_coap_msg_t *msg,
     size_t attr_size;
 
     int result;
-    anjay_coap_opt_iterator_t it = ANJAY_COAP_OPT_ITERATOR_EMPTY;
-    while ((result = _anjay_coap_msg_get_option_string_it(
-                    msg, ANJAY_COAP_OPT_URI_QUERY, &it,
+    avs_coap_opt_iterator_t it = AVS_COAP_OPT_ITERATOR_EMPTY;
+    while ((result = avs_coap_msg_get_option_string_it(
+                    msg, AVS_COAP_OPT_URI_QUERY, &it,
                     &attr_size, buffer, sizeof(buffer) - 1)) == 0) {
         const char *key;
         const char *value;
@@ -348,14 +349,14 @@ static int code_to_action(uint8_t code,
                           bool has_content_format,
                           anjay_request_action_t *out_action) {
     switch (code) {
-    case ANJAY_COAP_CODE_GET:
+    case AVS_COAP_CODE_GET:
         if (requested_format == ANJAY_COAP_FORMAT_APPLICATION_LINK) {
             *out_action = ANJAY_ACTION_DISCOVER;
         } else {
             *out_action = ANJAY_ACTION_READ;
         }
         return 0;
-    case ANJAY_COAP_CODE_POST:
+    case AVS_COAP_CODE_POST:
         if (is_bs_uri) {
             *out_action = ANJAY_ACTION_BOOTSTRAP_FINISH;
         } else if (has_rid) {
@@ -366,24 +367,24 @@ static int code_to_action(uint8_t code,
             *out_action = ANJAY_ACTION_CREATE;
         }
         return 0;
-    case ANJAY_COAP_CODE_PUT:
+    case AVS_COAP_CODE_PUT:
         if (has_content_format) {
             *out_action = ANJAY_ACTION_WRITE;
         } else {
             *out_action = ANJAY_ACTION_WRITE_ATTRIBUTES;
         }
         return 0;
-    case ANJAY_COAP_CODE_DELETE:
+    case AVS_COAP_CODE_DELETE:
         *out_action = ANJAY_ACTION_DELETE;
         return 0;
     default:
         anjay_log(ERROR, "unrecognized CoAP method: %s",
-                  ANJAY_COAP_CODE_STRING(code));
+                  AVS_COAP_CODE_STRING(code));
         return -1;
     }
 }
 
-static int get_msg_action(anjay_coap_msg_type_t msg_type,
+static int get_msg_action(avs_coap_msg_type_t msg_type,
                           uint8_t code,
                           uint16_t requested_format,
                           bool is_bs_uri,
@@ -393,10 +394,10 @@ static int get_msg_action(anjay_coap_msg_type_t msg_type,
                           anjay_request_action_t *out_action) {
     int result = 0;
     switch (msg_type) {
-    case ANJAY_COAP_MSG_RESET:
+    case AVS_COAP_MSG_RESET:
         *out_action = ANJAY_ACTION_CANCEL_OBSERVE;
         break;
-    case ANJAY_COAP_MSG_CONFIRMABLE:
+    case AVS_COAP_MSG_CONFIRMABLE:
         result = code_to_action(code, requested_format, is_bs_uri, has_iid,
                                 has_rid, has_content_format, out_action);
         break;
@@ -411,12 +412,12 @@ static int get_msg_action(anjay_coap_msg_type_t msg_type,
     return result;
 }
 
-static int parse_action(const anjay_coap_msg_t *msg,
+static int parse_action(const avs_coap_msg_t *msg,
                         anjay_request_t *inout_request) {
-    if (_anjay_coap_msg_get_option_uint(
-            msg, ANJAY_COAP_OPT_ACCEPT, &inout_request->requested_format,
+    if (avs_coap_msg_get_option_uint(
+            msg, AVS_COAP_OPT_ACCEPT, &inout_request->requested_format,
             sizeof(inout_request->requested_format))) {
-        inout_request->requested_format = ANJAY_COAP_FORMAT_NONE;
+        inout_request->requested_format = AVS_COAP_FORMAT_NONE;
     }
 
     return get_msg_action(inout_request->msg_type,
@@ -426,7 +427,7 @@ static int parse_action(const anjay_coap_msg_t *msg,
                           inout_request->uri.has_iid,
                           inout_request->uri.has_rid,
                           inout_request->content_format
-                                  != ANJAY_COAP_FORMAT_NONE,
+                                  != AVS_COAP_FORMAT_NONE,
                           &inout_request->action);
 }
 
@@ -445,25 +446,25 @@ static int parse_request_uri_segment(const char *uri,
     return 0;
 }
 
-static int parse_bs_uri(const anjay_coap_msg_t *msg, bool *out_is_bs) {
+static int parse_bs_uri(const avs_coap_msg_t *msg, bool *out_is_bs) {
     char uri[ANJAY_MAX_URI_SEGMENT_SIZE] = "";
     size_t uri_size;
 
     *out_is_bs = false;
 
-    anjay_coap_opt_iterator_t optit = ANJAY_COAP_OPT_ITERATOR_EMPTY;
-    int result = _anjay_coap_msg_get_option_string_it(
-            msg, ANJAY_COAP_OPT_URI_PATH, &optit,
+    avs_coap_opt_iterator_t optit = AVS_COAP_OPT_ITERATOR_EMPTY;
+    int result = avs_coap_msg_get_option_string_it(
+            msg, AVS_COAP_OPT_URI_PATH, &optit,
             &uri_size, uri, sizeof(uri) - 1);
     if (result) {
-        return (result == ANJAY_COAP_OPTION_MISSING) ? 0 : result;
+        return (result == AVS_COAP_OPTION_MISSING) ? 0 : result;
     }
 
     if (strcmp(uri, "bs") == 0) {
-        result = _anjay_coap_msg_get_option_string_it(
-                msg, ANJAY_COAP_OPT_URI_PATH, &optit,
+        result = avs_coap_msg_get_option_string_it(
+                msg, AVS_COAP_OPT_URI_PATH, &optit,
                 &uri_size, uri, sizeof(uri) - 1);
-        if (result == ANJAY_COAP_OPTION_MISSING) {
+        if (result == AVS_COAP_OPTION_MISSING) {
             *out_is_bs = true;
             return 0;
         }
@@ -472,7 +473,7 @@ static int parse_bs_uri(const anjay_coap_msg_t *msg, bool *out_is_bs) {
     return result;
 }
 
-static int parse_dm_uri(const anjay_coap_msg_t *msg,
+static int parse_dm_uri(const avs_coap_msg_t *msg,
                         anjay_uri_path_t *out_uri) {
     char uri[ANJAY_MAX_URI_SEGMENT_SIZE] = "";
     size_t uri_size;
@@ -491,12 +492,12 @@ static int parse_dm_uri(const anjay_coap_msg_t *msg,
         { &out_uri->rid, &out_uri->has_rid, UINT16_MAX }
     };
 
-    anjay_coap_opt_iterator_t optit = ANJAY_COAP_OPT_ITERATOR_EMPTY;
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(ids); ++i) {
-        int result = _anjay_coap_msg_get_option_string_it(
-                    msg, ANJAY_COAP_OPT_URI_PATH, &optit,
+    avs_coap_opt_iterator_t optit = AVS_COAP_OPT_ITERATOR_EMPTY;
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(ids); ++i) {
+        int result = avs_coap_msg_get_option_string_it(
+                    msg, AVS_COAP_OPT_URI_PATH, &optit,
                     &uri_size, uri, sizeof(uri) - 1);
-        if (result == ANJAY_COAP_OPTION_MISSING) {
+        if (result == AVS_COAP_OPTION_MISSING) {
             return 0;
         } else if (result) {
             return result;
@@ -509,17 +510,17 @@ static int parse_dm_uri(const anjay_coap_msg_t *msg,
     }
 
     // 3 or more segments...
-    if (_anjay_coap_msg_get_option_string_it(
-                    msg, ANJAY_COAP_OPT_URI_PATH, &optit,
+    if (avs_coap_msg_get_option_string_it(
+                    msg, AVS_COAP_OPT_URI_PATH, &optit,
                     &uri_size, uri, sizeof(uri) - 1)
-            != ANJAY_COAP_OPTION_MISSING) {
+            != AVS_COAP_OPTION_MISSING) {
         anjay_log(ERROR, "prefixed Uri-Path are not supported");
         return -1;
     }
     return 0;
 }
 
-static int parse_request_uri(const anjay_coap_msg_t *msg,
+static int parse_request_uri(const avs_coap_msg_t *msg,
                              bool *out_is_bs,
                              anjay_uri_path_t *out_uri) {
     int result = parse_bs_uri(msg, out_is_bs);
@@ -536,12 +537,12 @@ static int parse_request_uri(const anjay_coap_msg_t *msg,
     }
 }
 
-static int parse_observe(const anjay_coap_msg_t *msg,
+static int parse_observe(const avs_coap_msg_t *msg,
                          anjay_coap_observe_t *out) {
     uint32_t raw_value;
-    int retval = _anjay_coap_msg_get_option_uint(
-            msg, ANJAY_COAP_OPT_OBSERVE, &raw_value, sizeof(raw_value));
-    if (retval == ANJAY_COAP_OPTION_MISSING) {
+    int retval = avs_coap_msg_get_option_uint(
+            msg, AVS_COAP_OPT_OBSERVE, &raw_value, sizeof(raw_value));
+    if (retval == AVS_COAP_OPTION_MISSING) {
         *out = ANJAY_COAP_OBSERVE_NONE;
         return 0;
     } else if (retval) {
@@ -560,15 +561,15 @@ static int parse_observe(const anjay_coap_msg_t *msg,
     }
 }
 
-static int parse_request(const anjay_coap_msg_t *msg,
+static int parse_request(const avs_coap_msg_t *msg,
                          anjay_request_t *out_request) {
     memset(out_request, 0, sizeof(*out_request));
-    out_request->msg_type = _anjay_coap_msg_header_get_type(&msg->header);
-    out_request->request_code = msg->header.code;
+    out_request->msg_type = avs_coap_msg_get_type(msg);
+    out_request->request_code = avs_coap_msg_get_code(msg);
     if (parse_observe(msg, &out_request->observe)
         || parse_request_uri(msg, &out_request->is_bs_uri, &out_request->uri)
         || parse_attributes(msg, &out_request->attributes)
-        || _anjay_coap_msg_get_content_format(msg, &out_request->content_format)
+        || avs_coap_msg_get_content_format(msg, &out_request->content_format)
         || parse_action(msg, out_request)) {
         return -1;
     }
@@ -577,12 +578,12 @@ static int parse_request(const anjay_coap_msg_t *msg,
 
 uint8_t _anjay_make_error_response_code(int handler_result) {
     uint8_t handler_code = (uint8_t)(-handler_result);
-    int cls = _anjay_coap_msg_code_get_class(&handler_code);
+    int cls = avs_coap_msg_code_get_class(handler_code);
     if (cls == 4 || cls == 5) {
         return handler_code;
     } else switch (handler_result) {
     case ANJAY_OUTCTXERR_FORMAT_MISMATCH:
-        return ANJAY_COAP_CODE_NOT_ACCEPTABLE;
+        return AVS_COAP_CODE_NOT_ACCEPTABLE;
     default:
         anjay_log(ERROR, "invalid error code: %d", handler_result);
         return -ANJAY_ERR_INTERNAL;
@@ -592,27 +593,27 @@ uint8_t _anjay_make_error_response_code(int handler_result) {
 static bool critical_option_validator(uint8_t msg_code, uint32_t optnum) {
     /* Note: BLOCK Options are handled inside stream.c */
     switch (msg_code) {
-    case ANJAY_COAP_CODE_GET:
-        return optnum == ANJAY_COAP_OPT_URI_PATH
-            || optnum == ANJAY_COAP_OPT_ACCEPT;
-    case ANJAY_COAP_CODE_PUT:
-    case ANJAY_COAP_CODE_POST:
-        return optnum == ANJAY_COAP_OPT_URI_PATH
-            || optnum == ANJAY_COAP_OPT_URI_QUERY;
-    case ANJAY_COAP_CODE_DELETE:
-        return optnum == ANJAY_COAP_OPT_URI_PATH;
+    case AVS_COAP_CODE_GET:
+        return optnum == AVS_COAP_OPT_URI_PATH
+            || optnum == AVS_COAP_OPT_ACCEPT;
+    case AVS_COAP_CODE_PUT:
+    case AVS_COAP_CODE_POST:
+        return optnum == AVS_COAP_OPT_URI_PATH
+            || optnum == AVS_COAP_OPT_URI_QUERY;
+    case AVS_COAP_CODE_DELETE:
+        return optnum == AVS_COAP_OPT_URI_PATH;
     default:
         return false;
     }
 }
 
-static int block_request_equality_validator(const anjay_coap_msg_t *msg,
+static int block_request_equality_validator(const avs_coap_msg_t *msg,
                                             void *orig_request_) {
     const anjay_request_t *orig_request =
             (const anjay_request_t *) orig_request_;
     anjay_request_t block_request;
-    if (_anjay_coap_msg_validate_critical_options(msg,
-                                                  critical_option_validator)
+    if (avs_coap_msg_validate_critical_options(msg,
+                                               critical_option_validator)
             || parse_request(msg, &block_request)
             || !_anjay_request_equal(&block_request, orig_request)) {
         return -1;
@@ -621,7 +622,7 @@ static int block_request_equality_validator(const anjay_coap_msg_t *msg,
 }
 
 static int handle_request(anjay_t *anjay,
-                          const anjay_coap_msg_identity_t *request_identity,
+                          const avs_coap_msg_identity_t *request_identity,
                           const anjay_request_t *request) {
     int result = -1;
 
@@ -634,14 +635,14 @@ static int handle_request(anjay_t *anjay,
     if (result) {
         uint8_t error_code = _anjay_make_error_response_code(result);
 
-        if (_anjay_coap_msg_code_is_client_error(error_code)) {
+        if (avs_coap_msg_code_is_client_error(error_code)) {
             // the request was invalid; that's not really an error on our side,
             anjay_log(TRACE, "invalid request: %s",
-                      ANJAY_COAP_CODE_STRING(request->request_code));
+                      AVS_COAP_CODE_STRING(request->request_code));
             result = 0;
         } else {
             anjay_log(ERROR, "could not handle request: %s",
-                      ANJAY_COAP_CODE_STRING(request->request_code));
+                      AVS_COAP_CODE_STRING(request->request_code));
         }
 
         if (_anjay_coap_stream_set_error(anjay->comm_stream, error_code)) {
@@ -651,7 +652,7 @@ static int handle_request(anjay_t *anjay,
     }
 
     int finish_result = 0;
-    if (request->msg_type == ANJAY_COAP_MSG_CONFIRMABLE) {
+    if (request->msg_type == AVS_COAP_MSG_CONFIRMABLE) {
         finish_result = avs_stream_finish_message(anjay->comm_stream);
     }
 
@@ -670,13 +671,13 @@ static int handle_incoming_message(anjay_t *anjay) {
         anjay_log(DEBUG, "server ID = %u", _anjay_dm_current_ssid(anjay));
     }
 
-    const anjay_coap_msg_t *request_msg;
+    const avs_coap_msg_t *request_msg;
     if ((result = _anjay_coap_stream_get_incoming_msg(anjay->comm_stream,
                                                       &request_msg))) {
-        if (result == ANJAY_COAP_SOCKET_ERR_DUPLICATE) {
+        if (result == AVS_COAP_CTX_ERR_DUPLICATE) {
             anjay_log(TRACE, "duplicate request received");
             result = 0;
-        } else if (result == ANJAY_COAP_SOCKET_ERR_MSG_WAS_PING) {
+        } else if (result == AVS_COAP_CTX_ERR_MSG_WAS_PING) {
             anjay_log(TRACE, "received CoAP ping");
             result = 0;
         } else {
@@ -685,14 +686,14 @@ static int handle_incoming_message(anjay_t *anjay) {
         goto cleanup;
     }
 
-    anjay_coap_msg_identity_t request_identity = ANJAY_COAP_MSG_IDENTITY_EMPTY;
+    avs_coap_msg_identity_t request_identity = AVS_COAP_MSG_IDENTITY_EMPTY;
     anjay_request_t request;
     if (_anjay_coap_stream_get_request_identity(anjay->comm_stream,
                                                 &request_identity)
-            || _anjay_coap_msg_validate_critical_options(
+            || avs_coap_msg_validate_critical_options(
                     request_msg, critical_option_validator)
             || parse_request(request_msg, &request)) {
-        if (_anjay_coap_msg_code_is_request(request_msg->header.code)) {
+        if (avs_coap_msg_code_is_request(avs_coap_msg_get_code(request_msg))) {
             if (_anjay_coap_stream_set_error(anjay->comm_stream,
                                              -ANJAY_ERR_BAD_OPTION)
                     || avs_stream_finish_message(anjay->comm_stream)) {
@@ -722,7 +723,7 @@ _anjay_get_server_connection(anjay_connection_ref_t ref) {
 }
 
 int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
-    const anjay_coap_tx_params_t *tx_params;
+    const avs_coap_tx_params_t *tx_params;
     switch (ref.conn_type) {
     case ANJAY_CONNECTION_UDP:
         tx_params = &anjay->udp_tx_params;
@@ -799,14 +800,13 @@ static void queue_mode_activate_socket(anjay_t *anjay) {
     assert(connection);
     assert(connection->queue_mode_close_socket_clb_handle == NULL);
 
-    anjay_coap_tx_params_t tx_params;
+    avs_coap_tx_params_t tx_params;
     if (_anjay_coap_stream_get_tx_params(anjay->comm_stream, &tx_params)) {
         anjay_log(ERROR, "could not get current CoAP transmission parameters");
     }
 
-    struct timespec delay;
-    _anjay_time_from_ms(&delay,
-                        _anjay_coap_max_transmit_wait_ms(&tx_params));
+    struct timespec delay =
+            avs_time_from_ms(avs_coap_max_transmit_wait_ms(&tx_params));
 
     queue_mode_close_socket_args_t args = {
         .ssid = _anjay_dm_current_ssid(anjay),
@@ -924,10 +924,6 @@ int anjay_sched_run(anjay_t *anjay) {
         return -1;
     }
 
-    if (tasks_executed > 0) {
-        anjay_log(DEBUG, "executed %ld tasks", (long)tasks_executed);
-    }
-
     return 0;
 }
 
@@ -960,6 +956,41 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr) {
     }
 }
 
+uint64_t anjay_get_tx_bytes(anjay_t *anjay) {
+#ifdef WITH_NET_STATS
+    return avs_coap_ctx_get_tx_bytes(anjay->coap_ctx);
+#else
+    (void) anjay;
+    return 0;
+#endif
+}
+
+uint64_t anjay_get_rx_bytes(anjay_t *anjay) {
+#ifdef WITH_NET_STATS
+    return avs_coap_ctx_get_rx_bytes(anjay->coap_ctx);
+#else
+    (void) anjay;
+    return 0;
+#endif
+}
+
+uint64_t anjay_get_num_incoming_retransmissions(anjay_t *anjay) {
+#ifdef WITH_NET_STATS
+    return avs_coap_ctx_get_num_incoming_retransmissions(anjay->coap_ctx);
+#else
+    (void) anjay;
+    return 0;
+#endif
+}
+
+uint64_t anjay_get_num_outgoing_retransmissions(anjay_t *anjay) {
+#ifdef WITH_NET_STATS
+    return avs_coap_ctx_get_num_outgoing_retransmissions(anjay->coap_ctx);
+#else
+    (void) anjay;
+    return 0;
+#endif
+}
 
 #ifdef ANJAY_TEST
 #include "test/anjay.c"

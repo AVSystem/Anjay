@@ -33,7 +33,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *
  * @param rand_seed     Seed used internally to generate identities.
  * @param token_size    Requested token size. Might be zero, in which case
- *                      returned token will always be @p ANJAY_COAP_TOKEN_EMPTY
+ *                      returned token will always be @p AVS_COAP_TOKEN_EMPTY
  *
  * @returns pointer to a identity source object or NULL in case of error.
  */

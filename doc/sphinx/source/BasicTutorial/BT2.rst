@@ -44,7 +44,7 @@ structure and implement appropriate callback functions, linking it to actual
 representation.  However, for now, we are going to use our preimplemented LwM2M
 Objects (Security, Server), so that you don't have to worry about initializing
 the structure on your own. But, if you are interested in this topic now,
-you may jump to :doc:`BT4_CustomObject` to get more information.
+you may jump to :doc:`BT5_CustomObject` to get more information.
 
 To register an object we are going to use ``anjay_register_object`` function:
 

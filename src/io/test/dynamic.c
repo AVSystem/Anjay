@@ -59,7 +59,7 @@ AVS_UNIT_SUITE_INIT(dynamic_out, verbose) {
 }
 
 #define DETAILS_TEMPLATE(Format) { \
-    .msg_type = ANJAY_COAP_MSG_NON_CONFIRMABLE, \
+    .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE, \
     .format = Format \
 }
 
@@ -79,7 +79,7 @@ static const avs_stream_outbuf_t COAPIZED_OUTBUF
             _anjay_output_dynamic_create((avs_stream_abstract_t *) &outbuf, \
                                          &outctx_errno, &details, &no_uri)
 
-#define TEST_ENV(Size) TEST_ENV_WITH_FORMAT(Size, ANJAY_COAP_FORMAT_NONE)
+#define TEST_ENV(Size) TEST_ENV_WITH_FORMAT(Size, AVS_COAP_FORMAT_NONE)
 
 #define VERIFY_BYTES(Data) do { \
     AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&outbuf), \
@@ -257,13 +257,11 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
 #define TEST_ENV_COMMON(Data) \
     avs_net_abstract_socket_t *mocksock; \
     _anjay_mocksock_create(&mocksock, 1252, 1252); \
-    anjay_coap_socket_t *coapsock; \
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_socket_create(&coapsock, mocksock, 0)); \
     avs_unit_mocksock_expect_connect(mocksock, "", ""); \
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", "")); \
     avs_stream_abstract_t *coap = NULL; \
     SCOPED_MOCK_COAP_STREAM(mock_coap_stream_ctx) = \
-            _anjay_mock_coap_stream_create(&coap, coapsock, 256, 256); \
+            _anjay_mock_coap_stream_create(&coap, mocksock, 256, 256); \
     avs_unit_mocksock_input(mocksock, Data, sizeof(Data) - 1)
 
 #define TEST_ENV(Data) \

@@ -25,6 +25,16 @@ SCRIPT_DIR="$(dirname "$(canonicalize "$0")")"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 TOOLS_DIR="$SCRIPT_DIR"
 
+if [ -z "$OPENSSL" ]; then
+    if [ -x /usr/local/opt/openssl/bin/openssl ]; then
+        # default OpenSSL on macOS is outdated and buggy
+        # use the one from Homebrew if available
+        OPENSSL=/usr/local/opt/openssl/bin/openssl
+    else
+        OPENSSL=openssl
+    fi
+fi
+
 if [[ "$#" < 1 ]]; then
     CERTS_DIR="$(pwd)/certs"
 else
@@ -41,22 +51,22 @@ mkdir -p "$CERTS_DIR"
 pushd "$CERTS_DIR" >/dev/null 2>&1
 
 echo "* generating root cert"
-openssl ecparam -name prime256v1 -genkey -out root.key
-openssl req -batch -new -key root.key -x509 -sha256 -days 9999 -out root.crt
+"$OPENSSL" ecparam -name prime256v1 -genkey -out root.key
+"$OPENSSL" req -batch -new -key root.key -x509 -sha256 -days 9999 -out root.crt
 echo "* generating root cert - done"
 
 for NAME in client server; do
     echo "* generating $NAME cert"
-    openssl ecparam -name prime256v1 -genkey -out "${NAME}.key"
-    openssl req -batch -new -subj '/CN=localhost' -key "${NAME}.key" -sha256 -out "${NAME}.csr"
-    openssl x509 -sha256 -req -in "${NAME}.csr" -CA root.crt -CAkey root.key -out "${NAME}.crt" -days 9999 -CAcreateserial
+    "$OPENSSL" ecparam -name prime256v1 -genkey -out "${NAME}.key"
+    "$OPENSSL" req -batch -new -subj '/CN=localhost' -key "${NAME}.key" -sha256 -out "${NAME}.csr"
+    "$OPENSSL" x509 -sha256 -req -in "${NAME}.csr" -CA root.crt -CAkey root.key -out "${NAME}.crt" -days 9999 -CAcreateserial
     cat "${NAME}.crt" root.crt > "${NAME}-and-root.crt"
     echo "* generating $NAME cert - done"
 done
 
-openssl pkcs8 -topk8 -in client.key -inform pem -outform der \
+"$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der \
     -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client.key.der
-openssl x509 -in client.crt -outform der > client.crt.der
+"$OPENSSL" x509 -in client.crt -outform der > client.crt.der
 
 if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ] || ! "$KEYTOOL" -help >/dev/null 2>/dev/null; then
     echo ''
@@ -69,7 +79,7 @@ else
 
     echo "* creating keyStore.jks"
     for NAME in client server; do
-        openssl pkcs12 -export -in "${NAME}.crt" -inkey "${NAME}.key" -passin "pass:$KEYSTORE_PASSWORD" -out "${NAME}.p12" -name "${NAME}" -CAfile root.crt -caname root -password "pass:$KEYSTORE_PASSWORD"
+        "$OPENSSL" pkcs12 -export -in "${NAME}.crt" -inkey "${NAME}.key" -passin "pass:$KEYSTORE_PASSWORD" -out "${NAME}.p12" -name "${NAME}" -CAfile root.crt -caname root -password "pass:$KEYSTORE_PASSWORD"
         "$KEYTOOL" -importkeystore -deststorepass "$KEYSTORE_PASSWORD" -destkeystore keyStore.jks -srckeystore "${NAME}.p12" -srcstoretype PKCS12 -srcstorepass "$KEYSTORE_PASSWORD" -alias "${NAME}" -trustcacerts
     done
     echo "* creating keyStore.jks - done"

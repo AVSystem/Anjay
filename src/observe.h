@@ -57,7 +57,7 @@ typedef struct {
 typedef struct {
     anjay_observe_entry_t *ref;
     anjay_msg_details_t details;
-    anjay_coap_msg_identity_t identity;
+    avs_coap_msg_identity_t identity;
     struct timespec timestamp;
     double numeric;
     const size_t value_length;
@@ -79,7 +79,7 @@ void _anjay_observe_cleanup(anjay_t *anjay);
 int _anjay_observe_put_entry(anjay_t *anjay,
                              const anjay_observe_key_t *key,
                              const anjay_msg_details_t *details,
-                             const anjay_coap_msg_identity_t *identity,
+                             const avs_coap_msg_identity_t *identity,
                              double numeric,
                              const void *data,
                              size_t size);

@@ -97,8 +97,8 @@ if ! analyze; then
     # open newest index.html
     REPORT="file://$(find "$OUTPUT_DIR" -name index.html | xargs ls -t | head -1)"
     if command -v xdg-open > /dev/null; then
-        open "$REPORT"
-    else
         xdg-open "$REPORT"
+    else
+        open "$REPORT"
     fi
 fi

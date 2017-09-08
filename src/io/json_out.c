@@ -20,14 +20,15 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include <sys/types.h>
 
-#include <avsystem/commons/log.h>
 #include <avsystem/commons/list.h>
+#include <avsystem/commons/log.h>
 #include <avsystem/commons/stream.h>
+#include <avsystem/commons/utils.h>
+
+#include "../coap/content_format.h"
 
 #include "../io.h"
-#include "../coap/content_format.h"
 #include "base64_out.h"
 #include "vtable.h"
 
@@ -171,17 +172,17 @@ count_child_path_elems(json_out_t *ctx) {
 static ssize_t child_path_to_string(json_out_t *ctx, char *dest, size_t size) {
     switch (count_child_path_elems(ctx)) {
     case 1:
-        return _anjay_snprintf(dest, size, "/%"PRId32,
-                               ctx->path[ctx->num_base_path_elems].id);
+        return avs_simple_snprintf(dest, size, "/%"PRId32,
+                                   ctx->path[ctx->num_base_path_elems].id);
     case 2:
-        return _anjay_snprintf(dest, size, "/%"PRId32"/%"PRId32,
-                               ctx->path[ctx->num_base_path_elems].id,
-                               ctx->path[ctx->num_base_path_elems + 1].id);
+        return avs_simple_snprintf(dest, size, "/%"PRId32"/%"PRId32,
+                                   ctx->path[ctx->num_base_path_elems].id,
+                                   ctx->path[ctx->num_base_path_elems + 1].id);
     case 3:
-        return _anjay_snprintf(dest, size, "/%"PRId32"/%"PRId32"/%"PRId32,
-                               ctx->path[ctx->num_base_path_elems].id,
-                               ctx->path[ctx->num_base_path_elems + 1].id,
-                               ctx->path[ctx->num_base_path_elems + 2].id);
+        return avs_simple_snprintf(dest, size, "/%"PRId32"/%"PRId32"/%"PRId32,
+                                   ctx->path[ctx->num_base_path_elems].id,
+                                   ctx->path[ctx->num_base_path_elems + 1].id,
+                                   ctx->path[ctx->num_base_path_elems + 2].id);
     default:
         return -1;
     }

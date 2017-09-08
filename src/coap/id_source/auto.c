@@ -26,17 +26,19 @@ typedef struct coap_default_id_src {
     coap_id_source_t base;
     anjay_rand_seed_t rand_seed;
     uint16_t next_msg_id;
-    uint32_t token_size;
+    uint8_t token_size;
 } coap_default_id_src_t;
 
-static anjay_coap_msg_identity_t id_src_seq_get(coap_id_source_t *self_) {
+static avs_coap_msg_identity_t id_src_seq_get(coap_id_source_t *self_) {
     coap_default_id_src_t *self = (coap_default_id_src_t *)self_;
 
-    anjay_coap_msg_identity_t id = {
+    avs_coap_msg_identity_t id = {
         .msg_id = self->next_msg_id,
-        .token_size = self->token_size
+        .token = {
+            .size = self->token_size
+        }
     };
-    for (size_t i = 0; i < self->token_size; ++i) {
+    for (uint8_t i = 0; i < self->token_size; ++i) {
         id.token.bytes[i] = (char) _anjay_rand32(&self->rand_seed);
     }
     ++self->next_msg_id;
@@ -51,6 +53,7 @@ static const coap_id_source_vt_t *const ID_SRC_SEQ_VTABLE =
 
 coap_id_source_t *_anjay_coap_id_source_auto_new(anjay_rand_seed_t rand_seed,
                                                  size_t token_size) {
+    assert(token_size <= AVS_COAP_MAX_TOKEN_LENGTH);
     coap_default_id_src_t *src = (coap_default_id_src_t *)
             malloc(sizeof(coap_default_id_src_t));
     if (!src) {
@@ -61,8 +64,7 @@ coap_id_source_t *_anjay_coap_id_source_auto_new(anjay_rand_seed_t rand_seed,
            sizeof(ID_SRC_SEQ_VTABLE));
     src->rand_seed = rand_seed;
     src->next_msg_id = (uint16_t) _anjay_rand32(&src->rand_seed);
-    src->token_size = (uint32_t) token_size;
-    assert(token_size <= sizeof(ANJAY_COAP_MSG_IDENTITY_EMPTY.token));
+    src->token_size = (uint8_t) token_size;
 
     return &src->base;
 }

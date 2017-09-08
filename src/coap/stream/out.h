@@ -20,13 +20,12 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "../block_utils.h"
-#include "../msg.h"
-#include "../msg_builder.h"
-#include "../socket.h"
-#include "../stream.h"
+#include <avsystem/commons/coap/block_utils.h>
+#include <avsystem/commons/coap/msg.h>
+#include <avsystem/commons/coap/msg_builder.h>
+#include <avsystem/commons/coap/ctx.h>
 
-#include "common.h"
+#include "../stream.h"
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
 #error "Headers from coap/stream are not meant to be included from outside"
@@ -50,8 +49,8 @@ typedef struct coap_output_buffer {
     size_t buffer_capacity;
     size_t dgram_layer_mtu;
 
-    anjay_coap_msg_info_t info;
-    anjay_coap_msg_builder_t builder;
+    avs_coap_msg_info_t info;
+    avs_coap_msg_builder_t builder;
 } coap_output_buffer_t;
 
 coap_output_buffer_t _anjay_coap_out_init(uint8_t *payload_buffer,
@@ -67,10 +66,10 @@ void _anjay_coap_out_reset(coap_output_buffer_t *out);
  * Sets the limit of buffer size, adequate to the MTU of a specified socket.
  *
  * @param out    Buffer to operate on.
- * @param socket CoAP socket to query MTU on.
+ * @param socket Socket to query MTU on.
  */
 void _anjay_coap_out_setup_mtu(coap_output_buffer_t *out,
-                               anjay_coap_socket_t *socket);
+                               avs_net_abstract_socket_t *socket);
 
 /**
  * @param out Buffer to check.
@@ -78,7 +77,7 @@ void _anjay_coap_out_setup_mtu(coap_output_buffer_t *out,
  * @returns true if the buffer does not contain any data yet, false otherwise.
  */
 static inline bool _anjay_coap_out_is_reset(coap_output_buffer_t *out) {
-    return !_anjay_coap_msg_builder_is_initialized(&out->builder);
+    return !avs_coap_msg_builder_is_initialized(&out->builder);
 }
 
 /**
@@ -90,9 +89,9 @@ static inline bool _anjay_coap_out_is_reset(coap_output_buffer_t *out) {
  * @returns 0 on success, a negative value in case of error.
  */
 int _anjay_coap_out_setup_msg(coap_output_buffer_t *out,
-                              const anjay_coap_msg_identity_t *id,
+                              const avs_coap_msg_identity_t *id,
                               const anjay_msg_details_t *details,
-                              const coap_block_info_t *block);
+                              const avs_coap_block_info_t *block);
 
 /**
  * Resets message ID, token and acknowledged BLOCK option for the message being
@@ -105,8 +104,8 @@ int _anjay_coap_out_setup_msg(coap_output_buffer_t *out,
  * @returns 0 on success, a negative value in case of error.
  */
 int _anjay_coap_out_update_msg_header(coap_output_buffer_t *out,
-                                      const anjay_coap_msg_identity_t *id,
-                                      const coap_block_info_t *block);
+                                      const avs_coap_msg_identity_t *id,
+                                      const avs_coap_block_info_t *block);
 
 /**
  * Writes a message payload.
@@ -124,9 +123,9 @@ size_t _anjay_coap_out_write(coap_output_buffer_t *out,
                              const void *data,
                              size_t data_length);
 
-static inline const anjay_coap_msg_t *
+static inline const avs_coap_msg_t *
 _anjay_coap_out_build_msg(coap_output_buffer_t *out) {
-    return _anjay_coap_msg_builder_get_msg(&out->builder);
+    return avs_coap_msg_builder_get_msg(&out->builder);
 }
 
 VISIBILITY_PRIVATE_HEADER_END

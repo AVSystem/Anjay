@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
@@ -25,11 +26,12 @@
 #include <inttypes.h>
 
 #include "../log.h"
-#include "../block_utils.h"
+
+#include <avsystem/commons/coap/block_utils.h>
+
 #include "../content_format.h"
-#include "../msg_internal.h"
 #include "../id_source/static.h"
-#include "stream.h"
+#include "common.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -72,7 +74,7 @@ void _anjay_coap_server_set_block_request_relation_validator(
 }
 #endif // WITH_BLOCK_SEND
 
-const anjay_coap_msg_identity_t *
+const avs_coap_msg_identity_t *
 _anjay_coap_server_get_request_identity(const coap_server_t *server) {
     if (server->state != COAP_SERVER_STATE_RESET) {
         return &server->request_identity;
@@ -87,13 +89,10 @@ static bool is_block1_transfer(coap_server_t *server) {
 }
 
 static bool is_success_response(uint8_t msg_code) {
-    uint8_t cls = _anjay_coap_msg_code_get_class(&msg_code);
-    return cls == 2;
+    return avs_coap_msg_code_get_class(msg_code) == 2;
 }
 
 int _anjay_coap_server_setup_response(coap_server_t *server,
-                                      coap_output_buffer_t *out,
-                                      anjay_coap_socket_t *socket,
                                       const anjay_msg_details_t *details) {
     if (is_server_reset(server)) {
         coap_log(DEBUG, "no request to respond to");
@@ -104,58 +103,53 @@ int _anjay_coap_server_setup_response(coap_server_t *server,
            && "setup_response called with unsent error");
     clear_error(server);
 
-    if (!_anjay_coap_out_is_reset(out)) {
+    if (!_anjay_coap_out_is_reset(&server->common.out)) {
         coap_log(TRACE, "setup_response called, but out buffer not reset");
-        _anjay_coap_out_reset(out);
+        _anjay_coap_out_reset(&server->common.out);
     }
 
-    const coap_block_info_t *block = NULL;
+    const avs_coap_block_info_t *block = NULL;
     if (is_block1_transfer(server)
             && is_success_response(details->msg_code)) {
         block = &server->curr_block;
     }
 
-    _anjay_coap_out_setup_mtu(out, socket);
-    return _anjay_coap_out_setup_msg(out, &server->request_identity,
-                                     details, block);
+    _anjay_coap_out_setup_mtu(&server->common.out, server->common.socket);
+    return _anjay_coap_out_setup_msg(&server->common.out,
+                                     &server->request_identity, details, block);
 }
 
 void _anjay_coap_server_set_error(coap_server_t *server, uint8_t code) {
     if (has_error(server)) {
         coap_log(DEBUG, "error %s skipped (%s still not sent)",
-                 ANJAY_COAP_CODE_STRING(code),
-                 ANJAY_COAP_CODE_STRING(server->last_error_code));
+                 AVS_COAP_CODE_STRING(code),
+                 AVS_COAP_CODE_STRING(server->last_error_code));
     }
 
     server->last_error_code = code;
-    coap_log(DEBUG, "server error set to %s", ANJAY_COAP_CODE_STRING(code));
+    coap_log(DEBUG, "server error set to %s", AVS_COAP_CODE_STRING(code));
 }
 
-static void setup_error_response(coap_server_t *server,
-                                 coap_output_buffer_t *out,
-                                 anjay_coap_socket_t *socket) {
+static void setup_error_response(coap_server_t *server) {
     assert(has_error(server));
 
     const anjay_msg_details_t details = {
-        .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
         .msg_code = server->last_error_code,
-        .format = ANJAY_COAP_FORMAT_NONE
+        .format = AVS_COAP_FORMAT_NONE
     };
 
-    _anjay_coap_out_reset(out);
+    _anjay_coap_out_reset(&server->common.out);
     clear_error(server);
-    int result = _anjay_coap_server_setup_response(server, out, socket,
-                                                   &details);
+    int result = _anjay_coap_server_setup_response(server, &details);
     assert(result == 0);
 
     (void)result;
 }
 
-int _anjay_coap_server_finish_response(coap_server_t *server,
-                                       coap_output_buffer_t *out,
-                                       anjay_coap_socket_t *socket) {
+int _anjay_coap_server_finish_response(coap_server_t *server) {
     if (has_error(server)) {
-        setup_error_response(server, out, socket);
+        setup_error_response(server);
     }
 
     if (has_block_ctx(server)) {
@@ -170,12 +164,15 @@ int _anjay_coap_server_finish_response(coap_server_t *server,
     int result = 0;
     if (is_block1_transfer(server)) {
         result = _anjay_coap_out_update_msg_header(
-                out, &server->request_identity, &server->curr_block);
+                &server->common.out,
+                &server->request_identity, &server->curr_block);
     }
 
     if (!result) {
-        const anjay_coap_msg_t *msg = _anjay_coap_out_build_msg(out);
-        result = _anjay_coap_socket_send(socket, msg);
+        const avs_coap_msg_t *msg =
+                _anjay_coap_out_build_msg(&server->common.out);
+        result = avs_coap_ctx_send(server->common.coap_ctx,
+                                   server->common.socket, msg);
     }
     return result;
 }
@@ -185,18 +182,18 @@ static bool is_opt_critical(uint32_t opt_number) {
 }
 
 static int block_store_critical_options(AVS_LIST(coap_block_optbuf_t) *out,
-                                        const anjay_coap_msg_t *msg,
+                                        const avs_coap_msg_t *msg,
                                         uint32_t optnum_to_ignore) {
     AVS_LIST(coap_block_optbuf_t) *outptr = out;
     assert(!*outptr);
 
-    for (anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
-            !_anjay_coap_opt_end(&optit); _anjay_coap_opt_next(&optit)) {
-        uint32_t optnum = _anjay_coap_opt_number(&optit);
+    for (avs_coap_opt_iterator_t optit = avs_coap_opt_begin(msg);
+            !avs_coap_opt_end(&optit); avs_coap_opt_next(&optit)) {
+        uint32_t optnum = avs_coap_opt_number(&optit);
         if (optnum == optnum_to_ignore || !is_opt_critical(optnum)) {
             continue;
         }
-        uint32_t length = _anjay_coap_opt_content_length(optit.curr_opt);
+        uint32_t length = avs_coap_opt_content_length(optit.curr_opt);
         *outptr = (AVS_LIST(coap_block_optbuf_t)) AVS_LIST_NEW_BUFFER(
                 offsetof(coap_block_optbuf_t, content) + length);
         if (!*outptr) {
@@ -204,7 +201,7 @@ static int block_store_critical_options(AVS_LIST(coap_block_optbuf_t) *out,
         }
         (*outptr)->optnum = optnum;
         (*outptr)->length = length;
-        memcpy((*outptr)->content, _anjay_coap_opt_value(optit.curr_opt),
+        memcpy((*outptr)->content, avs_coap_opt_value(optit.curr_opt),
                 length);
         outptr = AVS_LIST_NEXT_PTR(outptr);
     }
@@ -214,8 +211,8 @@ err:
     return -1;
 }
 
-static inline uint32_t get_block_offset(const coap_block_info_t *block) {
-    assert(_anjay_coap_is_valid_block_size(block->size));
+static inline uint32_t get_block_offset(const avs_coap_block_info_t *block) {
+    assert(avs_coap_is_valid_block_size(block->size));
 
     return block->seq_num * block->size;
 }
@@ -230,23 +227,23 @@ typedef enum process_result {
 } process_result_t;
 
 static process_result_t process_initial_request(coap_server_t *server,
-                                                const anjay_coap_msg_t *msg) {
+                                                const avs_coap_msg_t *msg) {
     assert(is_server_reset(server));
 
-    anjay_coap_msg_type_t type = _anjay_coap_msg_header_get_type(&msg->header);
-    if (!_anjay_coap_msg_is_request(msg)
+    avs_coap_msg_type_t type = avs_coap_msg_get_type(msg);
+    if (!avs_coap_msg_is_request(msg)
             // incoming Reset may still require some kind of reaction,
             // so it should be handled by upper layers
-            && type != ANJAY_COAP_MSG_RESET) {
+            && type != AVS_COAP_MSG_RESET) {
         coap_log(DEBUG, "invalid request: %s",
-                 ANJAY_COAP_CODE_STRING(msg->header.code));
+                 AVS_COAP_CODE_STRING(avs_coap_msg_get_code(msg)));
         return PROCESS_INITIAL_INVALID_REQUEST;
     }
 
-    coap_block_info_t block1;
-    coap_block_info_t block2;
-    int result1 = _anjay_coap_get_block_info(msg, COAP_BLOCK1, &block1);
-    int result2 = _anjay_coap_get_block_info(msg, COAP_BLOCK2, &block2);
+    avs_coap_block_info_t block1;
+    avs_coap_block_info_t block2;
+    int result1 = avs_coap_get_block_info(msg, AVS_COAP_BLOCK1, &block1);
+    int result2 = avs_coap_get_block_info(msg, AVS_COAP_BLOCK2, &block2);
     if (result1 || result2) {
         _anjay_coap_server_set_error(server, -ANJAY_ERR_BAD_REQUEST);
         return PROCESS_INITIAL_INVALID_REQUEST;
@@ -270,7 +267,7 @@ static process_result_t process_initial_request(coap_server_t *server,
     }
 
     if (block1.valid || block2.valid) {
-        coap_log(TRACE, "block request: %u, size %u",
+        coap_log(TRACE, "block request: %" PRIu32 ", size %u",
                  get_block_offset(&server->curr_block),
                  server->curr_block.size);
 
@@ -283,56 +280,50 @@ static process_result_t process_initial_request(coap_server_t *server,
 
         if (block1.valid
                 && block_store_critical_options(&server->expected_block_opts,
-                                                msg, ANJAY_COAP_OPT_BLOCK1)) {
+                                                msg, AVS_COAP_OPT_BLOCK1)) {
             return PROCESS_INITIAL_INVALID_REQUEST;
         }
     }
-    server->request_identity = _anjay_coap_msg_get_identity(msg);
+    server->request_identity = avs_coap_msg_get_identity(msg);
 
     assert(!is_server_reset(server));
     return PROCESS_INITIAL_OK;
 }
 
-static int receive_request(coap_server_t *server,
-                           coap_input_buffer_t *in,
-                           anjay_coap_socket_t *socket) {
-    int result = _anjay_coap_in_get_next_message(in, socket);
-    if (result == ANJAY_COAP_SOCKET_ERR_MSG_TOO_LONG) {
-        const anjay_coap_msg_t *partial_msg = (anjay_coap_msg_t *) in->buffer;
-        if (partial_msg->length < sizeof(partial_msg->header)) {
-            coap_log(ERROR, "message too small to read header properly");
-            return result;
-        }
-
-        size_t token_size =
-                _anjay_coap_msg_header_get_token_length(&partial_msg->header);
-        if (partial_msg->length < sizeof(partial_msg->header) + token_size) {
-            coap_log(ERROR, "message too small to read token properly");
-            return result;
-        }
+static int receive_request(coap_server_t *server) {
+    int result = _anjay_coap_in_get_next_message(&server->common.in,
+                                                 server->common.coap_ctx,
+                                                 server->common.socket);
+    if (result == AVS_COAP_CTX_ERR_MSG_TOO_LONG) {
+        const avs_coap_msg_t *partial_msg =
+                (avs_coap_msg_t *) server->common.in.buffer;
         /**
          * Due to Size1 Option semantics being not clear enough we don't
          * inform Server about supported message size.
          */
-        _anjay_coap_send_error(socket, partial_msg,
-                               ANJAY_COAP_CODE_REQUEST_ENTITY_TOO_LARGE);
+        avs_coap_ctx_send_error(server->common.coap_ctx, server->common.socket,
+                                partial_msg,
+                                AVS_COAP_CODE_REQUEST_ENTITY_TOO_LARGE);
     }
 
     if (result) {
         return result;
     }
 
-    const anjay_coap_msg_t *msg = _anjay_coap_in_get_message(in);
+    const avs_coap_msg_t *msg = _anjay_coap_in_get_message(&server->common.in);
     switch (process_initial_request(server, msg)) {
     case PROCESS_INITIAL_INVALID_REQUEST:
         if (!server->last_error_code) {
-            if (_anjay_coap_msg_header_get_type(&msg->header)
-                    == ANJAY_COAP_MSG_CONFIRMABLE) {
-                _anjay_coap_send_empty(socket, ANJAY_COAP_MSG_RESET,
-                                       _anjay_coap_msg_get_id(msg));
+            if (avs_coap_msg_get_type(msg) == AVS_COAP_MSG_CONFIRMABLE) {
+                avs_coap_ctx_send_empty(server->common.coap_ctx,
+                                        server->common.socket,
+                                        AVS_COAP_MSG_RESET,
+                                        avs_coap_msg_get_id(msg));
             }
         } else {
-            _anjay_coap_send_error(socket, msg, server->last_error_code);
+            avs_coap_ctx_send_error(server->common.coap_ctx,
+                                    server->common.socket,
+                                    msg, server->last_error_code);
         }
         return -1;
     case PROCESS_INITIAL_OK:
@@ -344,11 +335,9 @@ static int receive_request(coap_server_t *server,
 }
 
 int _anjay_coap_server_get_or_receive_msg(coap_server_t *server,
-                                          coap_input_buffer_t *in,
-                                          anjay_coap_socket_t *socket,
-                                          const anjay_coap_msg_t **out_msg) {
+                                          const avs_coap_msg_t **out_msg) {
     if (server->state == COAP_SERVER_STATE_RESET) {
-        int result = receive_request(server, in, socket);
+        int result = receive_request(server);
         if (result) {
             *out_msg = NULL;
             return result;
@@ -356,13 +345,13 @@ int _anjay_coap_server_get_or_receive_msg(coap_server_t *server,
     }
 
     assert(server->state != COAP_SERVER_STATE_RESET);
-    *out_msg = _anjay_coap_in_get_message(in);
+    *out_msg = _anjay_coap_in_get_message(&server->common.in);
     return 0;
 }
 
 #ifdef WITH_BLOCK_RECEIVE
-static bool blocks_equal(const coap_block_info_t *a,
-                         const coap_block_info_t *b) {
+static bool blocks_equal(const avs_coap_block_info_t *a,
+                         const avs_coap_block_info_t *b) {
     assert(a->valid);
     assert(b->valid);
 
@@ -372,18 +361,18 @@ static bool blocks_equal(const coap_block_info_t *a,
 }
 
 static int block_validate_critical_options(AVS_LIST(coap_block_optbuf_t) opts,
-                                           const anjay_coap_msg_t *msg,
+                                           const avs_coap_msg_t *msg,
                                            uint32_t optnum_to_ignore) {
 #define BVCO_LOG_MSG "critical options mismatch when receiving BLOCK request; "
 #define BVCO_LOG_OPT "%" PRIu32 " length %" PRIu32
     AVS_LIST(coap_block_optbuf_t) optbuf = opts;
-    for (anjay_coap_opt_iterator_t optit = _anjay_coap_opt_begin(msg);
-            !_anjay_coap_opt_end(&optit); _anjay_coap_opt_next(&optit)) {
-        uint32_t optnum = _anjay_coap_opt_number(&optit);
+    for (avs_coap_opt_iterator_t optit = avs_coap_opt_begin(msg);
+            !avs_coap_opt_end(&optit); avs_coap_opt_next(&optit)) {
+        uint32_t optnum = avs_coap_opt_number(&optit);
         if (optnum == optnum_to_ignore || !is_opt_critical(optnum)) {
             continue;
         }
-        uint32_t length = _anjay_coap_opt_content_length(optit.curr_opt);
+        uint32_t length = avs_coap_opt_content_length(optit.curr_opt);
         if (!optbuf) {
             anjay_log(DEBUG, BVCO_LOG_MSG "expected end; got " BVCO_LOG_OPT,
                       optnum, length);
@@ -391,7 +380,7 @@ static int block_validate_critical_options(AVS_LIST(coap_block_optbuf_t) opts,
         }
         if (optnum != optbuf->optnum
                 || length != optbuf->length
-                || memcmp(_anjay_coap_opt_value(optit.curr_opt),
+                || memcmp(avs_coap_opt_value(optit.curr_opt),
                           optbuf->content, optbuf->length) != 0) {
             anjay_log(DEBUG, BVCO_LOG_MSG
                              "expected " BVCO_LOG_OPT "; got " BVCO_LOG_OPT,
@@ -421,17 +410,17 @@ typedef enum process_block_result {
     PROCESS_BLOCK_REJECT_ABORT,
 } process_block_result_t;
 
-static int retrieve_block_options(const anjay_coap_msg_t *msg,
-                                  coap_block_info_t *out_block1,
-                                  coap_block_info_t *out_block2) {
+static int retrieve_block_options(const avs_coap_msg_t *msg,
+                                  avs_coap_block_info_t *out_block1,
+                                  avs_coap_block_info_t *out_block2) {
     int result = 0;
 
-    if (_anjay_coap_get_block_info(msg, COAP_BLOCK1, out_block1)) {
+    if (avs_coap_get_block_info(msg, AVS_COAP_BLOCK1, out_block1)) {
         coap_log(DEBUG, "block-wise transfer - BLOCK1 invalid");
         result = -1;
     }
 
-    if (_anjay_coap_get_block_info(msg, COAP_BLOCK2, out_block2)) {
+    if (avs_coap_get_block_info(msg, AVS_COAP_BLOCK2, out_block2)) {
         coap_log(DEBUG, "block-wise transfer - BLOCK2 invalid");
         result = -1;
     }
@@ -440,103 +429,104 @@ static int retrieve_block_options(const anjay_coap_msg_t *msg,
 }
 
 static process_block_result_t process_next_block(coap_server_t *server,
-                                                 const anjay_coap_msg_t *msg,
+                                                 const avs_coap_msg_t *msg,
                                                  uint8_t *out_error_code) {
-    if (!_anjay_coap_msg_is_request(msg)) {
+    if (!avs_coap_msg_is_request(msg)) {
         *out_error_code = 0;
         return PROCESS_BLOCK_REJECT_CONTINUE;
     }
 
-    coap_block_info_t new_block;
-    coap_block_info_t block2;
+    avs_coap_block_info_t new_block;
+    avs_coap_block_info_t block2;
 
     if (retrieve_block_options(msg, &new_block, &block2)) {
         // malformed block option(s)
-        *out_error_code = ANJAY_COAP_CODE_BAD_REQUEST;
+        *out_error_code = AVS_COAP_CODE_BAD_REQUEST;
         return PROCESS_BLOCK_REJECT_ABORT;
     }
 
     if (!new_block.valid) {
         coap_log(DEBUG, "block-wise transfer - BLOCK1 missing");
-        *out_error_code = ANJAY_COAP_CODE_SERVICE_UNAVAILABLE;
+        *out_error_code = AVS_COAP_CODE_SERVICE_UNAVAILABLE;
         return PROCESS_BLOCK_REJECT_CONTINUE;
     }
 
     if (block2.valid) {
         coap_log(DEBUG, "block-wise transfer - got BLOCK2 option while "
                         "BLOCK1 transfer, this is not implemented");
-        *out_error_code = ANJAY_COAP_CODE_BAD_OPTION;
+        *out_error_code = AVS_COAP_CODE_BAD_OPTION;
         return PROCESS_BLOCK_REJECT_ABORT;
     }
 
     uint32_t offset = get_block_offset(&new_block);
     uint32_t expected_offset =
             get_block_offset(&server->curr_block) + server->curr_block.size;
-    anjay_coap_msg_identity_t msg_identity = _anjay_coap_msg_get_identity(msg);
+    avs_coap_msg_identity_t msg_identity = avs_coap_msg_get_identity(msg);
 
     if (offset != expected_offset) {
-        if (_anjay_coap_identity_equal(&server->request_identity, &msg_identity)
+        if (avs_coap_identity_equal(&server->request_identity, &msg_identity)
                 && blocks_equal(&server->curr_block, &new_block)) {
             return PROCESS_BLOCK_DUPLICATE;
         }
 
         coap_log(ERROR, "incomplete block request");
-        *out_error_code = ANJAY_COAP_CODE_REQUEST_ENTITY_INCOMPLETE;
+        *out_error_code = AVS_COAP_CODE_REQUEST_ENTITY_INCOMPLETE;
         return PROCESS_BLOCK_REJECT_ABORT;
     }
 
     if (block_validate_critical_options(server->expected_block_opts, msg,
-                                        ANJAY_COAP_OPT_BLOCK1)) {
-        *out_error_code = ANJAY_COAP_CODE_SERVICE_UNAVAILABLE;
+                                        AVS_COAP_OPT_BLOCK1)) {
+        *out_error_code = AVS_COAP_CODE_SERVICE_UNAVAILABLE;
         return PROCESS_BLOCK_REJECT_CONTINUE;
     }
 
     server->state = COAP_SERVER_STATE_HAS_BLOCK1_REQUEST;
     server->curr_block = new_block;
-    coap_log(TRACE, "got block: %u (size %u)",
+    coap_log(TRACE, "got block: %" PRIu32 " (size %" PRIu16 ")",
              get_block_offset(&new_block), new_block.size);
     return PROCESS_BLOCK_OK;
 }
 
-static int send_continue(anjay_coap_socket_t *socket,
-                         const anjay_coap_msg_identity_t *id,
-                         const coap_block_info_t *block_info) {
-    assert(socket);
+static int send_continue(coap_server_t *server,
+                         const avs_coap_msg_identity_t *id) {
+    assert(server);
     assert(id);
-    assert(block_info && block_info->type == COAP_BLOCK1);
+    assert(server->curr_block.type == AVS_COAP_BLOCK1);
 
-    anjay_coap_msg_info_t info = _anjay_coap_msg_info_init();
+    avs_coap_msg_info_t info = avs_coap_msg_info_init();
     anjay_msg_details_t details = {
-        .msg_type = ANJAY_COAP_MSG_ACKNOWLEDGEMENT,
-        .msg_code = ANJAY_COAP_CODE_CONTINUE,
-        .format = ANJAY_COAP_FORMAT_NONE
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_code = AVS_COAP_CODE_CONTINUE,
+        .format = AVS_COAP_FORMAT_NONE
     };
 
-    if (_anjay_coap_common_fill_msg_info(&info, &details, id, block_info)) {
+    if (_anjay_coap_common_fill_msg_info(&info, &details, id,
+                                         &server->curr_block)) {
         return -1;
     }
 
     int result = -1;
-    size_t storage_size = _anjay_coap_msg_info_get_storage_size(&info);
+    size_t storage_size = avs_coap_msg_info_get_storage_size(&info);
     void *storage = malloc(storage_size);
     if (!storage) {
         goto cleanup_info;
     }
 
-    const anjay_coap_msg_t *msg = _anjay_coap_msg_build_without_payload(
-            _anjay_coap_ensure_aligned_buffer(storage),
+    const avs_coap_msg_t *msg = avs_coap_msg_build_without_payload(
+            avs_coap_ensure_aligned_buffer(storage),
             storage_size, &info);
     if (msg) {
-        result = _anjay_coap_socket_send(socket, msg);
+        result = avs_coap_ctx_send(server->common.coap_ctx,
+                                   server->common.socket, msg);
     }
 
     free(storage);
 cleanup_info:
-    _anjay_coap_msg_info_reset(&info);
+    avs_coap_msg_info_reset(&info);
     return result;
 }
 
-static int receive_next_block(const anjay_coap_msg_t *msg,
+static int receive_next_block(const avs_coap_msg_t *msg,
                               void *server_,
                               bool *out_wait_for_next,
                               uint8_t *out_error_code) {
@@ -557,7 +547,7 @@ static int receive_next_block(const anjay_coap_msg_t *msg,
     case PROCESS_BLOCK_OK:
     case PROCESS_BLOCK_DUPLICATE:
     case PROCESS_BLOCK_REJECT_ABORT:
-        server->request_identity = _anjay_coap_msg_get_identity(msg);
+        server->request_identity = avs_coap_msg_get_identity(msg);
         *out_wait_for_next = false;
         break;
     }
@@ -565,21 +555,21 @@ static int receive_next_block(const anjay_coap_msg_t *msg,
     return (int)result;
 }
 
-static int receive_next_block_with_timeout(coap_server_t *server,
-                                           coap_input_buffer_t *in,
-                                           anjay_coap_socket_t *socket) {
+static int receive_next_block_with_timeout(coap_server_t *server) {
     /**
      * See CoAP BLOCK, 2.5 "Using the Block1 Option".
      *
      * That's a *really* big timeout, but CoAP BLOCK spec suggests that value
      * to be used as a timeout until cached state can be discarded.
      */
-    int32_t timeout_ms = (int32_t)_anjay_coap_exchange_lifetime_ms(
-            _anjay_coap_socket_get_tx_params(socket));
+    avs_coap_tx_params_t tx_params =
+            avs_coap_ctx_get_tx_params(server->common.coap_ctx);
+    int32_t timeout_ms = (int32_t)avs_coap_exchange_lifetime_ms(&tx_params);
     while (timeout_ms > 0) {
         int recv_result = -1;
         int result = _anjay_coap_common_recv_msg_with_timeout(
-                socket, in, &timeout_ms, receive_next_block, server,
+                server->common.coap_ctx, server->common.socket,
+                &server->common.in, &timeout_ms, receive_next_block, server,
                 &recv_result);
         if (result) {
             return result;
@@ -587,10 +577,7 @@ static int receive_next_block_with_timeout(coap_server_t *server,
 
         switch (recv_result) {
         case PROCESS_BLOCK_DUPLICATE:
-            {
-                const anjay_coap_msg_identity_t *id = &server->request_identity;
-                send_continue(socket, id, &server->curr_block);
-            }
+            send_continue(server, &server->request_identity);
             break;
 
         case PROCESS_BLOCK_OK:
@@ -606,15 +593,13 @@ static int receive_next_block_with_timeout(coap_server_t *server,
             return recv_result;
         }
     }
-    coap_log(DEBUG, "timeout reached while waiting for block (offset = %u)",
-             get_block_offset(&server->curr_block));
+    coap_log(DEBUG, "timeout reached while waiting for block (offset = %"
+             PRIu32 ")", get_block_offset(&server->curr_block));
     return -1;
 }
 #endif // WITH_BLOCK_RECEIVE
 
 int _anjay_coap_server_read(coap_server_t *server,
-                            coap_input_buffer_t *in,
-                            anjay_coap_socket_t *socket,
                             size_t *out_bytes_read,
                             char *out_message_finished,
                             void *buffer,
@@ -628,25 +613,23 @@ int _anjay_coap_server_read(coap_server_t *server,
         // An attempt to read more payload was made, but we finished reading
         // last packet. Send 2.31 Continue to let the server know we are ready
         // to handle the next block and wait for it.
-        const anjay_coap_msg_identity_t *id =
-                _anjay_coap_server_get_request_identity(server);
-        send_continue(socket, id, &server->curr_block);
+        send_continue(server, _anjay_coap_server_get_request_identity(server));
 
-        int result = receive_next_block_with_timeout(server, in, socket);
+        int result = receive_next_block_with_timeout(server);
         if (result) {
             return result;
         }
     }
 #endif
 
-    _anjay_coap_in_read(in, out_bytes_read, out_message_finished,
-                        buffer, buffer_length);
+    _anjay_coap_in_read(&server->common.in, out_bytes_read,
+                        out_message_finished, buffer, buffer_length);
 
     if (*out_message_finished
             && server->state == COAP_SERVER_STATE_HAS_BLOCK1_REQUEST) {
         if (server->curr_block.has_more) {
 #ifdef WITH_BLOCK_RECEIVE
-            coap_log(TRACE, "block: packet %u finished",
+            coap_log(TRACE, "block: packet %" PRIu32 " finished",
                      server->curr_block.seq_num);
 
             server->state = COAP_SERVER_STATE_NEEDS_NEXT_BLOCK;
@@ -673,15 +656,12 @@ int _anjay_coap_server_read(coap_server_t *server,
 
 #ifdef WITH_BLOCK_SEND
 static int block_write(coap_server_t *server,
-                       coap_input_buffer_t *in,
-                       coap_output_buffer_t *out,
-                       anjay_coap_socket_t *socket,
                        const void *data,
                        size_t data_length) {
     if (!server->block_ctx) {
         uint16_t block_size = server->curr_block.valid
                 ? server->curr_block.size
-                : ANJAY_COAP_MSG_BLOCK_MAX_SIZE;
+                : AVS_COAP_MSG_BLOCK_MAX_SIZE;
 
         server->static_id_source = _anjay_coap_id_source_new_static(
                 _anjay_coap_server_get_request_identity(server));
@@ -689,7 +669,7 @@ static int block_write(coap_server_t *server,
             return -1;
         }
         server->block_ctx = _anjay_coap_block_response_new(
-                block_size, in, out, socket, server->static_id_source,
+                block_size, &server->common, server->static_id_source,
                 &server->block_relation_validator);
 
         if (!server->block_ctx) {
@@ -714,19 +694,17 @@ static int block_write(coap_server_t *server,
 #endif
 
 static bool block_response_requested(coap_server_t *server) {
-    return server->curr_block.valid && server->curr_block.type == COAP_BLOCK2;
+    return server->curr_block.valid
+               && server->curr_block.type == AVS_COAP_BLOCK2;
 }
 
 int _anjay_coap_server_write(coap_server_t *server,
-                             coap_input_buffer_t *in,
-                             coap_output_buffer_t *out,
-                             anjay_coap_socket_t *socket,
                              const void *data,
                              size_t data_length) {
-    (void) in; (void) socket;
     size_t bytes_written = 0;
     if (!has_block_ctx(server) && !block_response_requested(server)) {
-        bytes_written = _anjay_coap_out_write(out, data, data_length);
+        bytes_written = _anjay_coap_out_write(&server->common.out,
+                                              data, data_length);
         if (bytes_written == data_length) {
             return 0;
         } else {
@@ -735,7 +713,6 @@ int _anjay_coap_server_write(coap_server_t *server,
         }
     }
 
-    return block_write(server, in, out, socket,
-                       (const uint8_t*)data + bytes_written,
+    return block_write(server, (const uint8_t*) data + bytes_written,
                        data_length - bytes_written);
 }

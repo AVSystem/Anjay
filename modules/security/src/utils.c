@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <config.h>
+#include <posix-config.h>
+
 #include "utils.h"
 
 #include <string.h>

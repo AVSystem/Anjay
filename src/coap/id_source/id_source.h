@@ -17,13 +17,15 @@
 #ifndef ANJAY_COAP_IDSOURCE_H
 #define ANJAY_COAP_IDSOURCE_H
 
-#include "../msg.h"
+#include <avsystem/commons/coap/msg.h>
+
+#include <stdlib.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct coap_id_source coap_id_source_t;
 
-typedef anjay_coap_msg_identity_t coap_id_source_get_t(coap_id_source_t *self);
+typedef avs_coap_msg_identity_t coap_id_source_get_t(coap_id_source_t *self);
 
 typedef struct coap_id_source_vt {
     coap_id_source_get_t *get;
@@ -41,7 +43,7 @@ _anjay_coap_id_source_release(coap_id_source_t **src) {
     }
 }
 
-static inline anjay_coap_msg_identity_t
+static inline avs_coap_msg_identity_t
 _anjay_coap_id_source_get(coap_id_source_t *src) {
     return src->vtable->get(src);
 }

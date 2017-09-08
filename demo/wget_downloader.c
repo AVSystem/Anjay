@@ -20,7 +20,6 @@
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>

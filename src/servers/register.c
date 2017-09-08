@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <inttypes.h>
 
@@ -123,7 +124,7 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
 
     if (!result && !is_bootstrap) {
         result = _anjay_server_update_or_reregister(anjay, server);
-        if (result == ANJAY_COAP_SOCKET_ERR_NETWORK) {
+        if (result == AVS_COAP_CTX_ERR_NETWORK) {
             anjay_log(ERROR, "network communication error while updating "
                              "registration for SSID==%" PRIu16, server->ssid);
             // We cannot use _anjay_schedule_server_reconnect(), because it
@@ -147,12 +148,9 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
 
 static struct timespec
 get_server_update_interval(const anjay_registration_info_t *info) {
-    struct timespec update_interval;
-    _anjay_time_from_s(&update_interval,
-                       (int32_t)info->last_update_params.lifetime_s);
-    _anjay_time_div(&update_interval, &update_interval,
-                    ANJAY_UPDATE_INTERVAL_MARGIN_FACTOR);
-    return update_interval;
+    struct timespec update_interval =
+            avs_time_from_s((int32_t)info->last_update_params.lifetime_s);
+    return avs_time_div(&update_interval, ANJAY_UPDATE_INTERVAL_MARGIN_FACTOR);
 }
 
 static int
@@ -179,7 +177,7 @@ schedule_next_update(anjay_t *anjay,
             _anjay_register_time_remaining(&server->registration_info);
     struct timespec update_interval =
             get_server_update_interval(&server->registration_info);
-    _anjay_time_diff(&remaining, &remaining, &update_interval);
+    remaining = avs_time_diff(&remaining, &update_interval);
 
     if (remaining.tv_sec < ANJAY_MIN_UPDATE_INTERVAL_S) {
         remaining = (struct timespec){ ANJAY_MIN_UPDATE_INTERVAL_S, 0 };
@@ -237,7 +235,7 @@ int _anjay_server_update_or_reregister(anjay_t *anjay,
     if (!needs_reregister) {
         struct timespec remaining =
                 _anjay_register_time_remaining(&server->registration_info);
-        if (_anjay_time_before(&remaining, &ANJAY_TIME_ZERO)) {
+        if (avs_time_before(&remaining, &ANJAY_TIME_ZERO)) {
             anjay_log(DEBUG, "Registration Lifetime expired for SSID = %u, "
                       "forcing re-register", server->ssid);
             needs_reregister = true;

@@ -137,9 +137,10 @@ def _main():
     result = 0
     os.chdir(args.root)
     for f in get_file_list(args.diff):
-        if os.path.isfile(f) \
-                and (args.no_ignores or not is_ignored(f)) \
-                and not check_license(f):
+        if (os.path.isfile(f)
+                and not os.path.islink(f)
+                and (args.no_ignores or not is_ignored(f))
+                and not check_license(f)):
             print(f)
             result = 1
 

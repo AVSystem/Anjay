@@ -109,7 +109,7 @@ To install everything on Ubuntu 16.04 LTS:
 ``` sh
 sudo apt-get install git build-essential cmake libmbedtls-dev wget
 # Optionally for tests:
-sudo apt-get install libpython3-dev libssl-dev python3 clang
+sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-sphinx clang
 ```
 
 Or on macOS Sierra with [Homebrew](https://brew.sh/):
@@ -118,7 +118,7 @@ Or on macOS Sierra with [Homebrew](https://brew.sh/):
 brew install cmake mbedtls wget
 # Optionally for tests:
 brew install python3 openssl llvm
-pip3 install sphinx sphinx_rtd_theme
+pip3 install cryptography sphinx sphinx_rtd_theme
 ```
 
 ### Running the demo client

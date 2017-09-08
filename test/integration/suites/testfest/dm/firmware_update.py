@@ -148,11 +148,12 @@ class FirmwareUpdateWithHttpServer:
                     test_case.requests.append(self.path)
                     test_case.before_download()
 
+                    self.send_response(http.HTTPStatus.OK)
+                    self.send_header('Content-type', 'application/octet-stream')
+                    self.end_headers()
+
                     # give the test some time to read "Downloading" state
                     time.sleep(1)
-
-                    self.send_header('Content-type', 'application/octet-stream')
-                    self.send_response(http.HTTPStatus.OK)
 
                     self.wfile.write(firmware_package)
 

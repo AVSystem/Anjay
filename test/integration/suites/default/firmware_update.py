@@ -17,6 +17,7 @@
 import http
 import http.server
 import os
+import ssl
 import threading
 import time
 
@@ -77,19 +78,37 @@ class FirmwareUpdate:
                             line = f.readline()[:-1]
                             self.assertEqual(line, b"updated")
 
-        def read_update_result(self):
+        def read_update_result(self, timeout_s=1):
             req = Lwm2mRead('/5/0/5')
             self.serv.send(req)
-            res = self.serv.recv(timeout_s=1)
+            res = self.serv.recv(timeout_s=timeout_s)
             self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
             return int(res.content)
 
-        def read_state(self):
+        def read_state(self, timeout_s=1):
             req = Lwm2mRead('/5/0/3')
             self.serv.send(req)
-            res = self.serv.recv(timeout_s=1)
+            res = self.serv.recv(timeout_s=timeout_s)
             self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
             return int(res.content)
+
+        def write_firmware_and_wait_for_download(self, firmware_uri: str,
+                                                 write_timeout_s=1, read_timeout_s=1, download_timeout_s=10):
+            # Write /5/0/1 (Firmware URI)
+            req = Lwm2mWrite('/5/0/1', firmware_uri)
+            self.serv.send(req)
+            self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                                self.serv.recv(timeout_s=write_timeout_s))
+
+            # wait until client downloads the firmware
+            deadline = time.time() + download_timeout_s
+            while time.time() < deadline:
+                time.sleep(0.5)
+
+                if self.read_state(timeout_s=read_timeout_s) == UPDATE_STATE_DOWNLOADED:
+                    return
+
+            self.fail('firmware still not downloaded')
 
     class TestWithHttpServer(Test):
         def get_firmware_uri(self):
@@ -101,37 +120,16 @@ class FirmwareUpdate:
                 self._response_content = make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT)
                 self._response_cv.notify()
 
-        def write_firmware_and_wait_for_download(self):
-            self.provide_response()
-
-            # Write /5/0/1 (Firmware URI)
-            req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
-            self.serv.send(req)
-            self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                                self.serv.recv(timeout_s=1))
-
-            # wait until client downloads the firmware
-            ready = False
-            for _ in range(10):
-                time.sleep(0.5)
-
-                if self.read_state() == UPDATE_STATE_DOWNLOADED:
-                    break
-            else:
-                self.fail('firmware still not downloaded')
-
-        def setUp(self):
-            super().setUp()
-
-            self.requests = []
-            self._response_content = None
-            self._response_cv = threading.Condition()
-
+        def _create_server(self):
             test_case = self
 
             class FirmwareRequestHandler(http.server.BaseHTTPRequestHandler):
                 def do_GET(self):
                     test_case.requests.append(self.path)
+
+                    self.send_response(http.HTTPStatus.OK)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
 
                     # This condition variable makes it possible to defer sending the response.
                     # FirmwareUpdateStateChangeTest uses it to ensure demo has enough time
@@ -142,16 +140,22 @@ class FirmwareUpdate:
                         response_content = test_case._response_content
                         test_case._response_content = None
 
-                    self.send_header('Content-type', 'text/plain')
-                    self.send_response(http.HTTPStatus.OK)
                     self.wfile.write(response_content)
 
                 def log_request(code='-', size='-'):
                     # don't display logs on successful request
                     pass
 
-            self.http_server = http.server.HTTPServer(('', 0),
-                                                      FirmwareRequestHandler)
+            return http.server.HTTPServer(('', 0), FirmwareRequestHandler)
+
+        def setUp(self):
+            super().setUp()
+
+            self.requests = []
+            self._response_content = None
+            self._response_cv = threading.Condition()
+
+            self.http_server = self._create_server()
 
             self.server_thread = threading.Thread(target=lambda: self.http_server.serve_forever())
             self.server_thread.start()
@@ -166,24 +170,51 @@ class FirmwareUpdate:
             # there should be exactly one request
             self.assertEqual(['/firmware'], self.requests)
 
+    class TestWithHttpsServer(TestWithHttpServer):
+        def get_firmware_uri(self):
+            http_uri = super().get_firmware_uri()
+            assert http_uri[:5] == 'http:'
+            return 'https:' + http_uri[5:]
+
+        def _create_server(self):
+            import datetime
+            from cryptography import x509
+            from cryptography.x509.oid import NameOID
+            from cryptography.hazmat.backends import default_backend
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import rsa
+
+            key = rsa.generate_private_key(public_exponent=65537, key_size=1024, backend=default_backend())
+            name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'localhost')])
+            now = datetime.datetime.utcnow()
+            cert = (x509.CertificateBuilder().
+                    subject_name(name).
+                    issuer_name(name).
+                    public_key(key.public_key()).
+                    serial_number(1000).
+                    not_valid_before(now).
+                    not_valid_after(now + datetime.timedelta(days=1)).
+                    sign(key, hashes.SHA256(), default_backend()))
+            cert_pem = cert.public_bytes(encoding=serialization.Encoding.PEM)
+            key_pem = key.private_bytes(encoding=serialization.Encoding.PEM,
+                                        format=serialization.PrivateFormat.TraditionalOpenSSL,
+                                        encryption_algorithm=serialization.NoEncryption())
+
+            with tempfile.NamedTemporaryFile() as cert_file, tempfile.NamedTemporaryFile() as key_file:
+                cert_file.write(cert_pem)
+                cert_file.flush()
+
+                key_file.write(key_pem)
+                key_file.flush()
+
+                http_server = super()._create_server()
+                http_server.socket = ssl.wrap_socket(http_server.socket,
+                                                     certfile=cert_file.name,
+                                                     keyfile=key_file.name,
+                                                     server_side=True)
+                return http_server
+
     class TestWithCoapServer(Test):
-        def write_firmware_and_wait_for_download(self, firmware_uri: str):
-            # Write /5/0/1 (Firmware URI)
-            req = Lwm2mWrite('/5/0/1', firmware_uri)
-            self.serv.send(req)
-            self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                                self.serv.recv(timeout_s=1))
-
-            # wait until client downloads the firmware
-            ready = False
-            for _ in range(10):
-                time.sleep(0.5)
-
-                if self.read_state() == UPDATE_STATE_DOWNLOADED:
-                    break
-            else:
-                self.fail('firmware still not downloaded')
-
         def setUp(self):
             super().setUp()
 
@@ -227,7 +258,8 @@ class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
         self.set_auto_deregister(False)
 
     def runTest(self):
-        self.write_firmware_and_wait_for_download()
+        self.provide_response()
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri())
 
         # Execute /5/0/2 (Update)
         req = Lwm2mExecute('/5/0/2')
@@ -315,7 +347,8 @@ class FirmwareUpdateGoodBase64(FirmwareUpdate.Test):
 
 class FirmwareUpdateEmptyPkg(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
-        self.write_firmware_and_wait_for_download()
+        self.provide_response()
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri())
 
         req = Lwm2mWrite('/5/0/0', b'', format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
@@ -327,7 +360,8 @@ class FirmwareUpdateEmptyPkg(FirmwareUpdate.TestWithHttpServer):
 
 class FirmwareUpdateEmptyPkgUri(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
-        self.write_firmware_and_wait_for_download()
+        self.provide_response()
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri())
 
         req = Lwm2mWrite('/5/0/1', '')
         self.serv.send(req)
@@ -371,7 +405,8 @@ class FirmwareUpdateUnsupportedUri(FirmwareUpdate.Test):
 
 class FirmwareUpdateReplacingPkgUri(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
-        self.write_firmware_and_wait_for_download()
+        self.provide_response()
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri())
 
         # This isn't specified anywhere as a possible transition, therefore
         # it is most likely a bad request.
@@ -386,7 +421,8 @@ class FirmwareUpdateReplacingPkgUri(FirmwareUpdate.TestWithHttpServer):
 
 class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
-        self.write_firmware_and_wait_for_download()
+        self.provide_response()
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri())
 
         # This isn't specified anywhere as a possible transition, therefore
         # it is most likely a bad request.
@@ -397,6 +433,23 @@ class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
 
         self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+
+
+class FirmwareUpdateHttpsTest(FirmwareUpdate.TestWithHttpsServer):
+    def setUp(self):
+        super().setUp()
+        self.set_check_marker(True)
+        self.set_auto_deregister(False)
+
+    def runTest(self):
+        self.provide_response()
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri(), read_timeout_s=10, download_timeout_s=20)
+
+        # Execute /5/0/2 (Update)
+        req = Lwm2mExecute('/5/0/2')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv(timeout_s=1))
 
 
 class FirmwareUpdateResetInIdleState(FirmwareUpdate.Test):

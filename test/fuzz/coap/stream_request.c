@@ -21,6 +21,8 @@
 #include <assert.h>
 
 #include <avsystem/commons/socket_v_table.h>
+#include <avsystem/commons/coap/ctx.h>
+#include <avsystem/commons/stream/net.h>
 
 #include "../../../src/coap/stream.h"
 
@@ -110,8 +112,7 @@ static void perform_op(FILE *cmd_stream,
     case OP_SETUP_REQUEST:
         {
             anjay_msg_details_t details;
-            uint8_t token_size;
-            anjay_coap_token_t token;
+            avs_coap_token_t token;
 
             memset(&details, 0, sizeof(details));
 
@@ -119,16 +120,15 @@ static void perform_op(FILE *cmd_stream,
                       sizeof(details.msg_type) + sizeof(details.msg_code)
                       + sizeof(details.format) + sizeof(details.observe_serial),
                       1, cmd_stream) != 1
-                    || details.msg_type < _ANJAY_COAP_MSG_FIRST
-                    || details.msg_type > _ANJAY_COAP_MSG_LAST
-                    || fread(&token_size, 1, 1, cmd_stream) != 1
-                    || token_size > 8
-                    || (token_size > 0 && fread(&token, token_size, 1, cmd_stream) != 1)) {
+                    || details.msg_type < _AVS_COAP_MSG_FIRST
+                    || details.msg_type > _AVS_COAP_MSG_LAST
+                    || fread(&token.size, 1, 1, cmd_stream) != 1
+                    || token.size > 8
+                    || (token.size > 0 && fread(&token.bytes, token.size, 1, cmd_stream) != 1)) {
                 return;
             }
 
-            _anjay_coap_stream_setup_request(stream, &details,
-                                             &token, token_size);
+            _anjay_coap_stream_setup_request(stream, &details, &token);
         }
     case OP_WRITE:
         {
@@ -169,14 +169,19 @@ int main(int argc, char **argv) {
 
     avs_net_abstract_socket_t *mock_socket =
             (avs_net_abstract_socket_t*)&mock_socket_struct;
-    anjay_coap_socket_t *sock;
+    avs_coap_ctx_t *coap = NULL;
     avs_stream_abstract_t *stream = NULL;
+
+    uint8_t in_buffer[65536];
+    uint8_t out_buffer[65536];
 
     int retval = -1;
 
-    if (_anjay_coap_socket_create(&sock, mock_socket)
-            || _anjay_coap_stream_create(&stream, sock,
-                                         UINT16_MAX + 1, UINT16_MAX + 1)) {
+    if (avs_coap_ctx_create(&coap, 0)
+            || _anjay_coap_stream_create(&stream, coap,
+                                         in_buffer, sizeof(in_buffer),
+                                         out_buffer, sizeof(out_buffer))
+            || avs_stream_net_setsock(stream, mock_socket)) {
         goto exit;
     }
 

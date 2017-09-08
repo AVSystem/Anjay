@@ -23,8 +23,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <avsystem/commons/stream.h>
 #include <avsystem/commons/base64.h>
+#include <avsystem/commons/stream.h>
 
 #include <anjay/core.h>
 
@@ -215,7 +215,7 @@ static int has_valid_padding(const char *buffer,
 static void text_get_some_bytes_cache_flush(text_in_t *ctx,
                                             uint8_t **out_buf,
                                             size_t *buf_size) {
-    size_t bytes_to_copy = ANJAY_MIN(ctx->num_bytes_cached, *buf_size);
+    size_t bytes_to_copy = AVS_MIN(ctx->num_bytes_cached, *buf_size);
     memcpy(*out_buf, ctx->bytes_cached, bytes_to_copy);
     memmove(ctx->bytes_cached, ctx->bytes_cached + bytes_to_copy,
             sizeof(ctx->bytes_cached) - bytes_to_copy);
@@ -299,7 +299,7 @@ static int text_get_string(anjay_input_ctx_t *ctx,
 #define DEF_GETNUM(Type, Bufsize, ...) \
 static int safe_strto##Type (const char *in, TYPE##Type *value) { \
     char *endptr = NULL; \
-    if (!*in || isspace(*in)) { \
+    if (!*in || isspace((unsigned char)*in)) { \
         return -1; \
     } \
     errno = 0; \

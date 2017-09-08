@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include <string.h>
 
+#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 
 static int parse_ssid(const char *text,
@@ -302,6 +303,63 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
     }
 }
 
+static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
+    char path[strlen(args_string) + 1];
+    int path_len = 0;
+
+    if (sscanf(args_string, "%s%n", path, &path_len) != 1) {
+        goto error;
+    }
+    const char *args = args_string + path_len;
+    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
+    const char *pmin = strstr(args, "pmin=");
+    const char *pmax = strstr(args, "pmax=");
+    const char *lt = strstr(args, "lt=");
+    const char *gt = strstr(args, "gt=");
+    const char *st = strstr(args, "st=");
+    if (pmin) {
+        (void) sscanf(pmin, "pmin=%ld", &attrs.common.min_period);
+    }
+    if (pmax) {
+        (void) sscanf(pmax, "pmax=%ld", &attrs.common.max_period);
+    }
+    if (lt) {
+        (void) sscanf(lt, "lt=%lf", &attrs.less_than);
+    }
+    if (gt) {
+        (void) sscanf(gt, "gt=%lf", &attrs.greater_than);
+    }
+    if (st) {
+        (void) sscanf(st, "st=%lf", &attrs.step);
+    }
+
+    int oid, iid, rid;
+    switch (sscanf(path, "/%d/%d/%d", &oid, &iid, &rid)) {
+    case 3:
+        if (anjay_attr_storage_set_resource_attrs(
+                    demo->anjay, 1, (anjay_oid_t) oid, (anjay_iid_t) iid,
+                    (anjay_rid_t) rid, &attrs)) {
+            demo_log(ERROR, "failed to set resource level attributes");
+        }
+        return;
+    case 2:
+        if (anjay_attr_storage_set_instance_attrs(
+                    demo->anjay, 1, (anjay_oid_t) oid, (anjay_iid_t) iid,
+                    &attrs.common)) {
+            demo_log(ERROR, "failed to set instance level attributes");
+        }
+        return;
+    case 1:
+        if (anjay_attr_storage_set_object_attrs(
+                    demo->anjay, 1, (anjay_oid_t) oid, &attrs.common)) {
+            demo_log(ERROR, "failed to set object level attributes");
+        }
+        return;
+    }
+error:
+    demo_log(ERROR, "bad syntax - see help");
+}
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -344,6 +402,9 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("download", "url target_file [psk_identity psk_key]",
                 cmd_download,
                 "Download a file from given CoAP URL to target_file."),
+    CMD_HANDLER("set-attrs", "", cmd_set_attrs,
+                "Syntax [/x [/y [/z] ] ] [pmin,pmax,lt,gt,st] - e.g. "
+                "/x/y pmin=3,pmax=4"),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
 };
 #undef CMD_HANDLER

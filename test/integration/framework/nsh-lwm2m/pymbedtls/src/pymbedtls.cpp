@@ -32,10 +32,8 @@
 #include <vector>
 #include <sstream>
 #include <stdexcept>
-#include <system_error>
 
 #include <arpa/inet.h>
-#include <sys/socket.h>
 
 namespace py = pybind11;
 using namespace std;

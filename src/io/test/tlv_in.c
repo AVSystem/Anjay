@@ -251,7 +251,20 @@ AVS_UNIT_TEST(tlv_in_types, string_overflow) {
     TEST_ENV(TEST_STRING);
 
     char buf[4];
-    AVS_UNIT_ASSERT_FAILED(anjay_get_string(in, buf, sizeof(buf)));
+    AVS_UNIT_ASSERT_EQUAL(anjay_get_string(in, buf, sizeof(buf)),
+                          ANJAY_BUFFER_TOO_SHORT);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buf, "Hel");
+    AVS_UNIT_ASSERT_EQUAL(anjay_get_string(in, buf, sizeof(buf)),
+                          ANJAY_BUFFER_TOO_SHORT);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buf, "lo,");
+    AVS_UNIT_ASSERT_EQUAL(anjay_get_string(in, buf, sizeof(buf)),
+                          ANJAY_BUFFER_TOO_SHORT);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buf, " wo");
+    AVS_UNIT_ASSERT_EQUAL(anjay_get_string(in, buf, sizeof(buf)),
+                          ANJAY_BUFFER_TOO_SHORT);
+    AVS_UNIT_ASSERT_EQUAL_STRING(buf, "rld");
+    AVS_UNIT_ASSERT_SUCCESS(anjay_get_string(in, buf, sizeof(buf)));
+    AVS_UNIT_ASSERT_EQUAL_STRING(buf, "!");
 
     TEST_TEARDOWN;
 }

@@ -1,4 +1,15 @@
 {
+   getaddrinfo-globalstate
+   Memcheck:Leak
+   fun:malloc
+   fun:*
+   fun:*
+   fun:*
+   fun:*
+   fun:gaih_inet*
+   fun:getaddrinfo
+}
+{
    ssl_handshake-value
    Memcheck:Value8
    ...

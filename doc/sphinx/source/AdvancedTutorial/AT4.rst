@@ -95,7 +95,7 @@ Example usage
 In this example, we are going to setup multiple-server
 environment. We will assign LwM2M Server with SSID 1 the **Create**
 permission on the :doc:`Test Object developed in previous tutorials
-<../BasicTutorial/BT4_CustomObject/BT_CO5_MultiInstanceDynamic>`.
+<../BasicTutorial/BT5_CustomObject/BT_CO5_MultiInstanceDynamic>`.
 
 Additionally, we will allow both LwM2M Servers to read their respective LwM2M
 Server Instances.

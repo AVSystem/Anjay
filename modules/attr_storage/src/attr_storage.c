@@ -534,6 +534,100 @@ static int write_attrs_impl(anjay_attr_storage_t *fas,
             (size_t) ((char *) &(*(OutAttrs))->attrs - (char *) *(OutAttrs)), \
             sizeof((*(OutAttrs))->attrs), (IsEmptyFunc), (Ssid), (Attrs))
 
+static int write_object_attrs(anjay_t *anjay,
+                              anjay_ssid_t ssid,
+                              const anjay_dm_object_def_t *const *obj_ptr,
+                              const anjay_dm_internal_attrs_t *attrs) {
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    if (!fas) {
+        fas_log(ERROR, "Attribute Storage module is not installed");
+        return -1;
+    }
+    AVS_LIST(fas_object_entry_t) *object_ptr =
+            find_or_create_object(fas, (*obj_ptr)->oid);
+    if (!object_ptr) {
+        return -1;
+    }
+    int result = WRITE_ATTRS(fas, &(*object_ptr)->default_attrs,
+                             default_attrs_empty, ssid, attrs);
+    remove_object_if_empty(object_ptr);
+    return result;
+}
+
+static int write_instance_attrs(anjay_t *anjay,
+                                anjay_ssid_t ssid,
+                                const anjay_dm_object_def_t *const *obj_ptr,
+                                anjay_iid_t iid,
+                                const anjay_dm_internal_attrs_t *attrs) {
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    if (!fas) {
+        fas_log(ERROR, "Attribute Storage module is not installed");
+        return -1;
+    }
+    AVS_LIST(fas_object_entry_t) *object_ptr =
+            find_or_create_object(fas, (*obj_ptr)->oid);
+    if (!object_ptr) {
+        return -1;
+    }
+    int result = 0;
+    AVS_LIST(fas_instance_entry_t) *instance_ptr =
+            find_or_create_instance(*object_ptr, iid);
+    if (!instance_ptr) {
+        result = -1;
+    }
+    if (!result) {
+        result = WRITE_ATTRS(fas, &(*instance_ptr)->default_attrs,
+                             default_attrs_empty, ssid, attrs);
+    }
+    if (instance_ptr) {
+        remove_instance_if_empty(instance_ptr);
+    }
+    remove_object_if_empty(object_ptr);
+    return result;
+}
+
+static int write_resource_attrs(anjay_t *anjay,
+                                anjay_ssid_t ssid,
+                                const anjay_dm_object_def_t *const *obj_ptr,
+                                anjay_iid_t iid,
+                                anjay_rid_t rid,
+                                const anjay_dm_internal_res_attrs_t *attrs) {
+    anjay_attr_storage_t *fas = get_fas(anjay);
+    if (!fas) {
+        fas_log(ERROR, "Attribute Storage module is not installed");
+        return -1;
+    }
+    AVS_LIST(fas_object_entry_t) *object_ptr =
+            find_or_create_object(fas, (*obj_ptr)->oid);
+    if (!object_ptr) {
+        return -1;
+    }
+    int result = 0;
+    AVS_LIST(fas_instance_entry_t) *instance_ptr =
+            find_or_create_instance(*object_ptr, iid);
+    if (!instance_ptr) {
+        result = -1;
+    }
+    AVS_LIST(fas_resource_entry_t) *resource_ptr =
+            result ? NULL : find_or_create_resource(*instance_ptr, rid);
+    if (!resource_ptr) {
+        result = -1;
+    }
+    if (!result) {
+        result = WRITE_ATTRS(fas, &(*resource_ptr)->attrs,
+                             resource_attrs_empty, ssid, attrs);
+    }
+    if (resource_ptr) {
+        remove_resource_if_empty(resource_ptr);
+    }
+    if (instance_ptr) {
+        remove_instance_if_empty(instance_ptr);
+    }
+    remove_object_if_empty(object_ptr);
+    return result;
+}
+
+
 //// ATTRIBUTE HANDLERS ////////////////////////////////////////////////////////
 
 static int object_read_default_attrs(anjay_t *anjay,
@@ -562,16 +656,8 @@ static int object_write_default_attrs(anjay_t *anjay,
         return _anjay_dm_object_write_default_attrs(anjay, obj_ptr, ssid, attrs,
                                                     &_anjay_attr_storage_MODULE);
     }
-    anjay_attr_storage_t *fas = get_fas(anjay);
-    AVS_LIST(fas_object_entry_t) *object_ptr =
-            find_or_create_object(fas, (*obj_ptr)->oid);
-    if (!object_ptr) {
-        return ANJAY_ERR_INTERNAL;
-    }
-    int result = WRITE_ATTRS(fas, &(*object_ptr)->default_attrs,
-                             default_attrs_empty, ssid, attrs);
-    remove_object_if_empty(object_ptr);
-    return result;
+    return write_object_attrs(anjay, ssid, obj_ptr, attrs) ? ANJAY_ERR_INTERNAL
+                                                           : 0;
 }
 
 static int instance_read_default_attrs(anjay_t *anjay,
@@ -604,27 +690,9 @@ static int instance_write_default_attrs(anjay_t *anjay,
         return _anjay_dm_instance_write_default_attrs(
                 anjay, obj_ptr, iid, ssid, attrs, &_anjay_attr_storage_MODULE);
     }
-    anjay_attr_storage_t *fas = get_fas(anjay);
-    AVS_LIST(fas_object_entry_t) *object_ptr =
-            find_or_create_object(fas, (*obj_ptr)->oid);
-    if (!object_ptr) {
-        return ANJAY_ERR_INTERNAL;
-    }
-    int result = 0;
-    AVS_LIST(fas_instance_entry_t) *instance_ptr =
-            find_or_create_instance(*object_ptr, iid);
-    if (!instance_ptr) {
-        result = ANJAY_ERR_INTERNAL;
-    }
-    if (!result) {
-        result = WRITE_ATTRS(fas, &(*instance_ptr)->default_attrs,
-                             default_attrs_empty, ssid, attrs);
-    }
-    if (instance_ptr) {
-        remove_instance_if_empty(instance_ptr);
-    }
-    remove_object_if_empty(object_ptr);
-    return result;
+    return write_instance_attrs(anjay, ssid, obj_ptr, iid, attrs)
+                   ? ANJAY_ERR_INTERNAL
+                   : 0;
 }
 
 static int resource_read_attrs(anjay_t *anjay,
@@ -661,35 +729,9 @@ static int resource_write_attrs(anjay_t *anjay,
                                               attrs,
                                               &_anjay_attr_storage_MODULE);
     }
-    anjay_attr_storage_t *fas = get_fas(anjay);
-    AVS_LIST(fas_object_entry_t) *object_ptr =
-            find_or_create_object(fas, (*obj_ptr)->oid);
-    if (!object_ptr) {
-        return ANJAY_ERR_INTERNAL;
-    }
-    int result = 0;
-    AVS_LIST(fas_instance_entry_t) *instance_ptr =
-            find_or_create_instance(*object_ptr, iid);
-    if (!instance_ptr) {
-        result = ANJAY_ERR_INTERNAL;
-    }
-    AVS_LIST(fas_resource_entry_t) *resource_ptr =
-            result ? NULL : find_or_create_resource(*instance_ptr, rid);
-    if (!resource_ptr) {
-        result = ANJAY_ERR_INTERNAL;
-    }
-    if (!result) {
-        result = WRITE_ATTRS(fas, &(*resource_ptr)->attrs,
-                             resource_attrs_empty, ssid, attrs);
-    }
-    if (resource_ptr) {
-        remove_resource_if_empty(resource_ptr);
-    }
-    if (instance_ptr) {
-        remove_instance_if_empty(instance_ptr);
-    }
-    remove_object_if_empty(object_ptr);
-    return result;
+    return write_resource_attrs(anjay, ssid, obj_ptr, iid, rid, attrs)
+                   ? ANJAY_ERR_INTERNAL
+                   : 0;
 }
 
 //// ACTIVE PROXY HANDLERS /////////////////////////////////////////////////////
@@ -853,6 +895,148 @@ static int transaction_rollback(anjay_t *anjay,
             result = ANJAY_ERR_INTERNAL;
         }
         saved_state_reset(fas);
+    }
+    return result;
+}
+
+static const anjay_dm_object_def_t *const *
+maybe_get_object_before_setting_attrs(anjay_t *anjay,
+                                      anjay_ssid_t ssid,
+                                      anjay_oid_t oid,
+                                      const void *attrs) {
+    if (!attrs) {
+        fas_log(ERROR, "attributes cannot be NULL");
+        return NULL;
+    }
+    if (ssid == ANJAY_SSID_BOOTSTRAP || !_anjay_dm_ssid_exists(anjay, ssid)) {
+        fas_log(ERROR, "SSID %" PRIu16 " does not exist", ssid);
+        return NULL;
+    }
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, oid);
+    if (!obj) {
+        fas_log(ERROR, "/%" PRIu16 " does not exist", oid);
+    }
+    return obj;
+}
+
+#define ERR_HANDLERS_IMPLEMENTED_BY_BACKEND                                \
+    "cannot set %s level attribs: %s or %s is implemented by the backend " \
+    "object"
+
+#define ERR_INSTANCE_PRESENCE_CHECK  \
+    "instance /%" PRIu16 "/%" PRIu16 \
+    " does not exist or an error occurred during querying its presence"
+
+int anjay_attr_storage_set_object_attrs(anjay_t *anjay,
+                                        anjay_ssid_t ssid,
+                                        anjay_oid_t oid,
+                                        const anjay_dm_attributes_t *attrs) {
+    const anjay_dm_object_def_t *const *obj =
+            maybe_get_object_before_setting_attrs(anjay, ssid, oid, attrs);
+    if (!obj) {
+        return -1;
+    }
+    if (implements_any_object_default_attrs_handlers(anjay, obj)) {
+        fas_log(ERROR, ERR_HANDLERS_IMPLEMENTED_BY_BACKEND, "object",
+                "object_read_default_attrs", "object_write_default_attrs");
+        return -1;
+    }
+    const anjay_dm_internal_attrs_t internal_attrs = {
+#ifdef WITH_CUSTOM_ATTRIBUTES
+        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+#endif // WITH_CUSTOM_ATTRIBUTES
+        .standard = *attrs
+    };
+
+    int result;
+    if (!(result = write_object_attrs(anjay, ssid, obj, &internal_attrs))) {
+        (void) anjay_notify_instances_changed(anjay, oid);
+    }
+    return result;
+}
+
+int anjay_attr_storage_set_instance_attrs(anjay_t *anjay,
+                                          anjay_ssid_t ssid,
+                                          anjay_oid_t oid,
+                                          anjay_iid_t iid,
+                                          const anjay_dm_attributes_t *attrs) {
+    const anjay_dm_object_def_t *const *obj =
+            maybe_get_object_before_setting_attrs(anjay, ssid, oid, attrs);
+    if (!obj) {
+        return -1;
+    }
+    if (implements_any_instance_default_attrs_handlers(anjay, obj)) {
+        fas_log(ERROR, ERR_HANDLERS_IMPLEMENTED_BY_BACKEND, "instance",
+                "instance_read_default_attrs", "instance_write_default_attrs");
+        return -1;
+    }
+    if (iid == ANJAY_IID_INVALID) {
+        fas_log(ERROR, "invalid instance id");
+        return -1;
+    }
+    if (_anjay_dm_instance_present(anjay, obj, iid, NULL) <= 0) {
+        fas_log(ERROR, ERR_INSTANCE_PRESENCE_CHECK, oid, iid);
+        return -1;
+    }
+
+    const anjay_dm_internal_attrs_t internal_attrs = {
+#ifdef WITH_CUSTOM_ATTRIBUTES
+        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+#endif // WITH_CUSTOM_ATTRIBUTES
+        .standard = *attrs
+    };
+
+    int result;
+    if (!(result = write_instance_attrs(anjay, ssid, obj, iid,
+                                        &internal_attrs))) {
+        (void) anjay_notify_instances_changed(anjay, oid);
+    }
+    return result;
+}
+
+int anjay_attr_storage_set_resource_attrs(
+        anjay_t *anjay,
+        anjay_ssid_t ssid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        const anjay_dm_resource_attributes_t *attrs) {
+    const anjay_dm_object_def_t *const *obj =
+            maybe_get_object_before_setting_attrs(anjay, ssid, oid, attrs);
+    if (!obj) {
+        return -1;
+    }
+    if (implements_any_resource_attrs_handlers(anjay, obj)) {
+        fas_log(ERROR, ERR_HANDLERS_IMPLEMENTED_BY_BACKEND, "resource",
+                "resource_read_attrs", "resource_write_attrs");
+        return -1;
+    }
+    if (iid == ANJAY_IID_INVALID) {
+        fas_log(ERROR, "invalid instance id");
+        return -1;
+    }
+    if (_anjay_dm_instance_present(anjay, obj, iid, NULL) <= 0) {
+        fas_log(ERROR, ERR_INSTANCE_PRESENCE_CHECK, oid, iid);
+        return -1;
+    }
+    if (_anjay_dm_resource_supported_and_present(anjay, obj, iid, rid, NULL) <= 0) {
+        fas_log(ERROR, "resource /%" PRIu16 "/%" PRIu16 "/%" PRIu16
+                       "does not exist or an error occurred during querying "
+                       "its presence",
+                oid, iid, rid);
+        return -1;
+    }
+    const anjay_dm_internal_res_attrs_t internal_attrs = {
+#ifdef WITH_CUSTOM_ATTRIBUTES
+        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+#endif // WITH_CUSTOM_ATTRIBUTES
+        .standard = *attrs
+    };
+    int result;
+    if (!(result = write_resource_attrs(anjay, ssid, obj, iid, rid,
+                                        &internal_attrs))) {
+        (void) anjay_notify_instances_changed(anjay, oid);
     }
     return result;
 }

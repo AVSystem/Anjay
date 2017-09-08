@@ -20,6 +20,8 @@
 #include <stdio.h>
 
 #include <avsystem/commons/socket_v_table.h>
+#include <avsystem/commons/coap/ctx.h>
+#include <avsystem/commons/stream/net.h>
 
 #include "../../../src/coap/stream.h"
 
@@ -90,8 +92,11 @@ int main(int argc, char **argv) {
 
     avs_net_abstract_socket_t *stdin_socket =
             (avs_net_abstract_socket_t*)&stdin_socket_struct;
-    anjay_coap_socket_t *sock;
+    avs_coap_ctx_t *coap = NULL;
     avs_stream_abstract_t *stream = NULL;
+
+    uint8_t in_buffer[65536];
+    uint8_t out_buffer[65536];
 
     char buffer[UINT16_MAX + 1];
     size_t bytes_read;
@@ -99,9 +104,11 @@ int main(int argc, char **argv) {
     int retval = 0;
     char message_finished = 0;
 
-    if (_anjay_coap_socket_create(&sock, stdin_socket)
-            || _anjay_coap_stream_create(&stream, sock,
-                                         UINT16_MAX + 1, UINT16_MAX + 1)
+    if (avs_coap_ctx_create(&coap, 0)
+            || _anjay_coap_stream_create(&stream, coap,
+                                         in_buffer, sizeof(in_buffer),
+                                         out_buffer, sizeof(out_buffer))
+            || avs_stream_net_setsock(stream, stdin_socket)
             || avs_stream_read(stream, &bytes_read, &message_finished,
                                buffer, sizeof(buffer))) {
         retval = -1;

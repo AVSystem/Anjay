@@ -32,11 +32,6 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-#define ANJAY_ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
-
-#define ANJAY_MIN(a, b) ((a) < (b) ? (a) : (b))
-#define ANJAY_MAX(a, b) ((a) > (b) ? (a) : (b))
-
 typedef struct {
     void *data;
     /** Amount of bytes currently stored in the buffer. */
@@ -91,11 +86,6 @@ int _anjay_raw_buffer_clone(anjay_raw_buffer_t *dst,
 int _anjay_raw_buffer_from_data(anjay_raw_buffer_t *dst,
                                 const void *src,
                                 size_t size);
-
-ssize_t _anjay_snprintf(char *buffer,
-                        size_t buffer_size,
-                        const char *fmt,
-                        ...) AVS_F_PRINTF(3, 4);
 
 VISIBILITY_PRIVATE_HEADER_END
 

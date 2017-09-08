@@ -17,6 +17,7 @@
 #ifndef ANJAY_TEST_COAP_STREAM_H
 #define ANJAY_TEST_COAP_STREAM_H
 
+#include <avsystem/commons/net.h>
 #include <avsystem/commons/stream.h>
 
 // Hack to get to the coap_stream_t structure.
@@ -42,7 +43,7 @@ _anjay_mock_coap_stream_cleanup(anjay_mock_coap_stream_ctx_t *ctx) {
 
 anjay_mock_coap_stream_ctx_t
 _anjay_mock_coap_stream_create(avs_stream_abstract_t **stream_,
-                               anjay_coap_socket_t *socket,
+                               avs_net_abstract_socket_t *socket,
                                size_t in_buffer_size,
                                size_t out_buffer_size);
 

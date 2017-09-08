@@ -15,10 +15,12 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <inttypes.h>
 
 #include <avsystem/commons/stream/net.h>
+#include <avsystem/commons/utils.h>
 
 #include "../utils.h"
 #include "../dm/query.h"
@@ -122,7 +124,7 @@ static int read_connection_modes(anjay_t *anjay,
                                  anjay_server_connection_mode_t *out_sms_mode) {
     if (ssid != ANJAY_SSID_BOOTSTRAP) {
         anjay_binding_mode_t binding_mode = read_binding_mode(anjay, ssid);
-        for (size_t i = 0; i < ANJAY_ARRAY_SIZE(BINDING_TO_CONNECTIONS); ++i) {
+        for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_TO_CONNECTIONS); ++i) {
             if (BINDING_TO_CONNECTIONS[i].binding == binding_mode) {
                 if (out_udp_mode) {
                     *out_udp_mode = BINDING_TO_CONNECTIONS[i].connection.udp;
@@ -182,7 +184,7 @@ bool _anjay_connection_is_online(anjay_connection_ref_t ref) {
 static anjay_binding_mode_t
 binding_mode_from_connection_modes(anjay_server_connection_mode_t udp_mode,
                                    anjay_server_connection_mode_t sms_mode) {
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(BINDING_TO_CONNECTIONS); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_TO_CONNECTIONS); ++i) {
         if (BINDING_TO_CONNECTIONS[i].connection.udp == udp_mode
                 && BINDING_TO_CONNECTIONS[i].connection.sms == sms_mode) {
             return BINDING_TO_CONNECTIONS[i].binding;
@@ -463,7 +465,7 @@ static int get_udp_dtls_keys(anjay_t *anjay,
         }
     };
 
-    for (size_t i = 0; i < ANJAY_ARRAY_SIZE(values); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(values); ++i) {
         anjay_raw_buffer_t *value = values[i].buffer;
         const anjay_uri_path_t path =
                 MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
@@ -493,8 +495,8 @@ get_requested_local_port(char out_port[static ANJAY_MAX_URL_PORT_SIZE],
     }
 
     if (anjay->udp_listen_port > 0
-            && _anjay_snprintf(out_port, ANJAY_MAX_URL_PORT_SIZE,
-                               "%" PRIu16, anjay->udp_listen_port) > 0) {
+            && avs_simple_snprintf(out_port, ANJAY_MAX_URL_PORT_SIZE,
+                                   "%" PRIu16, anjay->udp_listen_port) >= 0) {
         return;
     }
 
@@ -607,15 +609,12 @@ int _anjay_server_refresh(anjay_t *anjay,
     udp_result = refresh_connection(anjay, &UDP_CONNECTION, server,
                                     &server_info, force_reconnect);
 
-    if (udp_result == RESULT_CONNECTED || sms_result == RESULT_CONNECTED) {
-        if (udp_result == RESULT_ERROR || sms_result == RESULT_ERROR) {
-            // some connection is available, but some other failed
-            server->needs_reload = true;
-            _anjay_schedule_delayed_reload_servers(anjay);
-        }
-        return 0;
+    if (udp_result != RESULT_CONNECTED && sms_result != RESULT_CONNECTED) {
+        return -1;
     }
-    return -1;
+
+
+    return 0;
 }
 
 int _anjay_server_setup_registration_connection(

@@ -34,24 +34,6 @@ def _override_timeout(sock, timeout_s=-1):
         sock.settimeout(orig_timeout_s)
 
 
-@contextlib.contextmanager
-def _enable_native_lib_import_from_script_dir():
-    """
-    Apparently Python does NOT look for native modules in the script directory,
-    unless the directory is explicitly listed in sys.path.
-
-    This function exists to enable importing locally-installed pymbedtls.so.
-    """
-    import sys
-    import os
-    path = os.path.dirname(os.path.realpath(__file__))
-    try:
-        sys.path.insert(0, path)
-        yield
-    finally:
-        sys.path.remove(path)
-
-
 class Server(object):
     def __init__(self, listen_port=0):
         self.socket_timeout = None
@@ -130,19 +112,18 @@ class DtlsServer(Server):
         super().__init__(listen_port)
 
     def connect(self, remote_addr: Tuple[str, int]) -> None:
-        with _enable_native_lib_import_from_script_dir():
-            from pymbedtls import Socket
+        from pymbedtls import Socket
 
+        self.close()
+
+        try:
+            self.server_socket = None
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket = Socket(self.socket, self.psk_identity, self.psk_key, self.debug)
+            self.socket.connect(remote_addr)
+        except:
             self.close()
-
-            try:
-                self.server_socket = None
-                self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self.socket = Socket(self.socket, self.psk_identity, self.psk_key, self.debug)
-                self.socket.connect(remote_addr)
-            except:
-                self.close()
-                raise
+            raise
 
     def close(self):
         super().close()
@@ -152,16 +133,16 @@ class DtlsServer(Server):
 
     def reset(self, listen_port=None) -> None:
         try:
-            with _enable_native_lib_import_from_script_dir():
-                from pymbedtls import ServerSocket
+            from pymbedtls import ServerSocket
 
-                super().reset(listen_port)
-                self.server_socket = ServerSocket(self.socket, self.psk_identity, self.psk_key, self.debug)
-                self.socket = None
+            super().reset(listen_port)
+            self.server_socket = ServerSocket(self.socket, self.psk_identity, self.psk_key, self.debug)
+            self.socket = None
         except ImportError:
             raise ImportError('could not import pymbedtls! run '
                               '`python3 setup.py install --user` in the '
-                              'pymbedtls/ subdirectory of nsh-lwm2m submodule')
+                              'pymbedtls/ subdirectory of nsh-lwm2m submodule '
+                              'or export PYTHONPATH properly')
 
     def listen(self, timeout_s: float = -1) -> None:
         with _override_timeout(self.server_socket, timeout_s):

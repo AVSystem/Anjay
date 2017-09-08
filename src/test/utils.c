@@ -21,6 +21,7 @@
 #include <anjay_modules/time.h>
 
 #include <avsystem/commons/unit/test.h>
+#include <avsystem/commons/utils.h>
 
 #define ANJAY_URL_EMPTY                           \
     (anjay_url_t) {                         \
@@ -399,106 +400,11 @@ AVS_UNIT_TEST(parse_url, bad_percent_encoding) {
 
 AVS_UNIT_TEST(snprintf, no_space_for_terminating_nullbyte) {
     char buf[3];
-    ssize_t result = _anjay_snprintf(buf, sizeof(buf), "%s", "foo");
+    ssize_t result = avs_simple_snprintf(buf, sizeof(buf), "%s", "foo");
     AVS_UNIT_ASSERT_TRUE(result < 0);
 }
 
 AVS_UNIT_TEST(binding_mode_from_str, unsupported_binding_mode) {
     AVS_UNIT_ASSERT_EQUAL(ANJAY_BINDING_NONE,
                           anjay_binding_mode_from_str("☃"));
-}
-
-AVS_UNIT_TEST(time, time_from_ms) {
-    struct timespec value;
-    _anjay_time_from_ms(&value, 1234);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 234000000L);
-    _anjay_time_from_ms(&value, -1234);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, -2);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 766000000L);
-}
-
-AVS_UNIT_TEST(time, add_ms_positive) {
-    struct timespec value = { 0, 0 };
-    _anjay_time_add_ms(&value, 1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 0);
-    AVS_UNIT_ASSERT_EQUAL(1 * 1000 * 1000, value.tv_nsec);
-}
-
-AVS_UNIT_TEST(time, add_ms_negative) {
-    struct timespec value = { 0, 1 * 1000 * 1000 };
-    _anjay_time_add_ms(&value, -1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 0);
-    AVS_UNIT_ASSERT_EQUAL(0, value.tv_nsec);
-
-}
-
-AVS_UNIT_TEST(time, add_ms_positive_overflow) {
-    struct timespec value = { 0, 999 * 1000 * 1000 };
-    _anjay_time_add_ms(&value, 1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 1);
-    AVS_UNIT_ASSERT_EQUAL(0, value.tv_nsec);
-}
-
-AVS_UNIT_TEST(time, add_ms_negative_underflow) {
-    struct timespec value = { 0, 0 };
-    _anjay_time_add_ms(&value, -1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, -1);
-    AVS_UNIT_ASSERT_EQUAL(999 * 1000 * 1000, value.tv_nsec);
-}
-
-AVS_UNIT_TEST(time, div_ns_only) {
-    struct timespec value = { 0, 10 };
-    _anjay_time_div(&value, &value, 2);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 0);
-    AVS_UNIT_ASSERT_EQUAL(5, value.tv_nsec);
-}
-
-AVS_UNIT_TEST(time, div) {
-    struct timespec value = { 1, 10 };
-    _anjay_time_div(&value, &value, 2);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 0);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 500 * 1000 * 1000 + 5);
-}
-
-AVS_UNIT_TEST(time, div_s_rest) {
-    struct timespec value = { 3, 500 * 1000 * 1000 };
-    _anjay_time_div(&value, &value, 2);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 750 * 1000 * 1000);
-}
-
-AVS_UNIT_TEST(time, div_big_divisor) {
-    struct timespec value = { 1, 0 };
-    _anjay_time_div(&value, &value, 1 * 1000 * 1000 * 1000);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 0);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 1);
-}
-
-AVS_UNIT_TEST(time, div_big_seconds) {
-    struct timespec value = { 999 * 1000 * 1000, 0 };
-    _anjay_time_div(&value, &value, 1 * 1000 * 1000 * 1000);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, 0);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 999 * 1000 * 1000);
-}
-
-AVS_UNIT_TEST(time, div_negative) {
-    struct timespec value = { -1, 0 };
-    _anjay_time_div(&value, &value, 2);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, -1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 500 * 1000 * 1000);
-}
-
-AVS_UNIT_TEST(time, div_negative_ns) {
-    struct timespec value = { -1, 500 * 1000 * 1000 };
-    _anjay_time_div(&value, &value, 2);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, -1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 750 * 1000 * 1000);
-}
-
-AVS_UNIT_TEST(time, div_big_negative) {
-    struct timespec value = { -999 * 1000 * 1000, 0 };
-    _anjay_time_div(&value, &value, 1 * 1000 * 1000 * 1000);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_sec, -1);
-    AVS_UNIT_ASSERT_EQUAL(value.tv_nsec, 1 * 1000 * 1000);
 }

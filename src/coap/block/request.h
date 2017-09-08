@@ -21,7 +21,8 @@
 
 #include "../stream/in.h"
 #include "../stream/out.h"
-#include "../socket.h"
+
+#include <avsystem/commons/coap/ctx.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -32,12 +33,10 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *
  * @param max_block_size           Maximum block size the client is willing to
  *                                 handle.
- * @param in                       Input buffer to store incoming response.
- * @param out                      Output buffer containing the part of a
- *                                 request created so far. It is consumed in
- *                                 the process of creating the block_request
- *                                 object and MUST NOT be used without
- *                                 reintializing it after a successful call to
+ * @param stream_data              Internal structure of the CoAP stream for
+ *                                 which the block request is performed. The
+ *                                 <c>out</c> field MUST NOT be used without
+ *                                 reinitializing after a successful call to
  *                                 this function.
  * @param socket                   The CoAP socket used to send/receive blocks.
  * @param id_source                CoAP message identity generator.
@@ -46,9 +45,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  */
 coap_block_transfer_ctx_t *
 _anjay_coap_block_request_new(uint16_t max_block_size,
-                              coap_input_buffer_t *in,
-                              coap_output_buffer_t *out,
-                              anjay_coap_socket_t *socket,
+                              coap_stream_common_t *stream_data,
                               coap_id_source_t *id_source);
 
 #endif

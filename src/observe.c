@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <posix-config.h>
 
 #include <math.h>
 
@@ -22,10 +23,11 @@
 
 #include <anjay_modules/time.h>
 
+#include "coap/content_format.h"
+
 #include "anjay.h"
 #include "dm/query.h"
 #include "observe.h"
-#include "coap/content_format.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -228,8 +230,8 @@ static int schedule_trigger(anjay_t *anjay,
     struct timespec realtime_now;
     clock_gettime(CLOCK_REALTIME, &realtime_now);
 
-    struct timespec delay;
-    _anjay_time_diff(&delay, &newest_value(entry)->timestamp, &realtime_now);
+    struct timespec delay = avs_time_diff(&newest_value(entry)->timestamp,
+                                          &realtime_now);
     delay.tv_sec += period;
     if (delay.tv_sec < 0) {
         delay.tv_sec = 0;
@@ -249,7 +251,7 @@ static int schedule_trigger(anjay_t *anjay,
 static AVS_LIST(anjay_observe_resource_value_t)
 create_resource_value(const anjay_msg_details_t *details,
                       anjay_observe_entry_t *ref,
-                      const anjay_coap_msg_identity_t *identity,
+                      const avs_coap_msg_identity_t *identity,
                       double numeric,
                       const void *data, size_t size) {
     AVS_LIST(anjay_observe_resource_value_t) result =
@@ -277,7 +279,7 @@ create_resource_value(const anjay_msg_details_t *details,
 static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
                             anjay_observe_entry_t *entry,
                             const anjay_msg_details_t *details,
-                            const anjay_coap_msg_identity_t *identity,
+                            const avs_coap_msg_identity_t *identity,
                             double numeric,
                             const void *data,
                             size_t size) {
@@ -299,15 +301,14 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
 static int insert_error(anjay_t *anjay,
                         anjay_observe_connection_entry_t *conn_state,
                         anjay_observe_entry_t *entry,
-                        const anjay_coap_msg_identity_t *identity,
+                        const avs_coap_msg_identity_t *identity,
                         int outer_result) {
     _anjay_sched_del(anjay->sched, &entry->notify_task);
     const anjay_msg_details_t details = {
         .msg_type = anjay->observe.confirmable_notifications
-                ? ANJAY_COAP_MSG_CONFIRMABLE : ANJAY_COAP_MSG_NON_CONFIRMABLE,
+                ? AVS_COAP_MSG_CONFIRMABLE : AVS_COAP_MSG_NON_CONFIRMABLE,
         .msg_code = _anjay_make_error_response_code(outer_result),
-        .format = ANJAY_COAP_FORMAT_NONE,
-        .observe_serial = true
+        .format = AVS_COAP_FORMAT_NONE
     };
     return insert_new_value(conn_state, entry, &details, identity,
                             NAN, NULL, 0);
@@ -369,7 +370,7 @@ static int insert_initial_value(
         anjay_observe_connection_entry_t *conn_state,
         anjay_observe_entry_t *entry,
         const anjay_msg_details_t *details,
-        const anjay_coap_msg_identity_t *identity,
+        const avs_coap_msg_identity_t *identity,
         double numeric,
         const void *data,
         size_t size) {
@@ -439,7 +440,7 @@ find_or_create_connection_state(anjay_t *anjay,
 int _anjay_observe_put_entry(anjay_t *anjay,
                              const anjay_observe_key_t *key,
                              const anjay_msg_details_t *details,
-                             const anjay_coap_msg_identity_t *identity,
+                             const avs_coap_msg_identity_t *identity,
                              double numeric,
                              const void *data,
                              size_t size) {
@@ -561,8 +562,8 @@ static bool has_pmax_expired(const anjay_observe_resource_value_t *value,
         struct timespec realtime_now;
         clock_gettime(CLOCK_REALTIME, &realtime_now);
 
-        struct timespec since_update;
-        _anjay_time_diff(&since_update, &realtime_now, &value->timestamp);
+        struct timespec since_update = avs_time_diff(&realtime_now,
+                                                     &value->timestamp);
         return since_update.tv_sec >= attrs->max_period;
     }
     return false;
@@ -647,9 +648,8 @@ static int bind_stream_by_ssid(anjay_t *anjay,
 
 static bool confirmable_required(const struct timespec *realtime_now,
                                  const anjay_observe_entry_t *entry) {
-    struct timespec since_confirmable;
-    _anjay_time_diff(&since_confirmable,
-                     realtime_now, &entry->last_confirmable);
+    struct timespec since_confirmable = avs_time_diff(realtime_now,
+                                                      &entry->last_confirmable);
     return (since_confirmable.tv_sec >= 24 * 60 * 60);
 }
 
@@ -691,19 +691,19 @@ static int send_entry(anjay_t *anjay,
     int result;
     assert(conn_state->unsent);
     anjay_observe_entry_t *entry = conn_state->unsent->ref;
-    const anjay_coap_msg_identity_t *id = &conn_state->unsent->identity;
+    const avs_coap_msg_identity_t *id = &conn_state->unsent->identity;
     anjay_msg_details_t details = conn_state->unsent->details;
-    anjay_coap_msg_identity_t notify_id;
+    avs_coap_msg_identity_t notify_id;
 
     struct timespec realtime_now;
     clock_gettime(CLOCK_REALTIME, &realtime_now);
-    if (details.msg_type != ANJAY_COAP_MSG_CONFIRMABLE
+    if (details.msg_type != AVS_COAP_MSG_CONFIRMABLE
             && confirmable_required(&realtime_now, entry)) {
-        details.msg_type = ANJAY_COAP_MSG_CONFIRMABLE;
+        details.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     }
 
     (void) ((result = _anjay_coap_stream_setup_request(
-                    anjay->comm_stream, &details, &id->token, id->token_size))
+                    anjay->comm_stream, &details, &id->token))
             || (result = avs_stream_write(anjay->comm_stream,
                                           conn_state->unsent->value,
                                           conn_state->unsent->value_length))
@@ -715,12 +715,12 @@ static int send_entry(anjay_t *anjay,
     _anjay_release_server_stream(anjay);
 
     if (!result) {
-        if (details.msg_type == ANJAY_COAP_MSG_CONFIRMABLE) {
+        if (details.msg_type == AVS_COAP_MSG_CONFIRMABLE) {
             entry->last_confirmable = realtime_now;
         }
         value_sent(conn_state);
         entry->last_sent->identity.msg_id = notify_id.msg_id;
-    } else if (result == ANJAY_COAP_SOCKET_ERR_NETWORK) {
+    } else if (result == AVS_COAP_CTX_ERR_NETWORK) {
         anjay_log(ERROR, "network communication error while sending Observe");
         _anjay_schedule_server_reconnect(anjay, server);
         // reschedule notification
@@ -759,7 +759,7 @@ static observe_server_state_t server_state(anjay_t *anjay, anjay_ssid_t ssid) {
 }
 
 static inline bool is_error_value(const anjay_observe_resource_value_t *value) {
-    return _anjay_coap_msg_code_get_class(&value->details.msg_code) >= 4;
+    return avs_coap_msg_code_get_class(value->details.msg_code) >= 4;
 }
 
 static void remove_all_unsent_values(anjay_observe_connection_entry_t *conn) {
@@ -783,13 +783,13 @@ static int handle_send_queue_entry(anjay_t *anjay,
     } else if (result < 0) {
         anjay_log(ERROR, "Could not send Observe notification, result == %d",
                   result);
-        if (result != ANJAY_COAP_SOCKET_ERR_NETWORK
+        if (result != AVS_COAP_CTX_ERR_NETWORK
                 && !observe_state.notification_storing_enabled) {
             remove_all_unsent_values(conn_state);
         }
     }
     if (is_error
-            && result != ANJAY_COAP_SOCKET_ERR_NETWORK
+            && result != AVS_COAP_CTX_ERR_NETWORK
             && (result == 0 || !observe_state.notification_storing_enabled)) {
         result = 1;
     }
@@ -911,12 +911,12 @@ update_notification_value(anjay_t *anjay,
 #ifdef WITH_CON_ATTR
     if (attrs.custom.data.con >= 0) {
         observe_details.msg_type = (attrs.custom.data.con > 0)
-                ? ANJAY_COAP_MSG_CONFIRMABLE : ANJAY_COAP_MSG_NON_CONFIRMABLE;
+                ? AVS_COAP_MSG_CONFIRMABLE : AVS_COAP_MSG_NON_CONFIRMABLE;
     } else
 #endif // WITH_CON_ATTR
     {
         observe_details.msg_type = anjay->observe.confirmable_notifications
-                ? ANJAY_COAP_MSG_CONFIRMABLE : ANJAY_COAP_MSG_NON_CONFIRMABLE;
+                ? AVS_COAP_MSG_CONFIRMABLE : AVS_COAP_MSG_NON_CONFIRMABLE;
     }
 
     if (pmax_expired || should_update(newest_value(entry), &attrs.standard,
@@ -992,6 +992,7 @@ static int observe_notify_bound(anjay_t *anjay,
     assert(it || !end);
 
     for (; it != end; it = AVS_RBTREE_ELEM_NEXT(it)) {
+        assert(it);
         _anjay_update_ret(&retval, notify_entry(anjay, obj, it));
     }
     return retval;
@@ -1112,7 +1113,7 @@ static int observe_notify(anjay_t *anjay,
                           anjay_observe_connection_entry_t *connection,
                           const anjay_observe_key_t *key,
                           const anjay_dm_object_def_t *const *obj) {
-    assert(key->format == ANJAY_COAP_FORMAT_NONE);
+    assert(key->format == AVS_COAP_FORMAT_NONE);
     assert(!obj || !*obj || (*obj)->oid == key->oid);
     assert(key->rid >= -1 && key->rid <= UINT16_MAX);
 
@@ -1151,7 +1152,7 @@ static int observe_notify(anjay_t *anjay,
 int _anjay_observe_notify(anjay_t *anjay,
                           const anjay_observe_key_t *key,
                           bool invert_server_match) {
-    assert(key->format == ANJAY_COAP_FORMAT_NONE);
+    assert(key->format == AVS_COAP_FORMAT_NONE);
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, key->oid);
 
