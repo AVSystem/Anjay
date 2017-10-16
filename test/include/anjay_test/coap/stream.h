@@ -22,7 +22,7 @@
 
 // Hack to get to the coap_stream_t structure.
 #define ANJAY_COAP_STREAM_INTERNALS
-#include "../../../src/coap/stream/stream.h"
+#include "../../../src/coap/stream/stream_internal.h"
 
 void _anjay_mock_coap_stream_setup(coap_stream_t *stream);
 

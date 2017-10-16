@@ -29,7 +29,7 @@
 #include <anjay/core.h>
 
 #include "../coap/content_format.h"
-#include "../utils.h"
+#include "../utils_core.h"
 #include "base64_out.h"
 #include "vtable.h"
 
@@ -110,7 +110,7 @@ static inline int text_ret_floating_point(text_out_t *ctx, double value,
     // FIXME: The spec calls for a "decimal" representation, which, in my
     // understanding, excludes exponential representation.
     // As printing floating-point numbers in C as pure decimal with sane
-    // precision is tricky, let's take the spec a bit loosely for now.
+    // precision is tricky, let's take the spec a bit loosely for now.
     if (!ctx->finished
             && !(retval = avs_stream_write_f(ctx->stream, "%.*g",
                                              precision, value))) {

@@ -22,7 +22,7 @@
 
 #include <anjay_test/utils.h>
 
-#include "../attr_storage.h"
+#include "../mod_attr_storage.h"
 
 static fas_resource_attrs_t *test_resource_attrs(anjay_ssid_t ssid,
                                                  time_t min_period,

@@ -23,7 +23,7 @@
 #include <avsystem/commons/stream.h>
 
 #include "../coap/content_format.h"
-#include "../io.h"
+#include "../io_core.h"
 
 #include "vtable.h"
 

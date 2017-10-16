@@ -20,7 +20,7 @@
 #include <arpa/inet.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #include <avsystem/commons/vector.h>
 

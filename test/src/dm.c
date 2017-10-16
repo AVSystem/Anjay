@@ -22,12 +22,12 @@
 #include <anjay_test/coap/stream.h>
 #include <anjay_test/coap/socket.h>
 
-#include "../../src/anjay.h"
+#include "../../src/anjay_core.h"
 
 // HACK to enable _anjay_server_cleanup
 #define ANJAY_SERVERS_INTERNALS
 #include "../../src/servers/connection_info.h"
-#include "../../src/servers/servers.h"
+#include "../../src/servers/servers_internal.h"
 #undef ANJAY_SERVERS_INTERNALS
 
 anjay_t *_anjay_test_dm_init(const anjay_configuration_t *config) {
@@ -57,9 +57,7 @@ avs_net_abstract_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
     avs_unit_mocksock_expect_connect(socket, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
     anjay->servers.active->udp_connection.conn_priv_data_.socket = socket;
-    anjay->servers.active->registration_info.expire_time.tv_sec =
-            (time_t) ((1UL << (sizeof(time_t) * CHAR_BIT - 1)) - 1UL);
-    assert(anjay->servers.active->registration_info.expire_time.tv_sec > 0);
+    anjay->servers.active->registration_info.expire_time.since_monotonic_epoch.seconds = INT64_MAX;
     return _anjay_connection_internal_get_socket(
             &anjay->servers.active->udp_connection);
 }

@@ -15,15 +15,14 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
-#include <anjay_modules/dm.h>
+#include <anjay_modules/dm_utils.h>
 #include <anjay_modules/notify.h>
 
 #include "coap/content_format.h"
 
-#include "anjay.h"
-#include "observe.h"
+#include "anjay_core.h"
+#include "observe_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 

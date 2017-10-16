@@ -15,12 +15,12 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <inttypes.h>
 
 #include <avsystem/commons/coap/msg_builder.h>
 #include <avsystem/commons/coap/msg_opt.h>
+#include <avsystem/commons/utils.h>
 
 #define ANJAY_DOWNLOADER_INTERNALS
 
@@ -124,22 +124,16 @@ static int schedule_coap_retransmission(anjay_downloader_t *dl,
     anjay_t *anjay = _anjay_downloader_get_anjay(dl);
     const avs_coap_tx_params_t *tx_params = &anjay->udp_tx_params;
 
-    avs_coap_retry_state_t retry_state = { 0,  0 };
+    avs_coap_retry_state_t retry_state = { 0, { 0,  0 } };
 
     // first retry
     avs_coap_update_retry_state(&retry_state, tx_params, &dl->rand_seed);
-    struct timespec delay = {
-        .tv_sec = retry_state.recv_timeout_ms / 1000,
-        .tv_nsec = 1000 * 1000 * (retry_state.recv_timeout_ms % 1000)
-    };
+    avs_time_duration_t delay = retry_state.recv_timeout;
 
     // second retry
     avs_coap_update_retry_state(&retry_state, tx_params, &dl->rand_seed);
     anjay_sched_retryable_backoff_t backoff = {
-        .delay = {
-            .tv_sec = retry_state.recv_timeout_ms / 1000,
-            .tv_nsec = 1000 * 1000 * (retry_state.recv_timeout_ms % 1000)
-        },
+        .delay = retry_state.recv_timeout,
         .max_delay = avs_coap_max_transmit_span(tx_params)
     };
 
@@ -444,10 +438,11 @@ static void handle_coap_message(anjay_downloader_t *dl,
             return;
         } else if (type == AVS_COAP_MSG_ACKNOWLEDGEMENT
                    && avs_coap_msg_get_code(msg) == AVS_COAP_CODE_EMPTY) {
-            struct timespec abort_delay = avs_coap_exchange_lifetime(
+            avs_time_duration_t abort_delay = avs_coap_exchange_lifetime(
                     &anjay->udp_tx_params);
-            dl_log(DEBUG, "Separate ACK received, waiting %ld.%09ld for "
-                   "response", (long)abort_delay.tv_sec, abort_delay.tv_nsec);
+            dl_log(DEBUG, "Separate ACK received, waiting "
+                          "%" PRId64 ".%09" PRId32 " for response",
+                   abort_delay.seconds, abort_delay.nanoseconds);
 
             _anjay_sched_del(anjay->sched, &ctx->sched_job);
             _anjay_sched(anjay->sched, &ctx->sched_job, abort_delay,
@@ -532,10 +527,10 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
 
     avs_net_socket_type_t socket_type;
     const void *config;
-    if (!strcasecmp(ctx->uri.protocol, "coap")) {
+    if (!avs_strcasecmp(ctx->uri.protocol, "coap")) {
         socket_type = AVS_NET_UDP_SOCKET;
         config = (const void *) &ssl_config.backend_configuration;
-    } else if (!strcasecmp(ctx->uri.protocol, "coaps")) {
+    } else if (!avs_strcasecmp(ctx->uri.protocol, "coaps")) {
         socket_type = AVS_NET_DTLS_SOCKET;
         config = (const void *) &ssl_config;
     } else {

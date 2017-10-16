@@ -27,7 +27,7 @@
 #include <anjay/anjay.h>
 
 #include "iosched.h"
-#include "utils.h"
+#include "demo_utils.h"
 
 typedef struct anjay_demo_struct anjay_demo_t;
 
@@ -104,7 +104,7 @@ void cm_notify_time_dependent(anjay_t *anjay,
 const anjay_dm_object_def_t **cs_object_create(void);
 void cs_object_release(const anjay_dm_object_def_t **def);
 
-const anjay_dm_object_def_t **download_diagnostics_object_create(iosched_t *iosched);
+const anjay_dm_object_def_t **download_diagnostics_object_create(void);
 void download_diagnostics_object_release(const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **ext_dev_info_object_create(void);

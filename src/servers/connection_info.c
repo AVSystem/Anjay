@@ -15,14 +15,13 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <inttypes.h>
 
-#include <avsystem/commons/stream/net.h>
+#include <avsystem/commons/stream/stream_net.h>
 #include <avsystem/commons/utils.h>
 
-#include "../utils.h"
+#include "../utils_core.h"
 #include "../dm/query.h"
 
 #define ANJAY_SERVERS_CONNECTION_INFO_C

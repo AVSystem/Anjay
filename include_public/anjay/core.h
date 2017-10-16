@@ -52,11 +52,11 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
 /**
  * Default transmission params recommended by the CoAP specification (RFC 7252).
  */
-#define ANJAY_COAP_DEFAULT_UDP_TX_PARAMS \
-    {                                    \
-        /* .ack_timeout_ms = */ 2000,    \
-        /* .ack_random_factor = */ 1.5,  \
-        /* .max_retransmit = */ 4        \
+#define ANJAY_COAP_DEFAULT_UDP_TX_PARAMS  \
+    {                                     \
+        /* .ack_timeout_ms = */ { 2, 0 }, \
+        /* .ack_random_factor = */ 1.5,   \
+        /* .max_retransmit = */ 4         \
     }
 
 /**
@@ -65,11 +65,11 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
  * This set of parameters ensures MAX_TRANSMIT_WAIT is equal to the default
  * (i.e. CoAP specified) MAX_TRANSMIT_WAIT, while disabling retransmissions.
  */
-#define ANJAY_COAP_DEFAULT_SMS_TX_PARAMS \
-    {                                    \
-        /* .ack_timeout_ms = */ 62000,   \
-        /* .ack_random_factor = */ 1.5,  \
-        /* .max_retransmit = */ 0        \
+#define ANJAY_COAP_DEFAULT_SMS_TX_PARAMS   \
+    {                                      \
+        /* .ack_timeout_ms = */ { 62, 0 }, \
+        /* .ack_random_factor = */ 1.5,    \
+        /* .max_retransmit = */ 0          \
     }
 
 typedef struct anjay_configuration {
@@ -318,7 +318,7 @@ typedef uint16_t anjay_riid_t;
  * @returns 0 on success, or a negative value if no tasks are scheduled.
  */
 int anjay_sched_time_to_next(anjay_t *anjay,
-                             struct timespec *out_delay);
+                             avs_time_duration_t *out_delay);
 
 /**
  * Determines time of next scheduled task in milliseconds.

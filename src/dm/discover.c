@@ -15,17 +15,16 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <inttypes.h>
 
-#include <anjay_modules/time.h>
+#include <anjay_modules/time_defs.h>
 
 #include "discover.h"
 #include "query.h"
 
-#include "../dm.h"
-#include "../anjay.h"
+#include "../dm_core.h"
+#include "../anjay_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 

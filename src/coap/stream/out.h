@@ -25,7 +25,7 @@
 #include <avsystem/commons/coap/msg_builder.h>
 #include <avsystem/commons/coap/ctx.h>
 
-#include "../stream.h"
+#include "../coap_stream.h"
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
 #error "Headers from coap/stream are not meant to be included from outside"

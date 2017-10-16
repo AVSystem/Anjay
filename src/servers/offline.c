@@ -15,10 +15,9 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include "../servers.h"
-#include "../anjay.h"
+#include "../anjay_core.h"
 
 #define ANJAY_SERVERS_INTERNALS
 

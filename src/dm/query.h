@@ -44,8 +44,9 @@ bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
 #define _anjay_is_bootstrap_security_instance(...) (false)
 #endif
 
-struct timespec _anjay_disable_timeout_from_server_iid(anjay_t *anjay,
-                                                       anjay_iid_t server_iid);
+avs_time_duration_t
+_anjay_disable_timeout_from_server_iid(anjay_t *anjay,
+                                       anjay_iid_t server_iid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

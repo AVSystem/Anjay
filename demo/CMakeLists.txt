@@ -19,9 +19,8 @@ set(SOURCES
     demo.c
     demo_args.c
     demo_cmds.c
+    demo_utils.c
     iosched.c
-    utils.c
-    wget_downloader.c
     objects/apn_conn_profile.c
     objects/cell_connectivity.c
     objects/conn_monitoring.c
@@ -38,18 +37,12 @@ set(SOURCES
 set(HEADERS
     iosched.h
     objects.h
-    utils.h
-    wget_downloader.h)
+    demo_utils.h)
 
 set(ALL_SOURCES ${SOURCES} ${HEADERS})
 
 if(NOT ANJAY_INCLUDE_DIRS AND NOT ANJAY_LIBRARIES)
     find_package(anjay REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/..")
-endif()
-
-find_program(WGET_EXECUTABLE wget)
-if(NOT WGET_EXECUTABLE)
-    message(FATAL_ERROR "wget executable is necessary for the demo application")
 endif()
 
 if(TARGET ${ANJAY_LIBRARIES_STATIC})

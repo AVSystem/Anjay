@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -25,11 +24,11 @@
 
 #include <anjay/core.h>
 
-#include <anjay_modules/time.h>
+#include <anjay_modules/time_defs.h>
 
 #define ANJAY_SCHED_C
 
-#include "utils.h"
+#include "utils_core.h"
 #include "sched.h"
 #include "sched_internal.h"
 
@@ -52,8 +51,9 @@ anjay_sched_t *_anjay_sched_new(anjay_t *anjay) {
 }
 
 static anjay_sched_entry_t *fetch_task(anjay_sched_t *sched,
-                                       const struct timespec *now) {
-    if (sched->entries && !avs_time_before(now, &sched->entries->when)) {
+                                       const avs_time_monotonic_t *now) {
+    if (sched->entries
+            && !avs_time_monotonic_before(*now, sched->entries->when)) {
         return AVS_LIST_DETACH(&sched->entries);
     } else {
         return NULL;
@@ -61,16 +61,16 @@ static anjay_sched_entry_t *fetch_task(anjay_sched_t *sched,
 }
 
 static void update_backoff(anjay_sched_retryable_backoff_t *cfg) {
-    cfg->delay = avs_time_add(&cfg->delay, &cfg->delay);
+    cfg->delay = avs_time_duration_mul(cfg->delay, 2);
 
-    if (avs_time_before(&cfg->max_delay, &cfg->delay)) {
+    if (avs_time_duration_less(cfg->max_delay, cfg->delay)) {
         cfg->delay = cfg->max_delay;
     }
 }
 
 static anjay_sched_handle_t
 sched_delayed(anjay_sched_t *sched,
-              struct timespec delay,
+              avs_time_duration_t delay,
               AVS_LIST(anjay_sched_entry_t) entry);
 
 static void execute_task(anjay_sched_t *sched,
@@ -114,8 +114,8 @@ static void execute_task(anjay_sched_t *sched,
                 }
                 update_backoff(backoff);
                 sched_log(TRACE, "retryable job %p backoff = %d.%09u (result = "
-                          "%d)", (void*)entry, (int)backoff->delay.tv_sec,
-                          (unsigned)backoff->delay.tv_nsec, clb_result);
+                          "%d)", (void*)entry, (int)backoff->delay.seconds,
+                          (unsigned)backoff->delay.nanoseconds, clb_result);
             }
         }
         return;
@@ -126,8 +126,7 @@ ssize_t _anjay_sched_run(anjay_sched_t *sched) {
     int running = 1;
     ssize_t tasks_executed = 0;
 
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    avs_time_monotonic_t now = avs_time_monotonic_now();
 
     while (running) {
         anjay_sched_entry_t *task = fetch_task(sched, &now);
@@ -139,11 +138,12 @@ ssize_t _anjay_sched_run(anjay_sched_t *sched) {
         }
     }
 
-    struct timespec delay = ANJAY_TIME_ZERO;
+    avs_time_duration_t delay = AVS_TIME_DURATION_ZERO;
     _anjay_sched_time_to_next(sched, &delay);
-    sched_log(TRACE, "%lu scheduled tasks remain; next after %ld.%09ld",
+    sched_log(TRACE, "%lu scheduled tasks remain; next after "
+                     "%" PRId64 ".%09" PRId32,
               (unsigned long)AVS_LIST_SIZE(sched->entries),
-              delay.tv_sec, delay.tv_nsec);
+              delay.seconds, delay.nanoseconds);
     return tasks_executed;
 }
 
@@ -176,7 +176,7 @@ insert_entry(anjay_sched_t *sched,
     }
 
     AVS_LIST_FOREACH_PTR(entry_ptr, &sched->entries) {
-        if (avs_time_before(&entry->when, &(*entry_ptr)->when)) {
+        if (avs_time_monotonic_before(entry->when, (*entry_ptr)->when)) {
             break;
         }
     }
@@ -208,7 +208,6 @@ create_entry(anjay_sched_task_type_t type,
         return NULL;
     }
 
-    entry->when = ANJAY_TIME_ZERO;
     entry->type = type;
     entry->clb = clb;
     entry->clb_data = clb_data;
@@ -222,21 +221,22 @@ create_entry(anjay_sched_task_type_t type,
 
 static anjay_sched_handle_t
 sched_delayed(anjay_sched_t *sched,
-              struct timespec delay,
+              avs_time_duration_t delay,
               AVS_LIST(anjay_sched_entry_t) entry) {
-    struct timespec sched_time;
+    avs_time_monotonic_t sched_time = avs_time_monotonic_now();
+    sched_log(TRACE, "current time %" PRId64 ".%09" PRId32,
+              sched_time.since_monotonic_epoch.seconds,
+              sched_time.since_monotonic_epoch.nanoseconds);
 
-    clock_gettime(CLOCK_MONOTONIC, &sched_time);
-    sched_log(TRACE, "current time %" PRId64 ".%09ld",
-              (int64_t) sched_time.tv_sec, sched_time.tv_nsec);
-
-    if (avs_time_is_valid(&delay)) {
-        sched_time = avs_time_add(&sched_time, &delay);
+    if (avs_time_duration_valid(delay)) {
+        sched_time = avs_time_monotonic_add(sched_time, delay);
     }
     sched_log(TRACE,
-             "job scheduled at %" PRId64 ".%09ld (+%" PRId64 ".%09ld); type %d",
-             (int64_t) sched_time.tv_sec, sched_time.tv_nsec,
-             (int64_t)delay.tv_sec, delay.tv_nsec, (int)entry->type);
+              "job scheduled at %" PRId64 ".%09" PRId32
+              " (+%" PRId64 ".%09" PRId32 "); type %d",
+              sched_time.since_monotonic_epoch.seconds,
+              sched_time.since_monotonic_epoch.nanoseconds,
+              delay.seconds, delay.nanoseconds, (int)entry->type);
 
     entry->when = sched_time;
     return insert_entry(sched, entry);
@@ -251,7 +251,7 @@ static anjay_sched_entry_t **find_task_entry_ptr(anjay_sched_t *sched,
 static int schedule(anjay_sched_t *sched,
                     anjay_sched_handle_t *out_handle,
                     anjay_sched_retryable_backoff_t *backoff_config,
-                    struct timespec delay,
+                    avs_time_duration_t delay,
                     anjay_sched_clb_t clb,
                     void *clb_data) {
     assert((!out_handle || *out_handle == NULL)
@@ -278,7 +278,7 @@ static int schedule(anjay_sched_t *sched,
 
 int _anjay_sched(anjay_sched_t *sched,
                  anjay_sched_handle_t *out_handle,
-                 struct timespec delay,
+                 avs_time_duration_t delay,
                  anjay_sched_clb_t clb,
                  void *clb_data) {
     return schedule(sched, out_handle, NULL, delay, clb, clb_data);
@@ -286,7 +286,7 @@ int _anjay_sched(anjay_sched_t *sched,
 
 int _anjay_sched_retryable(anjay_sched_t *sched,
                            anjay_sched_handle_t *out_handle,
-                           struct timespec delay,
+                           avs_time_duration_t delay,
                            anjay_sched_retryable_backoff_t config,
                            anjay_sched_clb_t clb,
                            void *clb_data) {
@@ -316,18 +316,16 @@ int _anjay_sched_del(anjay_sched_t *sched, anjay_sched_handle_t *handle) {
     return result;
 }
 
-int _anjay_sched_time_to_next(anjay_sched_t *sched, struct timespec *delay) {
-    struct timespec now;
+int _anjay_sched_time_to_next(anjay_sched_t *sched,
+                              avs_time_duration_t *delay) {
     anjay_sched_entry_t *elem;
-
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    avs_time_monotonic_t now = avs_time_monotonic_now();
 
     AVS_LIST_FOREACH(elem, sched->entries) {
         if (delay) {
-            *delay = avs_time_diff(&elem->when, &now);
-            if (delay->tv_sec < 0) {
-                delay->tv_sec = 0;
-                delay->tv_nsec = 0;
+            *delay = avs_time_monotonic_diff(elem->when, now);
+            if (avs_time_duration_less(*delay, AVS_TIME_DURATION_ZERO)) {
+                *delay = AVS_TIME_DURATION_ZERO;
             }
         }
         return 0;

@@ -27,8 +27,8 @@
 #include <avsystem/commons/coap/ctx.h>
 
 #include "../content_format.h"
-#include "../stream.h"
-#include "../stream/stream.h"
+#include "../coap_stream.h"
+#include "../stream/stream_internal.h"
 #include "../block/response.h"
 #include "../block/transfer_impl.h"
 

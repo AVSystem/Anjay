@@ -21,7 +21,7 @@
 
 #include "../demo.h"
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #define GEOPOINTS_LATITUDE    0 // double, degrees
 #define GEOPOINTS_LONGITUDE   1 // double, degrees

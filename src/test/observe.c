@@ -25,7 +25,7 @@
 #include <anjay_test/dm.h>
 #include <anjay_test/mock_clock.h>
 
-#include "../anjay.h"
+#include "../anjay_core.h"
 #include "../sched_internal.h"
 
 // HACK to enable access to servers
@@ -434,12 +434,12 @@ static void notify_max_period_test(const char *con_notify_ack,
     assert_observe_size(anjay, 1);
 
     ////// EMPTY SCHEDULER RUN //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     assert_observe_size(anjay, 1);
 
     ////// PLAIN NOTIFICATION //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_STRING(0, "Hello"));
@@ -463,13 +463,15 @@ static void notify_max_period_test(const char *con_notify_ack,
                        .observe_serial = true
                    }, "Hello", 5);
     AVS_UNIT_ASSERT_NOT_NULL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->notify_task);
-    AVS_UNIT_ASSERT_EQUAL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_sent->timestamp.tv_sec,
+    AVS_UNIT_ASSERT_EQUAL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_sent->timestamp.since_real_epoch.seconds,
                           1010);
-    AVS_UNIT_ASSERT_EQUAL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_confirmable.tv_sec,
+    AVS_UNIT_ASSERT_EQUAL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_confirmable.since_real_epoch.seconds,
                           1000);
 
     ////// CONFIRMABLE NOTIFICATION //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 24*60*60 - 10, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_diff(
+            avs_time_duration_from_scalar(1, AVS_TIME_DAY),
+            avs_time_duration_from_scalar(10, AVS_TIME_S)));
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_STRING(0, "Hi!"));
@@ -486,8 +488,8 @@ static void notify_max_period_test(const char *con_notify_ack,
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     assert_observe_size(anjay, observe_size_after_ack);
     if (observe_size_after_ack) {
-        AVS_UNIT_ASSERT_EQUAL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_confirmable.tv_sec,
-                              AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_sent->timestamp.tv_sec);
+        AVS_UNIT_ASSERT_EQUAL(AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_confirmable.since_real_epoch.seconds,
+                              AVS_RBTREE_FIRST(AVS_RBTREE_FIRST(anjay->observe.connection_entries)->entries)->last_sent->timestamp.since_real_epoch.seconds);
 
     }
 
@@ -528,14 +530,14 @@ AVS_UNIT_TEST(notify, min_period) {
     assert_observe_size(anjay, 1);
 
     ////// PMIN NOT REACHED //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     ////// PMIN REACHED //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_STRING(0, "Hi!"));
@@ -552,7 +554,7 @@ AVS_UNIT_TEST(notify, min_period) {
     assert_observe_size(anjay, 1);
 
     ////// AFTER PMIN, NO CHANGE //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 10, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
@@ -583,12 +585,12 @@ AVS_UNIT_TEST(notify, confirmable) {
     assert_observe_size(anjay, 1);
 
     ////// EMPTY SCHEDULER RUN //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     assert_observe_size(anjay, 1);
 
     ////// CONFIRMABLE NOTIFICATION //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 5, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(5, AVS_TIME_S));
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
@@ -1190,7 +1192,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     assert_observe_size(anjay, 3);
 
     ////// NOTIFICATION //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 10, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
     // no format preference
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
@@ -1233,7 +1235,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     assert_observe_size(anjay, 3);
 
     ////// NOTIFICATION - FORMAT CHANGE //////
-    _anjay_mock_clock_advance(&(const struct timespec) { 10, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_S));
     // no format preference
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     expect_read_res_attrs(anjay, &OBJ, 14, 69, 4, &ATTRS);
@@ -1452,7 +1454,7 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
@@ -1486,7 +1488,7 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
@@ -1564,7 +1566,7 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
     expect_read_notif_storing(anjay, &FAKE_SERVER, 34, false);
@@ -1592,7 +1594,7 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
     expect_read_notif_storing(anjay, &FAKE_SERVER, 34, false);
@@ -1639,7 +1641,7 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
@@ -1659,7 +1661,7 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
@@ -1721,7 +1723,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     // let's leave storing on for a moment
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
@@ -1742,7 +1744,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     // and now we have it disabled
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
@@ -1790,7 +1792,7 @@ AVS_UNIT_TEST(notify, storing_of_errors) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     // error during attribute reading
@@ -1809,7 +1811,7 @@ AVS_UNIT_TEST(notify, storing_of_errors) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
@@ -1834,7 +1836,7 @@ AVS_UNIT_TEST(notify, no_storing_of_errors) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, false);
     // error during attribute reading
@@ -1861,7 +1863,7 @@ AVS_UNIT_TEST(notify, reconnect) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
 
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
     // error during attribute reading

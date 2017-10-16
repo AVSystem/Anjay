@@ -587,7 +587,7 @@ AVS_UNIT_TEST(bootstrap_finish, success) {
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_notify_perform), 1);
     AVS_UNIT_ASSERT_EQUAL(
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     AVS_UNIT_ASSERT_EQUAL(
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_notify_perform), 1);
@@ -636,7 +636,7 @@ AVS_UNIT_TEST(bootstrap_finish, error) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     AVS_UNIT_ASSERT_EQUAL(
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
-    _anjay_mock_clock_advance(&(const struct timespec) { 1, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
     // still not removing
     AVS_UNIT_ASSERT_EQUAL(
@@ -656,8 +656,11 @@ AVS_UNIT_TEST(bootstrap_invalid, invalid) {
     DM_TEST_FINISH;
 }
 
-static long long time_to_ns(struct timespec ts) {
-    return ts.tv_sec * (long long) NUM_NANOSECONDS_IN_A_SECOND + ts.tv_nsec;
+static int64_t duration_to_ns(avs_time_duration_t ts) {
+    int64_t result;
+    AVS_UNIT_ASSERT_SUCCESS(avs_time_duration_to_scalar(&result, AVS_TIME_NS,
+                                                        ts));
+    return result;
 }
 
 AVS_UNIT_TEST(bootstrap_backoff, backoff) {
@@ -666,21 +669,23 @@ AVS_UNIT_TEST(bootstrap_backoff, backoff) {
 
     // after initial failure, Request Bootstrap requests are re-sent with
     // exponential backoff with a factor of 2, starting with 3s, capped at 120s
-    struct timespec sched_job_delay;
-    struct timespec backoff = { 3, 0 };
-    const struct timespec max_backoff = { 120, 0 };
+    avs_time_duration_t sched_job_delay;
+    avs_time_duration_t backoff = avs_time_duration_from_scalar(3, AVS_TIME_S);
+    const avs_time_duration_t max_backoff =
+            avs_time_duration_from_scalar(120, AVS_TIME_S);
 
-    while (backoff.tv_sec <= max_backoff.tv_sec) {
+    while (!avs_time_duration_less(max_backoff, backoff)) {
         avs_unit_mocksock_output_fail(mocksocks[0], -1);
         avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
         AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-        AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next(anjay, &sched_job_delay));
-        AVS_UNIT_ASSERT_TRUE(
-                llabs(time_to_ns(sched_job_delay) - time_to_ns(backoff)) < 10);
+        AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next(anjay,
+                                                         &sched_job_delay));
+        AVS_UNIT_ASSERT_TRUE(llabs(duration_to_ns(sched_job_delay)
+                                           - duration_to_ns(backoff)) < 10);
 
-        _anjay_mock_clock_advance(&sched_job_delay);
-        backoff.tv_sec *= 2;
+        _anjay_mock_clock_advance(sched_job_delay);
+        backoff = avs_time_duration_mul(backoff, 2);
     }
 
     // ensure the delay is capped at max_backoff
@@ -689,8 +694,8 @@ AVS_UNIT_TEST(bootstrap_backoff, backoff) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next(anjay, &sched_job_delay));
-    AVS_UNIT_ASSERT_TRUE(
-            llabs(time_to_ns(sched_job_delay) - time_to_ns(max_backoff)) < 10);
+    AVS_UNIT_ASSERT_TRUE(llabs(duration_to_ns(sched_job_delay)
+                                       - duration_to_ns(max_backoff)) < 10);
 
     DM_TEST_FINISH;
 }
@@ -716,10 +721,7 @@ AVS_UNIT_TEST(bootstrap_reconnect, reconnect) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next_ms(anjay,
                                                         &sched_job_delay_ms));
     AVS_UNIT_ASSERT_EQUAL(sched_job_delay_ms, 2999);
-    _anjay_mock_clock_advance(&(const struct timespec) {
-        .tv_sec = 3,
-        .tv_nsec = 0
-    });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(3, AVS_TIME_S));
 
     static const char REQUEST[] =
             "\x40\x02\x69\xEE" // CoAP header

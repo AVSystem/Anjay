@@ -20,7 +20,7 @@
 
 #include <anjay/core.h>
 
-#include "../utils.h"
+#include "../utils_core.h"
 #include "base64_out.h"
 #include "vtable.h"
 

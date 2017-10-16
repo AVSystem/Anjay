@@ -13,10 +13,10 @@
 # limitations under the License.
 
 set(SOURCES
-    src/attr_storage.c
-    src/persistence.c)
+    src/mod_attr_storage.c
+    src/attr_storage_persistence.c)
 set(PRIVATE_HEADERS
-    src/attr_storage.h)
+    src/mod_attr_storage.h)
 set(PUBLIC_HEADERS
     include_public/anjay/attr_storage.h)
 

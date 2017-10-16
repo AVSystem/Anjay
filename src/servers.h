@@ -19,9 +19,9 @@
 
 #include <anjay/core.h>
 
-#include "utils.h"
+#include "utils_core.h"
 #include "sched.h"
-#include "coap/stream.h"
+#include "coap/coap_stream.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -45,7 +45,7 @@ typedef struct {
 typedef struct {
     AVS_LIST(const anjay_string_t) endpoint_path;
     anjay_connection_type_t conn_type;
-    struct timespec expire_time;
+    avs_time_monotonic_t expire_time;
     anjay_update_parameters_t last_update_params;
 } anjay_registration_info_t;
 

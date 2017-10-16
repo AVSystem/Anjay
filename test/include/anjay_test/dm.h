@@ -19,8 +19,8 @@
 
 #include <avsystem/commons/unit/mocksock.h>
 
-#include <anjay_modules/dm.h>
-#include <anjay_modules/utils.h>
+#include <anjay_modules/dm_utils.h>
+#include <anjay_modules/raw_buffer.h>
 
 #include <anjay_test/mock_clock.h>
 #include <anjay_test/mock_dm.h>
@@ -166,7 +166,7 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
 #define DM_TEST_ESCAPE_PARENS(...) DM_TEST_ESCAPE_PARENS_IMPL __VA_ARGS__
 
 #define DM_TEST_INIT_GENERIC(Objects, Ssids, AddConfig) \
-    _anjay_mock_clock_start(&(const struct timespec) { 1000, 0 }); \
+    _anjay_mock_clock_start(avs_time_monotonic_from_scalar(1000, AVS_TIME_S)); \
     anjay_t *anjay = _anjay_test_dm_init( \
             DM_TEST_CONFIGURATION(DM_TEST_ESCAPE_PARENS(AddConfig))); \
     const anjay_dm_object_def_t *const *obj_defs[] = \
@@ -179,7 +179,8 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
     for (size_t i = AVS_ARRAY_SIZE(ssids) - 1; \
             i < AVS_ARRAY_SIZE(ssids); --i) { \
         mocksocks[i] = _anjay_test_dm_install_socket(anjay, ssids[i]); \
-        avs_unit_mocksock_enable_recv_timeout_getsetopt(mocksocks[i], 1000); \
+        avs_unit_mocksock_enable_recv_timeout_getsetopt( \
+                mocksocks[i], avs_time_duration_from_scalar(1, AVS_TIME_S)); \
         avs_unit_mocksock_enable_inner_mtu_getopt(mocksocks[i], 1252); \
         avs_unit_mocksock_enable_state_getopt(mocksocks[i]); \
     } \

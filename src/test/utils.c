@@ -18,7 +18,7 @@
 
 #include <stdio.h>
 
-#include <anjay_modules/time.h>
+#include <anjay_modules/time_defs.h>
 
 #include <avsystem/commons/unit/test.h>
 #include <avsystem/commons/utils.h>

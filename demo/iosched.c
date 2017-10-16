@@ -23,7 +23,7 @@
 #include <avsystem/commons/list.h>
 
 #include "iosched.h"
-#include "utils.h"
+#include "demo_utils.h"
 
 typedef struct iosched_instant_entry {
     iosched_handler_t *handler;

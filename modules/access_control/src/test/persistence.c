@@ -23,7 +23,7 @@
 #include <anjay/access_control.h>
 #include <anjay/core.h>
 
-#include "../access_control.h"
+#include "../mod_access_control.h"
 
 static int null_instance_it(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,

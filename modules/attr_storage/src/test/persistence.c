@@ -25,7 +25,7 @@
 
 #include <anjay_test/dm.h>
 
-#include "../attr_storage.h"
+#include "../mod_attr_storage.h"
 #include "attr_storage_test.h"
 
 #define PERSIST_TEST_INIT(Size) \

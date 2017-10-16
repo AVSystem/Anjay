@@ -34,7 +34,7 @@
 #include "demo_cmds.h"
 #include "iosched.h"
 #include "objects.h"
-#include "utils.h"
+#include "demo_utils.h"
 
 char **saved_argv;
 
@@ -309,8 +309,7 @@ static int demo_init(anjay_demo_t *demo,
             || install_object(demo, cm_object_create(),
                               cm_notify_time_dependent, cm_object_release)
             || install_object(demo, cs_object_create(), NULL, cs_object_release)
-            || install_object(demo,
-                              download_diagnostics_object_create(demo->iosched),
+            || install_object(demo, download_diagnostics_object_create(),
                               NULL, download_diagnostics_object_release)
             || install_object(demo,
                               device_object_create(demo->iosched,
@@ -443,25 +442,25 @@ static void refresh_socket_entries(anjay_demo_t *demo,
 static void serve(anjay_demo_t *demo) {
     AVS_LIST(socket_entry_t) socket_entries = NULL;
 
-    struct timespec last_time;
-    clock_gettime(CLOCK_REALTIME, &last_time);
+    avs_time_real_t last_time = avs_time_real_now();
 
     while (demo->running) {
         refresh_socket_entries(demo, &socket_entries);
         demo_log(TRACE, "number of sockets to poll: %u",
                  (unsigned) AVS_LIST_SIZE(socket_entries));
 
-        struct timespec current_time;
-        clock_gettime(CLOCK_REALTIME, &current_time);
+        avs_time_real_t current_time = avs_time_real_now();
 
-        if (current_time.tv_sec != last_time.tv_sec) {
+        if (current_time.since_real_epoch.seconds
+                != last_time.since_real_epoch.seconds) {
             notify_time_dependent(demo);
         }
         last_time = current_time;
 
         int waitms = anjay_sched_calculate_wait_time_ms(
                 demo->anjay,
-                (int) ((1000500000 - current_time.tv_nsec) / 1000000));
+                (int) ((1000500000 - current_time.since_real_epoch.nanoseconds)
+                               / 1000000));
         demo_log(TRACE, "wait time: %ld.%09ld s",
                  time_to_next_job.tv_sec, time_to_next_job.tv_nsec);
 

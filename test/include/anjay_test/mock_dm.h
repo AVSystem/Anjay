@@ -134,7 +134,7 @@ struct anjay_mock_dm_data_array_struct {
             ANJAY_MOCK_DM_ARRAY_REST__(__VA_ARGS__, NULL) \
         }[0] \
     }, \
-    .expected_retval = ANJAY_VARARG0(__VA_ARGS__) \
+    .expected_retval = AVS_VARARG0(__VA_ARGS__) \
 })
 
 #define ANJAY_MOCK_DM_ARRAY(...) \
@@ -143,7 +143,7 @@ struct anjay_mock_dm_data_array_struct {
         ANJAY_MOCK_DM_ARRAY_COMMON__(MOCK_DATA_ARRAY, __VA_ARGS__)
 
 #define ANJAY_MOCK_DM_ARRAY_ENTRY(...) (&(const anjay_mock_dm_data_array_t) { \
-    .index = ANJAY_VARARG0(__VA_ARGS__), \
+    .index = AVS_VARARG0(__VA_ARGS__), \
     .value = *ANJAY_MOCK_DM_ARRAY_REST__(__VA_ARGS__) \
 })
 

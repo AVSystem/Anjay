@@ -14,17 +14,27 @@
  * limitations under the License.
  */
 
+#if !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <config.h>
-#include <posix-config.h>
 
 #ifdef ANJAY_TEST
 
 #include "servers.h"
 
+#include <errno.h>
+#include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <signal.h>
-#include <poll.h>
-#include <errno.h>
+
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #if __linux__
 #include <sys/prctl.h>
@@ -36,10 +46,10 @@
 
 #include <anjay_test/mock_clock.h>
 
-#include "../../utils.h"
+#include "../../utils_core.h"
 
 #include <avsystem/commons/coap/msg.h>
-#include "../log.h"
+#include "../coap_log.h"
 
 typedef struct response_state {
     bool has_more_responses;

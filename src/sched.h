@@ -62,7 +62,7 @@ void _anjay_sched_delete(anjay_sched_t **sched_ptr);
  */
 int _anjay_sched(anjay_sched_t *sched,
                  anjay_sched_handle_t *out_handle,
-                 struct timespec delay,
+                 avs_time_duration_t delay,
                  anjay_sched_clb_t clb,
                  void *clb_data);
 /**
@@ -76,7 +76,7 @@ int _anjay_sched(anjay_sched_t *sched,
  */
 int _anjay_sched_del(anjay_sched_t *sched, anjay_sched_handle_t *handle);
 
-int _anjay_sched_time_to_next(anjay_sched_t *sched, struct timespec *delay);
+int _anjay_sched_time_to_next(anjay_sched_t *sched, avs_time_duration_t *delay);
 
 /**
  * See @ref _anjay_sched for details.
@@ -85,16 +85,16 @@ static inline int _anjay_sched_now(anjay_sched_t *sched,
                                    anjay_sched_handle_t *out_handle,
                                    anjay_sched_clb_t clb,
                                    void *clb_data) {
-    return _anjay_sched(sched, out_handle, (const struct timespec){ 0, 0 }, clb,
-                        clb_data);
+    return _anjay_sched(sched, out_handle, AVS_TIME_DURATION_ZERO,
+                        clb, clb_data);
 }
 
 typedef struct {
     /** Delay until the first job retry after initial attempt fails. */
-    struct timespec delay;
+    avs_time_duration_t delay;
 
     /** Maximum delay between a failed job execution and next attempt. */
-    struct timespec max_delay;
+    avs_time_duration_t max_delay;
 } anjay_sched_retryable_backoff_t;
 
 /**
@@ -124,7 +124,7 @@ typedef struct {
  */
 int _anjay_sched_retryable(anjay_sched_t *sched,
                            anjay_sched_handle_t *out_handle,
-                           struct timespec delay,
+                           avs_time_duration_t delay,
                            anjay_sched_retryable_backoff_t backoff,
                            anjay_sched_clb_t clb,
                            void *clb_data);

@@ -19,7 +19,7 @@
 
 #include <avsystem/commons/coap/msg_builder.h>
 
-#include "../stream.h"
+#include "../coap_stream.h"
 #include "in.h"
 #include "out.h"
 
@@ -70,7 +70,7 @@ typedef int recv_msg_handler_t(const avs_coap_msg_t *msg,
  * @param        coap_ctx           Context to use for CoAP message handling.
  * @param        socket             Socket to wait on.
  * @param        in                 Input buffer for the incoming message.
- * @param[inout] timeout_ms         Maximum time to wait for a message. Will be
+ * @param[inout] inout_timeout      Maximum time to wait for a message. Will be
  *                                  decremented by the time spent waiting on the
  *                                  message.
  * @param        handle_msg         Function to call after successfully
@@ -88,10 +88,12 @@ typedef int recv_msg_handler_t(const avs_coap_msg_t *msg,
 int _anjay_coap_common_recv_msg_with_timeout(avs_coap_ctx_t *ctx,
                                              avs_net_abstract_socket_t *socket,
                                              coap_input_buffer_t *in,
-                                             int32_t *inout_timeout_ms,
+                                             avs_time_duration_t *inout_timeout,
                                              recv_msg_handler_t *handle_msg,
                                              void *handle_msg_data,
                                              int *out_handler_result);
+
+uint32_t _anjay_coap_common_timestamp(void);
 
 VISIBILITY_PRIVATE_HEADER_END
 

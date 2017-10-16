@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "../../utils.h"
+#include "../../utils_core.h"
 
 #include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/coap/ctx.h>

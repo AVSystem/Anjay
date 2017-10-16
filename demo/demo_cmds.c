@@ -16,7 +16,7 @@
 
 #include "demo.h"
 #include "demo_cmds.h"
-#include "utils.h"
+#include "demo_utils.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -181,9 +181,10 @@ static void cmd_get_port(anjay_demo_t *demo, const char *args_string) {
                         index, num_sockets);
     }
     char port[16] = "0";
-    avs_net_abstract_socket_t *socket = *AVS_LIST_NTH(sockets, (size_t) index);
-    if (socket) {
-        avs_net_socket_get_local_port(socket, port, sizeof(port));
+    AVS_LIST(avs_net_abstract_socket_t *const) socket =
+            AVS_LIST_NTH(sockets, (size_t) index);
+    if (socket && *socket) {
+        avs_net_socket_get_local_port(*socket, port, sizeof(port));
     }
     printf("PORT==%s\n", port);
 }

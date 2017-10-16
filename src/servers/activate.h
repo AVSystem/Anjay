@@ -17,10 +17,10 @@
 #ifndef ANJAY_SERVERS_ACTIVATE_H
 #define ANJAY_SERVERS_ACTIVATE_H
 
-#include <anjay_modules/time.h>
+#include <anjay_modules/time_defs.h>
 
-#include "../anjay.h"
-#include "../utils.h"
+#include "../anjay_core.h"
+#include "../utils_core.h"
 
 #ifndef ANJAY_SERVERS_INTERNALS
 #error "Headers from servers/ are not meant to be included from outside"
@@ -41,7 +41,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 int _anjay_server_sched_activate(anjay_t *anjay,
                                  anjay_servers_t *servers,
                                  anjay_ssid_t ssid,
-                                 struct timespec delay);
+                                 avs_time_duration_t delay);
 
 /**
  * Inserts an active server entry into @p servers .
@@ -67,7 +67,7 @@ anjay_inactive_server_info_t *
 _anjay_server_deactivate(anjay_t *anjay,
                          anjay_servers_t *servers,
                          anjay_ssid_t ssid,
-                         struct timespec reactivate_delay);
+                         avs_time_duration_t reactivate_delay);
 
 /**
  * Creates a new detached inactive server entry for given @p ssid .

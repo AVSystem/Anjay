@@ -13,7 +13,7 @@
 # limitations under the License.
 
 set(SOURCES
-    src/persistence.c)
+    src/mod_persistence.c)
 set(PUBLIC_HEADERS
     include_public/anjay/persistence.h)
 

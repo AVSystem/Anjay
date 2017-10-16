@@ -17,8 +17,8 @@
 #ifndef ANJAY_SERVERS_CONNECTION_INFO_H
 #define ANJAY_SERVERS_CONNECTION_INFO_H
 
-#include "../anjay.h"
-#include "../utils.h"
+#include "../anjay_core.h"
+#include "../utils_core.h"
 
 #ifndef ANJAY_SERVERS_INTERNALS
 #error "Headers from servers/ are not meant to be included from outside"

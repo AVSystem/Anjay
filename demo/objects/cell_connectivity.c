@@ -19,7 +19,7 @@
 
 #include "../demo.h"
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #define CELL_RES_SMSC_ADDRESS 0               // string
 #define CELL_RES_DISABLE_RADIO_PERIOD 1       // int[0:86400]

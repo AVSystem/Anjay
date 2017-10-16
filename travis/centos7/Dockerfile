@@ -15,7 +15,7 @@
 FROM centos:7
 # required for mbedtls-devel and python3.5
 RUN yum install -y https://centos7.iuscommunity.org/ius-release.rpm
-RUN yum install -y which git make cmake3 boost-python-devel mbedtls-devel openssl openssl-devel wget python-sphinx python-sphinx_rtd_theme valgrind valgrind-devel gcc gcc-c++
+RUN yum install -y which git make cmake3 boost-python-devel mbedtls-devel openssl openssl-devel python-sphinx python-sphinx_rtd_theme valgrind valgrind-devel gcc gcc-c++
 # required to compile pybind11
 RUN yum install -y python-tools
 RUN yum install -y python35u python35u-devel python35u-pip

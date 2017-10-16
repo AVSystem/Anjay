@@ -15,12 +15,11 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <avsystem/commons/stream_v_table.h>
 #include <avsystem/commons/utils.h>
 
-#include "../utils.h"
+#include "../utils_core.h"
 #include "tlv.h"
 #include "vtable.h"
 
@@ -190,8 +189,8 @@ static int tlv_get_objlnk(anjay_input_ctx_t *ctx,
     } else if (bytes_read != 4) {
         return ANJAY_ERR_BAD_REQUEST;
     }
-    *out_oid = ntohs(raw[0]);
-    *out_iid = ntohs(raw[1]);
+    *out_oid = avs_convert_be16(raw[0]);
+    *out_iid = avs_convert_be16(raw[1]);
     return 0;
 }
 

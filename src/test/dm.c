@@ -23,7 +23,7 @@
 
 #include <anjay_test/dm.h>
 
-#include "../anjay.h"
+#include "../anjay_core.h"
 #include "../io/vtable.h"
 
 AVS_UNIT_TEST(debug, debug_make_path_macro) {

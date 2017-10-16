@@ -19,7 +19,7 @@
 
 #include <anjay/core.h>
 
-#include "../io.h"
+#include "../io_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

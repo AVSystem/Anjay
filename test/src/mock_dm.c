@@ -24,7 +24,7 @@
 
 #include <anjay_test/mock_dm.h>
 
-#include "../../src/dm/execute.h"
+#include "../../src/dm/dm_execute.h"
 
 typedef enum {
     MOCK_DM_OBJECT_READ_DEFAULT_ATTRS,

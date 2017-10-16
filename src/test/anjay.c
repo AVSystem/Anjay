@@ -440,12 +440,14 @@ AVS_UNIT_TEST(parse_headers, parse_observe) {
 }
 
 static time_t sched_time_to_next_s(anjay_sched_t *sched) {
-    struct timespec sched_delay;
+    avs_time_duration_t sched_delay;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(sched, &sched_delay));
-    if (sched_delay.tv_nsec >= (500L * 1000L * 1000L)) { // rounding
-        return sched_delay.tv_sec + 1;
+    if (!avs_time_duration_less(
+            sched_delay,
+            avs_time_duration_from_scalar(500, AVS_TIME_MS))) { // rounding
+        return sched_delay.seconds + 1;
     } else {
-        return sched_delay.tv_sec;
+        return sched_delay.seconds;
     }
 }
 
@@ -498,7 +500,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     ////// QUEUE MODE - EMPTY PASS //////
     AVS_UNIT_ASSERT_NOT_NULL(
             anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
-    _anjay_mock_clock_advance(&(const struct timespec) { 93, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
@@ -594,7 +596,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
             anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
     AVS_UNIT_ASSERT_NOT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
-    _anjay_mock_clock_advance(&(const struct timespec) { 93, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
@@ -709,7 +711,7 @@ AVS_UNIT_TEST(queue_mode, change) {
     AVS_UNIT_ASSERT_NOT_NULL(
             anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
-    _anjay_mock_clock_advance(&(const struct timespec) { 93, 0 });
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));

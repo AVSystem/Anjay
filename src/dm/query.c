@@ -15,14 +15,13 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
-#include <anjay_modules/time.h>
+#include <anjay_modules/time_defs.h>
 
 #include "query.h"
 
-#include "../dm.h"
-#include "../anjay.h"
+#include "../dm_core.h"
+#include "../anjay_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -179,8 +178,9 @@ bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
 }
 #endif
 
-struct timespec _anjay_disable_timeout_from_server_iid(anjay_t *anjay,
-                                                       anjay_iid_t server_iid) {
+avs_time_duration_t
+_anjay_disable_timeout_from_server_iid(anjay_t *anjay,
+                                       anjay_iid_t server_iid) {
     static const int32_t DEFAULT_DISABLE_TIMEOUT_S = NUM_SECONDS_IN_A_DAY;
 
     int64_t timeout_s;
@@ -194,5 +194,5 @@ struct timespec _anjay_disable_timeout_from_server_iid(anjay_t *anjay,
         timeout_s = INT32_MAX;
     }
 
-    return avs_time_from_s((int32_t) timeout_s);
+    return avs_time_duration_from_scalar(timeout_s, AVS_TIME_S);
 }

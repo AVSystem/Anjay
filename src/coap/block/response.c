@@ -19,7 +19,7 @@
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
-#include "../log.h"
+#include "../coap_log.h"
 
 #include "transfer_impl.h"
 #include "response.h"

@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <inttypes.h>
 
@@ -24,15 +23,15 @@
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/utils.h>
 
-#include <anjay_modules/time.h>
+#include <anjay_modules/time_defs.h>
 
 #include "register.h"
-#include "../dm.h"
+#include "../dm_core.h"
 #include "../dm/query.h"
-#include "../utils.h"
+#include "../utils_core.h"
 
 #include "../coap/content_format.h"
-#include "../coap/stream.h"
+#include "../coap/coap_stream.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -303,11 +302,10 @@ static int query_dm(anjay_t *anjay, AVS_LIST(anjay_dm_cache_object_t) *out) {
     return retval;
 }
 
-static struct timespec get_registration_expire_time(int64_t lifetime_s) {
-    struct timespec expire_time;
-    clock_gettime(CLOCK_MONOTONIC, &expire_time);
-    expire_time.tv_sec += (time_t) lifetime_s;
-    return expire_time;
+static avs_time_monotonic_t get_registration_expire_time(int64_t lifetime_s) {
+    return avs_time_monotonic_add(avs_time_monotonic_now(),
+                                  avs_time_duration_from_scalar(lifetime_s,
+                                                                AVS_TIME_S));
 }
 
 static void cleanup_update_parameters(anjay_update_parameters_t *params) {
@@ -563,10 +561,7 @@ int _anjay_deregister(anjay_t *anjay) {
     return result;
 }
 
-struct timespec
+avs_time_duration_t
 _anjay_register_time_remaining(const anjay_registration_info_t *info) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-
-    return avs_time_diff(&info->expire_time, &now);
+    return avs_time_monotonic_diff(info->expire_time, avs_time_monotonic_now());
 }

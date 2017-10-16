@@ -15,11 +15,10 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <math.h>
 
-#include "observe.h"
+#include "observe_core.h"
 #include "io/vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -29,15 +28,14 @@ VISIBILITY_SOURCE_BEGIN
 #define OTHER_ARGS_DECL3(_, T1, T2) , T1 _arg1__, T2 _arg2__
 
 #define OTHER_ARGS_DECL(...) \
-        AVS_CONCAT(OTHER_ARGS_DECL, \
-                   ANJAY_VARARG_LENGTH(__VA_ARGS__))(__VA_ARGS__)
+        AVS_CONCAT(OTHER_ARGS_DECL, AVS_VARARG_LENGTH(__VA_ARGS__))(__VA_ARGS__)
 
 #define OTHER_ARGS_CALL1
 #define OTHER_ARGS_CALL2 , _arg1__
 #define OTHER_ARGS_CALL3 , _arg1__, _arg2__
 
 #define OTHER_ARGS_CALL(...) \
-        AVS_CONCAT(OTHER_ARGS_CALL, ANJAY_VARARG_LENGTH(__VA_ARGS__))
+        AVS_CONCAT(OTHER_ARGS_CALL, AVS_VARARG_LENGTH(__VA_ARGS__))
 
 typedef struct {
     const anjay_output_ctx_vtable_t *vtable;
@@ -52,8 +50,8 @@ static Rettype Name (anjay_output_ctx_t *ctx_ \
     observe_out_t *ctx = (observe_out_t *) ctx_; \
     *ctx->out_numeric = NAN; \
     ctx->value_already_returned = true; \
-    return ANJAY_VARARG0(__VA_ARGS__) (ctx->backend \
-                                       OTHER_ARGS_CALL(__VA_ARGS__)); \
+    return AVS_VARARG0(__VA_ARGS__) (ctx->backend \
+                                     OTHER_ARGS_CALL(__VA_ARGS__)); \
 }
 
 NON_NUMERIC(anjay_ret_bytes_ctx_t *, observe_bytes_begin,

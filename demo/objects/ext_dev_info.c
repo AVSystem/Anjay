@@ -18,7 +18,7 @@
 #include <time.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #include <anjay/stats.h>
 
@@ -41,7 +41,7 @@
 
 typedef struct {
     const anjay_dm_object_def_t *def;
-    struct timespec init_time;
+    avs_time_monotonic_t init_time;
 } extdev_repr_t;
 
 static inline extdev_repr_t *get_extdev(const anjay_dm_object_def_t *const *obj_ptr) {
@@ -94,14 +94,11 @@ static int dev_read(anjay_t *anjay,
         return anjay_ret_i64(
                 ctx, (int64_t) anjay_get_num_outgoing_retransmissions(anjay));
     case EXT_DEV_RES_UPTIME: {
-        struct timespec curr_time;
-        if (clock_gettime(CLOCK_MONOTONIC, &curr_time)) {
-            return ANJAY_ERR_INTERNAL;
-        }
-        struct timespec diff =
-                avs_time_diff(&curr_time, &get_extdev(obj_ptr)->init_time);
+        avs_time_duration_t diff = avs_time_monotonic_diff(
+                avs_time_monotonic_now(), get_extdev(obj_ptr)->init_time);
 
-        return anjay_ret_double(ctx, (double) diff.tv_sec + (double) diff.tv_nsec / 1e9);
+        return anjay_ret_double(ctx, (double) diff.seconds
+                                             + (double) diff.nanoseconds / 1e9);
     }
     default:
         return ANJAY_ERR_NOT_FOUND;
@@ -136,18 +133,13 @@ static const anjay_dm_object_def_t EXT_DEV_INFO = {
 };
 
 const anjay_dm_object_def_t **ext_dev_info_object_create(void) {
-    struct timespec init_time;
-    if (clock_gettime(CLOCK_MONOTONIC, &init_time)) {
-        return NULL;
-    }
-
     extdev_repr_t *repr = (extdev_repr_t *) calloc(1, sizeof(extdev_repr_t));
     if (!repr) {
         return NULL;
     }
 
     repr->def = &EXT_DEV_INFO;
-    repr->init_time = init_time;
+    repr->init_time = avs_time_monotonic_now();
 
     return &repr->def;
 }

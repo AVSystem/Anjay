@@ -17,7 +17,7 @@
 #ifndef ANJAY_INTERFACE_REGISTER_H
 #define ANJAY_INTERFACE_REGISTER_H
 
-#include "../anjay.h"
+#include "../anjay_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -41,7 +41,7 @@ int _anjay_deregister(anjay_t *anjay);
 /**
  * @returns Amount of time from now until the server registration expires.
  */
-struct timespec
+avs_time_duration_t
 _anjay_register_time_remaining(const anjay_registration_info_t *info);
 
 VISIBILITY_PRIVATE_HEADER_END

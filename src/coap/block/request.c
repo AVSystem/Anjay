@@ -21,7 +21,7 @@
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
-#include "../log.h"
+#include "../coap_log.h"
 #include "../stream/common.h"
 #include "../stream/out.h"
 #include "../id_source/auto.h"

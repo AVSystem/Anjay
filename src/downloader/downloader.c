@@ -15,11 +15,12 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <inttypes.h>
 
-#include "../anjay.h"
+#include <avsystem/commons/utils.h>
+
+#include "../anjay_core.h"
 #include "../downloader.h"
 
 #define ANJAY_DOWNLOADER_INTERNALS
@@ -183,7 +184,7 @@ static uintptr_t find_free_id(anjay_downloader_t *dl) {
 }
 
 static bool starts_with(const char *haystack, const char *needle) {
-    return strncasecmp(haystack, needle, strlen(needle)) == 0;
+    return avs_strncasecmp(haystack, needle, strlen(needle)) == 0;
 }
 
 anjay_download_handle_t

@@ -17,7 +17,7 @@
 #include <assert.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #define CM_RES_NETWORK_BEARER           0 /* int */
 #define CM_RES_AVAILABLE_NETWORK_BEARER 1 /* array<int> */

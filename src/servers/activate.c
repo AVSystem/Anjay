@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <inttypes.h>
 
@@ -23,10 +22,10 @@
 
 #define ANJAY_SERVERS_INTERNALS
 
-#include "servers.h"
+#include "servers_internal.h"
 #include "activate.h"
 #include "connection_info.h"
-#include "register.h"
+#include "register_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -113,7 +112,7 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
 
 static int sched_reactivate_server(anjay_t *anjay,
                                    anjay_inactive_server_info_t *server,
-                                   struct timespec reactivate_delay) {
+                                   avs_time_duration_t reactivate_delay) {
     _anjay_sched_del(anjay->sched, &server->sched_reactivate_handle);
     if (_anjay_sched_retryable(anjay->sched, &server->sched_reactivate_handle,
                                reactivate_delay, ANJAY_SERVER_RETRYABLE_BACKOFF,
@@ -129,7 +128,7 @@ static int sched_reactivate_server(anjay_t *anjay,
 int _anjay_server_sched_activate(anjay_t *anjay,
                                  anjay_servers_t *servers,
                                  anjay_ssid_t ssid,
-                                 struct timespec delay) {
+                                 avs_time_duration_t delay) {
     AVS_LIST(anjay_inactive_server_info_t) *inactive_server_ptr =
             _anjay_servers_find_inactive_ptr(servers, ssid);
 
@@ -164,7 +163,7 @@ anjay_inactive_server_info_t *
 _anjay_server_deactivate(anjay_t *anjay,
                          anjay_servers_t *servers,
                          anjay_ssid_t ssid,
-                         struct timespec reactivate_delay) {
+                         avs_time_duration_t reactivate_delay) {
     if (ssid == ANJAY_SSID_BOOTSTRAP) {
         anjay_log(ERROR, "cannot deactivate Bootstrap Server");
         return NULL;

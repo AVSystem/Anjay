@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 
+#if !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #include <avsystem/commons/utils.h>
 

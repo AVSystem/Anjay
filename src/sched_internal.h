@@ -32,7 +32,7 @@ typedef struct {
     anjay_sched_task_type_t type;
 
     anjay_sched_handle_t *handle_ptr;
-    struct timespec when;
+    avs_time_monotonic_t when;
     anjay_sched_clb_t clb;
     void *clb_data;
 } anjay_sched_entry_t;

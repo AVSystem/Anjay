@@ -13,10 +13,10 @@
 # limitations under the License.
 
 set(SOURCES
-    src/security.c
-    src/transaction.c
-    src/persistence.c
-    src/utils.c)
+    src/security_utils.c
+    src/security_transaction.c
+    src/mod_security.c
+    src/security_persistence.c)
 set(PUBLIC_HEADERS
     include_public/anjay/security.h)
 

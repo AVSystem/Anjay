@@ -21,7 +21,7 @@
 #include <anjay/anjay.h>
 
 #include "objects.h"
-#include "utils.h"
+#include "demo_utils.h"
 
 typedef struct access_entry {
     anjay_ssid_t ssid;

@@ -75,7 +75,7 @@ static void setup(dl_test_env_t *env) {
     coap_id_source_t *id_source = _anjay_coap_id_source_auto_new(4235699843U, 0);
     _anjay_downloader_init(&env->anjay.downloader, &env->anjay, &id_source);
 
-    _anjay_mock_clock_start(&(const struct timespec){ 1, 0 });
+    _anjay_mock_clock_start(avs_time_monotonic_from_scalar(1, AVS_TIME_S));
 
     enum { ARBITRARY_SIZE = 4096 };
     // used by the downloader internally
@@ -505,10 +505,6 @@ AVS_UNIT_TEST(downloader, buffer_too_small_to_download) {
     _anjay_sched_run(env.base.anjay.sched);
 }
 
-static double timespec_to_s(const struct timespec *ts) {
-    return (double)ts->tv_sec + ((double)ts->tv_nsec / (1000 * 1000 * 1000));
-}
-
 AVS_UNIT_TEST(downloader, retry) {
     dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
     setup_simple(&env, "coap://127.0.0.1:5683");
@@ -528,23 +524,25 @@ AVS_UNIT_TEST(downloader, retry) {
     _anjay_sched_run(env.base.anjay.sched);
 
     // request retransmissions
-    struct timespec last_time_to_next = { 0, -1 };
+    avs_time_duration_t last_time_to_next = AVS_TIME_DURATION_INVALID;
     for (size_t i = 0; i < 4; ++i) {
         // make sure there's a retransmission job scheduled
-        struct timespec time_to_next;
+        avs_time_duration_t time_to_next;
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_sched_time_to_next(env.base.anjay.sched,
                                           &time_to_next));
-        _anjay_mock_clock_advance(&time_to_next);
+        _anjay_mock_clock_advance(time_to_next);
 
         avs_unit_mocksock_expect_output(env.mocksock,
                                         &req->content, req->length);
         _anjay_sched_run(env.base.anjay.sched);
 
         // ...and it's roughly exponential backoff
-        if (last_time_to_next.tv_nsec > 0) {
-            double ratio = timespec_to_s(&time_to_next)
-                           / timespec_to_s(&last_time_to_next);
+        if (avs_time_duration_valid(last_time_to_next)) {
+            double ratio = avs_time_duration_to_fscalar(time_to_next,
+                                                        AVS_TIME_S)
+                           / avs_time_duration_to_fscalar(last_time_to_next,
+                                                          AVS_TIME_S);
             ASSERT_ALMOST_EQ(ratio, 2.0);
         }
         last_time_to_next = time_to_next;
@@ -588,10 +586,11 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
     _anjay_sched_run(env.base.anjay.sched);
 
     // retransmission job should be scheduled
-    struct timespec time_to_next;
+    avs_time_duration_t time_to_next;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(env.base.anjay.sched,
                                                       &time_to_next));
-    AVS_UNIT_ASSERT_TRUE(timespec_to_s(&time_to_next) < 5.0);
+    AVS_UNIT_ASSERT_TRUE(avs_time_duration_to_fscalar(time_to_next,
+                                                      AVS_TIME_S) < 5.0);
 
     // separate ACK
     avs_unit_mocksock_input(env.mocksock, &req_ack->content, req_ack->length);
@@ -603,14 +602,15 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
 
     static const avs_coap_tx_params_t tx_params =
             ANJAY_COAP_DEFAULT_UDP_TX_PARAMS;
-    ASSERT_ALMOST_EQ(timespec_to_s(&time_to_next),
-                     (double) avs_coap_exchange_lifetime_ms(&tx_params)
-                             / 1000.0);
+    ASSERT_ALMOST_EQ(avs_time_duration_to_fscalar(time_to_next, AVS_TIME_S),
+                     avs_time_duration_to_fscalar(
+                             avs_coap_exchange_lifetime(&tx_params),
+                             AVS_TIME_S));
 
     // no separate response should abort the transfer after EXCHANGE_LIFETIME
     expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_FAILED);
 
-    _anjay_mock_clock_advance(&time_to_next);
+    _anjay_mock_clock_advance(time_to_next);
     _anjay_sched_run(env.base.anjay.sched);
 
     avs_unit_mocksock_assert_expects_met(env.mocksock);

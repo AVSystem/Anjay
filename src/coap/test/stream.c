@@ -30,7 +30,7 @@
 #include "servers.h"
 
 #include "../content_format.h"
-#include "../stream.h"
+#include "../coap_stream.h"
 
 #define TEST_PORT_UDP_ECHO 4322
 #define TEST_PORT_UDP_ACK 4323
@@ -496,7 +496,7 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
 
     {
         details.observe_serial = true;
-        _anjay_mock_clock_start(&(const struct timespec){ 514, 777 << 15 });
+        _anjay_mock_clock_start((avs_time_monotonic_t) { { 514, 777 << 15 } });
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL));
         static const char RESPONSE[] = "\x50\x45\x69\xED" // CoAP header
@@ -508,7 +508,7 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
     }
     {
         details.observe_serial = true;
-        _anjay_mock_clock_start(&(const struct timespec){ 777, 514 << 15 });
+        _anjay_mock_clock_start((avs_time_monotonic_t) { { 777, 514 << 15 } });
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL));
         static const char RESPONSE[] = "\x50\x45\x69\xEE" // CoAP header

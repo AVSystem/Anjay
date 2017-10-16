@@ -18,7 +18,7 @@
 #include <assert.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #define APNCP_RES_PROFILE_NAME 0                            // string
 #define APNCP_RES_APN 1                                     // string

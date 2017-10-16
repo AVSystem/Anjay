@@ -25,8 +25,8 @@
 
 #include <anjay_test/dm.h>
 
-#include "../../../../src/anjay.h"
-#include "../access_control.h"
+#include "../../../../src/anjay_core.h"
+#include "../mod_access_control.h"
 
 #define TEST_OID 0x100
 static const anjay_dm_object_def_t *const TEST = &(const anjay_dm_object_def_t) {

@@ -13,11 +13,11 @@
 # limitations under the License.
 
 set(SOURCES
-    src/access_control.c
-    src/handlers.c
-    src/persistence.c)
+    src/mod_access_control.c
+    src/access_control_handlers.c
+    src/access_control_persistence.c)
 set(PRIVATE_HEADERS
-    src/access_control.h)
+    src/mod_access_control.h)
 set(PUBLIC_HEADERS
     include_public/anjay/access_control.h)
 

@@ -20,7 +20,7 @@
 #include <inttypes.h>
 
 #include <avsystem/commons/http.h>
-#include <avsystem/commons/stream/net.h>
+#include <avsystem/commons/stream/stream_net.h>
 
 #define ANJAY_DOWNLOADER_INTERNALS
 

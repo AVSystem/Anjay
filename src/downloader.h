@@ -22,7 +22,7 @@
 #include <avsystem/commons/net.h>
 
 #include "sched.h"
-#include "utils.h"
+#include "utils_core.h"
 #include "coap/id_source/id_source.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN

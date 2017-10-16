@@ -28,7 +28,7 @@
 
 #include "../coap/content_format.h"
 
-#include "../io.h"
+#include "../io_core.h"
 #include "base64_out.h"
 #include "vtable.h"
 

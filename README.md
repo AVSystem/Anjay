@@ -107,7 +107,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 To install everything on Ubuntu 16.04 LTS:
 
 ``` sh
-sudo apt-get install git build-essential cmake libmbedtls-dev wget
+sudo apt-get install git build-essential cmake libmbedtls-dev
 # Optionally for tests:
 sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-sphinx clang
 ```
@@ -115,7 +115,7 @@ sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography pyth
 Or on macOS Sierra with [Homebrew](https://brew.sh/):
 
 ``` sh
-brew install cmake mbedtls wget
+brew install cmake mbedtls
 # Optionally for tests:
 brew install python3 openssl llvm
 pip3 install cryptography sphinx sphinx_rtd_theme

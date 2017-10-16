@@ -19,7 +19,7 @@
 #include <string.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 typedef enum {
     CS_SMS_TX_COUNTER       = 0,

@@ -19,7 +19,7 @@
 #include <unistd.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #define DEV_RES_MANUFACTURER 0                  // string
 #define DEV_RES_MODEL_NUMBER 1                  // string

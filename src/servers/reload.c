@@ -15,16 +15,15 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include "../dm/query.h"
 
 #define ANJAY_SERVERS_INTERNALS
 
 #include "connection_info.h"
-#include "servers.h"
+#include "servers_internal.h"
 #include "activate.h"
-#include "register.h"
+#include "register_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -37,7 +36,7 @@ static int reload_inactive_server(anjay_t *anjay,
 
     if (server->needs_activation
             && _anjay_server_sched_activate(anjay, servers, server->ssid,
-                                            ANJAY_TIME_ZERO)) {
+                                            AVS_TIME_DURATION_ZERO)) {
         return -1;
     }
 
@@ -114,7 +113,7 @@ static int reload_server_by_ssid(anjay_t *anjay,
 
     _anjay_servers_add_inactive(new_servers, new_server);
     return _anjay_server_sched_activate(anjay, new_servers,
-                                        ssid, ANJAY_TIME_ZERO);
+                                        ssid, AVS_TIME_DURATION_ZERO);
 }
 
 typedef struct {
@@ -193,9 +192,9 @@ static int schedule_reload_servers(anjay_t *anjay, bool delayed) {
     static const long RELOAD_DELAY_S = 5;
     _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
     if (_anjay_sched(anjay->sched, &anjay->reload_servers_sched_job_handle,
-                     (struct timespec){
-                         .tv_sec = delayed ? RELOAD_DELAY_S : 0
-                     }, reload_servers_sched_job, NULL)) {
+                     avs_time_duration_from_scalar(delayed ? RELOAD_DELAY_S : 0,
+                                                   AVS_TIME_S),
+                     reload_servers_sched_job, NULL)) {
         anjay_log(ERROR, "could not schedule reload_servers_job");
         return -1;
     }

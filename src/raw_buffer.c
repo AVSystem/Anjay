@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <anjay_modules/utils.h>
+#include <anjay_modules/raw_buffer.h>
 
 VISIBILITY_SOURCE_BEGIN
 

@@ -33,6 +33,8 @@ i.e. no LwM2M Objects are registered within it. We must therefore register
 objects that we would like to use via object registration mechanism you are
 just going to be presented with in the next subsection.
 
+.. _registering-objects:
+
 Registering Objects
 ^^^^^^^^^^^^^^^^^^^
 

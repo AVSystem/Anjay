@@ -15,15 +15,12 @@
  */
 
 #include "../objects.h"
-#include "../utils.h"
-#include "../wget_downloader.h"
+#include "../demo_utils.h"
 #include <assert.h>
 #include <string.h>
 #include <inttypes.h>
 #include <unistd.h>
 #include <time.h>
-
-#define TEMP_FILE_FMT       "/tmp/diag-XXXXXX"
 
 typedef enum {
     DOWNLOAD_DIAG_STATE         = 0,
@@ -45,33 +42,23 @@ typedef enum {
     DIAG_STATE_TRANSFER_FAILED  = 3
 } download_diag_state_t;
 
+typedef struct {
+    avs_time_real_t beg;
+    avs_time_real_t end;
+    size_t bytes_received;
+} download_diag_stats_t;
 
 typedef struct {
     const anjay_dm_object_def_t *def;
     char download_url[1024];
-    char temp_file[sizeof(TEMP_FILE_FMT)];
-    wget_context_t *wget_ctx;
-    wget_download_stats_t stats;
+    anjay_download_handle_t dl_handle;
+    download_diag_stats_t stats;
     download_diag_state_t state;
 } download_diag_repr_t;
-
-static int64_t timespec_as_us(struct timespec time) {
-    // It should be enough for 292471 years from epoch time.
-    return (int64_t) time.tv_sec * 1000000LL + time.tv_nsec / 1000;
-}
 
 static download_diag_repr_t *get_diag(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
     return container_of(obj_ptr, download_diag_repr_t, def);
-}
-
-static int make_temp_file(char *out_name) {
-    int fd = open_temporary_file(out_name);
-    if (fd == -1) {
-        return -1;
-    }
-    close(fd);
-    return 0;
 }
 
 static void set_state(anjay_t *anjay,
@@ -85,60 +72,65 @@ static void set_state(anjay_t *anjay,
     }
 }
 
-typedef struct {
-    download_diag_repr_t *repr;
-    anjay_t *anjay;
-} wget_args_t;
-
 static void reset_diagnostic(download_diag_repr_t *repr) {
     memset(repr->download_url, 0, sizeof(repr->download_url));
-    strcpy(repr->temp_file, TEMP_FILE_FMT);
 }
 
-static void wget_finish_callback(wget_result_t result,
-                                 const wget_download_stats_t *stats,
-                                 void *data) {
-    wget_args_t *args = (wget_args_t *) data;
-    if (!stats || result != WGET_RESULT_OK) {
-        set_state(args->anjay, args->repr, DIAG_STATE_TRANSFER_FAILED);
-    } else {
-        args->repr->stats = *stats;
-        set_state(args->anjay, args->repr, DIAG_STATE_COMPLETED);
+static void update_times(download_diag_repr_t *repr) {
+    avs_time_real_t now = avs_time_real_now();
+    if (!avs_time_real_valid(repr->stats.beg)) {
+        repr->stats.beg = now;
     }
-    unlink(args->repr->temp_file);
+    repr->stats.end = now;
+}
+
+static int dl_block_callback(anjay_t *anjay,
+                             const uint8_t *data,
+                             size_t data_size,
+                             const anjay_etag_t *etag,
+                             void *user_data) {
+    (void) anjay; (void) data; (void) etag;
+    download_diag_repr_t *repr = (download_diag_repr_t *) user_data;
+    repr->stats.bytes_received += data_size;
+    update_times(repr);
+    return 0;
+}
+
+static void dl_finish_callback(anjay_t *anjay,
+                               int result,
+                               void *user_data) {
+    download_diag_repr_t *repr = (download_diag_repr_t *) user_data;
+    update_times(repr);
+    if (result) {
+        set_state(anjay, repr, DIAG_STATE_TRANSFER_FAILED);
+    } else {
+        set_state(anjay, repr, DIAG_STATE_COMPLETED);
+    }
 }
 
 static int diag_download_run(anjay_t *anjay,
                              download_diag_repr_t *repr) {
-
-    if (make_temp_file(repr->temp_file)) {
-        return ANJAY_ERR_INTERNAL;
+    if (repr->dl_handle) {
+        demo_log(ERROR, "download diagnostic already in progress");
+        return -1;
     }
 
-    wget_args_t *args = (wget_args_t *) malloc(sizeof(wget_args_t));
-    if (!args) {
-        goto error;
-    }
-    args->anjay = anjay;
-    args->repr = repr;
-
-    if (wget_register_finish_callback(repr->wget_ctx, wget_finish_callback,
-                                      args, free)) {
-        goto error;
-    }
-
-    if (wget_background_download(repr->wget_ctx, repr->download_url,
-                                 repr->temp_file)) {
+    const anjay_download_config_t config = {
+        .url = repr->download_url,
+        .on_next_block = dl_block_callback,
+        .on_download_finished = dl_finish_callback,
+        .user_data = repr
+    };
+    if (!(repr->dl_handle = anjay_download(anjay, &config))) {
         set_state(anjay, repr, DIAG_STATE_TRANSFER_FAILED);
         demo_log(ERROR, "cannot schedule download diagnostic");
-        goto error;
+        return -1;
     }
+    repr->stats.beg = AVS_TIME_REAL_INVALID;
+    repr->stats.end = AVS_TIME_REAL_INVALID;
+    repr->stats.bytes_received = 0;
     set_state(anjay, repr, DIAG_STATE_REQUESTED);
     return 0;
-error:
-    unlink(repr->temp_file);
-    free(args);
-    return -1;
 }
 
 static int diag_resource_execute(anjay_t *anjay,
@@ -165,20 +157,25 @@ static int read_stats_resource(anjay_rid_t rid,
         return ANJAY_ERR_INTERNAL;
     }
 
+    int64_t tmp;
     switch ((download_diag_res_t) rid) {
     case DOWNLOAD_DIAG_ROM_TIME_US:
     case DOWNLOAD_DIAG_BOM_TIME_US:
-        return anjay_ret_i64(ctx, timespec_as_us(repr->stats.beg));
-    case DOWNLOAD_DIAG_EOM_TIME_US:
-        return anjay_ret_i64(ctx, timespec_as_us(repr->stats.end));
-    case DOWNLOAD_DIAG_TOTAL_BYTES:
-        {
-            int64_t total_bytes = INT64_MAX;
-            if (repr->stats.bytes_written < INT64_MAX) {
-                total_bytes = (int64_t) repr->stats.bytes_written;
-            }
-            return anjay_ret_i64(ctx, total_bytes);
+        if (avs_time_real_to_scalar(&tmp, AVS_TIME_US, repr->stats.beg)) {
+            return ANJAY_ERR_INTERNAL;
         }
+        return anjay_ret_i64(ctx, tmp);
+    case DOWNLOAD_DIAG_EOM_TIME_US:
+        if (avs_time_real_to_scalar(&tmp, AVS_TIME_US, repr->stats.end)) {
+            return ANJAY_ERR_INTERNAL;
+        }
+        return anjay_ret_i64(ctx, tmp);
+    case DOWNLOAD_DIAG_TOTAL_BYTES:
+        tmp = INT64_MAX;
+        if (repr->stats.bytes_received < INT64_MAX) {
+            tmp = (int64_t) repr->stats.bytes_received;
+        }
+        return anjay_ret_i64(ctx, tmp);
     default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -289,27 +286,20 @@ static const anjay_dm_object_def_t DOWNLOAD_DIAG = {
     }
 };
 
-const anjay_dm_object_def_t **
-download_diagnostics_object_create(iosched_t *iosched) {
+const anjay_dm_object_def_t **download_diagnostics_object_create(void) {
     download_diag_repr_t *repr = (download_diag_repr_t *)
             calloc(1, sizeof(download_diag_repr_t));
     if (!repr) {
         return NULL;
     }
     repr->def = &DOWNLOAD_DIAG;
-    repr->wget_ctx = wget_context_new(iosched);
-    if (!repr->wget_ctx) {
-        free(repr);
-        return NULL;
-    }
     return &repr->def;
 }
 
 void download_diagnostics_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
         download_diag_repr_t *repr = get_diag(def);
-        wget_context_delete(&repr->wget_ctx);
+        assert(!repr->dl_handle);
         free(repr);
     }
 }
-

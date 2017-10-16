@@ -27,7 +27,7 @@
 #include <arpa/inet.h>
 
 #include "../objects.h"
-#include "../utils.h"
+#include "../demo_utils.h"
 
 #define FW_RES_PACKAGE                  0
 #define FW_RES_PACKAGE_URI              1

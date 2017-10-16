@@ -15,19 +15,19 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
 #include <avsystem/commons/coap/msg_builder.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
+#include "common.h"
 #include "out.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 
-#include "../log.h"
+#include "../coap_log.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -78,14 +78,8 @@ static int add_string_options(avs_coap_msg_info_t *info,
 }
 
 static int add_observe_option(avs_coap_msg_info_t *info) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    // A nearly-linear, strictly monotonic timestamp with a precision of
-    // 32.768 us, wrapping every 512 seconds.
-    // Should satisfy the requirements given in OBSERVE 3.4 and 4.4
-    uint32_t value = (uint32_t) ((now.tv_sec & 0x1FF) << 15)
-            | (uint32_t) (now.tv_nsec >> 15);
-    return avs_coap_msg_info_opt_u32(info, AVS_COAP_OPT_OBSERVE, value);
+    return avs_coap_msg_info_opt_u32(info, AVS_COAP_OPT_OBSERVE,
+                                     _anjay_coap_common_timestamp());
 }
 
 static size_t effective_buffer_capacity(const coap_output_buffer_t *out) {

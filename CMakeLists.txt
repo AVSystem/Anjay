@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.4.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.4.1" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -47,9 +47,6 @@ include(cmake/install_utils.cmake)
 ################# FEATURES #####################################################
 
 include(CMakeDependentOption)
-include(TestBigEndian)
-
-test_big_endian(ANJAY_BIG_ENDIAN)
 
 # compilation flags
 if(NOT CMAKE_VERSION VERSION_LESS 3.1)
@@ -64,21 +61,13 @@ if(WITH_EXTRA_WARNINGS)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra -Winit-self -Wmissing-declarations -Wc++-compat -Wsign-conversion -Wconversion -Wcast-qual -Wno-variadic-macros -Wno-long-long")
 endif()
 
-option(WITH_POSIX "Enable use of system-installed POSIX APIs" ON)
-if(WITH_POSIX)
-    # macOS is weird and _POSIX_C_SOURCE causes a lot of things to disappear
-    if(NOT APPLE)
-        add_definitions(-D_POSIX_C_SOURCE=200809L)
-        set(CMAKE_REQUIRED_DEFINITIONS -D_POSIX_C_SOURCE=200809L)
-    endif()
-else()
-    set(POSIX_COMPAT_HEADER "" CACHE STRING "POSIX compatibility header path")
-endif()
-
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/PosixFeatures.cmake)
 
-cmake_dependent_option(WITH_DEMO "Compile DEMO applications" ON WITH_POSIX OFF)
+option(WITH_DEMO "Compile DEMO applications" ON)
 option(WITH_LIBRARY_SHARED "Compile Anjay as shared library" ON)
+cmake_dependent_option(WITH_STATIC_DEPS_LINKED
+                       "Directly link shared library with its static dependencies such as avs_commons (e.g. for interpreted language bindings)"
+                       OFF WITH_LIBRARY_SHARED OFF)
 
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
 option(WITH_BLOCK_RECEIVE "Enable support for receiving CoAP BLOCK transfers" ON)
@@ -155,12 +144,12 @@ endmacro()
 set(CORE_SOURCES
     src/coap/id_source/auto.c
     src/coap/id_source/static.c
-    src/coap/stream/client.c
+    src/coap/stream/client_internal.c
     src/coap/stream/common.c
     src/coap/stream/in.c
     src/coap/stream/out.c
-    src/coap/stream/server.c
-    src/coap/stream/stream.c
+    src/coap/stream/server_internal.c
+    src/coap/stream/stream_internal.c
     src/interface/register.c
     src/io/base64_out.c
     src/io/dynamic.c
@@ -169,26 +158,26 @@ set(CORE_SOURCES
     src/io/text.c
     src/io/tlv_in.c
     src/io/tlv_out.c
-    src/dm.c
-    src/dm/attributes.c
-    src/dm/execute.c
-    src/dm/handlers.c
+    src/dm_core.c
+    src/dm/dm_attributes.c
+    src/dm/dm_execute.c
+    src/dm/dm_handlers.c
     src/dm/modules.c
     src/dm/query.c
-    src/anjay.c
-    src/io.c
+    src/anjay_core.c
+    src/io_core.c
     src/notify.c
     src/servers/activate.c
     src/servers/connection_info.c
     src/servers/offline.c
     src/servers/reload.c
-    src/servers/register.c
-    src/servers/servers.c
+    src/servers/register_internal.c
+    src/servers/servers_internal.c
     src/raw_buffer.c
     src/sched.c
-    src/utils.c)
+    src/utils_core.c)
 if(WITH_ACCESS_CONTROL)
-    set(CORE_SOURCES ${CORE_SOURCES} src/access_control.c)
+    set(CORE_SOURCES ${CORE_SOURCES} src/access_control_utils.c)
 endif()
 if(WITH_DOWNLOADER)
     set(CORE_SOURCES ${CORE_SOURCES}
@@ -209,14 +198,14 @@ if(WITH_BLOCK_SEND)
         src/coap/block/transfer.c)
 endif()
 if(WITH_BOOTSTRAP)
-    set(CORE_SOURCES ${CORE_SOURCES} src/interface/bootstrap.c)
+    set(CORE_SOURCES ${CORE_SOURCES} src/interface/bootstrap_core.c)
 endif()
 if(WITH_DISCOVER)
     set(CORE_SOURCES ${CORE_SOURCES} src/dm/discover.c)
 endif()
 if(WITH_OBSERVE)
     set(CORE_SOURCES ${CORE_SOURCES}
-        src/observe.c
+        src/observe_core.c
         src/observe_io.c)
 endif()
 if(WITH_JSON)
@@ -224,7 +213,7 @@ if(WITH_JSON)
         src/io/json_out.c)
 endif()
 set(CORE_PRIVATE_HEADERS
-    src/access_control.h
+    src/access_control_utils.h
     src/coap/block/request.h
     src/coap/block/response.h
     src/coap/block/transfer.h
@@ -232,43 +221,43 @@ set(CORE_PRIVATE_HEADERS
     src/coap/id_source/id_source.h
     src/coap/id_source/auto.h
     src/coap/id_source/static.h
-    src/coap/stream.h
-    src/coap/stream/client.h
+    src/coap/coap_stream.h
+    src/coap/stream/client_internal.h
     src/coap/stream/common.h
     src/coap/stream/in.h
     src/coap/stream/out.h
-    src/coap/stream/server.h
-    src/coap/stream/stream.h
-    src/dm.h
-    src/dm/attributes.h
+    src/coap/stream/server_internal.h
+    src/coap/stream/stream_internal.h
+    src/dm_core.h
+    src/dm/dm_attributes.h
     src/dm/discover.h
-    src/dm/execute.h
+    src/dm/dm_execute.h
     src/dm/query.h
-    src/anjay.h
-    src/interface/bootstrap.h
+    src/anjay_core.h
+    src/interface/bootstrap_core.h
     src/interface/register.h
-    src/io.h
+    src/io_core.h
     src/io/tlv.h
     src/io/vtable.h
-    src/observe.h
+    src/observe_core.h
     src/sched.h
     src/sched_internal.h
     src/servers.h
     src/servers/activate.h
     src/servers/connection_info.h
-    src/servers/register.h
-    src/servers/servers.h
-    src/utils.h)
+    src/servers/register_internal.h
+    src/servers/servers_internal.h
+    src/utils_core.h)
 set(CORE_MODULES_HEADERS
-    include_modules/anjay_modules/dm.h
+    include_modules/anjay_modules/dm_utils.h
     include_modules/anjay_modules/dm/attributes.h
     include_modules/anjay_modules/dm/execute.h
     include_modules/anjay_modules/dm/modules.h
-    include_modules/anjay_modules/io.h
+    include_modules/anjay_modules/io_utils.h
     include_modules/anjay_modules/notify.h
     include_modules/anjay_modules/observe.h
-    include_modules/anjay_modules/time.h
-    include_modules/anjay_modules/utils.h)
+    include_modules/anjay_modules/time_defs.h
+    include_modules/anjay_modules/raw_buffer.h)
 set(CORE_PUBLIC_HEADERS
     include_public/anjay/anjay.h
     include_public/anjay/core.h
@@ -422,18 +411,20 @@ include_directories(${PUBLIC_INCLUDE_DIRS}
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in"
                "${CMAKE_CURRENT_BINARY_DIR}/config/config.h")
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/posix-config.h.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/config/posix-config.h")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/config")
 
 if(WITH_LIBRARY_SHARED)
     add_library(${PROJECT_NAME} SHARED ${ABSOLUTE_SOURCES})
-    target_link_libraries(${PROJECT_NAME} ${DEPS_LIBRARIES})
-    target_link_libraries(${PROJECT_NAME} LINK_INTERFACE_LIBRARIES ${DEPS_LIBRARIES_WEAK})
-    anjay_emit_deps(${PROJECT_NAME} ${DEPS_LIBRARIES_WEAK})
+    if(WITH_STATIC_DEPS_LINKED)
+        target_link_libraries(${PROJECT_NAME} ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
+    else()
+        target_link_libraries(${PROJECT_NAME} ${DEPS_LIBRARIES})
+        target_link_libraries(${PROJECT_NAME} LINK_INTERFACE_LIBRARIES ${DEPS_LIBRARIES_WEAK})
+        anjay_emit_deps(${PROJECT_NAME} ${DEPS_LIBRARIES_WEAK})
+    endif()
     set_target_properties(${PROJECT_NAME} PROPERTIES
                           VERSION ${ANJAY_BINARY_VERSION})
-    if(HAVE_VISIBILITY)
+    if(HAVE_VISIBILITY AND NOT WITH_STATIC_DEPS_LINKED)
         get_property(LINK_FLAGS TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS)
         set_property(TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,--exclude-libs,ALL")
     endif()
@@ -509,11 +500,15 @@ endif()
 ################# SOURCE VALIDATION ############################################
 
 foreach(F ${ABSOLUTE_SOURCES})
-    add_test(NAME test_${F}_visibility COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_visibility.sh ${F})
+    add_test(NAME test_${F}_visibility COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_visibility.py ${F})
+    add_test(NAME test_${F}_headers COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_headers.py ${F})
 endforeach()
 
 add_custom_target(visibility_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_visibility$$'")
 add_dependencies(anjay_unit_check visibility_check)
+
+add_custom_target(headers_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_headers$$'")
+add_dependencies(anjay_unit_check headers_check)
 
 set(ABSOLUTE_HEADERS)
 foreach(F ${ABSOLUTE_SOURCES})
@@ -536,7 +531,7 @@ add_dependencies(anjay_unit_check
 
 add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
 
-if(WITH_LIBRARY_SHARED)
+if(WITH_LIBRARY_SHARED AND NOT WITH_STATIC_DEPS_LINKED)
     add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}> anjay_ ANJAY_)
     add_dependencies(symbols_check ${PROJECT_NAME})
 endif()

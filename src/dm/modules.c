@@ -15,9 +15,8 @@
  */
 
 #include <config.h>
-#include <posix-config.h>
 
-#include "../anjay.h"
+#include "../anjay_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 

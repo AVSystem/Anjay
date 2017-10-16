@@ -21,7 +21,7 @@
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
-#include "../log.h"
+#include "../coap_log.h"
 
 #include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/coap/block_builder.h>
@@ -168,8 +168,9 @@ static bool should_wait_for_response(coap_block_transfer_ctx_t *ctx) {
 
 static int accept_response_with_timeout(coap_block_transfer_ctx_t *ctx,
                                         const avs_coap_msg_t *sent_msg,
-                                        int32_t recv_timeout_ms) {
-    coap_log(TRACE, "waiting %" PRId32 " ms for response", recv_timeout_ms);
+                                        avs_time_duration_t recv_timeout) {
+    coap_log(TRACE, "waiting %" PRId64 ".%09" PRId32 " s for response",
+             recv_timeout.seconds, recv_timeout.nanoseconds);
 
     block_recv_data_t block_recv_data = {
         .ctx = ctx,
@@ -180,7 +181,7 @@ static int accept_response_with_timeout(coap_block_transfer_ctx_t *ctx,
 
     int handler_retval;
     int result = _anjay_coap_common_recv_msg_with_timeout(
-            ctx->coap_ctx, ctx->socket, ctx->in, &recv_timeout_ms,
+            ctx->coap_ctx, ctx->socket, ctx->in, &recv_timeout,
             block_recv, &block_recv_data, &handler_retval);
 
     if (result == AVS_COAP_CTX_ERR_TIMEOUT) {
@@ -198,7 +199,10 @@ static int send_block_msg(coap_block_transfer_ctx_t *ctx,
              ctx->block.has_more);
 
     avs_coap_tx_params_t tx_params = avs_coap_ctx_get_tx_params(ctx->coap_ctx);
-    avs_coap_retry_state_t retry_state = { .retry_count = 0, .recv_timeout_ms = 0 };
+    avs_coap_retry_state_t retry_state = {
+        .retry_count = 0,
+        .recv_timeout = AVS_TIME_DURATION_ZERO
+    };
     int result = 0;
     do {
         avs_coap_update_retry_state(&retry_state, &tx_params,
@@ -213,15 +217,16 @@ static int send_block_msg(coap_block_transfer_ctx_t *ctx,
             break;
         } else {
             result = accept_response_with_timeout(ctx, msg,
-                                                  retry_state.recv_timeout_ms);
+                                                  retry_state.recv_timeout);
         }
 
         if (result != AVS_COAP_CTX_ERR_TIMEOUT) {
             break;
         }
 
-        coap_log(DEBUG, "timeout reached, next: %" PRId32 " ms",
-                 retry_state.recv_timeout_ms);
+        coap_log(DEBUG, "timeout reached, next: %" PRId64 ".%09" PRId32 " s",
+                 retry_state.recv_timeout.seconds,
+                 retry_state.recv_timeout.nanoseconds);
     } while (retry_state.retry_count < tx_params.max_retransmit);
 
     if (!result) {

@@ -13,10 +13,10 @@
 # limitations under the License.
 
 set(SOURCES
-    src/server.c
-    src/persistence.c
-    src/transaction.c
-    src/utils.c)
+    src/server_utils.c
+    src/server_transaction.c
+    src/mod_server.c
+    src/server_persistence.c)
 set(PUBLIC_HEADERS
     include_public/anjay/server.h)
 

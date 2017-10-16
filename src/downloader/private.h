@@ -17,7 +17,7 @@
 #ifndef ANJAY_DOWNLOADER_PRIVATE_H
 #define ANJAY_DOWNLOADER_PRIVATE_H
 
-#include "../anjay.h"
+#include "../anjay_core.h"
 #include "../downloader.h"
 
 #ifndef ANJAY_DOWNLOADER_INTERNALS
