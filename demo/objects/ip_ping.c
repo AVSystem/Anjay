@@ -388,22 +388,6 @@ ip_ping_transaction_begin(anjay_t *anjay,
 }
 
 static int
-ip_ping_transaction_validate(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;
-    (void) obj_ptr;
-    return 0;
-}
-
-static int
-ip_ping_transaction_commit(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;
-    (void) obj_ptr;
-    return 0;
-}
-
-static int
 ip_ping_transaction_rollback(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr) {
     (void) anjay;
@@ -436,8 +420,8 @@ static const anjay_dm_object_def_t IP_PING = {
         .resource_write = ip_ping_resource_write,
         .resource_execute = ip_ping_resource_execute,
         .transaction_begin = ip_ping_transaction_begin,
-        .transaction_validate = ip_ping_transaction_validate,
-        .transaction_commit = ip_ping_transaction_commit,
+        .transaction_validate = anjay_dm_transaction_NOOP,
+        .transaction_commit = anjay_dm_transaction_NOOP,
         .transaction_rollback = ip_ping_transaction_rollback
     }
 };

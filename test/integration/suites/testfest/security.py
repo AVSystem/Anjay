@@ -33,20 +33,21 @@ class Test401_UDPChannelSecurity_PreSharedKeyMode(DataModel.Test):
                                      auto_register=False)
 
     def runTest(self):
-        # a. Registration message (COAP POST) is sent from client to server.
-        req = self.serv.recv()
-        self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
-            req)
+        # 1. DTLS Session is established
+        # 2. Registration message (CoAP POST) is sent from LwM2M
+        #    Client to LwM2M Server.
+        # 3. Client receives Success message (2.01 Created) from the Server.
+        #
+        # A. In test step 2 & 3, Registration command of the Client on the Server
+        #    is performed successfully over the DTLS session
+        self.assertDemoRegisters()
 
-        # b. Client receives Success message (2.01 Created) from the server.
-        self.serv.send(Lwm2mCreated.matching(req)(location=self.DEFAULT_REGISTER_ENDPOINT))
-
-        # c. READ (COAP GET) on e.g. ACL object resources
-        req = Lwm2mRead('/2')
-        self.serv.send(req)
-
-        # d. Server receives success message (2.05 Content) and the
-        # requested values (encrypted)
-        self.assertMsgEqual(Lwm2mContent.matching(req)(),
-                            self.serv.recv())
+        # 4. READ (CoAP GET) on the Instance of the Device Object is
+        #    performed using the default TLV data format (cf Test
+        #    LwM2M-1.0-int-203)
+        # 5. Server receives success message (2.05 Content) and the
+        #    requested values (encrypted)
+        #
+        # B. In test step 4 & 5 the READ command work successfully over the
+        #    DTLS session.
+        self.test_read('/%d/0' % OID.Device)

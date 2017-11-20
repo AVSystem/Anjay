@@ -24,12 +24,13 @@
 
 #include <anjay/core.h>
 
+#include <anjay_modules/sched.h>
 #include <anjay_modules/time_defs.h>
 
 #define ANJAY_SCHED_C
 
+#include "anjay_core.h"
 #include "utils_core.h"
-#include "sched.h"
 #include "sched_internal.h"
 
 #define sched_log(...) _anjay_log(anjay_sched, __VA_ARGS__)
@@ -40,6 +41,10 @@ static anjay_sched_retryable_entry_t *
 get_retryable_entry(anjay_sched_entry_t *entry) {
     assert(entry->type == SCHED_TASK_RETRYABLE);
     return (anjay_sched_retryable_entry_t*)entry;
+}
+
+anjay_sched_t *_anjay_sched_get(anjay_t *anjay) {
+    return anjay->sched;
 }
 
 anjay_sched_t *_anjay_sched_new(anjay_t *anjay) {

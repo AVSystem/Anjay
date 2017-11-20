@@ -23,7 +23,6 @@
 
 #include "dm_core.h"
 #include "observe_core.h"
-#include "sched.h"
 
 #include "servers.h"
 #include "utils_core.h"
@@ -71,9 +70,9 @@ struct anjay_struct {
     uint8_t *out_buffer;
     size_t out_buffer_size;
 
-#ifdef WITH_BLOCK_DOWNLOAD
+#ifdef WITH_DOWNLOADER
     anjay_downloader_t downloader;
-#endif // WITH_BLOCK_DOWNLOAD
+#endif // WITH_DOWNLOADER
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1
@@ -94,6 +93,14 @@ void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay);
 void _anjay_release_server_stream(anjay_t *anjay);
 
 size_t _anjay_num_non_bootstrap_servers(anjay_t *anjay);
+
+/**
+ * @param anjay Pointer to the Anjay object, passed to scheduled jobs. Not
+ *              dereferenced by the scheduler object.
+ *
+ * @returns Created scheduler object, or NULL if there is not enough memory.
+ */
+anjay_sched_t *_anjay_sched_new(anjay_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

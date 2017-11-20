@@ -19,8 +19,9 @@
 
 #include <anjay/core.h>
 
+#include <anjay_modules/sched.h>
+
 #include "utils_core.h"
-#include "sched.h"
 #include "coap/coap_stream.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -28,11 +29,12 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 typedef enum {
     ANJAY_CONNECTION_UDP,
     ANJAY_CONNECTION_SMS,
-    ANJAY_CONNECTION_WILDCARD
+    ANJAY_CONNECTION_UNSET
 } anjay_connection_type_t;
 
 typedef struct {
     anjay_oid_t oid;
+    const char *version;
     AVS_LIST(anjay_iid_t) instances;
 } anjay_dm_cache_object_t;
 
@@ -81,39 +83,15 @@ typedef struct {
 #pragma GCC poison conn_priv_data_
 #endif
 
-    bool needs_socket_update;
+    bool needs_reconnect;
 
     bool queue_mode;
-
-    /**
-     * Sockets for queue mode connections are online for MAX_TRANSMIT_WAIT
-     * (93 seconds) since last communication with the server.
-     *
-     * In Anjay, this is achieved by calling <c>queue_mode_activate_socket()</c>
-     * from @ref _anjay_release_server_stream. This in turn (re)schedules
-     * <c>queue_mode_close_socket()</c> to be called after MAX_TRANSMIT_WAIT.
-     *
-     * There is no explicit flag to denote online or suspended socket for queue
-     * mode. This is because NULLness of this handle doubles as such a flag.
-     * If this handle is non-NULL, it means that socket suspension is
-     * scheduled - it is only natural that at that very moment the socket is
-     * thus online. If it is NULL, it means that socket suspension is not
-     * scheduled - and this means that it is already suspended.
-     *
-     * That's why checking
-     * <c>queue_mode_close_socket_clb_handle != NULL</c> is enough to check
-     * whether a queue mode socket should be online. This is indeed what
-     * <c>should_connection_be_online()</c> does. However,
-     * <c>queue_mode_close_socket()</c> actually closes the socket as well - so
-     * it needs to be reconnected. That's why
-     * <c>_anjay_connection_get_prepared_socket()</c> calls
-     * <c>_anjay_connection_internal_ensure_online()</c>.
-     */
     anjay_sched_handle_t queue_mode_close_socket_clb_handle;
 } anjay_server_connection_t;
 
 typedef struct {
     anjay_ssid_t ssid; // or ANJAY_SSID_BOOTSTRAP
+    anjay_url_t uri;
 
     bool needs_reload;
     anjay_server_connection_t udp_connection;
@@ -127,7 +105,7 @@ typedef struct {
 typedef struct {
     anjay_ssid_t ssid;
     anjay_sched_handle_t sched_reactivate_handle;
-    bool needs_activation;
+    bool reactivate_failed;
 } anjay_inactive_server_info_t;
 
 typedef struct {
@@ -151,6 +129,8 @@ static inline anjay_servers_t
 _anjay_servers_create(void) {
     return (anjay_servers_t){ NULL, NULL, NULL };
 }
+
+void _anjay_servers_inactive_cleanup(anjay_t *anjay);
 
 /**
  * Clears up the <c>anjay->servers</c> struct, sending De-Register messages for
@@ -204,9 +184,10 @@ int _anjay_server_setup_registration_connection(
         anjay_active_server_info_t *server);
 
 avs_net_abstract_socket_t *
-_anjay_connection_get_prepared_socket(anjay_t *anjay,
-                                      anjay_active_server_info_t *server,
-                                      anjay_server_connection_t *connection);
+_anjay_connection_get_online_socket(anjay_server_connection_t *connection);
+
+int _anjay_connection_bring_online(anjay_server_connection_t *connection,
+                                   bool *out_session_resumed);
 
 void _anjay_connection_suspend(anjay_connection_ref_t conn_ref);
 

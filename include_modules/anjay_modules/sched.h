@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef ANJAY_SCHED_H
-#define ANJAY_SCHED_H
+#ifndef ANJAY_INCLUDE_ANJAY_MODULES_SCHED_H
+#define ANJAY_INCLUDE_ANJAY_MODULES_SCHED_H
 
 #include <time.h>
-
 
 #include <anjay/core.h>
 
@@ -29,13 +28,8 @@ typedef void *anjay_sched_handle_t;
 
 typedef struct anjay_sched_struct anjay_sched_t;
 
-/**
- * @param anjay Pointer to the Anjay object, passed to scheduled jobs. Not
- *              dereferenced by the scheduler object.
- *
- * @returns Created scheduler object, or NULL if there is not enough memory.
- */
-anjay_sched_t *_anjay_sched_new(anjay_t *anjay);
+anjay_sched_t *_anjay_sched_get(anjay_t *anjay);
+
 ssize_t _anjay_sched_run(anjay_sched_t *sched);
 void _anjay_sched_delete(anjay_sched_t **sched_ptr);
 
@@ -131,5 +125,5 @@ int _anjay_sched_retryable(anjay_sched_t *sched,
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif /* ANJAY_SCHED_H */
+#endif /* ANJAY_INCLUDE_ANJAY_MODULES_SCHED_H */
 

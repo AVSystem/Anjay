@@ -122,15 +122,15 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
         self.assertEqual(len(self._find_icmp_unreach()), 1)
 
 
-class ReconnectTest(test_suite.Lwm2mSingleServerTest):
+class ReconnectTest(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
 
         original_remote_addr = self.serv.get_remote_addr()
 
         # should send an Update with reconnect
-        self.communicate('reconnect')
         self.serv.reset()
+        self.communicate('reconnect')
         pkt = self.serv.recv()
 
         # should retain remote port after reconnecting
@@ -243,38 +243,27 @@ class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
         self.serv.reset()
 
         pkt = self.serv.recv()
-        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                        query=[],
-                                        content=b''),
-                            pkt)
+        self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=1.0&ep=urn:dev:os:0023C7-000001&lt=86400'), pkt)
         self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_INTERNAL_SERVER_ERROR))
 
         # make sure that client retries
         self.serv.reset()
-        pkt = self.serv.recv(timeout_s=3)
-        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                        query=[],
-                                        content=b''),
-                            pkt)
-        self.serv.send(Lwm2mChanged.matching(pkt)())
+        self.assertDemoRegisters()
 
 
-class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mSingleServerTest):
+class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
 
         listen_port = self.serv.get_listen_port()
-        self.serv.close()
 
-        # should send an Update with reconnect
+        # should try to resume DTLS session
+        self.closeSocket()
         self.communicate('reconnect')
-        self.serv.reset()
 
         # give the process some time to fail
         time.sleep(1)
-
-        self.serv = Lwm2mServer(coap.Server(listen_port))
-        self.serv.set_timeout(timeout_s=1)
+        self.reopenSocket(listen_port)
 
         # make sure that client retries
         self.assertDemoUpdatesRegistration(timeout_s=5)

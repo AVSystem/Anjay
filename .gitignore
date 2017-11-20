@@ -17,6 +17,8 @@ nbproject
 CMakeFiles/
 CMakeTmp/
 CMakeCache.txt
+CMakeDoxyfile.in
+CMakeDoxygenDefaults.cmake
 cmake_install.cmake
 install_manifest.txt
 _CPack_Packages/

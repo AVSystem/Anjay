@@ -21,7 +21,8 @@
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/net.h>
 
-#include "sched.h"
+#include <anjay_modules/downloader.h>
+
 #include "utils_core.h"
 #include "coap/id_source/id_source.h"
 
@@ -68,9 +69,22 @@ int _anjay_downloader_init(anjay_downloader_t *dl,
  */
 void _anjay_downloader_cleanup(anjay_downloader_t *dl);
 
-anjay_download_handle_t
-_anjay_downloader_download(anjay_downloader_t *dl,
-                           const anjay_download_config_t *config);
+/**
+ * @returns negated value of an errno constant; currently supported values are:
+ *
+ * - <c>-EINVAL</c> - invalid argument, i.e. unparsable URL or unset handlers
+ * - <c>-ENOMEM</c> - out of memory
+ * - <c>-EPROTO</c> - unknown error on the socket layer, including (D)TLS
+ *   encryption errors
+ * - <c>-EPROTONOSUPPORT</c> - unsupported protocol (URL schema)
+ * - <c>-ETIMEDOUT</c> - attempt to connect to the remote host timed out
+ * - any negated <c>errno</c> value that might be set by system calls
+ *   <c>socket()</c>, <c>setsockopt()</c> <c>bind()</c>, <c>connect()</c> or
+ *   <c>send()</c>
+ */
+int _anjay_downloader_download(anjay_downloader_t *dl,
+                               anjay_download_handle_t *out,
+                               const anjay_download_config_t *config);
 
 /**
  * Retrieves all sockets used for downloads managed by @p dl and prepends them

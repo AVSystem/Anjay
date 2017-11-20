@@ -88,18 +88,21 @@ class BootstrapServerTest(BootstrapServer.Test):
 
         self.assertDemoRegisters(server=regular_serv, lifetime=60)
 
-        # Bootstrap Delete shall succeed
-        for obj in (OID.Security, OID.Server, OID.AccessControl):
-            req = Lwm2mDelete('/%d' % obj)
-            self.bootstrap_server.send(req)
-            self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
-                                self.bootstrap_server.recv(timeout_s=1))
+        # Bootstrap Delete / shall succeed
+        req = Lwm2mDelete('/')
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
+                            self.bootstrap_server.recv(timeout_s=1))
+        # ...even twice
+        req = Lwm2mDelete('/')
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
+                            self.bootstrap_server.recv(timeout_s=1))
         # now send Bootstrap Finish
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.bootstrap_server.recv(timeout_s=1))
-        self.assertDemoDeregisters(server=regular_serv)
 
         self.request_demo_shutdown()
 

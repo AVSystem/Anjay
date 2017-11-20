@@ -32,7 +32,7 @@ static int observe_notify(anjay_t *anjay,
     anjay_observe_key_t observe_key = {
         .connection = {
             .ssid = _anjay_dm_current_ssid(anjay),
-            .type = ANJAY_CONNECTION_WILDCARD
+            .type = ANJAY_CONNECTION_UNSET
         },
         .format = AVS_COAP_FORMAT_NONE
     };

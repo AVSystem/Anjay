@@ -26,8 +26,12 @@
 VISIBILITY_SOURCE_BEGIN
 
 static void disable_connection(anjay_server_connection_t *connection) {
-    _anjay_connection_internal_clean_socket(connection);
-    connection->needs_socket_update = false;
+    avs_net_abstract_socket_t *socket =
+            _anjay_connection_internal_get_socket(connection);
+    if (socket) {
+        avs_net_socket_close(socket);
+    }
+    connection->needs_reconnect = false;
 }
 
 static int enter_offline_job(anjay_t *anjay,
@@ -64,7 +68,7 @@ static int exit_offline_job(anjay_t *anjay, void *dummy) {
     anjay->offline = false;
     AVS_LIST(anjay_active_server_info_t) server;
     AVS_LIST_FOREACH(server, anjay->servers.active) {
-        server->udp_connection.needs_socket_update = true;
+        server->udp_connection.needs_reconnect = true;
     }
     return 0;
 }

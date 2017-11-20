@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <errno.h>
 #include <inttypes.h>
 
 #include <avsystem/commons/utils.h>
@@ -70,13 +71,16 @@ static void cleanup_transfer(anjay_downloader_t *dl,
 
 void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
                                       AVS_LIST(anjay_download_ctx_t) *ctx,
-                                      int result) {
+                                      int result,
+                                      int errno_value) {
     assert(ctx);
     assert(*ctx);
 
-    dl_log(TRACE, "aborting download id = %" PRIuPTR ", result = %d",
-           (*ctx)->common.id, result);
+    dl_log(TRACE,
+           "aborting download id = %" PRIuPTR ", result = %d, errno = %d",
+           (*ctx)->common.id, result, errno_value);
 
+    errno = errno_value;
     (*ctx)->common.on_download_finished(_anjay_downloader_get_anjay(dl), result,
                                         (*ctx)->common.user_data);
 
@@ -87,7 +91,7 @@ void _anjay_downloader_cleanup(anjay_downloader_t *dl) {
     assert(dl);
     while (dl->downloads) {
         _anjay_downloader_abort_transfer(dl, &dl->downloads,
-                                         ANJAY_DOWNLOAD_ERR_ABORTED);
+                                         ANJAY_DOWNLOAD_ERR_ABORTED, EINTR);
     }
 
     _anjay_coap_id_source_release(&dl->id_source);
@@ -187,34 +191,53 @@ static bool starts_with(const char *haystack, const char *needle) {
     return avs_strncasecmp(haystack, needle, strlen(needle)) == 0;
 }
 
-anjay_download_handle_t
-_anjay_downloader_download(anjay_downloader_t *dl,
-                           const anjay_download_config_t *config) {
+bool _anjay_downloader_protocol_supported(const char *proto) {
+    return false
+#ifdef WITH_BLOCK_DOWNLOAD
+            || avs_strcasecmp(proto, "coap") == 0
+            || avs_strcasecmp(proto, "coaps") == 0
+#endif // WITH_BLOCK_DOWNLOAD
+#ifdef WITH_HTTP_DOWNLOAD
+            || avs_strcasecmp(proto, "http") == 0
+            || avs_strcasecmp(proto, "https") == 0
+#endif // WITH_HTTP_DOWNLOAD
+            ;
+}
+
+int _anjay_downloader_download(anjay_downloader_t *dl,
+                               anjay_download_handle_t *out,
+                               const anjay_download_config_t *config) {
     assert(&_anjay_downloader_get_anjay(dl)->downloader == dl);
+    assert(out);
+    *out = (anjay_download_handle_t) INVALID_DOWNLOAD_ID;
 
     AVS_LIST(anjay_download_ctx_t) dl_ctx = NULL;
+    int result = -EPROTONOSUPPORT;
 #ifdef WITH_BLOCK_DOWNLOAD
     if (starts_with(config->url, "coap")) {
-        dl_ctx = _anjay_downloader_coap_ctx_new(dl, config, find_free_id(dl));
+        result = _anjay_downloader_coap_ctx_new(dl, &dl_ctx,
+                                                config, find_free_id(dl));
     } else
 #endif // WITH_BLOCK_DOWNLOAD
 #ifdef WITH_HTTP_DOWNLOAD
     if (starts_with(config->url, "http")) {
-        dl_ctx = _anjay_downloader_http_ctx_new(dl, config, find_free_id(dl));
+        result = _anjay_downloader_http_ctx_new(dl, &dl_ctx,
+                                                config, find_free_id(dl));
     } else
 #endif // WITH_HTTP_DOWNLOAD
     {
         dl_log(ERROR, "unrecognized protocol in URL: %s", config->url);
     }
-    if (!dl_ctx) {
-        return (anjay_download_handle_t) INVALID_DOWNLOAD_ID;
+
+    if (dl_ctx) {
+        AVS_LIST_APPEND(&dl->downloads, dl_ctx);
+
+        assert(dl_ctx->common.id != INVALID_DOWNLOAD_ID);
+        dl_log(INFO, "download scheduled: %s", config->url);
+        *out = (anjay_download_handle_t) dl_ctx->common.id;
+        result = 0;
     }
-
-    AVS_LIST_INSERT(&dl->downloads, dl_ctx);
-
-    assert(dl_ctx->common.id != INVALID_DOWNLOAD_ID);
-    dl_log(INFO, "download scheduled: %s", config->url);
-    return (anjay_download_handle_t) dl_ctx->common.id;
+    return result;
 }
 
 void _anjay_downloader_abort(anjay_downloader_t *dl,
@@ -226,6 +249,7 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
     if (!ctx) {
         dl_log(DEBUG, "download id = %" PRIuPTR " not found (expired?)", id);
     } else {
-        _anjay_downloader_abort_transfer(dl, ctx, ANJAY_DOWNLOAD_ERR_ABORTED);
+        _anjay_downloader_abort_transfer(dl, ctx,
+                                         ANJAY_DOWNLOAD_ERR_ABORTED, EINTR);
     }
 }

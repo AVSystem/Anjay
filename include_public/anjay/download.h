@@ -29,9 +29,9 @@ extern "C" {
 #endif
 
 /** CoAP Entity Tag. */
-typedef struct {
+typedef struct anjay_etag {
     uint8_t size;
-    uint8_t value[8];
+    uint8_t value[];
 } anjay_etag_t;
 
 /**
@@ -74,6 +74,27 @@ typedef enum anjay_download_result {
 /**
  * Called whenever the download finishes, successfully or not.
  *
+ * Upon entry to this function, additional information about the error
+ * condition, if any, will be passed via the standard global variable
+ * <c>errno</c>. Possible values include (but are not limited to):
+ *
+ * - <c>EADDRNOTAVAIL</c> - DNS resolution failed
+ * - <c>ECONNABORTED</c> - remote resource is no longer valid
+ * - <c>ECONNREFUSED</c> - server responded with an error or reset message on
+ *   the application layer (e.g. CoAP, HTTP)
+ * - <c>ECONNRESET</c> - connection lost or reset
+ * - <c>EINTR</c> - connection aborted by calling @ref anjay_download_abort
+ * - <c>EINVAL</c> - could not parse response from the server
+ * - <c>EIO</c> - internal error in the transfer code
+ * - <c>EMSGSIZE</c> - could not send or receive datagram because it was too
+ *   large
+ * - <c>ENOMEM</c> - out of memory
+ * - <c>ETIMEDOUT</c> - could not receive data from server in time
+ *
+ * If download is being aborted due to an error returned from
+ * @ref anjay_download_next_block_handler_t, <c>errno</c> value from the time of
+ * return from that function is preserved.
+ *
  * @param anjay     Anjay object managing the download process.
  * @param result    One of @ref anjay_download_result_t values or
  *                  any of ANJAY_ERR_* constants if the server sends
@@ -100,7 +121,7 @@ typedef struct anjay_download_config {
      * If start_offset is not 0, etag should be set to a value returned
      * by the server during the transfer before it got interrupted.
      */
-    anjay_etag_t etag;
+    const anjay_etag_t *etag;
 
     /** Required. Called after receiving a chunk of data from remote server. */
     anjay_download_next_block_handler_t *on_next_block;
@@ -138,7 +159,9 @@ typedef void *anjay_download_handle_t;
  *              the download,
  *          @li NULL handle if the download could not be initiated. Note that
  *              in such case, @ref anjay_download_config_t#on_download_finished
- *              handler is NOT called.
+ *              handler is NOT called. Additional information about the cause of
+ *              the error can be examined through the standard global variable
+ *              <c>errno</c>.
  */
 anjay_download_handle_t anjay_download(anjay_t *anjay,
                                        const anjay_download_config_t *config);

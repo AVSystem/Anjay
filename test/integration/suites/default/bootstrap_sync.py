@@ -13,31 +13,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import re
 
 from framework.lwm2m_test import *
 
 
 class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServerTest):
+    PSK_IDENTITY = b'test-identity'
+    PSK_KEY = b'test-key'
+
     def _get_socket_count(self):
         return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
 
-    def _wait_for_socket_count(self, expected_count):
-        # wait for sockets initialization
-        # scheduler-based socket initialization might delay socket setup a bit;
-        # this loop is here to ensure `communicate()` call below works as
-        # expected
-        for _ in range(10):
-            if self._get_socket_count() == expected_count:
-                break
-        else:
-            self.fail("sockets not initialized in time")
-
     def setUp(self):
-        self.setup_demo_with_servers(bootstrap_server=True)
+        self.setup_demo_with_servers(servers=[Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY))],
+                                     bootstrap_server=Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY)),
+                                     extra_cmdline_args=['--identity',
+                                                         str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
+                                                         '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
+                                     auto_register=False)
 
-        self._wait_for_socket_count(2)
-        demo_port = int(self.communicate('get-port -1', match_regex='PORT==([0-9]+)\n').group(1))
-        self.bootstrap_server.connect(('127.0.0.1', demo_port))
+        self.bootstrap_server.listen()
+        self.assertDemoRegisters(self.serv)
 
     def runTest(self):
         req = Lwm2mCreate('/1337')
@@ -69,7 +66,8 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
         self.bootstrap_server.send(Lwm2mBootstrapFinish())
         self.assertIsInstance(self.bootstrap_server.recv(), Lwm2mChanged)
 
-        self._wait_for_socket_count(2)
+        # client reconnects with DTLS session resumption
+        self.assertDtlsReconnect()
 
         # now we shall be able to do that Execute
         req = Lwm2mExecute('/1337/1/2')

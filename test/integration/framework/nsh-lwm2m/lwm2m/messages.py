@@ -196,21 +196,26 @@ class Lwm2mRequestBootstrap(Lwm2mMsg):
         """Checks if the PKT is a LWM2M Request Bootstrap message."""
         return (pkt.type == coap.Type.CONFIRMABLE
                 and pkt.code == coap.Code.REQ_POST
-                and pkt.get_full_uri().startswith('/bs?ep='))
+                and '/bs?ep=' in pkt.get_full_uri())
 
     def __init__(self,
                  endpoint_name: str,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
+                 uri_path: str = '',
+                 uri_query: List[str] = None,
                  options: List[coap.Option] = ANY,
                  content: EscapedBytes = ANY):
+        if not uri_query:
+            uri_query = []
+        uri_query = uri_query + ['ep=' + endpoint_name]
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_POST,
                          msg_id=msg_id,
                          token=token,
                          options=concat_if_not_any(
-                             CoapPath('/bs').to_uri_options(),
-                             [coap.Option.URI_QUERY('ep=' + endpoint_name)],
+                             CoapPath(uri_path + '/bs').to_uri_options(),
+                             [coap.Option.URI_QUERY(query) for query in uri_query],
                              options),
                          content=content)
 
@@ -225,7 +230,7 @@ class Lwm2mBootstrapFinish(Lwm2mMsg):
         """Checks if the PKT is a LWM2M Bootstrap Finish message."""
         return (pkt.type == coap.Type.CONFIRMABLE
                 and pkt.code == coap.Code.REQ_POST
-                and pkt.get_full_uri() == '/bs')
+                and pkt.get_full_uri().endswith('/bs'))
 
     def __init__(self,
                  msg_id: int = ANY,
@@ -274,7 +279,7 @@ class Lwm2mRegister(Lwm2mMsg):
         return (pkt.type == coap.Type.CONFIRMABLE
                 and pkt.code == coap.Code.REQ_POST
                 and is_link_format(pkt)
-                and pkt.get_uri_path() == '/rd')
+                and pkt.get_uri_path().endswith('/rd'))
 
     def __init__(self,
                  path: str or CoapPath,
@@ -310,7 +315,7 @@ class Lwm2mUpdate(Lwm2mMsg):
         # /OID or /OID/IID or /OID/IID/RID
         return (pkt.type == coap.Type.CONFIRMABLE
                 and pkt.code == coap.Code.REQ_POST
-                and pkt.get_uri_path().startswith('/rd/')
+                and '/rd/' in pkt.get_uri_path()
                 and (is_link_format(pkt)
                      or not is_lwm2m_nonempty_path(pkt.get_full_uri())))
 

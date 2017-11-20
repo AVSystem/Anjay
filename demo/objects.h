@@ -50,18 +50,11 @@ const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
                                                    const char *endpoint_name);
 void device_object_release(const anjay_dm_object_def_t **def);
 
-const anjay_dm_object_def_t **
-firmware_update_object_create(iosched_t *iosched,
-                              const char *fw_updated_marker_path);
-void firmware_update_object_release(const anjay_dm_object_def_t **def);
-
-void firmware_update_set_package_path(anjay_t *anjay,
-                                      const anjay_dm_object_def_t **fw_obj,
-                                      const char *path);
-
 #define MAX_SERVERS 1024
 
 typedef struct {
+    anjay_iid_t security_iid;
+    anjay_iid_t server_iid;
     anjay_ssid_t id;
     bool is_bootstrap;
     const char *uri;
@@ -139,5 +132,8 @@ const anjay_dm_object_def_t **geopoints_object_create(anjay_demo_t *demo);
 void geopoints_object_release(const anjay_dm_object_def_t **def);
 void geopoints_notify_time_dependent(anjay_t *anjay,
                                      const anjay_dm_object_def_t **def);
+
+const anjay_dm_object_def_t **portfolio_object_create(void);
+void portfolio_object_release(const anjay_dm_object_def_t **def);
 
 #endif // DEMO_OBJECTS_H

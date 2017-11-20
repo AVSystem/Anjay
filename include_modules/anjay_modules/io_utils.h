@@ -23,6 +23,8 @@
 
 #include <anjay/io.h>
 
+#include <anjay_modules/raw_buffer.h>
+
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 uint32_t _anjay_htonf(float f);
@@ -37,6 +39,20 @@ typedef int anjay_input_ctx_constructor_t(anjay_input_ctx_t **out,
 anjay_input_ctx_constructor_t _anjay_input_tlv_create;
 
 int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr);
+
+/**
+ * Fetches bytes from @p ctx. On success it frees underlying @p buffer storage
+ * via @p _anjay_sec_raw_buffer_clear and reinitializes @p buffer properly with
+ * obtained data.
+ */
+int _anjay_io_fetch_bytes(anjay_input_ctx_t *ctx, anjay_raw_buffer_t *buffer);
+
+/**
+ * Fetches string from @p ctx. It calls free() on @p *out and, on success,
+ * reinitializes @p *out properly with a pointer to (heap allocated) obtained
+ * data.
+ */
+int _anjay_io_fetch_string(anjay_input_ctx_t *ctx, char **out);
 
 VISIBILITY_PRIVATE_HEADER_END
 

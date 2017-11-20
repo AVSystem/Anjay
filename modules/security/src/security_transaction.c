@@ -65,7 +65,7 @@ int _anjay_sec_object_validate(sec_repr_t *repr) {
     bool bootstrap_server_present = false;
     AVS_LIST_FOREACH(it, repr->instances) {
         /* Assume something will go wrong */
-        result = -1;
+        result = ANJAY_ERR_BAD_REQUEST;
         if (validate_instance(it)) {
             goto finish;
         }
@@ -77,6 +77,7 @@ int _anjay_sec_object_validate(sec_repr_t *repr) {
             bootstrap_server_present = true;
         } else {
             if (!AVS_LIST_INSERT_NEW(anjay_ssid_t, &seen_ssids)) {
+                result = ANJAY_ERR_INTERNAL;
                 goto finish;
             }
             *seen_ssids = it->ssid;
@@ -92,7 +93,7 @@ int _anjay_sec_object_validate(sec_repr_t *repr) {
         while (next) {
             if (*prev == *next) {
                 /* Duplicate found */
-                result = -1;
+                result = ANJAY_ERR_BAD_REQUEST;
                 break;
             }
             prev = next;
@@ -106,13 +107,11 @@ finish:
 
 int _anjay_sec_transaction_begin_impl(sec_repr_t *repr) {
     assert(!repr->saved_instances);
-    if (!repr->instances) {
-        return 0;
-    }
     repr->saved_instances = _anjay_sec_clone_instances(repr);
-    if (!repr->saved_instances) {
+    if (!repr->saved_instances && repr->instances) {
         return ANJAY_ERR_INTERNAL;
     }
+    repr->saved_modified_since_persist = repr->modified_since_persist;
     return 0;
 }
 
@@ -129,5 +128,6 @@ int _anjay_sec_transaction_rollback_impl(sec_repr_t *repr) {
     _anjay_sec_destroy_instances(&repr->instances);
     repr->instances = repr->saved_instances;
     repr->saved_instances = NULL;
+    repr->modified_since_persist = repr->saved_modified_since_persist;
     return 0;
 }

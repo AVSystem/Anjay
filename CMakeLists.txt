@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.4.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.5.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -166,6 +166,7 @@ set(CORE_SOURCES
     src/dm/query.c
     src/anjay_core.c
     src/io_core.c
+    src/io_utils.c
     src/notify.c
     src/servers/activate.c
     src/servers/connection_info.c
@@ -240,7 +241,6 @@ set(CORE_PRIVATE_HEADERS
     src/io/tlv.h
     src/io/vtable.h
     src/observe_core.h
-    src/sched.h
     src/sched_internal.h
     src/servers.h
     src/servers/activate.h
@@ -253,9 +253,11 @@ set(CORE_MODULES_HEADERS
     include_modules/anjay_modules/dm/attributes.h
     include_modules/anjay_modules/dm/execute.h
     include_modules/anjay_modules/dm/modules.h
+    include_modules/anjay_modules/downloader.h
     include_modules/anjay_modules/io_utils.h
     include_modules/anjay_modules/notify.h
     include_modules/anjay_modules/observe.h
+    include_modules/anjay_modules/sched.h
     include_modules/anjay_modules/time_defs.h
     include_modules/anjay_modules/raw_buffer.h)
 set(CORE_PUBLIC_HEADERS
@@ -333,6 +335,9 @@ if(WITH_MODULE_persistence)
 endif()
 DEFINE_MODULE(security ON "Security object module")
 DEFINE_MODULE(server ON "Server object module")
+if(WITH_DOWNLOADER OR WITH_BLOCK_RECEIVE)
+    DEFINE_MODULE(fw_update ON "Firmware Update object module")
+endif()
 
 ################# LIBRARIES ####################################################
 
@@ -557,6 +562,8 @@ if(WITH_AVS_UNIT)
     add_anjay_test(${PROJECT_NAME} ${ABSOLUTE_TEST_SOURCES})
     target_link_libraries(${PROJECT_NAME}_test ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
 endif()
+
+add_subdirectory(test/codegen)
 
 cmake_dependent_option(WITH_INTEGRATION_TESTS "Enable integration tests" OFF WITH_DEMO OFF)
 if(WITH_INTEGRATION_TESTS)

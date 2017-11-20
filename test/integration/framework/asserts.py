@@ -147,3 +147,10 @@ class Lwm2mAsserts:
 
         serv.send(Lwm2mDeleted(msg_id=pkt.msg_id, token=pkt.token))
         serv.reset()
+
+    def assertDtlsReconnect(self, server=None, timeout_s=1):
+        serv = server or self.serv
+
+        with self.assertRaises(RuntimeError) as raised:
+            serv.recv(timeout_s=timeout_s)
+        self.assertIn('0x6780', raised.exception.args[0])  # -0x6780 == MBEDTLS_ERR_SSL_CLIENT_RECONNECT

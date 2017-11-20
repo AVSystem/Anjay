@@ -25,11 +25,23 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+typedef enum {
+    SERVER_REGISTRATION_UPDATE,
+    SERVER_REGISTRATION_RETRY
+} server_registration_operation_t;
+
+bool
+_anjay_server_registration_connection_valid(anjay_active_server_info_t *server);
+
+bool _anjay_server_registration_expired(anjay_active_server_info_t *server);
+
 int _anjay_server_register(anjay_t *anjay,
                            anjay_active_server_info_t *server);
 
-int _anjay_server_update_or_reregister(anjay_t *anjay,
-                                       anjay_active_server_info_t *server);
+int _anjay_server_update_or_reregister(
+        anjay_t *anjay,
+        anjay_active_server_info_t *server,
+        server_registration_operation_t *out_attempted_operation);
 
 int _anjay_server_reschedule_update_job(anjay_t *anjay,
                                         anjay_active_server_info_t *server);

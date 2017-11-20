@@ -26,7 +26,6 @@
 #include <anjay_test/utils.h>
 
 #include "../coap/test/utils.h"
-#include "../sched.h"
 
 AVS_UNIT_GLOBAL_INIT(verbose) {
 #ifdef WITH_AVS_LOG
@@ -525,7 +524,6 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Hello"));
-    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, -1, 0);
     static const char NOTIFY_RESPONSE[] =
             "\x50\x45\x69\xED" // CoAP header
             "\x63\x22\x80\x00" // Observe option
@@ -537,6 +535,11 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     avs_unit_mocksock_expect_remote_port(mocksocks[0], "8378");
     avs_unit_mocksock_expect_connect(mocksocks[0],
                                      "server.example.org", "8378");
+    avs_unit_mocksock_expect_get_opt(mocksocks[0],
+                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = true
+                                     });
     avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
                                     sizeof(NOTIFY_RESPONSE) - 1);
 
@@ -666,20 +669,6 @@ AVS_UNIT_TEST(queue_mode, change) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_BINDING, 0,
                                         ANJAY_MOCK_DM_STRING(0, "UQ"));
-    // get Security Mode
-    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
-                                           ANJAY_DM_RID_SECURITY_MODE, 1);
-    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
-                                        ANJAY_DM_RID_SECURITY_MODE, 0,
-                                        ANJAY_MOCK_DM_INT(
-                                                0, ANJAY_UDP_SECURITY_NOSEC));
-    // get URI
-    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
-                                           ANJAY_DM_RID_SECURITY_SERVER_URI, 1);
-    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
-                                        ANJAY_DM_RID_SECURITY_SERVER_URI, 0,
-                                        ANJAY_MOCK_DM_STRING(
-                                                0, "coap://127.0.0.1:5683"));
     // data model for the Update message - just fake an empty one
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0,
                                       ANJAY_IID_INVALID);
@@ -719,4 +708,13 @@ AVS_UNIT_TEST(queue_mode, change) {
             anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
 
     DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(anjay_new, no_endpoint_name) {
+    const anjay_configuration_t configuration = {
+        .endpoint_name = NULL,
+        .in_buffer_size = 4096,
+        .out_buffer_size = 4096
+    };
+    AVS_UNIT_ASSERT_NULL(anjay_new(&configuration));
 }

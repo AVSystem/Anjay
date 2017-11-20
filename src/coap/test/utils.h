@@ -30,7 +30,7 @@ struct coap_msg_args {
     const uint16_t *accept;
     const uint32_t *observe;
 
-    anjay_etag_t etag;
+    const anjay_etag_t *etag;
     const avs_coap_block_info_t block1;
     const avs_coap_block_info_t block2;
 
@@ -73,11 +73,11 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
         AVS_UNIT_ASSERT_SUCCESS(
                 avs_coap_msg_info_opt_block(&info, &args->block2));
     }
-    if (args->etag.size > 0) {
+    if (args->etag) {
         AVS_UNIT_ASSERT_SUCCESS(
                 avs_coap_msg_info_opt_opaque(&info, AVS_COAP_OPT_ETAG,
-                                             args->etag.value,
-                                             args->etag.size));
+                                             args->etag->value,
+                                             args->etag->size));
     }
 
     AVS_UNIT_ASSERT_SUCCESS(add_string_options(&info, AVS_COAP_OPT_URI_PATH,
@@ -150,7 +150,7 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
 
 /* Used in COAP_MSG() to specify ETag option value. */
 #define ETAG(Tag) \
-    .etag = (anjay_etag_t){ \
+    .etag = (const anjay_etag_t *) &(anjay_coap_etag_t){ \
         .size = sizeof(Tag) - 1, \
         .value = (Tag) \
     }

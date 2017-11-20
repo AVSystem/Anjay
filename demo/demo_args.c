@@ -28,6 +28,8 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .endpoint_name = "urn:dev:os:0023C7-000001",
     .connection_args = {
         .servers[0] = {
+            .security_iid = ANJAY_IID_INVALID,
+            .server_iid = ANJAY_IID_INVALID,
             .id = 1,
             .uri = "coap://127.0.0.1:5683"
         },
@@ -144,6 +146,11 @@ static void print_option_help(const struct option *opt) {
           "server URI to use. Note: coap:// URIs require --security-mode nosec "
           "to be set. N consecutive URIs will create N servers enumerated "
           "from 1 to N." },
+        { 'D', "IID", NULL, "enforce particular Security Instance IID for last "
+          "configured server." },
+        { 'd', "IID", NULL, "enforce particular Server Instance IID for last "
+          "configured server. Ignored if last configured server is an LwM2M "
+          "Bootstrap Server." },
         { 'I', "SIZE", "4000", "Nonnegative integer representing maximum "
                                "size of an incoming CoAP packet the client "
                                "should be able to handle." },
@@ -203,6 +210,19 @@ static int parse_i32(const char *str, int32_t *out_value) {
     }
 
     *out_value = (int32_t) long_value;
+    return 0;
+}
+
+static int parse_u16(const char *str, uint16_t *out_value) {
+    long long_value;
+    if (demo_parse_long(optarg, &long_value)
+            || long_value < 0
+            || long_value > UINT16_MAX) {
+        demo_log(ERROR, "value out of range: %s", str);
+        return -1;
+    }
+
+    *out_value = (uint16_t) long_value;
     return 0;
 }
 
@@ -335,7 +355,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "key",                        required_argument, 0, 'k' },
         { "key-file",                   required_argument, 0, 'K' },
         { "binding",                    optional_argument, 0, 'q' },
+        { "security-iid",               required_argument, 0, 'D' },
         { "security-mode",              required_argument, 0, 's' },
+        { "server-iid",                 required_argument, 0, 'd' },
         { "server-uri",                 required_argument, 0, 'u' },
         { "inbuf-size",                 required_argument, 0, 'I' },
         { "outbuf-size",                required_argument, 0, 'O' },
@@ -484,15 +506,38 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 parsed_args->connection_args.binding_mode = binding_mode;
                 break;
             }
+        case 'D': {
+                int idx = num_servers == 0 ? 0 : num_servers - 1;
+                if (parse_u16(optarg,
+                              &parsed_args->connection_args.servers[idx]
+                                                           .security_iid)) {
+                    goto error;
+                }
+            }
+            break;
         case 's':
             if (parse_security_mode(
                     optarg, &parsed_args->connection_args.security_mode)) {
                 goto error;
             }
             break;
-        case 'u':
-            assert(num_servers < MAX_SERVERS && "Too many servers");
-            parsed_args->connection_args.servers[num_servers++].uri = optarg;
+        case 'd': {
+                int idx = num_servers == 0 ? 0 : num_servers - 1;
+                if (parse_u16(optarg,
+                              &parsed_args->connection_args.servers[idx]
+                                                           .server_iid)) {
+                    goto error;
+                }
+            }
+            break;
+        case 'u': {
+                assert(num_servers < MAX_SERVERS && "Too many servers");
+                server_entry_t *entry =
+                        &parsed_args->connection_args.servers[num_servers++];
+                entry->uri = optarg;
+                entry->security_iid = ANJAY_IID_INVALID;
+                entry->server_iid = ANJAY_IID_INVALID;
+            }
             break;
         case 'I':
             if (parse_i32(optarg, &parsed_args->inbuf_size)
@@ -523,9 +568,15 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         }
     }
 finish:
-    for (int i = 1; i < num_servers; ++i) {
-        // update IDs
-        parsed_args->connection_args.servers[i].id = (anjay_ssid_t) (i + 1);
+    for (int i = 0; i < AVS_MAX(num_servers, 1); ++i) {
+        server_entry_t *entry = &parsed_args->connection_args.servers[i];
+        entry->id = (anjay_ssid_t) (i + 1);
+        if (entry->security_iid == ANJAY_IID_INVALID) {
+            entry->security_iid = (anjay_iid_t) entry->id;
+        }
+        if (entry->server_iid == ANJAY_IID_INVALID) {
+            entry->server_iid = (anjay_iid_t) entry->id;
+        }
     }
     bool identity_set =
             !!parsed_args->connection_args.public_cert_or_psk_identity_size;

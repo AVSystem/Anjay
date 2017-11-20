@@ -39,21 +39,21 @@ typedef struct {
     size_t num_mocksocks;
 } dl_test_env_t;
 
-static avs_net_abstract_socket_t *
-allocate_mocksock(anjay_t *anjay,
-                  avs_net_socket_type_t type,
-                  const char *bind_port,
-                  const void *config,
-                  const anjay_url_t *uri) {
+static int allocate_mocksock(anjay_t *anjay,
+                             avs_net_abstract_socket_t **out,
+                             avs_net_socket_type_t type,
+                             const char *bind_port,
+                             const void *config,
+                             const anjay_url_t *uri) {
     (void) type; (void) bind_port; (void) config;
 
     dl_test_env_t *env = AVS_CONTAINER_OF(anjay, dl_test_env_t, anjay);
     AVS_UNIT_ASSERT_TRUE(env->num_mocksocks < AVS_ARRAY_SIZE(env->mocksock));
-    avs_net_abstract_socket_t *sock = env->mocksock[env->num_mocksocks++];
+    *out = env->mocksock[env->num_mocksocks++];
 
-    AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(sock, uri->host, uri->port));
+    AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(*out, uri->host, uri->port));
 
-    return sock;
+    return 0;
 }
 
 static void setup(dl_test_env_t *env) {
@@ -108,7 +108,7 @@ static void teardown(dl_test_env_t *env) {
 typedef struct {
     uint8_t data[1024];
     size_t data_size;
-    anjay_etag_t etag;
+    const anjay_etag_t *etag;
     int result;
 } on_next_block_args_t;
 
@@ -147,8 +147,13 @@ static int on_next_block(anjay_t *anjay,
     AVS_UNIT_ASSERT_TRUE(anjay == hd->anjay);
 
     on_next_block_args_t *args = AVS_LIST_DETACH(&hd->on_next_block_calls);
-    AVS_UNIT_ASSERT_EQUAL(args->etag.size, etag->size);
-    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(args->etag.value, etag->value, etag->size);
+    if (etag && etag->size > 0) {
+        AVS_UNIT_ASSERT_EQUAL(args->etag->size, etag->size);
+        AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(args->etag->value, etag->value,
+                                          etag->size);
+    } else {
+        AVS_UNIT_ASSERT_NULL(args->etag);
+    }
     AVS_UNIT_ASSERT_EQUAL(args->data_size, data_size);
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(args->data, data, data_size);
     int result = args->result;
@@ -211,8 +216,9 @@ static int handle_packet(dl_simple_test_env_t *env) {
 }
 
 static void perform_simple_download(dl_simple_test_env_t *env) {
-    anjay_download_handle_t handle =
-            _anjay_downloader_download(&env->base.anjay.downloader, &env->cfg);
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
+            &env->base.anjay.downloader, &handle, &env->cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     do {
@@ -241,7 +247,10 @@ static void assert_download_not_possible(anjay_downloader_t *dl,
     num_downloads = AVS_LIST_SIZE(socks);
     AVS_LIST_CLEAR(&socks);
 
-    AVS_UNIT_ASSERT_NULL(_anjay_downloader_download(dl, cfg));
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_EQUAL(_anjay_downloader_download(dl, &handle, cfg),
+                          -EINVAL);
+    AVS_UNIT_ASSERT_NULL(handle);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_get_sockets(dl, &socks));
     AVS_UNIT_ASSERT_EQUAL(num_downloads, AVS_LIST_SIZE(socks));
@@ -339,8 +348,9 @@ AVS_UNIT_TEST(downloader, download_abort_on_cleanup) {
 
     avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
 
-    anjay_download_handle_t handle =
-            _anjay_downloader_download(&env.base.anjay.downloader, &env.cfg);
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
+            &env.base.anjay.downloader, &handle, &env.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_ABORTED);
@@ -369,8 +379,12 @@ AVS_UNIT_TEST(downloader, unsupported_protocol) {
     dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
     setup_simple(&env, "gopher://127.0.0.1:5683");
 
-    AVS_UNIT_ASSERT_NULL(_anjay_downloader_download(&env.base.anjay.downloader,
-                                                    &env.cfg));
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_EQUAL(
+            _anjay_downloader_download(&env.base.anjay.downloader, &handle,
+                                       &env.cfg),
+            -EPROTONOSUPPORT);
+    AVS_UNIT_ASSERT_NULL(handle);
 }
 
 AVS_UNIT_TEST(downloader, unrelated_socket) {
@@ -479,11 +493,12 @@ AVS_UNIT_TEST(downloader, coap_download_expired) {
     avs_unit_mocksock_expect_output(env.mocksock, &req2->content, req2->length);
     avs_unit_mocksock_input(env.mocksock, &res2->content, res2->length);
 
+    static const anjay_etag_t etag = { .size = 3, .value = "tag" };
     // expect handler calls
     expect_next_block(&env.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = 64,
-                          .etag = { .size = 3, .value = "tag" },
+                          .etag = &etag,
                           .result = 0 // request abort
                       });
     expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_EXPIRED);
@@ -498,8 +513,10 @@ AVS_UNIT_TEST(downloader, buffer_too_small_to_download) {
     env.base.anjay.out_buffer_size = 3;
     avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
 
-    AVS_UNIT_ASSERT_NOT_NULL(
-            _anjay_downloader_download(&env.base.anjay.downloader, &env.cfg));
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
+            &env.base.anjay.downloader, &handle, &env.cfg));
+    AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_FAILED);
     _anjay_sched_run(env.base.anjay.sched);
@@ -515,8 +532,9 @@ AVS_UNIT_TEST(downloader, retry) {
 
     avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
 
-    anjay_download_handle_t handle =
-            _anjay_downloader_download(&env.base.anjay.downloader, &env.cfg);
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
+            &env.base.anjay.downloader, &handle, &env.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
@@ -551,10 +569,11 @@ AVS_UNIT_TEST(downloader, retry) {
     // handle response
     avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
 
+    static const anjay_etag_t etag = { .size = 3, .value = "tag" };
     expect_next_block(&env.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
-                          .etag = { .size = 3, .value = "tag" },
+                          .etag = &etag,
                           .result = 0 // request abort
                       });
     expect_download_finished(&env.data, 0);
@@ -577,8 +596,9 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
 
     avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
 
-    anjay_download_handle_t handle =
-            _anjay_downloader_download(&env.base.anjay.downloader, &env.cfg);
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
+            &env.base.anjay.downloader, &handle, &env.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
@@ -630,8 +650,9 @@ AVS_UNIT_TEST(downloader, abort) {
 
     avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
 
-    anjay_download_handle_t handle =
-            _anjay_downloader_download(&env.base.anjay.downloader, &env.cfg);
+    anjay_download_handle_t handle = NULL;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
+            &env.base.anjay.downloader, &handle, &env.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // retransmission job scheduled
@@ -835,8 +856,9 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
         expect_download_finished(&env.data, 0);
 
         env.cfg.start_offset = offset;
-        anjay_download_handle_t handle =
-                _anjay_downloader_download(&env.base.anjay.downloader, &env.cfg);
+        anjay_download_handle_t handle = NULL;
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
+                &env.base.anjay.downloader, &handle, &env.cfg));
         AVS_UNIT_ASSERT_NOT_NULL(handle);
 
         do {

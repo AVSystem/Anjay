@@ -68,11 +68,14 @@ class BootstrapDiscoverFullMultipleServers(bs.BootstrapServer.Test,
 
         EXPECTED_PREFIX = b'lwm2m="1.0",</0>,</0/1>,</0/2>;ssid=11,</0/10>;ssid=12,' \
                           b'</1>,</1/24>;ssid=12,</1/42>;ssid=11,</2>,';
-        discover_result = self.discover(self.bootstrap_server).content
-        self.assertLinkListValid(discover_result[len(EXPECTED_ENABLER_VERSION_STRING) + 1:])
+        discover_result = self.discover(self.bootstrap_server)
+        self.assertEqual([coap.Option.CONTENT_FORMAT.APPLICATION_LINK],
+                         discover_result.get_options(coap.Option.CONTENT_FORMAT))
+        self.assertLinkListValid(discover_result.content[len(EXPECTED_ENABLER_VERSION_STRING) + 1:])
+        self.assertIn(b'</10>;ver="1.1"', discover_result.content[len(EXPECTED_ENABLER_VERSION_STRING) + 1:])
         # No more parameters
-        self.assertEqual(1, len(discover_result[len(EXPECTED_PREFIX):].split(b';')))
-        self.assertTrue(discover_result.startswith(EXPECTED_PREFIX))
+        self.assertEqual(2, len(discover_result.content[len(EXPECTED_PREFIX):].split(b';')))
+        self.assertTrue(discover_result.content.startswith(EXPECTED_PREFIX))
 
 
 class BootstrapDiscoverOnNonexistingObject(bs.BootstrapServer.Test,

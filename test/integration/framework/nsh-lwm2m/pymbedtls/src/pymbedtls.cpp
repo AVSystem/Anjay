@@ -24,6 +24,7 @@
 #include <mbedtls/entropy.h>
 #include <mbedtls/net.h>
 #include <mbedtls/ssl.h>
+#include <mbedtls/ssl_cache.h>
 #include <mbedtls/ssl_cookie.h>
 #include <mbedtls/timing.h>
 #include <mbedtls/debug.h>
@@ -90,6 +91,7 @@ struct Socket {
         HelloVerifyRequired
     };
 
+    shared_ptr<mbedtls_ssl_cache_context> session_cache;
     mbedtls_ssl_cookie_ctx cookie_ctx;
     mbedtls_ssl_context context;
     mbedtls_ssl_config config;
@@ -193,7 +195,9 @@ struct Socket {
            Type type_,
            const string &psk_identity_,
            const string &psk_key_,
-           bool debug):
+           bool debug,
+           shared_ptr<mbedtls_ssl_cache_context> session_cache_ = nullptr):
+        session_cache(session_cache_),
         py_socket(py_socket_),
         type(type_),
         in_handshake(false)
@@ -251,6 +255,12 @@ struct Socket {
 
         mbedtls_ssl_conf_dtls_cookies(&config, mbedtls_ssl_cookie_write,
                                       mbedtls_ssl_cookie_check, &cookie_ctx);
+
+        if (session_cache) {
+            mbedtls_ssl_conf_session_cache(&config, session_cache.get(),
+                                           mbedtls_ssl_cache_get,
+                                           mbedtls_ssl_cache_set);
+        }
 
         mbedtls_ssl_init(&context);
         mbedtls_ssl_set_bio(&context,
@@ -363,6 +373,8 @@ struct Socket {
 };
 
 class ServerSocket {
+    shared_ptr<mbedtls_ssl_cache_context> session_cache;
+
     void enable_reuse(const py::object &socket) {
         // Socket binding reuse on *nixes is crazy.
         // See http://stackoverflow.com/a/14388707 for details.
@@ -401,11 +413,13 @@ public:
                  const string &psk_identity_,
                  const string &psk_key_,
                  bool debug_):
+        session_cache(make_shared<mbedtls_ssl_cache_context>()),
         py_socket(py_socket_),
         psk_identity(psk_identity_),
         psk_key(psk_key_),
         debug(debug_)
     {
+        mbedtls_ssl_cache_init(session_cache.get());
         enable_reuse(py_socket);
     }
 
@@ -429,7 +443,8 @@ public:
         call_method<void>(client_py_sock, "connect", remote_addr);
 
         Socket *client_sock = new Socket(client_py_sock, Socket::Type::Server,
-                                         psk_identity, psk_key, debug);
+                                         psk_identity, psk_key, debug,
+                                         session_cache);
         client_sock->connect(remote_addr, handshake_timeouts_s);
         return client_sock;
     }
@@ -441,7 +456,19 @@ public:
     {}
 
     py::object __getattr__(py::object name) {
-        return call_method<py::object>(py_socket, "__getattribute__", name);
+        if (py::cast<string>(name) == "py_socket") {
+            return py_socket;
+        } else {
+            return call_method<py::object>(py_socket, "__getattribute__", name);
+        }
+    }
+
+    void __setattr__(py::object name, py::object value) {
+        if (py::cast<string>(name) == "py_socket") {
+            py_socket = value;
+        } else {
+            call_method<py::object>(py_socket, "__setattribute__", name, value);
+        }
     }
 };
 
@@ -456,6 +483,7 @@ PYBIND11_MODULE(pymbedtls, m) {
             py::return_value_policy::take_ownership,
             py::arg("handshake_timeouts_s") = py::none())
         .def("__getattr__", &ServerSocket::__getattr__)
+        .def("__setattr__", &ServerSocket::__setattr__)
     ;
 
     auto socket_scope = py::class_<Socket>(m, "Socket")

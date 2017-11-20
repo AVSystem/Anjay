@@ -224,3 +224,90 @@ class MultipleBootstrapSecurityInstancesNotAllowed(test_suite.Lwm2mTest):
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_BAD_REQUEST),
                             self.bootstrap_server.recv(timeout_s=2))
+
+
+class BootstrapUri(test_suite.Lwm2mSingleServerTest):
+    def make_demo_args(self, *args, **kwargs):
+        args = super().make_demo_args(*args, **kwargs)
+        for i in range(len(args)):
+            if args[i].startswith('coap'):
+                args[i] += '/some/crazy/path?and=more&craziness'
+        return args
+
+    def setUp(self):
+        self.setup_demo_with_servers(servers=1,
+                                     num_servers_passed=0,
+                                     bootstrap_server=True)
+
+    def runTest(self):
+        pkt = self.bootstrap_server.recv(timeout_s=2)
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME,
+                                                  uri_path='/some/crazy/path',
+                                                  uri_query=['and=more', 'craziness']),
+                            pkt)
+        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+
+class InvalidBootstrappedServer(test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        self.setup_demo_with_servers(servers=1,
+                                     num_servers_passed=0,
+                                     bootstrap_server=True)
+
+    def runTest(self):
+        req = self.bootstrap_server.recv(timeout_s=2)
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
+                            req)
+        self.bootstrap_server.send(Lwm2mChanged.matching(req)())
+
+        # Create Server object
+        req = Lwm2mWrite('/1/1',
+                         TLV.make_resource(RID.Server.Lifetime, 86400).serialize()
+                         + TLV.make_resource(RID.Server.ShortServerID, 1).serialize()
+                         + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
+                         + TLV.make_resource(RID.Server.Binding, "U").serialize(),
+                         format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.bootstrap_server.recv(timeout_s=1))
+
+        # Create Security object
+        regular_serv_uri = 'coap://127.0.0.1:%d' % self.serv.get_listen_port()
+
+        req = Lwm2mWrite('/0/2',
+                         TLV.make_resource(RID.Security.ServerURI, regular_serv_uri).serialize()
+                         + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                         + TLV.make_resource(RID.Security.Mode, 3).serialize()
+                         + TLV.make_resource(RID.Security.ShortServerID, 1).serialize()
+                         + TLV.make_resource(RID.Security.PKOrIdentity, "").serialize()
+                         + TLV.make_resource(RID.Security.SecretKey, "").serialize(),
+                         format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.bootstrap_server.recv(timeout_s=1))
+
+        # send Bootstrap Finish
+        req = Lwm2mBootstrapFinish()
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.bootstrap_server.recv(timeout_s=1))
+
+        # demo should now try to register
+        req = self.serv.recv()
+        self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
+                            req)
+
+        # respond with 4.03
+        self.serv.send(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_FORBIDDEN))
+
+        # demo should retry Bootstrap
+        req = self.bootstrap_server.recv(timeout_s=2)
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
+                            req)
+        self.bootstrap_server.send(Lwm2mChanged.matching(req)())
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)

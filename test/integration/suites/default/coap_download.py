@@ -33,9 +33,19 @@ class CoapDownload:
 
             self.file_server_thread = CoapFileServerThread(coap_server or coap.Server())
             self.file_server_thread.start()
-            self.file_server = self.file_server_thread.file_server
 
             self.tempfile = tempfile.NamedTemporaryFile()
+
+
+        @property
+        def file_server(self):
+            return self.file_server_thread.file_server
+
+
+        def register_resource(self, path, *args, **kwargs):
+            with self.file_server as file_server:
+                file_server.set_resource(path, *args, **kwargs)
+                return file_server.get_resource_uri(path)
 
 
         def tearDown(self):
@@ -65,9 +75,7 @@ class CoapDownload:
 
 class CoapDownloadDoesNotBlockLwm2mTraffic(CoapDownload.Test):
     def runTest(self):
-        self.file_server.set_resource('/', DUMMY_PAYLOAD)
-
-        self.communicate('download %s %s' % (self.file_server.get_resource_uri('/'),
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
                                              self.tempfile.name))
 
         for _ in range(10):
@@ -81,18 +89,20 @@ class CoapDownloadDoesNotBlockLwm2mTraffic(CoapDownload.Test):
 
 class CoapDownloadIgnoresUnrelatedRequests(CoapDownload.Test):
     def runTest(self):
-        self.file_server.set_resource('/', DUMMY_PAYLOAD)
-
-        self.communicate('download %s %s' % (self.file_server.get_resource_uri('/'),
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
                                              self.tempfile.name))
         self.assertEqual(2, self.count_client_sockets())
 
         # wait for first request
-        while len(self.file_server.requests) == 0:
+        while True:
+            with self.file_server as file_server:
+                if len(file_server.requests) != 0:
+                    break
             time.sleep(0.001)
 
         for _ in range(10):
-            self.file_server._server.send(Lwm2mRead(ResPath.Device.SerialNumber).fill_placeholders())
+            with self.file_server as file_server:
+                file_server._server.send(Lwm2mRead(ResPath.Device.SerialNumber).fill_placeholders())
 
         # make sure the download is actually done
         self.wait_until_downloads_finished()
@@ -109,9 +119,7 @@ class CoapDownloadOverDtls(CoapDownload.Test):
                                                   psk_key=self.PSK_KEY))
 
     def runTest(self):
-        self.file_server.set_resource('/', DUMMY_PAYLOAD)
-
-        self.communicate('download %s %s %s %s' % (self.file_server.get_resource_uri('/'),
+        self.communicate('download %s %s %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
                                                    self.tempfile.name,
                                                    self.PSK_IDENTITY.decode('ascii'),
                                                    self.PSK_KEY.decode('ascii')))
@@ -128,16 +136,18 @@ class CoapDownloadRetransmissions(CoapDownload.Test):
             try:
                 seq_num = req.get_options(coap.Option.BLOCK2)[0].seq_num()
                 required_retransmissions = seq_num % 4
-                num_retransmissions = len([x for x in self.file_server.requests if x == req])
+                with self.file_server as file_server:
+                    num_retransmissions = len([x for x in file_server.requests if x == req])
                 return num_retransmissions < required_retransmissions
             except:
                 return False
 
-        self.file_server.set_resource('/', DUMMY_PAYLOAD)
-        self.file_server.should_ignore_request = should_ignore_request
+        with self.file_server as file_server:
+            file_server.set_resource('/', DUMMY_PAYLOAD)
+            file_server.should_ignore_request = should_ignore_request
+            uri = file_server.get_resource_uri('/')
 
-        self.communicate('download %s %s' % (self.file_server.get_resource_uri('/'),
-                                             self.tempfile.name))
+        self.communicate('download %s %s' % (uri, self.tempfile.name))
 
         # make sure download succeeded
         self.wait_until_downloads_finished()
@@ -147,12 +157,11 @@ class CoapDownloadRetransmissions(CoapDownload.Test):
 
 class CoapDownloadAbortsOnErrorResponse(CoapDownload.Test):
     def runTest(self):
-        self.file_server.set_resource('/', DUMMY_PAYLOAD)
-
-        self.communicate('download %s %s' % (self.file_server.get_resource_uri('/'),
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
                                              self.tempfile.name))
         self.assertEqual(2, self.count_client_sockets())
-        self.file_server.set_resource('/', None)
+        with self.file_server as file_server:
+            file_server.set_resource('/', None)
 
         # make sure download was aborted
         self.wait_until_downloads_finished()
@@ -162,19 +171,19 @@ class CoapDownloadAbortsOnErrorResponse(CoapDownload.Test):
 
 class CoapDownloadAbortsOnETagChange(CoapDownload.Test):
     def runTest(self):
-        self.file_server.set_resource('/', DUMMY_PAYLOAD)
-
-        self.communicate('download %s %s' % (self.file_server.get_resource_uri('/'),
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
                                              self.tempfile.name))
         self.assertEqual(2, self.count_client_sockets())
 
-        while len(self.file_server.requests) == 0:
+        while True:
+            with self.file_server as file_server:
+                if len(file_server.requests) != 0:
+                    old_etag = file_server._resources['/'].etag
+                    new_etag = bytes([(old_etag[0] + 1) % 256]) + old_etag[1:]
+                    self.assertNotEqual(old_etag, new_etag)
+                    file_server.set_resource('/', DUMMY_PAYLOAD, etag=new_etag)
+                    break
             time.sleep(0.001)
-
-        old_etag = self.file_server._resources['/'].etag
-        new_etag = bytes([(old_etag[0] + 1) % 256]) + old_etag[1:]
-        self.assertNotEqual(old_etag, new_etag)
-        self.file_server.set_resource('/', DUMMY_PAYLOAD, etag=new_etag)
 
         # make sure download was aborted
         self.wait_until_downloads_finished()
@@ -184,17 +193,22 @@ class CoapDownloadAbortsOnETagChange(CoapDownload.Test):
 
 class CoapDownloadAbortsOnUnexpectedResponse(CoapDownload.Test):
     def runTest(self):
-        self.file_server.set_resource('/', DUMMY_PAYLOAD)
-        self.file_server.should_ignore_request = lambda _: True
+        with self.file_server as file_server:
+            file_server.set_resource('/', DUMMY_PAYLOAD)
+            file_server.should_ignore_request = lambda _: True
+            uri = file_server.get_resource_uri('/')
 
-        self.communicate('download %s %s' % (self.file_server.get_resource_uri('/'),
-                                             self.tempfile.name))
+        self.communicate('download %s %s' % (uri, self.tempfile.name))
         self.assertEqual(2, self.count_client_sockets())
 
-        while len(self.file_server.requests) == 0:
+        while True:
+            with self.file_server as file_server:
+                if len(file_server.requests) != 0:
+                    break
             time.sleep(0.001)
 
-        self.file_server._server.send(Lwm2mCreated.matching(self.file_server.requests[-1])().fill_placeholders())
+        with self.file_server as file_server:
+            file_server._server.send(Lwm2mCreated.matching(file_server.requests[-1])().fill_placeholders())
 
         # make sure download was aborted
         self.wait_until_downloads_finished()

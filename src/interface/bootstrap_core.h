@@ -23,7 +23,6 @@
 #include <avsystem/commons/stream/stream_outbuf.h>
 
 #include "../dm_core.h"
-#include "../sched.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

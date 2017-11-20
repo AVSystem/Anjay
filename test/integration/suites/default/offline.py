@@ -15,14 +15,13 @@
 # limitations under the License.
 
 import socket
-import time
 
 from framework.lwm2m_test import *
 
 OFFLINE_INTERVAL = 4
 
 
-class OfflineTest(test_suite.Lwm2mSingleServerTest):
+class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         # Create object
         req = Lwm2mCreate('/1337', TLV.make_instance(instance_id=0).serialize())
@@ -50,12 +49,11 @@ class OfflineTest(test_suite.Lwm2mSingleServerTest):
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=OFFLINE_INTERVAL)
 
-        self.serv.reset()
         # exit offline mode
         self.communicate('exit-offline')
 
-        # Update shall now come
-        self.assertDemoUpdatesRegistration(content=ANY)
+        # client reconnects with DTLS session resumption
+        self.assertDtlsReconnect()
 
         notifications = 0
         while True:
@@ -79,7 +77,7 @@ class OfflineTest(test_suite.Lwm2mSingleServerTest):
             self.serv.recv(timeout_s=2)
 
 
-class OfflineWithReregisterTest(test_suite.Lwm2mSingleServerTest):
+class OfflineWithReregisterTest(test_suite.Lwm2mDtlsSingleServerTest):
     LIFETIME = OFFLINE_INTERVAL - 1
 
     def setUp(self):
@@ -92,14 +90,14 @@ class OfflineWithReregisterTest(test_suite.Lwm2mSingleServerTest):
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=OFFLINE_INTERVAL)
 
-        self.serv.reset()
         self.communicate('exit-offline')
 
         # Register shall now come
+        self.assertDtlsReconnect()
         self.assertDemoRegisters(lifetime=OfflineWithReregisterTest.LIFETIME)
 
 
-class OfflineWithSecurityObjectChange(test_suite.Lwm2mSingleServerTest):
+class OfflineWithSecurityObjectChange(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         self.communicate('enter-offline')
         # Notify anjay that Security Object Resource changed
@@ -113,62 +111,36 @@ class OfflineWithSecurityObjectChange(test_suite.Lwm2mSingleServerTest):
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=1)
 
-        self.serv.reset()
         self.communicate('exit-offline')
-        self.assertDemoUpdatesRegistration()
+        self.assertDtlsReconnect()
 
 
-class OfflineWithReconnect(test_suite.Lwm2mSingleServerTest):
+class OfflineWithReconnect(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         self.communicate('enter-offline')
-        self.serv.reset()
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=OFFLINE_INTERVAL)
         self.communicate('reconnect')
+        self.assertDtlsReconnect()
         self.assertDemoUpdatesRegistration()
 
 
-class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mSingleServerTest):
+class OfflineWithoutDtlsTest(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        self.communicate('enter-offline')
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=OFFLINE_INTERVAL)
+        self.communicate('exit-offline')
+        self.assertDemoRegisters()
+
+
+class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         self.communicate('enter-offline')
         self.communicate('send-update 0')
         with self.assertRaises(socket.timeout):
             pkt = self.serv.recv(timeout_s=1)
 
-        self.serv.reset()
         self.communicate('exit-offline')
-        self.assertDemoUpdatesRegistration()
-
-
-class OfflineWithObserve(test_suite.Lwm2mSingleServerTest,
-                         test_suite.Lwm2mDmOperations):
-    UPDATED_INSTANCES = (b'</1/1>,</2/0>,</3/0>,</4/0>,</5/0>,</6/0>,'
-                         + b'</7/0>,</10/0>,</11>,</1337/1>,</11111/0>,</12359/0>,'
-                         + b'</12360>,</12361/0>')
-
-    # Explanation what's the idea:
-    # 1. Set min notification period to 3 seconds.
-    # 2. Observe current timestamp resource for at most 9 seconds,
-    #    which should give us at most 3 notifications.
-    # 3. Go offline after receiving first notification and make sure that
-    #    they are not received until we go online back.
-    def runTest(self):
-        self.create_instance(self.serv, oid=1337)
-        self.write_attributes(self.serv, oid=1337, query=['pmin=3'])
-
-        # Observe timestamp
-        pkt = self.observe(self.serv, oid=1337, iid=1, rid=0)
-        self.communicate('enter-offline')
-        self.assertMsgEqual(Lwm2mContent.matching(pkt)(), pkt)
-
-        # No notifications during anjay's being offline
-        with self.assertRaises(socket.timeout):
-            self.serv.recv(timeout_s=4)
-
-        self.serv.reset()
-        self.communicate('exit-offline')
-
-        self.assertDemoUpdatesRegistration(content=OfflineWithObserve.UPDATED_INSTANCES)
-
-        # notifications now come
-        notification = self.serv.recv(timeout_s=3)
-        self.assertEquals(notification.type, coap.Type.NON_CONFIRMABLE)
-        self.assertEquals(notification.code, coap.Code.RES_CONTENT)
+        self.assertDtlsReconnect()
+        # no Update because it doesn't work while in offline moed

@@ -74,7 +74,17 @@ typedef struct {
     const anjay_dm_object_def_t *def;
     AVS_LIST(sec_instance_t) instances;
     AVS_LIST(sec_instance_t) saved_instances;
+    bool modified_since_persist;
+    bool saved_modified_since_persist;
 } sec_repr_t;
+
+static inline void mark_modified(sec_repr_t *repr) {
+    repr->modified_since_persist = true;
+}
+
+static inline void clear_modified(sec_repr_t *repr) {
+    repr->modified_since_persist = false;
+}
 
 #define security_log(level, ...) _anjay_log(security, level, __VA_ARGS__)
 

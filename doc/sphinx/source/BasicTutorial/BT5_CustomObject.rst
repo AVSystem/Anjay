@@ -108,6 +108,12 @@ which holds:
         /** Object ID */
         anjay_oid_t oid;
 
+        /** Object version: a string with static lifetime, containing two digits
+         * separated by a dot (for example: "1.1").
+         * If left NULL, client will not include the "ver=" attribute in Register
+         * and Discover messages, which implies version 1.0. */
+        const char *version;
+
         /** List of Resource IDs supported by the object. The
          * @ref ANJAY_DM_SUPPORTED_RIDS macro is the preferred way of initializing
          * it. */

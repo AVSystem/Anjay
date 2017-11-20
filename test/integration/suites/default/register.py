@@ -47,7 +47,8 @@ class Register:
 # Security (/0) instances MUST not be a part of the list
 # see LwM2M spec, Register/Update operations description
 expected_content = (b'</1/1>,</2>,</3/0>,</4/0>,</5/0>,</6/0>,</7/0>,'
-                    + b'</10/0>,</11>,</1337>,</11111/0>,</12359/0>,</12360>,</12361/0>')
+                    + b'</10>;ver="1.1",</10/0>,</11>,</16>,</1337>,</11111/0>,'
+                    + b'</12359/0>,</12360>,</12361/0>')
 
 
 class RegisterTest(Register.TestCase):
@@ -137,3 +138,31 @@ class ConcurrentRequestWhileWaitingForResponse(Register.TestCase):
                             self.serv.recv())
 
         self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
+
+
+class RegisterUri(Register.TestCase):
+    def make_demo_args(self, *args, **kwargs):
+        args = super().make_demo_args(*args, **kwargs)
+        for i in range(len(args)):
+            if args[i].startswith('coap'):
+                args[i] += '/i/am/crazy/and?lwm2m=i&ep=know&lt=it'
+        return args
+
+    def runTest(self):
+        pkt = self.serv.recv()
+        self.assertMsgEqual(
+            Lwm2mRegister('/i/am/crazy/and/rd?lwm2m=i&ep=know&lt=it&lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION,
+                                                                                                DEMO_ENDPOINT_NAME),
+                          content=expected_content),
+            pkt)
+        self.serv.send(Lwm2mCreated.matching(pkt)(location='/some/weird/rd/point'))
+
+        # Update shall not contain the path and query from Server URI
+        self.communicate('send-update')
+        pkt = self.serv.recv()
+        self.assertMsgEqual(Lwm2mUpdate('/some/weird/rd/point', query=[], content=b''),
+                            pkt)
+        self.serv.send(Lwm2mChanged.matching(pkt)())
+
+    def tearDown(self):
+        self.teardown_demo_with_servers(path='/some/weird/rd/point')

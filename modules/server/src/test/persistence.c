@@ -115,3 +115,63 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
     };
     assert_instances_equal(&expected_server_instance, env->restored_repr->instances);
 }
+
+AVS_UNIT_TEST(server_persistence, modification_flag_add_instance) {
+    SCOPED_SERVER_PERSISTENCE_TEST_ENV(env);
+    /* At the beginning server object is not modified */
+    AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->stored));
+    /* Invalid instance does not change the modification flag */
+    anjay_iid_t iid = ANJAY_IID_INVALID;
+    const anjay_server_instance_t invalid_instance = {
+        .ssid = 0
+    };
+    AVS_UNIT_ASSERT_FAILED(anjay_server_object_add_instance(
+            env->stored, &invalid_instance, &iid));
+    AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->stored));
+    /* Same thing applies if the flag already was set to true */
+    mark_modified(_anjay_serv_get(env->stored));
+    AVS_UNIT_ASSERT_FAILED(anjay_server_object_add_instance(
+            env->stored, &invalid_instance, &iid));
+    AVS_UNIT_ASSERT_TRUE(anjay_server_object_is_modified(env->stored));
+    clear_modified(_anjay_serv_get(env->stored));
+
+    const anjay_server_instance_t instance = {
+        .ssid = 42,
+        .lifetime = 9001,
+        .default_min_period = -1,
+        .default_max_period = -1,
+        .disable_timeout = -1,
+        .binding = ANJAY_BINDING_U,
+        .notification_storing = true
+    };
+    /* And valid instance does change the flag */
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_server_object_add_instance(env->stored, &instance, &iid));
+    AVS_UNIT_ASSERT_TRUE(anjay_server_object_is_modified(env->stored));
+}
+
+AVS_UNIT_TEST(server_persistence, modification_flag_purge) {
+    SCOPED_SERVER_PERSISTENCE_TEST_ENV(env);
+    /* Purged object remains unmodified after purge */
+    anjay_server_object_purge(env->stored);
+    AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->stored));
+
+    anjay_iid_t iid = ANJAY_IID_INVALID;
+    const anjay_server_instance_t instance = {
+        .ssid = 42,
+        .lifetime = 9001,
+        .default_min_period = -1,
+        .default_max_period = -1,
+        .disable_timeout = -1,
+        .binding = ANJAY_BINDING_U,
+        .notification_storing = true
+    };
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_server_object_add_instance(env->stored, &instance, &iid));
+    AVS_UNIT_ASSERT_TRUE(anjay_server_object_is_modified(env->stored));
+    /* Simulate persistence operation. */
+    clear_modified(_anjay_serv_get(env->stored));
+    AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->stored));
+    anjay_server_object_purge(env->stored);
+    AVS_UNIT_ASSERT_TRUE(anjay_server_object_is_modified(env->stored));
+}

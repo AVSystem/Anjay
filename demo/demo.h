@@ -25,6 +25,7 @@
 
 #include <poll.h>
 
+#include "firmware_update.h"
 #include "objects.h"
 
 typedef struct {
@@ -49,6 +50,7 @@ struct anjay_demo_struct {
     server_connection_args_t *connection_args;
 
     iosched_t *iosched;
+    fw_update_logic_t fw_update;
 
     AVS_LIST(anjay_demo_object_t) objects;
 };

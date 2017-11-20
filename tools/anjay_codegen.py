@@ -21,6 +21,7 @@ import collections
 import textwrap
 import operator
 import sys
+import re
 from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
 from typing import Mapping, Tuple, Optional
@@ -203,13 +204,21 @@ static int instance_remove(anjay_t *anjay,
     return ANJAY_ERR_NOT_FOUND;
 }
 
+{% endif %}
+{% if obj.needs_instance_reset_handler %}
 static int instance_reset(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t iid) {
     (void) anjay;
 
-    {{ obj_inst_type }} *inst = find_instance(get_obj(obj_ptr), iid);
+    {{ obj_repr_type }} *obj = get_obj(obj_ptr);
+    assert(obj);
+{% if obj.multiple %}
+    {{ obj_inst_type }} *inst = find_instance(obj, iid);
     assert(inst);
+{% else %}
+    assert(iid == 0);
+{% endif %}
 
     // TODO: instance reset
     return 0;
@@ -416,6 +425,10 @@ def _node_text(n: Element) -> str:
     return (n.text if n.text is not None else '').strip()
 
 
+def _sanitize_macro_name(n: str) -> str:
+    return re.sub(r'[^a-zA-Z0-9]+', '_', n).strip('_')
+
+
 class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operations', 'multiple', 'mandatory', 'type',
                                                          'range_enumeration', 'units', 'description'])):
     @property
@@ -428,7 +441,7 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
 
     @property
     def name_upper(self) -> str:
-        return 'RID_' + self.name.upper().replace(' ', '_')
+        return _sanitize_macro_name('RID_' + self.name.upper())
 
     @property
     def read_handler(self) -> Optional[str]:
@@ -475,20 +488,20 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
             return None
 
         types = [
-            (('boolean', 'bool'), 'bool value',                         'anjay_get_bool(ctx, &value)'),
-            (('integer', 'int'),  'int32_t value',                      'anjay_get_i32(ctx, &value)'),
-            (('float',),          'float value',                        'anjay_get_float(ctx, &value)'),
-            (('string', 'str'),   'char value[256]',                    'anjay_get_string(ctx, value, sizeof(value))'),
+            (('boolean', 'bool'), 'bool value',      'anjay_get_bool(%s, &value)'),
+            (('integer', 'int'),  'int32_t value',   'anjay_get_i32(%s, &value)'),
+            (('float',),          'float value',     'anjay_get_float(%s, &value)'),
+            (('string', 'str'),   'char value[256]', 'anjay_get_string(%s, value, sizeof(value))'),
             (('opaque',),
                  'uint8_t value[256];\n'
                  '    bool finished;\n'
                  '    size_t bytes_read',
-                 '    anjay_get_bytes(ctx, &bytes_read, &finished, value, sizeof(value))'),
-            (('time',),           'int64_t value',                      'anjay_get_i64(ctx, &value)'),
+                 'anjay_get_bytes(%s, &bytes_read, &finished, value, sizeof(value))'),
+            (('time',),           'int64_t value',   'anjay_get_i64(%s, &value)'),
             (('objlnk',),
                 'anjay_oid_t oid;\n'
                 '    anjay_iid_t iid',
-                'anjay_get_objlnk(ctx, &oid, &iid)'),
+                'anjay_get_objlnk(%s, &oid, &iid)'),
         ]
 
 
@@ -499,14 +512,17 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
             else:
                 raise AssertionError('unexpected type: ' + type)
 
+        local_def, get_func = get_get_func(self.type.lower())
         if not self.multiple:
+            get_func %= ('ctx',)
             return textwrap.dedent("""\
                     {
                         %s; // TODO
                         return %s; // TODO
                     }
-                    """) % get_get_func(self.type.lower())
+                    """) % (local_def, get_func)
         else:
+            get_func %= ('array',)
             return textwrap.dedent("""\
                     {
                         anjay_input_ctx_t *array = anjay_get_array(ctx);
@@ -517,13 +533,13 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                         anjay_riid_t riid;
                         int result = 0;
                         %s; // TODO
-                        while (result && (result = anjay_get_array_index(array, &riid)) == 0) {
+                        while (result == 0 && (result = anjay_get_array_index(array, &riid)) == 0) {
                             result = %s; // TODO
                         }
 
                         return result;
                     }
-                    """) % get_get_func(self.type)
+                    """) % (local_def, get_func)
 
     @classmethod
     def from_etree(cls, res: Element) -> 'ResourceDef':
@@ -535,7 +551,7 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                    type=(_node_text(res.find('Type')).lower() or 'N/A'),
                    range_enumeration=(_node_text(res.find('RangeEnumeration')) or 'N/A'),
                    units=(_node_text(res.find('Units')) or 'N/A'),
-                   description=_node_text(res.find('Description')).replace('\n', '\n * '))
+                   description=textwrap.fill(_node_text(res.find('Description'))).replace('\n', '\n * '))
 
 
 class ObjectDef(collections.namedtuple('ObjectDef',
@@ -570,12 +586,12 @@ class ObjectDef(collections.namedtuple('ObjectDef',
 
     @property
     def needs_instance_reset_handler(self) -> bool:
-        return self.multiple or self.has_writable_resources
+        return self.multiple or self.has_any_writable_resources
 
     @classmethod
     def from_etree(cls, obj: ElementTree) -> 'ObjectDef':
         return cls(name=_node_text(obj.find('Name')),
-                   description=_node_text(obj.find('Description1')),
+                   description=textwrap.fill(_node_text(obj.find('Description1'))).replace('\n', '\n * '),
                    oid=int(_node_text(obj.find('ObjectID'))),
                    urn=_node_text(obj.find('ObjectURN')),
                    multiple={'Single': False, 'Multiple': True}[_node_text(obj.find('MultipleInstances'))],

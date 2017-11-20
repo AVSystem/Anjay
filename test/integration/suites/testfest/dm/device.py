@@ -16,124 +16,100 @@
 
 from framework.lwm2m_test import *
 
-from .utils import DataModel, ValueValidator
+from .utils import DataModel, ValueValidator as VV
 
 
 class Test651_DeviceObject_QueryingTheReadableResourcesOfObject(DataModel.Test):
     def runTest(self):
-        # A READ operation from server on the resource has been received by the
-        # client. This test has to be run on the following resources:
-        # a) Manufacturer
-        # b) Device type
-        # c) Model number
-        # d) Serial number
-        # e) Hardware version
-        # f) Firmware version
-        # g) Software version
-        # h) Available power sources
-        # i) Power source voltage
-        # j) Power source current
-        # k) Battery level
-        # l) Battery status
-        # m) Memory free
-        # n) Memory total
-        # o) Error code
-        # p) Current time
-        # q) UTC offset
-        # r) Timezone
-        # s) Supported binding and modes
+        # Precondition:
+        # The Initial values of the Device Object (ID:3) Instance, are saved on
+        # the Server
+        rids_to_restore = (RID.Device.CurrentTime,
+                           RID.Device.UTCOffset,
+                           RID.Device.Timezone)
+        prev_values = self.test_read('/%d/0' % OID.Device)
+        prev_values_tlv = TLV.parse(prev_values)
+        values_to_restore = [x for x in prev_values_tlv if x.identifier in rids_to_restore]
 
-        integer_array = ValueValidator.multiple_resource(ValueValidator.from_raw_int())
+        tlv = TLV.make_instance(0, [
+            TLV.make_resource(RID.Device.CurrentTime, 1367491215),
+            TLV.make_resource(RID.Device.UTCOffset, '+02:00'),
+            TLV.make_resource(RID.Device.Timezone, 'Europe/Paris')
+            ])
 
-        self.test_read(ResPath.Device.Manufacturer,             ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.ModelNumber,              ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.SerialNumber,             ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.FirmwareVersion,          ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        # TODO: this cannot be represented in text/plain format
-        self.test_read(ResPath.Device.AvailablePowerSources,    integer_array,                 coap.ContentFormat.APPLICATION_LWM2M_TLV)
-        # TODO: this cannot be represented in text/plain format
-        self.test_read(ResPath.Device.PowerSourceVoltage,       integer_array,                 coap.ContentFormat.APPLICATION_LWM2M_TLV)
-        # TODO: this cannot be represented in text/plain format
-        self.test_read(ResPath.Device.PowerSourceCurrent,       integer_array,                 coap.ContentFormat.APPLICATION_LWM2M_TLV)
-        self.test_read(ResPath.Device.BatteryLevel,             ValueValidator.integer(),      coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.MemoryFree,               ValueValidator.integer(),      coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.ErrorCode,                integer_array,                 coap.ContentFormat.APPLICATION_LWM2M_TLV)
-        self.test_read(ResPath.Device.CurrentTime,              ValueValidator.integer(),      coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.UTCOffset,                ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.Timezone,                 ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.SupportedBindingAndModes, ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.DeviceType,               ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.HardwareVersion,          ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.SoftwareVersion,          ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.BatteryStatus,            ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Device.MemoryTotal,              ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
+        # 1. A 1st WRITE (CoAP POST) operation on the Device Object (ID:3)
+        #    Instance is performed in using the set of values contains in the
+        #    651-SetOfValues sample below.The data format TLV is used. (11542)
+        self.test_write('/%d/0' % OID.Device, tlv.serialize(),
+                        coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                        update=True)
+
+        # 2. The Server READs the result of the WRITE operation by querying
+        #    the Device Object (ID:3) Instance.
+        self.test_read('/%d/0' % OID.Device,
+                       VV.tlv_instance(
+                           resource_validators={
+                               RID.Device.CurrentTime: VV.from_raw_int(),
+                               RID.Device.UTCOffset:   VV.ascii_string('+02:00'),
+                               RID.Device.Timezone:    VV.ascii_string('Europe/Paris'),
+                           },
+                           ignore_extra=True))
+
+        # 3. A 2nd WRITE (CoAP PUT) operation on the Device Object (ID:3)
+        #    Instance is performed in using the Initial values which have been
+        #    preserved (pre-conditions).
+        self.test_write('/%d/0' % OID.Device,
+                        b''.join(tlv.serialize() for tlv in values_to_restore),
+                        coap.ContentFormat.APPLICATION_LWM2M_TLV)
+
+        # 4. The Server READs the result of the previous WRITE operation by
+        #    querying the Server Object (ID:3) Instance.
+        self.assertEqual(prev_values,
+                         self.test_read('/%d/0' % OID.Device))
+
+        # A. The Server receives the correct status codes for the steps 1.
+        #    (2.04), 2. (2.05), 3. (2.04), & 4 (2.05) of the test.
+        # B. In test step 3., the received values are as expected (readable
+        #    resources) and consistent with the 651-SetOfValues sample.
+        # C. In test step 7, the received values are consistent with the values
+        #    present in the initial Configuration C.3
 
 
 class Test652_DeviceObject_QueryingTheFirmwareVersionFromTheClient(DataModel.Test):
     def runTest(self):
-        # 1. Server has received the requested information and displays to the
-        #    user the following information:
-        #    - Firmware version
-        self.test_read(ResPath.Device.FirmwareVersion, ValueValidator.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
+        # 1. READ (CoAP GET) operation is performed on Device Object
+        #    Resource "Firmware Version"
+        #
+        # A. In test step 2, the Server received the requested information
+        #    (Firmware Version ) in the data format preferred by the Client
+        # B. In test step 2 the Server receives the success message (2.05 Content)
+        self.test_read(ResPath.Device.FirmwareVersion, VV.ascii_string(), coap.ContentFormat.TEXT_PLAIN)
 
 
-class Test655_DeviceObject_SettingTheWritableResources(DataModel.Test):
+class Test680_CreateObjectInstance(DataModel.Test):
     def runTest(self):
-        # A WRITE operation from server on the resource has been received by the
-        # client. This test has to be run for the following resources:
-        # a) Current time
-        # b) UTC offset
-        # c) Timezone
-
-        self.test_write_validated(ResPath.Device.CurrentTime, '100',
-                                  alternative_acceptable_values=['101', '102', '103'])
-        self.test_write_validated(ResPath.Device.UTCOffset, 'UTC+12:45')
-        self.test_write_validated(ResPath.Device.Timezone, 'Pacific/Chatham')
+        # 1. CREATE (CoAP POST) operation is performed on Device Object
+        #
+        # A. In test step 1, the Server receives the failure message
+        #    (4.05 Method Not Allowed)
+        req = Lwm2mCreate('/%d' % OID.Device)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_METHOD_NOT_ALLOWED),
+                            self.serv.recv())
 
 
-class Test660_DeviceObject_ObservationAndNotificationOfObservableResources(DataModel.Test):
+class Test685_DeleteObjectInstance(DataModel.Test):
     def runTest(self):
-        # The Server establishes an Observation relationship with the Client to acquire
-        # condition notifications about observable resources. This test has to be run for
-        # the following resources:
-        # a) Manufacturer
-        # b) Device type
-        # c) Model number
-        # d) Serial number
-        # e) Hardware version
-        # f) Firmware version
-        # g) Software version
-        # h) Available power sources
-        # i) Power source voltage
-        # j) Power source current
-        # k) Battery level
-        # l) Battery status
-        # m) Memory free
-        # n) Memory total
-        # o) Error code
-        # p) Current time
-        # q) UTC offset
-        # r) Timezone
-        # s) Supported binding and modes
-
-        integer_array = ValueValidator.multiple_resource(ValueValidator.from_raw_int())
-
-        self.test_observe(ResPath.Device.Manufacturer,             ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.ModelNumber,              ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.SerialNumber,             ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.FirmwareVersion,          ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.AvailablePowerSources,    integer_array)
-        self.test_observe(ResPath.Device.PowerSourceVoltage,       integer_array)
-        self.test_observe(ResPath.Device.PowerSourceCurrent,       integer_array)
-        self.test_observe(ResPath.Device.BatteryLevel,             ValueValidator.integer())
-        self.test_observe(ResPath.Device.MemoryFree,               ValueValidator.integer())
-        self.test_observe(ResPath.Device.ErrorCode,                integer_array)
-        self.test_observe(ResPath.Device.CurrentTime,              ValueValidator.integer())
-        self.test_observe(ResPath.Device.UTCOffset,                ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.Timezone,                 ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.SupportedBindingAndModes, ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.DeviceType,               ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.HardwareVersion,          ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.SoftwareVersion,          ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.BatteryStatus,            ValueValidator.ascii_string())
-        self.test_observe(ResPath.Device.MemoryTotal,              ValueValidator.ascii_string())
+        # 1. DELETE (CoAP DELETE) operation is performed on the
+        #    Device Object Instance (/3/0)
+        #
+        # A. In test step 1, the Server received the requested information
+        #    (Firmware Version ) in the data format preferred by the Client
+        # B. In test step 1 the Server receives the failure message (4.05 Method
+        #    Not Allowed)
+        #
+        # NOTE: A. is clearly invalid.
+        req = Lwm2mDelete('/%d/0' % OID.Device)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_METHOD_NOT_ALLOWED),
+                            self.serv.recv())

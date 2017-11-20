@@ -18,6 +18,7 @@ import inspect
 import os
 import re
 import shutil
+import socket
 import subprocess
 import threading
 import time
@@ -27,6 +28,8 @@ from .asserts import Lwm2mAsserts
 from .lwm2m.server import Lwm2mServer
 from .lwm2m_test import *
 
+from typing import Tuple, List, TypeVar
+T = TypeVar('T')
 
 def read_with_timeout(fd, timeout_s):
     import select
@@ -88,6 +91,15 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         else:
             return Lwm2mErrorResponse.matching(req)(code=expect_error_code)
 
+    def create_instance_with_payload(self, server, oid, iid=None, payload=b'', expect_error_code=None, **kwargs):
+        if iid is None:
+            raise ValueError("IID cannot be None")
+
+        instance_tlv = TLV.make_instance(instance_id=iid, content=payload).serialize()
+        req = Lwm2mCreate('/%d' % oid, instance_tlv)
+        expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
     def create_instance(self, server, oid, iid=None, expect_error_code=None, **kwargs):
         instance_tlv = None if iid is None else TLV.make_instance(instance_id=iid).serialize()
         req = Lwm2mCreate('/%d' % oid, instance_tlv)
@@ -123,7 +135,7 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def write_resource(self, server, oid, iid, rid, content=b'', partial=False,
-                       format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                       format=coap.ContentFormat.TEXT_PLAIN,
                        expect_error_code=None, **kwargs):
         req = Lwm2mWrite('/%d/%d/%d' % (oid, iid, rid), content, format=format,
                          update=partial)
@@ -201,7 +213,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         name = name.lstrip('/')
         return name
 
-    def make_demo_args(self, servers):
+    def make_demo_args(self, servers, fw_updated_marker_path):
         """
         Helper method for easy generation of demo executable arguments.
         """
@@ -215,16 +227,18 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         else:
             protocol = 'coaps'
 
-        args = ['--security-mode', security_mode]
+        args = ['--fw-updated-marker-path', fw_updated_marker_path, '--security-mode', security_mode]
 
         for serv in servers:
             args += ['--server-uri', '%s://127.0.0.1:%d' % (protocol, serv.get_listen_port(),)]
 
         return args
 
-    def logs_path(self, log_type, log_root=None, **kwargs):
+    def logs_path(self, log_type, log_root=None, extension='.log', **kwargs):
         dir_path = os.path.join(log_root or self.config.logs_path, log_type.lower())
         log_path = os.path.join(dir_path, self.log_filename(**kwargs))
+        log_path, _ = os.path.splitext(log_path)
+        log_path += extension
         ensure_dir(os.path.dirname(log_path))
         return log_path
 
@@ -272,7 +286,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
     @staticmethod
     def dumpcap_available():
-        return shutil.which(Lwm2mTest.DUMPCAP_COMMAND) is not None
+        return not os.getenv('NO_DUMPCAP') and shutil.which(Lwm2mTest.DUMPCAP_COMMAND) is not None
 
     def _start_dumpcap(self, udp_ports):
         self.dumpcap_process = None
@@ -349,7 +363,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 extra_cmdline_args=[],
                                 auto_register=True,
                                 version=DEMO_LWM2M_VERSION,
-                                lifetime=None):
+                                lifetime=None,
+                                fw_updated_marker_path=None):
         """
         Starts the demo process and creates any required auxiliary objects (such as Lwm2mServer objects) or processes.
 
@@ -394,8 +409,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         if num_servers_passed is not None:
             servers_passed = servers_passed[:num_servers_passed]
 
-        if bootstrap_server:
+        if bootstrap_server is True:
             self.bootstrap_server = Lwm2mServer()
+        elif bootstrap_server:
+            self.bootstrap_server = bootstrap_server
+        else:
+            self.bootstrap_server = None
+
+        if self.bootstrap_server is not None:
             demo_args += ['--bootstrap']
             all_servers = [self.bootstrap_server] + self.servers
             all_servers_passed = [self.bootstrap_server] + servers_passed
@@ -403,10 +424,15 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             all_servers = self.servers
             all_servers_passed = servers_passed
 
+        if fw_updated_marker_path is None:
+            fw_updated_marker_path = generate_temp_filename(dir='/tmp', prefix='anjay-fw-updated-')
+
         self._start_dumpcap(server.get_listen_port() for server in all_servers)
 
-        demo_args += self.make_demo_args(all_servers_passed)
+        demo_args += self.make_demo_args(all_servers_passed, fw_updated_marker_path)
         demo_args += extra_cmdline_args
+        if lifetime is not None:
+            demo_args += ['--lifetime', str(lifetime)]
 
         self._start_demo(demo_args)
 
@@ -574,9 +600,10 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         pass
 
     def setUp(self,
+              extra_cmdline_args=None,
               auto_register=True,
               lifetime=None,
-              extra_cmdline_args=None):
+              fw_updated_marker_path=None):
         extra_args = ['--lifetime', str(lifetime)] if lifetime else []
         if extra_cmdline_args is not None:
             extra_args += extra_cmdline_args
@@ -584,7 +611,45 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         self.setup_demo_with_servers(servers=1,
                                      extra_cmdline_args=extra_args,
                                      auto_register=auto_register,
-                                     lifetime=lifetime)
+                                     lifetime=lifetime,
+                                     fw_updated_marker_path=fw_updated_marker_path)
+
+    def tearDown(self, *args, **kwargs):
+        self.teardown_demo_with_servers(*args, **kwargs)
+
+
+class Lwm2mDtlsSingleServerTest(Lwm2mTest, SingleServerAccessor):
+    PSK_IDENTITY = b'test-identity'
+    PSK_KEY = b'test-key'
+
+    def runTest(self):
+        pass
+
+    def setUp(self,
+              extra_cmdline_args=None,
+              auto_register=True,
+              lifetime=None,
+              fw_updated_marker_path=None):
+        extra_args = ['--lifetime', str(lifetime)] if lifetime else []
+        extra_args += ['--identity', str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
+                       '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')]
+        if extra_cmdline_args is not None:
+            extra_args += extra_cmdline_args
+
+        self.setup_demo_with_servers(servers=[Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY))],
+                                     extra_cmdline_args=extra_args,
+                                     auto_register=auto_register,
+                                     lifetime=lifetime,
+                                     fw_updated_marker_path=fw_updated_marker_path)
+
+    def closeSocket(self):
+        self.serv.reset()
+        self.serv.server_socket.py_socket.close()
+
+    def reopenSocket(self, listen_port):
+        self.serv.server_socket.py_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.serv.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.serv.server_socket.bind(('', listen_port))
 
     def tearDown(self, *args, **kwargs):
         self.teardown_demo_with_servers(*args, **kwargs)

@@ -18,6 +18,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -26,195 +27,20 @@
 
 #include "utils_core.h"
 
+#include <avsystem/commons/url.h>
 #include <avsystem/commons/utils.h>
 
 VISIBILITY_SOURCE_BEGIN
-
-static int url_parse_protocol(const char **url, anjay_url_t *parsed_url) {
-    const char *proto_end = strstr(*url, "://");
-    size_t proto_len = 0;
-    if (!proto_end) {
-        anjay_log(ERROR, "could not parse protocol");
-        return -1;
-    }
-    proto_len = (size_t) (proto_end - *url);
-    if (proto_len >= sizeof(parsed_url->protocol)) {
-        anjay_log(ERROR, "protocol name too long");
-        return -1;
-    }
-    memcpy(parsed_url->protocol, *url, proto_len);
-    parsed_url->protocol[proto_len] = '\0';
-    *url += proto_len + 3; /* 3 for "://" */
-    return 0;
-}
-
-static int url_parse_host(const char **url, anjay_url_t *parsed_url) {
-    const char *raw_url = *url;
-    char *host = parsed_url->host;
-    char *host_limit = parsed_url->host + sizeof(parsed_url->host) - 1;
-
-    if (*raw_url == '[') {
-        ++raw_url;
-        while ((host < host_limit)
-                && (*raw_url != '\0')
-                && (*raw_url != ']')) {
-            *host++ = *raw_url++;
-        }
-        if ((*raw_url != '\0') && (*raw_url != ']')) {
-            anjay_log(ERROR, "host address too long");
-            return -1;
-        }
-        if (*raw_url++ != ']') {
-            anjay_log(ERROR, "expected ] at the end of host address");
-            return -1;
-        }
-    } else {
-        while ((host < host_limit)
-                && (*raw_url != '\0')
-                && (*raw_url != '/')
-                && (*raw_url != ':')) {
-            if (*raw_url == '@') {
-                anjay_log(ERROR, "credentials in URLs are not supported");
-                return -1;
-            }
-            *host++ = *raw_url++;
-        }
-        if ((*raw_url != '\0') && (*raw_url != '/') && (*raw_url != ':')) {
-            anjay_log(ERROR, "host address too long");
-            return -1;
-        }
-    }
-    if (host == parsed_url->host) {
-        anjay_log(ERROR, "host part cannot be empty");
-        return -1;
-    }
-    *host = '\0';
-    *url = raw_url;
-    return 0;
-}
-
-static int url_parse_port(const char **url, anjay_url_t *parsed_url) {
-    const char *raw_url = *url;
-    char *port = parsed_url->port;
-    char *port_limit = parsed_url->port + sizeof(parsed_url->port) - 1;
-
-    if (*raw_url == ':') {
-        ++raw_url; /* move after ':' */
-        while ((port < port_limit) && isdigit((unsigned char) *raw_url)) {
-            *port++ = *raw_url++;
-        }
-        if (isdigit((unsigned char) *raw_url)) {
-            anjay_log(ERROR, "port too long");
-            return -1;
-        }
-        if (*raw_url != '\0' && *raw_url != '/') {
-            anjay_log(ERROR, "port should have numeric value");
-            return -1;
-        }
-        if (port == parsed_url->port) {
-            anjay_log(ERROR, "expected at least 1 digit for port number");
-            return -1;
-        }
-    }
-    *port = '\0';
-
-    *url = raw_url;
-    return 0;
-}
-
-static int url_parsed(const char *url) {
-    return (*url != '\0');
-}
-
-static int url_unescape_first(const char *data) {
-    if (data[0] == '%'
-            && isxdigit((unsigned char) data[1])
-            && isxdigit((unsigned char) data[2])) {
-        char ascii[3];
-        ascii[0] = data[1];
-        ascii[1] = data[2];
-        ascii[2] = '\0';
-        return (int) strtoul(ascii, NULL, 16);
-    }
-    return -1;
-}
-
-static int url_unescape(char *data) {
-    char *src = data, *dst = data;
-
-    if (!strchr(data, '%')) {
-        /* nothing to unescape */
-        return 0;
-    }
-
-    while (*src) {
-        if (*src == '%') {
-            int unescaped = url_unescape_first(src);
-            if (unescaped >= 0) {
-                *dst = (char) unescaped;
-                src += 3;
-                dst += 1;
-            } else {
-                anjay_log(ERROR, "bad escape format (%%XX)");
-                return -1;
-            }
-        } else {
-            *dst++ = *src++;
-        }
-    }
-    *dst = '\0';
-
-    return 0;
-}
 
 typedef enum {
     URL_PARSE_HINT_NONE,
     URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR
 } url_parse_chunks_hint_t;
 
-static bool is_valid_url_path_char(char c) {
-    /* Assumes english locale. For more information see RFC3986,
-       Section "3.3. Path" */
-    return isalnum((unsigned char) c)
-           || !!strchr("-._~"        /* unreserved */
-                       "!$&'()*+,;=" /* sub-delims */
-                       ":@",         /* rest of pchar grammar rule */
-                       c);
-}
-
-static bool is_valid_url_query_char(char c) {
-    return is_valid_url_path_char(c) || !!strchr("/?", c);
-}
-
-static bool is_valid_url_part(const char *str,
-                              size_t length,
-                              bool (*is_unescaped_character_valid)(char)) {
-    if (!str) {
-        return false;
-    }
-
-    while (*str && length) {
-        if (is_unescaped_character_valid(*str)) {
-            ++str;
-            --length;
-        } else {
-            if (url_unescape_first(str) < 0) {
-                return false;
-            }
-            const size_t escaped_len = sizeof("%xx") - 1;
-            str += escaped_len;
-            length -= escaped_len;
-        }
-    }
-
-    return !length;
-}
-
 static int url_parse_chunks(const char **url,
                             char delimiter,
                             char parser_terminator,
                             url_parse_chunks_hint_t hint,
-                            bool (*is_unescaped_character_valid)(char),
                             AVS_LIST(anjay_string_t) *out_chunks) {
     const char *ptr = *url;
     do {
@@ -227,11 +53,6 @@ static int url_parse_chunks(const char **url,
                 // trailing separator, ignoring
                 *url = ptr;
                 return 0;
-            }
-
-            if (!is_valid_url_part(*url + 1, chunk_len,
-                                   is_unescaped_character_valid)) {
-                return -1;
             }
 
             if (out_chunks) {
@@ -247,7 +68,8 @@ static int url_parse_chunks(const char **url,
                     // skip separator
                     memcpy(chunk, *url + 1, chunk_len);
 
-                    if (url_unescape(chunk->c_str)) {
+                    if (avs_url_percent_decode(chunk->c_str,
+                                               &(size_t[]) { 0 }[0])) {
                         return -1;
                     }
                 }
@@ -264,34 +86,64 @@ static int url_parse_chunks(const char **url,
     return 0;
 }
 
+static int copy_string(char *out, size_t out_size, const char *in) {
+    if (!in) {
+        return -1;
+    }
+    size_t len = strlen(in);
+    if (len >= out_size) {
+        return -1;
+    }
+    strcpy(out, in);
+    return 0;
+}
+
+static int copy_nullable_string(char *out, size_t out_size, const char *in) {
+    assert(out_size > 0);
+    if (!in) {
+        out[0] = '\0';
+        return 0;
+    } else {
+        return copy_string(out, out_size, in);
+    }
+}
+
 int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url) {
     assert(!out_parsed_url->uri_path);
     assert(!out_parsed_url->uri_query);
-    if (url_parse_protocol(&raw_url, out_parsed_url)
-        || url_parse_host(&raw_url, out_parsed_url)
-        || url_parse_port(&raw_url, out_parsed_url)) {
+    avs_url_t *avs_url = avs_url_parse(raw_url);
+    if (!avs_url) {
         return -1;
     }
-
-    if (*raw_url == '/'
-        && url_parse_chunks(
-                   &raw_url, '/', '?', URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR,
-                   is_valid_url_path_char, &out_parsed_url->uri_path)) {
-        goto error;
+    int result = (avs_url_user(avs_url) || avs_url_password(avs_url)) ? -1 : 0;
+    (void) (result
+            || (result = copy_string(out_parsed_url->protocol,
+                                     sizeof(out_parsed_url->protocol),
+                                     avs_url_protocol(avs_url)))
+            || (result = copy_string(out_parsed_url->host,
+                                     sizeof(out_parsed_url->host),
+                                     avs_url_host(avs_url)))
+            || (result = copy_nullable_string(out_parsed_url->port,
+                                              sizeof(out_parsed_url->port),
+                                              avs_url_port(avs_url))));
+    if (!result) {
+        const char *path_ptr = avs_url_path(avs_url);
+        if (path_ptr) {
+            result = url_parse_chunks(
+                    &path_ptr, '/', '?', URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR,
+                    &out_parsed_url->uri_path);
+            if (!result && *path_ptr == '?') {
+                result = url_parse_chunks(
+                        &path_ptr, '&', '\0', URL_PARSE_HINT_NONE,
+                        &out_parsed_url->uri_query);
+            }
+        }
     }
-    if (*raw_url == '?'
-        && url_parse_chunks(&raw_url, '&', '\0', URL_PARSE_HINT_NONE,
-                            is_valid_url_query_char,
-                            &out_parsed_url->uri_query)) {
-        goto error;
+    if (result) {
+        _anjay_url_cleanup(out_parsed_url);
     }
-    if (url_parsed(raw_url)) {
-        goto error;
-    }
-    return 0;
-error:
-    _anjay_url_cleanup(out_parsed_url);
-    return -1;
+    avs_url_free(avs_url);
+    return result;
 }
 
 void _anjay_url_cleanup(anjay_url_t *url) {
@@ -328,28 +180,46 @@ uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
 }
 #endif
 
+AVS_LIST(const anjay_string_t)
+_anjay_copy_string_list(AVS_LIST(const anjay_string_t) input) {
+    AVS_LIST(const anjay_string_t) output = NULL;
+    AVS_LIST(const anjay_string_t) *outptr = &output;
+
+    AVS_LIST_ITERATE(input) {
+        size_t len = strlen(input->c_str) + 1;
+        if (!(*outptr = (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
+            anjay_log(ERROR, "out of memory");
+            AVS_LIST_CLEAR(&output);
+            break;
+        }
+
+        memcpy((char *) (intptr_t) (*outptr)->c_str, input->c_str, len);
+        outptr = AVS_LIST_NEXT_PTR(outptr);
+    }
+    return output;
+}
+
 AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
                                                        ... /* strings */) {
     va_list list;
     va_start(list, string);
 
     AVS_LIST(const anjay_string_t) strings_list = NULL;
+    AVS_LIST(const anjay_string_t) *strings_list_endptr = &strings_list;
     const char *str = string;
 
     while (str) {
         size_t len = strlen(str) + 1;
-        AVS_LIST(anjay_string_t) list_elem =
-                (AVS_LIST(anjay_string_t))AVS_LIST_NEW_BUFFER(len);
-
-        if (!list_elem) {
+        if (!(*strings_list_endptr =
+                (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
             anjay_log(ERROR, "out of memory");
             AVS_LIST_CLEAR(&strings_list);
             break;
         }
 
-        memcpy(list_elem->c_str, str, len);
-        AVS_LIST_APPEND(&strings_list, list_elem);
-        str = va_arg(list, const char*);
+        memcpy((char *) (intptr_t) (*strings_list_endptr)->c_str, str, len);
+        strings_list_endptr = AVS_LIST_NEXT_PTR(strings_list_endptr);
+        str = va_arg(list, const char *);
     }
 
     va_end(list);
@@ -449,45 +319,53 @@ fail:
     return NULL;
 }
 
-avs_net_abstract_socket_t *
-_anjay_create_connected_udp_socket(anjay_t *anjay,
-                                   avs_net_socket_type_t type,
-                                   const char *bind_port,
-                                   const void *config,
-                                   const anjay_url_t *uri) {
+int _anjay_create_connected_udp_socket(anjay_t *anjay,
+                                       avs_net_abstract_socket_t **out,
+                                       avs_net_socket_type_t type,
+                                       const char *bind_port,
+                                       const void *config,
+                                       const anjay_url_t *uri) {
     (void) anjay;
 
-    avs_net_abstract_socket_t *socket = NULL;
+    int result = 0;
+    assert(!*out);
 
     switch (type) {
     case AVS_NET_UDP_SOCKET:
     case AVS_NET_DTLS_SOCKET:
-        if (avs_net_socket_create(&socket, type, config)) {
+        if (avs_net_socket_create(out, type, config)) {
+            result = -ENOMEM;
             anjay_log(ERROR, "could not create CoAP socket");
             goto fail;
         }
 
         if (bind_port && *bind_port
-                && avs_net_socket_bind(socket, NULL, bind_port)) {
+                && avs_net_socket_bind(*out, NULL, bind_port)) {
             anjay_log(ERROR, "could not bind socket to port %s", bind_port);
             goto fail;
         }
 
-        if (avs_net_socket_connect(socket, uri->host, uri->port)) {
+        if (avs_net_socket_connect(*out, uri->host, uri->port)) {
             anjay_log(ERROR, "could not connect to %s:%s",
                       uri->host, uri->port);
             goto fail;
         }
 
-        return socket;
+        return 0;
     default:
         anjay_log(ERROR, "unsupported socket type requested: %d", type);
-        return NULL;
+        return -EPROTONOSUPPORT;
     }
 
 fail:
-    avs_net_socket_cleanup(&socket);
-    return NULL;
+    if (*out) {
+        result = -avs_net_socket_errno(*out);
+    }
+    if (!result) {
+        result = -EPROTO;
+    }
+    avs_net_socket_cleanup(out);
+    return result;
 }
 
 #ifdef ANJAY_TEST

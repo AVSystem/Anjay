@@ -73,8 +73,8 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
     }
 
 typedef struct anjay_configuration {
-    /** Endpoint name as presented to the LwM2M server. If not set, defaults
-     * to ANJAY_DEFAULT_ENDPOINT_NAME. */
+    /** Endpoint name as presented to the LwM2M server. Must be non-NULL, or
+     * otherwise @ref anjay_new() will fail. */
     const char *endpoint_name;
 
     /** UDP port number that all listening sockets will be bound to. It may be

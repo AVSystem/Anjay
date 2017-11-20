@@ -89,16 +89,13 @@ class UnregisterDevice(unregister_test(OID.Device)): pass
 class UnregisterConnectivityMonitoring(unregister_test(OID.ConnectivityMonitoring)): pass
 
 
-class UnregisterFirmwareUpdate(unregister_test(OID.FirmwareUpdate)): pass
-
-
 class UnregisterLocation(unregister_test(OID.Location)): pass
 
 
 class UnregisterConnectivityStatistics(unregister_test(OID.ConnectivityStatistics)): pass
 
 
-class UnregisterCellConnectivity(unregister_test(OID.CellConnectivity)): pass
+class UnregisterCellConnectivity(unregister_test(OID.CellularConnectivity)): pass
 
 
 class UnregisterApnConnectionProfile(unregister_test(OID.ApnConnectionProfile)): pass

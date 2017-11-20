@@ -23,114 +23,122 @@ from framework.lwm2m_test import *
 
 
 class BasicClientBlockRequest:
-    class Test(test_suite.Lwm2mSingleServerTest):
-        def __init__(self, test_method_name):
-            super().__init__(test_method_name)
+    @staticmethod
+    def Test(base_class=test_suite.Lwm2mSingleServerTest):
+        class TestImpl(base_class):
+            def __init__(self, test_method_name):
+                super().__init__(test_method_name)
 
-            self.A_LOT = 256  # arbitratry, big enough to trigger block-wise Update
-            self.block_size = 1024  # maximum possible block size
-            self.expected_payload_size = None
+                self.A_LOT = 256  # arbitratry, big enough to trigger block-wise Update
+                self.block_size = 1024  # maximum possible block size
+                self.expected_payload_size = None
 
-        def setUp(self):
-            super().setUp()
+            def setUp(self):
+                super().setUp()
 
-            self.ac_object_instances_str = b','.join(b'</2/%d>' % x for x in range(self.A_LOT))
-            self.test_object_instances_str = b','.join(b'</1337/%d>' % x for x in range(1, self.A_LOT + 1))
-            self.expected_payload_size = (len(self.ac_object_instances_str)
-                                          + len(self.test_object_instances_str)
-                                          + 250)  # estimated size of other objects
-            self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
+                self.ac_object_instances_str = b','.join(b'</2/%d>' % x for x in range(self.A_LOT))
+                self.test_object_instances_str = b','.join(b'</1337/%d>' % x for x in range(1, self.A_LOT + 1))
+                self.expected_payload_size = (len(self.ac_object_instances_str)
+                                              + len(self.test_object_instances_str)
+                                              + 250)  # estimated size of other objects
+                self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
 
-            for _ in range(self.A_LOT):
-                req = Lwm2mCreate('/1337')
-                self.serv.send(req)
-                self.assertMsgEqual(Lwm2mCreated.matching(req)(),
-                                    self.serv.recv())
+                for _ in range(self.A_LOT):
+                    req = Lwm2mCreate('/1337')
+                    self.serv.send(req)
+                    self.assertMsgEqual(Lwm2mCreated.matching(req)(),
+                                        self.serv.recv())
 
-        def recv(self):
-            """
-            Receives a single packet. May be overridden in subclasses to perform
-            additional actions before/after actual recv.
-            """
-            return self.serv.recv()
+            def recv(self):
+                """
+                Receives a single packet. May be overridden in subclasses to perform
+                additional actions before/after actual recv.
+                """
+                return self.serv.recv()
 
-        def block_recv_next(self,
-                            expected_seq_num,
-                            validate=True):
-            req = self.recv()
+            def block_recv_next(self,
+                                expected_seq_num,
+                                validate=True):
+                req = self.recv()
 
-            if validate:
-                has_more = (expected_seq_num < self.expected_num_blocks - 1)
-                block_opt = coap.Option.BLOCK1(seq_num=expected_seq_num,
-                                               has_more=has_more,
-                                               block_size=self.block_size)
+                if validate:
+                    has_more = (expected_seq_num < self.expected_num_blocks - 1)
+                    block_opt = coap.Option.BLOCK1(seq_num=expected_seq_num,
+                                                   has_more=has_more,
+                                                   block_size=self.block_size)
 
-                self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                                query=[],
-                                                options=[block_opt]),
-                                    req)
+                    self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
+                                                    query=[],
+                                                    options=[block_opt]),
+                                        req)
 
-            return req
+                return req
 
-        def block_recv(self,
-                       seq_num_begin=0,
-                       seq_num_end=None,
-                       validate=True,
-                       send_ack=None):
-            payload = b''
-            expected_seq_num = seq_num_begin
-            wait_for_more = True
+            def block_recv(self,
+                           seq_num_begin=0,
+                           seq_num_end=None,
+                           validate=True,
+                           send_ack=None):
+                payload = b''
+                expected_seq_num = seq_num_begin
+                wait_for_more = True
 
-            if send_ack is None:
-                send_ack = self.serv.send
+                if send_ack is None:
+                    send_ack = self.serv.send
 
-            while wait_for_more:
-                req = self.block_recv_next(expected_seq_num, validate=validate)
-                expected_seq_num += 1
-                payload += req.content
+                while wait_for_more:
+                    req = self.block_recv_next(expected_seq_num, validate=validate)
+                    expected_seq_num += 1
+                    payload += req.content
 
-                block_opt = req.get_options(coap.Option.BLOCK1)[0]
-                if block_opt.has_more():
-                    response = Lwm2mContinue.matching(req)(options=[block_opt])
-                else:
-                    response = Lwm2mChanged.matching(req)(options=[block_opt])
+                    block_opt = req.get_options(coap.Option.BLOCK1)[0]
+                    if block_opt.has_more():
+                        response = Lwm2mContinue.matching(req)(options=[block_opt])
+                    else:
+                        response = Lwm2mChanged.matching(req)(options=[block_opt])
 
-                send_ack(response)
+                    send_ack(response)
 
-                wait_for_more = (block_opt.has_more() if seq_num_end is None
-                                 else expected_seq_num < seq_num_end)
+                    wait_for_more = (block_opt.has_more() if seq_num_end is None
+                                     else expected_seq_num < seq_num_end)
 
-            return payload
+                return payload
+
+        return TestImpl
 
 
 class ClientBlockRequest:
-    class Test(BasicClientBlockRequest.Test):
-        def __init__(self, test_method_name):
-            super().__init__(test_method_name)
+    @staticmethod
+    def Test(*args, **kwargs):
+        class TestImpl(BasicClientBlockRequest.Test(*args, **kwargs)):
+            def __init__(self, test_method_name):
+                super().__init__(test_method_name)
 
-            self.expected_payload_size = None
-            self.expected_num_blocks = None
+                self.expected_payload_size = None
+                self.expected_num_blocks = None
 
-        def set_block_size(self, new_block_size):
-            self.block_size = new_block_size
-            self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
+            def set_block_size(self, new_block_size):
+                self.block_size = new_block_size
+                self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
 
-        def setUp(self):
-            super().setUp()
+            def setUp(self):
+                super().setUp()
 
-            self.communicate('send-update')
-            complete_payload = self.block_recv(validate=False)
+                self.communicate('send-update')
+                complete_payload = self.block_recv(validate=False)
 
-            # change something in the DM so that next Update includes the list
-            # of all instances
-            self.serv.send(Lwm2mCreate('/1337'))
-            iid = self.serv.recv().get_options(coap.Option.LOCATION_PATH)[-1].content_to_str()
+                # change something in the DM so that next Update includes the list
+                # of all instances
+                self.serv.send(Lwm2mCreate('/1337'))
+                iid = self.serv.recv().get_options(coap.Option.LOCATION_PATH)[-1].content_to_str()
 
-            self.expected_payload_size = len(complete_payload) + len(',</1337/%s>,</2/%s>' % (iid, iid))
-            self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
+                self.expected_payload_size = len(complete_payload) + len(',</1337/%s>,</2/%s>' % (iid, iid))
+                self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
+
+        return TestImpl
 
 
-class HumongousUpdateTest(BasicClientBlockRequest.Test):
+class HumongousUpdateTest(BasicClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
         complete_payload = self.block_recv()
@@ -143,7 +151,7 @@ class HumongousUpdateTest(BasicClientBlockRequest.Test):
             self.serv.recv(timeout_s=3)
 
 
-class HumongousUpdateWithSeparateResponseTest(BasicClientBlockRequest.Test):
+class HumongousUpdateWithSeparateResponseTest(BasicClientBlockRequest.Test()):
     def send_separate_ack(self, msg):
         self.assertEqual(coap.Type.ACKNOWLEDGEMENT, msg.type,
                          "incorrect usage of SeparateResponseTest.send, it's "
@@ -172,7 +180,7 @@ class HumongousUpdateWithSeparateResponseTest(BasicClientBlockRequest.Test):
             self.serv.recv(timeout_s=3)
 
 
-class HumongousUpdateWithNonConfirmableSeparateResponseTest(BasicClientBlockRequest.Test):
+class HumongousUpdateWithNonConfirmableSeparateResponseTest(BasicClientBlockRequest.Test()):
     def send_separate_ack(self, msg):
         self.assertEqual(coap.Type.ACKNOWLEDGEMENT, msg.type,
                          "incorrect usage of SeparateResponseTest.send, it's "
@@ -198,7 +206,7 @@ class HumongousUpdateWithNonConfirmableSeparateResponseTest(BasicClientBlockRequ
             self.serv.recv(timeout_s=3)
 
 
-class ResetResponseToFirstRequestBlock(ClientBlockRequest.Test):
+class ResetResponseToFirstRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -207,7 +215,7 @@ class ResetResponseToFirstRequestBlock(ClientBlockRequest.Test):
         # client should abort
 
 
-class ResetResponseToIntermediateRequestBlock(ClientBlockRequest.Test):
+class ResetResponseToIntermediateRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -219,7 +227,7 @@ class ResetResponseToIntermediateRequestBlock(ClientBlockRequest.Test):
         # client should abort
 
 
-class ResetResponseToLastRequestBlock(ClientBlockRequest.Test):
+class ResetResponseToLastRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -231,7 +239,7 @@ class ResetResponseToLastRequestBlock(ClientBlockRequest.Test):
         # client should abort
 
 
-class CoapErrorResponseToFirstRequestBlock(ClientBlockRequest.Test):
+class CoapErrorResponseToFirstRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -240,7 +248,7 @@ class CoapErrorResponseToFirstRequestBlock(ClientBlockRequest.Test):
         # client should abort
 
 
-class CoapErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test):
+class CoapErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -252,7 +260,7 @@ class CoapErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test):
         # client should abort
 
 
-class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test):
+class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -284,53 +292,53 @@ class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test):
 # 4. Server restarts.
 # 5. Retransmitted packet hits the server, and an error occurs because
 #    we do not expect retransmitted block.
-ICMP_ERROR_RESPONSE_SLEEP_SECODNS = 4
+ICMP_ERROR_RESPONSE_SLEEP_SECONDS = 4
 
 
-class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test):
+class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
     def runTest(self):
         listen_port = self.serv.get_listen_port()
 
+        self.closeSocket()
         self.communicate('send-update')
-        self.serv.close()
         # client should abort and retry update in a while
 
-        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECODNS)
-        self.serv = Lwm2mServer(coap.Server(listen_port))
+        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
+        self.reopenSocket(listen_port)
         self.block_recv()
 
 
-class IcmpErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test):
+class IcmpErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
     def runTest(self):
         listen_port = self.serv.get_listen_port()
 
         self.communicate('send-update')
         self.block_recv(seq_num_begin=0,
                         seq_num_end=(self.expected_num_blocks // 2))
-        self.serv.close()
+        self.closeSocket()
         # client should abort and retry update in a while
 
-        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECODNS)
-        self.serv = Lwm2mServer(coap.Server(listen_port))
+        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
+        self.reopenSocket(listen_port)
         self.block_recv()
 
 
-class IcmpErrorResponseToLastRequestBlock(ClientBlockRequest.Test):
+class IcmpErrorResponseToLastRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
     def runTest(self):
         listen_port = self.serv.get_listen_port()
 
         self.communicate('send-update')
         self.block_recv(seq_num_begin=0,
                         seq_num_end=(self.expected_num_blocks - 1))
-        self.serv.close()
+        self.closeSocket()
         # client should abort and retry update in a while
 
-        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECODNS)
-        self.serv = Lwm2mServer(coap.Server(listen_port))
+        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
+        self.reopenSocket(listen_port)
         self.block_recv()
 
 
-class NoResponseAfterFirstRequestBlock(ClientBlockRequest.Test):
+class NoResponseAfterFirstRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -341,7 +349,7 @@ class NoResponseAfterFirstRequestBlock(ClientBlockRequest.Test):
         self.block_recv()
 
 
-class NoResponseAfterIntermediateRequestBlock(ClientBlockRequest.Test):
+class NoResponseAfterIntermediateRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -355,7 +363,7 @@ class NoResponseAfterIntermediateRequestBlock(ClientBlockRequest.Test):
         self.block_recv(seq_num_begin=(self.expected_num_blocks // 2))
 
 
-class NoResponseAfterLastRequestBlock(ClientBlockRequest.Test):
+class NoResponseAfterLastRequestBlock(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -369,7 +377,7 @@ class NoResponseAfterLastRequestBlock(ClientBlockRequest.Test):
         self.block_recv(seq_num_begin=(self.expected_num_blocks - 1))
 
 
-class BlockSizeRenegotiation(ClientBlockRequest.Test):
+class BlockSizeRenegotiation(ClientBlockRequest.Test()):
     def runTest(self):
         # blocks 2+ should use reduced block size
         self.communicate('send-update')
@@ -392,7 +400,7 @@ class BlockSizeRenegotiation(ClientBlockRequest.Test):
         self.block_recv(seq_num_begin=block_size_ratio)
 
 
-class BlockSizeRenegotiationInTheMiddleOfTransfer(ClientBlockRequest.Test):
+class BlockSizeRenegotiationInTheMiddleOfTransfer(ClientBlockRequest.Test()):
     def runTest(self):
         # blocks 2+ should use reduced block size
         self.communicate('send-update')
@@ -417,7 +425,7 @@ class BlockSizeRenegotiationInTheMiddleOfTransfer(ClientBlockRequest.Test):
         self.block_recv()
 
 
-class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test):
+class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 
@@ -434,7 +442,7 @@ class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test):
         self.block_recv(seq_num_begin=(self.expected_num_blocks // 2 + 1))
 
 
-class UnexpectedServerRequestWhileBlockRequestInProgress(ClientBlockRequest.Test):
+class UnexpectedServerRequestWhileBlockRequestInProgress(ClientBlockRequest.Test()):
     def runTest(self):
         self.communicate('send-update')
 

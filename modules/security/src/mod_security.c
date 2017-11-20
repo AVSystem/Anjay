@@ -22,6 +22,8 @@
 
 #include <avsystem/commons/utils.h>
 
+#include <anjay_modules/io_utils.h>
+
 #include "mod_security.h"
 #include "security_transaction.h"
 #include "security_utils.h"
@@ -157,6 +159,16 @@ static int add_instance(sec_repr_t *repr,
         }
     }
     AVS_LIST_INSERT(ptr, new_instance);
+
+    if (instance->bootstrap_server) {
+        security_log(INFO, "Added instance %u (bootstrap, URI: %s)",
+                     *inout_iid, instance->server_uri);
+    } else {
+        security_log(INFO, "Added instance %u (SSID: %u, URI: %s)",
+                     *inout_iid, instance->ssid, instance->server_uri);
+    }
+
+    mark_modified(repr);
     return 0;
 
 error:
@@ -170,6 +182,7 @@ static int del_instance(sec_repr_t *repr, anjay_iid_t iid) {
         if ((*it)->iid == iid) {
             AVS_LIST(sec_instance_t) element = AVS_LIST_DETACH(it);
             _anjay_sec_destroy_instances(&element);
+            mark_modified(repr);
             return 0;
         }
     }
@@ -272,13 +285,16 @@ static int sec_write(anjay_t *anjay,
                      anjay_rid_t rid,
                      anjay_input_ctx_t *ctx) {
     (void) anjay;
-    sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
+    sec_repr_t *repr = _anjay_sec_get(obj_ptr);
+    sec_instance_t *inst = find_instance(repr, iid);
     int retval;
     assert(inst);
 
+    mark_modified(repr);
+
     switch ((security_resource_t) rid) {
     case SEC_RES_LWM2M_SERVER_URI:
-        return _anjay_sec_fetch_string(ctx, &inst->server_uri);
+        return _anjay_io_fetch_string(ctx, &inst->server_uri);
     case SEC_RES_BOOTSTRAP_SERVER:
         if (!(retval = anjay_get_bool(ctx, &inst->is_bootstrap))) {
             inst->has_is_bootstrap = true;
@@ -291,11 +307,11 @@ static int sec_write(anjay_t *anjay,
         }
         return retval;
     case SEC_RES_PK_OR_IDENTITY:
-        return _anjay_sec_fetch_bytes(ctx, &inst->public_cert_or_psk_identity);
+        return _anjay_io_fetch_bytes(ctx, &inst->public_cert_or_psk_identity);
     case SEC_RES_SERVER_PK:
-        return _anjay_sec_fetch_bytes(ctx, &inst->server_public_key);
+        return _anjay_io_fetch_bytes(ctx, &inst->server_public_key);
     case SEC_RES_SECRET_KEY:
-        return _anjay_sec_fetch_bytes(ctx, &inst->private_cert_or_psk_key);
+        return _anjay_io_fetch_bytes(ctx, &inst->private_cert_or_psk_key);
     case SEC_RES_SMS_SECURITY_MODE:
         if (!(retval = _anjay_sec_fetch_sms_security_mode(
                 ctx, &inst->sms_security_mode))) {
@@ -303,17 +319,17 @@ static int sec_write(anjay_t *anjay,
         }
         return retval;
     case SEC_RES_SMS_BINDING_KEY_PARAMS:
-        if (!(retval = _anjay_sec_fetch_bytes(ctx, &inst->sms_key_params))) {
+        if (!(retval = _anjay_io_fetch_bytes(ctx, &inst->sms_key_params))) {
             inst->has_sms_key_params = true;
         }
         return retval;
     case SEC_RES_SMS_BINDING_SECRET_KEYS:
-        if (!(retval = _anjay_sec_fetch_bytes(ctx, &inst->sms_secret_key))) {
+        if (!(retval = _anjay_io_fetch_bytes(ctx, &inst->sms_secret_key))) {
             inst->has_sms_secret_key = true;
         }
         return retval;
     case SEC_RES_SERVER_SMS_NUMBER:
-        return _anjay_sec_fetch_string(ctx, &inst->sms_number);
+        return _anjay_io_fetch_string(ctx, &inst->sms_number);
     case SEC_RES_SHORT_SERVER_ID:
         if (!(retval = _anjay_sec_fetch_short_server_id(ctx, &inst->ssid))) {
             inst->has_ssid = true;
@@ -381,6 +397,7 @@ static int sec_instance_create(anjay_t *anjay,
     }
 
     AVS_LIST_INSERT(ptr, created);
+    mark_modified(repr);
     return 0;
 }
 
@@ -480,15 +497,23 @@ int anjay_security_object_add_instance(
         const anjay_security_instance_t *instance,
         anjay_iid_t *inout_iid) {
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
+    const bool modified_since_persist = repr->modified_since_persist;
     int retval = add_instance(repr, instance, inout_iid);
     if (!retval && (retval = _anjay_sec_object_validate(repr))) {
         (void) del_instance(repr, *inout_iid);
+        if (!modified_since_persist) {
+            /* validation failed and so in the end no instace is added */
+            clear_modified(repr);
+        }
     }
     return retval;
 }
 
 void anjay_security_object_purge(const anjay_dm_object_def_t *const *obj_ptr) {
     sec_repr_t *sec = _anjay_sec_get(obj_ptr);
+    if (sec->instances) {
+        mark_modified(sec);
+    }
     _anjay_sec_destroy_instances(&sec->instances);
     _anjay_sec_destroy_instances(&sec->saved_instances);
 }
@@ -498,6 +523,11 @@ void anjay_security_object_delete(const anjay_dm_object_def_t **def) {
         anjay_security_object_purge(def);
         free(_anjay_sec_get(def));
     }
+}
+
+bool anjay_security_object_is_modified(
+        const anjay_dm_object_def_t *const *obj_ptr) {
+    return _anjay_sec_get(obj_ptr)->modified_since_persist;
 }
 
 #ifdef ANJAY_TEST

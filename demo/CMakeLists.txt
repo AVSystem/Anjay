@@ -20,6 +20,7 @@ set(SOURCES
     demo_args.c
     demo_cmds.c
     demo_utils.c
+    firmware_update.c
     iosched.c
     objects/apn_conn_profile.c
     objects/cell_connectivity.c
@@ -28,13 +29,14 @@ set(SOURCES
     objects/download_diagnostics.c
     objects/device.c
     objects/ext_dev_info.c
-    objects/firmware_update.c
     objects/geopoints.c
     objects/ip_ping.c
     objects/location.c
+    objects/portfolio.c
     objects/test.c)
 
 set(HEADERS
+    firmware_update.h
     iosched.h
     objects.h
     demo_utils.h)

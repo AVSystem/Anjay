@@ -35,9 +35,9 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static AVS_LIST(const anjay_string_t)
-get_endpoint_path(const avs_coap_msg_t *msg) {
-    AVS_LIST(const anjay_string_t) path = NULL;
+static int get_endpoint_path(AVS_LIST(const anjay_string_t) *out_path,
+                             const avs_coap_msg_t *msg) {
+    assert(*out_path == NULL);
 
     int result;
     char buffer[ANJAY_MAX_URI_SEGMENT_SIZE];
@@ -57,16 +57,16 @@ get_endpoint_path(const avs_coap_msg_t *msg) {
         }
 
         memcpy(segment, buffer, attr_size + 1);
-        AVS_LIST_APPEND(&path, segment);
+        AVS_LIST_APPEND(out_path, segment);
     }
 
     if (result == AVS_COAP_OPTION_MISSING) {
-        return path;
+        return 0;
     }
 
 fail:
-    AVS_LIST_CLEAR(&path);
-    return NULL;
+    AVS_LIST_CLEAR(out_path);
+    return result;
 }
 
 static const char *assemble_endpoint_path(char *buffer,
@@ -93,6 +93,23 @@ static int send_objects_list(avs_stream_abstract_t *stream,
 
     anjay_dm_cache_object_t *object;
     AVS_LIST_FOREACH(object, dm) {
+        if (object->version || !object->instances) {
+            int result = avs_stream_write_f(stream, "%s</%u>",
+                                            is_first_path ? "" : ",",
+                                            object->oid);
+            if (result) {
+                return result;
+            }
+            if (object->version) {
+                result = avs_stream_write_f(stream, ";ver=\"%s\"", object->version);
+                if (result) {
+                    return result;
+                }
+            }
+
+            is_first_path = false;
+        }
+
         if (object->instances) {
             anjay_iid_t *iid;
             AVS_LIST_FOREACH(iid, object->instances) {
@@ -104,14 +121,6 @@ static int send_objects_list(avs_stream_abstract_t *stream,
                 }
                 is_first_path = false;
             }
-        } else {
-            int result = avs_stream_write_f(stream, "%s</%u>",
-                                            is_first_path ? "" : ",",
-                                            object->oid);
-            if (result) {
-                return result;
-            }
-            is_first_path = false;
         }
     }
     return 0;
@@ -145,21 +154,30 @@ static int get_server_lifetime(anjay_t *anjay,
 
 static int send_register(anjay_t *anjay,
                          const anjay_update_parameters_t *params) {
+    const anjay_url_t *const server_uri =
+            &anjay->current_connection.server->uri;
     anjay_msg_details_t details = {
         .msg_type = AVS_COAP_MSG_CONFIRMABLE,
         .msg_code = AVS_COAP_CODE_POST,
         .format = ANJAY_COAP_FORMAT_APPLICATION_LINK,
-        .uri_path = _anjay_make_string_list("rd", NULL),
-        .uri_query = _anjay_make_query_string_list(
-                ANJAY_SUPPORTED_ENABLER_VERSION, anjay->endpoint_name,
-                &params->lifetime_s,
-                params->binding_mode == ANJAY_BINDING_U ? ANJAY_BINDING_NONE
-                                                        : params->binding_mode,
-                _anjay_local_msisdn(anjay))
+        .uri_path = _anjay_copy_string_list(server_uri->uri_path),
+        .uri_query = _anjay_copy_string_list(server_uri->uri_query)
     };
 
     int result = -1;
-    if (!details.uri_path || !details.uri_query) {
+    if ((server_uri->uri_path && !details.uri_path)
+            || (server_uri->uri_query && !details.uri_query)
+            || !AVS_LIST_APPEND(&details.uri_path,
+                                _anjay_make_string_list("rd", NULL))
+            || !AVS_LIST_APPEND(&details.uri_query,
+                                _anjay_make_query_string_list(
+                                        ANJAY_SUPPORTED_ENABLER_VERSION,
+                                        anjay->endpoint_name,
+                                        &params->lifetime_s,
+                                        params->binding_mode == ANJAY_BINDING_U
+                                                ? ANJAY_BINDING_NONE
+                                                : params->binding_mode,
+                                        _anjay_local_msisdn(anjay)))) {
         anjay_log(ERROR, "could not initialize request headers");
         goto cleanup;
     }
@@ -195,22 +213,11 @@ check_register_response(avs_stream_abstract_t *stream,
         return -1;
     }
 
-    AVS_LIST(const anjay_string_t) endpoint_path = get_endpoint_path(response);
-    if (!endpoint_path) {
-        anjay_log(ERROR, "server did not specify a location");
+    AVS_LIST_CLEAR(out_endpoint_path);
+    if (get_endpoint_path(out_endpoint_path, response)) {
+        anjay_log(ERROR, "could not store Update location");
         return -1;
     }
-    if (strcmp(endpoint_path->c_str, "rd")) {
-        anjay_log(ERROR, "returned location does not start with 'rd' segment "
-                  "(got '%s')", endpoint_path->c_str);
-        AVS_LIST_CLEAR(&endpoint_path);
-        return -1;
-    }
-
-    if (*out_endpoint_path) {
-        AVS_LIST_CLEAR(out_endpoint_path);
-    }
-    *out_endpoint_path = endpoint_path;
 
     char location_buf[256];
     anjay_log(INFO, "registration successful, location = %s",
@@ -281,6 +288,7 @@ static int query_dm_object(anjay_t *anjay,
     *cache_object_insert_ptr = AVS_LIST_NEXT_PTR(*cache_object_insert_ptr);
 
     new_object->oid = (*obj)->oid;
+    new_object->version = (*obj)->version;
     AVS_LIST(anjay_iid_t) *instance_insert_ptr = &new_object->instances;
     int retval = _anjay_dm_foreach_instance(anjay, obj, query_dm_instance,
                                             &instance_insert_ptr);
@@ -403,10 +411,17 @@ static bool iid_lists_equal(AVS_LIST(anjay_iid_t) left,
     return !(left || right);
 }
 
+static bool nullable_strings_equal(const char *a,
+                                   const char *b) {
+    return (!a && !b)
+        || (a && b && !strcmp(a, b));
+}
+
 static bool dm_caches_equal(AVS_LIST(anjay_dm_cache_object_t) left,
                             AVS_LIST(anjay_dm_cache_object_t) right) {
     while (left && right) {
         if (left->oid != right->oid
+                || !nullable_strings_equal(left->version, right->version)
                 || !iid_lists_equal(left->instances, right->instances)) {
             return false;
         }

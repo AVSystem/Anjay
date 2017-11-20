@@ -38,17 +38,26 @@ int _anjay_serv_object_validate(server_repr_t *repr) {
                 || !it->has_binding
                 || !it->has_lifetime
                 || !it->has_notification_storing) {
-            result = -1;
+            server_log(TRACE, "Mandatory resources missing:%s%s%s%s",
+                       it->has_ssid ? "" : " SSID",
+                       it->has_binding ? "" : " BindingMode",
+                       it->has_lifetime ? "" : " Lifetime",
+                       it->has_notification_storing ? "" : " NotificationStoring");
+            result = ANJAY_ERR_BAD_REQUEST;
             break;
         }
         if (it->data.lifetime <= 0
                 || it->data.default_max_period == 0
                 || it->data.binding == ANJAY_BINDING_NONE) {
-            result = -1;
+            server_log(TRACE, "Invalid value(s): Lifetime = %d; "
+                       "DefaultMaxPeriod = %d, Binding = %d\n",
+                       it->data.lifetime, it->data.default_max_period,
+                       it->data.binding);
+            result = ANJAY_ERR_BAD_REQUEST;
             break;
         }
         if (!AVS_LIST_INSERT_NEW(anjay_ssid_t, &seen_ssids)) {
-            result = -1;
+            result = ANJAY_ERR_INTERNAL;
             break;
         }
         *seen_ssids = it->data.ssid;
@@ -62,7 +71,7 @@ int _anjay_serv_object_validate(server_repr_t *repr) {
         while (next) {
             if (*prev == *next) {
                 /* Duplicate found */
-                result = -1;
+                result = ANJAY_ERR_BAD_REQUEST;
                 break;
             }
             prev = next;
@@ -75,13 +84,11 @@ int _anjay_serv_object_validate(server_repr_t *repr) {
 
 int _anjay_serv_transaction_begin_impl(server_repr_t *repr) {
     assert(!repr->saved_instances);
-    if (!repr->instances) {
-        return 0;
-    }
     repr->saved_instances = _anjay_serv_clone_instances(repr);
-    if (!repr->saved_instances) {
+    if (!repr->saved_instances && repr->instances) {
         return ANJAY_ERR_INTERNAL;
     }
+    repr->saved_modified_since_persist = repr->modified_since_persist;
     return 0;
 }
 
@@ -96,6 +103,7 @@ int _anjay_serv_transaction_validate_impl(server_repr_t *repr) {
 
 int _anjay_serv_transaction_rollback_impl(server_repr_t *repr) {
     _anjay_serv_destroy_instances(&repr->instances);
+    repr->modified_since_persist = repr->saved_modified_since_persist;
     repr->instances = repr->saved_instances;
     repr->saved_instances = NULL;
     return 0;

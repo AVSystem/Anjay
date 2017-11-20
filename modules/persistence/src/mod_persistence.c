@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <inttypes.h>
 #include <stdio.h>
 
 #include <avsystem/commons/utils.h>
@@ -42,6 +43,11 @@ typedef int persistence_handler_time_t(anjay_persistence_context_t *ctx,
                                        time_t *value);
 typedef int persistence_handler_double_t(anjay_persistence_context_t *ctx,
                                          double *value);
+typedef int persistence_handler_sized_buffer_t(anjay_persistence_context_t *ctx,
+                                               void **data_ptr,
+                                               size_t *size_ptr);
+typedef int persistence_handler_string_t(anjay_persistence_context_t *ctx,
+                                         char **string_ptr);
 typedef int
 persistence_handler_list_t(anjay_persistence_context_t *ctx,
                            AVS_LIST(void) *list_ptr,
@@ -63,6 +69,8 @@ struct anjay_persistence_context_struct {
     persistence_handler_bytes_t *handle_bytes;
     persistence_handler_time_t *handle_time;
     persistence_handler_double_t *handle_double;
+    persistence_handler_sized_buffer_t *handle_sized_buffer;
+    persistence_handler_string_t *handle_string;
     persistence_handler_list_t *handle_list;
     persistence_handler_tree_t *handle_tree;
     avs_stream_abstract_t *stream;
@@ -105,6 +113,26 @@ static int persist_double(anjay_persistence_context_t *ctx, double *value) {
     AVS_STATIC_ASSERT(sizeof(*value) == sizeof(value_be), double_is_64);
     AVS_STATIC_ASSERT(sizeof(value_be) == 8, u64_is_8bytes);
     return avs_stream_write(ctx->stream, &value_be, 8);
+}
+
+static int persist_sized_buffer(anjay_persistence_context_t *ctx,
+                                void **data_ptr,
+                                size_t *size_ptr) {
+    uint32_t size32 = (uint32_t) *size_ptr;
+    if (size32 != *size_ptr) {
+        persistence_log(ERROR, "Element too big to persist");
+    }
+    int retval = persist_u32(ctx, &size32);
+    if (!retval && size32 > 0) {
+        retval = persist_bytes(ctx, (uint8_t *) *data_ptr, *size_ptr);
+    }
+    return retval;
+}
+
+static int persist_string(anjay_persistence_context_t *ctx,
+                          char **string_ptr) {
+    size_t size = (string_ptr && *string_ptr) ? (strlen(*string_ptr) + 1) : 0;
+    return persist_sized_buffer(ctx, (void **) string_ptr, &size);
 }
 
 static int persist_list(anjay_persistence_context_t *ctx,
@@ -155,15 +183,17 @@ static int persist_tree(anjay_persistence_context_t *ctx,
 }
 
 #define INIT_STORE_CONTEXT(Stream) { \
-            .handle_u16 = persist_u16, \
-            .handle_u32 = persist_u32, \
-            .handle_bool = persist_bool, \
-            .handle_bytes = persist_bytes, \
-            .handle_time = persist_time, \
-            .handle_double = persist_double, \
-            .handle_list = persist_list, \
-            .handle_tree = persist_tree, \
-            .stream = Stream \
+            persist_u16, \
+            persist_u32, \
+            persist_bool, \
+            persist_bytes, \
+            persist_time, \
+            persist_double, \
+            persist_sized_buffer, \
+            persist_string, \
+            persist_list, \
+            persist_tree, \
+            Stream \
         }
 
 //// RESTORE ///////////////////////////////////////////////////////////////////
@@ -218,6 +248,48 @@ static int restore_double(anjay_persistence_context_t *ctx, double *out) {
         *out = _anjay_ntohd(tmp);
     }
     return retval;
+}
+
+static int restore_sized_buffer(anjay_persistence_context_t *ctx,
+                                void **data_ptr,
+                                size_t *size_ptr) {
+    assert(!*data_ptr);
+    assert(!*size_ptr);
+    uint32_t size32;
+    int retval = restore_u32(ctx, &size32);
+    if (retval) {
+        return retval;
+    }
+    if (size32 == 0) {
+        return 0;
+    }
+    if (!(*data_ptr = malloc(size32))) {
+        persistence_log(ERROR, "Cannot allocate %" PRIu32 " bytes", size32);
+        return -1;
+    }
+    if ((retval = restore_bytes(ctx, (uint8_t *) *data_ptr, size32))) {
+        free(*data_ptr);
+        *data_ptr = NULL;
+    } else {
+        *size_ptr = size32;
+    }
+    return retval;
+}
+
+static int restore_string(anjay_persistence_context_t *ctx,
+                          char **string_ptr) {
+    size_t size = 0;
+    int retval = restore_sized_buffer(ctx, (void **) string_ptr, &size);
+    if (retval) {
+        return retval;
+    }
+    if (size > 0 && (*string_ptr)[size - 1] != '\0') {
+        persistence_log(ERROR, "Invalid string");
+        free(*string_ptr);
+        *string_ptr = NULL;
+        return -1;
+    }
+    return 0;
 }
 
 static int restore_list(anjay_persistence_context_t *ctx,
@@ -277,14 +349,16 @@ static int restore_tree(anjay_persistence_context_t *ctx,
 }
 
 #define INIT_RESTORE_CONTEXT(Stream) { \
-            .handle_u16 = restore_u16, \
-            .handle_u32 = restore_u32, \
-            .handle_bool = restore_bool, \
-            .handle_bytes = restore_bytes, \
-            .handle_time = restore_time, \
-            .handle_double = restore_double, \
-            .handle_list = restore_list, \
-            .handle_tree = restore_tree, \
+            restore_u16, \
+            restore_u32, \
+            restore_bool, \
+            restore_bytes, \
+            restore_time, \
+            restore_double, \
+            restore_sized_buffer, \
+            restore_string, \
+            restore_list, \
+            restore_tree, \
             .stream = Stream \
         }
 
@@ -356,6 +430,25 @@ static int ignore_collection(
     return retval;
 }
 
+static int ignore_sized_buffer(anjay_persistence_context_t *ctx,
+                               void **data_ptr,
+                               size_t *size_ptr) {
+    (void) data_ptr;
+    (void) size_ptr;
+    uint32_t size32;
+    int retval = restore_u32(ctx, &size32);
+    if (!retval) {
+        retval = ignore_bytes(ctx, NULL, size32);
+    }
+    return retval;
+}
+
+static int ignore_string(anjay_persistence_context_t *ctx,
+                         char **string_ptr) {
+    (void) string_ptr;
+    return ignore_sized_buffer(ctx, NULL, NULL);
+}
+
 static int ignore_list(anjay_persistence_context_t *ctx,
                        AVS_LIST(void) *list_ptr,
                        size_t element_size,
@@ -376,15 +469,17 @@ static int ignore_tree(anjay_persistence_context_t *ctx,
 }
 
 #define INIT_IGNORE_CONTEXT(Stream) { \
-            .handle_u16 = ignore_u16, \
-            .handle_u32 = ignore_u32, \
-            .handle_bool = ignore_bool, \
-            .handle_bytes = ignore_bytes, \
-            .handle_time = ignore_time, \
-            .handle_double = ignore_double, \
-            .handle_list = ignore_list, \
-            .handle_tree = ignore_tree, \
-            .stream = Stream \
+            ignore_u16, \
+            ignore_u32, \
+            ignore_bool, \
+            ignore_bytes, \
+            ignore_time, \
+            ignore_double, \
+            ignore_sized_buffer, \
+            ignore_string, \
+            ignore_list, \
+            ignore_tree, \
+            Stream \
         }
 
 anjay_persistence_context_t *
@@ -476,6 +571,23 @@ int anjay_persistence_double(anjay_persistence_context_t *ctx,
         return -1;
     }
     return ctx->handle_double(ctx, value);
+}
+
+int anjay_persistence_sized_buffer(anjay_persistence_context_t *ctx,
+                                   void **data_ptr,
+                                   size_t *size_ptr) {
+    if (!ctx) {
+        return -1;
+    }
+    return ctx->handle_sized_buffer(ctx, data_ptr, size_ptr);
+}
+
+int anjay_persistence_string(anjay_persistence_context_t *ctx,
+                             char **string_ptr) {
+    if (!ctx) {
+        return -1;
+    }
+    return ctx->handle_string(ctx, string_ptr);
 }
 
 int anjay_persistence_list(anjay_persistence_context_t *ctx,

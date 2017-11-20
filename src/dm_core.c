@@ -65,6 +65,24 @@ static int validate_supported_rids(const anjay_dm_object_def_t *obj_def) {
     return 0;
 }
 
+static int validate_version(const anjay_dm_object_def_t *obj_def) {
+    if (!obj_def->version) {
+        // missing version is equivalent to 1.0
+        return 0;
+    }
+
+    unsigned major, minor;
+    char dummy;
+    if (sscanf(obj_def->version, "%u.%u%c", &major, &minor, &dummy) != 2) {
+        anjay_log(ERROR, "invalid Object /%u version format (expected X.Y, "
+                  "where X and Y are unsigned integers): %s",
+                  (unsigned) obj_def->oid, obj_def->version);
+        return -1;
+    }
+
+    return 0;
+}
+
 int anjay_register_object(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *def_ptr) {
     assert(!anjay->transaction_state.depth);
@@ -91,7 +109,8 @@ int anjay_register_object(anjay_t *anjay,
         return -1;
     }
 
-    if (validate_supported_rids(*def_ptr)) {
+    if (validate_supported_rids(*def_ptr)
+            || validate_version(*def_ptr)) {
         return -1;
     }
 

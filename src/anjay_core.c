@@ -17,9 +17,10 @@
 #include <config.h>
 
 #include <assert.h>
-#include <math.h>
 #include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -117,18 +118,20 @@ static int init(anjay_t *anjay,
         return -1;
     }
 
+    coap_id_source_t *id_source = NULL;
 #ifdef WITH_BLOCK_DOWNLOAD
-    coap_id_source_t *id_source =
-            _anjay_coap_id_source_auto_new(0, AVS_COAP_MAX_TOKEN_LENGTH);
-    if (!id_source) {
+    if (!(id_source = _anjay_coap_id_source_auto_new(
+            0, AVS_COAP_MAX_TOKEN_LENGTH))) {
         return -1;
     }
+#endif // WITH_BLOCK_DOWNLOAD
+#ifdef WITH_DOWNLOADER
     if (_anjay_downloader_init(&anjay->downloader, anjay, &id_source)) {
         _anjay_coap_id_source_release(&id_source);
         return -1;
     }
+#endif // WITH_DOWNLOADER
     assert(!id_source);
-#endif // WITH_BLOCK_DOWNLOAD
 
     return 0;
 }
@@ -156,9 +159,9 @@ void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay) {
 void anjay_delete(anjay_t *anjay) {
     anjay_log(TRACE, "deleting anjay object");
 
-#ifdef WITH_BLOCK_DOWNLOAD
+#ifdef WITH_DOWNLOADER
     _anjay_downloader_cleanup(&anjay->downloader);
-#endif // WITH_BLOCK_DOWNLOAD
+#endif // WITH_DOWNLOADER
 
     _anjay_bootstrap_cleanup(anjay);
     _anjay_servers_cleanup(anjay);
@@ -732,16 +735,13 @@ int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
         return -1;
     }
 
-    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
-    if (!connection) {
-        anjay_log(ERROR, "could not get server connection");
+    avs_net_abstract_socket_t *socket = _anjay_connection_get_online_socket(
+            _anjay_get_server_connection(ref));
+    if (!socket) {
+        anjay_log(ERROR, "server connection is not online");
         return -1;
     }
-
-    avs_net_abstract_socket_t *socket = _anjay_connection_get_prepared_socket(
-            anjay, ref.server, connection);
-    if (!socket
-            || avs_stream_net_setsock(anjay->comm_stream, socket)
+    if (avs_stream_net_setsock(anjay->comm_stream, socket)
             || _anjay_coap_stream_set_tx_params(anjay->comm_stream,
                                                 tx_params)) {
         anjay_log(ERROR, "could not set stream socket");
@@ -762,8 +762,8 @@ static void *
 queue_mode_close_socket_args_encode(queue_mode_close_socket_args_t args) {
     AVS_STATIC_ASSERT(sizeof(void *) >= sizeof(queue_mode_close_socket_args_t),
                       pointer_big_enough);
-    // ensure that ANJAY_CONNECTION_WILDCARD is the last value
-    assert(args.conn_type < ANJAY_CONNECTION_WILDCARD);
+    // ensure that ANJAY_CONNECTION_UNSET is the last value
+    assert(args.conn_type < ANJAY_CONNECTION_UNSET);
     void *result = NULL;
     memcpy(&result, &args, sizeof(args));
     return result;
@@ -773,7 +773,7 @@ static queue_mode_close_socket_args_t
 queue_mode_close_socket_args_decode(void *value) {
     queue_mode_close_socket_args_t result;
     memcpy(&result, &value, sizeof(result));
-    assert(result.conn_type < ANJAY_CONNECTION_WILDCARD);
+    assert(result.conn_type < ANJAY_CONNECTION_UNSET);
     return result;
 }
 
@@ -879,11 +879,11 @@ static int sms_serve(anjay_t *anjay) {
 
 int anjay_serve(anjay_t *anjay,
                 avs_net_abstract_socket_t *ready_socket) {
-#ifdef WITH_BLOCK_DOWNLOAD
+#ifdef WITH_DOWNLOADER
     if (!_anjay_downloader_handle_packet(&anjay->downloader, ready_socket)) {
         return 0;
     }
-#endif // WITH_BLOCK_DOWNLOAD
+#endif // WITH_DOWNLOADER
 
     if (_anjay_sms_router(anjay)
             && ready_socket == _anjay_sms_poll_socket(anjay)) {
@@ -932,25 +932,28 @@ int anjay_sched_run(anjay_t *anjay) {
 
 anjay_download_handle_t anjay_download(anjay_t *anjay,
                                        const anjay_download_config_t *config) {
-#ifdef WITH_BLOCK_DOWNLOAD
-    return _anjay_downloader_download(&anjay->downloader, config);
-#else // WITH_BLOCK_DOWNLOAD
+#ifdef WITH_DOWNLOADER
+    anjay_download_handle_t result = NULL;
+    errno = -_anjay_downloader_download(&anjay->downloader, &result, config);
+    return result;
+#else // WITH_DOWNLOADER
     (void) anjay;
     (void) config;
     anjay_log(ERROR, "CoAP download support disabled");
+    errno = ENOTSUP;
     return NULL;
-#endif // WITH_BLOCK_DOWNLOAD
+#endif // WITH_DOWNLOADER
 }
 
 void anjay_download_abort(anjay_t *anjay,
                           anjay_download_handle_t handle) {
-#ifdef WITH_BLOCK_DOWNLOAD
+#ifdef WITH_DOWNLOADER
     _anjay_downloader_abort(&anjay->downloader, handle);
-#else // WITH_BLOCK_DOWNLOAD
+#else // WITH_DOWNLOADER
     (void) anjay;
     (void) handle;
     anjay_log(ERROR, "CoAP download support disabled");
-#endif // WITH_BLOCK_DOWNLOAD
+#endif // WITH_DOWNLOADER
 }
 
 void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr) {

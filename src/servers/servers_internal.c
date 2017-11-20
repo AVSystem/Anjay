@@ -48,6 +48,7 @@ void _anjay_server_cleanup(anjay_t *anjay, anjay_active_server_info_t *server) {
     _anjay_sched_del(anjay->sched, &server->sched_update_handle);
     _anjay_registration_info_cleanup(&server->registration_info);
     connection_cleanup(anjay, &server->udp_connection);
+    _anjay_url_cleanup(&server->uri);
 }
 
 static void active_servers_delete_and_deregister(anjay_t *anjay) {
@@ -61,67 +62,39 @@ static void active_servers_delete_and_deregister(anjay_t *anjay) {
     }
 }
 
+void _anjay_servers_inactive_cleanup(anjay_t *anjay) {
+    AVS_LIST_CLEAR(&anjay->servers.inactive) {
+        _anjay_sched_del(anjay->sched,
+                         &anjay->servers.inactive->sched_reactivate_handle);
+    }
+}
+
 void _anjay_servers_cleanup(anjay_t *anjay) {
     anjay_log(TRACE, "cleanup servers: %lu active, %lu inactive",
               (unsigned long) AVS_LIST_SIZE(anjay->servers.active),
               (unsigned long) AVS_LIST_SIZE(anjay->servers.inactive));
 
     active_servers_delete_and_deregister(anjay);
-    AVS_LIST_CLEAR(&anjay->servers.inactive) {
-        _anjay_sched_del(anjay->sched,
-                         &anjay->servers.inactive->sched_reactivate_handle);
-    }
+    _anjay_servers_inactive_cleanup(anjay);
     AVS_LIST_CLEAR(&anjay->servers.public_sockets);
 }
 
-static bool
-should_connection_be_online(anjay_t *anjay,
-                            anjay_ssid_t ssid,
-                            const anjay_server_connection_t *connection) {
-    (void) anjay; (void) ssid;
-    return _anjay_connection_internal_get_socket(connection) != NULL
-#ifdef WITH_BOOTSTRAP
-            && (!anjay->bootstrap.in_progress || ssid == ANJAY_SSID_BOOTSTRAP)
-#endif
-            && (!connection->queue_mode
-                    || connection->queue_mode_close_socket_clb_handle);
-    // see comment on field declaration for logic summary
-}
-
 avs_net_abstract_socket_t *
-_anjay_connection_get_prepared_socket(anjay_t *anjay,
-                                      anjay_active_server_info_t *server,
-                                      anjay_server_connection_t *connection) {
-    avs_net_abstract_socket_t *socket =
-            _anjay_connection_internal_get_socket(connection);
-    if (!socket) {
+_anjay_connection_get_online_socket(anjay_server_connection_t *connection) {
+    if (!connection || !_anjay_connection_internal_is_online(connection)) {
         return NULL;
     }
-    if (_anjay_connection_internal_ensure_online(connection)) {
-        anjay_log(ERROR, "broken socket for server %" PRIu16, server->ssid);
-        if (_anjay_schedule_server_reconnect(anjay, server)) {
-            anjay_log(ERROR, "could not schedule reconnect for server %" PRIu16,
-                      server->ssid);
-        }
-        return NULL;
-    }
-    return socket;
+    return _anjay_connection_internal_get_socket(connection);
 }
 
 static avs_net_abstract_socket_t *
-get_online_connection_socket(anjay_t *anjay,
-                             anjay_active_server_info_t *server,
+get_online_connection_socket(anjay_active_server_info_t *server,
                              anjay_connection_type_t conn_type) {
-    anjay_server_connection_t *connection =
+    return _anjay_connection_get_online_socket(
             _anjay_get_server_connection((anjay_connection_ref_t) {
                                              .server = server,
                                              .conn_type = conn_type
-                                         });
-    if (connection
-            && should_connection_be_online(anjay, server->ssid, connection)) {
-        return _anjay_connection_get_prepared_socket(anjay, server, connection);
-    }
-    return NULL;
+                                         }));
 }
 
 static int
@@ -145,13 +118,12 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
     anjay_active_server_info_t *server;
     AVS_LIST_FOREACH(server, anjay->servers.active) {
         avs_net_abstract_socket_t *udp_socket =
-                get_online_connection_socket(anjay, server,
-                                             ANJAY_CONNECTION_UDP);
+                get_online_connection_socket(server, ANJAY_CONNECTION_UDP);
         if (udp_socket && !add_socket_onto_list(tail_ptr, udp_socket)) {
             tail_ptr = AVS_LIST_NEXT_PTR(tail_ptr);
         }
 
-        if (get_online_connection_socket(anjay, server, ANJAY_CONNECTION_SMS)) {
+        if (get_online_connection_socket(server, ANJAY_CONNECTION_SMS)) {
             sms_active = true;
         }
     }
@@ -161,7 +133,9 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
         add_socket_onto_list(tail_ptr, _anjay_sms_poll_socket(anjay));
     }
 
+#ifdef WITH_DOWNLOADER
     _anjay_downloader_get_sockets(&anjay->downloader, tail_ptr);
+#endif // WITH_DOWNLOADER
     return anjay->servers.public_sockets;
 }
 
@@ -179,15 +153,26 @@ _anjay_servers_find_by_udp_socket(anjay_servers_t *servers,
     return NULL;
 }
 
+static int deactivate_server_job(anjay_t *anjay,
+                                 void *ssid_) {
+    return _anjay_server_deactivate(anjay, &anjay->servers,
+                                    (anjay_ssid_t) (intptr_t) ssid_,
+                                    AVS_TIME_DURATION_ZERO) ? 0 : -1;
+}
+
 int _anjay_schedule_socket_update(anjay_t *anjay,
                                   anjay_iid_t security_iid) {
     anjay_ssid_t ssid;
     anjay_active_server_info_t *server;
     if (!_anjay_ssid_from_security_iid(anjay, security_iid, &ssid)
             && (server = _anjay_servers_find_active(&anjay->servers, ssid))) {
-        server->udp_connection.needs_socket_update = true;
+        // mark that the registration connection is no longer valid;
+        // prevents superfluous Deregister
+        server->registration_info.conn_type = ANJAY_CONNECTION_UNSET;
+        return _anjay_sched_now(anjay->sched, NULL, deactivate_server_job,
+                                (void *) (uintptr_t) ssid);
     }
-    return _anjay_schedule_reload_servers(anjay);
+    return 0;
 }
 
 #ifdef WITH_BOOTSTRAP

@@ -56,7 +56,7 @@ def packets_from_chunks(chunks, process_options=None, path='/5/0/0'):
                           content=chunk)
 
 
-class BlockTest(test_suite.Lwm2mSingleServerTest):
+class BlockTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
     def block_init_file(self):
         import tempfile
 
@@ -95,6 +95,11 @@ class BlockTest(test_suite.Lwm2mSingleServerTest):
 
         self.assertEqual(request.get_options(coap.Option.BLOCK1),
                          response.options)
+
+    def tearDown(self):
+        # now reset the state machine
+        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
+        super().tearDown()
 
     @unittest.skip
     def runTest(self):
@@ -149,6 +154,8 @@ class BlockSizesTest(BlockTest):
         # multiple chunk sizes: min/max/something in between
         for chunk_size in (16, 256, 1024):
             self.block_send(A_LOT_OF_STUFF, equal_chunk_splitter(chunk_size))
+            # now reset the state machine
+            self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
 
 
 class BlockSingleChunkTest(BlockTest):
@@ -238,7 +245,9 @@ class BlockVariableChunkSizeTest(BlockTest):
 
         # variable chunk size
         self.block_send(A_LOT_OF_STUFF, shrinking_chunk_splitter(initial_chunk_size=1024))
+        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
         self.block_send(A_LOT_OF_STUFF, growing_chunk_splitter(initial_chunk_size=16))
+        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
         self.block_send(A_LOT_OF_STUFF, alternating_size_chunk_splitter(sizes=[32, 512, 256, 1024, 64]))
 
 
@@ -247,14 +256,17 @@ class BlockNonFirstTest(BlockTest):
         data = A_LOT_OF_STUFF
         splitter = equal_chunk_splitter(1024)
 
-        self.block_init_file()
-        chunks = list(splitter(data))
+        fw_file = self.block_init_file()
+        try:
+            chunks = list(splitter(data))
 
-        request = list(packets_from_chunks([chunks[1]]))[0]
+            request = list(packets_from_chunks([chunks[1]]))[0]
 
-        self.serv.send(request)
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(request)(coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
-                            self.serv.recv())
+            self.serv.send(request)
+            self.assertMsgEqual(Lwm2mErrorResponse.matching(request)(coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
+                                self.serv.recv())
+        finally:
+            os.unlink(fw_file)
 
 
 class BlockBrokenStreamTest(BlockTest):

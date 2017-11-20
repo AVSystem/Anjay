@@ -41,6 +41,7 @@
 #cmakedefine WITH_BLOCK_SEND
 #cmakedefine WITH_BOOTSTRAP
 #cmakedefine WITH_DISCOVER
+#cmakedefine WITH_DOWNLOADER
 #cmakedefine WITH_OBSERVE
 #cmakedefine WITH_HTTP_DOWNLOAD
 #cmakedefine WITH_JSON

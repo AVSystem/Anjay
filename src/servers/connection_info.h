@@ -32,8 +32,8 @@ avs_net_abstract_socket_t *_anjay_connection_internal_get_socket(
 void
 _anjay_connection_internal_clean_socket(anjay_server_connection_t *connection);
 
-int
-_anjay_connection_internal_ensure_online(anjay_server_connection_t *connection);
+bool
+_anjay_connection_internal_is_online(anjay_server_connection_t *connection);
 
 int _anjay_server_refresh(anjay_t *anjay,
                           anjay_active_server_info_t *server,

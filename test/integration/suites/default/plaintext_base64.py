@@ -40,8 +40,7 @@ class Base64DifferentLengths(Base64Test.Test):
     def runTest(self):
         for length in range(1, 1049):
             self.write_resource(self.serv, oid=OID.Test, iid=1,
-                                rid=RID.Test.ResBytesSize, content=str(length),
-                                format=coap.ContentFormat.TEXT_PLAIN)
+                                rid=RID.Test.ResBytesSize, content=str(length))
             result = self.read_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBytes,
                                         accept=coap.ContentFormat.TEXT_PLAIN)
             decoded = base64.decodebytes(result.content)
@@ -52,8 +51,7 @@ class Base64BlockTransfer(br.BlockResponseTest, test_suite.Lwm2mDmOperations):
     def runTest(self):
         LENGTH = 9001
         self.write_resource(self.serv, oid=OID.Test, iid=1,
-                            rid=RID.Test.ResBytesSize, content=str(LENGTH),
-                            format=coap.ContentFormat.TEXT_PLAIN)
+                            rid=RID.Test.ResBytesSize, content=str(LENGTH))
         result = self.read_blocks(iid=1, accept=coap.ContentFormat.TEXT_PLAIN)
         decoded = base64.decodebytes(result)
         self.assertEquals(test_object_bytes_generator(LENGTH), decoded)
@@ -66,8 +64,7 @@ class Base64ReadWrite(Base64Test.Test):
             b64_data = base64.encodebytes(raw_data).replace(b'\n', b'')
 
             self.write_resource(self.serv, oid=OID.Test, iid=1,
-                                rid=RID.Test.ResRawBytes, content=b64_data,
-                                format=coap.ContentFormat.TEXT_PLAIN)
+                                rid=RID.Test.ResRawBytes, content=b64_data)
 
             data = self.read_resource(self.serv, oid=OID.Test, iid=1,
                                       rid=RID.Test.ResRawBytes,
@@ -80,7 +77,6 @@ class Base64InvalidWrite(Base64Test.Test):
         def write(value, expected_error_code=coap.Code.RES_INTERNAL_SERVER_ERROR):
             self.write_resource(self.serv, oid=OID.Test, iid=1,
                                 rid=RID.Test.ResRawBytes, content=value,
-                                format=coap.ContentFormat.TEXT_PLAIN,
                                 expect_error_code=expected_error_code)
 
         write(b'A=A')

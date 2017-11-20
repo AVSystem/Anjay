@@ -57,20 +57,21 @@ _anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl,
 
 void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
                                       AVS_LIST(anjay_download_ctx_t) *ctx,
-                                      int result);
+                                      int result,
+                                      int errno_value);
 
 #ifdef WITH_BLOCK_DOWNLOAD
-AVS_LIST(anjay_download_ctx_t)
-_anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
-                               const anjay_download_config_t *cfg,
-                               uintptr_t id);
+int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
+                                   AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
+                                   const anjay_download_config_t *cfg,
+                                   uintptr_t id);
 #endif // WITH_BLOCK_DOWNLOAD
 
 #ifdef WITH_HTTP_DOWNLOAD
-AVS_LIST(anjay_download_ctx_t)
-_anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
-                               const anjay_download_config_t *cfg,
-                               uintptr_t id);
+int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
+                                   AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
+                                   const anjay_download_config_t *cfg,
+                                   uintptr_t id);
 #endif // WITH_HTTP_DOWNLOAD
 
 VISIBILITY_PRIVATE_HEADER_END

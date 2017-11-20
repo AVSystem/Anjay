@@ -27,33 +27,17 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int reload_inactive_server(anjay_t *anjay,
-                                  anjay_servers_t *servers,
-                                  AVS_LIST(anjay_inactive_server_info_t) server) {
-    assert(AVS_LIST_SIZE(server) == 1);
-
-    _anjay_servers_add_inactive(servers, server);
-
-    if (server->needs_activation
-            && _anjay_server_sched_activate(anjay, servers, server->ssid,
-                                            AVS_TIME_DURATION_ZERO)) {
-        return -1;
-    }
-
-    return 0;
-}
-
 static bool server_needs_reconnect(anjay_active_server_info_t *server) {
     anjay_connection_ref_t conn_ref = {
         .server = server
     };
     for (conn_ref.conn_type = (anjay_connection_type_t) 0;
-            conn_ref.conn_type < ANJAY_CONNECTION_WILDCARD;
+            conn_ref.conn_type < ANJAY_CONNECTION_UNSET;
             conn_ref.conn_type =
                     (anjay_connection_type_t) (conn_ref.conn_type + 1)) {
         anjay_server_connection_t *connection =
                 _anjay_get_server_connection(conn_ref);
-        if (connection && connection->needs_socket_update) {
+        if (connection && connection->needs_reconnect) {
             return true;
         }
     }
@@ -67,17 +51,27 @@ static int reload_active_server(anjay_t *anjay,
 
     _anjay_servers_add_active(servers, server);
 
-    bool needs_reconnect = server_needs_reconnect(server);
-    if (server->needs_reload || needs_reconnect) {
+    if (server->needs_reload || server_needs_reconnect(server)) {
         server->needs_reload = false;
         if (_anjay_server_refresh(anjay, server, false)) {
             return -1;
         }
     }
 
-    if (needs_reconnect && server->ssid != ANJAY_SSID_BOOTSTRAP) {
-        _anjay_server_update_or_reregister(anjay, server);
-        return _anjay_server_reschedule_update_job(anjay, server);
+    if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
+        if (!_anjay_server_registration_connection_valid(server)
+                || _anjay_server_registration_expired(server)) {
+            server_registration_operation_t attempted_operation;
+            int result = _anjay_server_update_or_reregister(
+                    anjay, server, &attempted_operation);
+            if (result && attempted_operation == SERVER_REGISTRATION_RETRY) {
+                _anjay_server_deactivate(anjay, servers, server->ssid,
+                                         AVS_TIME_DURATION_ZERO);
+            }
+        }
+        if (!server->sched_update_handle) {
+            return _anjay_server_reschedule_update_job(anjay, server);
+        }
     }
     return 0;
 }
@@ -92,8 +86,9 @@ static int reload_server_by_ssid(anjay_t *anjay,
             _anjay_servers_find_inactive_ptr(old_servers, ssid);
     if (inactive_server_ptr) {
         anjay_log(TRACE, "reloading inactive server SSID %u", ssid);
-        return reload_inactive_server(anjay, new_servers,
-                                      AVS_LIST_DETACH(inactive_server_ptr));
+        _anjay_servers_add_inactive(new_servers,
+                                    AVS_LIST_DETACH(inactive_server_ptr));
+        return 0;
     }
 
     AVS_LIST(anjay_active_server_info_t) *active_server_ptr =

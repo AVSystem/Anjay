@@ -17,7 +17,7 @@
 from framework.lwm2m_test import *
 
 
-class UriChangeUpdateTest(test_suite.Lwm2mTest):
+class UriChangeReregisterTest(test_suite.Lwm2mTest):
     def setUp(self):
         self.setup_demo_with_servers(servers=2,
                                      num_servers_passed=1,
@@ -64,5 +64,5 @@ class UriChangeUpdateTest(test_suite.Lwm2mTest):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.bootstrap_server.recv())
 
-        # we should now get a Registration Update on the new URL
-        self.assertDemoUpdatesRegistration(self.servers[1])
+        # we should now get a Register on the new URL
+        self.assertDemoRegisters(self.servers[1])

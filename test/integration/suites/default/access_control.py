@@ -480,11 +480,11 @@ class AclBootstrapping(bootstrap_server.BootstrapServer.Test, test_suite.Lwm2mDm
     def runTest(self):
         self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
 
-        for obj in (OID.Security, OID.Server, OID.AccessControl):
-            req = Lwm2mDelete('/%d' % obj)
-            self.bootstrap_server.send(req)
-            self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
-                                self.bootstrap_server.recv())
+        # Bootstrap Delete /
+        req = Lwm2mDelete('/')
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
+                            self.bootstrap_server.recv())
 
         # create servers
         self.servers = [self.add_server(1), self.add_server(2)]

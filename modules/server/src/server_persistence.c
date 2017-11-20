@@ -118,6 +118,9 @@ int anjay_server_object_persist(const anjay_dm_object_def_t *const *obj,
                                    sizeof(server_instance_t),
                                    persist_instance, NULL);
     anjay_persistence_context_delete(ctx);
+    if (!retval) {
+        clear_modified(repr);
+    }
     return retval;
 }
 
@@ -160,6 +163,9 @@ int anjay_server_object_restore(const anjay_dm_object_def_t *const *obj,
         _anjay_serv_destroy_instances(&backup.instances);
     }
     anjay_persistence_context_delete(restore_ctx);
+    if (!retval) {
+        clear_modified(repr);
+    }
     return retval;
 }
 

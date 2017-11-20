@@ -16,55 +16,61 @@
 
 from framework.lwm2m_test import *
 
-from .utils import DataModel, ValueValidator
-
-
-class VelocityValidator(ValueValidator):
-    def validate(self, value):
-        # TODO: implement some kind of actual validation - 3GPP velocity
-        # description is complex as hell
-        type = value[0]
-        if (type & 0xF0) not in (0, 1, 2, 3):
-            raise ValueError('unexpected velocity type')
+from .utils import DataModel, ValueValidator as VV
 
 
 class Test801_Location_QueryingTheResourcesOfObject(DataModel.Test):
     def runTest(self):
-        # A READ operation from server on the resource has been received by the
-        # client. This test has to be run on the following resources:
-        # a) Latitude
-        # b) Longitude
-        # c) Altitude
-        # d) Uncertainty
-        # e) Velocity
-        # f) Timestamp
-
-        self.test_read(ResPath.Location.Latitude,    ValueValidator.float_as_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Location.Longitude,   ValueValidator.float_as_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Location.Altitude,    ValueValidator.float_as_string(), coap.ContentFormat.TEXT_PLAIN)
-        self.test_read(ResPath.Location.Uncertainty, ValueValidator.float_as_string(), coap.ContentFormat.TEXT_PLAIN)
-        # TODO: cannot be represented in text/plain format, as test requires
-        self.test_read(ResPath.Location.Velocity,    VelocityValidator(),              coap.ContentFormat.APPLICATION_OCTET_STREAM)
-        # TODO: According to LwM2M spec, Timestamp values should be in range 0-6 (???)
-        self.test_read(ResPath.Location.Timestamp,   ValueValidator.integer(),         coap.ContentFormat.TEXT_PLAIN)
+        # 1. READ (CoAP GET) is performed by the Server on the Location
+        #    Object Instance of the Client
+        #
+        # A. In test step 1., the Client receives a READ (CoAP GET) command
+        #    from the Server on the Location Object Instance
+        # B. In test step 1., the Server receives the status code "2.05" for READ
+        #    message success
+        # C. In test step 1., along with the success message, the mandatory
+        #    Resources (Latitude, Longitude, Timestamp) and optional ones, are
+        #    received by the Server with expected values in compliance with
+        #    LwM2M technical specification 1.0
+        self.test_read('/%d/0' % OID.Location,
+                       VV.tlv_instance(resource_validators={
+                            RID.Location.Latitude: VV.float(),
+                            RID.Location.Longitude: VV.float(),
+                            RID.Location.Timestamp: VV.from_raw_int(),
+                           }, ignore_extra=True))
 
 
 class Test810_Location_ObservationAndNotificationOfObservableResources(DataModel.Test):
     def runTest(self):
-        # The Server establishes an Observation relationship with the Client to acquire
-        # condition notifications about observable resources. This test has to be run for
-        # the following resources:
-        # a) Latitude
-        # b) Longitude
-        # c) Altitude
-        # d) Uncertainty
-        # e) Velocity
-        # f) Timestamp
-
-        self.test_observe(ResPath.Location.Latitude,    ValueValidator.float_as_string())
-        self.test_observe(ResPath.Location.Longitude,   ValueValidator.float_as_string())
-        self.test_observe(ResPath.Location.Altitude,    ValueValidator.float_as_string())
-        self.test_observe(ResPath.Location.Uncertainty, ValueValidator.float_as_string())
-        self.test_observe(ResPath.Location.Velocity,    VelocityValidator())
-        # TODO: According to LwM2M spec, Timestamp values should be in range 0-6 (???)
-        self.test_observe(ResPath.Location.Timestamp,   ValueValidator.integer())
+        # 1. The Server communicates to the Client pmin=2 pmax=10 period
+        #    threshold values with a WRITE ATTRIBUTE (CoAP PUT)
+        #    operation at the Location Object Instance level
+        # 2. The Server sends OBSERVE (CoAP Observe Option) message
+        #    to activate reporting on the Location Object Instance.
+        # 3. The Client reports requested information with a NOTIFY
+        #    message (CoAP response)
+        #
+        # A. In test step 1., the Server received a WRITE ATTRIBUTE command
+        #    (CoAP PUT) targeting the Location Object Instance with the proper
+        #    pmin=2 and pmin=10 parameters.
+        # B. In test step 1., the Server received the success message (2.04
+        #    Changed) in response to the WRITE ATTRIBUTE command
+        # C. In test step 2., the Client received the OBSERVE operation targeting
+        #    the Location Object Instance
+        # D. In test step 2., in response to its OBSERVE operation, the Server
+        #    receives the success message (Content 2.05) along with the initial
+        #    values of the Location Object Instance
+        # E. In test step 3., based on pmin/pmax periods parameters received in
+        #    test step 1., the Client reports information to the Server with NOTIFY
+        #    messages containing the Location Object Instance updated values.
+        # F. In test step 3., the values received by the Server along with the
+        #    success message (Content 2.05) must be as expected : at less the
+        #    Mandatory Timestamp Resource must have admissible values
+        #    according to the pmin and pmax parameters.
+        self.test_observe('/%d/0' % OID.Location,
+                          VV.tlv_instance(resource_validators={
+                               RID.Location.Latitude: VV.float(),
+                               RID.Location.Longitude: VV.float(),
+                               RID.Location.Timestamp: VV.from_raw_int(),
+                              }, ignore_extra=True),
+                          pmin=2, pmax=10)

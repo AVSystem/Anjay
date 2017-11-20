@@ -98,6 +98,11 @@ static int print_discovered_object(avs_stream_abstract_t *stream,
     if (retval) {
         return retval;
     }
+    if ((*obj)->version) {
+        if ((retval = avs_stream_write_f(stream, ";ver=\"%s\"", (*obj)->version))) {
+            return retval;
+        }
+    }
     return print_attrs(stream, attrs);
 }
 

@@ -246,6 +246,21 @@ static int dev_write(anjay_t *anjay,
     }
 }
 
+static void dev_instance_reset_impl(dev_repr_t *dev) {
+    dev->current_time_offset = 0;
+    snprintf(dev->utc_offset, sizeof(dev->utc_offset), "+01:00");
+    snprintf(dev->timezone, sizeof(dev->timezone), "Europe/Warsaw");
+}
+
+static int dev_instance_reset(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr,
+                              anjay_iid_t iid) {
+    (void) anjay; (void) iid;
+
+    dev_instance_reset_impl(get_dev(obj_ptr));
+    return 0;
+}
+
 static void perform_reboot(void *unused) {
     (void) unused;
     char exe_path[256];
@@ -333,6 +348,7 @@ static const anjay_dm_object_def_t DEVICE = {
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
+        .instance_reset = dev_instance_reset,
         .resource_present = anjay_dm_resource_present_TRUE,
         .resource_read = dev_read,
         .resource_write = dev_write,
@@ -396,6 +412,7 @@ const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
     repr->iosched = iosched;
     repr->last_error = DEV_ERR_NO_ERROR;
 
+    dev_instance_reset_impl(repr);
     extract_device_info(endpoint_name,
                         repr->manufacturer, sizeof(repr->manufacturer),
                         repr->serial_number, sizeof(repr->serial_number));

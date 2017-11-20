@@ -25,7 +25,6 @@
 
 #include "coap/coap_stream.h"
 #include "servers.h"
-#include "sched.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

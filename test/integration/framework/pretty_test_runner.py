@@ -177,11 +177,13 @@ class PrettyTestResult(unittest.TestResult):
                           '%s\n'
                           'Demo log: %s\n'
                           'Valgrind: %s\n'
+                          'PCAP:     %s\n'
                           '-----\n'
                           % (get_test_name(test),
                              ''.join(traceback.format_exception(*err)),
                              test.logs_path('console', log_root),
-                             test.logs_path('valgrind', log_root))
+                             test.logs_path('valgrind', log_root),
+                             test.logs_path('pcap', log_root, extension='.pcapng'))
                           for test, err in self.errors + self.failures))
 
     @property

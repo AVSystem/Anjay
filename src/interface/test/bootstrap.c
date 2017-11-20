@@ -533,7 +533,28 @@ AVS_UNIT_TEST(bootstrap_delete, everything) {
     static const char REQUEST[] =
             "\x40\x04\xFA\x3E"; // CoAP header
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xfa\x3e");
+    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0, 2);
+    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 1, 0, 3);
+    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 2, 0,
+                                      ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_instance_remove(anjay, &FAKE_SERVER, 2, 0);
+    _anjay_mock_dm_expect_instance_remove(anjay, &FAKE_SERVER, 3, 0);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ_WITH_RESET, 0,
+                                      0, ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ, 0, 0, 34);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ, 1, 0, 69);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ, 2, 0, 514);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ, 3, 0, ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 34, 0);
+    _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 69, 0);
+    _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 514, 0);
+    _anjay_mock_dm_expect_instance_it(
+            anjay,
+            (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ,
+            0, 0, ANJAY_IID_INVALID);
+    _anjay_mock_dm_expect_instance_it(anjay, &OBJ_WITH_RES_OPS, 0, 0,
+                                      ANJAY_IID_INVALID);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x42\xfa\x3e");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }

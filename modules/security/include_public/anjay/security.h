@@ -131,6 +131,13 @@ int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
 int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
                                   avs_stream_abstract_t *in_stream);
 
+/**
+ * Checks whether the Security Object has been modified since last successful
+ * call to @ref anjay_security_object_persist or @ref
+ * anjay_security_object_restore.
+ */
+bool anjay_security_object_is_modified(const anjay_dm_object_def_t *const *obj);
+
 #ifdef __cplusplus
 }
 #endif

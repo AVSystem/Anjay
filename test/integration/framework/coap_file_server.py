@@ -13,12 +13,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import contextlib
 from typing import NamedTuple, Optional
 import socket
 import struct
 import threading
 import zlib
+
+import time
 
 from .lwm2m import coap
 from .lwm2m.path import CoapPath
@@ -124,13 +126,16 @@ class CoapFileServerThread(threading.Thread):
     def __init__(self, coap_server: coap.Server = None):
         super().__init__()
 
-        self.file_server = CoapFileServer(coap_server or coap.Server())
+        self._mutex = threading.RLock()
+        self._file_server = CoapFileServer(coap_server or coap.Server())
         self._shutdown = False
 
 
     def run(self):
         while not self._shutdown:
-            self.file_server.handle_request()
+            with self._mutex:
+                self._file_server.handle_request()
+            time.sleep(0.01)  # yield to the scheduler
 
 
     def join(self):
@@ -138,3 +143,8 @@ class CoapFileServerThread(threading.Thread):
         super().join()
 
 
+    @property
+    @contextlib.contextmanager
+    def file_server(self):
+        with self._mutex:
+            yield self._file_server

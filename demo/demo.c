@@ -26,12 +26,14 @@
 
 #include <anjay/access_control.h>
 #include <anjay/attr_storage.h>
+#include <anjay/fw_update.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
 
 #include "demo.h"
 #include "demo_args.h"
 #include "demo_cmds.h"
+#include "firmware_update.h"
 #include "iosched.h"
 #include "objects.h"
 #include "demo_utils.h"
@@ -68,7 +70,7 @@ static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
         instance.server_public_key = args->server_public_key;
         instance.server_public_key_size = args->server_public_key_size;
 
-        anjay_iid_t iid = (anjay_iid_t) server->id;
+        anjay_iid_t iid = server->security_iid;
         if (anjay_security_object_add_instance(sec_obj, &instance, &iid)) {
             demo_log(ERROR, "Cannot add Security Instance");
             return -1;
@@ -95,7 +97,7 @@ static int server_object_reload(const anjay_dm_object_def_t *const *serv_obj,
             .binding = args->binding_mode,
             .notification_storing = true
         };
-        anjay_iid_t iid = (anjay_iid_t) server->id;
+        anjay_iid_t iid = server->server_iid;
         if (anjay_server_object_add_instance(serv_obj, &instance, &iid)) {
             demo_log(ERROR, "Cannot add Server Instance");
             return -1;
@@ -148,6 +150,7 @@ static void demo_delete(anjay_demo_t *demo) {
     AVS_LIST_CLEAR(&demo->objects) {
         demo->objects->release_func(demo->objects->obj_ptr);
     }
+    firmware_update_destroy(&demo->fw_update);
 
     iosched_release(demo->iosched);
     AVS_LIST_CLEAR(&demo->allocated_strings);
@@ -289,6 +292,8 @@ static int demo_init(anjay_demo_t *demo,
             || !demo->iosched
             || anjay_attr_storage_install(demo->anjay)
             || anjay_access_control_install(demo->anjay)
+            || firmware_update_install(demo->anjay, &demo->fw_update,
+                                       cmdline_args->fw_updated_marker_path)
             || !iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
                                        POLLIN | POLLHUP,
                                        demo_command_dispatch, demo, NULL)) {
@@ -318,11 +323,6 @@ static int demo_init(anjay_demo_t *demo,
             || install_object(demo, ext_dev_info_object_create(),
                               ext_dev_info_notify_time_dependent,
                               ext_dev_info_object_release)
-            || install_object(demo,
-                              firmware_update_object_create(
-                                      demo->iosched,
-                                      cmdline_args->fw_updated_marker_path),
-                              NULL, firmware_update_object_release)
             || install_object(demo, geopoints_object_create(demo),
                               geopoints_notify_time_dependent,
                               geopoints_object_release)
@@ -330,7 +330,9 @@ static int demo_init(anjay_demo_t *demo,
                               ip_ping_object_release)
             || install_object(demo, test_object_create(),
                               test_notify_time_dependent,
-                              test_object_release)) {
+                              test_object_release)
+            || install_object(demo, portfolio_object_create(),
+                              NULL, portfolio_object_release)) {
         return -1;
     }
 

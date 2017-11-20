@@ -36,13 +36,67 @@ static void active_server_detach_delete(
     AVS_LIST_DELETE(server_ptr);
 }
 
+static bool is_valid_coap_uri(const anjay_url_t *uri) {
+    if (strcmp(uri->protocol, "coap") && strcmp(uri->protocol, "coaps")) {
+        anjay_log(ERROR, "unsupported protocol: %s", uri->protocol);
+        return false;
+    }
+    return true;
+}
+
+static int get_server_uri(anjay_t *anjay,
+                          anjay_iid_t security_iid,
+                          anjay_url_t *out_uri) {
+    enum { MAX_SERVER_URI_LENGTH = 256 };
+    char raw_uri[MAX_SERVER_URI_LENGTH];
+
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SERVER_URI);
+
+    if (_anjay_dm_res_read_string(anjay, &path, raw_uri, sizeof(raw_uri))) {
+        anjay_log(ERROR, "could not read LwM2M server URI");
+        return -1;
+    }
+
+    anjay_url_t uri = ANJAY_URL_EMPTY;
+    if (_anjay_parse_url(raw_uri, &uri) || !is_valid_coap_uri(&uri)) {
+        _anjay_url_cleanup(&uri);
+        anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
+        return -1;
+    }
+    if (!*uri.port) {
+        if (uri.protocol[4]) { // coap_s_
+            strcpy(uri.port, "5684");
+        } else { // coap_\0_
+            strcpy(uri.port, "5683");
+        }
+    }
+    *out_uri = uri;
+    return 0;
+}
+
 static int
 initialize_active_server(anjay_t *anjay,
                          anjay_ssid_t ssid,
                          anjay_active_server_info_t *server) {
-    server->ssid = ssid;
+    if (anjay_is_offline(anjay)) {
+        anjay_log(TRACE,
+                  "Anjay is offline, not initializing server SSID %" PRIu16,
+                  ssid);
+        return -1;
+    }
 
-    if (_anjay_server_refresh(anjay, server, true)) {
+    server->ssid = ssid;
+    anjay_iid_t security_iid;
+    if (_anjay_find_security_iid(anjay, ssid, &security_iid)) {
+        anjay_log(ERROR, "could not find server Security IID");
+        return -1;
+    }
+    if (get_server_uri(anjay, security_iid, &server->uri)) {
+        return -1;
+    }
+    if (_anjay_server_refresh(anjay, server, false)) {
         anjay_log(TRACE, "could not initialize sockets for SSID %u",
                   server->ssid);
         return -1;
@@ -84,6 +138,27 @@ create_active_server_from_ssid(anjay_t *anjay,
     return server;
 }
 
+static bool should_retry_bootstrap(anjay_t *anjay) {
+    if (anjay->bootstrap.in_progress) {
+        // Bootstrap already in progress, no need to retry
+        return false;
+    }
+    if (!anjay->servers.active
+            || AVS_LIST_NEXT(anjay->servers.active)
+            || anjay->servers.active->ssid != ANJAY_SSID_BOOTSTRAP) {
+        // Bootstrap Server not present or is not the only active one
+        return false;
+    }
+    AVS_LIST(anjay_inactive_server_info_t) it;
+    AVS_LIST_FOREACH(it, anjay->servers.inactive) {
+        if (!it->reactivate_failed) {
+            // there is hope for a successful non-bootstrap connection
+            return false;
+        }
+    }
+    return true;
+}
+
 static int activate_server_job(anjay_t *anjay, void *ssid_) {
     anjay_ssid_t ssid = (anjay_ssid_t) (uintptr_t) ssid_;
 
@@ -99,13 +174,20 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
     AVS_LIST(anjay_active_server_info_t) new_server =
             create_active_server_from_ssid(anjay, ssid);
     if (!new_server) {
+        (*inactive_server_ptr)->reactivate_failed = true;
+        if (ssid != ANJAY_SSID_BOOTSTRAP && should_retry_bootstrap(anjay)) {
+            _anjay_bootstrap_account_prepare(anjay);
+        }
         return -1;
     }
     /**
      * No need to remove job handle as we return 0 and scheduler will do it
      * for us (this is retryable job).
      */
-    AVS_LIST_DELETE(inactive_server_ptr);
+    if (*inactive_server_ptr) {
+        // might have been removed by start_bootstrap_if_not_already_started()
+        AVS_LIST_DELETE(inactive_server_ptr);
+    }
     _anjay_servers_add_active(&anjay->servers, new_server);
     return 0;
 }

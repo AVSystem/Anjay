@@ -77,8 +77,7 @@ class JsonEncodingBytesInBase64(JsonEncodingTest.Test):
         some_bytes = pb64.test_object_bytes_generator(51)
         some_bytes_b64 = base64.encodebytes(some_bytes).replace(b'\n', b'')
 
-        self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResRawBytes,
-                            content=some_bytes_b64, format=coap.ContentFormat.TEXT_PLAIN)
+        self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResRawBytes, content=some_bytes_b64)
 
         result = as_json(self.read_resource(self.serv, oid=OID.Test, iid=1,
                                             rid=RID.Test.ResRawBytes,

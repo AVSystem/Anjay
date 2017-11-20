@@ -31,7 +31,6 @@ typedef enum {
     CS_START                = 6,
     CS_STOP                 = 7,
     CS_COLLECTION_PERIOD    = 8,
-    CS_COLLECTION_DURATION  = 9,
 } conn_stats_res_t;
 
 typedef struct {
@@ -39,6 +38,7 @@ typedef struct {
     uint64_t last_tx_bytes;
     uint64_t last_rx_bytes;
     bool is_collecting;
+    uint32_t collection_period;
 } conn_stats_repr_t;
 
 static conn_stats_repr_t *get_cs(const anjay_dm_object_def_t *const *obj_ptr) {
@@ -108,6 +108,21 @@ static uint64_t get_tx_stats(anjay_t *anjay, conn_stats_repr_t *repr) {
     }
 }
 
+static int cs_instance_reset(anjay_t *anjay,
+                             const anjay_dm_object_def_t *const *obj_ptr,
+                             anjay_iid_t iid) {
+    (void) anjay;
+    (void) iid;
+
+    conn_stats_repr_t *repr = get_cs(obj_ptr);
+
+    repr->last_tx_bytes = 0;
+    repr->last_rx_bytes = 0;
+    repr->is_collecting = false;
+    repr->collection_period = 0;
+    return 0;
+}
+
 static int cs_resource_execute(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
@@ -125,9 +140,9 @@ static int cs_resource_execute(anjay_t *anjay,
     case CS_MAX_MSG_SIZE:
     case CS_AVG_MSG_SIZE:
     case CS_COLLECTION_PERIOD:
-    case CS_COLLECTION_DURATION:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     case CS_START:
+        // TODO: actually use Collection Period resource
         repr->last_tx_bytes = first_socket_stats(anjay, TX_STATS);
         repr->last_rx_bytes = first_socket_stats(anjay, RX_STATS);
         repr->is_collecting = true;
@@ -165,6 +180,8 @@ static int cs_resource_read(anjay_t *anjay,
         return anjay_ret_i64(ctx, (int64_t) (get_tx_stats(anjay, repr) / 1024));
     case CS_RX_KB:
         return anjay_ret_i64(ctx, (int64_t) (get_rx_stats(anjay, repr) / 1024));
+    case CS_COLLECTION_PERIOD:
+        return anjay_ret_i64(ctx, (int64_t) repr->collection_period);
     default:
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -177,13 +194,21 @@ static int cs_resource_write(anjay_t *anjay,
                              anjay_rid_t rid,
                              anjay_input_ctx_t *ctx) {
     (void) anjay;
-    (void) obj_ptr;
     (void) iid;
-    (void) ctx;
+    conn_stats_repr_t *repr = get_cs(obj_ptr);
     switch (rid) {
-    case CS_COLLECTION_PERIOD:
-    case CS_COLLECTION_DURATION:
-        return ANJAY_ERR_NOT_FOUND;
+    case CS_COLLECTION_PERIOD: {
+            int32_t val;
+            int result;
+            if ((result = anjay_get_i32(ctx, &val))) {
+                return result;
+            } else if (val < 0) {
+                return ANJAY_ERR_BAD_REQUEST;
+            }
+
+            repr->collection_period = (uint32_t) val;
+            return 0;
+        }
     case CS_MAX_MSG_SIZE:
     case CS_AVG_MSG_SIZE:
     case CS_SMS_TX_COUNTER:
@@ -207,10 +232,12 @@ static const anjay_dm_object_def_t CONN_STATISTICS = {
             CS_MAX_MSG_SIZE,
             CS_AVG_MSG_SIZE,
             CS_START,
-            CS_STOP),
+            CS_STOP,
+            CS_COLLECTION_PERIOD),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
+        .instance_reset = cs_instance_reset,
         .resource_present = anjay_dm_resource_present_TRUE,
         .resource_execute = cs_resource_execute,
         .resource_read = cs_resource_read,

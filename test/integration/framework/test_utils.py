@@ -67,8 +67,9 @@ class OID:
     FirmwareUpdate = 5
     Location = 6
     ConnectivityStatistics = 7
-    CellConnectivity = 10
+    CellularConnectivity = 10
     ApnConnectionProfile = 11
+    Portfolio = 16
     Test = 1337
     ExtDevInfo = 11111
     IpPing = 12359
@@ -178,6 +179,51 @@ class RID:
         CollectionPeriod = 8
         CollectionDuration = 9
 
+    class CellularConnectivity:
+        SMSCAddress = 0
+        DisableRadioPeriod = 1
+        ModuleActivationCode = 2
+        VendorSpecificExtensions = 3
+        PSMTimer = 4
+        ActiveTimer = 5
+        ServingPLMNRateControl = 6
+        eDRXParamtersForIuMode = 7
+        eDRXParamtersForWBS1Mode = 8
+        eDRXParametersForNBS1Mode = 9
+        eDRXParametersForAGbMode = 10
+        ActivatedProfileNames = 11
+        CoverageEnhancementLevel = 12
+        PowerSavingModes = 13
+        ActivePowerSavingModes = 14
+
+    class ApnConnectionProfile:
+        ProfileName = 0
+        APN = 1
+        AutoSelectAPNByDevice = 2
+        EnableStatus = 3
+        AuthenticationType = 4
+        UserName = 5
+        Secret = 6
+        ReconnectSchedule = 7
+        Validity = 8
+        ConnectionEstablishmentTime = 9
+        ConnectionEstablishmentResult = 10
+        ConnectionEstablishmentRejectCause = 11
+        ConnectionEndTime = 12
+        TotalBytesSent = 13
+        TotalBytesReceived = 14
+        IPAddress = 15
+        PrefixLength = 16
+        SubnetMask = 17
+        Gateway = 18
+        PrimaryDNSAddress = 19
+        SecondaryDNSAddress = 20
+        QCI = 21
+        VendorSpecificExtensions = 22
+        TotalPacketsSent = 23
+        PDNType = 24
+        APNRateControl = 25
+
     class GeoPoints:
         Latitude = 0
         Longitude = 1
@@ -198,6 +244,12 @@ class RID:
         ResInitIntArray = 9
         ResRawBytes = 10
         ResOpaqueArray = 11
+
+    class Portfolio:
+        Identity = 0
+        GetAuthData = 1
+        AuthData = 2
+        AuthStatus = 3
 
 
 class _Lwm2mResourcePathHelper:
@@ -240,7 +292,13 @@ class ResPath:
     Location = _Lwm2mResourcePathHelper.from_rid_object(RID.Location, oid=OID.Location)
     ConnectivityStatistics = _Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityStatistics,
                                                                       oid=OID.ConnectivityStatistics)
+    CellularConnectivity = _Lwm2mResourcePathHelper.from_rid_object(RID.CellularConnectivity,
+                                                                    oid=OID.CellularConnectivity)
+    ApnConnectionProfile = _Lwm2mResourcePathHelper.from_rid_object(RID.ApnConnectionProfile,
+                                                                    oid=OID.ApnConnectionProfile,
+                                                                    multi_instance=True)
     Test = _Lwm2mResourcePathHelper.from_rid_object(RID.Test, oid=OID.Test, multi_instance=True)
+    Portfolio = _Lwm2mResourcePathHelper.from_rid_object(RID.Portfolio, oid=OID.Portfolio, multi_instance=True)
 
 
 DEMO_ENDPOINT_NAME = 'urn:dev:os:0023C7-000001'

@@ -78,6 +78,7 @@ static int insert_created_instance(server_repr_t *repr,
             break;
         }
     }
+    mark_modified(repr);
     AVS_LIST_INSERT(ptr, new_instance);
     return 0;
 }
@@ -108,6 +109,8 @@ static int add_instance(server_repr_t *repr,
         AVS_LIST_CLEAR(&new_instance);
         return -1;
     }
+    server_log(INFO, "Added instance %u (SSID: %u)",
+               *inout_iid, instance->ssid);
     return 0;
 }
 
@@ -116,6 +119,7 @@ static int del_instance(server_repr_t *repr, anjay_iid_t iid) {
     AVS_LIST_FOREACH_PTR(it, &repr->instances) {
         if ((*it)->iid == iid) {
             AVS_LIST_DELETE(it);
+            mark_modified(repr);
             return 0;
         } else if ((*it)->iid > iid) {
             break;
@@ -203,8 +207,10 @@ static int serv_instance_reset(anjay_t *anjay,
     server_instance_t *inst = find_instance(_anjay_serv_get(obj_ptr), iid);
     assert(inst);
 
+    bool has_ssid = inst->has_ssid;
     anjay_ssid_t ssid = inst->data.ssid;
     reset_instance_resources(inst);
+    inst->has_ssid = has_ssid;
     inst->data.ssid = ssid;
     return 0;
 }
@@ -308,9 +314,12 @@ static int serv_write(anjay_t *anjay,
                       anjay_input_ctx_t *ctx) {
     (void) anjay;
 
-    server_instance_t *inst = find_instance(_anjay_serv_get(obj_ptr), iid);
+    server_repr_t *repr = _anjay_serv_get(obj_ptr);
+    server_instance_t *inst = find_instance(repr, iid);
     assert(inst);
     int retval;
+
+    mark_modified(repr);
 
     switch ((server_rid_t) rid) {
     case SERV_RES_SSID:
@@ -455,15 +464,23 @@ int anjay_server_object_add_instance(
         const anjay_server_instance_t *instance,
         anjay_iid_t *inout_iid) {
     server_repr_t *repr = _anjay_serv_get(obj_ptr);
+    const bool modified_since_persist = repr->modified_since_persist;
     int retval = add_instance(repr, instance, inout_iid);
     if (!retval && (retval = _anjay_serv_object_validate(repr))) {
         (void) del_instance(repr, *inout_iid);
+        if (!modified_since_persist) {
+            /* validation failed and so in the end no instace is added */
+            clear_modified(repr);
+        }
     }
     return retval;
 }
 
 void anjay_server_object_purge(const anjay_dm_object_def_t *const *obj_ptr) {
     server_repr_t *repr = _anjay_serv_get(obj_ptr);
+    if (repr->instances) {
+        mark_modified(repr);
+    }
     _anjay_serv_destroy_instances(&repr->instances);
     _anjay_serv_destroy_instances(&repr->saved_instances);
 }
@@ -473,6 +490,10 @@ void anjay_server_object_delete(const anjay_dm_object_def_t **def) {
         anjay_server_object_purge(def);
         free(_anjay_serv_get(def));
     }
+}
+
+bool anjay_server_object_is_modified(const anjay_dm_object_def_t *const *obj_ptr) {
+    return _anjay_serv_get(obj_ptr)->modified_since_persist;
 }
 
 #ifdef ANJAY_TEST

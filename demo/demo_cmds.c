@@ -17,6 +17,7 @@
 #include "demo.h"
 #include "demo_cmds.h"
 #include "demo_utils.h"
+#include "firmware_update.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -65,20 +66,12 @@ static void cmd_reconnect(anjay_demo_t *demo,
 
 static void cmd_set_fw_package_path(anjay_demo_t *demo,
                                     const char *args_string) {
-    const anjay_dm_object_def_t **firmware_update_obj =
-            demo_find_object(demo, DEMO_OID_FIRMWARE_UPDATE);
-    if (!firmware_update_obj) {
-        demo_log(ERROR, "Firmware update object not registered");
-        return;
-    }
-
     const char *path = args_string;
     while (isspace(*path)) {
         ++path;
     }
 
-    firmware_update_set_package_path(demo->anjay,
-                                     firmware_update_obj, path);
+    firmware_update_set_package_path(&demo->fw_update, path);
 }
 
 static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
@@ -122,11 +115,13 @@ static int add_server(anjay_demo_t *demo, const char *uri) {
     }
     memcpy(copied_uri->data, uri, uri_size);
     AVS_LIST_INSERT(&demo->allocated_strings, copied_uri);
-    demo->connection_args->servers[num_servers] =
-            demo->connection_args->servers[num_servers - 1];
-    demo->connection_args->servers[num_servers].id =
-            (anjay_ssid_t) (num_servers + 1);
-    demo->connection_args->servers[num_servers].uri = copied_uri->data;
+
+    server_entry_t *entry = &demo->connection_args->servers[num_servers];
+    *entry = demo->connection_args->servers[num_servers - 1];
+    entry->id = (anjay_ssid_t) (num_servers + 1);
+    entry->uri = copied_uri->data;
+    entry->security_iid = (anjay_iid_t) entry->id;
+    entry->server_iid = (anjay_iid_t) entry->id;
     demo_log(INFO, "Added new server, ID == %d", (int) (num_servers + 1));
     return 0;
 }

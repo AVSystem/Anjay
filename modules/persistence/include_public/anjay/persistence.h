@@ -164,6 +164,31 @@ int anjay_persistence_double(anjay_persistence_context_t *ctx,
                              double *value);
 
 /**
+ * Performs an operation (depending on the @p ctx) on a pair of @p data_ptr and
+ * @p size_ptr; in the restore case, a new buffer is allocated using
+ * <c>malloc()</c>.
+ *
+ * @param ctx      context that determines the actual operation
+ * @param data_ptr pointer to a pointer containing the data
+ * @param size_ptr pointer to a size variable for the buffer
+ * @return 0 in case of success, negative value in case of failure
+ */
+int anjay_persistence_sized_buffer(anjay_persistence_context_t *ctx,
+                                   void **data_ptr,
+                                   size_t *size_ptr);
+
+/**
+ * Performs an operation (depending on the @p ctx) on a heap-allocated
+ * null-terminated string variable.
+ *
+ * @param ctx        context that determines the actual operation
+ * @param string_ptr pointer to a heap-allocated null-terminated string variable
+ * @return 0 in case of success, negative value in case of failure
+ */
+int anjay_persistence_string(anjay_persistence_context_t *ctx,
+                             char **string_ptr);
+
+/**
  * Performs a operation (depending on the @p ctx) on a @p list_ptr, using
  * @p handler for each element.
  *

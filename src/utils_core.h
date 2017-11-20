@@ -43,6 +43,9 @@ typedef struct anjay_string {
 } anjay_string_t;
 
 AVS_LIST(const anjay_string_t)
+_anjay_copy_string_list(AVS_LIST(const anjay_string_t) input);
+
+AVS_LIST(const anjay_string_t)
 _anjay_make_string_list(const char *string,
                         ... /* strings */) AVS_F_SENTINEL;
 
@@ -93,12 +96,12 @@ static inline void _anjay_update_ret(int *var, int new_retval) {
     }
 }
 
-avs_net_abstract_socket_t *
-_anjay_create_connected_udp_socket(anjay_t *anjay,
-                                   avs_net_socket_type_t type,
-                                   const char *bind_port,
-                                   const void *config,
-                                   const anjay_url_t *uri);
+int _anjay_create_connected_udp_socket(anjay_t *anjay,
+                                       avs_net_abstract_socket_t **out,
+                                       avs_net_socket_type_t type,
+                                       const char *bind_port,
+                                       const void *config,
+                                       const anjay_url_t *uri);
 
 static inline size_t _anjay_max_power_of_2_not_greater_than(size_t bound) {
     int exponent = -1;

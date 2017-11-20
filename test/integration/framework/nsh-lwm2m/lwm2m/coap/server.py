@@ -132,17 +132,20 @@ class DtlsServer(Server):
             self.server_socket = None
 
     def reset(self, listen_port=None) -> None:
-        try:
-            from pymbedtls import ServerSocket
+        if self.server_socket and listen_port is None:
+            super().close()
+        else:
+            try:
+                from pymbedtls import ServerSocket
 
-            super().reset(listen_port)
-            self.server_socket = ServerSocket(self.socket, self.psk_identity, self.psk_key, self.debug)
-            self.socket = None
-        except ImportError:
-            raise ImportError('could not import pymbedtls! run '
-                              '`python3 setup.py install --user` in the '
-                              'pymbedtls/ subdirectory of nsh-lwm2m submodule '
-                              'or export PYTHONPATH properly')
+                super().reset(listen_port)
+                self.server_socket = ServerSocket(self.socket, self.psk_identity, self.psk_key, self.debug)
+                self.socket = None
+            except ImportError:
+                raise ImportError('could not import pymbedtls! run '
+                                  '`python3 setup.py install --user` in the '
+                                  'pymbedtls/ subdirectory of nsh-lwm2m submodule '
+                                  'or export PYTHONPATH properly')
 
     def listen(self, timeout_s: float = -1) -> None:
         with _override_timeout(self.server_socket, timeout_s):

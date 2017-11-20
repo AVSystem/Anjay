@@ -47,6 +47,8 @@
 typedef enum {
     AUTH_PAP = 0,
     AUTH_CHAP,
+    AUTH_PAP_OR_CHAP,
+    AUTH_NONE,
 
     AUTH_END_
 } apn_auth_type_t;
@@ -58,6 +60,7 @@ typedef struct {
     bool has_auth_type;
     char profile_name[256];
     apn_auth_type_t auth_type;
+    bool enabled;
 } apn_conn_profile_t;
 
 typedef struct {
@@ -189,6 +192,8 @@ static int apncp_resource_read(anjay_t *anjay,
     switch (rid) {
     case APNCP_RES_PROFILE_NAME:
         return anjay_ret_string(ctx, inst->profile_name);
+    case APNCP_RES_ENABLE_STATUS:
+        return anjay_ret_bool(ctx, inst->enabled);
     case APNCP_RES_AUTHENTICATION_TYPE:
         return anjay_ret_i32(ctx, inst->auth_type);
     default:
@@ -222,6 +227,8 @@ static int apncp_resource_write(anjay_t *anjay,
             inst->has_profile_name = true;
             return 0;
         }
+    case APNCP_RES_ENABLE_STATUS:
+        return anjay_get_bool(ctx, &inst->enabled);
     case APNCP_RES_AUTHENTICATION_TYPE:
         {
             int new_val = 0;
@@ -299,6 +306,7 @@ apncp_instance_reset(anjay_t *anjay,
     assert(inst && "could not find instance");
     inst->has_auth_type = false;
     inst->has_profile_name = false;
+    inst->enabled = false;
     return 0;
 }
 
@@ -306,6 +314,7 @@ static const anjay_dm_object_def_t apn_conn_profile = {
     .oid = DEMO_OID_APN_CONN_PROFILE,
     .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
             APNCP_RES_PROFILE_NAME,
+            APNCP_RES_ENABLE_STATUS,
             APNCP_RES_AUTHENTICATION_TYPE),
     .handlers = {
         .instance_it = apncp_instance_it,
@@ -351,6 +360,10 @@ apn_conn_profile_list_activated(const anjay_dm_object_def_t **def) {
 
     AVS_LIST(apn_conn_profile_t) it;
     AVS_LIST_FOREACH(it, get_apncp(def)->instances) {
+        if (!it->enabled) {
+            continue;
+        }
+
         AVS_LIST(anjay_iid_t) elem = AVS_LIST_NEW_ELEMENT(anjay_iid_t);
         if (!elem) {
             AVS_LIST_CLEAR(&iids);

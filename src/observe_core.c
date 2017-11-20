@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <inttypes.h>
 #include <math.h>
 
 #include <avsystem/commons/stream_v_table.h>
@@ -622,17 +623,46 @@ static inline ssize_t read_new_value(anjay_t *anjay,
             }, out_details, out_numeric, buffer, size);
 }
 
-static int bind_stream_by_ssid(anjay_t *anjay,
-                               anjay_ssid_t ssid,
-                               anjay_connection_type_t conn_type) {
-    anjay_connection_ref_t ref = {
-        .server = _anjay_servers_find_active(&anjay->servers, ssid),
-        .conn_type = conn_type
-    };
-    if (!ref.server) {
+static int get_conn_ref(anjay_t *anjay,
+                        anjay_connection_ref_t *out_ref,
+                        anjay_ssid_t ssid,
+                        anjay_connection_type_t conn_type) {
+    if (!(out_ref->server = _anjay_servers_find_active(&anjay->servers,
+                                                       ssid))) {
         return -1;
     }
-    return _anjay_bind_server_stream(anjay, ref);
+    out_ref->conn_type = conn_type;
+    return 0;
+}
+
+static int ensure_conn_online(anjay_t *anjay, anjay_connection_ref_t ref) {
+    if (_anjay_connection_current_mode(ref) == ANJAY_CONNECTION_QUEUE
+            && !_anjay_connection_is_online(ref)) {
+        bool session_resumed;
+        if (_anjay_connection_bring_online(_anjay_get_server_connection(ref),
+                                           &session_resumed)) {
+            anjay_log(ERROR, "broken socket for server %" PRIu16,
+                      ref.server->ssid);
+            if (_anjay_schedule_server_reconnect(anjay, ref.server)) {
+                anjay_log(ERROR,
+                          "could not schedule reconnect for server %" PRIu16,
+                          ref.server->ssid);
+            }
+            return -1;
+        }
+        if (!session_resumed) {
+            // mark that the registration connection is no longer valid;
+            // forces re-register
+            ref.server->registration_info.conn_type = ANJAY_CONNECTION_UNSET;
+            if (anjay_schedule_registration_update(anjay, ref.server->ssid)) {
+                anjay_log(ERROR,
+                          "could not schedule reregister for server %" PRIu16,
+                          ref.server->ssid);
+            }
+            return AVS_COAP_CTX_ERR_NETWORK;
+        }
+    }
+    return 0;
 }
 
 static bool confirmable_required(const avs_time_real_t now,
@@ -672,12 +702,15 @@ static int sched_flush_send_queue(anjay_t *anjay,
 
 static int send_entry(anjay_t *anjay,
                       anjay_observe_connection_entry_t *conn_state) {
-    if (bind_stream_by_ssid(anjay,
-                            conn_state->key.ssid, conn_state->key.type)) {
-        return -1;
+    int result;
+    anjay_connection_ref_t ref;
+    if ((result = get_conn_ref(anjay, &ref,
+                               conn_state->key.ssid, conn_state->key.type))
+            || (result = ensure_conn_online(anjay, ref))
+            || (result = _anjay_bind_server_stream(anjay, ref))) {
+        return result;
     }
     anjay_active_server_info_t *server = anjay->current_connection.server;
-    int result;
     assert(conn_state->unsent);
     anjay_observe_entry_t *entry = conn_state->unsent->ref;
     const avs_coap_msg_identity_t *id = &conn_state->unsent->identity;
@@ -724,7 +757,8 @@ typedef struct {
 
 static observe_server_state_t server_state(anjay_t *anjay, anjay_ssid_t ssid) {
     observe_server_state_t result = {
-        .server_active = !!_anjay_servers_find_active(&anjay->servers, ssid),
+        .server_active = !anjay_is_offline(anjay)
+                && !!_anjay_servers_find_active(&anjay->servers, ssid),
         .notification_storing_enabled = true
     };
 
@@ -804,25 +838,23 @@ static void schedule_all_triggers(anjay_t *anjay,
     }
 }
 
-static int flush_send_queue(anjay_t *anjay, void *conn_) {
-    anjay_observe_connection_entry_t *conn =
-            (anjay_observe_connection_entry_t *) conn_;
+static int flush_send_queue(anjay_t *anjay,
+                            anjay_observe_connection_entry_t *conn,
+                            const observe_server_state_t *observe_state) {
     int result = 0;
-
-    observe_server_state_t observe_state;
-    bool observe_state_filled = false;
+    observe_server_state_t observe_state_buf;
 
     while (result >= 0 && conn && conn->unsent) {
         anjay_observe_key_t key = conn->unsent->ref->key;
-        if (!observe_state_filled) {
-            observe_state = server_state(anjay, key.connection.ssid);
-            observe_state_filled = true;
-            if (!observe_state.server_active) {
+        if (!observe_state) {
+            observe_state_buf = server_state(anjay, key.connection.ssid);
+            observe_state = &observe_state_buf;
+            if (!observe_state_buf.server_active) {
                 break;
             }
         }
         if ((result = handle_send_queue_entry(anjay, conn,
-                                              observe_state)) > 0) {
+                                              *observe_state)) > 0) {
             _anjay_observe_remove_entry(anjay, &key);
             // the above might've deleted the connection entry,
             // so we "re-find" it to check if it's still valid
@@ -836,6 +868,11 @@ static int flush_send_queue(anjay_t *anjay, void *conn_) {
     return result;
 }
 
+static int flush_send_queue_job(anjay_t *anjay, void *conn) {
+    return flush_send_queue(anjay, (anjay_observe_connection_entry_t *) conn,
+                            NULL);
+}
+
 static int sched_flush_send_queue(anjay_t *anjay,
                                   anjay_observe_connection_entry_t *conn) {
     if (!conn || conn->flush_task) {
@@ -844,7 +881,7 @@ static int sched_flush_send_queue(anjay_t *anjay,
                         : "flush task already scheduled");
         return 0;
     }
-    if (_anjay_sched_now(anjay->sched, &conn->flush_task, flush_send_queue,
+    if (_anjay_sched_now(anjay->sched, &conn->flush_task, flush_send_queue_job,
                          conn)) {
         anjay_log(ERROR, "Could not schedule notification flush");
         return -1;
@@ -940,7 +977,9 @@ static int trigger_observe(anjay_t *anjay, void *entry_) {
                               &newest_value(entry)->identity, result);
     }
     if (state.server_active) {
-        int flush_result = sched_flush_send_queue(anjay, conn);
+        _anjay_sched_del(anjay->sched, &conn->flush_task);
+        assert(!conn->flush_task);
+        int flush_result = flush_send_queue(anjay, conn, &state);
         if (!result) {
             result = flush_result;
         }
