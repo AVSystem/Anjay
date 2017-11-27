@@ -64,8 +64,15 @@ class Test651_DeviceObject_QueryingTheReadableResourcesOfObject(DataModel.Test):
 
         # 4. The Server READs the result of the previous WRITE operation by
         #    querying the Server Object (ID:3) Instance.
-        self.assertEqual(prev_values,
-                         self.test_read('/%d/0' % OID.Device))
+
+        def filter_out_dynamic_resources(tlv):
+            return b''.join(x.serialize() for x in TLV.parse(tlv) \
+                    if x.identifier not in (RID.Device.CurrentTime,
+                                            RID.Device.PowerSourceVoltage,
+                                            RID.Device.PowerSourceCurrent))
+
+        self.assertEqual(filter_out_dynamic_resources(prev_values),
+                         filter_out_dynamic_resources(self.test_read('/%d/0' % OID.Device)))
 
         # A. The Server receives the correct status codes for the steps 1.
         #    (2.04), 2. (2.05), 3. (2.04), & 4 (2.05) of the test.

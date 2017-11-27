@@ -296,7 +296,7 @@ static int send_confirmable_with_retry(coap_client_t *client,
         coap_log(DEBUG, "timeout reached, next: %" PRId64 ".09%" PRId32 " s",
                  retry_state.recv_timeout.seconds,
                  retry_state.recv_timeout.nanoseconds);
-    } while (retry_state.retry_count < avs_coap_ctx_get_tx_params(
+    } while (retry_state.retry_count <= avs_coap_ctx_get_tx_params(
             client->common.coap_ctx).max_retransmit);
 
     assert(result <= 0 || result == COAP_CLIENT_RECEIVE_RESET);

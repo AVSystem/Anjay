@@ -125,15 +125,18 @@ int _anjay_downloader_get_sockets(
     AVS_LIST(anjay_download_ctx_t) dl_ctx;
 
     AVS_LIST_FOREACH(dl_ctx, dl->downloads) {
-        AVS_LIST(avs_net_abstract_socket_t *) elem =
-                AVS_LIST_NEW_ELEMENT(avs_net_abstract_socket_t *);
-        if (!elem) {
-            AVS_LIST_CLEAR(&sockets);
-            return -1;
-        }
+        avs_net_abstract_socket_t *socket = get_ctx_socket(dl, dl_ctx);
+        if (socket) {
+            AVS_LIST(avs_net_abstract_socket_t *) elem =
+                    AVS_LIST_NEW_ELEMENT(avs_net_abstract_socket_t *);
+            if (!elem) {
+                AVS_LIST_CLEAR(&sockets);
+                return -1;
+            }
 
-        *elem = get_ctx_socket(dl, dl_ctx);
-        AVS_LIST_INSERT(&sockets, elem);
+            *elem = socket;
+            AVS_LIST_INSERT(&sockets, elem);
+        }
     }
 
     AVS_LIST_INSERT(out_socks, sockets);
@@ -160,7 +163,7 @@ int _anjay_downloader_handle_packet(anjay_downloader_t *dl,
     AVS_LIST(anjay_download_ctx_t) *ctx =
             find_ctx_ptr_by_socket(dl, socket);
     if (!ctx) {
-        dl_log(DEBUG, "unknown socket");
+        // unknown socket
         return -1;
     }
 

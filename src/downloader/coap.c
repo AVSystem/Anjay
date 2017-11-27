@@ -61,6 +61,7 @@ typedef struct {
      *     received.
      */
     anjay_sched_handle_t sched_job;
+    avs_coap_retry_state_t retry_state;
 } anjay_coap_download_ctx_t;
 
 static void cleanup_coap_transfer(anjay_downloader_t *dl,
@@ -111,48 +112,19 @@ static int fill_coap_request_info(avs_coap_msg_info_t *req_info,
     return 0;
 }
 
-static int request_coap_block(anjay_downloader_t *dl,
-                              anjay_coap_download_ctx_t *ctx);
+static int request_coap_block_job(anjay_t *anjay, void *id);
 
-static int request_coap_block_job(anjay_t *anjay,
-                                  void *id_) {
-    uintptr_t id = (uintptr_t)id_;
-
-    AVS_LIST(anjay_download_ctx_t) *ctx =
-            _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
-    if (!ctx) {
-        dl_log(DEBUG, "download id = %" PRIuPTR " not found (expired?)", id);
-        return 0;
-    }
-
-    request_coap_block(&anjay->downloader, (anjay_coap_download_ctx_t *) *ctx);
-
-    // return non-zero to ensure job retries
-    return -1;
-}
-
-static int schedule_coap_retransmission(anjay_downloader_t *dl,
-                                        anjay_coap_download_ctx_t *ctx) {
+static int
+schedule_coap_retransmission(anjay_downloader_t *dl,
+                             anjay_coap_download_ctx_t *ctx) {
     anjay_t *anjay = _anjay_downloader_get_anjay(dl);
-    const avs_coap_tx_params_t *tx_params = &anjay->udp_tx_params;
 
-    avs_coap_retry_state_t retry_state = { 0, { 0,  0 } };
-
-    // first retry
-    avs_coap_update_retry_state(&retry_state, tx_params, &dl->rand_seed);
-    avs_time_duration_t delay = retry_state.recv_timeout;
-
-    // second retry
-    avs_coap_update_retry_state(&retry_state, tx_params, &dl->rand_seed);
-    anjay_sched_retryable_backoff_t backoff = {
-        .delay = retry_state.recv_timeout,
-        .max_delay = avs_coap_max_transmit_span(tx_params)
-    };
-
+    avs_coap_update_retry_state(&ctx->retry_state, &anjay->udp_tx_params,
+                                &dl->rand_seed);
     _anjay_sched_del(anjay->sched, &ctx->sched_job);
-    return _anjay_sched_retryable(anjay->sched, &ctx->sched_job, delay, backoff,
-                                  request_coap_block_job,
-                                  (void*)ctx->common.id);
+    return _anjay_sched(anjay->sched, &ctx->sched_job,
+                        ctx->retry_state.recv_timeout,
+                        request_coap_block_job, (void *) ctx->common.id);
 }
 
 static int request_coap_block(anjay_downloader_t *dl,
@@ -191,6 +163,36 @@ finish:
     return result;
 }
 
+static int request_coap_block_job(anjay_t *anjay, void *id_) {
+    uintptr_t id = (uintptr_t)id_;
+
+    AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
+            _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
+    if (!ctx_ptr) {
+        dl_log(DEBUG, "download id = %" PRIuPTR " not found (expired?)", id);
+        return 0;
+    }
+
+    anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
+    if (ctx->retry_state.retry_count > anjay->udp_tx_params.max_retransmit) {
+        dl_log(ERROR, "Limit of retransmissions reached, aborting download "
+                      "id = %" PRIuPTR, id);
+        _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
+                                         ANJAY_DOWNLOAD_ERR_FAILED, ETIMEDOUT);
+    } else {
+        request_coap_block(&anjay->downloader, ctx);
+        if (schedule_coap_retransmission(&anjay->downloader, ctx)) {
+            dl_log(WARNING, "could not schedule retransmission for download "
+                   "id = %" PRIuPTR, ctx->common.id);
+            _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
+                                             ANJAY_DOWNLOAD_ERR_FAILED, ENOMEM);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 static int map_coap_ctx_err_to_errno(int err) {
     switch (err) {
     case AVS_COAP_CTX_ERR_TIMEOUT:
@@ -206,6 +208,7 @@ static int request_next_coap_block(anjay_downloader_t *dl,
                                    AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
     ctx->last_req_id = _anjay_coap_id_source_get(dl->id_source);
+    memset(&ctx->retry_state, 0, sizeof(ctx->retry_state));
 
     int result;
     if ((result = request_coap_block(dl, ctx))
@@ -356,9 +359,7 @@ static void handle_coap_response(const avs_coap_msg_t *msg,
         return;
     }
 
-    if (ctx->bytes_downloaded == 0) {
-        assert(ctx->etag.size == 0 && "overwriting ETag!? we're supposed "
-                "to be handling the first packet!");
+    if (ctx->etag.size == 0) {
         ctx->etag = etag;
     } else if (!etag_matches(&etag, &ctx->etag)) {
         dl_log(DEBUG, "remote resource expired, aborting download");

@@ -469,14 +469,14 @@ static int write_firmware_to_stream(anjay_t *anjay,
     return 0;
 }
 
-static int expect_no_firmware_content(anjay_input_ctx_t *ctx) {
-    char ignored_byte;
+static int expect_single_nullbyte(anjay_input_ctx_t *ctx) {
+    char bytes[2];
     size_t bytes_read;
     bool finished = false;
-    if (anjay_get_bytes(ctx, &bytes_read, &finished, &ignored_byte, 1)) {
+    if (anjay_get_bytes(ctx, &bytes_read, &finished, bytes, sizeof(bytes))) {
         fw_log(ERROR, "anjay_get_bytes() failed");
         return ANJAY_ERR_INTERNAL;
-    } else if (bytes_read > 0 || !finished) {
+    } else if (bytes_read != 1 || !finished || bytes[0] != '\0') {
         return ANJAY_ERR_BAD_REQUEST;
     }
     return 0;
@@ -527,7 +527,7 @@ static int fw_write(anjay_t *anjay,
         {
             int result = 0;
             if (fw->state == UPDATE_STATE_DOWNLOADED) {
-                result = expect_no_firmware_content(ctx);
+                result = expect_single_nullbyte(ctx);
                 if (!result) {
                     reset(anjay, fw);
                 }
@@ -703,23 +703,24 @@ initialize_fw_repr(anjay_t *anjay,
         return 0;
     case ANJAY_FW_UPDATE_INITIAL_DOWNLOADING:
         repr->user_state.state = UPDATE_STATE_DOWNLOADING;
-        if (initial_state->resume_offset > 0 && !initial_state->resume_etag) {
-            fw_log(WARNING, "ETag not set, cannot resume firmware download");
+        size_t resume_offset = initial_state->resume_offset;
+        if (resume_offset > 0 && !initial_state->resume_etag) {
+            fw_log(WARNING, "ETag not set, need to start from the beginning");
             user_state_reset(&repr->user_state);
-        } else if (!initial_state->persisted_uri
+            resume_offset = 0;
+        }
+        if (!initial_state->persisted_uri
                 || !(repr->package_uri =
                         avs_strdup(initial_state->persisted_uri))) {
             fw_log(WARNING, "Could not copy the persisted Package URI, "
                             "not resuming firmware download");
             user_state_reset(&repr->user_state);
         } else if (schedule_background_anjay_download(
-                anjay, repr,
-                initial_state->resume_offset, initial_state->resume_etag)) {
+                anjay, repr, resume_offset, initial_state->resume_etag)) {
             fw_log(WARNING, "Could not resume firmware download");
             user_state_reset(&repr->user_state);
             if (repr->result == UPDATE_RESULT_CONNECTION_LOST
-                    && (initial_state->resume_offset > 0
-                            || initial_state->resume_etag)
+                    && initial_state->resume_etag
                     && schedule_background_anjay_download(anjay, repr,
                                                           0, NULL)) {
                 fw_log(WARNING, "Could not retry firmware download");

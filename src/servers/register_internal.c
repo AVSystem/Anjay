@@ -95,36 +95,34 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
     }
 
     server_registration_operation_t attempted_operation;
-    if (!result
-            && !is_bootstrap
-            && (result = _anjay_server_update_or_reregister(
-                    anjay, server, &attempted_operation))) {
-        if (attempted_operation == SERVER_REGISTRATION_RETRY) {
-            anjay_log(DEBUG, "re-registration failed");
-            // mark that the registration connection is no longer valid;
-            // prevents superfluous Deregister
-            server->registration_info.conn_type = ANJAY_CONNECTION_UNSET;
-            _anjay_server_deactivate(anjay, &anjay->servers, ssid,
-                                     AVS_TIME_DURATION_ZERO);
-            return 0;
-        } else if (result == AVS_COAP_CTX_ERR_NETWORK) {
-            anjay_log(ERROR, "network communication error while updating "
-                             "registration for SSID==%" PRIu16, server->ssid);
-            // We cannot use _anjay_schedule_server_reconnect(), because it
-            // would mean an endless loop without backoff if the server is down.
-            // Instead, we disconnect the socket and rely on scheduler's
-            // backoff. During the next call, _anjay_server_refresh() will
-            // reconnect the socket.
-            _anjay_connection_suspend((anjay_connection_ref_t) {
-                .server = server,
-                .conn_type = server->registration_info.conn_type
-            });
+    if (!result && !is_bootstrap) {
+        if ((result = _anjay_server_update_or_reregister(
+                anjay, server, &attempted_operation))) {
+            if (attempted_operation == SERVER_REGISTRATION_RETRY) {
+                anjay_log(DEBUG, "re-registration failed");
+                // mark that the registration connection is no longer valid;
+                // prevents superfluous Deregister
+                server->registration_info.conn_type = ANJAY_CONNECTION_UNSET;
+                _anjay_server_deactivate(anjay, &anjay->servers, ssid,
+                                         AVS_TIME_DURATION_ZERO);
+                return 0;
+            } else if (result == AVS_COAP_CTX_ERR_NETWORK) {
+                anjay_log(ERROR, "network communication error while updating "
+                          "registration for SSID==%" PRIu16, server->ssid);
+                // We cannot use _anjay_schedule_server_reconnect(), because it
+                // would mean an endless loop without backoff if the server is
+                // down. Instead, we disconnect the socket and rely on
+                // scheduler's backoff. During the next call,
+                // _anjay_server_refresh() will reconnect the socket.
+                _anjay_connection_suspend((anjay_connection_ref_t) {
+                    .server = server,
+                    .conn_type = server->registration_info.conn_type
+                });
+            }
+        } else {
+            // Updates are retryable, we only need to reschedule after success
+            result = _anjay_server_reschedule_update_job(anjay, server);
         }
-    }
-
-    // Updates are retryable, so we only need to reschedule after success
-    if (!result) {
-        result = _anjay_server_reschedule_update_job(anjay, server);
     }
     return result;
 }

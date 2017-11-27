@@ -48,6 +48,24 @@ class FirmwareUpdate:
             self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
             super().tearDown()
 
+    class TestWithCoapServer(Test):
+        def setUp(self, coap_server=None):
+            super().setUp()
+
+            from framework.coap_file_server import CoapFileServerThread
+            self.server_thread = CoapFileServerThread(coap_server=coap_server)
+            self.server_thread.start()
+
+        @property
+        def file_server(self):
+            return self.server_thread.file_server
+
+        def tearDown(self):
+            try:
+                super().tearDown()
+            finally:
+                self.server_thread.join()
+
 
 class FirmwareUpdateWithHttpServer:
     class Test(FirmwareUpdate.Test):
@@ -602,6 +620,78 @@ class Test773_FirmwareUpdate_ErrorCase_NotEnoughStorage_FirmwareURI(FirmwareUpda
         self.assertEqual(b'2', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
 
 
+class Test773_FirmwareUpdate_ErrorCase_NotEnoughStorage_FirmwareURI_CoAP(FirmwareUpdate.TestWithCoapServer):
+    def setUp(self):
+        # limit file size to 100K; enough for persistence file, not
+        # enough for firmware
+        import resource
+        self.prev_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
+        new_limit_b = 100 * 1024
+        resource.setrlimit(resource.RLIMIT_FSIZE, (new_limit_b, self.prev_limit[1]))
+
+        demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
+        with open(demo_executable, 'rb') as f:
+            self._payload = f.read()
+
+        super().setUp()
+
+    def tearDown(self):
+        import resource
+        resource.setrlimit(resource.RLIMIT_FSIZE, self.prev_limit)
+
+        super().tearDown()
+
+    def runTest(self):
+        with self.file_server as file_server:
+            file_server.set_resource('/firmware', self._payload)
+            uri = file_server.get_resource_uri('/firmware')
+
+        # 1. The Server verifies through a READ (CoAP GET) command on
+        #    /5/0/3 (State) the FW Update Object Instance of the Client is in
+        #    Idle State
+        #
+        # A. In test step 1, the Server receives the status code "2.05 " (Content) for
+        #    the READ success command, along with the State Resource value of
+        #    "0" (Idle)
+        self.assertEqual(b'0', self.test_read(ResPath.FirmwareUpdate.State))
+
+        # 2. The Server delivers the firmware package to the Client either
+        #    through a WRITE (CoAP PUT) operation in the Package
+        #    Resource (/5/0/0) or through a WRITE operation of an URI in the
+        #    Package URI Resource.
+        #
+        # B. In test step 2., the Server receives the status code "2.04" (Changed)
+        #    for the WRITE command setting either the Package URI Resource or
+        #    setting the Package Resource, according to the chosen firmware
+        #    delivery method.
+        self.test_write(ResPath.FirmwareUpdate.PackageURI, uri)
+
+        # 3. The firmware downloading process is runing The Server sends
+        #    repeated READs or OBSERVE on State and Update Result
+        #    Resources (CoAP GET /5/0) of the FW Update Object Instance
+        #    to determine when the download is completed or if an error
+        #    occured.Before the end of download, the device runs out of
+        #    storage and cannot finish the download
+        # 4. When the Package delivery is stopped the server READs Update
+        #    Result to know the result of the firmware update procedure.
+        #
+        # C. In test step 3., the State Resource retrieved with a value of "1" from
+        #    successive Server READs or Client NOTIFY messages, indicates the
+        #    download stage of the Package Delivery is engaged
+        # D. In test step 3., the Update Result Resource (/5/0/5) retrieved from
+        #    successive Server READs or Client NOTIFY messages will take the
+        #    value "2" indicating an error occurred during the downloading
+        #    process related to shortage of storage memory The State Resource
+        #    value never reaches the Downloaded value ("2")
+        # E. In test step 4., the success READ message(s) (status code "2.05"
+        #    Content) on State Resource with value "0" (Idle) and Update Result
+        #    Resource with value "2" indicates the firmware Package Delivery
+        observed_values = self.collect_values(ResPath.FirmwareUpdate.State, b'0')
+        self.assertEqual(b'0', observed_values[-1])
+        self.assertEqual({b'0', b'1'}, set(observed_values))
+        self.assertEqual(b'2', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
+
+
 class Test774_FirmwareUpdate_ErrorCase_OutOfMemory(FirmwareUpdate.Test):
     def runTest(self):
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
@@ -724,6 +814,66 @@ class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI(Fi
         #    Resource with value "4" indicates the firmware Package Delivery
         #    aborted due to connection lost dur the Package delivery.
         observed_values = self.collect_values(ResPath.FirmwareUpdate.State, b'0')
+        self.assertEqual(b'0', observed_values[-1])
+        self.assertEqual({b'0', b'1'}, set(observed_values))
+        self.assertEqual(b'4', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
+
+
+class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI_CoAP(FirmwareUpdate.TestWithCoapServer):
+    def setUp(self):
+        demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
+        with open(demo_executable, 'rb') as f:
+            pkg = make_firmware_package(f.read(), force_error=FirmwareUpdateForcedError.OutOfMemory)
+
+        class MuteServer(coap.Server):
+            def send(self, *args, **kwargs):
+                pass
+
+        super().setUp(coap_server=MuteServer())
+
+        with self.file_server as file_server:
+            file_server.set_resource('/firmware', pkg)
+            self._uri = file_server.get_resource_uri('/firmware')
+
+    def runTest(self):
+        # 1. The Server verifies through a READ (CoAP GET) command on
+        #    /5/0/3 (State) the FW Update Object Instance of the Client is in Idle
+        #    State
+        #
+        # A. In test step 1., the Server receives the status code "2.05 " (Content)
+        #    for the READ success command, along with the State Resource value
+        #    of "0" (Idle)
+        self.assertEqual(b'0', self.test_read(ResPath.FirmwareUpdate.State))
+
+        # 2. The Server delivers the firmware package to the Client through a
+        #    WRITE operation of an URI in the Package URI Resource.
+        #
+        # B. In test step 2., the Server receives the status code "2.04" (Changed)
+        #    for the WRITE command setting the Package URI Resource
+        #    according to the PULL firmware delivery method.
+        self.test_write(ResPath.FirmwareUpdate.PackageURI, self._uri)
+
+        # 3. The Server sends repeated READs or OBSERVE on State and Update
+        #    Result Resources (CoAP GET /5/0) of the FW Update Object
+        #    Instance to determine when the download is completed or if an error
+        #    occured.Before the end of download, the connection is intentionnaly
+        #    lost and the download cannot be finished.
+        # 4. When the Package delivery is stopped the Server READs Update
+        #    Result to know the result of the firmware update procedure.
+        #
+        # C. In test step 3., the State Resource value set to "1" retrieved from
+        #    successive Server READs or Client NOTIFY messages, indicates the
+        #    Package Delivery process is engaged in a Download stage
+        # D. In test step 3., the Update Result Resource (/5/0/5) retrieved from
+        #    successive Server READs or Client NOTIFY messages will take the
+        #    value "4" indicating an error occurred during the downloading
+        #    process related to connection lost
+        # E. In test step 4., the success READ message(s) (status code "2.05"
+        #    Content) on State Resource with value "0" (Idle) and Update Result
+        #    Resource with value "4" indicates the firmware Package Delivery
+        #    aborted due to connection lost dur the Package delivery.
+        observed_values = self.collect_values(ResPath.FirmwareUpdate.State, b'0',
+                                              max_iterations=100, step_time=1)
         self.assertEqual(b'0', observed_values[-1])
         self.assertEqual({b'0', b'1'}, set(observed_values))
         self.assertEqual(b'4', self.test_read(ResPath.FirmwareUpdate.UpdateResult))

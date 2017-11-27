@@ -98,7 +98,8 @@ class BlockTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
 
     def tearDown(self):
         # now reset the state machine
-        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
+        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'\0',
+                            format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         super().tearDown()
 
     @unittest.skip
@@ -155,7 +156,8 @@ class BlockSizesTest(BlockTest):
         for chunk_size in (16, 256, 1024):
             self.block_send(A_LOT_OF_STUFF, equal_chunk_splitter(chunk_size))
             # now reset the state machine
-            self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
+            self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'\0',
+                                format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
 
 
 class BlockSingleChunkTest(BlockTest):
@@ -245,9 +247,11 @@ class BlockVariableChunkSizeTest(BlockTest):
 
         # variable chunk size
         self.block_send(A_LOT_OF_STUFF, shrinking_chunk_splitter(initial_chunk_size=1024))
-        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
+        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'\0',
+                            format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.block_send(A_LOT_OF_STUFF, growing_chunk_splitter(initial_chunk_size=16))
-        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'')
+        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'\0',
+                            format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.block_send(A_LOT_OF_STUFF, alternating_size_chunk_splitter(sizes=[32, 512, 256, 1024, 64]))
 
 

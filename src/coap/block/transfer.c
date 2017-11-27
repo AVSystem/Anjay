@@ -227,7 +227,7 @@ static int send_block_msg(coap_block_transfer_ctx_t *ctx,
         coap_log(DEBUG, "timeout reached, next: %" PRId64 ".%09" PRId32 " s",
                  retry_state.recv_timeout.seconds,
                  retry_state.recv_timeout.nanoseconds);
-    } while (retry_state.retry_count < tx_params.max_retransmit);
+    } while (retry_state.retry_count <= tx_params.max_retransmit);
 
     if (!result) {
         ctx->timed_out = false;

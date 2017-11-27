@@ -17,9 +17,12 @@
 import http
 import http.server
 import os
+import re
 import ssl
 import threading
 import time
+
+import zlib
 
 from framework.coap_file_server import CoapFileServerThread
 from framework.lwm2m_test import *
@@ -135,8 +138,6 @@ class FirmwareUpdate:
 
             class FirmwareRequestHandler(http.server.BaseHTTPRequestHandler):
                 def do_GET(self):
-                    test_case.requests.append(self.path)
-
                     self.send_response(http.HTTPStatus.OK)
                     self.send_header('Content-type', 'text/plain')
                     self.end_headers()
@@ -148,6 +149,7 @@ class FirmwareUpdate:
                         while test_case._response_content is None:
                             test_case._response_cv.wait()
                         response_content = test_case._response_content
+                        test_case.requests.append(self.path)
                         test_case._response_content = None
 
                     self.wfile.write(response_content)
@@ -157,6 +159,11 @@ class FirmwareUpdate:
                     pass
 
             return http.server.HTTPServer(('', 0), FirmwareRequestHandler)
+
+        def write_firmware_and_wait_for_download(self, *args, **kwargs):
+            requests = list(self.requests)
+            super().write_firmware_and_wait_for_download(*args, **kwargs)
+            self.assertEqual(requests + ['/firmware'], self.requests)
 
         def setUp(self, *args, **kwargs):
             super().setUp(*args, **kwargs)
@@ -176,9 +183,6 @@ class FirmwareUpdate:
             finally:
                 self.http_server.shutdown()
                 self.server_thread.join()
-
-            # there should be exactly one request
-            self.assertEqual(['/firmware'], self.requests)
 
     class TestWithHttpsServer(TestWithHttpServer):
         def get_firmware_uri(self):
@@ -241,17 +245,49 @@ class FirmwareUpdate:
             finally:
                 self.server_thread.join()
 
-    class TestWithPartialDownloadAndRestart(TestWithCoapServer):
-        GARBAGE_SIZE = 8000
+    @staticmethod
+    def TestWithPartialDownloadAndRestart(base):
+        class TestWithPartialDownloadAndRestartCommon(base):
+            GARBAGE_SIZE = 8000
 
-        def _get_valgrind_args(self):
-            # these tests call demo_process.kill(), so Valgrind is not really useful
-            return []
+            def _get_valgrind_args(self):
+                # these tests call demo_process.kill(), so Valgrind is not really useful
+                return []
 
-        def _start_demo(self, cmdline_args, timeout_s=30):
-            self.cmdline_args = cmdline_args
-            return super()._start_demo(cmdline_args, timeout_s)
+            def _start_demo(self, cmdline_args, timeout_s=30):
+                self.cmdline_args = cmdline_args
+                return super()._start_demo(cmdline_args, timeout_s)
 
+            def wait_for_half_download(self):
+                deadline = time.time() + self.GARBAGE_SIZE / 1000  # roughly twice the time expected as per SlowServer
+                fsize = 0
+                while time.time() < deadline:
+                    time.sleep(0.5)
+                    fsize = os.stat(self.fw_file_name).st_size
+                    if fsize * 2 > self.GARBAGE_SIZE:
+                        break
+                if fsize * 2 <= self.GARBAGE_SIZE:
+                    self.fail('firmware image not downloaded fast enough')
+                elif fsize > self.GARBAGE_SIZE:
+                    self.fail('firmware image downloaded too quickly')
+
+            def setUp(self, *args, **kwargs):
+                super().setUp(garbage=self.GARBAGE_SIZE, *args, **kwargs)
+
+                import tempfile
+
+                with tempfile.NamedTemporaryFile(delete=False) as f:
+                    self.fw_file_name = f.name
+                self.communicate('set-fw-package-path %s' % (os.path.abspath(self.fw_file_name)))
+
+            def tearDown(self):
+                with open(self.fw_file_name, "rb") as f:
+                    self.assertEqual(f.read(), self.FIRMWARE_SCRIPT_CONTENT)
+                super().tearDown()
+
+        return TestWithPartialDownloadAndRestartCommon
+
+    class TestWithPartialCoapDownloadAndRestart(TestWithPartialDownloadAndRestart.__func__(TestWithCoapServer)):
         def setUp(self):
             class SlowServer(coap.Server):
                 def send(self, *args, **kwargs):
@@ -260,35 +296,76 @@ class FirmwareUpdate:
                     self.reset()  # allow requests from other ports
                     return result
 
-            super().setUp(coap_server=SlowServer(), garbage=self.GARBAGE_SIZE)
-
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(delete=False) as f:
-                self.fw_file_name = f.name
-            self.communicate('set-fw-package-path %s' % (os.path.abspath(self.fw_file_name)))
+            super().setUp(coap_server=SlowServer())
 
             with self.file_server as file_server:
                 file_server.set_resource('/firmware', make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT))
                 self.fw_uri = file_server.get_resource_uri('/firmware')
 
-        def tearDown(self):
-            with open(self.fw_file_name, "rb") as f:
-                self.assertEqual(f.read(), self.FIRMWARE_SCRIPT_CONTENT)
-            super().tearDown()
+    class TestWithPartialHttpDownloadAndRestart(TestWithPartialDownloadAndRestart.__func__(TestWithHttpServer)):
+        def get_etag(self, response_content):
+            return '"%d"' % zlib.crc32(response_content)
 
-        def wait_for_half_download(self):
-            deadline = time.time() + self.GARBAGE_SIZE / 1000  # roughly twice the time expected as per SlowServer
-            fsize = 0
-            while time.time() < deadline:
-                time.sleep(0.5)
-                fsize = os.stat(self.fw_file_name).st_size
-                if fsize * 2 > self.GARBAGE_SIZE:
-                    break
-            if fsize * 2 <= self.GARBAGE_SIZE:
-                self.fail('firmware image not downloaded fast enough')
-            elif fsize > self.GARBAGE_SIZE:
-                self.fail('firmware image downloaded too quickly')
+        def check_success(self, handler, response_content, response_etag):
+            pass
+
+        def send_headers(self, handler, response_content, response_etag):
+            pass
+
+        def _create_server(self):
+            test_case = self
+
+            class FirmwareRequestHandler(http.server.BaseHTTPRequestHandler):
+                def send_response(self, *args, **kwargs):
+                    self._response_sent = True
+                    return super().send_response(*args, **kwargs)
+
+                def do_GET(self):
+                    self._response_sent = False
+                    test_case.requests.append(self.path)
+
+                    # This condition variable makes it possible to defer sending the response.
+                    # FirmwareUpdateStateChangeTest uses it to ensure demo has enough time
+                    # to send the interim "Downloading" state notification.
+                    with test_case._response_cv:
+                        while test_case._response_content is None:
+                            test_case._response_cv.wait()
+                        response_content = test_case._response_content
+                        response_etag = test_case.get_etag(response_content)
+
+                        test_case.check_success(self, response_content, response_etag)
+                        if self._response_sent:
+                            return
+
+                        test_case._response_content = None
+
+                    self.send_response(http.HTTPStatus.OK)
+                    self.send_header('Content-type', 'text/plain')
+                    if response_etag is not None:
+                        self.send_header('ETag', response_etag)
+                    offset = test_case.send_headers(self, response_content, response_etag)
+                    if offset is None:
+                        offset = 0
+
+                    self.end_headers()
+
+                    while offset < len(response_content):
+                        chunk = response_content[offset:offset + 1024]
+                        self.wfile.write(chunk)
+                        offset += len(chunk)
+                        time.sleep(0.5)
+
+                def log_message(self, *args, **kwargs):
+                    # don't display logs
+                    pass
+
+            class SilentServer(http.server.HTTPServer):
+                def handle_error(self, *args, **kwargs):
+                    # don't log BrokenPipeErrors
+                    if not isinstance(sys.exc_info()[1], BrokenPipeError):
+                        super().handle_error(*args, **kwargs)
+
+            return SilentServer(('', 0), FirmwareRequestHandler)
 
 
 class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
@@ -375,6 +452,9 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'3'),
                             self.serv.recv())
 
+        # there should be exactly one request
+        self.assertEqual(['/firmware'], self.requests)
+
 
 class FirmwareUpdateBadBase64(FirmwareUpdate.Test):
     def runTest(self):
@@ -397,12 +477,12 @@ class FirmwareUpdateGoodBase64(FirmwareUpdate.Test):
                             self.serv.recv(timeout_s=1))
 
 
-class FirmwareUpdateEmptyPkg(FirmwareUpdate.TestWithHttpServer):
+class FirmwareUpdateNullPkg(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
         self.provide_response()
         self.write_firmware_and_wait_for_download(self.get_firmware_uri())
 
-        req = Lwm2mWrite('/5/0/0', b'', format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
+        req = Lwm2mWrite('/5/0/0', b'\0', format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv(timeout_s=1))
 
@@ -571,7 +651,7 @@ class FirmwareUpdateRestartWithDownloaded(FirmwareUpdate.Test):
                             self.serv.recv(timeout_s=1))
 
 
-class FirmwareUpdateRestartWithDownloading(FirmwareUpdate.TestWithPartialDownloadAndRestart):
+class FirmwareUpdateRestartWithDownloading(FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
     def runTest(self):
         # Write /5/0/1 (Firmware URI)
         req = Lwm2mWrite('/5/0/1', self.fw_uri)
@@ -602,7 +682,7 @@ class FirmwareUpdateRestartWithDownloading(FirmwareUpdate.TestWithPartialDownloa
         self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
 
 
-class FirmwareUpdateRestartWithDownloadingETagChange(FirmwareUpdate.TestWithPartialDownloadAndRestart):
+class FirmwareUpdateRestartWithDownloadingETagChange(FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
     def runTest(self):
         # Write /5/0/1 (Firmware URI)
         req = Lwm2mWrite('/5/0/1', self.fw_uri)
@@ -640,3 +720,168 @@ class FirmwareUpdateRestartWithDownloadingETagChange(FirmwareUpdate.TestWithPart
                 break
         self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
         self.assertTrue(file_truncated)
+
+
+class FirmwareUpdateRestartWithDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def get_etag(self, response_content):
+        return None
+
+    def runTest(self):
+        self.provide_response()
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.demo_process.kill()
+
+        # restart demo app
+        self.serv.reset()
+
+        self.provide_response()
+        self._start_demo(self.cmdline_args)
+        self.assertDemoRegisters(self.serv)
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        state = None
+        file_truncated = False
+        while time.time() < deadline:
+            try:
+                fsize = os.stat(self.fw_file_name).st_size
+                if fsize * 2 <= self.GARBAGE_SIZE:
+                    file_truncated = True
+            except FileNotFoundError:
+                file_truncated = True
+            state = self.read_state()
+            self.assertIn(state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
+            if state == UPDATE_STATE_DOWNLOADED:
+                break
+        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertTrue(file_truncated)
+
+        self.assertEqual(len(self.requests), 2)
+
+
+class FirmwareUpdateResumeDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def send_headers(self, handler, response_content, response_etag):
+        if 'Range' in handler.headers:
+            self.assertEqual(handler.headers['If-Match'], response_etag)
+            match = re.fullmatch(r'bytes=([0-9]+)-', handler.headers['Range'])
+            self.assertIsNotNone(match)
+            offset = int(match.group(1))
+            handler.send_header('Content-range', 'bytes %d-%d/*' % (offset, len(response_content) - 1))
+            return offset
+
+    def runTest(self):
+        self.provide_response()
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.demo_process.kill()
+
+        # restart demo app
+        self.serv.reset()
+
+        self.provide_response()
+        self._start_demo(self.cmdline_args)
+        self.assertDemoRegisters(self.serv)
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        state = None
+        while time.time() < deadline:
+            fsize = os.stat(self.fw_file_name).st_size
+            self.assertGreater(fsize * 2, self.GARBAGE_SIZE)
+            state = self.read_state()
+            self.assertIn(state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
+            if state == UPDATE_STATE_DOWNLOADED:
+                break
+        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+
+        self.assertEqual(len(self.requests), 2)
+
+
+class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def runTest(self):
+        self.provide_response()
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.demo_process.kill()
+
+        # restart demo app
+        self.serv.reset()
+
+        self.provide_response()
+        self._start_demo(self.cmdline_args)
+        self.assertDemoRegisters(self.serv)
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        state = None
+        while time.time() < deadline:
+            fsize = os.stat(self.fw_file_name).st_size
+            self.assertGreater(fsize * 2, self.GARBAGE_SIZE)
+            state = self.read_state()
+            self.assertIn(state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
+            if state == UPDATE_STATE_DOWNLOADED:
+                break
+        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+
+        self.assertEqual(len(self.requests), 2)
+
+
+class FirmwareUpdateRestartAfter412WithDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def check_success(self, handler, response_content, response_etag):
+        if 'If-Match' in handler.headers:
+            self.assertEqual(handler.headers['If-Match'], response_etag)
+            handler.send_error(http.HTTPStatus.PRECONDITION_FAILED)
+
+    def runTest(self):
+        self.provide_response()
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        self.demo_process.kill()
+
+        # restart demo app
+        self.serv.reset()
+
+        self.provide_response()
+        self._start_demo(self.cmdline_args)
+        self.assertDemoRegisters(self.serv)
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        state = None
+        file_truncated = False
+        while time.time() < deadline:
+            try:
+                fsize = os.stat(self.fw_file_name).st_size
+                if fsize * 2 <= self.GARBAGE_SIZE:
+                    file_truncated = True
+            except FileNotFoundError:
+                file_truncated = True
+            state = self.read_state()
+            self.assertIn(state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
+            if state == UPDATE_STATE_DOWNLOADED:
+                break
+        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertTrue(file_truncated)
+
+        self.assertEqual(len(self.requests), 3)
