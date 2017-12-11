@@ -688,14 +688,41 @@ int _anjay_connection_bring_online(anjay_server_connection_t *connection,
      * It is safe not to call bind(), because connect() is called below, which
      * will automatically bind the socket to a new ephemeral port.
      */
-    if (*connection->conn_priv_data_.last_local_port
-            && avs_net_socket_bind(
-                    connection->conn_priv_data_.socket, NULL,
+    if (*connection->conn_priv_data_.last_local_port) {
+        /*
+         * Whenever the socket is bound by connect(), the address family is
+         * set to match the remote address. If the socket is bound by a
+         * bind() call with NULL local_addr argument, the address family
+         * falls back to the original socket preference - by default,
+         * AF_UNSPEC. This causes avs_net to attempt to bind to [::]:$PORT,
+         * even though the remote host may be an IPv4 address. This generally
+         * works, because IPv4-mapped IPv6 addresses are a thing.
+         *
+         * On FreeBSD though, IPv4-mapped IPv6 are disabled by default (see:
+         * "Interaction between IPv4/v6 sockets" at
+         * https://www.freebsd.org/cgi/man.cgi?query=inet6&sektion=4), which
+         * effectively breaks all connect() calls after re-binding to a
+         * recently used port.
+         *
+         * To avoid that, we need to provide a local wildcard address
+         * appropriate for the family used by the remote host.
+         */
+        const char *local_addr = NULL;
+        if (strchr(remote_host, ':') != NULL) {
+            local_addr = "::";
+        } else if (strchr(remote_host, '.') != NULL) {
+            local_addr = "0.0.0.0";
+        }
+
+        if (avs_net_socket_bind(
+                    connection->conn_priv_data_.socket, local_addr,
                     connection->conn_priv_data_.last_local_port)) {
-        anjay_log(ERROR, "could not bind socket to port %s",
-                  connection->conn_priv_data_.last_local_port);
-        goto close_and_fail;
+            anjay_log(ERROR, "could not bind socket to port %s",
+                      connection->conn_priv_data_.last_local_port);
+            goto close_and_fail;
+        }
     }
+
     if (avs_net_socket_connect(connection->conn_priv_data_.socket,
                                remote_host, remote_port)) {
         anjay_log(ERROR, "could not connect to %s:%s",

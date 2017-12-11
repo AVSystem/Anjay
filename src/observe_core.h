@@ -91,6 +91,9 @@ void _anjay_observe_remove_by_msg_id(anjay_t *anjay,
 
 int _anjay_observe_sched_flush_current_connection(anjay_t *anjay);
 
+int _anjay_observe_sched_flush(anjay_t *anjay,
+                               anjay_connection_key_t key);
+
 int _anjay_observe_notify(anjay_t *anjay,
                           const anjay_observe_key_t *origin_key,
                           bool invert_ssid_match);

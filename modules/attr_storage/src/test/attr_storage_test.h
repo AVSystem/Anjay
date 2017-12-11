@@ -40,7 +40,9 @@ static fas_resource_attrs_t *test_resource_attrs(anjay_ssid_t ssid,
     attrs->attrs.standard.greater_than = greater_than;
     attrs->attrs.standard.less_than = less_than;
     attrs->attrs.standard.step = step;
+#ifdef WITH_CUSTOM_ATTRIBUTES
     attrs->attrs.custom.data.con = con;
+#endif // WITH_CUSTOM_ATTRIBUTES
     return attrs;
 }
 
@@ -70,7 +72,9 @@ static fas_default_attrs_t *test_default_attrs(anjay_ssid_t ssid,
     attrs->attrs = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
     attrs->attrs.standard.min_period = min_period;
     attrs->attrs.standard.max_period = max_period;
+#ifdef WITH_CUSTOM_ATTRIBUTES
     attrs->attrs.custom.data.con = con;
+#endif // WITH_CUSTOM_ATTRIBUTES
     return attrs;
 }
 
@@ -124,7 +128,9 @@ test_object_entry(anjay_oid_t oid,
 
 static void assert_attrs_equal(const anjay_dm_internal_attrs_t *actual,
                                const anjay_dm_internal_attrs_t *expected) {
+#ifdef WITH_CUSTOM_ATTRIBUTES
     AVS_UNIT_ASSERT_EQUAL(actual->custom.data.con, expected->custom.data.con);
+#endif // WITH_CUSTOM_ATTRIBUTES
     AVS_UNIT_ASSERT_EQUAL(actual->standard.min_period,
                           expected->standard.min_period);
     AVS_UNIT_ASSERT_EQUAL(actual->standard.max_period,

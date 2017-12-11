@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <sys/param.h>
+
 #include <assert.h>
 #include <string.h>
 #include <unistd.h>
@@ -269,7 +271,9 @@ static void perform_reboot(void *unused) {
     if (_NSGetExecutablePath(exe_path, &(uint32_t) { sizeof(exe_path) })) {
         demo_log(ERROR, "could not get executable path");
     } else
-#else // __APPLE__
+#elif defined(BSD)
+    strcpy(exe_path, "/proc/curproc/file");
+#else // !__APPLE__ && !BSD
     strcpy(exe_path, "/proc/self/exe");
 #endif
     {

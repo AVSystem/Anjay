@@ -18,7 +18,6 @@
 
 #include <avsystem/commons/unit/test.h>
 
-#include <alloca.h>
 #include <errno.h>
 #include <stdio.h>
 
@@ -137,10 +136,16 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
 #undef TEST_PARSE_ATTRIBUTE_SUCCESS
 #undef TEST_PARSE_ATTRIBUTE_FAILED
 
+#ifdef WITH_CUSTOM_ATTRIBUTES
+#define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
+    AVS_UNIT_ASSERT_EQUAL(actual.custom.data.con, expected.custom.data.con)
+#else // WITH_CUSTOM_ATTRIBUTES
+#define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
+#endif // WITH_CUSTOM_ATTRIBUTES
+
 #define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
     do { \
-        AVS_UNIT_ASSERT_EQUAL(actual.custom.data.con, \
-                              expected.custom.data.con); \
+        ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected); \
         AVS_UNIT_ASSERT_EQUAL(actual.standard.common.min_period, \
                               expected.standard.common.min_period); \
         AVS_UNIT_ASSERT_EQUAL(actual.standard.common.max_period, \
@@ -152,6 +157,13 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
         AVS_UNIT_ASSERT_EQUAL(actual.standard.step, expected.standard.step); \
     } while (0)
 
+#ifdef WITH_CUSTOM_ATTRIBUTES
+#define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) \
+    AVS_UNIT_ASSERT_EQUAL(actual.custom.has_con, expected.custom.has_con)
+#else // WITH_CUSTOM_ATTRIBUTES
+#define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
+#endif // WITH_CUSTOM_ATTRIBUTES
+
 #define ASSERT_ATTRIBUTES_EQUAL(actual, expected) \
     do { \
         AVS_UNIT_ASSERT_EQUAL(actual.has_min_period, expected.has_min_period); \
@@ -160,7 +172,7 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
                               expected.has_greater_than); \
         AVS_UNIT_ASSERT_EQUAL(actual.has_less_than, expected.has_less_than); \
         AVS_UNIT_ASSERT_EQUAL(actual.has_step, expected.has_step); \
-        AVS_UNIT_ASSERT_EQUAL(actual.custom.has_con, expected.custom.has_con); \
+        ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected); \
         ASSERT_ATTRIBUTE_VALUES_EQUAL(actual.values, expected.values); \
     } while (0)
 

@@ -36,6 +36,9 @@
 
 #include <arpa/inet.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+
 namespace py = pybind11;
 using namespace std;
 
@@ -363,7 +366,19 @@ struct Socket {
     }
 
     py::object __getattr__(py::object name) {
-        return call_method<py::object>(py_socket, "__getattribute__", name);
+        if (py::cast<string>(name) == "py_socket") {
+            return py_socket;
+        } else {
+            return call_method<py::object>(py_socket, "__getattribute__", name);
+        }
+    }
+
+    void __setattr__(py::object name, py::object value) {
+        if (py::cast<string>(name) == "py_socket") {
+            py_socket = value;
+        } else {
+            call_method<py::object>(py_socket, "__setattribute__", name, value);
+        }
     }
 
     template<typename... Args>
@@ -428,8 +443,7 @@ public:
         // create a new one for listening
         py::object bound_addr = call_method<py::object>(py_socket, "getsockname");
         py::tuple data__remote_addr =
-                call_method<py::tuple>(py_socket, "recvfrom", 1,
-                                             (int) MSG_PEEK);
+                call_method<py::tuple>(py_socket, "recvfrom", 1, (int) MSG_PEEK);
         py::tuple remote_addr =
                 py::cast<py::tuple>(data__remote_addr[1]);
 
@@ -499,6 +513,7 @@ PYBIND11_MODULE(pymbedtls, m) {
         .def("recvfrom_into", &Socket::fail<py::object>)
         .def("settimeout", &Socket::settimeout)
         .def("__getattr__", &Socket::__getattr__)
+        .def("__setattr__", &Socket::__setattr__)
     ;
 
     py::enum_<Socket::Type>(socket_scope, "Type")

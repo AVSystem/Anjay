@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.5.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.5.2" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -43,6 +43,29 @@ set(CMAKE_USE_RELATIVE_PATHS TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(cmake/install_utils.cmake)
+
+include(CheckFunctionExists)
+
+# On Linux, one needs to link libdl to use dlsym(). On BSD, it is not necessary,
+# and even harmful, since libdl does not exist.
+set(CMAKE_REQUIRED_INCLUDES "dlfcn.h")
+foreach(lib "" dl)
+    message(STATUS "Looking for dlsym() in library: ${lib}")
+    set(CMAKE_REQUIRED_LIBRARIES ${lib})
+
+    # check_function_exists caches its result; make sure the check is
+    # actually repeated for each lib
+    unset(HAVE_DLSYM CACHE)
+    check_function_exists(dlsym HAVE_DLSYM)
+    set(CMAKE_REQUIRED_LIBRARIES)
+
+    if(HAVE_DLSYM)
+        set(DETECTED_DLSYM_LIBRARY "${lib}" CACHE STRING "" FORCE)
+        break()
+    endif()
+endforeach()
+set(CMAKE_REQUIRED_INCLUDES)
+set(DLSYM_LIBRARY "${DETECTED_DLSYM_LIBRARY}" CACHE STRING "Name of the library containing dlsym() symbol")
 
 ################# FEATURES #####################################################
 
@@ -319,8 +342,6 @@ macro(DEFINE_MODULE MOD_NAME MOD_DEFAULT MOD_DESC)
     option(WITH_MODULE_${MOD_NAME} "${MOD_DESC}" ${MOD_DEFAULT})
     if(WITH_MODULE_${MOD_NAME})
         add_subdirectory(modules/${MOD_NAME})
-        set(MODULES_INCLUDE_DIRS ${MODULES_INCLUDE_DIRS}
-                                 ${CMAKE_CURRENT_SOURCE_DIR}/modules/${MOD_NAME}/include_modules)
         set(PUBLIC_INCLUDE_DIRS ${PUBLIC_INCLUDE_DIRS}
                                 ${CMAKE_CURRENT_SOURCE_DIR}/modules/${MOD_NAME}/include_public)
     endif()
@@ -363,14 +384,17 @@ endforeach()
 option(WITH_LOCAL_AVS_COMMONS "Use locally installed avs_commons libraries" OFF)
 
 if(WITH_LOCAL_AVS_COMMONS)
-    find_package(avs_commons COMPONENTS ${AVS_COMMONS_COMPONENTS} REQUIRED)
-else()
-    option(WITH_AVS_UNIT "Enable compilation of avs_unit to allow unit testing" OFF)
-    if(WITH_AVS_UNIT)
+    # WITH_TEST is also defined in Commons
+    # it defaults to ON there, but if we have external avs_commons, let's better not depend on avs_unit by default
+    option(WITH_TEST "Enable Anjay tests" OFF)
+    if(WITH_TEST)
+        set(AVS_COMMONS_COMPONENTS ${AVS_COMMONS_COMPONENTS} unit)
+
         find_program(VALGRIND_EXECUTABLE valgrind)
         cmake_dependent_option(WITH_VALGRIND "Enable usage of valgrind during unit tests" OFF "VALGRIND_EXECUTABLE" OFF)
     endif()
-
+    find_package(avs_commons COMPONENTS ${AVS_COMMONS_COMPONENTS} REQUIRED)
+else()
     set(_DTLS_BACKENDS "mbedtls" "openssl" "tinydtls")
     set(DTLS_BACKEND "mbedtls" CACHE STRING "DTLS backend to use; possible values: <empty> ${_DTLS_BACKENDS}")
 
@@ -469,106 +493,116 @@ endif()
 
 ################# TEST ########################################################
 
-macro(add_anjay_test NAME)
-    add_executable(${NAME}_test EXCLUDE_FROM_ALL ${ARGN})
-    target_link_libraries(${NAME}_test avs_unit dl)
-    set_property(TARGET ${NAME}_test APPEND PROPERTY COMPILE_DEFINITIONS
-                 ANJAY_TEST
-                 "ANJAY_BIN_DIR=\"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\"")
-    set_property(TARGET ${NAME}_test APPEND PROPERTY COMPILE_FLAGS
-                 "-Wno-pedantic -Wno-overlength-strings")
+cmake_dependent_option(WITH_INTEGRATION_TESTS "Enable integration tests" OFF "WITH_TEST;WITH_DEMO" OFF)
 
-    if(VALGRIND)
-        set(VALGRIND_LOG ${VALGRIND} --log-file=${ANJAY_BUILD_OUTPUT_DIR}/VALGRIND.${NAME}.log)
-    else()
-        set(VALGRIND_LOG)
+if(WITH_TEST)
+    macro(add_anjay_test NAME)
+        add_executable(${NAME}_test EXCLUDE_FROM_ALL ${ARGN})
+        target_link_libraries(${NAME}_test avs_unit)
+
+        if(NOT HAVE_DLSYM AND NOT DLSYM_LIBRARY)
+            message(FATAL_ERROR "dlsym() is required for tests, but its definition "
+                    "could not be found; either use -DDLSYM_LIBRARY to select the "
+                    "library or disable tests")
+        elseif(DLSYM_LIBRARY)
+            target_link_libraries(${NAME}_test ${DLSYM_LIBRARY})
+        endif()
+
+        set_property(TARGET ${NAME}_test APPEND PROPERTY COMPILE_DEFINITIONS
+                     ANJAY_TEST
+                     "ANJAY_BIN_DIR=\"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\"")
+        set_property(TARGET ${NAME}_test APPEND PROPERTY COMPILE_FLAGS
+                     "-Wno-pedantic -Wno-overlength-strings")
+
+        if(VALGRIND)
+            set(VALGRIND_LOG ${VALGRIND} --log-file=${ANJAY_BUILD_OUTPUT_DIR}/VALGRIND.${NAME}.log)
+        else()
+            set(VALGRIND_LOG)
+        endif()
+
+        add_test(NAME ${NAME}_test
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                 COMMAND ${VALGRIND_LOG} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME}_test)
+
+        add_custom_target(${NAME}_check COMMAND ${CMAKE_CTEST_COMMAND} -R "^${NAME}_test$$" -V DEPENDS ${NAME}_test)
+        add_dependencies(anjay_unit_check ${NAME}_check)
+    endmacro()
+
+    enable_testing()
+
+    add_custom_target(check)
+    add_custom_target(anjay_unit_check)
+    add_dependencies(check anjay_unit_check)
+
+    if(TARGET avs_commons_check)
+        add_dependencies(check avs_commons_check)
     endif()
 
-    add_test(NAME ${NAME}_test
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-             COMMAND ${VALGRIND_LOG} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME}_test)
+    # Source validation
+    foreach(F ${ABSOLUTE_SOURCES})
+        add_test(NAME test_${F}_visibility COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_visibility.py ${F})
+        add_test(NAME test_${F}_headers COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_headers.py ${F})
+    endforeach()
 
-    add_custom_target(${NAME}_check COMMAND ${CMAKE_CTEST_COMMAND} -R "^${NAME}_test$$" -V DEPENDS ${NAME}_test)
-    add_dependencies(anjay_unit_check ${NAME}_check)
-endmacro()
+    add_custom_target(visibility_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_visibility$$'")
+    add_dependencies(anjay_unit_check visibility_check)
 
-enable_testing()
+    add_custom_target(headers_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_headers$$'")
+    add_dependencies(anjay_unit_check headers_check)
 
-add_custom_target(check)
-add_custom_target(anjay_unit_check)
-add_dependencies(check anjay_unit_check)
+    set(ABSOLUTE_HEADERS)
+    foreach(F ${ABSOLUTE_SOURCES})
+        if(F MATCHES [.]h$)
+            list(APPEND ABSOLUTE_HEADERS ${F})
+        endif()
+    endforeach()
+    add_test(NAME test_function_duplicates COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_duplicates.py ${ABSOLUTE_HEADERS})
+    add_test(NAME test_markdown_toc COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-toc.py --check "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 
-if (TARGET avs_commons_check)
-    add_dependencies(check avs_commons_check)
-endif()
+    add_custom_target(function_duplicates_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_function_duplicates$$'")
 
-################# SOURCE VALIDATION ############################################
+    add_custom_target(toc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_markdown_toc$$'")
 
-foreach(F ${ABSOLUTE_SOURCES})
-    add_test(NAME test_${F}_visibility COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_visibility.py ${F})
-    add_test(NAME test_${F}_headers COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_headers.py ${F})
-endforeach()
+    add_dependencies(anjay_unit_check
+                     function_duplicates_check
+                     toc_check)
 
-add_custom_target(visibility_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_visibility$$'")
-add_dependencies(anjay_unit_check visibility_check)
+    # Symbol validation
+    add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
 
-add_custom_target(headers_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_headers$$'")
-add_dependencies(anjay_unit_check headers_check)
-
-set(ABSOLUTE_HEADERS)
-foreach(F ${ABSOLUTE_SOURCES})
-    if(F MATCHES [.]h$)
-        list(APPEND ABSOLUTE_HEADERS ${F})
+    if(WITH_LIBRARY_SHARED AND NOT WITH_STATIC_DEPS_LINKED)
+        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}> anjay_ ANJAY_)
+        add_dependencies(symbols_check ${PROJECT_NAME})
     endif()
-endforeach()
-add_test(NAME test_function_duplicates COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_duplicates.py ${ABSOLUTE_HEADERS})
-add_test(NAME test_markdown_toc COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-toc.py --check "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 
-add_custom_target(function_duplicates_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_function_duplicates$$'")
+    add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}_static> anjay_ ANJAY_ _anjay_ _ANJAY_)
+    add_dependencies(symbols_check ${PROJECT_NAME}_static)
 
-add_custom_target(toc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_markdown_toc$$'")
+    add_dependencies(anjay_unit_check symbols_check)
 
-add_dependencies(anjay_unit_check
-                 function_duplicates_check
-                 toc_check)
+    # Unit tests
+    include(ProcessorCount)
+    ProcessorCount(ANJAY_DEFAULT_NPROC)
 
-################# SYMBOL VALIDATION ############################################
+    set(NPROC "${ANJAY_DEFAULT_NPROC}" CACHE STRING "Number of threads for multi-threaded build/test operations")
 
-add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
+    if(WITH_VALGRIND)
+        set(VALGRIND ${VALGRIND_EXECUTABLE} --leak-check=full --track-origins=yes -q --error-exitcode=63 --suppressions=${CMAKE_CURRENT_SOURCE_DIR}/valgrind_test.supp)
+    endif()
 
-if(WITH_LIBRARY_SHARED AND NOT WITH_STATIC_DEPS_LINKED)
-    add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}> anjay_ ANJAY_)
-    add_dependencies(symbols_check ${PROJECT_NAME})
-endif()
-
-add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}_static> anjay_ ANJAY_ _anjay_ _ANJAY_)
-add_dependencies(symbols_check ${PROJECT_NAME}_static)
-
-add_dependencies(anjay_unit_check symbols_check)
-
-################# UNIT TESTS ###################################################
-
-include(ProcessorCount)
-ProcessorCount(ANJAY_DEFAULT_NPROC)
-
-set(NPROC "${ANJAY_DEFAULT_NPROC}" CACHE STRING "Number of threads for multi-threaded build/test operations")
-
-if(WITH_VALGRIND)
-    set(VALGRIND ${VALGRIND_EXECUTABLE} --leak-check=full --track-origins=yes -q --error-exitcode=63 --suppressions=${CMAKE_CURRENT_SOURCE_DIR}/valgrind_test.supp)
-endif()
-
-if(WITH_AVS_UNIT)
     include_directories(test/include)
     add_anjay_test(${PROJECT_NAME} ${ABSOLUTE_TEST_SOURCES})
     target_link_libraries(${PROJECT_NAME}_test ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
-endif()
 
-add_subdirectory(test/codegen)
+    add_subdirectory(test/codegen)
 
-cmake_dependent_option(WITH_INTEGRATION_TESTS "Enable integration tests" OFF WITH_DEMO OFF)
-if(WITH_INTEGRATION_TESTS)
-    add_subdirectory(test/integration)
-endif()
+    if(WITH_INTEGRATION_TESTS)
+        add_subdirectory(test/integration)
+    endif()
+else(WITH_TEST)
+    macro(add_anjay_test NAME)
+    endmacro()
+endif(WITH_TEST)
 
 ################# FUZZ TESTING #################################################
 
@@ -604,7 +638,7 @@ add_custom_target(doc)
 set(ANJAY_SPHINX_DOC_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source")
 set(ANJAY_SPHINX_DOC_CONF_DIR "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx")
 
-option(WITH_DOC_CHECK "Enables/disables sphinx documentation validation" OFF)
+cmake_dependent_option(WITH_DOC_CHECK "Enables/disables sphinx documentation validation" OFF WITH_TEST OFF)
 
 if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
     find_program(SPHINX_BUILD_EXECUTABLE sphinx-build
@@ -675,7 +709,7 @@ endif()
 
 ################# STATIC ANALYSIS ##############################################
 
-option(WITH_STATIC_ANALYSIS "Perform static analysis of the codebase on `make check`" OFF)
+cmake_dependent_option(WITH_STATIC_ANALYSIS "Perform static analysis of the codebase on `make check`" OFF WITH_TEST OFF)
 if(WITH_STATIC_ANALYSIS)
     find_program(SCAN_BUILD_BINARY scan-build)
     if(NOT SCAN_BUILD_BINARY)
@@ -720,7 +754,9 @@ add_custom_command(TARGET examples
                    COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
                    WORKING_DIRECTORY "${ANJAY_EXAMPLES_BUILD_DIR}")
 
-add_dependencies(check examples)
+if(TARGET check)
+    add_dependencies(check examples)
+endif()
 
 ################# INSTALL ######################################################
 

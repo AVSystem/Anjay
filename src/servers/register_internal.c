@@ -120,6 +120,9 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
                 });
             }
         } else {
+            // Ignore errors, failure to flush notifications is not fatal.
+            _anjay_observe_sched_flush_current_connection(anjay);
+
             // Updates are retryable, we only need to reschedule after success
             result = _anjay_server_reschedule_update_job(anjay, server);
         }
@@ -186,10 +189,6 @@ send_update(anjay_t *anjay,
     }
 
     int result = _anjay_update_registration(anjay);
-    if (result == 0) {
-        _anjay_observe_sched_flush_current_connection(anjay);
-    }
-
     avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream(anjay);
 

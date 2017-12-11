@@ -49,17 +49,17 @@ class BasicClientBlockRequest:
                     self.assertMsgEqual(Lwm2mCreated.matching(req)(),
                                         self.serv.recv())
 
-            def recv(self):
+            def recv(self, **kwargs):
                 """
                 Receives a single packet. May be overridden in subclasses to perform
                 additional actions before/after actual recv.
                 """
-                return self.serv.recv()
+                return self.serv.recv(**kwargs)
 
             def block_recv_next(self,
                                 expected_seq_num,
                                 validate=True):
-                req = self.recv()
+                req = self.serv.recv()
 
                 if validate:
                     has_more = (expected_seq_num < self.expected_num_blocks - 1)
@@ -297,44 +297,40 @@ ICMP_ERROR_RESPONSE_SLEEP_SECONDS = 4
 
 class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
     def runTest(self):
-        listen_port = self.serv.get_listen_port()
+        with self.serv.fake_close():
+            self.communicate('send-update')
+            time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
-        self.closeSocket()
-        self.communicate('send-update')
         # client should abort and retry update in a while
-
-        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
-        self.reopenSocket(listen_port)
+        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 2))
         self.block_recv()
 
 
 class IcmpErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
     def runTest(self):
-        listen_port = self.serv.get_listen_port()
-
         self.communicate('send-update')
         self.block_recv(seq_num_begin=0,
                         seq_num_end=(self.expected_num_blocks // 2))
-        self.closeSocket()
-        # client should abort and retry update in a while
 
-        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
-        self.reopenSocket(listen_port)
+        with self.serv.fake_close():
+            time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
+
+        # client should abort and retry update in a while
+        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 2))
         self.block_recv()
 
 
 class IcmpErrorResponseToLastRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
     def runTest(self):
-        listen_port = self.serv.get_listen_port()
-
         self.communicate('send-update')
         self.block_recv(seq_num_begin=0,
                         seq_num_end=(self.expected_num_blocks - 1))
-        self.closeSocket()
-        # client should abort and retry update in a while
 
-        time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
-        self.reopenSocket(listen_port)
+        with self.serv.fake_close():
+            time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
+
+        # client should abort and retry update in a while
+        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 2))
         self.block_recv()
 
 

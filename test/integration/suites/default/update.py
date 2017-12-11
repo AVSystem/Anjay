@@ -63,9 +63,19 @@ class UpdateTest(test_suite.Lwm2mSingleServerTest):
                      'This test involves parsing PCAP file')
 class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
     def _read_pcap(self):
+        def decode_packet(data):
+            # dumpcap captures contain Ethernet frames on Linux and
+            # loopback ones on BSD
+            for frame_type in [dpkt.ethernet.Ethernet, dpkt.loopback.Loopback]:
+                pkt = frame_type(data)
+                if isinstance(pkt.data, dpkt.ip.IP):
+                    return pkt
+
+            raise ValueError('Could not decode frame: %s' % pkt.hex())
+
         with open(self.dumpcap_file_path, 'rb') as f:
             r = dpkt.pcapng.Reader(f)
-            return [dpkt.ethernet.Ethernet(pkt[1]).data for pkt in r.readpkts()]
+            return [decode_packet(pkt[1]).data for pkt in r.readpkts()]
 
     def _find_icmp_unreach(self):
         result = []
@@ -75,23 +85,17 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
         return result
 
     def runTest(self):
-        # close the server socket, so that demo receives Port Unreachable in response
-        # to the next packet
-        listen_port = self.serv.get_listen_port()
-        self.serv.socket.close()
+        # respond with Port Unreachable to the next packet
+        with self.serv.fake_close():
+            self.communicate('send-update')
 
-        self.communicate('send-update')
-
-        for _ in range(100):
-            unreach = self._find_icmp_unreach()
-            if len(unreach) > 0:
-                break
-            time.sleep(0.1)
-        else:
-            self.fail('demo did not attempt to reconnect or ICMP Packet Unreachable not generated')
-
-        # start the server again
-        self.serv = Lwm2mServer(coap.Server(listen_port))
+            for _ in range(100):
+                unreach = self._find_icmp_unreach()
+                if len(unreach) > 0:
+                    break
+                time.sleep(0.1)
+            else:
+                self.fail('demo did not attempt to reconnect or ICMP Packet Unreachable not generated')
 
         # the Update failed, wait for retransmission to check if the stream was
         # properly released, i.e. sending another message does not trigger
@@ -99,7 +103,7 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
 
         # demo should still work at this point
 
-        # receive the update packet and send valid reply
+        # receive the re-Register packet and send valid reply
         # otherwise demo will not finish until timeout
 
         # Note: explicit timeout is added on purpose to avoid following scenario,
@@ -108,14 +112,15 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
         # 1. Demo retrieves 'send-update' command.
         # 2. Test waits for 1s to miss that update request.
         # 3. Demo notices that it failed to deliver an update, therefore
-        #    update is being rescheduled after 2s.
-        # 4. Time passes, demo sends update again, but Lwm2mServer hasn't started
+        #    re-Register is being rescheduled after 2s.
+        # 4. Time passes, demo sends Register, but Lwm2mServer hasn't started
         #    just yet.
-        # 5. Demo reschedules update again after about 4s of delay.
+        # 5. Demo reschedules Register again after about 4s of delay.
         # 6. Lwm2mServer has finally started.
-        # 7. Test waited for 1 second for the update (default assertDemoUpdatesRegistration
+        # 7. Test waited for 1 second for the Register (default assertDemoRegisters
         #    timeout), which is too little (see 5.), and failed.
-        self.assertDemoUpdatesRegistration(timeout_s=5)
+        self.serv.reset()
+        self.assertDemoRegisters(timeout_s=5)
 
     def tearDown(self):
         super().tearDown()
@@ -205,15 +210,14 @@ class UpdateFallbacksToRegisterAfterLifetimeExpiresTest(test_suite.Lwm2mSingleSe
         self.assertDemoRegisters(lifetime=self.LIFETIME)
 
     def runTest(self):
-        port = self.serv.get_listen_port()
-
         self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1)
 
         # make subsequent Updates fail to force re-Register
-        self.serv.close()
-        time.sleep(self.LIFETIME + 1)
+        with self.serv.fake_close():
+            time.sleep(self.LIFETIME + 1)
 
-        self.serv = Lwm2mServer(coap.Server(port))
+        # re-Register causes the client to change port
+        self.serv.reset()
         self.assertDemoRegisters(lifetime=self.LIFETIME, timeout_s=5)
 
 
@@ -255,17 +259,15 @@ class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTe
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
 
-        listen_port = self.serv.get_listen_port()
-
         # should try to resume DTLS session
-        self.closeSocket()
-        self.communicate('reconnect')
+        with self.serv.fake_close():
+            self.communicate('reconnect')
 
-        # give the process some time to fail
-        time.sleep(1)
-        self.reopenSocket(listen_port)
+            # give the process some time to fail
+            time.sleep(1)
 
         # make sure that client retries
+        self.assertDtlsReconnect(timeout_s=5)
         self.assertDemoUpdatesRegistration(timeout_s=5)
 
 

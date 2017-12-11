@@ -883,23 +883,27 @@ static int sched_flush_send_queue(anjay_t *anjay,
     }
     if (_anjay_sched_now(anjay->sched, &conn->flush_task, flush_send_queue_job,
                          conn)) {
-        anjay_log(ERROR, "Could not schedule notification flush");
+        anjay_log(WARNING, "Could not schedule notification flush");
         return -1;
     }
     return 0;
 }
 
 int _anjay_observe_sched_flush_current_connection(anjay_t *anjay) {
-    anjay_log(TRACE, "scheduling notifications flush for server SSID %u, "
-              "connection type %d", _anjay_dm_current_ssid(anjay),
-              anjay->current_connection.conn_type);
     const anjay_connection_key_t query_key = {
         .ssid = _anjay_dm_current_ssid(anjay),
         .type = anjay->current_connection.conn_type
     };
+    return _anjay_observe_sched_flush(anjay, query_key);
+}
+
+int _anjay_observe_sched_flush(anjay_t *anjay,
+                               anjay_connection_key_t key) {
+    anjay_log(TRACE, "scheduling notifications flush for server SSID %u, "
+              "connection type %d", key.ssid, key.type);
     anjay_observe_connection_entry_t *conn =
             AVS_RBTREE_FIND(anjay->observe.connection_entries,
-                            connection_query(&query_key));
+                            connection_query(&key));
     return sched_flush_send_queue(anjay, conn);
 }
 

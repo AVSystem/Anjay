@@ -107,6 +107,63 @@ static void write_res_attrs(anjay_t *anjay,
             anjay, obj, iid, rid, ssid, attrs, NULL));
 }
 
+static const char PERSIST_TEST_DATA[] =
+        MAGIC_HEADER_V2
+        "\x00\x00\x00\x03" // 3 objects
+            "\x00\x04" // OID 4
+                "\x00\x00\x00\x02" // 2 object-level default attrs
+                    "\x00\x0E" // SSID 14
+                        "\xFF\xFF\xFF\xFF" // min period
+                        "\x00\x00\x00\x03" // max period
+                        "\xFF" // confirmable
+                    "\x00\x21" // SSID 33
+                        "\x00\x00\x00\x2A" // min period
+                        "\xFF\xFF\xFF\xFF" // max period
+                        "\x00" // confirmable
+                "\x00\x00\x00\x00" // 0 instance entries
+            "\x00\x2A" // OID 42
+                "\x00\x00\x00\x00" // 0 object-level default attrs
+                "\x00\x00\x00\x01" // 1 instance entry
+                    "\x00\x01" // IID 1
+                        "\x00\x00\x00\x01" // 1 instance-level default attr
+                            "\x00\x02" // SSID 2
+                                "\x00\x00\x00\x07" // min period
+                                "\x00\x00\x00\x0D" // max period
+                                "\xFF" // confirmable
+                        "\x00\x00\x00\x01" // 1 resource entry
+                            "\x00\x03" // RID 3
+                                "\x00\x00\x00\x02" // 2 attr entries
+                                    "\x00\x02" // SSID 2
+                                        "\xFF\xFF\xFF\xFF" // min period
+                                        "\xFF\xFF\xFF\xFF" // max period
+                    /* greater than */  "\x3F\xF0\x00\x00\x00\x00\x00\x00"
+                    /* less than */     "\xBF\xF0\x00\x00\x00\x00\x00\x00"
+                    /* step */          "\x7F\xF8\x00\x00\x00\x00\x00\x00"
+                                        "\x01" // confirmable
+                                    "\x00\x07" // SSID 7
+                                        "\x00\x00\x00\x01" // min period
+                                        "\x00\x00\x00\x0E" // max period
+                    /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* step */          "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                                        "\xFF" // confirmable
+            "\x02\x05" // OID 517
+                "\x00\x00\x00\x00" // 0 object-level default attrs
+                "\x00\x00\x00\x01" // 1 instance entry
+                    "\x02\x04" // IID 516
+                        "\x00\x00\x00\x00" // 0 instance-level default attrs
+                        "\x00\x00\x00\x01" // 1 resource entry
+                            "\x02\x03" // RID 515
+                                "\x00\x00\x00\x01" // 1 attr entry
+                                    "\x02\x02" // SSID 514
+                                        "\x00\x00\x00\x21" // min period
+                                        "\xFF\xFF\xFF\xFF" // max period
+                    /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
+                    /* step */          "\x40\x45\x00\x00\x00\x00\x00\x00"
+                                        "\xFF"; // confirmable
+
+#ifdef WITH_CUSTOM_ATTRIBUTES
 static void persist_test_fill(anjay_t *anjay) {
     write_obj_attrs(anjay, 4, 33,
                     &(const anjay_dm_internal_attrs_t) {
@@ -181,62 +238,6 @@ static void persist_test_fill(anjay_t *anjay) {
                     });
 }
 
-static const char PERSIST_TEST_DATA[] =
-        MAGIC_HEADER_V2
-        "\x00\x00\x00\x03" // 3 objects
-            "\x00\x04" // OID 4
-                "\x00\x00\x00\x02" // 2 object-level default attrs
-                    "\x00\x0E" // SSID 14
-                        "\xFF\xFF\xFF\xFF" // min period
-                        "\x00\x00\x00\x03" // max period
-                        "\xFF" // confirmable
-                    "\x00\x21" // SSID 33
-                        "\x00\x00\x00\x2A" // min period
-                        "\xFF\xFF\xFF\xFF" // max period
-                        "\x00" // confirmable
-                "\x00\x00\x00\x00" // 0 instance entries
-            "\x00\x2A" // OID 42
-                "\x00\x00\x00\x00" // 0 object-level default attrs
-                "\x00\x00\x00\x01" // 1 instance entry
-                    "\x00\x01" // IID 1
-                        "\x00\x00\x00\x01" // 1 instance-level default attr
-                            "\x00\x02" // SSID 2
-                                "\x00\x00\x00\x07" // min period
-                                "\x00\x00\x00\x0D" // max period
-                                "\xFF" // confirmable
-                        "\x00\x00\x00\x01" // 1 resource entry
-                            "\x00\x03" // RID 3
-                                "\x00\x00\x00\x02" // 2 attr entries
-                                    "\x00\x02" // SSID 2
-                                        "\xFF\xFF\xFF\xFF" // min period
-                                        "\xFF\xFF\xFF\xFF" // max period
-                    /* greater than */  "\x3F\xF0\x00\x00\x00\x00\x00\x00"
-                    /* less than */     "\xBF\xF0\x00\x00\x00\x00\x00\x00"
-                    /* step */          "\x7F\xF8\x00\x00\x00\x00\x00\x00"
-                                        "\x01" // confirmable
-                                    "\x00\x07" // SSID 7
-                                        "\x00\x00\x00\x01" // min period
-                                        "\x00\x00\x00\x0E" // max period
-                    /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                    /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                    /* step */          "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                                        "\xFF" // confirmable
-            "\x02\x05" // OID 517
-                "\x00\x00\x00\x00" // 0 object-level default attrs
-                "\x00\x00\x00\x01" // 1 instance entry
-                    "\x02\x04" // IID 516
-                        "\x00\x00\x00\x00" // 0 instance-level default attrs
-                        "\x00\x00\x00\x01" // 1 resource entry
-                            "\x02\x03" // RID 515
-                                "\x00\x00\x00\x01" // 1 attr entry
-                                    "\x02\x02" // SSID 514
-                                        "\x00\x00\x00\x21" // min period
-                                        "\xFF\xFF\xFF\xFF" // max period
-                    /* greater than */  "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                    /* less than */     "\x7f\xf8\x00\x00\x00\x00\x00\x00"
-                    /* step */          "\x40\x45\x00\x00\x00\x00\x00\x00"
-                                        "\xFF"; // confirmable
-
 AVS_UNIT_TEST(attr_storage_persistence, persist_full) {
     PERSIST_TEST_INIT(512);
     INSTALL_FAKE_OBJECT(4, 3);
@@ -258,6 +259,7 @@ AVS_UNIT_TEST(attr_storage_persistence, persist_not_enough_space) {
             anjay, (avs_stream_abstract_t *) &outbuf));
     PERSISTENCE_TEST_FINISH;
 }
+#endif // WITH_CUSTOM_ATTRIBUTES
 
 #define RESTORE_TEST_INIT(Data) \
         avs_stream_inbuf_t inbuf = AVS_STREAM_INBUF_STATIC_INITIALIZER; \

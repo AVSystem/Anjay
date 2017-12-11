@@ -97,7 +97,9 @@ static AVS_LIST(anjay_mock_dm_expected_command_t) EXPECTED_COMMANDS;
 void _anjay_mock_dm_assert_common_attributes_equal(
         const anjay_dm_internal_attrs_t *a,
         const anjay_dm_internal_attrs_t *b) {
+#ifdef WITH_CUSTOM_ATTRIBUTES
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, custom.data.con);
+#endif // WITH_CUSTOM_ATTRIBUTES
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.min_period);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.max_period);
 }

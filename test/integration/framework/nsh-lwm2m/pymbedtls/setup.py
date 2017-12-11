@@ -41,7 +41,7 @@ extensions = [
               sources=[os.path.join(SCRIPT_DIR, 'src/pymbedtls.cpp')],
               libraries=['mbedtls', 'mbedcrypto'],
               include_dirs=[os.path.join(SCRIPT_DIR, 'src/pybind11/include/')],
-              extra_compile_args=['-std=c++11'])
+              extra_compile_args=['-std=c++11', '-isystem', '/usr/local/include'])
 ]
 
 setup(

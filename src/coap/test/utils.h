@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <alloca.h>
-
 #include <avsystem/commons/unit/test.h>
 #include <anjay/download.h>
 

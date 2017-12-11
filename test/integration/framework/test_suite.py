@@ -642,14 +642,5 @@ class Lwm2mDtlsSingleServerTest(Lwm2mTest, SingleServerAccessor):
                                      lifetime=lifetime,
                                      fw_updated_marker_path=fw_updated_marker_path)
 
-    def closeSocket(self):
-        self.serv.reset()
-        self.serv.server_socket.py_socket.close()
-
-    def reopenSocket(self, listen_port):
-        self.serv.server_socket.py_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.serv.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.serv.server_socket.bind(('', listen_port))
-
     def tearDown(self, *args, **kwargs):
         self.teardown_demo_with_servers(*args, **kwargs)

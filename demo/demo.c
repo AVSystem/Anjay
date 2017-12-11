@@ -23,6 +23,7 @@
 
 #include <poll.h>
 #include <unistd.h>
+#include <netinet/in.h>
 
 #include <anjay/access_control.h>
 #include <anjay/attr_storage.h>
@@ -276,7 +277,7 @@ static int demo_init(anjay_demo_t *demo,
         .in_buffer_size = (size_t) cmdline_args->inbuf_size,
         .out_buffer_size = (size_t) cmdline_args->outbuf_size,
         .msg_cache_size = (size_t) cmdline_args->msg_cache_size,
-#ifdef __APPLE__
+#ifndef IP_MTU
         .udp_socket_config = {
             .forced_mtu = 1492
         },

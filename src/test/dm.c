@@ -1385,10 +1385,12 @@ AVS_UNIT_TEST(dm_discover, resource_multiple_servers) {
                     .step = ANJAY_ATTRIB_VALUE_NONE
                 }
             });
+#ifdef WITH_CUSTOM_ATTRIBUTES
     _anjay_mock_dm_expect_instance_read_default_attrs(
             anjay, &OBJ, 69, 34, 0, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
     _anjay_mock_dm_expect_object_read_default_attrs(
             anjay, &OBJ, 34, 0, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
+#endif // WITH_CUSTOM_ATTRIBUTES
     DM_TEST_EXPECT_RESPONSE(mocksocks[0],
             "\x60\x45\xfa\x3e" // CoAP header
             "\xc1\x28" // Content-Format: application/link-format

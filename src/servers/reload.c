@@ -69,6 +69,16 @@ static int reload_active_server(anjay_t *anjay,
                                          AVS_TIME_DURATION_ZERO);
             }
         }
+
+        // Flush notifications pending since connectivity loss or entering
+        // offline mode.
+        // Ignore errors, failure to flush notifications is not fatal.
+        anjay_connection_key_t key = {
+            .ssid = server->ssid,
+            .type = server->registration_info.conn_type
+        };
+        _anjay_observe_sched_flush(anjay, key);
+
         if (!server->sched_update_handle) {
             return _anjay_server_reschedule_update_job(anjay, server);
         }

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright 2017 AVSystem <avsystem@avsystem.com>
 #
@@ -117,7 +117,7 @@ fi
 
 rm -f CMakeCache.txt
 rm -rf CMakeFiles
-cmake -D WITH_AVS_UNIT=ON \
+cmake -D WITH_TEST=ON \
       -D WITH_DEMO=ON \
       -D WITH_EXTRA_WARNINGS=ON \
       -D WITH_CON_ATTR=ON \

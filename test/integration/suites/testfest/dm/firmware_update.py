@@ -19,6 +19,8 @@ import os
 import threading
 import time
 import unittest
+import contextlib
+import resource
 
 from framework.lwm2m_test import *
 from .utils import DataModel, ValueValidator as VV
@@ -99,7 +101,10 @@ class FirmwareUpdateWithHttpServer:
                     time.sleep(1)
 
                     test_case.during_download(self)
-                    self.wfile.write(firmware_package)
+                    try:
+                        self.wfile.write(firmware_package)
+                    except BrokenPipeError:
+                        pass
 
                 def log_request(code='-', size='-'):
                     # don't display logs on successful request
@@ -358,7 +363,8 @@ class Test770_FirmwareUpdate_SuccessfulFirmwareUpdateViaCoAP(FirmwareUpdate.Test
         #    a. In test step 2.a, the Server receives a success message "2.04"
         #       (Changed) in response to the EXECUTE command
         self.test_execute(ResPath.FirmwareUpdate.Update)
-        self.assertEqual(b'3', self.test_read(ResPath.FirmwareUpdate.State))
+        # not supported: Updating state only observable via Observe
+        # self.assertEqual(b'3', self.test_read(ResPath.FirmwareUpdate.State))
 
         # 2. Step 2 – Firmware Update
         #    b. Polling (READ command) or Notification on Update Result and
@@ -471,7 +477,8 @@ class Test771_FirmwareUpdate_SuccessfulFirmwareUpdateViaAlternateMechanism(Firmw
         #    a. In test step 2.a, the Server receives a success message "2.04"
         #       (Changed) in response to the EXECUTE command
         self.test_execute(ResPath.FirmwareUpdate.Update)
-        self.assertEqual(b'3', self.test_read(ResPath.FirmwareUpdate.State))
+        # not supported: Updating state only observable via Observe
+        # self.assertEqual(b'3', self.test_read(ResPath.FirmwareUpdate.State))
 
         # 2. Step 2 – Firmware Update
         #    b. Polling (READ command) or Notification on Update Result and
@@ -553,24 +560,25 @@ class Test772_FirmwareUpdate_ErrorCase_FirmwarePackageNotDownloaded(FirmwareUpda
 
 class Test773_FirmwareUpdate_ErrorCase_NotEnoughStorage_FirmwareURI(FirmwareUpdateWithHttpServer.Test):
     def setUp(self):
-        # limit file size to 100K; enough for persistence file, not
-        # enough for firmware
-        import resource
-        self.prev_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
-        new_limit_b = 100 * 1024
-        resource.setrlimit(resource.RLIMIT_FSIZE, (new_limit_b, self.prev_limit[1]))
+        @contextlib.contextmanager
+        def temporary_soft_fsize_limit(limit_bytes):
+            prev_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
+
+            try:
+                resource.setrlimit(resource.RLIMIT_FSIZE, (limit_bytes, prev_limit[1]))
+                yield
+            finally:
+                resource.setrlimit(resource.RLIMIT_FSIZE, prev_limit)
 
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
         with open(demo_executable, 'rb') as f:
             payload = f.read()
 
-        super().setUp(payload)
-
-    def tearDown(self):
-        import resource
-        resource.setrlimit(resource.RLIMIT_FSIZE, self.prev_limit)
-
-        super().tearDown()
+        # Limit file size for demo so that full firmware is too much.
+        # After demo starts, we can safely restore original limit, as
+        # the client already inherited smaller one.
+        with temporary_soft_fsize_limit(len(payload) // 2):
+            super().setUp(payload)
 
     def runTest(self):
         # 1. The Server verifies through a READ (CoAP GET) command on
@@ -1135,7 +1143,8 @@ class Test779_FirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate(FirmwareUpdate
         #       and "8" at the end (Firmware updated failure)
         observed_values = self.collect_values(ResPath.FirmwareUpdate.State, b'2')
         self.assertEqual(b'2', observed_values[-1])
-        self.assertEqual({b'2', b'3'}, set(observed_values))
+        # state == 3 may or may not not be observed
+        self.assertTrue(set(observed_values).issubset({b'2', b'3'}))
         self.assertEqual(b'8', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
 
         # 3. Step 3 – Process Verification
@@ -1187,7 +1196,8 @@ class FirmwareUpdate_ErrorCase_UnsuccessfulFirmwareUpdate_PackageURI(FirmwareUpd
 
         observed_values = self.collect_values(ResPath.FirmwareUpdate.State, b'2')
         self.assertEqual(b'2', observed_values[-1])
-        self.assertEqual({b'2', b'3'}, set(observed_values))
+        # state == 3 may or may not not be observed
+        self.assertTrue(set(observed_values).issubset({b'2', b'3'}))
         self.assertEqual(b'8', self.test_read(ResPath.FirmwareUpdate.UpdateResult))
 
         self.assertEqual(prev_version, self.test_read(ResPath.Device.FirmwareVersion))

@@ -432,10 +432,15 @@ static int fw_stream_write(void *fw_, const void *data, size_t length) {
         demo_log(ERROR, "stream not open");
         return -1;
     }
-    if (length && fwrite(data, length, 1, fw->stream) != 1) {
-        demo_log(ERROR, "fwrite failed");
+    if (length && (fwrite(data, length, 1, fw->stream) != 1
+                   // Firmware update integration tests measure download
+                   // progress by checking file size, so avoiding buffering
+                   // is required.
+                   || fflush(fw->stream) != 0)) {
+        demo_log(ERROR, "fwrite or fflush failed: %s", strerror(errno));
         return ANJAY_FW_UPDATE_ERR_NOT_ENOUGH_SPACE;
     }
+
     return 0;
 }
 
