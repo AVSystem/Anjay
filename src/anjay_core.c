@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <errno.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <avsystem/commons/errno.h>
 #include <avsystem/commons/stream/stream_net.h>
 #include <avsystem/commons/stream_v_table.h>
 
@@ -196,10 +196,10 @@ static void split_query_string(char *query,
     }
 }
 
-static int parse_nullable_time(const char *key_str,
-                               const char *period_str,
-                               bool *out_present,
-                               time_t *out_value) {
+static int parse_nullable_period(const char *key_str,
+                                 const char *period_str,
+                                 bool *out_present,
+                                 int32_t *out_value) {
     long long num;
     if (*out_present) {
         anjay_log(WARNING, "Duplicated attribute in query string: %s", key_str);
@@ -212,7 +212,7 @@ static int parse_nullable_time(const char *key_str,
         return -1;
     } else {
         *out_present = true;
-        *out_value = (time_t)num;
+        *out_value = (int32_t)num;
         return 0;
     }
 }
@@ -266,11 +266,11 @@ static int parse_attribute(anjay_request_attributes_t *out_attrs,
                            const char *key,
                            const char *value) {
     if (!strcmp(key, ANJAY_ATTR_PMIN)) {
-        return parse_nullable_time(
+        return parse_nullable_period(
                 key, value, &out_attrs->has_min_period,
                 &out_attrs->values.standard.common.min_period);
     } else if (!strcmp(key, ANJAY_ATTR_PMAX)) {
-        return parse_nullable_time(
+        return parse_nullable_period(
                 key, value, &out_attrs->has_max_period,
                 &out_attrs->values.standard.common.max_period);
     } else if (!strcmp(key, ANJAY_ATTR_GT)) {

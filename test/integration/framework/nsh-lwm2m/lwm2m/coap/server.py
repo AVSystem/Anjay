@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ def _override_timeout(sock, timeout_s=-1):
         sock.settimeout(orig_timeout_s)
 
 
-def _disconnect_socket(old_sock):
+def _disconnect_socket(old_sock, family):
     """
     Attempts to "disconnect" an UDP socket, making it accept packets from
     all remote addresses again. POSIX says that:
@@ -67,7 +67,7 @@ def _disconnect_socket(old_sock):
     5. Set SO_REUSEADDR/SO_REUSEPORT values on the new socket to the same
        ones as previously used by the old socket.
     """
-    new_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
+    new_sock = socket.socket(family, socket.SOCK_DGRAM, 0)
 
     orig_reuse_addr = old_sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
     orig_reuse_port = old_sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT)
@@ -90,10 +90,11 @@ def _disconnect_socket(old_sock):
 
 
 class Server(object):
-    def __init__(self, listen_port=0):
+    def __init__(self, listen_port=0, use_ipv6=False):
         self._prev_remote_endpoint = None
         self.socket_timeout = None
         self.socket = None
+        self.family = socket.AF_INET6 if use_ipv6 else socket.AF_INET
 
         self.reset(listen_port)
 
@@ -160,7 +161,7 @@ class Server(object):
             listen_port = self.get_listen_port() if self.socket else 0
 
         self.close()
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket = socket.socket(self.family, socket.SOCK_DGRAM)
         self.socket.bind(('', listen_port))
 
     def send(self, coap_packet: Packet) -> None:
@@ -203,13 +204,13 @@ class Server(object):
 
 
 class DtlsServer(Server):
-    def __init__(self, psk_identity, psk_key, listen_port=0, debug=False):
+    def __init__(self, psk_identity, psk_key, listen_port=0, debug=False, use_ipv6=False):
         self.psk_identity = psk_identity
         self.psk_key = psk_key
         self.server_socket = None
         self.debug = debug
 
-        super().__init__(listen_port)
+        super().__init__(listen_port, use_ipv6)
 
     def connect(self, remote_addr: Tuple[str, int]) -> None:
         from pymbedtls import Socket
@@ -218,7 +219,7 @@ class DtlsServer(Server):
 
         try:
             self.server_socket = None
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket = socket.socket(self.family, socket.SOCK_DGRAM)
             self.socket = Socket(self.socket, self.psk_identity, self.psk_key, self.debug)
             self.socket.connect(remote_addr)
         except:
@@ -242,7 +243,7 @@ class DtlsServer(Server):
 
     def _fake_unclose(self):
         super()._fake_unclose()
-        self.server_socket = _disconnect_socket(self.server_socket)
+        self.server_socket = _disconnect_socket(self.server_socket, self.family)
 
     def close(self):
         super().close()

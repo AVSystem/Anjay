@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,7 +152,11 @@ int anjay_persistence_u32(anjay_persistence_context_t *ctx,
  * @return 0 in case of success, negative value in case of failure
  */
 int anjay_persistence_time(anjay_persistence_context_t *ctx,
-                           time_t *value);
+                           time_t *value)
+#ifdef __GNUC__
+    __attribute__((deprecated))
+#endif
+    ;
 
 /**
  * Performs operation (depending on the @p ctx) on double.

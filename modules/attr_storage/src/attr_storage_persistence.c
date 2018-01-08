@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,8 +38,10 @@ VISIBILITY_SOURCE_BEGIN
 static int handle_dm_attributes(anjay_persistence_context_t *ctx,
                                 anjay_dm_attributes_t *attrs) {
     int retval;
-    (void) ((retval = anjay_persistence_time(ctx, &attrs->min_period))
-            || (retval = anjay_persistence_time(ctx, &attrs->max_period)));
+    (void) ((retval = anjay_persistence_u32(
+                    ctx, (uint32_t *) &attrs->min_period))
+            || (retval = anjay_persistence_u32(
+                    ctx, (uint32_t *) &attrs->max_period)));
     return retval;
 }
 

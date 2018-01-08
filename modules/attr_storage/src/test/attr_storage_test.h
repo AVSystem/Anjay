@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@
 #include "../mod_attr_storage.h"
 
 static fas_resource_attrs_t *test_resource_attrs(anjay_ssid_t ssid,
-                                                 time_t min_period,
-                                                 time_t max_period,
+                                                 int32_t min_period,
+                                                 int32_t max_period,
                                                  double greater_than,
                                                  double less_than,
                                                  double step,
@@ -63,8 +63,8 @@ static fas_resource_entry_t *test_resource_entry(unsigned /*anjay_rid_t*/ rid, .
 }
 
 static fas_default_attrs_t *test_default_attrs(anjay_ssid_t ssid,
-                                               time_t min_period,
-                                               time_t max_period,
+                                               int32_t min_period,
+                                               int32_t max_period,
                                                anjay_dm_con_attr_t con) {
     fas_default_attrs_t *attrs = AVS_LIST_NEW_ELEMENT(fas_default_attrs_t);
     AVS_UNIT_ASSERT_NOT_NULL(attrs);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -226,7 +226,7 @@ newest_value(const anjay_observe_entry_t *entry) {
 
 static int schedule_trigger(anjay_t *anjay,
                             anjay_observe_entry_t *entry,
-                            time_t period) {
+                            int32_t period) {
     if (period < 0) {
         return 0;
     }
@@ -995,7 +995,7 @@ static inline int notify_entry(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                anjay_observe_entry_t *entry) {
     anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
-    time_t period = 0;
+    int32_t period = 0;
     if (!get_effective_attrs(anjay, &attrs, obj, &entry->key)
             && attrs.standard.common.min_period > 0) {
         period = attrs.standard.common.min_period;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define ANJAY_INCLUDE_ANJAY_DM_H
 
 #include <math.h>
+#include <stdint.h>
 
 #include <anjay/io.h>
 
@@ -33,8 +34,8 @@ typedef struct anjay_dm_object_def_struct anjay_dm_object_def_t;
 
 /** Object/Object Instance Attributes */
 typedef struct {
-    time_t min_period; //< Minimum Period as defined by LwM2M spec
-    time_t max_period; //< Maximum Period as defined by LwM2M spec
+    int32_t min_period; //< Minimum Period as defined by LwM2M spec
+    int32_t max_period; //< Maximum Period as defined by LwM2M spec
 } anjay_dm_attributes_t;
 
 /** Resource attributes. */

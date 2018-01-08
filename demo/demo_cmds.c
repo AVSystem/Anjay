@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include <anjay/attr_storage.h>
 #include <anjay/security.h>
@@ -314,10 +315,10 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     const char *gt = strstr(args, "gt=");
     const char *st = strstr(args, "st=");
     if (pmin) {
-        (void) sscanf(pmin, "pmin=%ld", &attrs.common.min_period);
+        (void) sscanf(pmin, "pmin=%" PRId32, &attrs.common.min_period);
     }
     if (pmax) {
-        (void) sscanf(pmax, "pmax=%ld", &attrs.common.max_period);
+        (void) sscanf(pmax, "pmax=%" PRId32, &attrs.common.max_period);
     }
     if (lt) {
         (void) sscanf(lt, "lt=%lf", &attrs.less_than);

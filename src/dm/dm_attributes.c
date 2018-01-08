@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ const anjay_dm_internal_attrs_t ANJAY_DM_INTERNAL_ATTRS_EMPTY =
 const anjay_dm_internal_res_attrs_t ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY =
         _ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
 
-static inline void combine_period(time_t *out, time_t other) {
+static inline void combine_period(int32_t *out, int32_t other) {
     if (*out < 0) {
         *out = other;
     }
@@ -53,18 +53,10 @@ static inline void combine_attrs(anjay_dm_internal_attrs_t *out,
     combine_period(&out->standard.max_period, other->standard.max_period);
 }
 
-#define TIME_MAX (sizeof(time_t) == 8 ? INT64_MAX : INT32_MAX)
-
 static int read_period(anjay_t *anjay,
                        anjay_iid_t server_iid,
                        anjay_rid_t rid,
-                       time_t *out) {
-    /* This enforces time_t to be a signed 32/64bit integer type. */
-    AVS_STATIC_ASSERT((time_t) -1 < 0
-                              && (sizeof(time_t) == 4 || sizeof(time_t) == 8)
-                              && (time_t) 1.5 == (time_t) 1,
-                      time_t_is_sane);
-
+                       int32_t *out) {
     int64_t value;
     const anjay_uri_path_t path =
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid, rid);
@@ -76,10 +68,10 @@ static int read_period(anjay_t *anjay,
         return 0;
     } else if (result < 0) {
         return result;
-    } else if (value < 0 || value > TIME_MAX) {
+    } else if (value < 0 || value > INT32_MAX) {
         return ANJAY_ATTRIB_PERIOD_NONE;
     } else {
-        *out = (time_t) value;
+        *out = (int32_t) value;
         return 0;
     }
 }
@@ -87,7 +79,7 @@ static int read_period(anjay_t *anjay,
 static int read_combined_period(anjay_t *anjay,
                                 anjay_iid_t server_iid,
                                 anjay_rid_t rid,
-                                time_t *out) {
+                                int32_t *out) {
     if (*out < 0) {
         return read_period(anjay, server_iid, rid, out);
     } else {

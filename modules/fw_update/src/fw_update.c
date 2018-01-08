@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,9 @@
 #include <anjay_modules/io_utils.h>
 #include <anjay_modules/sched.h>
 
+#include <avsystem/commons/errno.h>
 #include <avsystem/commons/log.h>
 #include <avsystem/commons/utils.h>
-#include <errno.h>
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -340,22 +340,15 @@ static void download_finished(anjay_t *anjay,
         // something already failed in download_write_block()
         user_state_reset(&fw->user_state);
     } else if (result) {
-        fw_update_result_t update_result;
-        switch (errno) {
-        case ENOMEM:
+        fw_update_result_t update_result = UPDATE_RESULT_CONNECTION_LOST;
+        if (errno == ENOMEM) {
             update_result = UPDATE_RESULT_OUT_OF_MEMORY;
-            break;
-        case EADDRNOTAVAIL:
+        } else if (errno == EADDRNOTAVAIL) {
             update_result = UPDATE_RESULT_INVALID_URI;
-            break;
-        case ECONNREFUSED:
+        } else if (errno == ECONNREFUSED) {
             if (result == ANJAY_ERR_NOT_FOUND || result == 404) {
                 update_result = UPDATE_RESULT_INVALID_URI;
-                break;
             }
-            // fall-through
-        default:
-            update_result = UPDATE_RESULT_CONNECTION_LOST;
         }
         user_state_reset(&fw->user_state);
         if (fw->retry_download_on_expired
@@ -398,18 +391,13 @@ static int schedule_background_anjay_download(anjay_t *anjay,
     anjay_download_handle_t handle = anjay_download(anjay, &cfg);
     if (!handle) {
         fw_update_result_t update_result;
-        switch (errno) {
-        case EADDRNOTAVAIL:
-        case EINVAL:
+        if (errno == EADDRNOTAVAIL || errno == EINVAL) {
             update_result = UPDATE_RESULT_INVALID_URI;
-            break;
-        case ENOMEM:
+        } else if (errno == ENOMEM) {
             update_result = UPDATE_RESULT_OUT_OF_MEMORY;
-            break;
-        case EPROTONOSUPPORT:
+        } else if (errno == EPROTONOSUPPORT) {
             update_result = UPDATE_RESULT_UNSUPPORTED_PROTOCOL;
-            break;
-        default:
+        } else {
             update_result = UPDATE_RESULT_CONNECTION_LOST;
         }
         set_update_result(anjay, fw, update_result);

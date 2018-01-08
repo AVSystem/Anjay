@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2017 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,11 +45,15 @@ if [[ "$ANJAY_VERSION" == "" ]]; then
     ANJAY_VERSION="unknown"
 fi
 
-if ! which afl-gcc; then
+if ! which afl-gcc &>/dev/null; then
     if [[ -d "$HOME/tools/afl/latest" ]]; then
         AFL_FUZZER_DIR="$HOME/tools/afl/latest"
     fi
 fi
+
+# in case both CMake 2 and 3 is available, prefer newer
+CMAKE_COMMAND=cmake
+which cmake3 &>/dev/null && CMAKE_COMMAND=cmake3
 
 # argument parsing
 while [ $# -gt 0 ]; do
@@ -117,20 +121,21 @@ fi
 
 rm -f CMakeCache.txt
 rm -rf CMakeFiles
-cmake -D WITH_TEST=ON \
-      -D WITH_DEMO=ON \
-      -D WITH_EXTRA_WARNINGS=ON \
-      -D WITH_CON_ATTR=ON \
-      -D WITH_HTTP_DOWNLOAD=ON \
-      -D WITH_JSON=ON \
-      -D WITH_VALGRIND=${WITH_VALGRIND} \
-      -D WITH_INTEGRATION_TESTS=ON \
-      -D WITH_DOC_CHECK=ON \
-      -D WITH_STATIC_ANALYSIS=${WITH_STATIC_ANALYSIS} \
-      -D DTLS_BACKEND="${DTLS_BACKEND}" \
-      -D AVS_LOG_WITH_TRACE=ON \
-      -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
-      -D ANJAY_VERSION="${ANJAY_VERSION}" \
-      "${EXTRA_FLAGS[@]}" \
-      "$@" -H"$(dirname "$0")" -B. &&
+${CMAKE_COMMAND} \
+    -D WITH_TEST=ON \
+    -D WITH_DEMO=ON \
+    -D WITH_EXTRA_WARNINGS=ON \
+    -D WITH_CON_ATTR=ON \
+    -D WITH_HTTP_DOWNLOAD=ON \
+    -D WITH_JSON=ON \
+    -D WITH_VALGRIND=${WITH_VALGRIND} \
+    -D WITH_INTEGRATION_TESTS=ON \
+    -D WITH_DOC_CHECK=ON \
+    -D WITH_STATIC_ANALYSIS=${WITH_STATIC_ANALYSIS} \
+    -D DTLS_BACKEND="${DTLS_BACKEND}" \
+    -D AVS_LOG_WITH_TRACE=ON \
+    -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
+    -D ANJAY_VERSION="${ANJAY_VERSION}" \
+    "${EXTRA_FLAGS[@]}" \
+    "$@" -H"$(dirname "$0")" -B. &&
 make clean

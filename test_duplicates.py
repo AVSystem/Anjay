@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,6 +59,17 @@ def strip_function_like_macros(s, replace_with):
     return s
 
 
+def strip_gcc_attributes(s):
+    r = re.compile("__attribute__\s*\(")
+    while True:
+        m = r.search(s)
+        if m is None: break
+        closing = find_closing_bracket(s, m.end())
+        if closing is None: break
+        s = s[:m.start()] + s[closing + 1:]
+    return s
+
+
 def strip_curly_blocks(s, replace_with):
     while True:
         index = s.find('{')
@@ -72,7 +83,7 @@ def strip_curly_blocks(s, replace_with):
 def extract_function_name(decl):
     beg = 0
     while beg < len(decl):
-        opening_paren = decl.index('(')
+        opening_paren = decl.index('(', beg)
         closing_paren = find_closing_bracket(decl, opening_paren + 1)
         if closing_paren is None:
             break
@@ -92,6 +103,7 @@ def extract_function_names(filename):
     contents = re.sub('//.*$', '', contents, flags=re.MULTILINE)  # remove line comments
     contents = re.sub('^\s*#.*$', '', contents, flags=re.MULTILINE)  # remove preprocessor directives
     contents = strip_function_like_macros(contents, 'MACRO')
+    contents = strip_gcc_attributes(contents)
     contents = re.sub('extern\s*"C"\s*\{', '', contents)  # remove extern "C" qualifiers
     contents = strip_curly_blocks(contents, ';')
     contents = re.sub('\s+', ' ', contents)  # replace all whitespace (including newlines with single spaces

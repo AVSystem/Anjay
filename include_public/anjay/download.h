@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,6 +90,9 @@ typedef enum anjay_download_result {
  *   large
  * - <c>ENOMEM</c> - out of memory
  * - <c>ETIMEDOUT</c> - could not receive data from server in time
+ *
+ * If any of those variables is not natively available on your system, please
+ * use <c>#include &lt;avsystem/commons/errno.h&gt;</c>.
  *
  * If download is being aborted due to an error returned from
  * @ref anjay_download_next_block_handler_t, <c>errno</c> value from the time of

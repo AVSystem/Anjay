@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,9 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int
-print_time_attr(avs_stream_abstract_t *stream, const char *name, time_t t) {
+static int print_period_attr(avs_stream_abstract_t *stream,
+                             const char *name,
+                             int32_t t) {
     if (t < 0) {
         return 0;
     }
@@ -61,10 +62,10 @@ static int print_double_attr(avs_stream_abstract_t *stream,
 static int print_attrs(avs_stream_abstract_t *stream,
                        const anjay_dm_internal_attrs_t *attrs) {
     int result = 0;
-    (void) ((result = print_time_attr(stream, ANJAY_ATTR_PMIN,
-                                      attrs->standard.min_period))
-            || (result = print_time_attr(stream, ANJAY_ATTR_PMAX,
-                                         attrs->standard.max_period))
+    (void) ((result = print_period_attr(stream, ANJAY_ATTR_PMIN,
+                                        attrs->standard.min_period))
+            || (result = print_period_attr(stream, ANJAY_ATTR_PMAX,
+                                           attrs->standard.max_period))
             || (result = print_con_attr(stream, attrs->custom.data.con)));
     return result;
 }
