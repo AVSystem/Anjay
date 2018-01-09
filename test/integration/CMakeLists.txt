@@ -58,11 +58,6 @@ if(NOT MBEDTLS_LIBRARY)
     message(FATAL_ERROR "mbed TLS is required for integration tests")
 endif()
 
-if(CMAKE_MAJOR_VERSION LESS 3
-        OR (CMAKE_MAJOR_VERSION EQUAL 3 AND CMAKE_MINOR_VERSION LESS 1))
-    message(FATAL_ERROR "CMake >=3.1.0 is required to run integration tests")
-endif()
-
 set(_MISSING_PYTHON_MSG "If you have it installed on your system, but your cmake version is outdated you could try to restart the process that lead to this error message with: -DPython_ADDITIONAL_VERSIONS=3.x")
 
 if(Python_ADDITIONAL_VERSIONS)

@@ -33,7 +33,7 @@ foreach(CODEGEN_INPUT ${CODEGEN_INPUTS})
     list(APPEND CODEGEN_SOURCES "${OUTPUT}")
 endforeach()
 
-add_library(codegen_check OBJECT EXCLUDE_FROM_ALL "${CODEGEN_SOURCES}")
+add_library(codegen_check OBJECT EXCLUDE_FROM_ALL ${CODEGEN_SOURCES})
 set_target_properties(codegen_check PROPERTIES
                       COMPILE_FLAGS "-Wno-missing-declarations -Wno-unused-variable -Wno-unused-parameter")
 
