@@ -10,6 +10,14 @@
    fun:getaddrinfo
 }
 {
+   getaddrinfo-invalidfree
+   Memcheck:Free
+   fun:free
+   fun:__libc_freeres
+   ...
+   fun:exit
+}
+{
    ssl_handshake-value
    Memcheck:Value8
    ...
