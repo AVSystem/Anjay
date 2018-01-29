@@ -46,6 +46,16 @@
 
 VISIBILITY_SOURCE_BEGIN
 
+static anjay_server_unreachable_action_t
+default_server_unreachable_handler(anjay_t *anjay,
+                                   anjay_ssid_t ssid,
+                                   void *user_data) {
+    (void) anjay;
+    (void) ssid;
+    (void) user_data;
+    return ANJAY_SU_ACTION_RETRY;
+}
+
 static int init(anjay_t *anjay,
                 const anjay_configuration_t *config) {
     anjay->dtls_version = config->dtls_version;
@@ -132,6 +142,12 @@ static int init(anjay_t *anjay,
     }
 #endif // WITH_DOWNLOADER
     assert(!id_source);
+
+    anjay->server_unreachable_handler = config->server_unreachable_handler
+            ? config->server_unreachable_handler
+            : default_server_unreachable_handler;
+    anjay->server_unreachable_handler_data =
+            config->server_unreachable_handler_data;
 
     return 0;
 }
@@ -724,17 +740,19 @@ _anjay_get_server_connection(anjay_connection_ref_t ref) {
     }
 }
 
-int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
-    const avs_coap_tx_params_t *tx_params;
-    switch (ref.conn_type) {
+const avs_coap_tx_params_t *
+_anjay_tx_params_for_conn_type(anjay_t *anjay,
+                               anjay_connection_type_t conn_type) {
+    switch (conn_type) {
     case ANJAY_CONNECTION_UDP:
-        tx_params = &anjay->udp_tx_params;
-        break;
+        return &anjay->udp_tx_params;
     default:
         assert(0 && "Should never happen");
-        return -1;
+        return NULL;
     }
+}
 
+int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
     avs_net_abstract_socket_t *socket = _anjay_connection_get_online_socket(
             _anjay_get_server_connection(ref));
     if (!socket) {
@@ -742,8 +760,9 @@ int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
         return -1;
     }
     if (avs_stream_net_setsock(anjay->comm_stream, socket)
-            || _anjay_coap_stream_set_tx_params(anjay->comm_stream,
-                                                tx_params)) {
+            || _anjay_coap_stream_set_tx_params(
+                    anjay->comm_stream,
+                    _anjay_tx_params_for_conn_type(anjay, ref.conn_type))) {
         anjay_log(ERROR, "could not set stream socket");
         return -1;
     }

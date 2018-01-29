@@ -453,7 +453,7 @@ static int bootstrap_discover(anjay_t *anjay,
     return _anjay_bootstrap_discover(anjay);
 }
 #else // WITH_DISCOVER
-#define bootstrap_discover(anjay, details, stream) \
+#define bootstrap_discover(anjay, details) \
         (anjay_log(ERROR, "Not supported: Bootstrap Discover %s", \
                    ANJAY_DEBUG_MAKE_PATH(&details->uri)), \
                    ANJAY_ERR_NOT_IMPLEMENTED)

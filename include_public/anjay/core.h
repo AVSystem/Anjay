@@ -23,6 +23,7 @@
 #include <avsystem/commons/coap/tx_params.h>
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/net.h>
+#include <avsystem/commons/time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,12 +32,65 @@ extern "C" {
 /** LwM2M Enabler Version */
 #define ANJAY_SUPPORTED_ENABLER_VERSION "1.0"
 
+/** Short Server ID type. */
+typedef uint16_t anjay_ssid_t;
+
+/** A constant that may be used in @ref anjay_schedule_registration_update
+ * call instead of Short Server ID to send Update messages to all connected
+ * servers. */
+#define ANJAY_SSID_ANY 0
+
+/** An SSID value reserved by LwM2M to refer to the Bootstrap Server.
+ * NOTE: The value of a "Short Server ID" Resource in the Security Object
+ * Instance referring to the Bootstrap Server is irrelevant and cannot be used
+ * to identify the Bootstrap Server. */
+#define ANJAY_SSID_BOOTSTRAP UINT16_MAX
+
 /** Anjay object containing all information required for LwM2M communication. */
 typedef struct anjay_struct anjay_t;
 
 /** Driver for communication over the SMS transport. Used only by the commercial
  * version of Anjay. */
 typedef struct anjay_smsdrv_struct anjay_smsdrv_t;
+
+/**
+ * Result code that defines how should Anjay proceed if it is unable to
+ * establish a connection with the server.
+ */
+typedef enum {
+    /**
+     * Retry connecting again, applying an exponential backoff. The @ref
+     * anjay_server_unreachable_handler_t will be called again for every
+     * failed reconnection attempt.
+     */
+    ANJAY_SU_ACTION_RETRY,
+
+    /**
+     * Stop reconnections immediately. This does not disable the server (see
+     * @ref anjay_disable_server_with_timeout ), so a reconnection may still
+     * be attempted at some unspecified time in the future.
+     *
+     * To make sure Anjay does not attempt to communicate with the server,
+     * use @ref anjay_disable_server_with_timeout in @ref
+     * anjay_server_unreachable_handler_t .
+     */
+    ANJAY_SU_ACTION_ABORT,
+} anjay_server_unreachable_action_t;
+
+/**
+ * A function called by Anjay whenever connecting to an LwM2M server fails.
+ *
+ * @param anjay     Anjay object to operate on.
+ * @param ssid      SSID of the unreachable server.
+ * @param user_data Opaque pointer to user-defined data.
+ *
+ * @returns An enum value describing how should Anjay proceed with reconnection
+ *          attempts. See @ref anjay_server_unreachable_action_t for details.
+ */
+typedef anjay_server_unreachable_action_t
+anjay_server_unreachable_handler_t(anjay_t *anjay,
+                                   anjay_ssid_t ssid,
+                                   void *user_data);
 
 /**
  * Cleans up all resources and releases an SMS driver object.
@@ -169,6 +223,19 @@ typedef struct anjay_configuration {
      * to false, Concatenated SMS may be used in cases when it is impossible to
      * split the message in another way, e.g. during DTLS handshake. */
     bool prefer_multipart_sms;
+
+    /**
+     * An optional function to call whenever Anjay is unable to successfully
+     * connect to a server (bootstrap or non-bootstrap one). Allows the user
+     * to disable an unreachable server, avoiding unnecessary traffic.
+     */
+    anjay_server_unreachable_handler_t *server_unreachable_handler;
+
+    /**
+     * Opaque pointer passed to @ref
+     * anjay_configuration_t#server_unreachable_handler .
+     */
+    void *server_unreachable_handler_data;
 } anjay_configuration_t;
 
 /**
@@ -242,20 +309,6 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay);
  */
 int anjay_serve(anjay_t *anjay,
                 avs_net_abstract_socket_t *ready_socket);
-
-/** Short Server ID type. */
-typedef uint16_t anjay_ssid_t;
-
-/** A constant that may be used in @ref anjay_schedule_registration_update
- * call instead of Short Server ID to send Update messages to all connected
- * servers. */
-#define ANJAY_SSID_ANY 0
-
-/** An SSID value reserved by LwM2M to refer to the Bootstrap Server.
- * NOTE: The value of a "Short Server ID" Resource in the Security Object
- * Instance referring to the Bootstrap Server is irrelevant and cannot be used
- * to identify the Bootstrap Server. */
-#define ANJAY_SSID_BOOTSTRAP UINT16_MAX
 
 /** Object ID */
 typedef uint16_t anjay_oid_t;
@@ -418,6 +471,39 @@ int anjay_schedule_reconnect(anjay_t *anjay);
  */
 int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid);
 
+/**
+ * This function shall be called when an LwM2M Server Object shall be disabled.
+ * The standard case for this is when Execute is performed on the Disable
+ * resource (/1/x/4). It may also be used to prevent reconnections if the
+ * server becomes unreachable.
+ *
+ * The server will become disabled during next @ref anjay_sched_run call.
+ *
+ * @param anjay   Anjay object to operate on.
+ * @param ssid    Short Server ID of the server to put in a disabled state.
+ * @param timeout Disable timeout. If set to @ref AVS_TIME_DURATION_INVALID,
+ *                the server will remain disabled until explicit call to
+ *                @ref anjay_enable_server . Otherwise, the server will get
+ *                enabled automatically after @p timeout .
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_disable_server_with_timeout(anjay_t *anjay,
+                                      anjay_ssid_t ssid,
+                                      avs_time_duration_t timeout);
+
+/**
+ * Schedules a job for re-enabling a previously disabled (with a call to
+ * @ref anjay_disable_server_with_timeout ) server. The server will be enabled
+ * during next @ref anjay_sched_run call.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid  Short Server ID of the server to enable.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_enable_server(anjay_t *anjay,
+                        anjay_ssid_t ssid);
 
 /**
  * Checks whether anjay is currently in offline state.

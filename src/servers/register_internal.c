@@ -130,12 +130,26 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
     return result;
 }
 
+/**
+ * Returns the duration that we should reserve before expiration of lifetime for
+ * performing the Update operation.
+ */
 static avs_time_duration_t
-get_server_update_interval(const anjay_registration_info_t *info) {
-    return avs_time_duration_div(
-            avs_time_duration_from_scalar(info->last_update_params.lifetime_s,
-                                          AVS_TIME_S),
-            ANJAY_UPDATE_INTERVAL_MARGIN_FACTOR);
+get_server_update_interval_margin(anjay_t *anjay,
+                                  const anjay_registration_info_t *info) {
+    avs_time_duration_t half_lifetime =
+        avs_time_duration_div(
+                avs_time_duration_from_scalar(
+                        info->last_update_params.lifetime_s, AVS_TIME_S),
+                ANJAY_UPDATE_INTERVAL_MARGIN_FACTOR);
+    avs_time_duration_t max_transmit_wait =
+            avs_coap_max_transmit_wait(_anjay_tx_params_for_conn_type(
+                    anjay, info->conn_type));
+    if (avs_time_duration_less(half_lifetime, max_transmit_wait)) {
+        return half_lifetime;
+    } else {
+        return max_transmit_wait;
+    }
 }
 
 static int
@@ -161,9 +175,9 @@ schedule_next_update(anjay_t *anjay,
                      const anjay_active_server_info_t *server) {
     avs_time_duration_t remaining =
             _anjay_register_time_remaining(&server->registration_info);
-    avs_time_duration_t update_interval =
-            get_server_update_interval(&server->registration_info);
-    remaining = avs_time_duration_diff(remaining, update_interval);
+    avs_time_duration_t interval_margin = get_server_update_interval_margin(
+            anjay, &server->registration_info);
+    remaining = avs_time_duration_diff(remaining, interval_margin);
 
     if (remaining.seconds < ANJAY_MIN_UPDATE_INTERVAL_S) {
         remaining = avs_time_duration_from_scalar(ANJAY_MIN_UPDATE_INTERVAL_S,

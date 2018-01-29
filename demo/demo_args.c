@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "demo_args.h"
 
@@ -45,6 +46,8 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .outbuf_size = 4000,
     .msg_cache_size = 0,
     .fw_updated_marker_path = "/tmp/anjay-fw-updated",
+    .server_unreachable_handler = NULL,
+    .server_unreachable_handler_data = NULL,
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -89,6 +92,64 @@ static int parse_security_mode(const char *mode_string,
     demo_log(ERROR, "unrecognized security mode %s (expected one of:%s)",
              mode_string, allowed_modes);
     return -1;
+}
+
+static anjay_server_unreachable_action_t action_disable(anjay_t *anjay,
+                                                        anjay_ssid_t ssid,
+                                                        void *user_data) {
+    // negative disable_timeout_s means "no disable timeout"
+    intptr_t disable_timeout_s = (intptr_t) user_data;
+
+    avs_time_duration_t disable_timeout =
+            disable_timeout_s < 0
+                ? AVS_TIME_DURATION_INVALID
+                : avs_time_duration_from_scalar(disable_timeout_s, AVS_TIME_S);
+
+    if (anjay_disable_server_with_timeout(anjay, ssid, disable_timeout)) {
+        demo_log(WARNING, "unable to disable server %u; retrying connection "
+                 "instead", ssid);
+        return ANJAY_SU_ACTION_RETRY;
+    }
+
+    return ANJAY_SU_ACTION_ABORT;
+}
+
+static int parse_i32(const char *str, int32_t *out_value);
+
+static int
+parse_server_unreachable_action(const char *action_string,
+                                anjay_server_unreachable_handler_t **out_handler,
+                                void **out_handler_data) {
+    assert(action_string);
+#define DISABLE_FOR "disable_for:"
+    if (!strcmp("retry", action_string)) {
+        *out_handler = NULL;
+        *out_handler_data = NULL;
+    } else if (!strcmp("disable", action_string)) {
+        *out_handler = action_disable;
+        *out_handler_data = (void *)(intptr_t) -1;
+    } else if (!strncmp(DISABLE_FOR, action_string,
+                        sizeof(DISABLE_FOR) - 1)) {
+        int32_t disable_timeout = -1;
+        const char *seconds_str = &action_string[sizeof(DISABLE_FOR) - 1];
+
+        if (parse_i32(seconds_str, &disable_timeout)
+                || disable_timeout < 0) {
+            demo_log(ERROR, "invalid disable timeout: %s; expected an "
+                     "non-negative integer (seconds)", seconds_str);
+            return -1;
+        }
+
+        *out_handler = action_disable;
+        *out_handler_data = (void *)(intptr_t) disable_timeout;
+    } else {
+        demo_log(ERROR, "invalid disable action: %s; expected one of: retry "
+                 "disable disable_for:N", action_string);
+        return -1;
+    }
+#undef DISABLE_FOR
+
+    return 0;
 }
 
 
@@ -164,6 +225,11 @@ static void print_option_help(const struct option *opt) {
           "Send notifications as Confirmable messages by default" },
         { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
+        { 'U', "ACTION", "retry",
+          "Action to perform when connection to a server fails. If "
+          "ACTION is disable_for:X, X should be a number of seconds after "
+          "which the server will be re-enabled. "
+          "One of: retry disable disable_for:SECONDS" },
     };
 
     int description_offset = 25;
@@ -202,7 +268,7 @@ static void print_option_help(const struct option *opt) {
 
 static int parse_i32(const char *str, int32_t *out_value) {
     long long_value;
-    if (demo_parse_long(optarg, &long_value)
+    if (demo_parse_long(str, &long_value)
             || long_value < INT32_MIN
             || long_value > INT32_MAX) {
         demo_log(ERROR, "value out of range: %s", str);
@@ -215,7 +281,7 @@ static int parse_i32(const char *str, int32_t *out_value) {
 
 static int parse_u16(const char *str, uint16_t *out_value) {
     long long_value;
-    if (demo_parse_long(optarg, &long_value)
+    if (demo_parse_long(str, &long_value)
             || long_value < 0
             || long_value > UINT16_MAX) {
         demo_log(ERROR, "value out of range: %s", str);
@@ -364,6 +430,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "cache-size",                 required_argument, 0, '$' },
         { "confirmable-notifications",  no_argument,       0, 'N' },
         { "fw-updated-marker-path",     required_argument, 0, 1 },
+        { "server-unreachable-action",  required_argument, 0, 'U' },
         { 0, 0, 0, 0 }
     };
     int num_servers = 0;
@@ -562,6 +629,14 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         case 1:
             parsed_args->fw_updated_marker_path = optarg;
+            break;
+        case 'U':
+            if (parse_server_unreachable_action(
+                        optarg,
+                        &parsed_args->server_unreachable_handler,
+                        &parsed_args->server_unreachable_handler_data)) {
+                goto error;
+            }
             break;
         case 0:
             goto finish;

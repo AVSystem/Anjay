@@ -216,6 +216,16 @@ anjay_active_server_info_t *_anjay_servers_find_active(anjay_servers_t *servers,
                                                        anjay_ssid_t ssid) {
     AVS_LIST(anjay_active_server_info_t) *ptr =
             _anjay_servers_find_active_ptr(servers, ssid);
+    assert((!ptr || *ptr) && "_anjay_servers_find_active_ptr broken");
+    return ptr ? *ptr : NULL;
+}
+
+anjay_inactive_server_info_t *
+_anjay_servers_find_inactive(anjay_servers_t *servers,
+                             anjay_ssid_t ssid) {
+    AVS_LIST(anjay_inactive_server_info_t) *ptr =
+            _anjay_servers_find_inactive_ptr(servers, ssid);
+    assert((!ptr || *ptr) && "_anjay_servers_find_inactive_ptr broken");
     return ptr ? *ptr : NULL;
 }
 
@@ -255,9 +265,9 @@ static int disable_server_job(anjay_t *anjay,
         return 0;
     }
 
-    _anjay_server_deactivate(anjay, &anjay->servers, ssid,
-                             _anjay_disable_timeout_from_server_iid(
-                                     anjay, server_iid));
+    const avs_time_duration_t disable_timeout =
+            _anjay_disable_timeout_from_server_iid(anjay, server_iid);
+    _anjay_server_deactivate(anjay, &anjay->servers, ssid, disable_timeout);
     return 0;
 }
 
@@ -269,4 +279,71 @@ int anjay_disable_server(anjay_t *anjay,
         return -1;
     }
     return 0;
+}
+
+typedef struct {
+    anjay_ssid_t ssid;
+    avs_time_duration_t timeout;
+} disable_server_data_t;
+
+static int disable_server_with_timeout_job(anjay_t *anjay,
+                                           void *data_) {
+    disable_server_data_t *data = (disable_server_data_t *) data_;
+    anjay_inactive_server_info_t *inactive_serv =
+            _anjay_server_deactivate(anjay, &anjay->servers,
+                                     data->ssid, data->timeout);
+    if (!inactive_serv) {
+        anjay_log(ERROR, "unable to deactivate server: %" PRIu16, data->ssid);
+    }
+
+    if (avs_time_duration_valid(data->timeout)) {
+        anjay_log(INFO, "server %" PRIu16 " disabled for %" PRId64
+                  ".%09" PRId32 " seconds", data->ssid,
+                  data->timeout.seconds, data->timeout.nanoseconds);
+    } else {
+        anjay_log(INFO, "server %" PRIu16 " disabled", data->ssid);
+    }
+
+    free(data);
+    return 0;
+}
+
+int anjay_disable_server_with_timeout(anjay_t *anjay,
+                                      anjay_ssid_t ssid,
+                                      avs_time_duration_t timeout) {
+    if (ssid == ANJAY_SSID_ANY) {
+        anjay_log(WARNING, "invalid SSID: %u", ssid);
+        return -1;
+    }
+
+    disable_server_data_t *data = (disable_server_data_t *)
+            malloc(sizeof(*data));
+
+    if (!data) {
+        anjay_log(ERROR, "out of memory");
+        return -1;
+    }
+
+    data->ssid = ssid;
+    data->timeout = timeout;
+
+    if (_anjay_sched_now(anjay->sched, NULL,
+                         disable_server_with_timeout_job, data)) {
+        free(data);
+        anjay_log(ERROR, "could not schedule disable_server_with_timeout_job");
+        return -1;
+    }
+
+    return 0;
+}
+
+int anjay_enable_server(anjay_t *anjay,
+                        anjay_ssid_t ssid) {
+    if (ssid == ANJAY_SSID_ANY) {
+        anjay_log(WARNING, "invalid SSID: %u", ssid);
+        return -1;
+    }
+
+    return _anjay_server_sched_activate(anjay, &anjay->servers, ssid,
+                                        AVS_TIME_DURATION_ZERO);
 }

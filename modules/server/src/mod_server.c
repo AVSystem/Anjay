@@ -373,7 +373,16 @@ static int serv_execute(anjay_t *anjay,
 
     switch ((server_rid_t)rid) {
     case SERV_RES_DISABLE:
-        return anjay_disable_server(anjay, inst->data.ssid);
+        {
+            avs_time_duration_t disable_timeout =
+                    inst->data.disable_timeout < 0
+                        ? AVS_TIME_DURATION_INVALID
+                        : avs_time_duration_from_scalar(
+                                inst->data.disable_timeout, AVS_TIME_S);
+
+            return anjay_disable_server_with_timeout(anjay, inst->data.ssid,
+                                                     disable_timeout);
+        }
     case SERV_RES_REGISTRATION_UPDATE_TRIGGER:
         return anjay_schedule_registration_update(anjay, inst->data.ssid);
 

@@ -59,9 +59,9 @@ void _anjay_servers_add_active(anjay_servers_t *servers,
  * inactive server entry. Fails if there is no active server entry with such
  * @p ssid .
  *
- * Schedules an reactivate job after @p reactivate delay. The job is a
- * retryable one, so the caller does not need to worry about reactivating the
- * server manually.
+ * If @p reactivate_delay is not AVS_TIME_DURATION_INVALID, schedules a
+ * reactivate job after @p reactivate_delay. The job is a retryable one, so
+ * the caller does not need to worry about reactivating the server manually.
  */
 anjay_inactive_server_info_t *
 _anjay_server_deactivate(anjay_t *anjay,

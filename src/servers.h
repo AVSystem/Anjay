@@ -154,6 +154,10 @@ _anjay_servers_find_by_udp_socket(anjay_servers_t *servers,
 anjay_active_server_info_t *_anjay_servers_find_active(anjay_servers_t *servers,
                                                        anjay_ssid_t ssid);
 
+anjay_inactive_server_info_t *
+_anjay_servers_find_inactive(anjay_servers_t *servers,
+                             anjay_ssid_t ssid);
+
 int _anjay_schedule_reload_servers(anjay_t *anjay);
 
 int _anjay_schedule_delayed_reload_servers(anjay_t *anjay);

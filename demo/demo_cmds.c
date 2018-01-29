@@ -357,6 +357,19 @@ error:
     demo_log(ERROR, "bad syntax - see help");
 }
 
+static void cmd_enable_server(anjay_demo_t *demo, const char *args_string) {
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    if (*args_string && parse_ssid(args_string, &ssid)) {
+        return;
+    }
+
+    if (anjay_enable_server(demo->anjay, ssid)) {
+        demo_log(ERROR, "could not enable server with SSID %" PRIu16,
+                 ssid);
+        return;
+    }
+}
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -402,6 +415,8 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("set-attrs", "", cmd_set_attrs,
                 "Syntax [/x [/y [/z] ] ] [pmin,pmax,lt,gt,st] - e.g. "
                 "/x/y pmin=3,pmax=4"),
+    CMD_HANDLER("enable-server", "ssid", cmd_enable_server,
+                "Enables a server with given SSID."),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
 };
 #undef CMD_HANDLER
@@ -456,7 +471,7 @@ static void cmd_help(anjay_demo_t *demo, const char *args_string) {
     puts("Available commands:");
     for (size_t idx = 0; idx < ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
         const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[idx];
-        printf("\n%s%s\n", cmd->cmd_name, cmd->help_args);
+        printf("\n%s %s\n", cmd->cmd_name, cmd->help_args);
         print_with_indent(cmd->help_descr);
     }
     puts("---");

@@ -73,6 +73,9 @@ struct anjay_struct {
 #ifdef WITH_DOWNLOADER
     anjay_downloader_t downloader;
 #endif // WITH_DOWNLOADER
+
+    anjay_server_unreachable_handler_t *server_unreachable_handler;
+    void *server_unreachable_handler_data;
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1
@@ -85,6 +88,10 @@ uint8_t _anjay_make_error_response_code(int handler_result);
 
 anjay_server_connection_t *
 _anjay_get_server_connection(anjay_connection_ref_t ref);
+
+const avs_coap_tx_params_t *
+_anjay_tx_params_for_conn_type(anjay_t *anjay,
+                               anjay_connection_type_t conn_type);
 
 int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref);
 

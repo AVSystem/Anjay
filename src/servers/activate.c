@@ -169,27 +169,42 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
         anjay_log(TRACE, "not an inactive server: SSID = %u", ssid);
         return 0;
     }
-    assert(*inactive_server_ptr && "_anjay_servers_find_inactive_ptr broken");
 
     AVS_LIST(anjay_active_server_info_t) new_server =
             create_active_server_from_ssid(anjay, ssid);
-    if (!new_server) {
+
+    if (new_server) {
+        /**
+         * No need to remove job handle as we return 0 and scheduler will do it
+         * for us (this is retryable job).
+         */
+        if (*inactive_server_ptr) {
+            // might have been removed by start_bootstrap_if_not_already_started()
+            AVS_LIST_DELETE(inactive_server_ptr);
+        }
+        _anjay_servers_add_active(&anjay->servers, new_server);
+        return 0;
+    } else {
         (*inactive_server_ptr)->reactivate_failed = true;
         if (ssid != ANJAY_SSID_BOOTSTRAP && should_retry_bootstrap(anjay)) {
             _anjay_bootstrap_account_prepare(anjay);
         }
+
+        switch (anjay->server_unreachable_handler(
+                    anjay, ssid, anjay->server_unreachable_handler_data)) {
+        case ANJAY_SU_ACTION_RETRY:
+            // Fail the retryable job. This causes a reconnection attempt with
+            // exponential backoff.
+            return -1;
+        case ANJAY_SU_ACTION_ABORT:
+            // Pass the retryable job. This prevents re-scheduling a
+            // reconnection attempt.
+            return 0;
+        }
+
+        assert(0 && "unhandled case in switch()");
         return -1;
     }
-    /**
-     * No need to remove job handle as we return 0 and scheduler will do it
-     * for us (this is retryable job).
-     */
-    if (*inactive_server_ptr) {
-        // might have been removed by start_bootstrap_if_not_already_started()
-        AVS_LIST_DELETE(inactive_server_ptr);
-    }
-    _anjay_servers_add_active(&anjay->servers, new_server);
-    return 0;
 }
 
 static int sched_reactivate_server(anjay_t *anjay,
@@ -218,7 +233,6 @@ int _anjay_server_sched_activate(anjay_t *anjay,
         anjay_log(TRACE, "not an inactive server: SSID = %u", ssid);
         return -1;
     }
-    assert(*inactive_server_ptr && "_anjay_servers_find_inactive_ptr broken");
 
     return sched_reactivate_server(anjay, *inactive_server_ptr, delay);
 }
@@ -241,34 +255,23 @@ void _anjay_servers_add_active(anjay_servers_t *servers,
     AVS_LIST_INSERT(insert_ptr, server);
 }
 
-anjay_inactive_server_info_t *
-_anjay_server_deactivate(anjay_t *anjay,
+static anjay_inactive_server_info_t *
+deactivate_active_server(anjay_t *anjay,
                          anjay_servers_t *servers,
+                         AVS_LIST(anjay_active_server_info_t) *active_server_ptr,
                          anjay_ssid_t ssid,
                          avs_time_duration_t reactivate_delay) {
-    if (ssid == ANJAY_SSID_BOOTSTRAP) {
-        anjay_log(ERROR, "cannot deactivate Bootstrap Server");
-        return NULL;
-    }
-
-    AVS_LIST(anjay_active_server_info_t) *active_server_ptr =
-            _anjay_servers_find_active_ptr(servers, ssid);
-
-    if (!active_server_ptr) {
-        anjay_log(TRACE, "not an active server: SSID = %u", ssid);
-        return NULL;
-    }
-    assert(*active_server_ptr && "_anjay_servers_find_active_ptr broken");
-
     AVS_LIST(anjay_inactive_server_info_t) new_server =
             _anjay_servers_create_inactive(ssid);
     if (!new_server) {
         return NULL;
     }
 
-    if (sched_reactivate_server(anjay, new_server, reactivate_delay)) {
-        AVS_LIST_CLEAR(&new_server);
-        return NULL;
+    if (avs_time_duration_valid(reactivate_delay)) {
+        if (sched_reactivate_server(anjay, new_server, reactivate_delay)) {
+            AVS_LIST_CLEAR(&new_server);
+            return NULL;
+        }
     }
 
     // Return value intentionally ignored.
@@ -279,6 +282,50 @@ _anjay_server_deactivate(anjay_t *anjay,
 
     _anjay_servers_add_inactive(servers, new_server);
     return new_server;
+}
+
+static anjay_inactive_server_info_t *deactivate_inactive_server(
+        anjay_t *anjay,
+        AVS_LIST(anjay_inactive_server_info_t) inactive_server,
+        avs_time_duration_t reactivate_delay) {
+    // deactivating an already-inactive server involves either rescheduling
+    // the reactivate action, or canceling the reactivation task if an user
+    // requested deactivation for an indeterminate amount of time
+    if (!avs_time_duration_valid(reactivate_delay)) {
+        _anjay_sched_del(anjay->sched,
+                         &inactive_server->sched_reactivate_handle);
+    } else if (sched_reactivate_server(anjay, inactive_server,
+                                       reactivate_delay)) {
+        anjay_log(ERROR, "could not reschedule server reactivation");
+        return NULL;
+    }
+
+    return inactive_server;
+}
+
+anjay_inactive_server_info_t *
+_anjay_server_deactivate(anjay_t *anjay,
+                         anjay_servers_t *servers,
+                         anjay_ssid_t ssid,
+                         avs_time_duration_t reactivate_delay) {
+    AVS_LIST(anjay_active_server_info_t) *active_server_ptr =
+            _anjay_servers_find_active_ptr(servers, ssid);
+
+    if (active_server_ptr) {
+        return deactivate_active_server(anjay, servers, active_server_ptr,
+                                        ssid, reactivate_delay);
+    }
+
+    anjay_inactive_server_info_t *inactive_server =
+            _anjay_servers_find_inactive(servers, ssid);
+
+    if (inactive_server) {
+        return deactivate_inactive_server(anjay, inactive_server,
+                                          reactivate_delay);
+    }
+
+    anjay_log(ERROR, "SSID %" PRIu16 " is not a known server", ssid);
+    return NULL;
 }
 
 AVS_LIST(anjay_inactive_server_info_t)
