@@ -173,7 +173,7 @@ static bool should_retry_bootstrap(anjay_t *anjay) {
 }
 
 bool anjay_all_connections_failed(anjay_t *anjay) {
-    if (anjay->servers.active) {
+    if (anjay->servers.active || !anjay->servers.inactive) {
         return false;
     }
     AVS_LIST(anjay_inactive_server_info_t) it;
@@ -218,33 +218,31 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
 
         if (socket_error == ECONNREFUSED) {
             ++*num_icmp_failures;
-        } else if (socket_error == ETIMEDOUT
-                || socket_error == ANJAY_ERR_FORBIDDEN) {
+        } else if (socket_error == ANJAY_ERR_FORBIDDEN
+                        || socket_error == ETIMEDOUT
+                        || socket_error == EPROTO) {
             *num_icmp_failures = anjay->max_icmp_failures;
         }
 
-        if (ssid == ANJAY_SSID_BOOTSTRAP) {
-            if (*num_icmp_failures >= anjay->max_icmp_failures
-                    || socket_error == EPROTO) {
+        if (*num_icmp_failures >= anjay->max_icmp_failures) {
+            if (ssid == ANJAY_SSID_BOOTSTRAP) {
                 anjay_log(DEBUG, "Bootstrap Server could not be reached. "
                                  "Disabling all communication.");
                 // Abort any further bootstrap retries.
                 _anjay_bootstrap_cleanup(anjay);
-                // And return 0, to kill this job.
-                return 0;
-            }
-        } else if (*num_icmp_failures >= anjay->max_icmp_failures
-                       || socket_error == EPROTO) {
-            if (_anjay_dm_ssid_exists(anjay, ANJAY_SSID_BOOTSTRAP)) {
-                if (should_retry_bootstrap(anjay)) {
-                    _anjay_bootstrap_account_prepare(anjay);
-                }
             } else {
-                anjay_log(DEBUG,
-                          "Non-Bootstrap Server %" PRIu16
-                          " could not be reached.",
-                          ssid);
+                if (_anjay_dm_ssid_exists(anjay, ANJAY_SSID_BOOTSTRAP)) {
+                    if (should_retry_bootstrap(anjay)) {
+                        _anjay_bootstrap_account_prepare(anjay);
+                    }
+                } else {
+                    anjay_log(DEBUG,
+                              "Non-Bootstrap Server %" PRIu16
+                              " could not be reached.",
+                              ssid);
+                }
             }
+            // Return 0, to kill this job.
             return 0;
         }
         // We had a failure with either a bootstrap or a non-bootstrap server,
