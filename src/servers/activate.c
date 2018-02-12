@@ -218,7 +218,8 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
 
         if (socket_error == ECONNREFUSED) {
             ++*num_icmp_failures;
-        } else if (socket_error == ANJAY_ERR_FORBIDDEN) {
+        } else if (socket_error == ETIMEDOUT
+                || socket_error == ANJAY_ERR_FORBIDDEN) {
             *num_icmp_failures = anjay->max_icmp_failures;
         }
 
