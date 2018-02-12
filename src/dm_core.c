@@ -1386,7 +1386,7 @@ int _anjay_dm_foreach_instance(anjay_t *anjay,
             && iid != ANJAY_IID_INVALID) {
         result = handler(anjay, obj, iid, data);
         if (result == ANJAY_DM_FOREACH_BREAK) {
-            anjay_log(DEBUG, "foreach_instance: break on /%u/%u", (*obj)->oid,
+            anjay_log(TRACE, "foreach_instance: break on /%u/%u", (*obj)->oid,
                       iid);
             return 0;
         } else if (result) {

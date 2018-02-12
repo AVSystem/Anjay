@@ -89,6 +89,14 @@ _anjay_servers_create_inactive(anjay_ssid_t ssid);
 void _anjay_servers_add_inactive(anjay_servers_t *servers,
                                  AVS_LIST(anjay_inactive_server_info_t) server);
 
+/**
+ * Checks whether it is possible to connect to a non-Bootstrap Server before
+ * initiating Client Initiated Bootstrap.
+ *
+ * @returns true if it is possible, false otherwise.
+ */
+bool _anjay_can_retry_with_normal_server(anjay_t *anjay);
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // ANJAY_SERVERS_ACTIVATE_H

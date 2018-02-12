@@ -283,9 +283,7 @@ static int demo_init(anjay_demo_t *demo,
         },
 #endif
         .confirmable_notifications = cmdline_args->confirmable_notifications,
-        .server_unreachable_handler = cmdline_args->server_unreachable_handler,
-        .server_unreachable_handler_data =
-                cmdline_args->server_unreachable_handler_data,
+        .max_icmp_failures = &cmdline_args->max_icmp_failures,
     };
 
     demo->connection_args = &cmdline_args->connection_args;

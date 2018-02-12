@@ -40,8 +40,7 @@ typedef struct cmdline_args {
     int32_t msg_cache_size;
     bool confirmable_notifications;
     const char *fw_updated_marker_path;
-    anjay_server_unreachable_handler_t *server_unreachable_handler;
-    void *server_unreachable_handler_data;
+    uint32_t max_icmp_failures;
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

@@ -35,6 +35,11 @@ _anjay_connection_internal_clean_socket(anjay_server_connection_t *connection);
 bool
 _anjay_connection_internal_is_online(anjay_server_connection_t *connection);
 
+/**
+ * @returns @li 0 on success,
+ *          @li a positive errno value in case of a primary socket (UDP) error,
+ *          @li a negative value in case of other error.
+ */
 int _anjay_server_refresh(anjay_t *anjay,
                           anjay_active_server_info_t *server,
                           bool force_reconnect);

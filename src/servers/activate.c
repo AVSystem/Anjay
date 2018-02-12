@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <inttypes.h>
+#include <avsystem/commons/errno.h>
 
 #include "../dm/query.h"
 
@@ -96,24 +97,24 @@ initialize_active_server(anjay_t *anjay,
     if (get_server_uri(anjay, security_iid, &server->uri)) {
         return -1;
     }
-    if (_anjay_server_refresh(anjay, server, false)) {
+
+    int result = _anjay_server_refresh(anjay, server, false);
+    if (result) {
         anjay_log(TRACE, "could not initialize sockets for SSID %u",
                   server->ssid);
-        return -1;
+        return result;
     }
 
     if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
-        if (_anjay_server_register(anjay, server)) {
+        if ((result = _anjay_server_register(anjay, server))) {
             anjay_log(ERROR, "could not register to server SSID %u",
                       server->ssid);
-            return -1;
+            return result;
         }
-    } else {
-        if (_anjay_bootstrap_account_prepare(anjay)) {
-            anjay_log(ERROR, "could not prepare bootstrap account for SSID %u",
-                      server->ssid);
-            return -1;
-        }
+    } else if ((result = _anjay_bootstrap_account_prepare(anjay))) {
+        anjay_log(ERROR, "could not prepare bootstrap account for SSID %u",
+                  server->ssid);
+        return result;
     }
 
     return 0;
@@ -121,21 +122,40 @@ initialize_active_server(anjay_t *anjay,
 
 static AVS_LIST(anjay_active_server_info_t)
 create_active_server_from_ssid(anjay_t *anjay,
-                               anjay_ssid_t ssid) {
+                               anjay_ssid_t ssid,
+                               int *out_primary_socket_error) {
     AVS_LIST(anjay_active_server_info_t) server =
             AVS_LIST_NEW_ELEMENT(anjay_active_server_info_t);
+
+    *out_primary_socket_error = 0;
 
     if (!server) {
         anjay_log(ERROR, "out of memory");
         return NULL;
     }
 
-    if (initialize_active_server(anjay, ssid, server)) {
+    if ((*out_primary_socket_error =
+                 initialize_active_server(anjay, ssid, server))) {
         active_server_detach_delete(anjay, &server);
         return NULL;
     }
 
     return server;
+}
+
+bool _anjay_can_retry_with_normal_server(anjay_t *anjay) {
+    AVS_LIST(anjay_inactive_server_info_t) it;
+    AVS_LIST_FOREACH(it, anjay->servers.inactive) {
+        if (it->ssid == ANJAY_SSID_BOOTSTRAP) {
+            continue;
+        }
+        if (!it->reactivate_failed
+                || it->num_icmp_failures < anjay->max_icmp_failures) {
+            // there is hope for a successful non-bootstrap connection
+            return true;
+        }
+    }
+    return false;
 }
 
 static bool should_retry_bootstrap(anjay_t *anjay) {
@@ -149,10 +169,16 @@ static bool should_retry_bootstrap(anjay_t *anjay) {
         // Bootstrap Server not present or is not the only active one
         return false;
     }
+    return !_anjay_can_retry_with_normal_server(anjay);
+}
+
+bool anjay_all_connections_failed(anjay_t *anjay) {
+    if (anjay->servers.active) {
+        return false;
+    }
     AVS_LIST(anjay_inactive_server_info_t) it;
     AVS_LIST_FOREACH(it, anjay->servers.inactive) {
-        if (!it->reactivate_failed) {
-            // there is hope for a successful non-bootstrap connection
+        if (it->num_icmp_failures < anjay->max_icmp_failures) {
             return false;
         }
     }
@@ -170,8 +196,9 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
         return 0;
     }
 
+    int socket_error = 0;
     AVS_LIST(anjay_active_server_info_t) new_server =
-            create_active_server_from_ssid(anjay, ssid);
+            create_active_server_from_ssid(anjay, ssid, &socket_error);
 
     if (new_server) {
         /**
@@ -186,23 +213,41 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
         return 0;
     } else {
         (*inactive_server_ptr)->reactivate_failed = true;
-        if (ssid != ANJAY_SSID_BOOTSTRAP && should_retry_bootstrap(anjay)) {
-            _anjay_bootstrap_account_prepare(anjay);
+        uint32_t *num_icmp_failures =
+                &(*inactive_server_ptr)->num_icmp_failures;
+
+        if (socket_error == ECONNREFUSED) {
+            ++*num_icmp_failures;
+        } else if (socket_error == ANJAY_ERR_FORBIDDEN) {
+            *num_icmp_failures = anjay->max_icmp_failures;
         }
 
-        switch (anjay->server_unreachable_handler(
-                    anjay, ssid, anjay->server_unreachable_handler_data)) {
-        case ANJAY_SU_ACTION_RETRY:
-            // Fail the retryable job. This causes a reconnection attempt with
-            // exponential backoff.
-            return -1;
-        case ANJAY_SU_ACTION_ABORT:
-            // Pass the retryable job. This prevents re-scheduling a
-            // reconnection attempt.
+        if (ssid == ANJAY_SSID_BOOTSTRAP) {
+            if (*num_icmp_failures >= anjay->max_icmp_failures
+                    || socket_error == EPROTO) {
+                anjay_log(DEBUG, "Bootstrap Server could not be reached. "
+                                 "Disabling all communication.");
+                // Abort any further bootstrap retries.
+                _anjay_bootstrap_cleanup(anjay);
+                // And return 0, to kill this job.
+                return 0;
+            }
+        } else if (*num_icmp_failures >= anjay->max_icmp_failures
+                       || socket_error == EPROTO) {
+            if (_anjay_dm_ssid_exists(anjay, ANJAY_SSID_BOOTSTRAP)) {
+                if (should_retry_bootstrap(anjay)) {
+                    _anjay_bootstrap_account_prepare(anjay);
+                }
+            } else {
+                anjay_log(DEBUG,
+                          "Non-Bootstrap Server %" PRIu16
+                          " could not be reached.",
+                          ssid);
+            }
             return 0;
         }
-
-        assert(0 && "unhandled case in switch()");
+        // We had a failure with either a bootstrap or a non-bootstrap server,
+        // retry till it's possible.
         return -1;
     }
 }

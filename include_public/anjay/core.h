@@ -54,45 +54,6 @@ typedef struct anjay_struct anjay_t;
 typedef struct anjay_smsdrv_struct anjay_smsdrv_t;
 
 /**
- * Result code that defines how should Anjay proceed if it is unable to
- * establish a connection with the server.
- */
-typedef enum {
-    /**
-     * Retry connecting again, applying an exponential backoff. The @ref
-     * anjay_server_unreachable_handler_t will be called again for every
-     * failed reconnection attempt.
-     */
-    ANJAY_SU_ACTION_RETRY,
-
-    /**
-     * Stop reconnections immediately. This does not disable the server (see
-     * @ref anjay_disable_server_with_timeout ), so a reconnection may still
-     * be attempted at some unspecified time in the future.
-     *
-     * To make sure Anjay does not attempt to communicate with the server,
-     * use @ref anjay_disable_server_with_timeout in @ref
-     * anjay_server_unreachable_handler_t .
-     */
-    ANJAY_SU_ACTION_ABORT,
-} anjay_server_unreachable_action_t;
-
-/**
- * A function called by Anjay whenever connecting to an LwM2M server fails.
- *
- * @param anjay     Anjay object to operate on.
- * @param ssid      SSID of the unreachable server.
- * @param user_data Opaque pointer to user-defined data.
- *
- * @returns An enum value describing how should Anjay proceed with reconnection
- *          attempts. See @ref anjay_server_unreachable_action_t for details.
- */
-typedef anjay_server_unreachable_action_t
-anjay_server_unreachable_handler_t(anjay_t *anjay,
-                                   anjay_ssid_t ssid,
-                                   void *user_data);
-
-/**
  * Cleans up all resources and releases an SMS driver object.
  *
  * NOTE: If an Anjay object has been using the SMS driver, the SMS driver shall
@@ -225,17 +186,17 @@ typedef struct anjay_configuration {
     bool prefer_multipart_sms;
 
     /**
-     * An optional function to call whenever Anjay is unable to successfully
-     * connect to a server (bootstrap or non-bootstrap one). Allows the user
-     * to disable an unreachable server, avoiding unnecessary traffic.
+     * Configures the number of ICMP Host / Port Unreachable after which the
+     * Server is considered unreachable.
+     *
+     * If NULL, the default value of 7 will be used.
+     *
+     * NOTE: If the LwM2M Client is expected to attempt to reach servers
+     * indefinitely, then one shall use this configuration option along with
+     * @ref anjay_all_connections_failed() to know when is the right time to
+     * call e.g. @ref anjay_schedule_reconnect() method.
      */
-    anjay_server_unreachable_handler_t *server_unreachable_handler;
-
-    /**
-     * Opaque pointer passed to @ref
-     * anjay_configuration_t#server_unreachable_handler .
-     */
-    void *server_unreachable_handler_data;
+    const uint32_t *max_icmp_failures;
 } anjay_configuration_t;
 
 /**
@@ -339,6 +300,7 @@ typedef uint16_t anjay_riid_t;
 /** Low-level CoAP error code; used internally by Anjay when CoAP option values
  * were invalid. */
 #define ANJAY_ERR_BAD_OPTION                 (-ANJAY_COAP_STATUS(4,  2))
+#define ANJAY_ERR_FORBIDDEN                  (-ANJAY_COAP_STATUS(4,  3))
 /** Target of the operation (Object/Instance/Resource) does not exist. */
 #define ANJAY_ERR_NOT_FOUND                  (-ANJAY_COAP_STATUS(4,  4))
 /** Operation is not allowed in current device state or the attempted operation
@@ -479,6 +441,10 @@ int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid);
  *
  * The server will become disabled during next @ref anjay_sched_run call.
  *
+ * NOTE: disabling a server with dual binding (UDP+SMS) closes both
+ * communication channels. Shutting down only one of them requires changing
+ * the Binding Resource in Server object.
+ *
  * @param anjay   Anjay object to operate on.
  * @param ssid    Short Server ID of the server to put in a disabled state.
  * @param timeout Disable timeout. If set to @ref AVS_TIME_DURATION_INVALID,
@@ -547,6 +513,16 @@ int anjay_enter_offline(anjay_t *anjay);
  * @returns 0 on success, a negative value in case of error.
  */
 int anjay_exit_offline(anjay_t *anjay);
+
+/**
+ * Tests if Anjay gave up on any further server connection attempts. It will
+ * happen if none of the configured servers could be reached.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+bool anjay_all_connections_failed(anjay_t *anjay);
 
 #ifdef __cplusplus
 } /* extern "C" */

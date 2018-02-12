@@ -29,6 +29,10 @@
 #include "../dm/discover.h"
 #include "../dm/query.h"
 
+#define ANJAY_SERVERS_INTERNALS
+#include "../servers/activate.h"
+#undef ANJAY_SERVERS_INTERNALS
+
 #ifdef ANJAY_TEST
 #include "test/bootstrap_mock.h"
 #endif // ANJAY_TEST
@@ -764,7 +768,8 @@ static int64_t client_hold_off_time_s(anjay_t *anjay) {
 
 int _anjay_bootstrap_account_prepare(anjay_t *anjay) {
     // schedule Client Initiated Bootstrap if not attempted already
-    if (anjay->bootstrap.client_initiated_bootstrap_handle) {
+    if (anjay->bootstrap.client_initiated_bootstrap_handle
+            || _anjay_can_retry_with_normal_server(anjay)) {
         return 0;
     }
 
@@ -774,6 +779,7 @@ int _anjay_bootstrap_account_prepare(anjay_t *anjay) {
                         "not scheduling Client Initiated Bootstrap");
         return 0;
     }
+    anjay_log(DEBUG, "scheduling Client Initiated Bootstrap");
     return schedule_request_bootstrap(anjay, holdoff_s);
 }
 

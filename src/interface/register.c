@@ -210,7 +210,7 @@ check_register_response(avs_stream_abstract_t *stream,
         anjay_log(ERROR, "server responded with %s (expected %s)",
                   AVS_COAP_CODE_STRING(avs_coap_msg_get_code(response)),
                   AVS_COAP_CODE_STRING(AVS_COAP_CODE_CREATED));
-        return -1;
+        return -avs_coap_msg_get_code(response);
     }
 
     AVS_LIST_CLEAR(out_endpoint_path);
@@ -380,7 +380,7 @@ int _anjay_register(anjay_t *anjay) {
     int result = -1;
 
     if (send_register(anjay, &new_params)
-            || check_register_response(anjay->comm_stream, &endpoint_path)) {
+            || (result = check_register_response(anjay->comm_stream, &endpoint_path))) {
         anjay_log(ERROR, "could not register to server %u",
                   _anjay_dm_current_ssid(anjay));
         goto fail;

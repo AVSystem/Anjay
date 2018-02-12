@@ -238,6 +238,7 @@ static int recreate_socket(anjay_t *anjay,
                            anjay_server_connection_t *connection,
                            server_connection_info_t *inout_info) {
     dtls_keys_t dtls_keys = EMPTY_DTLS_KEYS_INITIALIZER;
+
     // At this point, inout_info has "global" settings filled,
     // but transport-specific (i.e. UDP or SMS) fields are not
     if (def->get_connection_info(
@@ -248,15 +249,18 @@ static int recreate_socket(anjay_t *anjay,
         return -1;
     }
     _anjay_connection_internal_clean_socket(connection);
-    if (def->create_connected_socket(anjay, connection, inout_info, &dtls_keys)
+    int result = def->create_connected_socket(anjay, connection, inout_info,
+                                              &dtls_keys);
+    if (result
         || avs_net_socket_get_local_port(
                    connection->conn_priv_data_.socket,
                    connection->conn_priv_data_.last_local_port,
                    sizeof(connection->conn_priv_data_.last_local_port))) {
-        if (connection->conn_priv_data_.socket) {
-            avs_net_socket_close(connection->conn_priv_data_.socket);
+        avs_net_abstract_socket_t *sock = connection->conn_priv_data_.socket;
+        if (sock) {
+            avs_net_socket_close(sock);
         }
-        return -1;
+        return result ? result : -1;
     }
     return 0;
 }
@@ -273,12 +277,18 @@ ensure_socket_connected(anjay_t *anjay,
                         const connection_type_definition_t *def,
                         anjay_server_connection_t *connection,
                         server_connection_info_t *inout_info,
-                        bool reconnect) {
+                        bool reconnect,
+                        int *out_socket_errno) {
     bool session_resume = false;
     avs_net_abstract_socket_t *existing_socket =
             _anjay_connection_internal_get_socket(connection);
+
+    *out_socket_errno = 0;
+
     if (existing_socket == NULL) {
-        if (recreate_socket(anjay, def, connection, inout_info)) {
+        int result = recreate_socket(anjay, def, connection, inout_info);
+        if (result) {
+            *out_socket_errno = -result;
             return RESULT_ERROR;
         }
     } else {
@@ -287,9 +297,13 @@ ensure_socket_connected(anjay_t *anjay,
         }
         if (_anjay_connection_internal_is_online(connection)) {
             session_resume = true;
-        } else if (_anjay_connection_bring_online(connection,
-                                                  &session_resume)) {
-            return RESULT_ERROR;
+        } else {
+            int result = _anjay_connection_bring_online(connection,
+                                                        &session_resume);
+            if (result) {
+                *out_socket_errno = -result;
+                return RESULT_ERROR;
+            }
         }
     }
     return session_resume ? RESULT_RESUMED : RESULT_NEW_CONNECTION;
@@ -300,7 +314,8 @@ refresh_connection(anjay_t *anjay,
                    const connection_type_definition_t *def,
                    anjay_active_server_info_t *server,
                    server_connection_info_t *inout_info,
-                   bool force_reconnect) {
+                   bool force_reconnect,
+                   int *out_socket_errno) {
     anjay_server_connection_t *out_connection =
             _anjay_get_server_connection((anjay_connection_ref_t) {
                 .server = server,
@@ -308,12 +323,16 @@ refresh_connection(anjay_t *anjay,
             });
     assert(out_connection);
     refresh_connection_result_t result = RESULT_DISABLED;
+
+    *out_socket_errno = 0;
+
     if (def->get_connection_mode(inout_info) == ANJAY_CONNECTION_DISABLED) {
         _anjay_connection_internal_clean_socket(out_connection);
     } else {
         result = ensure_socket_connected(
                 anjay, def, out_connection, inout_info,
-                force_reconnect || out_connection->needs_reconnect);
+                force_reconnect || out_connection->needs_reconnect,
+                out_socket_errno);
     }
     out_connection->needs_reconnect = false;
     out_connection->queue_mode =
@@ -536,12 +555,13 @@ static int create_connected_udp_socket(anjay_t *anjay,
             : (const void *) &config.backend_configuration;
 
     avs_net_abstract_socket_t *socket = NULL;
-    _anjay_create_connected_udp_socket(anjay, &socket, type,
-                                       info->udp.local_port, config_ptr,
-                                       &info->server->uri);
+    int result = _anjay_create_connected_udp_socket(
+            anjay, &socket, type, info->udp.local_port, config_ptr,
+            &info->server->uri);
     if (!socket) {
+        assert(result);
         anjay_log(ERROR, "could not create CoAP socket");
-        return -1;
+        return result;
     }
 
     anjay_log(INFO, "connected to %s:%s",
@@ -597,12 +617,16 @@ int _anjay_server_refresh(anjay_t *anjay,
     }
 
     refresh_connection_result_t udp_result = RESULT_DISABLED;
+    int udp_errno = 0;
     refresh_connection_result_t sms_result = RESULT_DISABLED;
+    int sms_errno = 0;
     udp_result = refresh_connection(anjay, &UDP_CONNECTION, server,
-                                    &server_info, force_reconnect);
+                                    &server_info, force_reconnect,
+                                    &udp_errno);
+    (void) sms_errno;
 
     if (!is_connected(udp_result) && !is_connected(sms_result)) {
-        return -1;
+        return udp_errno ? udp_errno : -1;
     }
 
 
@@ -614,7 +638,8 @@ int _anjay_server_refresh(anjay_t *anjay,
         // forces re-register
         server->registration_info.conn_type = ANJAY_CONNECTION_UNSET;
     }
-    return 0;
+
+    return udp_errno;
 }
 
 int _anjay_server_setup_registration_connection(
@@ -746,9 +771,13 @@ int _anjay_connection_bring_online(anjay_server_connection_t *connection,
               *out_session_resumed ? "resumed connection" : "reconnected",
               remote_host, remote_port);
     return 0;
-close_and_fail:
+
+    // Labels must be followed by a statement, not a declaration.
+    // Fortunately, `;` is a perfectly fine statement in C.
+close_and_fail:;
+    int result = avs_net_socket_errno(connection->conn_priv_data_.socket);
     if (avs_net_socket_close(connection->conn_priv_data_.socket)) {
         anjay_log(ERROR, "Could not close the socket (?!)");
     }
-    return -1;
+    return result;
 }

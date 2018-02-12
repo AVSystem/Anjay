@@ -106,6 +106,7 @@ typedef struct {
     anjay_ssid_t ssid;
     anjay_sched_handle_t sched_reactivate_handle;
     bool reactivate_failed;
+    uint32_t num_icmp_failures;
 } anjay_inactive_server_info_t;
 
 typedef struct {

@@ -294,6 +294,8 @@ static int disable_server_with_timeout_job(anjay_t *anjay,
                                      data->ssid, data->timeout);
     if (!inactive_serv) {
         anjay_log(ERROR, "unable to deactivate server: %" PRIu16, data->ssid);
+        free(data);
+        return -1;
     }
 
     if (avs_time_duration_valid(data->timeout)) {

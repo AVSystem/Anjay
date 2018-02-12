@@ -73,9 +73,7 @@ struct anjay_struct {
 #ifdef WITH_DOWNLOADER
     anjay_downloader_t downloader;
 #endif // WITH_DOWNLOADER
-
-    anjay_server_unreachable_handler_t *server_unreachable_handler;
-    void *server_unreachable_handler_data;
+    uint32_t max_icmp_failures;
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1

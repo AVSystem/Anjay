@@ -46,16 +46,6 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static anjay_server_unreachable_action_t
-default_server_unreachable_handler(anjay_t *anjay,
-                                   anjay_ssid_t ssid,
-                                   void *user_data) {
-    (void) anjay;
-    (void) ssid;
-    (void) user_data;
-    return ANJAY_SU_ACTION_RETRY;
-}
-
 static int init(anjay_t *anjay,
                 const anjay_configuration_t *config) {
     anjay->dtls_version = config->dtls_version;
@@ -143,11 +133,8 @@ static int init(anjay_t *anjay,
 #endif // WITH_DOWNLOADER
     assert(!id_source);
 
-    anjay->server_unreachable_handler = config->server_unreachable_handler
-            ? config->server_unreachable_handler
-            : default_server_unreachable_handler;
-    anjay->server_unreachable_handler_data =
-            config->server_unreachable_handler_data;
+    anjay->max_icmp_failures =
+            config->max_icmp_failures ? *config->max_icmp_failures : 7u;
 
     return 0;
 }
