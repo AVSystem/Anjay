@@ -76,7 +76,7 @@ class BlockResponseTest(test_suite.Lwm2mSingleServerTest):
         req = Lwm2mRead("/%d/%d/%d" % (TEST_OBJECT_OID, iid, TEST_OBJECT_RES_BYTES),
                         options=opts, accept=accept)
         self.serv.send(req)
-        res = self.serv.recv(timeout_s=5)
+        res = self.serv.recv()
         self.assertIdentityMatches(res, req)
         return res
 
@@ -258,7 +258,7 @@ class BlockResponseToNonBlockRequestRetransmission(BlockResponseTest):
         self.serv.send(req)
 
         # BLOCK response received
-        res = self.serv.recv(timeout_s=5)
+        res = self.serv.recv()
         self.assertIdentityMatches(res, req)
 
         block_opts = res.get_options(coap.Option.BLOCK2)
@@ -268,7 +268,7 @@ class BlockResponseToNonBlockRequestRetransmission(BlockResponseTest):
         self.serv.send(req)
 
         # should receive the same response as before
-        res2 = self.serv.recv(timeout_s=5)
+        res2 = self.serv.recv()
         self.assertMsgEqual(res, res2)
 
         # should be able to continue the transfer

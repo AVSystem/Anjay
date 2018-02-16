@@ -63,7 +63,7 @@ def unregister_test(oid):
     class UnregisterTest(test_suite.Lwm2mSingleServerTest):
         def setUp(self):
             super().setUp(auto_register=False)
-            pkt = self.serv.recv(timeout_s=2)
+            pkt = self.serv.recv()
             expected = Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400))
             self.assertMsgEqual(expected, pkt)
             self.serv.send(

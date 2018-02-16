@@ -23,10 +23,10 @@ class CriticalOptsTest(test_suite.Lwm2mSingleServerTest):
         pkt = Lwm2mRead('/1/1/0', options=[coap.Option.IF_NONE_MATCH])
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_BAD_OPTION),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # And this shuld work.
         pkt = Lwm2mRead('/1/1/0')
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mContent.matching(pkt)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())

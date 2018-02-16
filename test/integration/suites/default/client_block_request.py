@@ -280,7 +280,7 @@ class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test()):
 #    is closed and a retry should be scheduled.
 # 5. Restart server and receive update.
 #
-# Now, 4 seconds is enough to make demo realize that server really stopped
+# Now, 5 seconds is enough to make demo realize that server really stopped
 # running. Sleeping for shorter amounts of time might cause race condition,
 # and in effect test failure:
 # 1. as above
@@ -292,7 +292,7 @@ class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test()):
 # 4. Server restarts.
 # 5. Retransmitted packet hits the server, and an error occurs because
 #    we do not expect retransmitted block.
-ICMP_ERROR_RESPONSE_SLEEP_SECONDS = 4
+ICMP_ERROR_RESPONSE_SLEEP_SECONDS = 5
 
 
 class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
@@ -302,7 +302,7 @@ class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test(test_suite.Lw
             time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
         # client should abort and retry update in a while
-        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 2))
+        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
         self.block_recv()
 
 
@@ -316,7 +316,7 @@ class IcmpErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test(test_s
             time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
         # client should abort and retry update in a while
-        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 2))
+        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
         self.block_recv()
 
 
@@ -330,7 +330,7 @@ class IcmpErrorResponseToLastRequestBlock(ClientBlockRequest.Test(test_suite.Lwm
             time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
         # client should abort and retry update in a while
-        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 2))
+        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
         self.block_recv()
 
 

@@ -135,6 +135,7 @@ ${CMAKE_COMMAND} \
     -D DTLS_BACKEND="${DTLS_BACKEND}" \
     -D AVS_LOG_WITH_TRACE=ON \
     -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
+    -D CMAKE_CXX_FLAGS="${EXTRA_C_FLAGS}" \
     -D ANJAY_VERSION="${ANJAY_VERSION}" \
     "${EXTRA_FLAGS[@]}" \
     "$@" -H"$(dirname "$0")" -B. &&

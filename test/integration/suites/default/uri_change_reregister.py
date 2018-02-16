@@ -32,7 +32,7 @@ class UriChangeReregisterTest(test_suite.Lwm2mTest):
         regular_serv2_uri = 'coap://127.0.0.1:%d' % self.servers[1].get_listen_port()
 
         # Register to regular_serv1
-        pkt = self.servers[0].recv(timeout_s=1)
+        pkt = self.servers[0].recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
             pkt)

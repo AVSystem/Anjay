@@ -31,7 +31,7 @@ extern "C" {
 /** CoAP Entity Tag. */
 typedef struct anjay_etag {
     uint8_t size;
-    uint8_t value[];
+    uint8_t value[1]; // actually a flexible array member
 } anjay_etag_t;
 
 /**
@@ -68,7 +68,7 @@ typedef enum anjay_download_result {
     /** Downloaded resource changed while transfer was in progress. */
     ANJAY_DOWNLOAD_ERR_EXPIRED,
     /** Download was aborted by calling @ref anjay_download_abort . */
-    ANJAY_DOWNLOAD_ERR_ABORTED,
+    ANJAY_DOWNLOAD_ERR_ABORTED
 } anjay_download_result_t;
 
 /**

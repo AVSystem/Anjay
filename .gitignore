@@ -43,6 +43,7 @@ tags
 .ycm_extra_conf.py
 .ycm_extra_conf.pyc
 /test/codegen/*.c
+/test/codegen/*.cpp
 /test/integration/build
 __pycache__/
 .gdb_history

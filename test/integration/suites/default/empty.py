@@ -81,4 +81,4 @@ class EmptyTest(test_suite.Lwm2mSingleServerTest):
         ping_req = Lwm2mEmpty(type=coap.Type.CONFIRMABLE)
         self.serv.send(ping_req)
         self.assertMsgEqual(Lwm2mReset.matching(ping_req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())

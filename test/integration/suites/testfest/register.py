@@ -26,7 +26,7 @@ class Test101_InitialRegistration(test_suite.Lwm2mSingleServerTest):
 
     def runTest(self):
         # 1. Registration message (CoAP POST) is sent from Client to Server.
-        pkt = self.serv.recv(timeout_s=1)
+        pkt = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
             pkt)

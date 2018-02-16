@@ -34,7 +34,7 @@ class BootstrapClientTest(test_suite.Lwm2mSingleServerTest):
             print(self.bootstrap_server.recv(timeout_s=2))
 
         # we should get Bootstrap Request now
-        pkt = self.bootstrap_server.recv(timeout_s=2)
+        pkt = self.bootstrap_server.recv()
         self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
                             pkt)
         self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
@@ -48,7 +48,7 @@ class BootstrapClientTest(test_suite.Lwm2mSingleServerTest):
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         # Create Security object
         regular_serv_uri = 'coap://127.0.0.1:%d' % self.serv.get_listen_port()
@@ -63,13 +63,13 @@ class BootstrapClientTest(test_suite.Lwm2mSingleServerTest):
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         # send Bootstrap Finish
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         # should now register with the non-bootstrap server
         self.assertDemoRegisters(self.serv, lifetime=60)
@@ -195,7 +195,7 @@ class BootstrapNonwritableResources(test_suite.Lwm2mTest):
 
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=2))
+                            self.bootstrap_server.recv())
 
 
 class MultipleBootstrapSecurityInstancesNotAllowed(test_suite.Lwm2mTest):
@@ -223,7 +223,7 @@ class MultipleBootstrapSecurityInstancesNotAllowed(test_suite.Lwm2mTest):
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_BAD_REQUEST),
-                            self.bootstrap_server.recv(timeout_s=2))
+                            self.bootstrap_server.recv())
 
 
 class BootstrapUri(test_suite.Lwm2mSingleServerTest):
@@ -240,7 +240,7 @@ class BootstrapUri(test_suite.Lwm2mSingleServerTest):
                                      bootstrap_server=True)
 
     def runTest(self):
-        pkt = self.bootstrap_server.recv(timeout_s=2)
+        pkt = self.bootstrap_server.recv()
         self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME,
                                                   uri_path='/some/crazy/path',
                                                   uri_query=['and=more', 'craziness']),
@@ -258,7 +258,7 @@ class InvalidBootstrappedServer(test_suite.Lwm2mSingleServerTest):
                                      bootstrap_server=True)
 
     def runTest(self):
-        req = self.bootstrap_server.recv(timeout_s=2)
+        req = self.bootstrap_server.recv()
         self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
                             req)
         self.bootstrap_server.send(Lwm2mChanged.matching(req)())
@@ -272,7 +272,7 @@ class InvalidBootstrappedServer(test_suite.Lwm2mSingleServerTest):
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         # Create Security object
         regular_serv_uri = 'coap://127.0.0.1:%d' % self.serv.get_listen_port()
@@ -287,13 +287,13 @@ class InvalidBootstrappedServer(test_suite.Lwm2mSingleServerTest):
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         # send Bootstrap Finish
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         # demo should now try to register
         req = self.serv.recv()
@@ -304,7 +304,7 @@ class InvalidBootstrappedServer(test_suite.Lwm2mSingleServerTest):
         self.serv.send(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_FORBIDDEN))
 
         # demo should retry Bootstrap
-        req = self.bootstrap_server.recv(timeout_s=2)
+        req = self.bootstrap_server.recv()
         self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
                             req)
         self.bootstrap_server.send(Lwm2mChanged.matching(req)())

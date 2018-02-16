@@ -14,7 +14,7 @@ fe67012caed88d5e4d4bc56e915abae8  examples/tutorial/custom-object/read-only/src/
 f0ea67cc46614a7869459c53fa0b1d02  examples/tutorial/custom-object/read-only-with-executable/src/main.c
 46d522d9eefe98120a2765c7f2f227a8  examples/tutorial/custom-object/writable-multiple-fixed/src/main.c
 449259e337fd4f12aa699c5813349df0  examples/tutorial/custom-object/writable-multiple-fixed-transactional/src/main.c
-d09990be8a72d5b6f2738754d90c593b  include_public/anjay/dm.h
+0e851d63512e919071e07428e8d2b77c  include_public/anjay/dm.h
 974956fc5253e0793418271577631142  include_public/anjay/io.h
 917826f966db70fbe815a5a4bec89f86  modules/access_control/include_public/anjay/access_control.h
 ef8ef2c02403ef43d4bb47939b29c58b  modules/attr_storage/include_public/anjay/attr_storage.h

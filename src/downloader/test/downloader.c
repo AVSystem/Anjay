@@ -493,12 +493,12 @@ AVS_UNIT_TEST(downloader, coap_download_expired) {
     avs_unit_mocksock_expect_output(env.mocksock, &req2->content, req2->length);
     avs_unit_mocksock_input(env.mocksock, &res2->content, res2->length);
 
-    static const anjay_etag_t etag = { .size = 3, .value = "tag" };
+    static const anjay_coap_etag_t etag = { .size = 3, .value = "tag" };
     // expect handler calls
     expect_next_block(&env.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = 64,
-                          .etag = &etag,
+                          .etag = (const anjay_etag_t *) &etag,
                           .result = 0 // request abort
                       });
     expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_EXPIRED);
@@ -569,11 +569,11 @@ AVS_UNIT_TEST(downloader, retry) {
     // handle response
     avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
 
-    static const anjay_etag_t etag = { .size = 3, .value = "tag" };
+    static const anjay_coap_etag_t etag = { .size = 3, .value = "tag" };
     expect_next_block(&env.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
-                          .etag = &etag,
+                          .etag = (const anjay_etag_t *) &etag,
                           .result = 0 // request abort
                       });
     expect_download_finished(&env.data, 0);

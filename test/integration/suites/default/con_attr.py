@@ -34,7 +34,7 @@ class ConfirmableTest(test_suite.Lwm2mSingleServerTest,
         con_count = 0
         non_count = 0
         for _ in range(10):
-            pkt = self.serv.recv(timeout_s=3)
+            pkt = self.serv.recv()
             self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
             self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
             if pkt.token == counter_pkt.token:
@@ -50,7 +50,7 @@ class ConfirmableTest(test_suite.Lwm2mSingleServerTest,
 
         # Cancel Observations
         for _ in range(2):
-            pkt = self.serv.recv(timeout_s=3)
+            pkt = self.serv.recv()
             self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
             self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
             self.serv.send(Lwm2mReset.matching(pkt)())
@@ -76,7 +76,7 @@ class NonConfirmableTest(test_suite.Lwm2mSingleServerTest,
         con_count = 0
         non_count = 0
         for _ in range(10):
-            pkt = self.serv.recv(timeout_s=3)
+            pkt = self.serv.recv()
             self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
             self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
             if pkt.token == counter_pkt.token:
@@ -92,7 +92,7 @@ class NonConfirmableTest(test_suite.Lwm2mSingleServerTest,
 
         # Cancel Observations
         for _ in range(2):
-            pkt = self.serv.recv(timeout_s=3)
+            pkt = self.serv.recv()
             self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
             self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
             self.serv.send(Lwm2mReset.matching(pkt)())

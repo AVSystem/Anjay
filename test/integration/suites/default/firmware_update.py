@@ -91,34 +91,34 @@ class FirmwareUpdate:
                     self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
                 super().tearDown(auto_deregister=auto_deregister)
 
-        def read_update_result(self, timeout_s=1):
+        def read_update_result(self):
             req = Lwm2mRead('/5/0/5')
             self.serv.send(req)
-            res = self.serv.recv(timeout_s=timeout_s)
+            res = self.serv.recv()
             self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
             return int(res.content)
 
-        def read_state(self, timeout_s=1):
+        def read_state(self):
             req = Lwm2mRead('/5/0/3')
             self.serv.send(req)
-            res = self.serv.recv(timeout_s=timeout_s)
+            res = self.serv.recv()
             self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
             return int(res.content)
 
         def write_firmware_and_wait_for_download(self, firmware_uri: str,
-                                                 write_timeout_s=1, read_timeout_s=1, download_timeout_s=10):
+                                                 download_timeout_s=20):
             # Write /5/0/1 (Firmware URI)
             req = Lwm2mWrite('/5/0/1', firmware_uri)
             self.serv.send(req)
             self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                                self.serv.recv(timeout_s=write_timeout_s))
+                                self.serv.recv())
 
             # wait until client downloads the firmware
             deadline = time.time() + download_timeout_s
             while time.time() < deadline:
                 time.sleep(0.5)
 
-                if self.read_state(timeout_s=read_timeout_s) == UPDATE_STATE_DOWNLOADED:
+                if self.read_state() == UPDATE_STATE_DOWNLOADED:
                     return
 
             self.fail('firmware still not downloaded')
@@ -381,13 +381,13 @@ class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
                          format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # Execute /5/0/2 (Update)
         req = Lwm2mExecute('/5/0/2')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
 
 class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
@@ -404,7 +404,7 @@ class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
         req = Lwm2mExecute('/5/0/2')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
 
 class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
@@ -430,23 +430,23 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # notification should be sent before downloading
         self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'1'),
-                            self.serv.recv(timeout_s=3))
+                            self.serv.recv())
 
         self.provide_response()
 
         # ... and after it finishes
         self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'2'),
-                            self.serv.recv(timeout_s=3))
+                            self.serv.recv())
 
         # Execute /5/0/2 (Update)
         req = Lwm2mExecute('/5/0/2')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # ... and when update starts
         self.assertMsgEqual(Lwm2mNotify(observe_req.token, b'3'),
@@ -464,7 +464,7 @@ class FirmwareUpdateBadBase64(FirmwareUpdate.Test):
         req = Lwm2mWrite('/5/0/0', data, format=coap.ContentFormat.TEXT_PLAIN)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_INTERNAL_SERVER_ERROR),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
 
 class FirmwareUpdateGoodBase64(FirmwareUpdate.Test):
@@ -474,7 +474,7 @@ class FirmwareUpdateGoodBase64(FirmwareUpdate.Test):
         req = Lwm2mWrite('/5/0/0', data, format=coap.ContentFormat.TEXT_PLAIN)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
 
 class FirmwareUpdateNullPkg(FirmwareUpdate.TestWithHttpServer):
@@ -484,7 +484,7 @@ class FirmwareUpdateNullPkg(FirmwareUpdate.TestWithHttpServer):
 
         req = Lwm2mWrite('/5/0/0', b'\0', format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv(timeout_s=1))
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
@@ -497,7 +497,7 @@ class FirmwareUpdateEmptyPkgUri(FirmwareUpdate.TestWithHttpServer):
 
         req = Lwm2mWrite('/5/0/1', '')
         self.serv.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv(timeout_s=1))
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
@@ -512,10 +512,10 @@ class FirmwareUpdateInvalidUri(FirmwareUpdate.Test):
 
         req = Lwm2mWrite('/5/0/1', b'http://invalidfirmware.exe')
         self.serv.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv(timeout_s=1))
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 
         while True:
-            notify = self.serv.recv(timeout_s=5)
+            notify = self.serv.recv()
             self.assertMsgEqual(Lwm2mNotify(observe_req.token), notify)
             if int(notify.content) != UPDATE_RESULT_INITIAL:
                 break
@@ -545,7 +545,7 @@ class FirmwareUpdateReplacingPkgUri(FirmwareUpdate.TestWithHttpServer):
         req = Lwm2mWrite('/5/0/1', 'http://something')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_BAD_REQUEST),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
@@ -561,7 +561,7 @@ class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
         req = Lwm2mWrite('/5/0/0', b'trololo', format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_BAD_REQUEST),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
@@ -575,13 +575,13 @@ class FirmwareUpdateHttpsTest(FirmwareUpdate.TestWithHttpsServer):
 
     def runTest(self):
         self.provide_response()
-        self.write_firmware_and_wait_for_download(self.get_firmware_uri(), read_timeout_s=10, download_timeout_s=20)
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri(), download_timeout_s=20)
 
         # Execute /5/0/2 (Update)
         req = Lwm2mExecute('/5/0/2')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
 
 class FirmwareUpdateResetInIdleState(FirmwareUpdate.Test):
@@ -635,7 +635,7 @@ class FirmwareUpdateRestartWithDownloaded(FirmwareUpdate.Test):
                          format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # restart the app
         self.teardown_demo_with_servers()
@@ -648,7 +648,7 @@ class FirmwareUpdateRestartWithDownloaded(FirmwareUpdate.Test):
         req = Lwm2mExecute('/5/0/2')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
 
 class FirmwareUpdateRestartWithDownloading(FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):

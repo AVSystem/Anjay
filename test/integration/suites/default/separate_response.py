@@ -26,7 +26,7 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
 
     def runTest(self):
         # receive Register
-        req = self.serv.recv(timeout_s=1)
+        req = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
             req)
@@ -44,7 +44,7 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
 
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mEmpty.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # check Separate Response to an Update
         self.communicate('send-update')
@@ -68,7 +68,7 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
         self.assertMsgEqual(
                 Lwm2mErrorResponse.matching(invalid_req)(code=coap.Code.RES_SERVICE_UNAVAILABLE,
                                                          options=ANY),
-                self.serv.recv(timeout_s=1))
+                self.serv.recv())
 
         # Separate Response: actual response
         req = Lwm2mChanged(msg_id=next(msg_id_generator),
@@ -77,7 +77,7 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
         self.serv.send(req)
 
         self.assertMsgEqual(Lwm2mEmpty.matching(req)(),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # should not send more messages after receiving a correct response
         with self.assertRaises(socket.timeout, msg='unexpected message'):

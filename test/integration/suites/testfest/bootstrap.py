@@ -98,4 +98,4 @@ class Test0_ClientInitiatedBootstrap(DataModel.Test):
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())

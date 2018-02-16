@@ -359,7 +359,7 @@ int anjay_dm_resource_present_TRUE(anjay_t *anjay,
 typedef enum {
     ANJAY_DM_RESOURCE_OP_BIT_R = (1 << 0),
     ANJAY_DM_RESOURCE_OP_BIT_W = (1 << 1),
-    ANJAY_DM_RESOURCE_OP_BIT_E = (1 << 2),
+    ANJAY_DM_RESOURCE_OP_BIT_E = (1 << 2)
 } anjay_dm_resource_op_bit_t;
 
 typedef uint16_t anjay_dm_resource_op_mask_t;
@@ -911,7 +911,7 @@ typedef enum {
 typedef enum {
     ANJAY_SMS_SECURITY_DTLS_PSK = 1, //< DTLS in PSK mode
     ANJAY_SMS_SECURITY_SECURE_PACKET = 2, //< Secure Packet Structure
-    ANJAY_SMS_SECURITY_NOSEC = 3, //< NoSec mode
+    ANJAY_SMS_SECURITY_NOSEC = 3 //< NoSec mode
 } anjay_sms_security_mode_t;
 
 #define ANJAY_ACCESS_MASK_READ            (1U << 0)

@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.7.2" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.7.3" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")

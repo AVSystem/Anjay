@@ -73,7 +73,7 @@ class AccessControl:
             for instance in range(IID_BOUND):
                 req = Lwm2mRead('/%d/%d/%d' % (ACCESS_CONTROL_OID, instance, ACCESS_CONTROL_RID_OIID))
                 server.send(req)
-                res = server.recv(timeout_s=2)
+                res = server.recv()
 
                 # TODO: assertMsgEqual(Lwm2mResponse.matching...)
                 if res.code != coap.Code.RES_CONTENT:
@@ -513,7 +513,7 @@ class AclBootstrapping(bootstrap_server.BootstrapServer.Test, test_suite.Lwm2mDm
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         self.assertDemoRegisters(self.servers[0])
         self.assertDemoRegisters(self.servers[1])

@@ -92,7 +92,7 @@ class ObserveWithMultipleServers(ac.AccessControl.Test):
 
         self.execute_resource(self.servers[0], oid=1337, iid=0, rid=2)  # ++counter
         self.execute_resource(self.servers[0], oid=1337, iid=0, rid=2)  # ++counter
-        pkt = self.servers[1].recv(timeout_s=2)
+        pkt = self.servers[1].recv()
         self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
         self.assertEqual(pkt.content, b'2')
 

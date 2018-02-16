@@ -45,7 +45,7 @@ class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
                          content=b'32')
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_REQUEST_ENTITY_TOO_LARGE),
-                            self.serv.recv(timeout_s=1))
+                            self.serv.recv())
 
         # When options do not dominate message size everything works fine.
         pkt = Lwm2mWrite('/1337/1/6',
@@ -54,7 +54,7 @@ class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
                                   coap.Option.URI_QUERY('st=1.0')],
                          content=b'32')
         self.serv.send(pkt)
-        self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.serv.recv(timeout_s=1))
+        self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.serv.recv())
 
 
 class OutputBufferTooSmallButDemoDoesntCrash(BufferSizeTest.Base):

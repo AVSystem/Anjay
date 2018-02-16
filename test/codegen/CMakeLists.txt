@@ -20,6 +20,11 @@ file(GLOB_RECURSE CODEGEN_INPUTS RELATIVE ${CODEGEN_TEST_INPUT_ROOT} "${CODEGEN_
 
 set(CODEGEN_CHECK_TARGETS)
 
+enable_language(CXX)
+string(REPLACE "-Wc++-compat" "" CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
+string(REGEX REPLACE "-std=[a-z0-9]*" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98")
+
 foreach(CODEGEN_INPUT ${CODEGEN_INPUTS})
     string(REGEX REPLACE "^${CMAKE_CURRENT_SOURCE_DIR}" "" CODEGEN_TEST "${CODEGEN_INPUT}")
     string(REGEX REPLACE "\\.xml" "" CODEGEN_TEST "${CODEGEN_TEST}")
@@ -27,14 +32,23 @@ foreach(CODEGEN_INPUT ${CODEGEN_INPUTS})
 
     set(INPUT "${CODEGEN_TEST_INPUT_ROOT}/${CODEGEN_INPUT}")
     set(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${CODEGEN_TEST}.c")
+    set(OUTPUT_CXX "${CMAKE_CURRENT_BINARY_DIR}/${CODEGEN_TEST}.cpp")
     add_custom_command(OUTPUT "${OUTPUT}"
                        COMMAND "${CODEGEN}" -i "${INPUT}" -o "${OUTPUT}"
-                       DEPENDS "${CODEGEN}" "${INPUT}" )
+                       DEPENDS "${CODEGEN}" "${INPUT}")
+    add_custom_command(OUTPUT "${OUTPUT_CXX}"
+                       COMMAND "${CODEGEN}" -x -i "${INPUT}" -o "${OUTPUT_CXX}"
+                       DEPENDS "${CODEGEN}" "${INPUT}")
     list(APPEND CODEGEN_SOURCES "${OUTPUT}")
+    list(APPEND CODEGEN_CXX_SOURCES "${OUTPUT_CXX}")
 endforeach()
 
 add_library(codegen_check OBJECT EXCLUDE_FROM_ALL ${CODEGEN_SOURCES})
 set_target_properties(codegen_check PROPERTIES
                       COMPILE_FLAGS "-Wno-missing-declarations -Wno-unused-variable -Wno-unused-parameter")
 
-add_dependencies(check codegen_check)
+add_library(codegen_check_cxx OBJECT EXCLUDE_FROM_ALL ${CODEGEN_CXX_SOURCES})
+set_target_properties(codegen_check_cxx PROPERTIES
+                      COMPILE_FLAGS "-Wno-missing-declarations -Wno-unused-variable -Wno-unused-parameter")
+
+add_dependencies(check codegen_check codegen_check_cxx)

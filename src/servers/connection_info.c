@@ -441,11 +441,17 @@ static int get_udp_security_mode(anjay_t *anjay,
 
 static bool uri_protocol_matching(anjay_udp_security_mode_t security_mode,
                                   const anjay_url_t *uri) {
-    if (security_mode == ANJAY_UDP_SECURITY_NOSEC) {
-        return strcmp(uri->protocol, "coap") == 0;
-    } else {
-        return strcmp(uri->protocol, "coaps") == 0;
+    const char *expected_proto = (security_mode == ANJAY_UDP_SECURITY_NOSEC)
+            ? "coap" : "coaps";
+
+    if (strcmp(uri->protocol, expected_proto)) {
+        anjay_log(WARNING, "URI protocol mismatch: security mode %d requires "
+                  "'%s', but '%s' was configured", (int) security_mode,
+                  expected_proto, uri->protocol);
+        return false;
     }
+
+    return true;
 }
 
 static int get_udp_dtls_keys(anjay_t *anjay,

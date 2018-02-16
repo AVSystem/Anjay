@@ -57,7 +57,7 @@ class BootstrapServerTest(BootstrapServer.Test):
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         regular_serv = Lwm2mServer()
         regular_serv_uri = 'coap://127.0.0.1:%d' % regular_serv.get_listen_port()
@@ -74,7 +74,7 @@ class BootstrapServerTest(BootstrapServer.Test):
         self.bootstrap_server.send(req)
 
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         # no Client Initiated bootstrap
         with self.assertRaises(socket.timeout):
@@ -84,7 +84,7 @@ class BootstrapServerTest(BootstrapServer.Test):
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         self.assertDemoRegisters(server=regular_serv, lifetime=60)
 
@@ -92,17 +92,17 @@ class BootstrapServerTest(BootstrapServer.Test):
         req = Lwm2mDelete('/')
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
         # ...even twice
         req = Lwm2mDelete('/')
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
         # now send Bootstrap Finish
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
 
         self.request_demo_shutdown()
 
@@ -125,10 +125,10 @@ class BootstrapEmptyResourcesDoesNotSegfault(BootstrapServer.Test):
         for _ in range(64):
             self.bootstrap_server.send(req)
             self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                                self.bootstrap_server.recv(timeout_s=1))
+                                self.bootstrap_server.recv())
 
         req = Lwm2mBootstrapFinish()
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv(timeout_s=1))
+                            self.bootstrap_server.recv())
         self.request_demo_shutdown()

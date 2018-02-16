@@ -22,10 +22,14 @@ from framework.lwm2m_test import *
 
 class BlockRegister:
     class Test(unittest.TestCase):
-        def __call__(self, server, timeout_s=1):
+        def __call__(self, server, timeout_s=None):
             register_content = b''
             while True:
-                pkt = server.recv(timeout_s=timeout_s)
+                if timeout_s is None:
+                    pkt = server.recv()
+                else:
+                    pkt = server.recv(timeout_s=timeout_s)
+
                 block1 = pkt.get_options(coap.Option.BLOCK1)
                 self.assertIn(len(block1), {0, 1})
                 register_content += pkt.content
@@ -54,7 +58,7 @@ expected_content = (b'</1/1>,</2>,</3/0>,</4/0>,</5/0>,</6/0>,</7/0>,'
 class RegisterTest(Register.TestCase):
     def runTest(self):
         # should send Register request at start
-        pkt = self.serv.recv(timeout_s=1)
+        pkt = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
                           content=expected_content),
@@ -91,7 +95,7 @@ class RegisterTest(Register.TestCase):
 class RegisterWithLostSeparateAck(Register.TestCase):
     def runTest(self):
         # should send Register request at start
-        pkt = self.serv.recv(timeout_s=1)
+        pkt = self.serv.recv()
         self.assertMsgEqual(
             Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
                           content=expected_content),
