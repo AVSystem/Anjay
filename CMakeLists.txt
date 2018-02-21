@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.7.3" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.8.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -280,9 +280,11 @@ set(CORE_MODULES_HEADERS
     include_modules/anjay_modules/io_utils.h
     include_modules/anjay_modules/notify.h
     include_modules/anjay_modules/observe.h
+    include_modules/anjay_modules/raw_buffer.h
     include_modules/anjay_modules/sched.h
+    include_modules/anjay_modules/servers.h
     include_modules/anjay_modules/time_defs.h
-    include_modules/anjay_modules/raw_buffer.h)
+    include_modules/anjay_modules/utils_core.h)
 set(CORE_PUBLIC_HEADERS
     include_public/anjay/anjay.h
     include_public/anjay/core.h

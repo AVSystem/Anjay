@@ -194,17 +194,25 @@ static bool starts_with(const char *haystack, const char *needle) {
     return avs_strncasecmp(haystack, needle, strlen(needle)) == 0;
 }
 
-bool _anjay_downloader_protocol_supported(const char *proto) {
-    return false
+anjay_downloader_protocol_class_t
+_anjay_downloader_classify_protocol(const char *proto) {
 #ifdef WITH_BLOCK_DOWNLOAD
-            || avs_strcasecmp(proto, "coap") == 0
-            || avs_strcasecmp(proto, "coaps") == 0
+    if (avs_strcasecmp(proto, "coap") == 0) {
+        return ANJAY_DOWNLOADER_PROTO_PLAIN;
+    }
+    if (avs_strcasecmp(proto, "coaps") == 0) {
+        return ANJAY_DOWNLOADER_PROTO_ENCRYPTED;
+    }
 #endif // WITH_BLOCK_DOWNLOAD
 #ifdef WITH_HTTP_DOWNLOAD
-            || avs_strcasecmp(proto, "http") == 0
-            || avs_strcasecmp(proto, "https") == 0
+    if (avs_strcasecmp(proto, "http") == 0) {
+        return ANJAY_DOWNLOADER_PROTO_PLAIN;
+    }
+    if (avs_strcasecmp(proto, "https") == 0) {
+        return ANJAY_DOWNLOADER_PROTO_ENCRYPTED;
+    }
 #endif // WITH_HTTP_DOWNLOAD
-            ;
+    return ANJAY_DOWNLOADER_PROTO_UNSUPPORTED;
 }
 
 int _anjay_downloader_download(anjay_downloader_t *dl,

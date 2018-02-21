@@ -20,17 +20,12 @@
 #include <anjay/core.h>
 
 #include <anjay_modules/sched.h>
+#include <anjay_modules/servers.h>
 
 #include "utils_core.h"
 #include "coap/coap_stream.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
-
-typedef enum {
-    ANJAY_CONNECTION_UDP,
-    ANJAY_CONNECTION_SMS,
-    ANJAY_CONNECTION_UNSET
-} anjay_connection_type_t;
 
 typedef struct {
     anjay_oid_t oid;

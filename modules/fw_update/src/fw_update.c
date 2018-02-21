@@ -76,6 +76,7 @@ typedef struct fw_repr {
     const anjay_dm_object_def_t *def;
 
     fw_user_state_t user_state;
+    avs_net_security_info_t *security_from_dm;
 
     fw_update_state_t state;
     fw_update_result_t result;
@@ -111,18 +112,6 @@ static int user_state_stream_write(fw_user_state_t *user,
     return user->handlers->stream_write(user->arg, data, length);
 }
 
-static int user_state_stream_finish(fw_user_state_t *user) {
-    assert(user->state == UPDATE_STATE_DOWNLOADING);
-    int result = user->handlers->stream_finish(user->arg);
-    user->state = (result ? UPDATE_STATE_IDLE : UPDATE_STATE_DOWNLOADED);
-    return result;
-}
-
-static void user_state_reset(fw_user_state_t *user) {
-    user->handlers->reset(user->arg);
-    user->state = UPDATE_STATE_IDLE;
-}
-
 static const char *user_state_get_name(fw_user_state_t *user) {
     if (!user->handlers->get_name
             || user->state != UPDATE_STATE_DOWNLOADED) {
@@ -146,6 +135,44 @@ static int user_state_perform_upgrade(fw_user_state_t *user) {
         user->state = UPDATE_STATE_UPDATING;
     }
     return result;
+}
+
+static int finish_user_stream(fw_repr_t *fw) {
+    assert(fw->user_state.state == UPDATE_STATE_DOWNLOADING);
+    int result = fw->user_state.handlers->stream_finish(fw->user_state.arg);
+    if (result) {
+        fw->user_state.state = UPDATE_STATE_IDLE;
+        free(fw->security_from_dm);
+        fw->security_from_dm = NULL;
+    } else {
+        fw->user_state.state = UPDATE_STATE_DOWNLOADED;
+    }
+    return result;
+}
+
+static void reset_user_state(fw_repr_t *fw) {
+    fw->user_state.handlers->reset(fw->user_state.arg);
+    fw->user_state.state = UPDATE_STATE_IDLE;
+    free(fw->security_from_dm);
+    fw->security_from_dm = NULL;
+}
+
+static int get_security_info(anjay_t *anjay,
+                             fw_repr_t *fw,
+                             avs_net_security_info_t *out_security_info) {
+    assert(fw->user_state.state == UPDATE_STATE_IDLE);
+    if (fw->user_state.handlers->get_security_info) {
+        return fw->user_state.handlers->get_security_info(
+                fw->user_state.arg, out_security_info, fw->package_uri);
+    } else {
+        assert(!fw->security_from_dm);
+        if (!(fw->security_from_dm = anjay_fw_update_load_security_from_dm(
+                anjay, fw->package_uri))) {
+            return -1;
+        }
+        *out_security_info = *fw->security_from_dm;
+        return 0;
+    }
 }
 
 static void set_update_result(anjay_t *anjay,
@@ -187,7 +214,7 @@ static void handle_err_result(anjay_t *anjay,
 }
 
 static void reset(anjay_t *anjay, fw_repr_t *fw) {
-    user_state_reset(&fw->user_state);
+    reset_user_state(fw);
     set_state(anjay, fw, UPDATE_STATE_IDLE);
     set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
     fw_log(INFO, "Firmware Object state reset");
@@ -290,15 +317,15 @@ static int fw_read(anjay_t *anjay,
 }
 
 #ifdef WITH_DOWNLOADER
-static bool is_supported_protocol(const char *uri) {
+static anjay_downloader_protocol_class_t classify_protocol(const char *uri) {
     const char *colon = strchr(uri, ':');
     if (!colon) {
-        return false;
+        return ANJAY_DOWNLOADER_PROTO_UNSUPPORTED;
     }
     char buf[colon + 1 - uri];
     memcpy(buf, uri, sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
-    return _anjay_downloader_protocol_supported(buf);
+    return _anjay_downloader_classify_protocol(buf);
 }
 
 static int download_write_block(anjay_t *anjay,
@@ -338,7 +365,7 @@ static void download_finished(anjay_t *anjay,
     fw_repr_t *fw = (fw_repr_t *) fw_;
     if (fw->state != UPDATE_STATE_DOWNLOADING) {
         // something already failed in download_write_block()
-        user_state_reset(&fw->user_state);
+        reset_user_state(fw);
     } else if (result) {
         fw_update_result_t update_result = UPDATE_RESULT_CONNECTION_LOST;
         if (errno == ENOMEM) {
@@ -350,7 +377,7 @@ static void download_finished(anjay_t *anjay,
                 update_result = UPDATE_RESULT_INVALID_URI;
             }
         }
-        user_state_reset(&fw->user_state);
+        reset_user_state(fw);
         if (fw->retry_download_on_expired
                 && result == ANJAY_DOWNLOAD_ERR_EXPIRED) {
             fw_log(INFO, "Could not resume firmware download (result = %d), "
@@ -366,7 +393,7 @@ static void download_finished(anjay_t *anjay,
         }
     } else if ((result = user_state_ensure_stream_open(&fw->user_state,
                                                        fw->package_uri, NULL))
-            || (result = user_state_stream_finish(&fw->user_state))) {
+            || (result = finish_user_stream(fw))) {
         handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
                           UPDATE_RESULT_NOT_ENOUGH_SPACE);
     } else {
@@ -388,6 +415,16 @@ static int schedule_background_anjay_download(anjay_t *anjay,
         .user_data = fw
     };
 
+    if (classify_protocol(fw->package_uri)
+            == ANJAY_DOWNLOADER_PROTO_ENCRYPTED) {
+        int result = get_security_info(anjay, fw, &cfg.security_info);
+        if (result) {
+            handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
+                              UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
+            return -1;
+        }
+    }
+
     anjay_download_handle_t handle = anjay_download(anjay, &cfg);
     if (!handle) {
         fw_update_result_t update_result;
@@ -400,6 +437,7 @@ static int schedule_background_anjay_download(anjay_t *anjay,
         } else {
             update_result = UPDATE_RESULT_CONNECTION_LOST;
         }
+        reset_user_state(fw);
         set_update_result(anjay, fw, update_result);
         return -1;
     }
@@ -485,11 +523,11 @@ static int write_firmware(anjay_t *anjay,
 
     int result = write_firmware_to_stream(anjay, fw, ctx, out_is_reset_request);
     if (result) {
-        user_state_reset(&fw->user_state);
+        reset_user_state(fw);
     } else if (!*out_is_reset_request) {
         // stream_finish_result deliberately not propagated up:
         // write itself succeeded
-        int stream_finish_result = user_state_stream_finish(&fw->user_state);
+        int stream_finish_result = finish_user_stream(fw);
         if (stream_finish_result) {
             handle_err_result(anjay, fw, UPDATE_STATE_IDLE,
                               stream_finish_result,
@@ -545,7 +583,8 @@ static int fw_write(anjay_t *anjay,
                 result = ANJAY_ERR_BAD_REQUEST;
             }
 
-            if (!result && len > 0 && !is_supported_protocol(new_uri)) {
+            if (!result && len > 0 && classify_protocol(new_uri)
+                    == ANJAY_DOWNLOADER_PROTO_UNSUPPORTED) {
                 set_update_result(anjay, fw,
                                   UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
                 result = ANJAY_ERR_BAD_REQUEST;
@@ -663,6 +702,7 @@ static void fw_delete(anjay_t *anjay, void *fw_) {
     (void) anjay;
     fw_repr_t *fw = (fw_repr_t *) fw_;
     _anjay_sched_del(_anjay_sched_get(anjay), &fw->update_job);
+    free(fw->security_from_dm);
     free((void *) (intptr_t) fw->package_uri);
     free(fw);
 }
@@ -694,7 +734,7 @@ initialize_fw_repr(anjay_t *anjay,
         size_t resume_offset = initial_state->resume_offset;
         if (resume_offset > 0 && !initial_state->resume_etag) {
             fw_log(WARNING, "ETag not set, need to start from the beginning");
-            user_state_reset(&repr->user_state);
+            reset_user_state(repr);
             resume_offset = 0;
         }
         if (!initial_state->persisted_uri
@@ -702,11 +742,11 @@ initialize_fw_repr(anjay_t *anjay,
                         avs_strdup(initial_state->persisted_uri))) {
             fw_log(WARNING, "Could not copy the persisted Package URI, "
                             "not resuming firmware download");
-            user_state_reset(&repr->user_state);
+            reset_user_state(repr);
         } else if (schedule_background_anjay_download(
                 anjay, repr, resume_offset, initial_state->resume_etag)) {
             fw_log(WARNING, "Could not resume firmware download");
-            user_state_reset(&repr->user_state);
+            reset_user_state(repr);
             if (repr->result == UPDATE_RESULT_CONNECTION_LOST
                     && initial_state->resume_etag
                     && schedule_background_anjay_download(anjay, repr,

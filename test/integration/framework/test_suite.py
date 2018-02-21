@@ -18,17 +18,15 @@ import inspect
 import os
 import re
 import shutil
-import socket
 import subprocess
 import threading
 import time
 import unittest
+from typing import TypeVar
 
 from .asserts import Lwm2mAsserts
-from .lwm2m.server import Lwm2mServer
 from .lwm2m_test import *
 
-from typing import Tuple, List, TypeVar
 T = TypeVar('T')
 
 def read_with_timeout(fd, timeout_s):
@@ -603,12 +601,21 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
               extra_cmdline_args=None,
               auto_register=True,
               lifetime=None,
-              fw_updated_marker_path=None):
+              fw_updated_marker_path=None,
+              psk_identity=None,
+              psk_key=None):
+        assert((psk_identity is None) == (psk_key is None))
         extra_args = ['--lifetime', str(lifetime)] if lifetime else []
+        if psk_identity:
+            extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
+                           '--key', str(binascii.hexlify(psk_key), 'ascii')]
+            coap_server = coap.DtlsServer(psk_identity, psk_key)
+        else:
+            coap_server = coap.Server()
         if extra_cmdline_args is not None:
             extra_args += extra_cmdline_args
 
-        self.setup_demo_with_servers(servers=1,
+        self.setup_demo_with_servers(servers=[Lwm2mServer(coap_server)],
                                      extra_cmdline_args=extra_args,
                                      auto_register=auto_register,
                                      lifetime=lifetime,
@@ -618,29 +625,15 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         self.teardown_demo_with_servers(*args, **kwargs)
 
 
-class Lwm2mDtlsSingleServerTest(Lwm2mTest, SingleServerAccessor):
+class Lwm2mDtlsSingleServerTest(Lwm2mSingleServerTest):
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
-
-    def runTest(self):
-        pass
 
     def setUp(self,
               extra_cmdline_args=None,
               auto_register=True,
               lifetime=None,
               fw_updated_marker_path=None):
-        extra_args = ['--lifetime', str(lifetime)] if lifetime else []
-        extra_args += ['--identity', str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
-                       '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')]
-        if extra_cmdline_args is not None:
-            extra_args += extra_cmdline_args
-
-        self.setup_demo_with_servers(servers=[Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY))],
-                                     extra_cmdline_args=extra_args,
-                                     auto_register=auto_register,
-                                     lifetime=lifetime,
-                                     fw_updated_marker_path=fw_updated_marker_path)
-
-    def tearDown(self, *args, **kwargs):
-        self.teardown_demo_with_servers(*args, **kwargs)
+        super().setUp(extra_cmdline_args=extra_cmdline_args, auto_register=auto_register, lifetime=lifetime,
+                      fw_updated_marker_path=fw_updated_marker_path, psk_identity=self.PSK_IDENTITY,
+                      psk_key=self.PSK_KEY)

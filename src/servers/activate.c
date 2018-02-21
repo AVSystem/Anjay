@@ -37,46 +37,6 @@ static void active_server_detach_delete(
     AVS_LIST_DELETE(server_ptr);
 }
 
-static bool is_valid_coap_uri(const anjay_url_t *uri) {
-    if (strcmp(uri->protocol, "coap") && strcmp(uri->protocol, "coaps")) {
-        anjay_log(ERROR, "unsupported protocol: %s", uri->protocol);
-        return false;
-    }
-    return true;
-}
-
-static int get_server_uri(anjay_t *anjay,
-                          anjay_iid_t security_iid,
-                          anjay_url_t *out_uri) {
-    enum { MAX_SERVER_URI_LENGTH = 256 };
-    char raw_uri[MAX_SERVER_URI_LENGTH];
-
-    const anjay_uri_path_t path =
-            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                               ANJAY_DM_RID_SECURITY_SERVER_URI);
-
-    if (_anjay_dm_res_read_string(anjay, &path, raw_uri, sizeof(raw_uri))) {
-        anjay_log(ERROR, "could not read LwM2M server URI");
-        return -1;
-    }
-
-    anjay_url_t uri = ANJAY_URL_EMPTY;
-    if (_anjay_parse_url(raw_uri, &uri) || !is_valid_coap_uri(&uri)) {
-        _anjay_url_cleanup(&uri);
-        anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
-        return -1;
-    }
-    if (!*uri.port) {
-        if (uri.protocol[4]) { // coap_s_
-            strcpy(uri.port, "5684");
-        } else { // coap_\0_
-            strcpy(uri.port, "5683");
-        }
-    }
-    *out_uri = uri;
-    return 0;
-}
-
 static int
 initialize_active_server(anjay_t *anjay,
                          anjay_ssid_t ssid,
@@ -94,7 +54,7 @@ initialize_active_server(anjay_t *anjay,
         anjay_log(ERROR, "could not find server Security IID");
         return -1;
     }
-    if (get_server_uri(anjay, security_iid, &server->uri)) {
+    if (_anjay_server_get_uri(anjay, security_iid, &server->uri)) {
         return -1;
     }
 

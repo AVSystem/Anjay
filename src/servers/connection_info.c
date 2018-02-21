@@ -32,22 +32,6 @@
 VISIBILITY_SOURCE_BEGIN
 
 typedef struct {
-    anjay_raw_buffer_t pk_or_identity;
-    anjay_raw_buffer_t server_pk_or_identity;
-    anjay_raw_buffer_t secret_key;
-} dtls_keys_t;
-
-#define EMPTY_DTLS_KEYS_INITIALIZER \
-        { \
-            .pk_or_identity = ANJAY_RAW_BUFFER_ON_STACK( \
-                    ANJAY_MAX_PK_OR_IDENTITY_SIZE), \
-            .server_pk_or_identity = ANJAY_RAW_BUFFER_ON_STACK( \
-                    ANJAY_MAX_SERVER_PK_OR_IDENTITY_SIZE), \
-            .secret_key = ANJAY_RAW_BUFFER_ON_STACK( \
-                    ANJAY_MAX_SECRET_KEY_SIZE) \
-        }
-
-typedef struct {
     anjay_server_connection_mode_t mode;
     char local_port[ANJAY_MAX_URL_PORT_SIZE];
     anjay_udp_security_mode_t security_mode;
@@ -55,8 +39,8 @@ typedef struct {
 
 
 typedef struct {
-    const anjay_active_server_info_t *server;
     anjay_iid_t security_iid;
+    const anjay_url_t *uri;
     udp_connection_info_t udp;
 } server_connection_info_t;
 
@@ -217,19 +201,25 @@ get_connection_mode_t(const server_connection_info_t *info);
 
 typedef int get_connection_info_t(anjay_t *anjay,
                                   server_connection_info_t *inout_info,
-                                  dtls_keys_t *out_dtls_keys,
+                                  anjay_server_dtls_keys_t *out_dtls_keys,
                                   avs_net_abstract_socket_t *existing_socket);
 
-typedef int create_connected_socket_t(anjay_t *anjay,
-                                      anjay_server_connection_t *out_connection,
-                                      const server_connection_info_t *info,
-                                      const dtls_keys_t *dtls_keys);
+typedef int get_net_security_info_t(avs_net_security_info_t *out_net_info,
+                                    const server_connection_info_t *info,
+                                    const anjay_server_dtls_keys_t *dtls_keys);
+
+typedef int
+create_connected_socket_t(anjay_t *anjay,
+                          anjay_server_connection_t *out_connection,
+                          avs_net_ssl_configuration_t *inout_socket_config,
+                          const server_connection_info_t *info);
 
 typedef struct {
     const char *name;
     anjay_connection_type_t type;
     get_connection_mode_t *get_connection_mode;
     get_connection_info_t *get_connection_info;
+    get_net_security_info_t *get_net_security_info;
     create_connected_socket_t *create_connected_socket;
 } connection_type_definition_t;
 
@@ -237,32 +227,47 @@ static int recreate_socket(anjay_t *anjay,
                            const connection_type_definition_t *def,
                            anjay_server_connection_t *connection,
                            server_connection_info_t *inout_info) {
-    dtls_keys_t dtls_keys = EMPTY_DTLS_KEYS_INITIALIZER;
+    anjay_server_dtls_keys_t dtls_keys;
+    memset(&dtls_keys, 0, sizeof(dtls_keys));
 
     // At this point, inout_info has "global" settings filled,
     // but transport-specific (i.e. UDP or SMS) fields are not
     if (def->get_connection_info(
             anjay, inout_info, &dtls_keys,
             _anjay_connection_internal_get_socket(connection))) {
-        anjay_log(DEBUG, "could not get %s connection info for SSID %u",
-                  def->name, inout_info->server->ssid);
+        anjay_log(DEBUG, "could not get %s connection info for server /%u/%u",
+                  def->name, ANJAY_DM_OID_SECURITY, inout_info->security_iid);
         return -1;
     }
     _anjay_connection_internal_clean_socket(connection);
-    int result = def->create_connected_socket(anjay, connection, inout_info,
-                                              &dtls_keys);
-    if (result
-        || avs_net_socket_get_local_port(
-                   connection->conn_priv_data_.socket,
-                   connection->conn_priv_data_.last_local_port,
-                   sizeof(connection->conn_priv_data_.last_local_port))) {
+
+    // Socket configuration is slightly different between UDP and SMS
+    // connections. That's why we do the common configuration here...
+    avs_net_ssl_configuration_t socket_config;
+    memset(&socket_config, 0, sizeof(socket_config));
+    socket_config.version = anjay->dtls_version;
+    socket_config.use_session_resumption = true;
+    int result = def->get_net_security_info(&socket_config.security,
+                                            inout_info, &dtls_keys);
+    // ...and pass it as an in/out argument to create_connected_socket() so that
+    // it can do any protocol-specific modifications.
+    if (!result) {
+        result = def->create_connected_socket(anjay, connection, &socket_config,
+                                              inout_info);
+    }
+    if (!result) {
+        result = avs_net_socket_get_local_port(
+                connection->conn_priv_data_.socket,
+                connection->conn_priv_data_.last_local_port,
+                sizeof(connection->conn_priv_data_.last_local_port));
+    }
+    if (result) {
         avs_net_abstract_socket_t *sock = connection->conn_priv_data_.socket;
         if (sock) {
             avs_net_socket_close(sock);
         }
-        return result ? result : -1;
     }
-    return 0;
+    return result;
 }
 
 typedef enum {
@@ -346,32 +351,32 @@ get_udp_connection_mode(const server_connection_info_t *info) {
 }
 
 static int init_psk_security(avs_net_security_info_t *security,
-                             const dtls_keys_t *keys) {
+                             const anjay_server_dtls_keys_t *keys) {
     *security = avs_net_security_info_from_psk(
         (avs_net_psk_t){
-            .psk = keys->secret_key.data,
-            .psk_size = keys->secret_key.size,
-            .identity = keys->pk_or_identity.data,
-            .identity_size = keys->pk_or_identity.size
+            .psk = keys->secret_key,
+            .psk_size = keys->secret_key_size,
+            .identity = keys->pk_or_identity,
+            .identity_size = keys->pk_or_identity_size
         });
     return 0;
 }
 
 static int init_cert_security(avs_net_security_info_t *security,
-                              const dtls_keys_t *keys) {
+                              const anjay_server_dtls_keys_t *keys) {
     avs_net_client_cert_t client_cert =
-            avs_net_client_cert_from_x509(keys->pk_or_identity.data,
-                                          keys->pk_or_identity.size);
+            avs_net_client_cert_from_x509(keys->pk_or_identity,
+                                          keys->pk_or_identity_size);
 
     avs_net_private_key_t private_key =
-            avs_net_private_key_from_pkcs8(keys->secret_key.data,
-                                           keys->secret_key.size, NULL);
+            avs_net_private_key_from_pkcs8(keys->secret_key,
+                                           keys->secret_key_size, NULL);
 
-    const void *raw_cert_der = keys->server_pk_or_identity.size > 0
-            ? keys->server_pk_or_identity.data
+    const void *raw_cert_der = keys->server_pk_or_identity_size > 0
+            ? keys->server_pk_or_identity
             : NULL;
     avs_net_trusted_cert_source_t ca = avs_net_trusted_cert_source_from_x509(
-            raw_cert_der, keys->server_pk_or_identity.size);
+            raw_cert_der, keys->server_pk_or_identity_size);
 
     *security = avs_net_security_info_from_certificates(
             (avs_net_certificate_info_t) {
@@ -384,29 +389,20 @@ static int init_cert_security(avs_net_security_info_t *security,
     return 0;
 }
 
-static int fill_udp_socket_config(anjay_t *anjay,
-                                  avs_net_ssl_configuration_t *config,
-                                  avs_net_resolved_endpoint_t *preferred_endpoint,
-                                  const udp_connection_info_t *udp_info,
-                                  const dtls_keys_t *dtls_keys) {
-    memset(config, 0, sizeof(*config));
-    config->version = anjay->dtls_version;
-    config->use_session_resumption = true;
-    config->backend_configuration = anjay->udp_socket_config;
-    config->backend_configuration.reuse_addr = 1;
-    config->backend_configuration.preferred_endpoint = preferred_endpoint;
-
-    switch (udp_info->security_mode) {
+static int get_udp_net_security_info(avs_net_security_info_t *out_net_info,
+                                     const server_connection_info_t *info,
+                                     const anjay_server_dtls_keys_t *dtls_keys) {
+    switch (info->udp.security_mode) {
     case ANJAY_UDP_SECURITY_NOSEC:
         return 0;
     case ANJAY_UDP_SECURITY_PSK:
-        return init_psk_security(&config->security, dtls_keys);
+        return init_psk_security(out_net_info, dtls_keys);
     case ANJAY_UDP_SECURITY_CERTIFICATE:
-        return init_cert_security(&config->security, dtls_keys);
+        return init_cert_security(out_net_info, dtls_keys);
     case ANJAY_UDP_SECURITY_RPK:
     default:
         anjay_log(ERROR, "unsupported security mode: %d",
-                  (int) udp_info->security_mode);
+                  (int) info->udp.security_mode);
         return -1;
     }
 }
@@ -457,7 +453,7 @@ static bool uri_protocol_matching(anjay_udp_security_mode_t security_mode,
 static int get_udp_dtls_keys(anjay_t *anjay,
                              anjay_iid_t security_iid,
                              anjay_udp_security_mode_t security_mode,
-                             dtls_keys_t *out_keys) {
+                             anjay_server_dtls_keys_t *out_keys) {
     if (security_mode == ANJAY_UDP_SECURITY_NOSEC) {
         return 0;
     }
@@ -465,30 +461,38 @@ static int get_udp_dtls_keys(anjay_t *anjay,
     const struct {
         bool required;
         anjay_rid_t rid;
-        anjay_raw_buffer_t *buffer;
+        char *buffer;
+        size_t buffer_capacity;
+        size_t *buffer_size_ptr;
     } values[] = {
         {
             true,
             ANJAY_DM_RID_SECURITY_PK_OR_IDENTITY,
-            &out_keys->pk_or_identity
+            out_keys->pk_or_identity,
+            sizeof(out_keys->pk_or_identity),
+            &out_keys->pk_or_identity_size
         }, {
             security_mode != ANJAY_UDP_SECURITY_PSK,
             ANJAY_DM_RID_SECURITY_SERVER_PK_OR_IDENTITY,
-            &out_keys->server_pk_or_identity
+            out_keys->server_pk_or_identity,
+            sizeof(out_keys->server_pk_or_identity),
+            &out_keys->server_pk_or_identity_size
         }, {
             true,
             ANJAY_DM_RID_SECURITY_SECRET_KEY,
-            &out_keys->secret_key
+            out_keys->secret_key,
+            sizeof(out_keys->secret_key),
+            &out_keys->secret_key_size
         }
     };
 
     for (size_t i = 0; i < AVS_ARRAY_SIZE(values); ++i) {
-        anjay_raw_buffer_t *value = values[i].buffer;
         const anjay_uri_path_t path =
                 MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
                                    values[i].rid);
-        if (_anjay_dm_res_read(anjay, &path, (char*)value->data,
-                               value->capacity, &value->size)
+        if (_anjay_dm_res_read(anjay, &path, values[i].buffer,
+                               values[i].buffer_capacity,
+                               values[i].buffer_size_ptr)
                 && values[i].required) {
             anjay_log(WARNING, "read %s failed", ANJAY_DEBUG_MAKE_PATH(&path));
             return -1;
@@ -522,12 +526,13 @@ get_requested_local_port(char out_port[static ANJAY_MAX_URL_PORT_SIZE],
 
 static int get_udp_connection_info(anjay_t *anjay,
                                    server_connection_info_t *inout_info,
-                                   dtls_keys_t *dtls_keys,
+                                   anjay_server_dtls_keys_t *dtls_keys,
                                    avs_net_abstract_socket_t *old_socket) {
     if (get_udp_security_mode(anjay, inout_info->security_iid,
                               &inout_info->udp.security_mode)
-            || !uri_protocol_matching(inout_info->udp.security_mode,
-                                      &inout_info->server->uri)
+            || (inout_info->uri
+                    && !uri_protocol_matching(inout_info->udp.security_mode,
+                                              inout_info->uri))
             || get_udp_dtls_keys(anjay, inout_info->security_iid,
                                  inout_info->udp.security_mode, dtls_keys)) {
         return -1;
@@ -541,37 +546,34 @@ static int get_udp_connection_info(anjay_t *anjay,
     return 0;
 }
 
-static int create_connected_udp_socket(anjay_t *anjay,
-                                       anjay_server_connection_t *out_conn,
-                                       const server_connection_info_t *info,
-                                       const dtls_keys_t *dtls_keys) {
+static int
+create_connected_udp_socket(anjay_t *anjay,
+                            anjay_server_connection_t *out_conn,
+                            avs_net_ssl_configuration_t *inout_socket_config,
+                            const server_connection_info_t *info) {
     avs_net_socket_type_t type =
             info->udp.security_mode == ANJAY_UDP_SECURITY_NOSEC
                 ? AVS_NET_UDP_SOCKET : AVS_NET_DTLS_SOCKET;
 
-    avs_net_ssl_configuration_t config;
-    if (fill_udp_socket_config(anjay, &config,
-                               &out_conn->conn_priv_data_.preferred_endpoint,
-                               &info->udp, dtls_keys)) {
-        return -1;
-    }
+    inout_socket_config->backend_configuration = anjay->udp_socket_config;
+    inout_socket_config->backend_configuration.reuse_addr = 1;
+    inout_socket_config->backend_configuration.preferred_endpoint =
+            &out_conn->conn_priv_data_.preferred_endpoint;
 
     const void *config_ptr = (type == AVS_NET_DTLS_SOCKET)
-            ? (const void *) &config
-            : (const void *) &config.backend_configuration;
+            ? (const void *) inout_socket_config
+            : (const void *) &inout_socket_config->backend_configuration;
 
     avs_net_abstract_socket_t *socket = NULL;
     int result = _anjay_create_connected_udp_socket(
-            anjay, &socket, type, info->udp.local_port, config_ptr,
-            &info->server->uri);
+            anjay, &socket, type, info->udp.local_port, config_ptr, info->uri);
     if (!socket) {
         assert(result);
         anjay_log(ERROR, "could not create CoAP socket");
         return result;
     }
 
-    anjay_log(INFO, "connected to %s:%s",
-              info->server->uri.host, info->server->uri.port);
+    anjay_log(INFO, "connected to %s:%s", info->uri->host, info->uri->port);
     out_conn->conn_priv_data_.socket = socket;
     return 0;
 }
@@ -581,6 +583,7 @@ static const connection_type_definition_t UDP_CONNECTION = {
     .type = ANJAY_CONNECTION_UDP,
     .get_connection_mode = get_udp_connection_mode,
     .get_connection_info = get_udp_connection_info,
+    .get_net_security_info = get_udp_net_security_info,
     .create_connected_socket = create_connected_udp_socket
 };
 
@@ -594,7 +597,7 @@ static int get_common_connection_info(anjay_t *anjay,
         return -1;
     }
 
-    out_info->server = server;
+    out_info->uri = &server->uri;
 
     if (read_connection_modes(anjay, server, &out_info->udp.mode,
                               NULL
@@ -785,5 +788,33 @@ close_and_fail:;
     if (avs_net_socket_close(connection->conn_priv_data_.socket)) {
         anjay_log(ERROR, "Could not close the socket (?!)");
     }
+    return result;
+}
+
+int _anjay_get_security_info(anjay_t *anjay,
+                             avs_net_security_info_t *out_net_info,
+                             anjay_server_dtls_keys_t *out_dtls_keys,
+                             anjay_iid_t security_iid,
+                             anjay_connection_type_t conn_type) {
+    const connection_type_definition_t *conn_def;
+    switch (conn_type) {
+    case ANJAY_CONNECTION_UDP:
+        conn_def = &UDP_CONNECTION;
+        break;
+    default:
+        assert(0 && "Should never happen");
+        return -1;
+    }
+
+    server_connection_info_t info = {
+        .security_iid = security_iid
+    };
+
+    memset(out_dtls_keys, 0, sizeof(*out_dtls_keys));
+    int result;
+    (void) ((result = conn_def->get_connection_info(anjay, &info, out_dtls_keys,
+                                                    NULL))
+            || (result = conn_def->get_net_security_info(out_net_info, &info,
+                                                         out_dtls_keys)));
     return result;
 }

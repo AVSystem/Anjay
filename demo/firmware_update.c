@@ -498,7 +498,16 @@ static int fw_perform_upgrade(void *fw_) {
     return -1;
 }
 
-static const anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
+static int fw_get_security_info(void *fw_,
+                                avs_net_security_info_t *out_security_info,
+                                const char *download_uri) {
+    fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
+    (void) download_uri;
+    memcpy(out_security_info, &fw->security_info, sizeof(fw->security_info));
+    return 0;
+}
+
+static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .stream_open = fw_stream_open,
     .stream_write = fw_stream_write,
     .stream_finish = fw_stream_finish,
@@ -585,8 +594,15 @@ static persistence_file_data_t read_persistence_file(const char *path) {
 
 int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
-                            const char *persistence_file) {
+                            const char *persistence_file,
+                            const avs_net_security_info_t *security_info) {
     fw->persistence_file = persistence_file;
+    if (security_info) {
+        memcpy(&fw->security_info, security_info, sizeof(fw->security_info));
+        FW_UPDATE_HANDLERS.get_security_info = fw_get_security_info;
+    } else {
+        FW_UPDATE_HANDLERS.get_security_info = NULL;
+    }
 
     persistence_file_data_t data = read_persistence_file(persistence_file);
     delete_persistence_file(fw);

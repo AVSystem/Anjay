@@ -35,11 +35,13 @@ typedef struct {
     char *package_uri;
     const char *persistence_file;
     FILE *stream;
+    avs_net_security_info_t security_info;
 } fw_update_logic_t;
 
 int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
-                            const char *persistence_file);
+                            const char *persistence_file,
+                            const avs_net_security_info_t *security_info);
 
 void firmware_update_destroy(fw_update_logic_t *fw_update);
 

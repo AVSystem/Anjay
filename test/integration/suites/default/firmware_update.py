@@ -21,7 +21,6 @@ import re
 import ssl
 import threading
 import time
-
 import zlib
 
 from framework.coap_file_server import CoapFileServerThread
@@ -55,7 +54,7 @@ class FirmwareUpdate:
         def set_check_marker(self, check_marker):
             self.check_marker = check_marker
 
-        def setUp(self, garbage=0):
+        def setUp(self, garbage=0, *args, **kwargs):
             garbage_lines = ''
             while garbage > 0:
                 garbage_line = '#' * (min(garbage, 80) - 1) + '\n'
@@ -64,7 +63,7 @@ class FirmwareUpdate:
             self.ANJAY_MARKER_FILE = generate_temp_filename(dir='/tmp', prefix='anjay-fw-updated-')
             self.FIRMWARE_SCRIPT_CONTENT = \
                 (FIRMWARE_SCRIPT_TEMPLATE % (garbage_lines, self.ANJAY_MARKER_FILE)).encode('ascii')
-            super().setUp(fw_updated_marker_path=self.ANJAY_MARKER_FILE)
+            super().setUp(fw_updated_marker_path=self.ANJAY_MARKER_FILE, *args, **kwargs)
 
         def tearDown(self):
             auto_deregister = getattr(self, 'auto_deregister', True)
@@ -166,13 +165,13 @@ class FirmwareUpdate:
             self.assertEqual(requests + ['/firmware'], self.requests)
 
         def setUp(self, *args, **kwargs):
-            super().setUp(*args, **kwargs)
-
             self.requests = []
             self._response_content = None
             self._response_cv = threading.Condition()
 
             self.http_server = self._create_server()
+
+            super().setUp(*args, **kwargs)
 
             self.server_thread = threading.Thread(target=lambda: self.http_server.serve_forever())
             self.server_thread.start()
@@ -190,7 +189,43 @@ class FirmwareUpdate:
             assert http_uri[:5] == 'http:'
             return 'https:' + http_uri[5:]
 
-        def _create_server(self):
+        def setUp(self, pass_cert_to_demo=True, cn=None, *args, **kwargs):
+            cert_pem, key_pem = self._generate_pem_cert_and_key(cn=cn)
+            with tempfile.NamedTemporaryFile(delete=False) as cert_file, \
+                    tempfile.NamedTemporaryFile(delete=False) as key_file:
+                cert_file.write(cert_pem)
+                cert_file.flush()
+
+                key_file.write(key_pem)
+                key_file.flush()
+
+                self._cert_file = cert_file.name
+                self._key_file = key_file.name
+
+            extra_cmdline_args = []
+            if 'extra_cmdline_args' in kwargs:
+                extra_cmdline_args += kwargs['extra_cmdline_args']
+                del kwargs['extra_cmdline_args']
+            if pass_cert_to_demo:
+                extra_cmdline_args += ['--fw-cert-file', self._cert_file]
+            super().setUp(extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
+
+        def tearDown(self):
+            def unlink_without_err(fname):
+                try:
+                    os.unlink(fname)
+                except:
+                    print('unlink(%r) failed' % (fname,))
+                    sys.excepthook(*sys.exc_info())
+
+            try:
+                super().tearDown()
+            finally:
+                unlink_without_err(self._cert_file)
+                unlink_without_err(self._key_file)
+
+        @staticmethod
+        def _generate_pem_cert_and_key(cn=None):
             import datetime
             from cryptography import x509
             from cryptography.x509.oid import NameOID
@@ -198,8 +233,8 @@ class FirmwareUpdate:
             from cryptography.hazmat.primitives import hashes, serialization
             from cryptography.hazmat.primitives.asymmetric import rsa
 
-            key = rsa.generate_private_key(public_exponent=65537, key_size=1024, backend=default_backend())
-            name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'localhost')])
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
+            name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn or '127.0.0.1')])
             now = datetime.datetime.utcnow()
             cert = (x509.CertificateBuilder().
                     subject_name(name).
@@ -213,20 +248,13 @@ class FirmwareUpdate:
             key_pem = key.private_bytes(encoding=serialization.Encoding.PEM,
                                         format=serialization.PrivateFormat.TraditionalOpenSSL,
                                         encryption_algorithm=serialization.NoEncryption())
+            return cert_pem, key_pem
 
-            with tempfile.NamedTemporaryFile() as cert_file, tempfile.NamedTemporaryFile() as key_file:
-                cert_file.write(cert_pem)
-                cert_file.flush()
-
-                key_file.write(key_pem)
-                key_file.flush()
-
-                http_server = super()._create_server()
-                http_server.socket = ssl.wrap_socket(http_server.socket,
-                                                     certfile=cert_file.name,
-                                                     keyfile=key_file.name,
-                                                     server_side=True)
-                return http_server
+        def _create_server(self):
+            http_server = super()._create_server()
+            http_server.socket = ssl.wrap_socket(http_server.socket, certfile=self._cert_file, keyfile=self._key_file,
+                                                 server_side=True)
+            return http_server
 
     class TestWithCoapServer(Test):
         def setUp(self, coap_server=None, *args, **kwargs):
@@ -582,6 +610,94 @@ class FirmwareUpdateHttpsTest(FirmwareUpdate.TestWithHttpsServer):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+
+class FirmwareUpdateUnconfiguredHttpsTest(FirmwareUpdate.TestWithHttpsServer):
+    def setUp(self):
+        super().setUp(pass_cert_to_demo=False)
+
+    def runTest(self):
+        # disable minimum notification period
+        write_attrs_req = Lwm2mWriteAttributes('/5/0/5', query=['pmin=0'])
+        self.serv.send(write_attrs_req)
+        self.assertMsgEqual(Lwm2mChanged.matching(write_attrs_req)(), self.serv.recv())
+
+        # initial result should be 0
+        observe_req = Lwm2mObserve('/5/0/5')
+        self.serv.send(observe_req)
+        self.assertMsgEqual(Lwm2mContent.matching(observe_req)(content=b'0'), self.serv.recv())
+
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # even before reaching the server, we should get an error
+        notify_msg = self.serv.recv()
+        # no security information => "Unsupported protocol"
+        self.assertMsgEqual(Lwm2mNotify(observe_req.token, str(UPDATE_RESULT_UNSUPPORTED_PROTOCOL).encode()),
+                            notify_msg)
+        self.serv.send(Lwm2mReset(msg_id=notify_msg.msg_id))
+        self.assertEqual(0, self.read_state())
+
+
+class FirmwareUpdateUnconfiguredHttpsWithFallbackAttemptTest(FirmwareUpdate.TestWithHttpsServer):
+    def setUp(self):
+        super().setUp(pass_cert_to_demo=False, psk_identity=b'test-identity', psk_key=b'test-key')
+
+    def runTest(self):
+        # disable minimum notification period
+        write_attrs_req = Lwm2mWriteAttributes('/5/0/5', query=['pmin=0'])
+        self.serv.send(write_attrs_req)
+        self.assertMsgEqual(Lwm2mChanged.matching(write_attrs_req)(), self.serv.recv())
+
+        # initial result should be 0
+        observe_req = Lwm2mObserve('/5/0/5')
+        self.serv.send(observe_req)
+        self.assertMsgEqual(Lwm2mContent.matching(observe_req)(content=b'0'), self.serv.recv())
+
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # even before reaching the server, we should get an error
+        notify_msg = self.serv.recv()
+        # no security information => client will attempt PSK from data model and fail handshake => "Connection lost"
+        self.assertMsgEqual(Lwm2mNotify(observe_req.token, str(UPDATE_RESULT_CONNECTION_LOST).encode()), notify_msg)
+        self.serv.send(Lwm2mReset(msg_id=notify_msg.msg_id))
+        self.assertEqual(0, self.read_state())
+
+
+class FirmwareUpdateInvalidHttpsTest(FirmwareUpdate.TestWithHttpsServer):
+    def setUp(self):
+        super().setUp(cn='invalid_cn')
+
+    def runTest(self):
+        # disable minimum notification period
+        write_attrs_req = Lwm2mWriteAttributes('/5/0/5', query=['pmin=0'])
+        self.serv.send(write_attrs_req)
+        self.assertMsgEqual(Lwm2mChanged.matching(write_attrs_req)(), self.serv.recv())
+
+        # initial result should be 0
+        observe_req = Lwm2mObserve('/5/0/5')
+        self.serv.send(observe_req)
+        self.assertMsgEqual(Lwm2mContent.matching(observe_req)(content=b'0'), self.serv.recv())
+
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # even before reaching the server, we should get an error
+        notify_msg = self.serv.recv()
+        # handshake failure => "Connection lost"
+        self.assertMsgEqual(Lwm2mNotify(observe_req.token, str(UPDATE_RESULT_CONNECTION_LOST).encode()), notify_msg)
+        self.serv.send(Lwm2mReset(msg_id=notify_msg.msg_id))
+        self.assertEqual(0, self.read_state())
 
 
 class FirmwareUpdateResetInIdleState(FirmwareUpdate.Test):

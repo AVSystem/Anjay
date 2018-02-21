@@ -286,6 +286,11 @@ static int demo_init(anjay_demo_t *demo,
         .max_icmp_failures = &cmdline_args->max_icmp_failures,
     };
 
+    const avs_net_security_info_t *fw_security_info_ptr = NULL;
+    if (cmdline_args->fw_security_info.mode != (avs_net_security_mode_t) -1) {
+        fw_security_info_ptr = &cmdline_args->fw_security_info;
+    }
+
     demo->connection_args = &cmdline_args->connection_args;
 
     demo->anjay = anjay_new(&config);
@@ -295,7 +300,8 @@ static int demo_init(anjay_demo_t *demo,
             || anjay_attr_storage_install(demo->anjay)
             || anjay_access_control_install(demo->anjay)
             || firmware_update_install(demo->anjay, &demo->fw_update,
-                                       cmdline_args->fw_updated_marker_path)
+                                       cmdline_args->fw_updated_marker_path,
+                                       fw_security_info_ptr)
             || !iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
                                        POLLIN | POLLHUP,
                                        demo_command_dispatch, demo, NULL)) {

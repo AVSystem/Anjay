@@ -73,7 +73,7 @@ static const char BUFFERS[][50] = {
 
 static const anjay_security_instance_t BOOTSTRAP_INSTANCE = {
     .ssid = 0,
-    .server_uri = "... at ease, eating well",
+    .server_uri = "coap://at.ease/eating?well",
     .bootstrap_server = true,
     .security_mode = ANJAY_UDP_SECURITY_NOSEC,
     .client_holdoff_s = -1,

@@ -31,7 +31,8 @@ class Test0_ClientInitiatedBootstrap(DataModel.Test):
                                      bootstrap_server=True)
 
     def tearDown(self):
-        super().teardown_demo_with_servers(auto_deregister=False)
+        self.assertDemoRegisters()
+        super().teardown_demo_with_servers()
 
     def runTest(self):
         # 1. Without Instance of Server Object, the Client performs a
@@ -60,7 +61,7 @@ class Test0_ClientInitiatedBootstrap(DataModel.Test):
         self.test_write('/%d' % OID.Security,
                         TLV.make_instance(0, [TLV.make_resource(RID.Security.ServerURI, regular_serv_uri),
                             TLV.make_resource(RID.Security.Bootstrap, 0),
-                            TLV.make_resource(RID.Security.Mode, 3),
+                            TLV.make_resource(RID.Security.Mode, 0),
                             TLV.make_resource(RID.Security.ShortServerID, 1),
                             TLV.make_resource(RID.Security.PKOrIdentity, self.PSK_IDENTITY),
                             TLV.make_resource(RID.Security.SecretKey, self.PSK_KEY)]).serialize(),

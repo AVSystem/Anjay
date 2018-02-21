@@ -13,6 +13,7 @@
 # limitations under the License.
 
 set(SOURCES
+    src/fw_dm_security.c
     src/fw_update.c)
 set(PUBLIC_HEADERS
     include_public/anjay/fw_update.h)

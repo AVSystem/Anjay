@@ -21,7 +21,14 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-bool _anjay_downloader_protocol_supported(const char *proto);
+typedef enum {
+    ANJAY_DOWNLOADER_PROTO_UNSUPPORTED,
+    ANJAY_DOWNLOADER_PROTO_PLAIN,
+    ANJAY_DOWNLOADER_PROTO_ENCRYPTED
+} anjay_downloader_protocol_class_t;
+
+anjay_downloader_protocol_class_t
+_anjay_downloader_classify_protocol(const char *proto);
 
 VISIBILITY_PRIVATE_HEADER_END
 

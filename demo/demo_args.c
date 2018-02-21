@@ -47,6 +47,9 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .msg_cache_size = 0,
     .fw_updated_marker_path = "/tmp/anjay-fw-updated",
     .max_icmp_failures = 7,
+    .fw_security_info = {
+        .mode = (avs_net_security_mode_t) -1
+    },
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -164,10 +167,22 @@ static void print_option_help(const struct option *opt) {
                             "it to 0 disables caching mechanism." },
         { 'N', NULL, NULL,
           "Send notifications as Confirmable messages by default" },
-        { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
-          "File path to use as a marker for persisting firmware update state" },
         { 'U', "COUNT", "7", "Sets maximum number of ICMP Port/Host unreachable "
                "errors before the Server is considered unreachable" },
+        { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
+          "File path to use as a marker for persisting firmware update state" },
+        { 2, "CERT_FILE", NULL, "Require certificate validation against "
+          "specified file when downloading firmware over encrypted channels" },
+        { 3, "CERT_DIR", NULL, "Require certificate validation against files "
+          "in specified path when downloading firmware over encrypted channels"
+          "; note that the TLS backend may impose specific requirements for "
+          "file names and formats" },
+        { 4, "PSK identity", NULL, "Download firmware over encrypted channels "
+          "using PSK-mode encryption with the specified identity (provided as "
+          "hexlified string); must be used together with --fw-psk-key" },
+        { 5, "PSK key", NULL, "Download firmware over encrypted channels using "
+          "PSK-mode encryption with the specified key (provided as hexlified "
+          "string); must be used together with --fw-psk-identity" },
     };
 
     int description_offset = 25;
@@ -237,6 +252,9 @@ static int parse_hexstring(const char *str, uint8_t **out, size_t *out_size) {
 
     size_t length = strlen(str);
     if (length % 2 || !length) {
+        return -1;
+    }
+    if (*out) {
         return -1;
     }
     *out = (uint8_t *) malloc(length / 2);
@@ -367,8 +385,12 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "outbuf-size",                required_argument, 0, 'O' },
         { "cache-size",                 required_argument, 0, '$' },
         { "confirmable-notifications",  no_argument,       0, 'N' },
-        { "fw-updated-marker-path",     required_argument, 0, 1 },
         { "max-icmp-failures",          required_argument, 0, 'U' },
+        { "fw-updated-marker-path",     required_argument, 0, 1 },
+        { "fw-cert-file",               required_argument, 0, 2 },
+        { "fw-cert-path",               required_argument, 0, 3 },
+        { "fw-psk-identity",            required_argument, 0, 4 },
+        { "fw-psk-key",                 required_argument, 0, 5 },
         { 0, 0, 0, 0 }
     };
     int num_servers = 0;
@@ -565,9 +587,6 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'N':
             parsed_args->confirmable_notifications = true;
             break;
-        case 1:
-            parsed_args->fw_updated_marker_path = optarg;
-            break;
         case 'U': {
             int32_t max_icmp_failures;
             if (parse_i32(optarg, &max_icmp_failures)
@@ -577,6 +596,87 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->max_icmp_failures = (uint32_t)max_icmp_failures;
             break;
         }
+        case 1:
+            parsed_args->fw_updated_marker_path = optarg;
+            break;
+        case 2:
+            if (parsed_args->fw_security_info.mode
+                    != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for firmware upgrade");
+                goto error;
+            }
+            parsed_args->fw_security_info =
+                    avs_net_security_info_from_certificates(
+                            (avs_net_certificate_info_t) {
+                                .server_cert_validation = true,
+                                .trusted_certs =
+                                        avs_net_trusted_cert_source_from_paths(
+                                                NULL, optarg)
+                            });
+            break;
+        case 3:
+            if (parsed_args->fw_security_info.mode
+                    != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for firmware upgrade");
+                goto error;
+            }
+            parsed_args->fw_security_info =
+                    avs_net_security_info_from_certificates(
+                            (avs_net_certificate_info_t) {
+                                .server_cert_validation = true,
+                                .trusted_certs =
+                                        avs_net_trusted_cert_source_from_paths(
+                                                optarg, NULL)
+                            });
+            break;
+        case 4:
+            if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
+                    && parsed_args->fw_security_info.mode
+                            != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for firmware upgrade");
+                goto error;
+            }
+            if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
+                    && parsed_args->fw_security_info.data.psk.identity) {
+                demo_log(ERROR, "--fw-psk-identity specified more than once");
+                goto error;
+            }
+            if (parse_hexstring(
+                    optarg,
+                    (uint8_t **) (intptr_t)
+                            &parsed_args->fw_security_info.data.psk.identity,
+                    &parsed_args->fw_security_info.data.psk.identity_size)) {
+                demo_log(ERROR, "Invalid PSK identity for firmware upgrade");
+                goto error;
+            }
+            parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
+            break;
+        case 5:
+            if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
+                    && parsed_args->fw_security_info.mode
+                            != (avs_net_security_mode_t) -1) {
+                demo_log(ERROR, "Multiple incompatible security information "
+                                "specified for firmware upgrade");
+                goto error;
+            }
+            if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
+                    && parsed_args->fw_security_info.data.psk.psk) {
+                demo_log(ERROR, "--fw-psk-key specified more than once");
+                goto error;
+            }
+            if (parse_hexstring(
+                    optarg,
+                    (uint8_t **) (intptr_t)
+                            &parsed_args->fw_security_info.data.psk.psk,
+                    &parsed_args->fw_security_info.data.psk.psk_size)) {
+                demo_log(ERROR, "Invalid pre-shared key for firmware upgrade");
+                goto error;
+            }
+            parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
+            break;
         case 0:
             goto finish;
         }
@@ -645,6 +745,13 @@ finish:
                 goto error;
             }
         }
+    }
+    if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
+            && (!parsed_args->fw_security_info.data.psk.identity
+                    || !parsed_args->fw_security_info.data.psk.psk)) {
+        demo_log(ERROR, "Both identity and key must be provided when using PSK "
+                        "for firmware upgrade security");
+        goto error;
     }
     return 0;
 error:

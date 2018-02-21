@@ -254,6 +254,45 @@ _anjay_servers_find_inactive_ptr(anjay_servers_t *servers,
     return NULL;
 }
 
+static bool is_valid_coap_uri(const anjay_url_t *uri) {
+    if (strcmp(uri->protocol, "coap") && strcmp(uri->protocol, "coaps")) {
+        anjay_log(ERROR, "unsupported protocol: %s", uri->protocol);
+        return false;
+    }
+    return true;
+}
+
+int _anjay_server_get_uri(anjay_t *anjay,
+                          anjay_iid_t security_iid,
+                          anjay_url_t *out_uri) {
+    char raw_uri[ANJAY_MAX_URL_RAW_LENGTH];
+
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SERVER_URI);
+
+    if (_anjay_dm_res_read_string(anjay, &path, raw_uri, sizeof(raw_uri))) {
+        anjay_log(ERROR, "could not read LwM2M server URI");
+        return -1;
+    }
+
+    anjay_url_t uri = ANJAY_URL_EMPTY;
+    if (_anjay_parse_url(raw_uri, &uri) || !is_valid_coap_uri(&uri)) {
+        _anjay_url_cleanup(&uri);
+        anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
+        return -1;
+    }
+    if (!*uri.port) {
+        if (uri.protocol[4]) { // coap_s_
+            strcpy(uri.port, "5684");
+        } else { // coap_\0_
+            strcpy(uri.port, "5683");
+        }
+    }
+    *out_uri = uri;
+    return 0;
+}
+
 static int disable_server_job(anjay_t *anjay,
                               void *ssid_) {
     anjay_ssid_t ssid = (anjay_ssid_t)(intptr_t)ssid_;

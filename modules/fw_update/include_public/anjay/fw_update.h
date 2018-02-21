@@ -325,16 +325,58 @@ typedef const char *anjay_fw_update_get_version_t(void *user_ptr);
  * @param user_ptr Opaque pointer to user data, as passed to
  *                 @ref anjay_fw_update_install
  *
- * @returns The callback shall return a negative if it can be determined without
- *          a reboot that the firmware upgrade cannot be successfully performed.
- *          If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> value is returned, an
- *          equivalent value will be set in the Update Result Resource. If an
- *          update is to be attempted, it shall either return 0 or perform a
- *          reboot internally without returning. In either case, a reboot or at
- *          least a reinitialization of the library is then required to pass the
- *          update result.
+ * @returns The callback shall return a negative value if it can be determined
+ *          without a reboot that the firmware upgrade cannot be successfully
+ *          performed. If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> values is
+ *          returned, an equivalent value will be set in the Update Result
+ *          Resource. If an update is to be attempted, it shall either return 0
+ *          or perform a reboot internally without returning. In either case,
+ *          a reboot or at least a reinitialization of the library is then
+ *          required to pass the update result.
  */
 typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
+
+/**
+ * Queries security information that shall be used for an encrypted connection
+ * with a PULL-mode download server.
+ *
+ * May be called before @ref anjay_fw_update_stream_open_t if the download is to
+ * be performed in PULL mode and the connection needs to use TLS or DTLS
+ * encryption.
+ *
+ * Note that the <c>avs_net_security_info_t</c> contains references to file
+ * paths and/or binary security keys. It is the user's responsibility to
+ * appropriately allocate them and ensure proper lifetime of the returned
+ * pointers. The returned security information may only be invalidated in a call
+ * to @ref anjay_fw_update_reset_t or after a call to @ref anjay_delete .
+ *
+ * If this handler is not implemented at all (with the corresponding field set
+ * to <c>NULL</c>), @ref anjay_fw_update_load_security_from_dm will be used as
+ * a default way to get security information. You may also use that function
+ * yourself, for example as a fallback mechanism.
+ *
+ * @param user_ptr          Opaque pointer to user data, as passed to
+ *                          @ref anjay_fw_update_install
+ *
+ * @param out_security_info Pointer in which the handler shall fill in security
+ *                          configuration to use for download. Note that leaving
+ *                          this value as empty without filling it in will
+ *                          result in a configuration that is <strong>valid, but
+ *                          very insecure</strong>: it will cause any server
+ *                          certificate to be accepted without validation. Any
+ *                          pointers used within the supplied structure shall
+ *                          remain valid until a call to
+ *                          @ref anjay_fw_update_reset_t .
+ *
+ * @returns The callback shall return 0 if successful or a negative value in
+ *          case of error. If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> value is
+ *          returned, an equivalent value will be set in the Update Result
+ *          Resource.
+ */
+typedef int
+anjay_fw_update_get_security_info_t(void *user_ptr,
+                                    avs_net_security_info_t *out_security_info,
+                                    const char *download_uri);
 
 /**
  * Handler callbacks that shall implement the platform-specific part of firmware
@@ -349,7 +391,10 @@ typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
  *   called in this state:
  *   - <c>stream_open</c> - shall open the download stream; moves the object
  *     into the <em>Downloading</em> state
- *   - <c>reset</c> - most likely shall do nothing
+ *   - <c>get_security_info</c> - shall fill in security info that shall be used
+ *     for a given URL
+ *   - <c>reset</c> - shall free data allocated by <c>get_security_info</c>, if
+ *     it was called and there is any
  * - <strong>Downloading</strong>. The object might be initialized directly into
  *   this state by using <c>ANJAY_FW_UPDATE_INITIAL_DOWNLOADING</c>. In this
  *   state, the download stream is open and data may be transferred. The
@@ -402,6 +447,10 @@ typedef struct {
     /** Performs the actual upgrade with previously downloaded package;
      * @ref anjay_fw_update_perform_upgrade_t */
     anjay_fw_update_perform_upgrade_t *perform_upgrade;
+
+    /** Queries security information that shall be used for an encrypted
+     * connection; @ref anjay_fw_update_get_security_info_t */
+    anjay_fw_update_get_security_info_t *get_security_info;
 } anjay_fw_update_handlers_t;
 
 /**
@@ -436,6 +485,35 @@ anjay_fw_update_install(anjay_t *anjay,
                         const anjay_fw_update_handlers_t *handlers,
                         void *user_arg,
                         const anjay_fw_update_initial_state_t *initial_state);
+
+/**
+ * Helper function that is used as a default implementation of security
+ * information querying for PULL-mode downloads from (D)TLS-encrypted URIs.
+ *
+ * Given a URI, the Security object is scanned for instances with Server URI
+ * resource matching it in the following way:
+ * - if there is at least one instance with matching hostname, protocol and port
+ *   number, and valid secure connection configuration, the first such instance
+ *   (in the order as returned via @ref anjay_dm_instance_it_t) is used
+ * - otherwise, if there is at least one instance with matching hostname and
+ *   valid secure connection configuration, the first such instance (in the
+ *   order as returned via @ref anjay_dm_instance_it_t) is used
+ *
+ * The returned security information is exactly the same configuration that is
+ * used for LwM2M connection with the server chosen with the rules described
+ * above.
+ *
+ * @param anjay Anjay object whose data model shall be queried.
+ *
+ * @param uri   URI for which to find security configuration.
+ *
+ * @returns Security information found, or <c>NULL</c> if no suitable LwM2M
+ *          Security Object instance could be found. The returned structure is
+ *          heap-allocated; to release all memory allocated for it, it is enough
+ *          to call <c>free()</c> on the returned pointer.
+ */
+avs_net_security_info_t *
+anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *uri);
 
 #ifdef __cplusplus
 }

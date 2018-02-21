@@ -41,6 +41,7 @@ typedef struct cmdline_args {
     bool confirmable_notifications;
     const char *fw_updated_marker_path;
     uint32_t max_icmp_failures;
+    avs_net_security_info_t fw_security_info;
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);
