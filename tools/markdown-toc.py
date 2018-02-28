@@ -45,6 +45,10 @@ def extract_toc_headers(content):
     return headers
 
 
+def strip_links(text):
+    return re.sub(r'\[(.*?)]\(.*?\)', r'\1', text)
+
+
 def anchor_from_title(title):
     title = title.lower()
     title = ''.join(c for c in title if c not in string.punctuation)
@@ -57,7 +61,7 @@ def make_toc_from_headers(headers):
 
     for header in headers:
         indent = '  ' * (header.level - min_level)
-        toc_string += '%s* [%s](#%s)\n' % (indent, header.title, anchor_from_title(header.title))
+        toc_string += '%s* [%s](#%s)\n' % (indent, strip_links(header.title), anchor_from_title(header.title))
 
     return toc_string
 

@@ -154,6 +154,7 @@ anjay_t *anjay_new(const anjay_configuration_t *config) {
 
 void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay) {
     memset(&anjay->current_connection, 0, sizeof(anjay->current_connection));
+    avs_stream_reset(anjay->comm_stream);
     if (avs_stream_net_setsock(anjay->comm_stream, NULL)) {
         anjay_log(ERROR, "could not set stream socket to NULL");
     }
@@ -681,14 +682,14 @@ static int handle_incoming_message(anjay_t *anjay) {
                                                       &request_msg))) {
         if (result == AVS_COAP_CTX_ERR_DUPLICATE) {
             anjay_log(TRACE, "duplicate request received");
-            result = 0;
+            return 0;
         } else if (result == AVS_COAP_CTX_ERR_MSG_WAS_PING) {
             anjay_log(TRACE, "received CoAP ping");
-            result = 0;
+            return 0;
         } else {
             anjay_log(ERROR, "received packet is not a valid CoAP message");
+            return result;
         }
-        goto cleanup;
     }
 
     avs_coap_msg_identity_t request_identity = AVS_COAP_MSG_IDENTITY_EMPTY;
@@ -705,16 +706,12 @@ static int handle_incoming_message(anjay_t *anjay) {
                 anjay_log(WARNING, "could not send Bad Option response");
             }
         }
-        goto cleanup;
+        return 0;
     }
 
     _anjay_coap_stream_set_block_request_validator(
             anjay->comm_stream, block_request_equality_validator, &request);
-    result = handle_request(anjay, &request_identity, &request);
-
-cleanup:
-    avs_stream_reset(anjay->comm_stream);
-    return result;
+    return handle_request(anjay, &request_identity, &request);
 }
 
 anjay_server_connection_t *

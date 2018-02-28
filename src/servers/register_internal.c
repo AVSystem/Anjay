@@ -73,6 +73,29 @@ static void send_update_args_decode(anjay_ssid_t *out_ssid,
     assert(*out_socket_needs >= 0 && *out_socket_needs < _SOCKET_NEEDS_LIMIT);
 }
 
+static int send_update(anjay_t *anjay, anjay_active_server_info_t *server) {
+    anjay_connection_ref_t connection = {
+        .server = server,
+        .conn_type = server->registration_info.conn_type
+    };
+    if (_anjay_bind_server_stream(anjay, connection)) {
+        anjay_log(ERROR, "could not get stream for server %u", server->ssid);
+        return -1;
+    }
+
+    int result = _anjay_update_registration(anjay);
+    _anjay_release_server_stream(anjay);
+
+    if (result == ANJAY_REGISTRATION_UPDATE_REJECTED) {
+        anjay_log(DEBUG, "update rejected for SSID = %u; needs re-registering",
+                  server->ssid);
+    } else if (result != 0) {
+        anjay_log(ERROR, "could not send registration update: %d", result);
+    }
+
+    return result;
+}
+
 static int send_update_sched_job(anjay_t *anjay, void *args) {
     anjay_ssid_t ssid;
     anjay_socket_needs_t socket_needs;
@@ -82,52 +105,74 @@ static int send_update_sched_job(anjay_t *anjay, void *args) {
 
     AVS_LIST(anjay_active_server_info_t) server =
             _anjay_servers_find_active(&anjay->servers, ssid);
-
     if (!server) {
         return -1;
     }
 
-    bool is_bootstrap = (server->ssid == ANJAY_SSID_BOOTSTRAP);
-
-    int result = _anjay_server_refresh(anjay, server, socket_needs);
-    if (!result && socket_needs != SOCKET_NEEDS_NOTHING && is_bootstrap) {
-        result = _anjay_bootstrap_update_reconnected(anjay);
-    }
-
-    server_registration_operation_t attempted_operation;
-    if (!result && !is_bootstrap) {
-        if ((result = _anjay_server_update_or_reregister(
-                anjay, server, &attempted_operation))) {
-            if (attempted_operation == SERVER_REGISTRATION_RETRY) {
-                anjay_log(DEBUG, "re-registration failed");
-                // mark that the registration connection is no longer valid;
-                // prevents superfluous Deregister
-                server->registration_info.conn_type = ANJAY_CONNECTION_UNSET;
-                _anjay_server_deactivate(anjay, &anjay->servers, ssid,
-                                         AVS_TIME_DURATION_ZERO);
-                return 0;
-            } else if (result == AVS_COAP_CTX_ERR_NETWORK) {
-                anjay_log(ERROR, "network communication error while updating "
-                          "registration for SSID==%" PRIu16, server->ssid);
-                // We cannot use _anjay_schedule_server_reconnect(), because it
-                // would mean an endless loop without backoff if the server is
-                // down. Instead, we disconnect the socket and rely on
-                // scheduler's backoff. During the next call,
-                // _anjay_server_refresh() will reconnect the socket.
-                _anjay_connection_suspend((anjay_connection_ref_t) {
-                    .server = server,
-                    .conn_type = server->registration_info.conn_type
-                });
-            }
+    if (_anjay_server_refresh(anjay, server, socket_needs)) {
+        if (_anjay_server_registration_expired(server)) {
+            // note that this invariably causes re-Register,
+            // so we cannot do it if we want to retry Update
+            goto connection_failure;
         } else {
-            // Ignore errors, failure to flush notifications is not fatal.
-            _anjay_observe_sched_flush_current_connection(anjay);
-
-            // Updates are retryable, we only need to reschedule after success
-            result = _anjay_server_reschedule_update_job(anjay, server);
+            return -1;
         }
     }
-    return result;
+    if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+        if (socket_needs == SOCKET_NEEDS_NOTHING) {
+            return 0;
+        }
+        return _anjay_bootstrap_update_reconnected(anjay);
+    }
+
+    bool needs_reregister = true;
+    if (_anjay_server_registration_connection_valid(server)) {
+        if (!_anjay_server_registration_expired(server)) {
+            int result = send_update(anjay, server);
+            if (!result) {
+                needs_reregister = false;
+            } else if (result != ANJAY_REGISTRATION_UPDATE_REJECTED) {
+                if (result == AVS_COAP_CTX_ERR_NETWORK) {
+                    anjay_log(ERROR, "network communication error while "
+                                     "updating registration for SSID==%" PRIu16,
+                              server->ssid);
+                    // We cannot use _anjay_schedule_server_reconnect(),
+                    // because it would mean an endless loop without backoff
+                    // if the server is down. Instead, we disconnect the socket
+                    // and rely on scheduler's backoff. During the next call,
+                    // _anjay_server_refresh() will reconnect the socket.
+                    _anjay_connection_suspend((anjay_connection_ref_t) {
+                        .server = server,
+                        .conn_type = server->registration_info.conn_type
+                    });
+                }
+                return result;
+            }
+        }
+    } else {
+        anjay_log(INFO, "No valid existing connection to Registration "
+                  "Interface for SSID = %u, re-registering", server->ssid);
+        if (_anjay_server_setup_registration_connection(server)) {
+            goto connection_failure;
+        }
+    }
+    if (needs_reregister && _anjay_server_register(anjay, server)) {
+        anjay_log(DEBUG, "re-registration failed");
+        goto connection_failure;
+    }
+
+    // Ignore errors, failure to flush notifications is not fatal.
+    _anjay_observe_sched_flush_current_connection(anjay);
+
+    // Updates are retryable, we only need to reschedule after success
+    return _anjay_server_reschedule_update_job(anjay, server);
+connection_failure:
+    // mark that the registration connection is no longer valid;
+    // prevents superfluous Deregister
+    server->registration_info.conn_type = ANJAY_CONNECTION_UNSET;
+    _anjay_server_deactivate(anjay, &anjay->servers, ssid,
+                             AVS_TIME_DURATION_ZERO);
+    return 0;
 }
 
 /**
@@ -188,36 +233,6 @@ schedule_next_update(anjay_t *anjay,
                            SOCKET_NEEDS_NOTHING);
 }
 
-static int
-send_update(anjay_t *anjay,
-            anjay_active_server_info_t *server,
-            server_registration_operation_t *out_attempted_operation) {
-    *out_attempted_operation = SERVER_REGISTRATION_UPDATE;
-    anjay_connection_ref_t connection = {
-        .server = server,
-        .conn_type = server->registration_info.conn_type
-    };
-    if (_anjay_bind_server_stream(anjay, connection)) {
-        anjay_log(ERROR, "could not get stream for server %u", server->ssid);
-        return -1;
-    }
-
-    int result = _anjay_update_registration(anjay);
-    avs_stream_reset(anjay->comm_stream);
-    _anjay_release_server_stream(anjay);
-
-    if (result == ANJAY_REGISTRATION_UPDATE_REJECTED) {
-        anjay_log(DEBUG, "update rejected for SSID = %u; re-registering",
-                  server->ssid);
-        *out_attempted_operation = SERVER_REGISTRATION_RETRY;
-        result = _anjay_server_register(anjay, server);
-    } else if (result != 0) {
-        anjay_log(ERROR, "could not send registration update: %d", result);
-    }
-
-    return result;
-}
-
 bool _anjay_server_registration_connection_valid(
         anjay_active_server_info_t *server) {
     return server->registration_info.conn_type != ANJAY_CONNECTION_UNSET
@@ -237,26 +252,6 @@ bool _anjay_server_registration_expired(anjay_active_server_info_t *server) {
         return true;
     }
     return false;
-}
-
-int _anjay_server_update_or_reregister(
-        anjay_t *anjay,
-        anjay_active_server_info_t *server,
-        server_registration_operation_t *out_attempted_operation) {
-    *out_attempted_operation = SERVER_REGISTRATION_RETRY;
-
-    if (_anjay_server_registration_connection_valid(server)) {
-        if (!_anjay_server_registration_expired(server)) {
-            return send_update(anjay, server, out_attempted_operation);
-        }
-    } else {
-        anjay_log(INFO, "No valid existing connection to Registration Interface"
-                  " for SSID = %u, re-registering", server->ssid);
-        if (_anjay_server_setup_registration_connection(server)) {
-            return -1;
-        }
-    }
-    return _anjay_server_register(anjay, server);
 }
 
 int _anjay_server_reschedule_update_job(anjay_t *anjay,
@@ -353,8 +348,6 @@ int _anjay_server_register(anjay_t *anjay,
     }
 
     int result = _anjay_register(anjay);
-    avs_stream_reset(anjay->comm_stream);
-
     if (!result) {
         _anjay_sched_del(anjay->sched, &server->sched_update_handle);
         if (schedule_next_update(anjay, &server->sched_update_handle, server)) {
@@ -387,7 +380,6 @@ int _anjay_server_deregister(anjay_t *anjay,
         anjay_log(ERROR, "could not send De-Register request: %d", result);
     }
 
-    avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream_without_scheduling_queue(anjay);
     return result;
 }

@@ -732,7 +732,6 @@ static int send_entry(anjay_t *anjay,
                     anjay->comm_stream, &notify_id))
             || (result = avs_stream_finish_message(anjay->comm_stream)));
 
-    avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream(anjay);
 
     if (!result) {

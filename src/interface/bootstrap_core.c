@@ -743,7 +743,6 @@ static int request_bootstrap(anjay_t *anjay, void *dummy) {
         start_bootstrap_if_not_already_started(anjay);
     }
 
-    avs_stream_reset(anjay->comm_stream);
     _anjay_release_server_stream(anjay);
     return result;
 }

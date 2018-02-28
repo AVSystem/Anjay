@@ -21,7 +21,7 @@ The project has been created and is actively maintained by [AVSystem](https://ww
   * [Dependencies](#dependencies)
     * [Ubuntu 16.04 LTS](#ubuntu-1604-lts)
     * [CentOS 7](#centos-7)
-    * [macOS Sierra with [Homebrew](https://brew.sh/)](#macos-sierra-with-homebrewhttpsbrewsh)
+    * [macOS Sierra with Homebrew](#macos-sierra-with-homebrewhttpsbrewsh)
   * [Running the demo client](#running-the-demo-client)
   * [Detailed compilation guide](#detailed-compilation-guide)
 * [License](#license)

@@ -54,20 +54,19 @@ static int reload_active_server(anjay_t *anjay,
     if (server->needs_reload || server_needs_reconnect(server)) {
         server->needs_reload = false;
         if (_anjay_server_refresh(anjay, server, false)) {
-            return -1;
+            goto connection_failure;
         }
     }
 
     if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
-        if (!_anjay_server_registration_connection_valid(server)
-                || _anjay_server_registration_expired(server)) {
-            server_registration_operation_t attempted_operation;
-            int result = _anjay_server_update_or_reregister(
-                    anjay, server, &attempted_operation);
-            if (result && attempted_operation == SERVER_REGISTRATION_RETRY) {
-                _anjay_server_deactivate(anjay, servers, server->ssid,
-                                         AVS_TIME_DURATION_ZERO);
+        if (!_anjay_server_registration_connection_valid(server)) {
+            if (_anjay_server_setup_registration_connection(server)
+                    || _anjay_server_register(anjay, server)) {
+                goto connection_failure;
             }
+        } else if (_anjay_server_registration_expired(server)
+                && _anjay_server_register(anjay, server)) {
+            goto connection_failure;
         }
 
         // Flush notifications pending since connectivity loss or entering
@@ -83,6 +82,10 @@ static int reload_active_server(anjay_t *anjay,
             return _anjay_server_reschedule_update_job(anjay, server);
         }
     }
+    return 0;
+connection_failure:
+    _anjay_server_deactivate(anjay, servers, server->ssid,
+                             AVS_TIME_DURATION_ZERO);
     return 0;
 }
 
