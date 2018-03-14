@@ -20,7 +20,7 @@ import time
 from framework.lwm2m_test import *
 
 
-class ReconnectRetryTest(test_suite.Lwm2mDtlsSingleServerTest, test_suite.PcapEnabledTest):
+class ReconnectRetryTest(test_suite.PcapEnabledTest, test_suite.Lwm2mDtlsSingleServerTest):
     def setup_demo_with_servers(self, **kwargs):
         for server in kwargs['servers']:
             self._server_close_stack.enter_context(server.fake_close())

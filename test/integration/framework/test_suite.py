@@ -654,6 +654,10 @@ class Lwm2mDtlsSingleServerTest(Lwm2mSingleServerTest):
                       psk_key=self.PSK_KEY)
 
 
+# This class **MUST** be specified as the first in superclass list, due to Python's method resolution order
+# (see https://www.python-course.eu/python3_multiple_inheritance.php) and the fact that not all setUp() methods
+# call super().setUp(). Failure to fulfill this requirement may lead to "make check" failing on systems
+# without dpkt or dumpcap available.
 class PcapEnabledTest(Lwm2mTest):
     def setUp(self, *args, **kwargs):
         if not (_DPKT_AVAILABLE and Lwm2mTest.dumpcap_available()):

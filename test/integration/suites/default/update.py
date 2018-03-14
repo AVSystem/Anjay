@@ -51,7 +51,7 @@ class UpdateTest(test_suite.Lwm2mSingleServerTest):
         self.assertDemoUpdatesRegistration(timeout_s=LIFETIME)
 
 
-class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest, test_suite.PcapEnabledTest):
+class UpdateServerDownReconnectTest(test_suite.PcapEnabledTest, test_suite.Lwm2mSingleServerTest):
     def runTest(self):
         # respond with Port Unreachable to the next packet
         with self.serv.fake_close():
