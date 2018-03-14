@@ -214,6 +214,9 @@ static int activate_server_job(anjay_t *anjay, void *ssid_) {
 static int sched_reactivate_server(anjay_t *anjay,
                                    anjay_inactive_server_info_t *server,
                                    avs_time_duration_t reactivate_delay) {
+    // start the backoff procedure from the beginning
+    server->reactivate_failed = false;
+    server->num_icmp_failures = 0;
     _anjay_sched_del(anjay->sched, &server->sched_reactivate_handle);
     if (_anjay_sched_retryable(anjay->sched, &server->sched_reactivate_handle,
                                reactivate_delay, ANJAY_SERVER_RETRYABLE_BACKOFF,
@@ -239,6 +242,25 @@ int _anjay_server_sched_activate(anjay_t *anjay,
     }
 
     return sched_reactivate_server(anjay, *inactive_server_ptr, delay);
+}
+
+int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay) {
+    int result = 0;
+
+    AVS_LIST(anjay_inactive_server_info_t) it;
+    AVS_LIST_FOREACH(it, anjay->servers.inactive) {
+        if (!it->reactivate_failed
+                || it->num_icmp_failures < anjay->max_icmp_failures) {
+            continue;
+        }
+        int partial = sched_reactivate_server(anjay, it,
+                                              AVS_TIME_DURATION_ZERO);
+        if (!result) {
+            result = partial;
+        }
+    }
+
+    return result;
 }
 
 void _anjay_servers_add_active(anjay_servers_t *servers,

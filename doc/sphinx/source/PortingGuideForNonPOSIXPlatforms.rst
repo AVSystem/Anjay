@@ -40,6 +40,15 @@ If POSIX ``clock_gettime`` function is not available:
 Networking API
 --------------
 
+.. note::
+
+    If LwIP 2.0 is used as a network stack, you may set:
+
+     - ``-DWITH_POSIX_AVS_SOCKET=ON``
+     - ``-DWITH_IPV6=OFF``
+     - ``-DPOSIX_COMPAT_HEADER=avs_commons/git/compat/lwip-posix-compat.h``
+    CMake options for an out-of-the-box socket compatibility layer implementation.
+
 If POSIX socket API is not available:
 
 - Use ``WITH_POSIX_AVS_SOCKET=OFF`` when running CMake on Anjay,

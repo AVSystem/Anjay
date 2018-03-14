@@ -289,7 +289,11 @@ static int test_resource_read(anjay_t *anjay,
     case TEST_RES_BYTES_BURST:
         return anjay_ret_i32(ctx, inst->bytes_burst);
     case TEST_RES_EMPTY:
-        return 0; // trololo, see T832
+        // We used to have a bug that caused the library to segfault
+        // if a resource_read handler does not call any anjay_ret_*
+        // function. This resource is used to check whether we do not
+        // crash in such situations. See T832.
+        return 0;
     case TEST_RES_OPAQUE_ARRAY: {
         anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
         if (!array) {
@@ -408,11 +412,13 @@ static int test_resource_write(anjay_t *anjay,
     }
     case TEST_RES_RAW_BYTES:
         return fetch_bytes(ctx, &inst->raw_bytes, &inst->raw_bytes_size);
-    case TEST_RES_BYTES:
     case TEST_RES_TIMESTAMP:
     case TEST_RES_INCREMENT_COUNTER:
     case TEST_RES_LAST_EXEC_ARGS_ARRAY:
+    case TEST_RES_BYTES:
+    case TEST_RES_EMPTY:
     case TEST_RES_INIT_INT_ARRAY:
+    case TEST_RES_OPAQUE_ARRAY:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     default:
         return ANJAY_ERR_NOT_FOUND;
@@ -602,11 +608,25 @@ static int test_resource_execute(anjay_t *anjay,
             }
 
             ++inst->execute_counter;
-            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, TEST_RES_COUNTER);
+            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                                 TEST_RES_COUNTER);
+            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                                 TEST_RES_LAST_EXEC_ARGS_ARRAY);
             return 0;
         }
     case TEST_RES_INIT_INT_ARRAY:
-        return init_int_array(&inst->array, arg_ctx);
+        {
+            int result = init_int_array(&inst->array, arg_ctx);
+            if (result) {
+                return result;
+            }
+
+            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                                 TEST_RES_INT_ARRAY);
+            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                                 TEST_RES_OPAQUE_ARRAY);
+            return 0;
+        }
     default:
         return ANJAY_ERR_NOT_FOUND;
     }

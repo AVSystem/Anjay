@@ -14,8 +14,14 @@
  * limitations under the License.
  */
 
+#include <assert.h>
+#include <inttypes.h>
+#include <string.h>
+
 #include "server_transaction.h"
 #include "server_utils.h"
+
+#include <anjay_modules/dm_utils.h>
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -23,6 +29,58 @@ static int ssid_cmp(const void *a, const void *b, size_t size) {
     assert(size == sizeof(anjay_ssid_t));
     (void) size;
     return *((const anjay_ssid_t *) a) - *((const anjay_ssid_t *) b);
+}
+
+#define LOG_VALIDATION_FAILED(ServInstance, ...)                    \
+    do {                                                            \
+        char buffer[128];                                           \
+        int offset = snprintf(buffer, sizeof(buffer),               \
+                              "/%u/%u: ", ANJAY_DM_OID_SERVER,      \
+                              (unsigned) (ServInstance)->iid);      \
+        if (offset < 0) {                                           \
+            offset = 0;                                             \
+        }                                                           \
+        snprintf(&buffer[offset], sizeof(buffer) - (size_t) offset, \
+                 __VA_ARGS__);                                      \
+        server_log(ERROR, "%s", buffer);                            \
+    } while (0)
+
+static int validate_instance(server_instance_t *it) {
+    if (!it->has_ssid) {
+        LOG_VALIDATION_FAILED(
+                it, "missing mandatory 'Short Server ID' resource value");
+        return -1;
+    }
+    if (!it->has_binding) {
+        LOG_VALIDATION_FAILED(it, "missing mandatory 'Binding' resource value");
+        return -1;
+    }
+    if (!it->has_lifetime) {
+        LOG_VALIDATION_FAILED(it,
+                              "missing mandatory 'Lifetime' resource value");
+        return -1;
+    }
+    if (!it->has_notification_storing) {
+        LOG_VALIDATION_FAILED(it, "missing mandatory 'Notification Storing "
+                                  "when disabled or offline' resource value");
+        return -1;
+    }
+
+    if (it->data.lifetime <= 0) {
+        LOG_VALIDATION_FAILED(it, "Lifetime value is negative: %" PRId32,
+                              it->data.lifetime);
+        return -1;
+    }
+    if (it->data.default_max_period == 0) {
+        LOG_VALIDATION_FAILED(it, "Default Max Period is 0");
+        return -1;
+    }
+    if (it->data.binding == ANJAY_BINDING_NONE) {
+        LOG_VALIDATION_FAILED(it, "Incorrect binding mode %d",
+                              (int) it->data.binding);
+        return -1;
+    }
+    return 0;
 }
 
 int _anjay_serv_object_validate(server_repr_t *repr) {
@@ -34,28 +92,11 @@ int _anjay_serv_object_validate(server_repr_t *repr) {
     AVS_LIST(anjay_ssid_t) seen_ssids = NULL;
     AVS_LIST(server_instance_t) it;
     AVS_LIST_FOREACH(it, repr->instances) {
-        if (!it->has_ssid
-                || !it->has_binding
-                || !it->has_lifetime
-                || !it->has_notification_storing) {
-            server_log(TRACE, "Mandatory resources missing:%s%s%s%s",
-                       it->has_ssid ? "" : " SSID",
-                       it->has_binding ? "" : " BindingMode",
-                       it->has_lifetime ? "" : " Lifetime",
-                       it->has_notification_storing ? "" : " NotificationStoring");
+        if (validate_instance(it)) {
             result = ANJAY_ERR_BAD_REQUEST;
             break;
         }
-        if (it->data.lifetime <= 0
-                || it->data.default_max_period == 0
-                || it->data.binding == ANJAY_BINDING_NONE) {
-            server_log(TRACE, "Invalid value(s): Lifetime = %d; "
-                       "DefaultMaxPeriod = %d, Binding = %d\n",
-                       it->data.lifetime, it->data.default_max_period,
-                       it->data.binding);
-            result = ANJAY_ERR_BAD_REQUEST;
-            break;
-        }
+
         if (!AVS_LIST_INSERT_NEW(anjay_ssid_t, &seen_ssids)) {
             result = ANJAY_ERR_INTERNAL;
             break;

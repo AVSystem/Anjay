@@ -20,9 +20,6 @@ from framework.lwm2m_test import *
 
 
 class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor):
-    def _get_socket_count(self):
-        return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
-
     def setUp(self):
         extra_args = ['--bootstrap-timeout', '5']
         self.setup_demo_with_servers(servers=1,
@@ -33,21 +30,21 @@ class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor
         self.teardown_demo_with_servers()
 
     def runTest(self):
-        self.assertEqual(2, self._get_socket_count())
+        self.assertEqual(2, self.get_socket_count())
 
         # no message on the bootstrap socket - already bootstrapped
         with self.assertRaises(socket.timeout):
             print(self.bootstrap_server.recv(timeout_s=2))
 
         # no changes
-        self.assertEqual(2, self._get_socket_count())
+        self.assertEqual(2, self.get_socket_count())
 
         # still no message
         with self.assertRaises(socket.timeout):
             print(self.bootstrap_server.recv(timeout_s=4))
 
         # Bootstrap Finish did not arrive, so Bootstrap Server timeout is not applicable here - no change
-        self.assertEqual(2, self._get_socket_count())
+        self.assertEqual(2, self.get_socket_count())
 
         # Registration Update shall not include changes
         self.communicate('send-update')

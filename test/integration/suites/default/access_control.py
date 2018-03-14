@@ -478,7 +478,7 @@ class AclBootstrapping(bootstrap_server.BootstrapServer.Test, test_suite.Lwm2mDm
         return server
 
     def runTest(self):
-        self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
+        self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
 
         # Bootstrap Delete /
         req = Lwm2mDelete('/')

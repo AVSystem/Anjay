@@ -65,7 +65,7 @@ class CoapFileServer:
 
 
     def _recv_request(self):
-        if isinstance(self._server, coap.DtlsServer):
+        if self._server.get_remote_addr() is None:
             try:
                 self._server.listen(timeout_s=0.1)
             except socket.timeout:

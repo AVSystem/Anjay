@@ -47,8 +47,8 @@ class UriChangeReregisterTest(test_suite.Lwm2mTest):
         self.assertIn(b'</0/2/', res.content)
 
         # modify the server URI
-        demo_port = int(self.communicate('get-port -1', match_regex='PORT==([0-9]+)\n').group(1))
-        self.bootstrap_server.connect(('127.0.0.1', demo_port))
+        demo_port = self.get_demo_port()
+        self.bootstrap_server.connect_to_client(('127.0.0.1', demo_port))
 
         req = Lwm2mWrite('/0/2/%d' % RID.Security.ServerURI,
                          regular_serv2_uri)

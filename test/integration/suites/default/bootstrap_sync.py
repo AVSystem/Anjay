@@ -22,12 +22,9 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
 
-    def _get_socket_count(self):
-        return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
-
     def setUp(self):
-        self.setup_demo_with_servers(servers=[Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY))],
-                                     bootstrap_server=Lwm2mServer(coap.DtlsServer(self.PSK_IDENTITY, self.PSK_KEY)),
+        self.setup_demo_with_servers(servers=[Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))],
+                                     bootstrap_server=Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
                                      extra_cmdline_args=['--identity',
                                                          str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
                                                          '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
@@ -60,7 +57,7 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
         with self.assertRaises(OSError):
             self.serv.recv(timeout_s=5)
 
-        self.assertEqual(1, self._get_socket_count())
+        self.assertEqual(1, self.get_socket_count())
 
         # Bootstrap Finish
         self.bootstrap_server.send(Lwm2mBootstrapFinish())

@@ -31,24 +31,24 @@ class BootstrapServer:
         def tearDown(self):
             self.teardown_demo_with_servers()
 
-        def get_demo_port(self):
+        def get_demo_port(self, server_index=None):
             # wait for sockets initialization
             # scheduler-based socket initialization might delay socket setup a bit;
             # this loop is here to ensure `communicate()` call below works as
             # expected
             for _ in range(10):
-                if int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1)) > 0:
+                if self.get_socket_count() > 0:
                     break
             else:
                 self.fail("sockets not initialized in time");
 
             # send Bootstrap messages without request
-            return int(self.communicate('get-port -1', match_regex='PORT==([0-9]+)\n').group(1))
+            return super().get_demo_port(server_index)
 
 
 class BootstrapServerTest(BootstrapServer.Test):
     def runTest(self):
-        self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
+        self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
         req = Lwm2mWrite('/1/42',
                          TLV.make_resource(RID.Server.Lifetime, 60).serialize()
                          + TLV.make_resource(RID.Server.Binding, "U").serialize()
@@ -111,7 +111,7 @@ class BootstrapServerTest(BootstrapServer.Test):
 
 class BootstrapEmptyResourcesDoesNotSegfault(BootstrapServer.Test):
     def runTest(self):
-        self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
+        self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
 
         req = Lwm2mWrite('/0/42',
                          TLV.make_resource(RID.Security.ServerURI, 'coap://1.2.3.4:5678').serialize()

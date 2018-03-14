@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include <string.h>
 
 #include "security_transaction.h"
 #include "security_utils.h"
+
+#include <anjay_modules/dm_utils.h>
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -34,36 +37,75 @@ static bool uri_protocol_matching(anjay_udp_security_mode_t security_mode,
     return strncmp(uri, expected_prefix, strlen(expected_prefix)) == 0;
 }
 
+#define LOG_VALIDATION_FAILED(SecInstance, ...)                     \
+    do {                                                            \
+        char buffer[128];                                           \
+        int offset = snprintf(buffer, sizeof(buffer),               \
+                              "/%u/%u: ", ANJAY_DM_OID_SECURITY,    \
+                              (unsigned) (SecInstance)->iid);       \
+        if (offset < 0) {                                           \
+            offset = 0;                                             \
+        }                                                           \
+        snprintf(&buffer[offset], sizeof(buffer) - (size_t) offset, \
+                 __VA_ARGS__);                                      \
+        security_log(ERROR, "%s", buffer);                          \
+    } while (0)
+
 static int validate_instance(sec_instance_t *it) {
-    if (!it->server_uri
-            || !it->has_is_bootstrap
-            || !it->has_udp_security_mode
-            || (!it->is_bootstrap && !it->has_ssid)) {
+    if (!it->server_uri) {
+        LOG_VALIDATION_FAILED(it,
+                              "missing mandatory 'Server URI' resource value");
+        return -1;
+    }
+    if (!it->has_is_bootstrap) {
+        LOG_VALIDATION_FAILED(
+                it, "missing mandatory 'Bootstrap Server' resource value");
+        return -1;
+    }
+    if (!it->has_udp_security_mode) {
+        LOG_VALIDATION_FAILED(
+                it, "missing mandatory 'Security Mode' resource value");
+        return -1;
+    }
+    if (!it->is_bootstrap && !it->has_ssid) {
+        LOG_VALIDATION_FAILED(
+                it, "missing mandatory 'Short Server ID' resource value");
         return -1;
     }
     if (_anjay_sec_validate_udp_security_mode(it->udp_security_mode)) {
-        security_log(ERROR, "UDP Security mode %d not supported",
-                     (int) it->udp_security_mode);
+        LOG_VALIDATION_FAILED(it, "UDP Security mode %d not supported",
+                              (int) it->udp_security_mode);
         return -1;
     }
     if (!uri_protocol_matching(it->udp_security_mode, it->server_uri)) {
+        LOG_VALIDATION_FAILED(
+                it,
+                "Expected '%s://' protocol in Server Uri '%s' due to security "
+                "configuration",
+                (it->udp_security_mode == ANJAY_UDP_SECURITY_NOSEC) ? "coap"
+                                                                    : "coaps",
+                it->server_uri);
         return -1;
     }
     if (it->udp_security_mode != ANJAY_UDP_SECURITY_NOSEC) {
         if (!it->public_cert_or_psk_identity.data
                 || !it->private_cert_or_psk_key.data) {
+            LOG_VALIDATION_FAILED(
+                    it, "UDP security credentials not fully configured");
             return -1;
         }
     }
     if (it->has_sms_security_mode) {
         if (_anjay_sec_validate_sms_security_mode(it->sms_security_mode)) {
-            security_log(ERROR, "SMS Security mode %d not supported",
-                         (int) it->sms_security_mode);
+            LOG_VALIDATION_FAILED(it, "SMS Security mode %d not supported",
+                                  (int) it->sms_security_mode);
             return -1;
         }
         if ((it->sms_security_mode == ANJAY_SMS_SECURITY_DTLS_PSK
                 || it->sms_security_mode == ANJAY_SMS_SECURITY_SECURE_PACKET)
             && (!it->sms_key_params.data || !it->sms_secret_key.data)) {
+            LOG_VALIDATION_FAILED(
+                    it, "SMS security credentials not fully configured");
             return -1;
         }
     }

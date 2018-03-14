@@ -226,7 +226,7 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
     return strings_list;
 }
 
-static struct {
+static const struct {
     anjay_binding_mode_t binding;
     const char *str;
 } BINDING_MODE_AS_STR[] = {

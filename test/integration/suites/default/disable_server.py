@@ -21,9 +21,7 @@ from framework.lwm2m_test import *
 
 class DisableServerTest(test_suite.Lwm2mSingleServerTest):
     def assertSocketsPolled(self, num):
-        self.assertEqual(num,
-                         int(self.communicate('socket-count',
-                                              match_regex='SOCKET_COUNT==([0-9]+)\n').group(1)))
+        self.assertEqual(num, self.get_socket_count())
 
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)

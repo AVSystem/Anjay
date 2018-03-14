@@ -250,27 +250,29 @@ typedef struct anjay_execute_ctx_struct anjay_execute_ctx_t;
  * internal error in anjay, or by malformed message. In case of an error all
  * data read up to the point when an error occurs should be considered invalid.
  *
- * User not interested in argument value (or interested in ignoring the value after
- * reading some part of it), can safely call this function to skip tail of the
- * value and get next argument or an EOF information.
+ * User not interested in argument value (or interested in ignoring the value
+ * after reading some part of it), can safely call this function to skip tail of
+ * the value and get next argument or an EOF information.
  *
- * @param ctx execute context
- * @param out_arg obtained argument id
+ * @param ctx           Execute context
+ * @param out_arg       Obtained argument id
  * @param out_has_value true if argument has a value, false otherwise
- * @return 0 on success, negative value in case of an error (described above),
- *         ANJAY_EXECUTE_GET_ARG_END in case of end of message
- *         (in which case out_arg is set to -1, and out_has_value to false)
+ *
+ * @returns 0 on success, negative value in case of an error (described above),
+ *          ANJAY_EXECUTE_GET_ARG_END in case of end of message
+ *          (in which case out_arg is set to -1, and out_has_value to false)
  */
-int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx, int *out_arg,
+int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
+                               int *out_arg,
                                bool *out_has_value);
 
 /**
  * Attempts to read currently processed argument's value (or part of it).
  * Read data is written as null-terminated string into @p out_buf.
  *
- * Function might return 0 when there is nothing more to read or because argument
- * does not have associated value with it, or because the value has already been
- * read / skipped entirely.
+ * Function might return 0 when there is nothing more to read or because
+ * argument does not have associated value with it, or because the value has
+ * already been read / skipped entirely.
  *
  * If the function returns buf_size-1, then there might be more data to read.
  *
@@ -280,13 +282,15 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx, int *out_arg,
  * 3. In case of malformed message or when an internal error occurs.
  *    In such cases all data read up to this point should be considered invalid.
  *
- * @param ctx execute context
- * @param out_buf buffer where read bytes will be stored
- * @param buf_size size of the buffer
- * @return number of bytes read, or a negative value in case of an error
+ * @param ctx       Execute context
+ * @param out_buf   Buffer where read bytes will be stored
+ * @param buf_size  Size of the buffer
+ *
+ * @returns number of bytes read, or a negative value in case of an error
  */
-ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx, char* out_buf,
-                                    ssize_t buf_size);
+ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
+                                    char *out_buf,
+                                    size_t buf_size);
 
 /**
  * Reads a chunk of data blob from the RPC request message.

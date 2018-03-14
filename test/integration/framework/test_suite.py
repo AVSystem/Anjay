@@ -27,6 +27,13 @@ from typing import TypeVar
 from .asserts import Lwm2mAsserts
 from .lwm2m_test import *
 
+try:
+    import dpkt
+
+    _DPKT_AVAILABLE = True
+except ImportError:
+    _DPKT_AVAILABLE = False
+
 T = TypeVar('T')
 
 def read_with_timeout(fd, timeout_s):
@@ -183,7 +190,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.bootstrap_server = None
 
     def setUp(self):
-        pass
+        return super().setUp()
 
     @unittest.skip
     def runTest(self):
@@ -578,6 +585,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         for serv in deregister_servers:
             self.assertDemoDeregisters(serv, *args, **kwargs)
 
+    def get_socket_count(self):
+        return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
+
+    def get_demo_port(self, server_index=None):
+        if server_index is None:
+            server_index = -1
+        return int(self.communicate('get-port %s' % (server_index,), match_regex='PORT==([0-9]+)\n').group(1))
+
 
 class SingleServerAccessor:
     @property
@@ -609,7 +624,7 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         if psk_identity:
             extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
                            '--key', str(binascii.hexlify(psk_key), 'ascii')]
-            coap_server = coap.DtlsServer(psk_identity, psk_key)
+            coap_server = coap.DtlsServer(psk_identity=psk_identity, psk_key=psk_key)
         else:
             coap_server = coap.Server()
         if extra_cmdline_args is not None:
@@ -637,3 +652,43 @@ class Lwm2mDtlsSingleServerTest(Lwm2mSingleServerTest):
         super().setUp(extra_cmdline_args=extra_cmdline_args, auto_register=auto_register, lifetime=lifetime,
                       fw_updated_marker_path=fw_updated_marker_path, psk_identity=self.PSK_IDENTITY,
                       psk_key=self.PSK_KEY)
+
+
+class PcapEnabledTest(Lwm2mTest):
+    def setUp(self, *args, **kwargs):
+        if not (_DPKT_AVAILABLE and Lwm2mTest.dumpcap_available()):
+            raise unittest.SkipTest('This test involves parsing PCAP file')
+        return super().setUp(*args, **kwargs)
+
+    def read_pcap(self):
+        def decode_packet(data):
+            # dumpcap captures contain Ethernet frames on Linux and
+            # loopback ones on BSD
+            for frame_type in [dpkt.ethernet.Ethernet, dpkt.loopback.Loopback]:
+                pkt = frame_type(data)
+                if isinstance(pkt.data, dpkt.ip.IP):
+                    return pkt
+
+            raise ValueError('Could not decode frame: %s' % pkt.hex())
+
+        with open(self.dumpcap_file_path, 'rb') as f:
+            r = dpkt.pcapng.Reader(f)
+            return [decode_packet(pkt[1]).data for pkt in r.readpkts()]
+
+    def read_icmp_unreachable_packets(self):
+        result = []
+        for pkt in self.read_pcap():
+            if isinstance(pkt, dpkt.ip.IP) and isinstance(pkt.data, dpkt.icmp.ICMP) and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach):
+                result.append(pkt)
+        return result
+
+    def wait_until_icmp_unreachable_count(self, value, timeout_s=None, step_s=0.1):
+        if timeout_s is None:
+            timeout_s = self.DEFAULT_MSG_TIMEOUT
+        deadline = time.time() + timeout_s
+        while True:
+            if len(self.read_icmp_unreachable_packets()) >= value:
+                return
+            if time.time() >= deadline:
+                raise TimeoutError('ICMP Unreachable packet not generated')
+            time.sleep(step_s)

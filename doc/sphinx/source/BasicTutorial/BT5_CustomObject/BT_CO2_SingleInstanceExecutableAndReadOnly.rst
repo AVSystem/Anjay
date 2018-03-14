@@ -87,12 +87,14 @@ there are methods designed specifically to solve this problem, namely:
 .. snippet-source:: include_public/anjay/io.h
 
     // ... One that returns the next argument from the Execute argument list
-    int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx, int *out_arg,
+    int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
+                                   int *out_arg,
                                    bool *out_has_value);
 
     // ... And the one that obtains its value (if any)
-    ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx, char* out_buf,
-                                        ssize_t buf_size);
+    ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
+                                        char *out_buf,
+                                        size_t buf_size);
 
 They will greatly simplify parsing process, as you will see in the next section.
 

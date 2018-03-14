@@ -26,7 +26,7 @@ class BootstrapDiscoverFullNoServers(bs.BootstrapServer.Test,
                                      test_suite.Lwm2mDmOperations):
     def runTest(self):
         EXPECTED_PREFIX = b'lwm2m="1.0",</0>,</0/1>,</1>,</2>,'
-        self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
+        self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
         discover_result = self.discover(self.bootstrap_server).content
         self.assertLinkListValid(discover_result[len(EXPECTED_ENABLER_VERSION_STRING) + 1:])
         self.assertTrue(discover_result.startswith(EXPECTED_PREFIX))
@@ -35,7 +35,7 @@ class BootstrapDiscoverFullNoServers(bs.BootstrapServer.Test,
 class BootstrapDiscoverFullMultipleServers(bs.BootstrapServer.Test,
                                            test_suite.Lwm2mDmOperations):
     def runTest(self):
-        self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
+        self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
         self.write_instance(server=self.bootstrap_server, oid=OID.Server, iid=42,
                             content=TLV.make_resource(RID.Server.Lifetime, 60).serialize()
                                     + TLV.make_resource(RID.Server.Binding, "U").serialize()
@@ -81,6 +81,6 @@ class BootstrapDiscoverFullMultipleServers(bs.BootstrapServer.Test,
 class BootstrapDiscoverOnNonexistingObject(bs.BootstrapServer.Test,
                                            test_suite.Lwm2mDmOperations):
     def runTest(self):
-        self.bootstrap_server.connect(('127.0.0.1', self.get_demo_port()))
+        self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
         self.discover(self.bootstrap_server, oid=42, expect_error_code=coap.Code.RES_NOT_FOUND)
 

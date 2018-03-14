@@ -38,7 +38,11 @@ def library_exists(lib_name):
 
 extensions = [
     Extension('pymbedtls',
-              sources=[os.path.join(SCRIPT_DIR, 'src/pymbedtls.cpp')],
+              sources=[os.path.join(SCRIPT_DIR, 'src/pymbedtls.cpp'),
+                       os.path.join(SCRIPT_DIR, 'src/socket.cpp'),
+                       os.path.join(SCRIPT_DIR, 'src/common.cpp'),
+                       os.path.join(SCRIPT_DIR, 'src/context.cpp'),
+                       os.path.join(SCRIPT_DIR, 'src/security.cpp')],
               libraries=['mbedtls', 'mbedcrypto'],
               include_dirs=[os.path.join(SCRIPT_DIR, 'src/pybind11/include/')],
               extra_compile_args=['-std=c++11', '-isystem', '/usr/local/include'])
@@ -46,10 +50,10 @@ extensions = [
 
 setup(
     name='pymbedtls',
-    version='0.2.0',
+    version='0.3.0',
     description='''DTLS-PSK socket classes''',
-    author='Marcin Radomski',
-    author_email='m.radomski@avsystem.com',
+    author='AVSystem',
+    author_email='avsystem@avsystem.com',
     license='Apache License, Version 2.0',
     ext_modules=extensions
 )

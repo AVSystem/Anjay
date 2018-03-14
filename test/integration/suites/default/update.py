@@ -20,14 +20,6 @@ import unittest
 
 from framework.lwm2m_test import *
 
-try:
-    import dpkt
-
-    _DPKT_AVAILABLE = True
-except ImportError:
-    _DPKT_AVAILABLE = False
-
-
 class UpdateTest(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
@@ -59,43 +51,12 @@ class UpdateTest(test_suite.Lwm2mSingleServerTest):
         self.assertDemoUpdatesRegistration(timeout_s=LIFETIME)
 
 
-@unittest.skipUnless(_DPKT_AVAILABLE and test_suite.Lwm2mTest.dumpcap_available(),
-                     'This test involves parsing PCAP file')
-class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
-    def _read_pcap(self):
-        def decode_packet(data):
-            # dumpcap captures contain Ethernet frames on Linux and
-            # loopback ones on BSD
-            for frame_type in [dpkt.ethernet.Ethernet, dpkt.loopback.Loopback]:
-                pkt = frame_type(data)
-                if isinstance(pkt.data, dpkt.ip.IP):
-                    return pkt
-
-            raise ValueError('Could not decode frame: %s' % pkt.hex())
-
-        with open(self.dumpcap_file_path, 'rb') as f:
-            r = dpkt.pcapng.Reader(f)
-            return [decode_packet(pkt[1]).data for pkt in r.readpkts()]
-
-    def _find_icmp_unreach(self):
-        result = []
-        for pkt in self._read_pcap():
-            if isinstance(pkt, dpkt.ip.IP) and isinstance(pkt.data, dpkt.icmp.ICMP) and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach):
-                result.append(pkt)
-        return result
-
+class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest, test_suite.PcapEnabledTest):
     def runTest(self):
         # respond with Port Unreachable to the next packet
         with self.serv.fake_close():
             self.communicate('send-update')
-
-            for _ in range(100):
-                unreach = self._find_icmp_unreach()
-                if len(unreach) > 0:
-                    break
-                time.sleep(0.1)
-            else:
-                self.fail('demo did not attempt to reconnect or ICMP Packet Unreachable not generated')
+            self.wait_until_icmp_unreachable_count(1, timeout_s=10)
 
         # the Update failed, wait for retransmission to check if the stream was
         # properly released, i.e. sending another message does not trigger
@@ -124,7 +85,7 @@ class UpdateServerDownReconnectTest(test_suite.Lwm2mSingleServerTest):
 
     def tearDown(self):
         super().tearDown()
-        self.assertEqual(len(self._find_icmp_unreach()), 1)
+        self.assertEqual(len(self.read_icmp_unreachable_packets()), 1)
 
 
 class ReconnectTest(test_suite.Lwm2mDtlsSingleServerTest):
@@ -173,7 +134,7 @@ class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):
 
         self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
 
-        demo_port = int(self.communicate('get-port -1', match_regex='PORT==([0-9]+)\n').group(1))
+        demo_port = self.get_demo_port()
         self.assertEqual(self.bootstrap_server.get_remote_addr()[1], demo_port)
 
         # send Bootstrap Finish
@@ -190,10 +151,10 @@ class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):
             print(self.bootstrap_server.recv(timeout_s=3))
 
         # should retain remote port after reconnecting
-        new_demo_port = int(self.communicate('get-port -1', match_regex='PORT==([0-9]+)\n').group(1))
+        new_demo_port = self.get_demo_port()
         self.assertEqual(demo_port, new_demo_port)
 
-        self.bootstrap_server.connect(('127.0.0.1', new_demo_port))
+        self.bootstrap_server.connect_to_client(('127.0.0.1', new_demo_port))
 
         # DELETE /1337, essentially a no-op to check connectivity
         req = Lwm2mDelete(Lwm2mPath('/1337'))

@@ -1,7 +1,10 @@
 # Anjay LwM2M library [<img align="right" height="50px" src="https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSoiMy6rnzARUEdR0OjHmPGxTeiAMLBFlUYwIB9baWYWmuUwTbo">](http://www.avsystem.com/)
 
 [![Build Status](https://travis-ci.org/AVSystem/Anjay.svg?branch=master)](https://travis-ci.org/AVSystem/Anjay)
+<!--
+2018-03-14: Coverity Scan is in "planned maintenance mode" since 2018-02-20
 [![Coverity Status](https://scan.coverity.com/projects/13206/badge.svg)](https://scan.coverity.com/projects/avsystem-anjay)
+-->
 
 ## What is Anjay?
 

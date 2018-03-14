@@ -402,6 +402,9 @@ static int abort_transfer_job(anjay_t *anjay,
                               void *ctx_) {
     AVS_LIST(anjay_download_ctx_t) ctx = (AVS_LIST(anjay_download_ctx_t))ctx_;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
+            // IAR compiler does not support typeof, so AVS_LIST_FIND_PTR
+            // returns void**, which is not implicitly-convertible
+            (AVS_LIST(anjay_download_ctx_t) *)
             AVS_LIST_FIND_PTR(&anjay->downloader.downloads, ctx);
 
     if (!ctx_ptr) {

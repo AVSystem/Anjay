@@ -43,6 +43,8 @@ int _anjay_server_sched_activate(anjay_t *anjay,
                                  anjay_ssid_t ssid,
                                  avs_time_duration_t delay);
 
+int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay);
+
 /**
  * Inserts an active server entry into @p servers .
  *

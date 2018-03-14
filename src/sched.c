@@ -249,8 +249,11 @@ sched_delayed(anjay_sched_t *sched,
 
 static anjay_sched_entry_t **find_task_entry_ptr(anjay_sched_t *sched,
                                                  anjay_sched_handle_t *handle) {
-    return AVS_LIST_FIND_PTR(&sched->entries,
-                             *((anjay_sched_entry_t **) handle));
+    // IAR compiler does not support typeof, so AVS_LIST_FIND_PTR
+    // returns void**, which is not implicitly-convertible
+    return (AVS_LIST(anjay_sched_entry_t) *)
+            AVS_LIST_FIND_PTR(&sched->entries,
+                              *((anjay_sched_entry_t **) handle));
 }
 
 static int schedule(anjay_sched_t *sched,

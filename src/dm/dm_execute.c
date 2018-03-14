@@ -97,7 +97,8 @@ static int skip_value(anjay_execute_ctx_t *ctx) {
     return (int) ret;
 }
 
-int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx, int *out_arg,
+int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
+                               int *out_arg,
                                bool *out_has_value) {
     if (skip_value(ctx)) {
         return -1;
@@ -117,8 +118,9 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx, int *out_arg,
     return result;
 }
 
-ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx, char *out_buf,
-                                    ssize_t buf_size) {
+ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
+                                    char *out_buf,
+                                    size_t buf_size) {
     if (ctx->state != STATE_READ_VALUE) {
         return 0;
     } else if (buf_size < 2 || !out_buf) {
@@ -126,7 +128,7 @@ ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx, char *out_buf,
     }
 
     ssize_t read_bytes = 0;
-    while (read_bytes < buf_size-1) {
+    while ((size_t) read_bytes < buf_size-1) {
         int ch = next_char(ctx);
         ctx->state = state_read_value(ctx, ch);
 
@@ -146,7 +148,7 @@ ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx, char *out_buf,
 
 anjay_execute_ctx_t *_anjay_execute_ctx_create(anjay_input_ctx_t *ctx) {
     anjay_execute_ctx_t *ret =
-        (anjay_execute_ctx_t *) calloc(1, sizeof(anjay_execute_ctx_t));
+            (anjay_execute_ctx_t *) calloc(1, sizeof(anjay_execute_ctx_t));
     if (ret) {
         ret->input_ctx = ctx;
         ret->arg = -1;
@@ -162,7 +164,7 @@ void _anjay_execute_ctx_destroy(anjay_execute_ctx_t **ctx) {
     }
 }
 
-static anjay_execute_state_t expect_separator_or_eof(anjay_execute_ctx_t* ctx,
+static anjay_execute_state_t expect_separator_or_eof(anjay_execute_ctx_t *ctx,
                                                      int ch) {
     (void)ctx;
     if (is_arg_separator(ch)) {
@@ -173,7 +175,8 @@ static anjay_execute_state_t expect_separator_or_eof(anjay_execute_ctx_t* ctx,
     return STATE_ERROR;
 }
 
-static anjay_execute_state_t state_read_value(anjay_execute_ctx_t* ctx, int ch) {
+static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx,
+                                              int ch) {
     if (is_value(ch)) {
         return STATE_READ_VALUE;
     } else if (is_value_delimiter(ch)) {
@@ -182,7 +185,7 @@ static anjay_execute_state_t state_read_value(anjay_execute_ctx_t* ctx, int ch) 
     return STATE_ERROR;
 }
 
-static anjay_execute_state_t expect_value(anjay_execute_ctx_t* ctx, int ch) {
+static anjay_execute_state_t expect_value(anjay_execute_ctx_t *ctx, int ch) {
     (void)ctx;
     if (is_value_delimiter(ch)) {
         return STATE_READ_VALUE;
@@ -191,12 +194,12 @@ static anjay_execute_state_t expect_value(anjay_execute_ctx_t* ctx, int ch) {
     }
 }
 
-static anjay_execute_state_t expect_separator_or_assignment_or_eof(anjay_execute_ctx_t *ctx,
-                                                                   int ch) {
+static anjay_execute_state_t
+expect_separator_or_assignment_or_eof(anjay_execute_ctx_t *ctx, int ch) {
     /*
-     * This state is being entered only after some argument has been read successfully,
-     * and it determines whether we should expect new argument, or whether we
-     * should proceed with value read.
+     * This state is being entered only after some argument has been read
+     * successfully, and it determines whether we should expect new argument, or
+     * whether we should proceed with value read.
      */
     if (is_arg_separator(ch)) {
         ctx->arg_has_value = false;
@@ -210,7 +213,8 @@ static anjay_execute_state_t expect_separator_or_assignment_or_eof(anjay_execute
     return STATE_ERROR;
 }
 
-static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t* ctx, int ch) {
+static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t *ctx,
+                                                 int ch) {
     assert(ch == EOF || (0 <= ch && ch <= UINT8_MAX));
 
     if (isdigit(ch)) {

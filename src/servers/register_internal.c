@@ -322,6 +322,9 @@ int anjay_schedule_registration_update(anjay_t *anjay,
 int anjay_schedule_reconnect(anjay_t *anjay) {
     int result = reschedule_update_for_all_servers(anjay,
                                                    SOCKET_NEEDS_RECONNECT);
+    if (!result) {
+        result = _anjay_servers_sched_reactivate_all_given_up(anjay);
+    }
     if (result) {
         return result;
     }

@@ -99,12 +99,17 @@ class Server(object):
         self.reset(listen_port)
 
     def listen(self, timeout_s=-1):
+        assert self.get_remote_addr() is None
         with _override_timeout(self.socket, timeout_s):
             _, remote_addr_port = self.socket.recvfrom(1, socket.MSG_PEEK)
 
-        self.connect(remote_addr_port)
+        self.connect_to_client(remote_addr_port)
 
-    def connect(self, remote_addr: Tuple[str, int]) -> None:
+    def connect_to_client(self, remote_addr: Tuple[str, int]) -> None:
+        """
+        This may be used e.g. for Server-Initiated Bootstrap over NoSec, when there is absolutely no initial traffic
+        from the client.
+        """
         self.socket.connect(remote_addr)
 
     @property
@@ -141,7 +146,7 @@ class Server(object):
             self._raw_udp_socket.connect(self._prev_remote_endpoint)
             self._prev_remote_endpoint = None
         else:
-            self._raw_udp_socket = _disconnect_socket(self._raw_udp_socket)
+            self._raw_udp_socket = _disconnect_socket(self._raw_udp_socket, self.family)
 
     @contextlib.contextmanager
     def fake_close(self):
@@ -168,10 +173,10 @@ class Server(object):
         self.socket.send(coap_packet.serialize())
 
     def recv_raw(self, timeout_s: float = -1):
-        with _override_timeout(self.socket, timeout_s):
-            if not self.get_remote_addr():
-                self.listen()
+        if not self.get_remote_addr():
+            self.listen(timeout_s=timeout_s)
 
+        with _override_timeout(self.socket, timeout_s):
             return self.socket.recv(65536)
 
     def recv(self, timeout_s: float = -1) -> Packet:
@@ -202,29 +207,36 @@ class Server(object):
     def security_mode(self):
         return 'nosec'
 
-
 class DtlsServer(Server):
-    def __init__(self, psk_identity, psk_key, listen_port=0, debug=False, use_ipv6=False):
-        self.psk_identity = psk_identity
-        self.psk_key = psk_key
-        self.server_socket = None
-        self.debug = debug
+    def __init__(self, psk_identity=None, psk_key=None, ca_path=None, ca_file=None,
+                 crt_file=None, key_file=None, listen_port=0, debug=False, use_ipv6=False):
+        use_psk = (psk_identity and psk_key)
+        use_certs = any((ca_path, ca_file, crt_file, key_file))
+        if use_psk and use_certs:
+            raise ValueError("Cannot use PSK and Certificates at the same time")
+
+        try:
+            from pymbedtls import PskSecurity, CertSecurity, Context
+        except ImportError:
+            raise ImportError('could not import pymbedtls! run '
+                              '`python3 setup.py install --user` in the '
+                              'pymbedtls/ subdirectory of nsh-lwm2m submodule '
+                              'or export PYTHONPATH properly')
+
+        if use_psk:
+            security = PskSecurity(psk_key, psk_identity)
+        elif use_certs:
+            security = CertSecrity(ca_path, ca_file, crt_file, key_file)
+        else:
+            raise ValueError("Neither PSK nor Certificates were configured for use with DTLS")
+
+        self._pymbedtls_context = Context(security, debug)
+        self._security_mode = security.name()
 
         super().__init__(listen_port, use_ipv6)
 
-    def connect(self, remote_addr: Tuple[str, int]) -> None:
-        from pymbedtls import Socket
-
-        self.close()
-
-        try:
-            self.server_socket = None
-            self.socket = socket.socket(self.family, socket.SOCK_DGRAM)
-            self.socket = Socket(self.socket, self.psk_identity, self.psk_key, self.debug)
-            self.socket.connect(remote_addr)
-        except:
-            self.close()
-            raise
+    def connect_to_client(self, remote_addr: Tuple[str, int]) -> None:
+        raise NotImplementedError('connect_to_client() not supported for DTLS servers')
 
     @property
     def _raw_udp_socket(self) -> None:
@@ -234,47 +246,22 @@ class DtlsServer(Server):
     def _raw_udp_socket(self, value) -> None:
         self.socket.py_socket = value
 
-    def _fake_close(self):
-        super()._fake_close()
-        # we cannot use the same fake remote endpoint as for the "client" socket
-        # because BSD does not allow two sockets with the same local/remote
-        # endpoints. For details, see comment in Server._fake_close.
-        self.server_socket.connect(('', 2))
-
-    def _fake_unclose(self):
-        super()._fake_unclose()
-        self.server_socket = _disconnect_socket(self.server_socket, self.family)
-
-    def close(self):
-        super().close()
-        if self.server_socket:
-            self.server_socket.close()
-            self.server_socket = None
-
     def reset(self, listen_port=None) -> None:
-        if self.server_socket and listen_port is None:
-            super().close()
-        else:
-            try:
-                from pymbedtls import ServerSocket
-
-                super().reset(listen_port)
-                self.server_socket = ServerSocket(self.socket, self.psk_identity, self.psk_key, self.debug)
-                self.socket = None
-            except ImportError:
-                raise ImportError('could not import pymbedtls! run '
-                                  '`python3 setup.py install --user` in the '
-                                  'pymbedtls/ subdirectory of nsh-lwm2m submodule '
-                                  'or export PYTHONPATH properly')
+        from pymbedtls import ServerSocket
+        super().reset(listen_port)
+        self.socket = ServerSocket(self._pymbedtls_context, self.socket)
 
     def listen(self, timeout_s: float = -1) -> None:
-        with _override_timeout(self.server_socket, timeout_s):
-            self.socket = self.server_socket.accept()
+        from pymbedtls import ServerSocket
+        assert isinstance(self.socket, ServerSocket)
+        with _override_timeout(self.socket, timeout_s):
+            client_socket = self.socket.accept()
             if self.socket_timeout is not None:
-                self.socket.settimeout(self.socket_timeout)
+                client_socket.settimeout(self.socket_timeout)
 
-    def get_listen_port(self) -> int:
-        return self.server_socket.getsockname()[1]
+        self.socket.close()
+        self.socket = client_socket
 
     def security_mode(self):
-        return 'psk'
+        # Either 'psk' or 'cert'.
+        return self._security_mode
