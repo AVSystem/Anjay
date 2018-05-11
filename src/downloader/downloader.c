@@ -87,8 +87,23 @@ void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
     cleanup_transfer(dl, ctx);
 }
 
+static void reconnect_transfer(anjay_downloader_t *dl,
+                               AVS_LIST(anjay_download_ctx_t) *ctx) {
+    assert(ctx);
+    assert(*ctx);
+    assert((*ctx)->common.vtable);
+
+    int result = (*ctx)->common.vtable->reconnect(dl, ctx);
+    if (result) {
+        _anjay_downloader_abort_transfer(dl, ctx, ANJAY_DOWNLOAD_ERR_FAILED,
+                                         -result);
+    }
+}
+
 void _anjay_downloader_cleanup(anjay_downloader_t *dl) {
     assert(dl);
+    _anjay_sched_del(_anjay_downloader_get_anjay(dl)->sched,
+                     &dl->reconnect_job_handle);
     while (dl->downloads) {
         _anjay_downloader_abort_transfer(dl, &dl->downloads,
                                          ANJAY_DOWNLOAD_ERR_ABORTED, EINTR);
@@ -263,4 +278,23 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
         _anjay_downloader_abort_transfer(dl, ctx,
                                          ANJAY_DOWNLOAD_ERR_ABORTED, EINTR);
     }
+}
+
+static void reconnect_all_job(anjay_t *anjay, void *dummy) {
+    (void) dummy;
+    AVS_LIST(anjay_download_ctx_t) *ctx_ptr;
+    AVS_LIST(anjay_download_ctx_t) helper;
+    AVS_LIST_DELETABLE_FOREACH_PTR(ctx_ptr, helper,
+                                   &anjay->downloader.downloads) {
+        reconnect_transfer(&anjay->downloader, ctx_ptr);
+    }
+}
+
+int _anjay_downloader_sched_reconnect_all(anjay_downloader_t *dl) {
+    if (dl->reconnect_job_handle) {
+        dl_log(DEBUG, "reconnect already scheduled, ignoring");
+        return 0;
+    }
+    return _anjay_sched_now(_anjay_downloader_get_anjay(dl)->sched,
+                            &dl->reconnect_job_handle, reconnect_all_job, NULL);
 }

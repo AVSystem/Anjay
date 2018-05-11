@@ -18,18 +18,13 @@
 
 #include <string.h>
 
+#include <anjay_modules/dm_utils.h>
+
 #include "mod_server.h"
 #include "server_transaction.h"
 #include "server_utils.h"
 
 VISIBILITY_SOURCE_BEGIN
-
-server_repr_t *_anjay_serv_get(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
-    return AVS_CONTAINER_OF(obj_ptr, server_repr_t, def);
-}
 
 static inline server_instance_t *
 find_instance(server_repr_t *repr,
@@ -430,7 +425,7 @@ serv_transaction_rollback(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t SERVER = {
-    .oid = 1,
+    .oid = ANJAY_DM_OID_SERVER,
     .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
             SERV_RES_SSID,
             SERV_RES_LIFETIME,
@@ -459,20 +454,21 @@ static const anjay_dm_object_def_t SERVER = {
     }
 };
 
-const anjay_dm_object_def_t **anjay_server_object_create(void) {
-    server_repr_t *repr = (server_repr_t *) calloc(1, sizeof(server_repr_t));
-    if (!repr) {
-        return NULL;
-    }
-    repr->def = &SERVER;
-    return &repr->def;
+server_repr_t *_anjay_serv_get(const anjay_dm_object_def_t *const *obj_ptr) {
+    assert(obj_ptr && *obj_ptr == &SERVER);
+    return AVS_CONTAINER_OF(obj_ptr, server_repr_t, def);
 }
 
 int anjay_server_object_add_instance(
-        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_t *anjay,
         const anjay_server_instance_t *instance,
         anjay_iid_t *inout_iid) {
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *obj_ptr =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
     server_repr_t *repr = _anjay_serv_get(obj_ptr);
+
     const bool modified_since_persist = repr->modified_since_persist;
     int retval = add_instance(repr, instance, inout_iid);
     if (!retval && (retval = _anjay_serv_object_validate(repr))) {
@@ -482,11 +478,17 @@ int anjay_server_object_add_instance(
             clear_modified(repr);
         }
     }
+
+    if (!retval) {
+        if (anjay_notify_instances_changed(anjay, SERVER.oid)) {
+            server_log(WARNING, "Could not schedule socket reload");
+        }
+    }
+
     return retval;
 }
 
-void anjay_server_object_purge(const anjay_dm_object_def_t *const *obj_ptr) {
-    server_repr_t *repr = _anjay_serv_get(obj_ptr);
+static void server_purge(server_repr_t *repr) {
     if (repr->instances) {
         mark_modified(repr);
     }
@@ -494,15 +496,63 @@ void anjay_server_object_purge(const anjay_dm_object_def_t *const *obj_ptr) {
     _anjay_serv_destroy_instances(&repr->saved_instances);
 }
 
-void anjay_server_object_delete(const anjay_dm_object_def_t **def) {
-    if (def) {
-        anjay_server_object_purge(def);
-        free(_anjay_serv_get(def));
+static void server_delete(anjay_t *anjay, void *repr) {
+    (void) anjay;
+    server_purge((server_repr_t*) repr);
+    free(repr);
+}
+
+void anjay_server_object_purge(anjay_t *anjay) {
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+    server_repr_t *repr = _anjay_serv_get(server_obj);
+
+    server_purge(repr);
+
+    if (anjay_notify_instances_changed(anjay, SERVER.oid)) {
+        server_log(WARNING, "Could not schedule socket reload");
     }
 }
 
-bool anjay_server_object_is_modified(const anjay_dm_object_def_t *const *obj_ptr) {
-    return _anjay_serv_get(obj_ptr)->modified_since_persist;
+bool anjay_server_object_is_modified(anjay_t *anjay) {
+    assert(anjay);
+    
+    const anjay_dm_object_def_t *const *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+    return _anjay_serv_get(server_obj)->modified_since_persist;
+}
+
+static const anjay_dm_module_t SERVER_MODULE = {
+    .deleter = server_delete
+};
+
+int anjay_server_object_install(anjay_t *anjay) {
+    assert(anjay);
+    
+    server_repr_t *repr = (server_repr_t *) calloc(1, sizeof(server_repr_t));
+    if (!repr) {
+        server_log(ERROR, "Out of memory");
+        return -1;
+    }
+
+    repr->def = &SERVER;
+
+    if (_anjay_dm_module_install(anjay, &SERVER_MODULE, repr)) {
+        free(repr);
+        return -1;
+    }
+
+    if (anjay_register_object(anjay, &repr->def)) {
+        // this will free repr
+        int result = _anjay_dm_module_uninstall(anjay, &SERVER_MODULE);
+        assert(!result);
+        (void) result;
+        return -1;
+    }
+
+    return 0;
 }
 
 #ifdef ANJAY_TEST

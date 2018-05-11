@@ -83,33 +83,33 @@ static void execute_task(anjay_sched_t *sched,
     /* make sure the task is detached */
     assert(AVS_LIST_NEXT(entry) == NULL);
 
-    sched_log(TRACE, "executing task %p (clb=%p)",
-              (void *) entry, (void *) (intptr_t) entry->clb);
+    sched_log(TRACE, "executing task %p", (void *) entry);
 
     anjay_sched_handle_t handle = NULL;
     if (entry->handle_ptr) {
         handle = *entry->handle_ptr;
         *entry->handle_ptr = NULL;
     }
-    int clb_result = entry->clb(sched->anjay, entry->clb_data);
-    if (clb_result) {
-        sched_log(DEBUG, "non-zero (%d) job exit status (clb=%p)",
-                  clb_result, (void *) (intptr_t) entry->clb);
-    }
 
     switch (entry->type) {
     case SCHED_TASK_ONESHOT:
+        entry->clb.oneshot(sched->anjay, entry->clb_data);
         AVS_LIST_DELETE(&entry);
         return;
 
     case SCHED_TASK_RETRYABLE: {
+            anjay_sched_retryable_result_t clb_result =
+                    entry->clb.retryable(sched->anjay, entry->clb_data);
+
             anjay_sched_retryable_backoff_t *backoff =
                     &get_retryable_entry(entry)->backoff;
 
-            if (clb_result == 0
-                    || !sched_delayed(sched, backoff->delay, entry)) {
-                sched_log(TRACE, "retryable job %p cancel (result = %d)",
-                          (void*)entry, clb_result);
+            if (clb_result == ANJAY_SCHED_FINISH) {
+                sched_log(TRACE, "retryable job %p finished", (void*) entry);
+                AVS_LIST_DELETE(&entry);
+            } else if (!sched_delayed(sched, backoff->delay, entry)) {
+                sched_log(TRACE, "could not reschedule job %p - cancelling",
+                          (void*) entry);
                 AVS_LIST_DELETE(&entry);
             } else {
                 if (entry->handle_ptr) {
@@ -194,14 +194,9 @@ insert_entry(anjay_sched_t *sched,
 
 static AVS_LIST(anjay_sched_entry_t)
 create_entry(anjay_sched_task_type_t type,
-             anjay_sched_clb_t clb,
+             anjay_sched_clb_union_t clb,
              void *clb_data,
              const anjay_sched_retryable_backoff_t *backoff) {
-    if (clb == NULL) {
-        sched_log(ERROR, "Attempted to schedule a null callback pointer");
-        return NULL;
-    }
-
     AVS_LIST(anjay_sched_entry_t) entry =
         (type == SCHED_TASK_ONESHOT
             ? AVS_LIST_NEW_ELEMENT(anjay_sched_entry_t)
@@ -260,7 +255,7 @@ static int schedule(anjay_sched_t *sched,
                     anjay_sched_handle_t *out_handle,
                     anjay_sched_retryable_backoff_t *backoff_config,
                     avs_time_duration_t delay,
-                    anjay_sched_clb_t clb,
+                    anjay_sched_clb_union_t clb,
                     void *clb_data) {
     assert((!out_handle || *out_handle == NULL)
                && "Dangerous non-initialized out_handle");
@@ -289,16 +284,26 @@ int _anjay_sched(anjay_sched_t *sched,
                  avs_time_duration_t delay,
                  anjay_sched_clb_t clb,
                  void *clb_data) {
-    return schedule(sched, out_handle, NULL, delay, clb, clb_data);
+    if (clb == NULL) {
+        sched_log(ERROR, "Attempted to schedule a null callback pointer");
+        return -1;
+    }
+    return schedule(sched, out_handle, NULL, delay,
+                    (anjay_sched_clb_union_t) { .oneshot = clb }, clb_data);
 }
 
 int _anjay_sched_retryable(anjay_sched_t *sched,
                            anjay_sched_handle_t *out_handle,
                            avs_time_duration_t delay,
                            anjay_sched_retryable_backoff_t config,
-                           anjay_sched_clb_t clb,
+                           anjay_sched_retryable_clb_t clb,
                            void *clb_data) {
-    return schedule(sched, out_handle, &config, delay, clb, clb_data);
+    if (clb == NULL) {
+        sched_log(ERROR, "Attempted to schedule a null callback pointer");
+        return -1;
+    }
+    return schedule(sched, out_handle, &config, delay,
+                    (anjay_sched_clb_union_t) { .retryable = clb }, clb_data);
 }
 
 int _anjay_sched_del(anjay_sched_t *sched, anjay_sched_handle_t *handle) {

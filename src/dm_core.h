@@ -26,7 +26,7 @@
 #include <anjay_modules/dm_utils.h>
 
 #include "coap/coap_stream.h"
-#include "observe_core.h"
+#include "observe/observe_core.h"
 #include "dm/dm_attributes.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN

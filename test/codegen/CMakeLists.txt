@@ -22,6 +22,7 @@ set(CODEGEN_CHECK_TARGETS)
 
 enable_language(CXX)
 string(REPLACE "-Wc++-compat" "" CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
+string(REPLACE "-Wjump-misses-init" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 string(REGEX REPLACE "-std=[a-z0-9]*" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++98")
 

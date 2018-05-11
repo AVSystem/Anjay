@@ -241,12 +241,13 @@ static void ip_ping_handler(short revents, void *ping_) {
     (void) revents;
     ip_ping_t *ping = (ip_ping_t *) ping_;
     char line[512];
+    ip_ping_handler_state_t last_state;
 
     if (!fgets(line, sizeof(line), ping->command_state.ping_pipe)) {
         goto finish;
     }
 
-    ip_ping_handler_state_t last_state = ping->command_state.state;
+    last_state = ping->command_state.state;
     ping->command_state.state =
             (ip_ping_handler_state_t) (ping->command_state.state + 1);
     switch (last_state) {

@@ -21,11 +21,40 @@
 
 #include "../servers.h"
 
-#ifndef ANJAY_SERVERS_INTERNALS
+#include "connection_info.h"
+
+#if !defined(ANJAY_SERVERS_INTERNALS) && !defined(ANJAY_TEST)
 #error "Headers from servers/ are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
+
+struct anjay_servers_struct {
+    AVS_LIST(anjay_server_info_t) servers;
+
+    AVS_LIST(avs_net_abstract_socket_t *const) public_sockets;
+};
+
+struct anjay_server_info_struct {
+    anjay_ssid_t ssid; // or ANJAY_SSID_BOOTSTRAP
+    anjay_sched_handle_t sched_update_or_reactivate_handle;
+
+    // These fields are valid only for active servers
+    struct {
+        anjay_url_t uri;
+
+        bool needs_reload;
+        anjay_server_connection_t udp_connection;
+
+        anjay_registration_info_t registration_info;
+    } data_active;
+
+    // These fields are valid only for inactive servers
+    struct {
+        bool reactivate_failed;
+        uint32_t num_icmp_failures;
+    } data_inactive;
+};
 
 /**
  * Retryable job backoff configuration for retryable server jobs
@@ -37,34 +66,24 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
         .max_delay = { 120, 0 } \
      })
 
+void _anjay_servers_internal_deregister(anjay_t *anjay,
+                                        anjay_servers_t *servers);
+
+void _anjay_servers_internal_cleanup(anjay_t *anjay,
+                                     anjay_servers_t *servers);
+
 /**
  * Cleans up server data. Does not send De-Register message.
  */
-void _anjay_server_cleanup(anjay_t *anjay, anjay_active_server_info_t *server);
+void _anjay_server_cleanup(const anjay_t *anjay, anjay_server_info_t *server);
 
-/**
- * Returns Security IID for given @p ssid . Handles ANJAY_SSID_BOOTSTRAP
- * constant as if it were an actual SSID.
- */
-int _anjay_server_security_iid(anjay_t *anjay,
-                               anjay_ssid_t ssid,
-                               anjay_iid_t *out_iid);
+bool _anjay_server_active(anjay_server_info_t *server);
 
-AVS_LIST(anjay_active_server_info_t) *
-_anjay_servers_find_active_insert_ptr(anjay_servers_t *servers,
-                                      anjay_ssid_t ssid);
+AVS_LIST(anjay_server_info_t) *
+_anjay_servers_find_insert_ptr(anjay_servers_t *servers, anjay_ssid_t ssid);
 
-AVS_LIST(anjay_inactive_server_info_t) *
-_anjay_servers_find_inactive_insert_ptr(anjay_servers_t *servers,
-                                        anjay_ssid_t ssid);
-
-AVS_LIST(anjay_active_server_info_t) *
-_anjay_servers_find_active_ptr(anjay_servers_t *servers,
-                               anjay_ssid_t ssid);
-
-AVS_LIST(anjay_inactive_server_info_t) *
-_anjay_servers_find_inactive_ptr(anjay_servers_t *servers,
-                                 anjay_ssid_t ssid);
+AVS_LIST(anjay_server_info_t) *
+_anjay_servers_find_ptr(anjay_servers_t *servers, anjay_ssid_t ssid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -22,7 +22,7 @@
 #include "coap/content_format.h"
 
 #include "anjay_core.h"
-#include "observe_core.h"
+#include "observe/observe_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -59,7 +59,7 @@ static int observe_notify(anjay_t *anjay,
     return ret;
 }
 #else // WITH_OBSERVE
-#define observe_notify(anjay, origin_ssid, queue) ((void) (origin_ssid), 0)
+#define observe_notify(anjay, queue) (0)
 #endif // WITH_OBSERVE
 
 static int security_modified_notify(
@@ -99,7 +99,7 @@ static int server_modified_notify(anjay_t *anjay,
         if (_anjay_dm_res_read_i64(anjay, &path, &ssid)
                 || ssid <= 0 || ssid >= UINT16_MAX) {
             _anjay_update_ret(&ret, -1);
-        } else if (_anjay_servers_find_active(&anjay->servers,
+        } else if (_anjay_servers_find_active(anjay->servers,
                                               (anjay_ssid_t) ssid)) {
             _anjay_update_ret(&ret,
                               anjay_schedule_registration_update(
@@ -315,9 +315,9 @@ void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue) {
     }
 }
 
-static int notify_clb(anjay_t *anjay, void *dummy) {
+static void notify_clb(anjay_t *anjay, void *dummy) {
     (void) dummy;
-    return _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
+    _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
 }
 
 static int reschedule_notify(anjay_t *anjay) {

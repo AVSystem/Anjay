@@ -23,13 +23,6 @@
 
 #include <avsystem/commons/defs.h>
 
-#ifdef WITH_AVS_LOG
-#include <avsystem/commons/log.h>
-#define _anjay_log(...) avs_log(__VA_ARGS__)
-#else
-#define _anjay_log(...) ((void) 0)
-#endif
-
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {

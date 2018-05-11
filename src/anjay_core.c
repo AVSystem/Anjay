@@ -33,6 +33,8 @@
 
 #include <anjay_modules/time_defs.h>
 
+#include <anjay_config_log.h>
+
 #include "anjay_core.h"
 #include "utils_core.h"
 #include "dm_core.h"
@@ -77,8 +79,13 @@ static int init(anjay_t *anjay,
 
 
     anjay->servers = _anjay_servers_create();
+    if (!anjay->servers) {
+        anjay_log(ERROR, "Out of memory");
+        return -1;
+    }
 
     if (avs_coap_ctx_create(&anjay->coap_ctx, config->msg_cache_size)) {
+        anjay_log(ERROR, "Could not create CoAP context");
         return -1;
     }
 
@@ -100,10 +107,12 @@ static int init(anjay_t *anjay,
 
     anjay->sched = _anjay_sched_new(anjay);
     if (!anjay->sched) {
+        anjay_log(ERROR, "Out of memory");
         return -1;
     }
 
-    if (_anjay_observe_init(anjay, config->confirmable_notifications)) {
+    if (_anjay_observe_init(&anjay->observe,
+                            config->confirmable_notifications)) {
         return -1;
     }
 
@@ -122,6 +131,7 @@ static int init(anjay_t *anjay,
 #ifdef WITH_BLOCK_DOWNLOAD
     if (!(id_source = _anjay_coap_id_source_auto_new(
             0, AVS_COAP_MAX_TOKEN_LENGTH))) {
+        anjay_log(ERROR, "Out of memory");
         return -1;
     }
 #endif // WITH_BLOCK_DOWNLOAD
@@ -144,10 +154,16 @@ const char *anjay_get_version(void) {
 }
 
 anjay_t *anjay_new(const anjay_configuration_t *config) {
+    anjay_log(INFO, "Initializing Anjay " ANJAY_VERSION);
+    _anjay_log_feature_list();
     anjay_t *out = (anjay_t *) calloc(1, sizeof(*out));
-    if (out && init(out, config)) {
+    if (!out) {
+        anjay_log(ERROR, "Out of memory");
+        return NULL;
+    }
+    if (init(out, config)) {
         anjay_delete(out);
-        out = NULL;
+        return NULL;
     }
     return out;
 }
@@ -160,29 +176,36 @@ void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay) {
     }
 }
 
-void anjay_delete(anjay_t *anjay) {
+static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     anjay_log(TRACE, "deleting anjay object");
+
+    _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
+    _anjay_sched_delete(&anjay->sched);
 
 #ifdef WITH_DOWNLOADER
     _anjay_downloader_cleanup(&anjay->downloader);
 #endif // WITH_DOWNLOADER
 
     _anjay_bootstrap_cleanup(anjay);
+    if (deregister) {
+        _anjay_servers_deregister(anjay);
+    }
     _anjay_servers_cleanup(anjay);
-    _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
-
-    _anjay_sched_delete(&anjay->sched);
 
     assert(avs_stream_net_getsock(anjay->comm_stream) == NULL);
     avs_stream_cleanup(&anjay->comm_stream);
 
     _anjay_dm_cleanup(anjay);
-    _anjay_observe_cleanup(anjay);
+    _anjay_observe_cleanup(&anjay->observe, anjay->sched);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
 
     free(anjay->in_buffer);
     free(anjay->out_buffer);
     free(anjay);
+}
+
+void anjay_delete(anjay_t *anjay) {
+    anjay_delete_impl(anjay, true);
 }
 
 static void split_query_string(char *query,
@@ -714,16 +737,6 @@ static int handle_incoming_message(anjay_t *anjay) {
     return handle_request(anjay, &request_identity, &request);
 }
 
-anjay_server_connection_t *
-_anjay_get_server_connection(anjay_connection_ref_t ref) {
-    switch (ref.conn_type) {
-    case ANJAY_CONNECTION_UDP:
-        return &ref.server->udp_connection;
-    default:
-        return NULL;
-    }
-}
-
 const avs_coap_tx_params_t *
 _anjay_tx_params_for_conn_type(anjay_t *anjay,
                                anjay_connection_type_t conn_type) {
@@ -737,8 +750,8 @@ _anjay_tx_params_for_conn_type(anjay_t *anjay,
 }
 
 int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
-    avs_net_abstract_socket_t *socket = _anjay_connection_get_online_socket(
-            _anjay_get_server_connection(ref));
+    avs_net_abstract_socket_t *socket =
+            _anjay_connection_get_online_socket(ref);
     if (!socket) {
         anjay_log(ERROR, "server connection is not online");
         return -1;
@@ -756,111 +769,16 @@ int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref) {
     return 0;
 }
 
-typedef struct {
-    anjay_ssid_t ssid;
-    uint16_t conn_type; // semantically anjay_connection_type_t
-} queue_mode_close_socket_args_t;
-
-static void *
-queue_mode_close_socket_args_encode(queue_mode_close_socket_args_t args) {
-    AVS_STATIC_ASSERT(sizeof(void *) >= sizeof(queue_mode_close_socket_args_t),
-                      pointer_big_enough);
-    // ensure that ANJAY_CONNECTION_UNSET is the last value
-    assert(args.conn_type < ANJAY_CONNECTION_UNSET);
-    void *result = NULL;
-    memcpy(&result, &args, sizeof(args));
-    return result;
-}
-
-static queue_mode_close_socket_args_t
-queue_mode_close_socket_args_decode(void *value) {
-    queue_mode_close_socket_args_t result;
-    memcpy(&result, &value, sizeof(result));
-    assert(result.conn_type < ANJAY_CONNECTION_UNSET);
-    return result;
-}
-
-static int queue_mode_close_socket(anjay_t *anjay, void *args_) {
-    queue_mode_close_socket_args_t args =
-            queue_mode_close_socket_args_decode(args_);
-    anjay_connection_ref_t ref = {
-        .server = _anjay_servers_find_active(&anjay->servers, args.ssid),
-        .conn_type = (anjay_connection_type_t) args.conn_type
-    };
-    if (!ref.server) {
-        return -1;
-    }
-    _anjay_connection_suspend(ref);
-    return 0;
-}
-
-static void queue_mode_activate_socket(anjay_t *anjay) {
-    assert(anjay->comm_stream);
-
-    anjay_server_connection_t *connection =
-            _anjay_get_server_connection(anjay->current_connection);
-    assert(connection);
-    assert(connection->queue_mode_close_socket_clb_handle == NULL);
-
-    avs_coap_tx_params_t tx_params;
-    if (_anjay_coap_stream_get_tx_params(anjay->comm_stream, &tx_params)) {
-        anjay_log(ERROR, "could not get current CoAP transmission parameters");
-    }
-
-    avs_time_duration_t delay = avs_coap_max_transmit_wait(&tx_params);
-
-    queue_mode_close_socket_args_t args = {
-        .ssid = _anjay_dm_current_ssid(anjay),
-        .conn_type = (uint16_t) anjay->current_connection.conn_type
-    };
-    // see comment on field declaration for logic summary
-    if (_anjay_sched(anjay->sched,
-                     &connection->queue_mode_close_socket_clb_handle,
-                     delay, queue_mode_close_socket,
-                     queue_mode_close_socket_args_encode(args))) {
-        anjay_log(ERROR, "could not schedule queue mode operations");
-    }
-}
-
 void _anjay_release_server_stream(anjay_t *anjay) {
-    anjay_server_connection_t *connection =
-            _anjay_get_server_connection(anjay->current_connection);
-    assert(connection);
-    _anjay_sched_del(anjay->sched,
-                     &connection->queue_mode_close_socket_clb_handle);
-
-    if (connection->queue_mode) {
-        queue_mode_activate_socket(anjay);
-    }
-
+    _anjay_connection_schedule_queue_mode_close(anjay,
+                                                anjay->current_connection);
     _anjay_release_server_stream_without_scheduling_queue(anjay);
-}
-
-size_t _anjay_num_non_bootstrap_servers(anjay_t *anjay) {
-    size_t num_servers = 0;
-    {
-        AVS_LIST(anjay_active_server_info_t) it;
-        AVS_LIST_FOREACH(it, anjay->servers.active) {
-            if (it->ssid != ANJAY_SSID_BOOTSTRAP) {
-                ++num_servers;
-            }
-        }
-    }
-    {
-        AVS_LIST(anjay_inactive_server_info_t) it;
-        AVS_LIST_FOREACH(it, anjay->servers.inactive) {
-            if (it->ssid != ANJAY_SSID_BOOTSTRAP) {
-                ++num_servers;
-            }
-        }
-    }
-    return num_servers;
 }
 
 static int udp_serve(anjay_t *anjay,
                      avs_net_abstract_socket_t *ready_socket) {
     anjay_connection_ref_t connection = {
-        .server = _anjay_servers_find_by_udp_socket(&anjay->servers,
+        .server = _anjay_servers_find_by_udp_socket(anjay->servers,
                                                     ready_socket),
         .conn_type = ANJAY_CONNECTION_UDP
     };
@@ -874,11 +792,6 @@ static int udp_serve(anjay_t *anjay,
     return result;
 }
 
-static int sms_serve(anjay_t *anjay) {
-    (void) anjay;
-    assert(0 && "SMS not supported in this version of Anjay");
-    return -1;
-}
 
 int anjay_serve(anjay_t *anjay,
                 avs_net_abstract_socket_t *ready_socket) {
@@ -888,10 +801,6 @@ int anjay_serve(anjay_t *anjay,
     }
 #endif // WITH_DOWNLOADER
 
-    if (_anjay_sms_router(anjay)
-            && ready_socket == _anjay_sms_poll_socket(anjay)) {
-        return sms_serve(anjay);
-    }
     return udp_serve(anjay, ready_socket);
 }
 
@@ -1000,6 +909,7 @@ uint64_t anjay_get_num_outgoing_retransmissions(anjay_t *anjay) {
     return 0;
 #endif
 }
+
 
 #ifdef ANJAY_TEST
 #include "test/anjay.c"

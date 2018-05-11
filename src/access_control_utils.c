@@ -121,7 +121,7 @@ static int get_mask(anjay_t *anjay,
     }
 
     if (res_oiid != data->oiid || res_oid != data->oid) {
-        return ANJAY_DM_FOREACH_CONTINUE;
+        return ANJAY_FOREACH_CONTINUE;
     }
 
     const anjay_uri_path_t path =
@@ -147,19 +147,19 @@ static int get_mask(anjay_t *anjay,
     if (found_ssid == data->ssid) {
         // Found the ACL
         data->result = mask;
-        return ANJAY_DM_FOREACH_BREAK;
+        return ANJAY_FOREACH_BREAK;
     } else if (found_ssid == UINT16_MAX) {
         if (res_owner == data->ssid) {
             // Empty ACL, and given ssid is an owner of the instance
             data->result = ANJAY_ACCESS_MASK_FULL & ~ANJAY_ACCESS_MASK_CREATE;
-            return ANJAY_DM_FOREACH_BREAK;
+            return ANJAY_FOREACH_BREAK;
         }
     } else if (!found_ssid) {
         // Default ACL
         data->result = mask;
     }
     // Not the iid we were looking for
-    return ANJAY_DM_FOREACH_CONTINUE;
+    return ANJAY_FOREACH_CONTINUE;
 }
 
 static anjay_access_mask_t
@@ -204,7 +204,7 @@ typedef struct {
 } get_owner_data_t;
 
 static bool is_single_ssid_environment(anjay_t *anjay) {
-    return _anjay_num_non_bootstrap_servers(anjay) == 1;
+    return _anjay_servers_count_non_bootstrap(anjay) == 1;
 }
 
 bool _anjay_access_control_action_allowed(anjay_t *anjay,

@@ -25,7 +25,7 @@
 
 #include <anjay_modules/dm_utils.h>
 #include <anjay_modules/notify.h>
-#include <anjay_modules/raw_buffer.h>
+#include <anjay_modules/utils_core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

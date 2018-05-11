@@ -41,6 +41,7 @@ INCLUDE_WHITELIST = {
     r'time\.h',
     # r'wchar\.h',
     # r'wctype\.h',
+    r'anjay_config_log\.h',
     r'config\.h',
     r'avsystem/commons/[^.]*\.h',
     r'anjay/[^.]*\.h',

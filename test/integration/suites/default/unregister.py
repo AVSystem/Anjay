@@ -22,43 +22,6 @@ from framework.lwm2m_test import *
 def object_set_from_payload(payload):
     return set(int(re.match(b'^</(\d+)[/>]', elem).group(1)) for elem in payload.split(b','))
 
-
-class UnregisterSecurity(test_suite.Lwm2mSingleServerTest):
-    def runTest(self):
-        self.communicate('unregister-object 0')
-        self.assertDemoDeregisters()
-
-    def tearDown(self):
-        super().tearDown(auto_deregister=False)
-
-
-class UnregisterServer(test_suite.Lwm2mSingleServerTest):
-    def runTest(self):
-        # Anjay does not look for instance set changes in the Server object,
-        # asserting that Security and Server are kept in sync and looking at
-        # Security instead. So there is no Deregister message. We also cannot
-        # trigger Update, because server state is no longer valid.
-        #
-        # This is not a big issue, because having a Security instance without
-        # a corresponding Server instance may be considered an inconsistent
-        # state of the data model (even from a high-level, protocol point of
-        # view), so it's basically undefined behaviour.
-        #
-        # Hence, we just call unregister and assert there's no crash.
-        self.communicate('unregister-object 1')
-
-
-# Another test to check that we behave sanely when both objects are gone
-class UnregisterServerAndSecurity(test_suite.Lwm2mSingleServerTest):
-    def runTest(self):
-        self.communicate('unregister-object 1')
-        self.communicate('unregister-object 0')
-        self.assertDemoDeregisters()
-
-    def tearDown(self):
-        super().tearDown(auto_deregister=False)
-
-
 def unregister_test(oid):
     class UnregisterTest(test_suite.Lwm2mSingleServerTest):
         def setUp(self):

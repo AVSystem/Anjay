@@ -70,26 +70,23 @@ int main(int argc, char *argv[]) {
 
     int result;
     if (anjay_attr_storage_install(anjay)
-        || anjay_access_control_install(anjay)) {
+            || anjay_access_control_install(anjay)
+            || anjay_security_object_install(anjay)
+            || anjay_server_object_install(anjay)) {
         result = -1;
-        goto cleanup;
     }
 
-    // Instantiate necessary objects
-    const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
-    const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
+    // Instantiate test object
     const anjay_dm_object_def_t **test_obj = create_test_object();
 
-    // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj || !test_obj) {
+    // For some reason we were unable to instantiate or install
+    if (!test_obj || result) {
         result = -1;
         goto cleanup;
     }
 
-    // Register them within Anjay
-    if (anjay_register_object(anjay, security_obj)
-        || anjay_register_object(anjay, server_obj)
-        || anjay_register_object(anjay, test_obj)) {
+    // Register test object within Anjay
+    if (anjay_register_object(anjay, test_obj)) {
         result = -1;
         goto cleanup;
     }
@@ -128,16 +125,16 @@ int main(int argc, char *argv[]) {
 
     // Setup first LwM2M Server
     anjay_iid_t server_instance_iid1 = ANJAY_IID_INVALID;
-    anjay_security_object_add_instance(security_obj, &security_instance1,
+    anjay_security_object_add_instance(anjay, &security_instance1,
                                        &(anjay_iid_t) { ANJAY_IID_INVALID });
-    anjay_server_object_add_instance(server_obj, &server_instance1,
+    anjay_server_object_add_instance(anjay, &server_instance1,
                                      &server_instance_iid1);
 
     // Setup second LwM2M Server
     anjay_iid_t server_instance_iid2 = ANJAY_IID_INVALID;
-    anjay_security_object_add_instance(security_obj, &security_instance2,
+    anjay_security_object_add_instance(anjay, &security_instance2,
                                        &(anjay_iid_t) { ANJAY_IID_INVALID });
-    anjay_server_object_add_instance(server_obj, &server_instance2,
+    anjay_server_object_add_instance(anjay, &server_instance2,
                                      &server_instance_iid2);
 
     // Set LwM2M Create permission rights for SSID = 1, this will make SSID=1
@@ -155,8 +152,6 @@ int main(int argc, char *argv[]) {
 
 cleanup:
     anjay_delete(anjay);
-    anjay_security_object_delete(security_obj);
-    anjay_server_object_delete(server_obj);
     delete_test_object(test_obj);
     return result;
 }

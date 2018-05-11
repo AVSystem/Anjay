@@ -216,7 +216,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             name = name[:-len('.py')]
         name = name[len(test_root):] if name.startswith(test_root) else name
         name = name.lstrip('/')
-        return name
+        return name.replace('/', '.')
 
     def make_demo_args(self, servers, fw_updated_marker_path):
         """
@@ -262,7 +262,18 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         Starts the demo executable with given CMDLINE_ARGS.
         """
         demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
-        demo_args = self._get_valgrind_args() + [demo_executable] + cmdline_args
+
+        args_prefix = []
+        if (os.environ.get('RR')
+                or ('RRR' in os.environ
+                    and test_or_suite_matches_query_regex(self, os.environ['RRR']))):
+            print('*** rr-recording enabled ***', file=sys.stderr)
+            # ignore valgrind if rr was requested
+            args_prefix = ['rr', 'record']
+        else:
+            args_prefix = self._get_valgrind_args()
+
+        demo_args = args_prefix + [demo_executable] + cmdline_args
 
         import shlex
         console_log_path = self.logs_path('console')
@@ -696,3 +707,52 @@ class PcapEnabledTest(Lwm2mTest):
             if time.time() >= deadline:
                 raise TimeoutError('ICMP Unreachable packet not generated')
             time.sleep(step_s)
+
+
+def get_test_name(test):
+    if isinstance(test, Lwm2mTest):
+        return test.test_name()
+    return test.id()
+
+
+def get_full_test_name(test):
+    if isinstance(test, Lwm2mTest):
+        return test.suite_name() + '.' + test.test_name()
+    return test.id()
+
+
+def get_suite_name(suite):
+    suite_names = []
+    for test in suite:
+        if isinstance(test, Lwm2mTest):
+            suite_names.append(test.suite_name())
+        elif isinstance(test, unittest.TestSuite):
+            suite_names.append(get_suite_name(test))
+        else:
+            suite_names.append(test.id())
+
+    suite_names = set(suite_names)
+    assert len(suite_names) == 1
+
+    suite_name = next(iter(suite_names))
+    return next(iter(suite_names)).replace('/', '.')
+
+
+def test_or_suite_matches_query_regex(test_or_suite, query_regex):
+    """
+    Test or test suite matches regex query when at least one of following
+    matches the regex:
+
+    * test name,
+    * suite name,
+    * "suite_name.test_name" string.
+
+    Substring matches are allowed unless the regex is anchored using ^ or $.
+    """
+    if isinstance(test_or_suite, unittest.TestCase):
+        return (re.search(query_regex, get_test_name(test_or_suite))
+                or re.search(query_regex, get_full_test_name(test_or_suite)))
+    elif isinstance(test_or_suite, unittest.TestSuite):
+        return re.search(query_regex, get_suite_name(test_or_suite))
+    else:
+        raise TypeError('Neither a test nor suite: %r' % test_or_suite)

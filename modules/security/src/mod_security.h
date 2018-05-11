@@ -25,6 +25,7 @@
 #include <anjay/security.h>
 
 #include <anjay_modules/raw_buffer.h>
+#include <anjay_modules/utils_core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

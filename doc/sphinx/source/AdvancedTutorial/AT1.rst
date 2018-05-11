@@ -64,12 +64,9 @@ So, we can modify part of our ``main()`` function to install the module:
 
     int result = anjay_attr_storage_install(anjay);
 
-    // Instantiate necessary objects
-    const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
-    const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
-
-    // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj) {
+    // Install necessary objects
+    if (anjay_security_object_install(anjay)
+            || anjay_server_object_install(anjay)) {
         result = -1;
     }
 

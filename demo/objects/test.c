@@ -273,7 +273,7 @@ static int test_resource_read(anjay_t *anjay,
         }
         return result;
     }
-    case TEST_RES_RAW_BYTES:
+    case TEST_RES_RAW_BYTES: {
         if (!inst->raw_bytes_size) {
             return 0;
         }
@@ -284,6 +284,7 @@ static int test_resource_read(anjay_t *anjay,
         }
         return anjay_ret_bytes_append(bytes_ctx, inst->raw_bytes,
                                       inst->raw_bytes_size);
+    }
     case TEST_RES_BYTES_SIZE:
         return anjay_ret_i32(ctx, inst->bytes_size);
     case TEST_RES_BYTES_BURST:

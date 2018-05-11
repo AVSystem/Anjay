@@ -74,13 +74,13 @@ if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ] || ! "$KEYTOOL" -help >/dev
     echo ''
 else
     echo "* creating trustStore.jks"
-    yes | "$KEYTOOL" -importcert -alias root -file root.crt -keystore trustStore.jks -storepass "$TRUSTSTORE_PASSWORD" >/dev/null
+    yes | "$KEYTOOL" -importcert -alias root -file root.crt -keystore trustStore.jks -storetype PKCS12 -storepass "$TRUSTSTORE_PASSWORD" >/dev/null
     echo "* creating trustStore.jks - done"
 
     echo "* creating keyStore.jks"
     for NAME in client server; do
         "$OPENSSL" pkcs12 -export -in "${NAME}.crt" -inkey "${NAME}.key" -passin "pass:$KEYSTORE_PASSWORD" -out "${NAME}.p12" -name "${NAME}" -CAfile root.crt -caname root -password "pass:$KEYSTORE_PASSWORD"
-        "$KEYTOOL" -importkeystore -deststorepass "$KEYSTORE_PASSWORD" -destkeystore keyStore.jks -srckeystore "${NAME}.p12" -srcstoretype PKCS12 -srcstorepass "$KEYSTORE_PASSWORD" -alias "${NAME}" -trustcacerts
+        "$KEYTOOL" -importkeystore -deststorepass "$KEYSTORE_PASSWORD" -destkeystore keyStore.jks -deststoretype PKCS12 -srckeystore "${NAME}.p12" -srcstoretype PKCS12 -srcstorepass "$KEYSTORE_PASSWORD" -alias "${NAME}" -trustcacerts
     done
     echo "* creating keyStore.jks - done"
 

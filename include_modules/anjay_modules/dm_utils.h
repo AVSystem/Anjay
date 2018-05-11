@@ -56,6 +56,16 @@ static inline bool _anjay_uri_path_equal(const anjay_uri_path_t *left,
         assert((uri).has_rid);    \
     } while (0)
 
+#define MAKE_INSTANCE_OR_RESOURCE_PATH(Oid, Iid, Rid) \
+    (anjay_uri_path_t) {                              \
+        .oid = (Oid),                                 \
+        .iid = (Iid),                                 \
+        .rid = (anjay_rid_t)(Rid),                    \
+        .has_oid = true,                              \
+        .has_iid = true,                              \
+        .has_rid = (0 <= (Rid) && (Rid) < UINT16_MAX) \
+    }
+
 #define MAKE_RESOURCE_PATH(Oid, Iid, Rid) \
     (anjay_uri_path_t) {                  \
         .oid = (Oid),                     \
@@ -124,9 +134,6 @@ static inline int _anjay_dm_res_read_bool(anjay_t *anjay,
 }
 
 typedef struct anjay_dm anjay_dm_t;
-
-#define ANJAY_DM_FOREACH_BREAK INT_MIN
-#define ANJAY_DM_FOREACH_CONTINUE 0
 
 typedef int
 anjay_dm_foreach_object_handler_t(anjay_t *anjay,

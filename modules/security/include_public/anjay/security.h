@@ -60,13 +60,6 @@ typedef struct {
 } anjay_security_instance_t;
 
 /**
- * Creates Security Object ready to get registered in Anjay.
- *
- * @returns pointer to Security Object or NULL in case of error.
- */
-const anjay_dm_object_def_t **anjay_security_object_create(void);
-
-/**
  * Adds new Instance of Security Object and returns newly created Instance id
  * via @p inout_iid .
  *
@@ -81,41 +74,33 @@ const anjay_dm_object_def_t **anjay_security_object_create(void);
  * Warning: calling this function during active communication with Bootstrap
  * Server may yield undefined behavior and unexpected failures may occur.
  *
- * @param obj       Security Object to operate on.
+ * @param anjay     Anjay instance with Security Object installed to operate on.
  * @param instance  Security Instance to insert.
  * @param inout_iid Security Instance id to use or @ref ANJAY_IID_INVALID .
  *
  * @return 0 on success, negative value in case of an error or if the instance
  * of specified id already exists.
  */
-int anjay_security_object_add_instance(
-        const anjay_dm_object_def_t *const *obj,
-        const anjay_security_instance_t *instance,
-        anjay_iid_t *inout_iid);
+int anjay_security_object_add_instance(anjay_t *anjay,
+                                       const anjay_security_instance_t *instance,
+                                       anjay_iid_t *inout_iid);
 
 
 /**
  * Purges instances of Security Object leaving it in an empty state.
  *
- * @param obj   Security Object to purge.
+ * @param anjay Anjay instance with Security Object installed to purge.
  */
-void anjay_security_object_purge(const anjay_dm_object_def_t *const *obj);
-
-/**
- * Deletes Security Object.
- *
- * @param security  Security Object to remove.
- */
-void anjay_security_object_delete(const anjay_dm_object_def_t **security);
+void anjay_security_object_purge(anjay_t *anjay);
 
 /**
  * Dumps Security Object Instance to the @p out_stream.
  *
- * @param obj           Security Object.
+ * @param anjay         Anjay instance with Security Object installed.
  * @param out_stream    Stream to write to.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
+int anjay_security_object_persist(anjay_t *anjay,
                                   avs_stream_abstract_t *out_stream);
 
 /**
@@ -124,19 +109,31 @@ int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
  * Note: if restore fails, then Security Object will be left untouched, on
  * success though all Instances stored within the Object will be purged.
  *
- * @param obj       Security Object.
+ * @param anjay     Anjay instance with Security Object installed.
  * @param in_stream Stream to read from.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
+int anjay_security_object_restore(anjay_t *anjay,
                                   avs_stream_abstract_t *in_stream);
 
 /**
- * Checks whether the Security Object has been modified since last successful
- * call to @ref anjay_security_object_persist or @ref
+ * Checks whether the Security Object in Anjay instance has been modified since
+ * last successful call to @ref anjay_security_object_persist or @ref
  * anjay_security_object_restore.
  */
-bool anjay_security_object_is_modified(const anjay_dm_object_def_t *const *obj);
+bool anjay_security_object_is_modified(anjay_t *anjay);
+
+/**
+ * Installs the Security Object in an Anjay instance.
+ *
+ * The Security module does not require explicit cleanup; all resources will be
+ * automatically freed up during the call to @ref anjay_delete.
+ *
+ * @param anjay Anjay instance for which the Security Object is installed.
+ *
+ * @returns 0 on success, or a negative value in case of error.
+ */
+int anjay_security_object_install(anjay_t *anjay);
 
 #ifdef __cplusplus
 }

@@ -19,7 +19,7 @@
 #include <math.h>
 
 #include "observe_core.h"
-#include "io/vtable.h"
+#include "../io/vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
 

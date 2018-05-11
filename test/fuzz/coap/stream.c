@@ -21,9 +21,9 @@
 
 #include <avsystem/commons/socket_v_table.h>
 #include <avsystem/commons/coap/ctx.h>
-#include <avsystem/commons/stream/net.h>
+#include <avsystem/commons/stream/stream_net.h>
 
-#include "../../../src/coap/stream.h"
+#include "../../../src/coap/coap_stream.h"
 
 static int success() { return 0; }
 static int fail() { return -1; }
@@ -49,7 +49,7 @@ static int stdin_get_opt(avs_net_abstract_socket_t *socket,
     (void)socket;
     (void)opt;
     if (opt == AVS_NET_SOCKET_OPT_RECV_TIMEOUT) {
-        value->recv_timeout = 1;
+        value->recv_timeout = avs_time_duration_from_scalar(1, AVS_TIME_S);
     } else {
         memset(value, 0, sizeof(*value));
     }

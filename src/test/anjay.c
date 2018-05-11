@@ -25,6 +25,7 @@
 #include <anjay_test/utils.h>
 
 #include "../coap/test/utils.h"
+#include "../servers/servers_internal.h"
 
 AVS_UNIT_GLOBAL_INIT(verbose) {
 #ifdef WITH_AVS_LOG
@@ -477,7 +478,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     ////// INIT //////
     DM_TEST_INIT_WITH_SSIDS(42);
-    anjay->servers.active->udp_connection.queue_mode = true;
+    anjay->servers->servers->data_active.udp_connection.queue_mode = true;
     static const char REQUEST[] =
             "\x40\x01\xFA\x3E" // CoAP header
             "\x60" // Observe
@@ -510,13 +511,13 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     ////// QUEUE MODE - EMPTY PASS //////
     AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
+            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
+            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 
     ////// NOTIFY - TRIGGER QUEUE MODE //////
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
@@ -608,7 +609,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     ////// ASSERT QUEUE MODE //////
     AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
+            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
     AVS_UNIT_ASSERT_NOT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
@@ -616,7 +617,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
+            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 
     DM_TEST_FINISH;
 }
@@ -652,7 +653,7 @@ AVS_UNIT_TEST(queue_mode, change) {
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(anjay_get_sockets(anjay)), 1);
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
+            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 
     ////// REFRESH BINDING MODE //////
     // query SSID in Security
@@ -710,14 +711,14 @@ AVS_UNIT_TEST(queue_mode, change) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
+            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(
-            anjay->servers.active->udp_connection.queue_mode_close_socket_clb_handle);
+            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 
     DM_TEST_FINISH;
 }

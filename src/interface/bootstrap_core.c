@@ -44,24 +44,28 @@ static void cancel_client_initiated_bootstrap(anjay_t *anjay) {
                      &anjay->bootstrap.client_initiated_bootstrap_handle);
 }
 
+static int suspend_nonbootstrap_server(anjay_t *anjay,
+                                       anjay_server_info_t *server,
+                                       void *data) {
+    (void) anjay; (void) data;
+    if (_anjay_server_ssid(server) != ANJAY_SSID_BOOTSTRAP) {
+        anjay_connection_ref_t ref = {
+            .server = server,
+            .conn_type = ANJAY_CONNECTION_UNSET
+        };
+        _anjay_connection_suspend(ref);
+    }
+    return 0;
+}
+
 static void start_bootstrap_if_not_already_started(anjay_t *anjay) {
     if (!anjay->bootstrap.in_progress) {
+        // clear inactive servers so that they won't attempt to retry; they will
+        // be recreated during _anjay_schedule_reload_servers() after bootstrap
+        // procedure is finished
+        _anjay_servers_cleanup_inactive(anjay);
         // suspend active connections
-        AVS_LIST(anjay_active_server_info_t) server;
-        AVS_LIST_FOREACH(server, anjay->servers.active) {
-            if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
-                anjay_connection_ref_t ref = {
-                    .server = server,
-                    .conn_type = ANJAY_CONNECTION_UNSET
-                };
-                _anjay_connection_suspend(ref);
-            }
-        }
-
-        // clear inactive servers so that they won't attempt to retry;
-        // they will be recreated during _anjay_schedule_reload_servers()
-        // after bootstrap procedure is finished
-        _anjay_servers_inactive_cleanup(anjay);
+        _anjay_servers_foreach_active(anjay, suspend_nonbootstrap_server, NULL);
 
         _anjay_dm_transaction_begin(anjay);
         anjay->bootstrap.in_progress = true;
@@ -70,13 +74,18 @@ static void start_bootstrap_if_not_already_started(anjay_t *anjay) {
     }
 }
 
-static void resume_connections(anjay_t *anjay) {
-    AVS_LIST(anjay_active_server_info_t) server;
-    AVS_LIST_FOREACH(server, anjay->servers.active) {
-        if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
-            server->needs_reload = true;
-        }
+static int resume_server(anjay_t *anjay,
+                         anjay_server_info_t *server,
+                         void *data) {
+    (void) anjay; (void) data;
+    if (_anjay_server_ssid(server) != ANJAY_SSID_BOOTSTRAP) {
+        _anjay_server_require_reload(server);
     }
+    return 0;
+}
+
+static void resume_connections(anjay_t *anjay) {
+    _anjay_servers_foreach_active(anjay, resume_server, NULL);
     _anjay_schedule_reload_servers(anjay);
 }
 
@@ -273,7 +282,7 @@ static int security_object_valid_handler(anjay_t *anjay,
         return 0;
     }
     if (++*((uintptr_t *) bootstrap_instances) > 1) {
-        return ANJAY_DM_FOREACH_BREAK;
+        return ANJAY_FOREACH_BREAK;
     }
     return 0;
 }
@@ -463,14 +472,14 @@ static int bootstrap_discover(anjay_t *anjay,
                    ANJAY_ERR_NOT_IMPLEMENTED)
 #endif // WITH_DISCOVER
 
-static int purge_bootstrap(anjay_t *anjay, void *dummy) {
+static void purge_bootstrap(anjay_t *anjay, void *dummy) {
     (void) dummy;
-    anjay_iid_t iid;
+    anjay_iid_t iid = ANJAY_IID_INVALID;
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!obj || _anjay_find_security_iid(anjay, ANJAY_SSID_BOOTSTRAP, &iid)) {
         anjay_log(WARNING, "Could not find Bootstrap Server Account to purge");
-        return 0;
+        return;
     }
     int retval = -1;
     if (obj && *obj) {
@@ -486,7 +495,6 @@ static int purge_bootstrap(anjay_t *anjay, void *dummy) {
         anjay_log(ERROR, "Could not purge Bootstrap Server Account %" PRIu16,
                   iid);
     }
-    return retval;
 }
 
 static int schedule_bootstrap_timeout(anjay_t *anjay) {
@@ -647,7 +655,7 @@ static int check_request_bootstrap_response(avs_stream_abstract_t *stream) {
 
 static int send_request_bootstrap(anjay_t *anjay) {
     const anjay_url_t *const server_uri =
-            &anjay->current_connection.server->uri;
+            _anjay_server_uri(anjay->current_connection.server);
     anjay_msg_details_t details = {
         .msg_type = AVS_COAP_MSG_CONFIRMABLE,
         .msg_code = AVS_COAP_CODE_POST,
@@ -686,7 +694,8 @@ cleanup:
     return result;
 }
 
-static int request_bootstrap(anjay_t *anjay, void *dummy);
+static anjay_sched_retryable_result_t
+request_bootstrap(anjay_t *anjay, void *dummy);
 
 static int schedule_request_bootstrap(anjay_t *anjay, int64_t holdoff_s) {
     avs_time_duration_t delay =
@@ -706,30 +715,31 @@ static int schedule_request_bootstrap(anjay_t *anjay, int64_t holdoff_s) {
     return 0;
 }
 
-static int request_bootstrap(anjay_t *anjay, void *dummy) {
-    if (_anjay_servers_is_connected_to_non_bootstrap(&anjay->servers)) {
+static anjay_sched_retryable_result_t
+request_bootstrap(anjay_t *anjay, void *dummy) {
+    if (_anjay_servers_is_connected_to_non_bootstrap(anjay->servers)) {
         anjay_log(DEBUG,
                   "Client Initiated Bootstrap not applicable, not performing");
-        return 0;
+        return ANJAY_SCHED_FINISH;
     }
 
     anjay_log(TRACE, "sending Client Initiated Bootstrap");
 
     (void) dummy;
 
-    anjay_active_server_info_t *server =
-            _anjay_servers_find_active(&anjay->servers, ANJAY_SSID_BOOTSTRAP);
+    anjay_server_info_t *server =
+            _anjay_servers_find_active(anjay->servers, ANJAY_SSID_BOOTSTRAP);
     if (!server || _anjay_server_setup_registration_connection(server)) {
-        return -1;
+        return ANJAY_SCHED_RETRY;
     }
     anjay_connection_ref_t connection = {
         .server = server,
-        .conn_type = server->registration_info.conn_type
+        .conn_type = _anjay_server_registration_conn_type(server)
     };
     if (!connection.server
             || _anjay_bind_server_stream(anjay, connection)) {
         anjay_log(ERROR, "could not get stream for bootstrap server");
-        return -1;
+        return ANJAY_SCHED_RETRY;
     }
 
     int result = send_request_bootstrap(anjay);
@@ -744,7 +754,7 @@ static int request_bootstrap(anjay_t *anjay, void *dummy) {
     }
 
     _anjay_release_server_stream(anjay);
-    return result;
+    return result ? ANJAY_SCHED_RETRY : ANJAY_SCHED_FINISH;
 }
 
 static int64_t client_hold_off_time_s(anjay_t *anjay) {

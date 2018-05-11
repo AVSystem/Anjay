@@ -25,12 +25,13 @@
 
 #include <arpa/inet.h>
 
+#include <avsystem/commons/persistence.h>
+
 #include <avsystem/commons/stream/stream_file.h>
 #include <avsystem/commons/utils.h>
 
 #include "demo_utils.h"
 #include "firmware_update.h"
-#include "anjay/persistence.h"
 
 #define FORCE_ERROR_OUT_OF_MEMORY 1
 #define FORCE_ERROR_FAILED_UPDATE 2
@@ -327,13 +328,13 @@ static int preprocess_firmware(fw_update_logic_t *fw) {
     return result;
 }
 
-static int store_etag(anjay_persistence_context_t *ctx,
+static int store_etag(avs_persistence_context_t *ctx,
                       const anjay_etag_t *etag) {
     // UINT16_MAX is a magic value that means "there is no ETag"
     uint16_t size16 = (etag ? etag->size : UINT16_MAX);
-    int result = anjay_persistence_u16(ctx, &size16);
+    int result = avs_persistence_u16(ctx, &size16);
     if (!result && etag) {
-        result = anjay_persistence_bytes(
+        result = avs_persistence_bytes(
                 ctx, (uint8_t *) (intptr_t) etag->value, etag->size);
     }
     return result;
@@ -346,21 +347,21 @@ static int write_persistence_file(const char *path,
                                   bool filename_administratively_set,
                                   const anjay_etag_t *etag) {
     avs_stream_abstract_t *stream = NULL;
-    anjay_persistence_context_t *ctx = NULL;
+    avs_persistence_context_t *ctx = NULL;
     int8_t result8 = (int8_t) result;
     int retval = 0;
     if (!(stream = avs_stream_file_create(path, AVS_STREAM_FILE_WRITE))
-            || !(ctx = anjay_persistence_store_context_new(stream))
-            || anjay_persistence_bytes(ctx, (uint8_t *) &result8, 1)
-            || anjay_persistence_string(ctx, (char **) (intptr_t) &uri)
-            || anjay_persistence_string(ctx, &download_file)
-            || anjay_persistence_bool(ctx, &filename_administratively_set)
+            || !(ctx = avs_persistence_store_context_new(stream))
+            || avs_persistence_bytes(ctx, (uint8_t *) &result8, 1)
+            || avs_persistence_string(ctx, (char **) (intptr_t) &uri)
+            || avs_persistence_string(ctx, &download_file)
+            || avs_persistence_bool(ctx, &filename_administratively_set)
             || store_etag(ctx, etag)) {
         demo_log(ERROR, "Could not write firmware state persistence file");
         retval = -1;
     }
     if (ctx) {
-        anjay_persistence_context_delete(ctx);
+        avs_persistence_context_delete(ctx);
     }
     if (stream) {
         avs_stream_cleanup(&stream);
@@ -517,18 +518,18 @@ static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .perform_upgrade = fw_perform_upgrade
 };
 
-static int restore_etag(anjay_persistence_context_t *ctx,
+static int restore_etag(avs_persistence_context_t *ctx,
                         anjay_etag_t **etag) {
     assert(etag && !*etag);
     uint16_t size16;
-    int result = anjay_persistence_u16(ctx, &size16);
+    int result = avs_persistence_u16(ctx, &size16);
     if (!result && size16 <= UINT8_MAX) {
         *etag = (anjay_etag_t *) malloc(offsetof(anjay_etag_t, value) + size16);
         if (!*etag) {
             return -1;
         }
         (*etag)->size = (uint8_t) size16;
-        if ((result = anjay_persistence_bytes(ctx, (*etag)->value, size16))) {
+        if ((result = avs_persistence_bytes(ctx, (*etag)->value, size16))) {
             free(*etag);
             *etag = NULL;
         }
@@ -562,19 +563,19 @@ static persistence_file_data_t read_persistence_file(const char *path) {
     persistence_file_data_t data;
     memset(&data, 0, sizeof(data));
     avs_stream_abstract_t *stream = NULL;
-    anjay_persistence_context_t *ctx = NULL;
+    avs_persistence_context_t *ctx = NULL;
     int8_t result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_NEUTRAL;
     if ((stream = avs_stream_file_create(path, AVS_STREAM_FILE_READ))) {
         // invalid or empty but existing file still signifies success
         result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_SUCCESS;
     }
     if (!stream
-            || !(ctx = anjay_persistence_restore_context_new(stream))
-            || anjay_persistence_bytes(ctx, (uint8_t *) &result8, 1)
+            || !(ctx = avs_persistence_restore_context_new(stream))
+            || avs_persistence_bytes(ctx, (uint8_t *) &result8, 1)
             || !is_valid_result(result8)
-            || anjay_persistence_string(ctx, &data.uri)
-            || anjay_persistence_string(ctx, &data.download_file)
-            || anjay_persistence_bool(ctx, &data.filename_administratively_set)
+            || avs_persistence_string(ctx, &data.uri)
+            || avs_persistence_string(ctx, &data.download_file)
+            || avs_persistence_bool(ctx, &data.filename_administratively_set)
             || restore_etag(ctx, &data.etag)) {
         demo_log(WARNING,
                  "Invalid data in the firmware state persistence file");
@@ -584,7 +585,7 @@ static persistence_file_data_t read_persistence_file(const char *path) {
     }
     data.result = (anjay_fw_update_initial_result_t) result8;
     if (ctx) {
-        anjay_persistence_context_delete(ctx);
+        avs_persistence_context_delete(ctx);
     }
     if (stream) {
         avs_stream_cleanup(&stream);

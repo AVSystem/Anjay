@@ -19,6 +19,13 @@
 
 #include <avsystem/commons/list.h>
 
+#ifdef WITH_AVS_LOG
+#include <avsystem/commons/log.h>
+#define _anjay_log(...) avs_log(__VA_ARGS__)
+#else
+#define _anjay_log(...) ((void) 0)
+#endif
+
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct anjay_string {
@@ -42,6 +49,9 @@ typedef struct anjay_url {
     (anjay_url_t) {                         \
         .uri_path = NULL, .uri_query = NULL \
     }
+
+#define ANJAY_FOREACH_BREAK INT_MIN
+#define ANJAY_FOREACH_CONTINUE 0
 
 /**
  * Parses endpoint name into hostname, path and port number. Additionally

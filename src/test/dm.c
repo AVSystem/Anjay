@@ -25,6 +25,7 @@
 
 #include "../anjay_core.h"
 #include "../io/vtable.h"
+#include "../servers/servers_internal.h"
 
 AVS_UNIT_TEST(debug, debug_make_path_macro) {
     anjay_request_t request;
@@ -1937,7 +1938,7 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
     }
 
     anjay.comm_stream = (avs_stream_abstract_t *) &mock;
-    anjay.current_connection.server = &(anjay_active_server_info_t) {
+    anjay.current_connection.server = &(anjay_server_info_t) {
         .ssid = 0
     };
     ASSERT_ACTION_FAILS(ANJAY_ACTION_READ)

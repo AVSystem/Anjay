@@ -280,7 +280,7 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
         return;
     }
 
-    avs_net_psk_t psk = {
+    avs_net_psk_info_t psk = {
         .psk = psk_key,
         .psk_size = strlen(psk_key),
         .identity = psk_identity,
@@ -303,17 +303,20 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
 static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     char path[strlen(args_string) + 1];
     int path_len = 0;
+    const char *args = NULL, *pmin = NULL, *pmax = NULL, *lt = NULL, *gt = NULL,
+               *st = NULL;
+    anjay_dm_resource_attributes_t attrs;
 
     if (sscanf(args_string, "%s%n", path, &path_len) != 1) {
         goto error;
     }
-    const char *args = args_string + path_len;
-    anjay_dm_resource_attributes_t attrs = ANJAY_RES_ATTRIBS_EMPTY;
-    const char *pmin = strstr(args, "pmin=");
-    const char *pmax = strstr(args, "pmax=");
-    const char *lt = strstr(args, "lt=");
-    const char *gt = strstr(args, "gt=");
-    const char *st = strstr(args, "st=");
+    args = args_string + path_len;
+    attrs = ANJAY_RES_ATTRIBS_EMPTY;
+    pmin = strstr(args, "pmin=");
+    pmax = strstr(args, "pmax=");
+    lt = strstr(args, "lt=");
+    gt = strstr(args, "gt=");
+    st = strstr(args, "st=");
     if (pmin) {
         (void) sscanf(pmin, "pmin=%" PRId32, &attrs.common.min_period);
     }

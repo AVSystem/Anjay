@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 2.8.12)
 
 option(WITH_FUZZ_TESTS "Compile fuzz tests using the AFL fuzzer" OFF)
 if(WITH_FUZZ_TESTS)
@@ -26,18 +26,13 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.8.2" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.9.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/lib")
-
-# new policy in CMake 2.8.12 for link interface
-if(NOT CMAKE_VERSION VERSION_LESS "2.8.12")
-    cmake_policy(SET CMP0022 OLD)
-endif()
 
 set(CMAKE_USE_RELATIVE_PATHS TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -75,13 +70,16 @@ include(CMakeDependentOption)
 if(NOT CMAKE_VERSION VERSION_LESS 3.1)
     set(CMAKE_C_STANDARD 99)
     set(CMAKE_C_EXTENSIONS OFF)
-elseif(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+elseif(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
 endif()
 
 option(WITH_EXTRA_WARNINGS "Enable extra compilation warnings" OFF)
 if(WITH_EXTRA_WARNINGS)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra -Winit-self -Wmissing-declarations -Wc++-compat -Wsign-conversion -Wconversion -Wcast-qual -Wno-variadic-macros -Wno-long-long")
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wjump-misses-init")
+    endif()
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/PosixFeatures.cmake)
@@ -106,6 +104,7 @@ endif()
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
+
 
 cmake_dependent_option(WITH_BLOCK_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
 cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF WITH_DOWNLOADER OFF)
@@ -152,6 +151,9 @@ set(MAX_URI_SEGMENT_SIZE 256 CACHE STRING
     "Maximum supported length (in characters) of a single Uri-Path/Location-Path CoAP option value, including trailing nullbyte.")
 set(MAX_URI_QUERY_SEGMENT_SIZE 256 CACHE STRING
     "Maximum supported length (in characters) of a single Uri-Query CoAP option value, including trailing nullbyte.")
+
+set(DTLS_SESSION_BUFFER_SIZE 1024 CACHE STRING
+    "Size of the buffer that caches DTLS session information for resumption support.")
 
 ################# CONVENIENCE SUPPORT ##########################################
 
@@ -229,8 +231,8 @@ if(WITH_DISCOVER)
 endif()
 if(WITH_OBSERVE)
     set(CORE_SOURCES ${CORE_SOURCES}
-        src/observe_core.c
-        src/observe_io.c)
+        src/observe/observe_core.c
+        src/observe/observe_io.c)
 endif()
 if(WITH_JSON)
     set(CORE_SOURCES ${CORE_SOURCES}
@@ -263,12 +265,13 @@ set(CORE_PRIVATE_HEADERS
     src/io_core.h
     src/io/tlv.h
     src/io/vtable.h
-    src/observe_core.h
+    src/observe/observe_core.h
     src/sched_internal.h
     src/servers.h
     src/servers/activate.h
     src/servers/connection_info.h
     src/servers/register_internal.h
+    src/servers/reload.h
     src/servers/servers_internal.h
     src/utils_core.h)
 set(CORE_MODULES_HEADERS
@@ -289,7 +292,10 @@ set(CORE_PUBLIC_HEADERS
     include_public/anjay/anjay.h
     include_public/anjay/core.h
     include_public/anjay/dm.h
-    include_public/anjay/io.h)
+    include_public/anjay/download.h
+    include_public/anjay/io.h
+    include_public/anjay/persistence.h
+    include_public/anjay/stats.h)
 
 
 set(ALL_SOURCES
@@ -307,7 +313,7 @@ set(TEST_SOURCES
     src/coap/test/block_response.c
     src/interface/test/bootstrap_mock.h
     src/io/test/bigdata.h
-    src/test/observe_mock.h
+    src/observe/test/observe_mock.h
     test/src/coap/stream.c
     test/src/coap/socket.c
     test/src/dm.c
@@ -349,12 +355,9 @@ macro(DEFINE_MODULE MOD_NAME MOD_DEFAULT MOD_DESC)
     endif()
 endmacro()
 
-DEFINE_MODULE(persistence ON "Persistence support")
-if(WITH_MODULE_persistence)
-    DEFINE_MODULE(attr_storage ON "Automatic attribute storage module")
-    if(WITH_ACCESS_CONTROL)
-        DEFINE_MODULE(access_control ON "Access control object implementation module")
-    endif()
+DEFINE_MODULE(attr_storage ON "Automatic attribute storage module")
+if(WITH_ACCESS_CONTROL)
+    DEFINE_MODULE(access_control ON "Access control object implementation module")
 endif()
 DEFINE_MODULE(security ON "Security object module")
 DEFINE_MODULE(server ON "Server object module")
@@ -371,6 +374,10 @@ set(DEPS_LIBRARIES_WEAK "")
 set(AVS_COMMONS_COMPONENTS algorithm coap list vector rbtree buffer net stream utils)
 if(WITH_HTTP_DOWNLOAD)
     list(APPEND AVS_COMMONS_COMPONENTS http)
+endif()
+if(WITH_MODULE_attr_storage
+   OR WITH_MODULE_access_control)
+    list(APPEND AVS_COMMONS_COMPONENTS persistence)
 endif()
 
 foreach(_component ${AVS_COMMONS_COMPONENTS})
@@ -438,10 +445,51 @@ include_directories(SYSTEM ${DEPS_INCLUDE_DIRS})
 include_directories(${PUBLIC_INCLUDE_DIRS}
                     ${MODULES_INCLUDE_DIRS})
 
+################# FEATURE LIST LOG #############################################
+
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in" CONFIG_FILE_CONTENTS)
+set(CONFIG_FILE_VARIABLES)
+foreach(CONFIG_FILE_LINE IN LISTS CONFIG_FILE_CONTENTS)
+    if(CONFIG_FILE_LINE MATCHES "\#[ \t]*define[ \t]+([A-Za-z_0-9]+)[ \t]+\@([A-Za-z_0-9]+)\@")
+        set(CONFIG_FILE_VARIABLE "${CMAKE_MATCH_1}")
+        set(CONFIG_FILE_VARIABLE_TYPE "VALUE")
+    elseif(CONFIG_FILE_LINE MATCHES "#[ \t]*cmakedefine[ \t]+([A-Za-z_0-9]+)")
+        set(CONFIG_FILE_VARIABLE "${CMAKE_MATCH_1}")
+        set(CONFIG_FILE_VARIABLE_TYPE "FLAG")
+    elseif(CONFIG_FILE_LINE MATCHES "#[ \t]*cmakedefine" OR CONFIG_FILE_LINE MATCHES "\@[A-Za-z_0-9]+\@")
+        message(SEND_ERROR "Found unloggable line in config.h.in: ${CONFIG_FILE_LINE}")
+    else()
+        set(CONFIG_FILE_VARIABLE "")
+    endif()
+    if(NOT CONFIG_FILE_VARIABLE MATCHES "^(ANJAY_VERSION|ANJAY_LOG_FEATURE_LIST|)$")
+        list(APPEND CONFIG_FILE_VARIABLES "${CONFIG_FILE_VARIABLE} ${CONFIG_FILE_VARIABLE_TYPE}")
+    endif()
+endforeach()
+list(SORT CONFIG_FILE_VARIABLES)
+
+set(ANJAY_LOG_FEATURE_LIST "")
+foreach(CONFIG_FILE_VARIABLE_ENTRY IN LISTS CONFIG_FILE_VARIABLES)
+    string(REPLACE " " ";" CONFIG_FILE_VARIABLE_ENTRY "${CONFIG_FILE_VARIABLE_ENTRY}")
+    list(GET CONFIG_FILE_VARIABLE_ENTRY 0 CONFIG_FILE_VARIABLE)
+    list(GET CONFIG_FILE_VARIABLE_ENTRY 1 CONFIG_FILE_VARIABLE_TYPE)
+
+    if(CONFIG_FILE_VARIABLE_TYPE MATCHES "^VALUE$")
+        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n    _anjay_log(anjay, TRACE, \"${CONFIG_FILE_VARIABLE} = \" AVS_QUOTE_MACRO(${CONFIG_FILE_VARIABLE}));")
+    else()
+        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n#ifdef ${CONFIG_FILE_VARIABLE}")
+        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n    _anjay_log(anjay, TRACE, \"${CONFIG_FILE_VARIABLE} = ON\");")
+        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n#else // ${CONFIG_FILE_VARIABLE}")
+        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n    _anjay_log(anjay, TRACE, \"${CONFIG_FILE_VARIABLE} = OFF\");")
+        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n#endif // ${CONFIG_FILE_VARIABLE}")
+    endif()
+endforeach()
+
 ################# LINK #########################################################
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in"
                "${CMAKE_CURRENT_BINARY_DIR}/config/config.h")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/anjay_config_log.h.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/config/anjay_config_log.h")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/config")
 
 if(WITH_LIBRARY_SHARED)
@@ -513,8 +561,13 @@ if(WITH_TEST)
         set_property(TARGET ${NAME}_test APPEND PROPERTY COMPILE_DEFINITIONS
                      ANJAY_TEST
                      "ANJAY_BIN_DIR=\"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\"")
+
+        set(TEST_COMPILE_FLAGS "-Wno-pedantic -Wno-overlength-strings")
+        if(CMAKE_C_COMPILER_ID MATCHES "GNU")
+            set(TEST_COMPILE_FLAGS "${TEST_COMPILE_FLAGS} -Wno-jump-misses-init")
+        endif()
         set_property(TARGET ${NAME}_test APPEND PROPERTY COMPILE_FLAGS
-                     "-Wno-pedantic -Wno-overlength-strings")
+                     "${TEST_COMPILE_FLAGS}")
 
         if(VALGRIND)
             set(VALGRIND_LOG ${VALGRIND} --log-file=${ANJAY_BUILD_OUTPUT_DIR}/VALGRIND.${NAME}.log)
@@ -568,6 +621,16 @@ if(WITH_TEST)
     add_dependencies(anjay_unit_check
                      function_duplicates_check
                      toc_check)
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+        option(WITH_LICENSE_TEST "Enable checking if all files have the Apache License boilerplate" OFF)
+        if(WITH_LICENSE_TEST)
+            add_custom_target(anjay_license_check
+                              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/check-license-headers.py"
+                              WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+            add_dependencies(anjay_unit_check anjay_license_check)
+        endif()
+    endif()
 
     # Symbol validation
     add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)

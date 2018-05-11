@@ -22,9 +22,9 @@
 
 #include <avsystem/commons/socket_v_table.h>
 #include <avsystem/commons/coap/ctx.h>
-#include <avsystem/commons/stream/net.h>
+#include <avsystem/commons/stream/stream_net.h>
 
-#include "../../../src/coap/stream.h"
+#include "../../../src/coap/coap_stream.h"
 
 typedef struct mock_socket {
     const avs_net_socket_v_table_t *const vtable;

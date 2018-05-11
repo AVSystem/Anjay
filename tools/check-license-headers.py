@@ -19,7 +19,6 @@ import os
 import re
 import subprocess
 import sys
-import time
 from argparse import ArgumentParser
 from io import StringIO
 
@@ -78,7 +77,7 @@ def get_file_list(origin_commit):
     output = subprocess.run(['git', 'diff', '--name-only', origin_commit],
                             stdout=subprocess.PIPE, universal_newlines=True, check=True)
     with StringIO(output.stdout) as f:
-        return [line.strip() for line in f]
+        return [os.path.normpath(line.strip()) for line in f]
 
 
 def check_license(filename):

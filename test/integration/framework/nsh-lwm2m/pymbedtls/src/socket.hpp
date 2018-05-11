@@ -16,11 +16,16 @@
 
 #ifndef PYMBEDTLS_SOCKET_HPP
 #define PYMBEDTLS_SOCKET_HPP
+#include <mbedtls/version.h>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/debug.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/error.h>
+#if MBEDTLS_VERSION_NUMBER >= 0x02040000 // mbed TLS 2.4 deprecated net.h
+#include <mbedtls/net_sockets.h>
+#else // support mbed TLS <=2.3
 #include <mbedtls/net.h>
+#endif
 #include <mbedtls/ssl.h>
 #include <mbedtls/ssl_cache.h>
 #include <mbedtls/ssl_cookie.h>

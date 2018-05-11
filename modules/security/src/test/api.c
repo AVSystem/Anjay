@@ -18,8 +18,12 @@
 
 #include <anjay_test/utils.h>
 
+static const anjay_configuration_t CONFIG = {
+    .endpoint_name = "test"
+};
+
 typedef struct {
-    const anjay_dm_object_def_t **obj;
+    anjay_t *anjay;
 } security_test_env_t;
 
 #define SCOPED_SERVER_TEST_ENV(Name)                       \
@@ -30,13 +34,14 @@ static security_test_env_t *
 security_test_env_create() {
     security_test_env_t *env = (__typeof__(env)) calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
-    env->obj = anjay_security_object_create();
-    AVS_UNIT_ASSERT_NOT_NULL(env->obj);
+    env->anjay = anjay_new(&CONFIG);
+    AVS_UNIT_ASSERT_NOT_NULL(env->anjay);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_install(env->anjay));
     return env;
 }
 
 static void security_test_env_destroy(security_test_env_t **env) {
-    anjay_security_object_delete((*env)->obj);
+    anjay_delete((*env)->anjay);
     free(*env);
 }
 
@@ -61,17 +66,23 @@ static const anjay_security_instance_t instance2 = {
 AVS_UNIT_TEST(security_object_api, add_instances_with_duplicated_ids) {
     SCOPED_SERVER_TEST_ENV(env);
     anjay_iid_t iid = 0;
-    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(env->obj, &instance1, &iid));
-    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->obj, &instance2, &iid));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_security_object_add_instance(env->anjay, &instance1, &iid));
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_security_object_add_instance(env->anjay, &instance2, &iid));
 }
 
 AVS_UNIT_TEST(security_object_api, add_instances_with_duplicated_ssids) {
     SCOPED_SERVER_TEST_ENV(env);
     anjay_iid_t iid = 1;
-    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(env->obj, &instance1, &iid));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_security_object_add_instance(env->anjay, &instance1, &iid));
     iid = 2;
-    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(env->obj, &instance2, &iid));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_security_object_add_instance(env->anjay, &instance2, &iid));
     iid = 3;
-    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->obj, &instance1, &iid));
-    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->obj, &instance2, &iid));
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_security_object_add_instance(env->anjay, &instance1, &iid));
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_security_object_add_instance(env->anjay, &instance2, &iid));
 }

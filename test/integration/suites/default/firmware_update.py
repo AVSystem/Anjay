@@ -924,6 +924,50 @@ class FirmwareUpdateResumeDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttp
         self.assertEqual(len(self.requests), 2)
 
 
+class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    def _get_valgrind_args(self):
+        # we don't kill the process here, so we want Valgrind
+        return FirmwareUpdate.TestWithHttpServer._get_valgrind_args(self)
+
+    def send_headers(self, handler, response_content, response_etag):
+        if 'Range' in handler.headers:
+            self.assertEqual(handler.headers['If-Match'], response_etag)
+            match = re.fullmatch(r'bytes=([0-9]+)-', handler.headers['Range'])
+            self.assertIsNotNone(match)
+            offset = int(match.group(1))
+            handler.send_header('Content-range', 'bytes %d-%d/*' % (offset, len(response_content) - 1))
+            return offset
+
+    def runTest(self):
+        self.provide_response()
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite('/5/0/1', self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_for_half_download()
+
+        # reconnect
+        self.serv.reset()
+        self.communicate('reconnect')
+        self.assertDemoRegisters(self.serv)
+        self.provide_response()
+
+        # wait until client downloads the firmware
+        deadline = time.time() + 20
+        state = None
+        while time.time() < deadline:
+            fsize = os.stat(self.fw_file_name).st_size
+            self.assertGreater(fsize * 2, self.GARBAGE_SIZE)
+            state = self.read_state()
+            self.assertIn(state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
+            if state == UPDATE_STATE_DOWNLOADED:
+                break
+        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+
+        self.assertEqual(len(self.requests), 2)
+
+
 class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def runTest(self):
         self.provide_response()

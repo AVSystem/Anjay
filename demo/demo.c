@@ -25,6 +25,8 @@
 #include <unistd.h>
 #include <netinet/in.h>
 
+#include <avsystem/commons/stream/stream_file.h>
+
 #include <anjay/access_control.h>
 #include <anjay/attr_storage.h>
 #include <anjay/fw_update.h>
@@ -41,9 +43,9 @@
 
 char **saved_argv;
 
-static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
-                                  const server_connection_args_t *args) {
-    anjay_security_object_purge(sec_obj);
+static int security_object_reload(anjay_demo_t *demo) {
+    anjay_security_object_purge(demo->anjay);
+    const server_connection_args_t *args = demo->connection_args;
     const server_entry_t *server;
     DEMO_FOREACH_SERVER_ENTRY(server, args) {
         anjay_security_instance_t instance;
@@ -72,7 +74,7 @@ static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
         instance.server_public_key_size = args->server_public_key_size;
 
         anjay_iid_t iid = server->security_iid;
-        if (anjay_security_object_add_instance(sec_obj, &instance, &iid)) {
+        if (anjay_security_object_add_instance(demo->anjay, &instance, &iid)) {
             demo_log(ERROR, "Cannot add Security Instance");
             return -1;
         }
@@ -80,26 +82,25 @@ static int security_object_reload(const anjay_dm_object_def_t *const *sec_obj,
     return 0;
 }
 
-static int server_object_reload(const anjay_dm_object_def_t *const *serv_obj,
-                                const server_connection_args_t *args) {
-    anjay_server_object_purge(serv_obj);
+static int server_object_reload(anjay_demo_t *demo) {
+    anjay_server_object_purge(demo->anjay);
     const server_entry_t *server;
-    DEMO_FOREACH_SERVER_ENTRY(server, args) {
+    DEMO_FOREACH_SERVER_ENTRY(server, demo->connection_args) {
         if (server->is_bootstrap) {
             continue;
         }
 
         const anjay_server_instance_t instance = {
             .ssid = server->id,
-            .lifetime = args->lifetime,
+            .lifetime = demo->connection_args->lifetime,
             .default_min_period = -1,
             .default_max_period = -1,
             .disable_timeout = -1,
-            .binding = args->binding_mode,
+            .binding = demo->connection_args->binding_mode,
             .notification_storing = true
         };
         anjay_iid_t iid = server->server_iid;
-        if (anjay_server_object_add_instance(serv_obj, &instance, &iid)) {
+        if (anjay_server_object_add_instance(demo->anjay, &instance, &iid)) {
             demo_log(ERROR, "Cannot add Server Instance");
             return -1;
         }
@@ -119,32 +120,24 @@ const anjay_dm_object_def_t **demo_find_object(anjay_demo_t *demo,
 }
 
 void demo_reload_servers(anjay_demo_t *demo) {
-    const anjay_dm_object_def_t **security_obj =
-            demo_find_object(demo, DEMO_OID_SECURITY);
-    const anjay_dm_object_def_t **server_obj =
-            demo_find_object(demo, DEMO_OID_SERVER);
-
-    if (!security_obj || !server_obj) {
-        demo_log(ERROR, "Either security or server object is not registered");
-        exit(-1);
-    }
-
-    if (security_object_reload(security_obj, demo->connection_args)
-        || server_object_reload(server_obj, demo->connection_args)) {
+    if (security_object_reload(demo)
+        || server_object_reload(demo)) {
         demo_log(ERROR, "Error while adding new server objects");
         exit(-1);
-    }
-
-    int ret_notify_sec = anjay_notify_instances_changed(demo->anjay,
-                                                        (*security_obj)->oid);
-    int ret_notify_serv = anjay_notify_instances_changed(demo->anjay,
-                                                         (*server_obj)->oid);
-    if (ret_notify_sec || ret_notify_serv) {
-        demo_log(WARNING, "Could not schedule socket reload");
     }
 }
 
 static void demo_delete(anjay_demo_t *demo) {
+    if (demo->anjay && demo->attr_storage_file) {
+        avs_stream_abstract_t *data =
+                avs_stream_file_create(demo->attr_storage_file,
+                                       AVS_STREAM_FILE_WRITE);
+        if (!data || anjay_attr_storage_persist(demo->anjay, data)) {
+            demo_log(ERROR, "Cannot persist attribute storage to file %s",
+                     demo->attr_storage_file);
+        }
+        avs_stream_cleanup(&data);
+    }
     if (demo->anjay) {
         anjay_delete(demo->anjay);
     }
@@ -267,6 +260,7 @@ install_object(anjay_demo_t *demo,
     return 0;
 }
 
+
 static int demo_init(anjay_demo_t *demo,
                      cmdline_args_t *cmdline_args) {
 
@@ -292,8 +286,10 @@ static int demo_init(anjay_demo_t *demo,
     }
 
     demo->connection_args = &cmdline_args->connection_args;
-
-    demo->anjay = anjay_new(&config);
+    demo->attr_storage_file = cmdline_args->attr_storage_file;
+    {
+        demo->anjay = anjay_new(&config);
+    }
     demo->iosched = iosched_create();
     if (!demo->anjay
             || !demo->iosched
@@ -308,10 +304,8 @@ static int demo_init(anjay_demo_t *demo,
         return -1;
     }
 
-    if (install_object(demo, anjay_security_object_create(), NULL,
-                       anjay_security_object_delete)
-            || install_object(demo, anjay_server_object_create(), NULL,
-                              anjay_server_object_delete)
+    if (anjay_security_object_install(demo->anjay)
+            || anjay_server_object_install(demo->anjay)
             || install_object(demo, location_object_create(),
                               location_notify_time_dependent,
                               location_object_release)
@@ -357,7 +351,19 @@ static int demo_init(anjay_demo_t *demo,
             || add_access_entries(demo, cmdline_args)) {
         return -1;
     }
-
+    if (cmdline_args->attr_storage_file) {
+        avs_stream_abstract_t *data =
+                avs_stream_file_create(cmdline_args->attr_storage_file,
+                                       AVS_STREAM_FILE_READ);
+        if (!data || anjay_attr_storage_restore(demo->anjay, data)) {
+            demo_log(
+                    ERROR,
+                    "Cannot restore attribute storage persistence from file %s",
+                    cmdline_args->attr_storage_file);
+        }
+        // no success log there, as Attribute Storage module logs it by itself
+        avs_stream_cleanup(&data);
+    }
     return 0;
 }
 
@@ -471,8 +477,7 @@ static void serve(anjay_demo_t *demo) {
                 demo->anjay,
                 (int) ((1000500000 - current_time.since_real_epoch.nanoseconds)
                                / 1000000));
-        demo_log(TRACE, "wait time: %ld.%09ld s",
-                 time_to_next_job.tv_sec, time_to_next_job.tv_nsec);
+        demo_log(TRACE, "wait time: %d ms", waitms);
 
         // +1 to prevent annoying annoying looping in case of
         // sub-millisecond delays

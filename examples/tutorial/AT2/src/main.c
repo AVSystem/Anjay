@@ -66,9 +66,7 @@ int main_loop(anjay_t *anjay) {
 
 #define PERSISTENCE_FILENAME "at2-persistence.dat"
 
-int persist_objects(anjay_t *anjay,
-                    const anjay_dm_object_def_t **security_obj,
-                    const anjay_dm_object_def_t **server_obj) {
+int persist_objects(anjay_t *anjay) {
     avs_log(tutorial, INFO, "Persisting objects to %s", PERSISTENCE_FILENAME);
 
     avs_stream_abstract_t *file_stream =
@@ -81,12 +79,12 @@ int persist_objects(anjay_t *anjay,
 
     int result;
 
-    if ((result = anjay_security_object_persist(security_obj, file_stream))) {
+    if ((result = anjay_security_object_persist(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not persist Security Object");
         goto finish;
     }
 
-    if ((result = anjay_server_object_persist(server_obj, file_stream))) {
+    if ((result = anjay_server_object_persist(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not persist Server Object");
         goto finish;
     }
@@ -101,11 +99,7 @@ finish:
     return result;
 }
 
-int restore_objects_if_possible(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t **security_obj,
-        const anjay_dm_object_def_t **server_obj) {
-
+int restore_objects_if_possible(anjay_t *anjay) {
     avs_log(tutorial, INFO, "Attempting to restore objects from persistence");
     int result;
 
@@ -132,12 +126,12 @@ int restore_objects_if_possible(
         return -1;
     }
 
-    if ((result = anjay_security_object_restore(security_obj, file_stream))) {
+    if ((result = anjay_security_object_restore(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not restore Security Object");
         goto finish;
     }
 
-    if ((result = anjay_server_object_restore(server_obj, file_stream))) {
+    if ((result = anjay_server_object_restore(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not restore Server Object");
         goto finish;
     }
@@ -152,9 +146,7 @@ finish:
     return result;
 }
 
-void initialize_objects_with_default_settings(
-        const anjay_dm_object_def_t **security_obj,
-        const anjay_dm_object_def_t **server_obj) {
+void initialize_objects_with_default_settings(anjay_t *anjay) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
         .server_uri = "coap://127.0.0.1:5683",
@@ -172,9 +164,9 @@ void initialize_objects_with_default_settings(
 
     anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
     anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
-    anjay_security_object_add_instance(security_obj, &security_instance,
+    anjay_security_object_add_instance(anjay, &security_instance,
                                        &security_instance_id);
-    anjay_server_object_add_instance(server_obj, &server_instance,
+    anjay_server_object_add_instance(anjay, &server_instance,
                                      &server_instance_id);
 }
 
@@ -192,47 +184,33 @@ int main(int argc, char *argv[]) {
         avs_log(tutorial, ERROR, "Could not create Anjay object");
         return -1;
     }
+
     int result = 0;
 
-    // Instantiate necessary objects
-    const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
-    const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
-
-    // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj) {
+    // Install necessary objects
+    if (anjay_security_object_install(anjay)
+            || anjay_server_object_install(anjay)) {
         result = -1;
-    }
-
-    if (result) {
         goto cleanup;
     }
 
     int restore_retval =
-            restore_objects_if_possible(anjay, security_obj, server_obj);
+            restore_objects_if_possible(anjay);
     if (restore_retval < 0) {
         result = -1;
         goto cleanup;
     } else if (restore_retval > 0) {
-        initialize_objects_with_default_settings(security_obj, server_obj);
-    }
-
-    // Register them within Anjay
-    if (anjay_register_object(anjay, security_obj)
-        || anjay_register_object(anjay, server_obj)) {
-        result = -1;
-        goto cleanup;
+        initialize_objects_with_default_settings(anjay);
     }
 
     result = main_loop(anjay);
 
-    int persist_result = persist_objects(anjay, security_obj, server_obj);
+    int persist_result = persist_objects(anjay);
     if (!result) {
         result = persist_result;
     }
 
 cleanup:
     anjay_delete(anjay);
-    anjay_security_object_delete(security_obj);
-    anjay_server_object_delete(server_obj);
     return result;
 }

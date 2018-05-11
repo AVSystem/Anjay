@@ -23,6 +23,7 @@
 #include <anjay_test/dm.h>
 
 #include "../../sched_internal.h"
+#include "../../servers/servers_internal.h"
 
 AVS_UNIT_TEST(bootstrap_write, resource) {
     DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
@@ -731,12 +732,13 @@ AVS_UNIT_TEST(bootstrap_reconnect, reconnect) {
 
     // mocking reconnect is rather hard, so let's just check it's scheduled
     AVS_UNIT_ASSERT_TRUE(anjay->sched->entries
-            == anjay->servers.active->sched_update_handle);
+            == anjay->servers->servers->sched_update_or_reactivate_handle);
     // encoded update args:
     // - SSID==65535 (0xFFFF; fake-SSID for Bootstrap Server)
     // - reconnect required == true (hence the 1 at the higher-order byte)
     AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data, 0x1FFFF);
-    _anjay_sched_del(anjay->sched, &anjay->servers.active->sched_update_handle);
+    _anjay_sched_del(anjay->sched,
+                     &anjay->servers->servers->sched_update_or_reactivate_handle);
 
     int sched_job_delay_ms;
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_time_to_next_ms(anjay,

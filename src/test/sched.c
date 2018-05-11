@@ -19,24 +19,29 @@
 #include <avsystem/commons/unit/test.h>
 #include <anjay_test/mock_clock.h>
 
-static int increment_task(anjay_t *anjay,
-                          void *counter_) {
+static void increment_task(anjay_t *anjay, void *counter_) {
     (void)anjay;
     ++*(int*)counter_;
-    return 0;
 }
 
-static int increment_and_fail_task(anjay_t *anjay,
-                                   void *counter_) {
+static anjay_sched_retryable_result_t
+increment_and_succeed_task(anjay_t *anjay, void *counter_) {
     (void)anjay;
     ++*(int*)counter_;
-    return -1;
+    return ANJAY_SCHED_FINISH;
 }
 
-static int return_int_task(anjay_t *anjay,
-                           void *value_) {
+static anjay_sched_retryable_result_t
+increment_and_fail_task(anjay_t *anjay, void *counter_) {
     (void)anjay;
-    return *(int*)value_;
+    ++*(int*)counter_;
+    return ANJAY_SCHED_RETRY;
+}
+
+static anjay_sched_retryable_result_t
+return_result_task(anjay_t *anjay, void *value_) {
+    (void)anjay;
+    return *(anjay_sched_retryable_result_t*)value_;
 }
 
 typedef struct {
@@ -191,7 +196,7 @@ AVS_UNIT_TEST(sched, retryable_success) {
     anjay_sched_handle_t task = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_retryable(
             env.sched, &task, AVS_TIME_DURATION_ZERO, backoff,
-            increment_task, &counter));
+            increment_and_succeed_task, &counter));
     AVS_UNIT_ASSERT_NOT_NULL(task);
 
     // initial execution - success
@@ -214,11 +219,11 @@ AVS_UNIT_TEST(sched, retryable_retry_then_success) {
         .max_delay = { 4, 0 }
     };
 
-    int counter = 1;
+    anjay_sched_retryable_result_t result = ANJAY_SCHED_RETRY;
     anjay_sched_handle_t task = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_retryable(
             env.sched, &task, AVS_TIME_DURATION_ZERO, backoff,
-            return_int_task, &counter));
+            return_result_task, &result));
     AVS_UNIT_ASSERT_NOT_NULL(task);
 
     // initial execution - fail
@@ -226,7 +231,7 @@ AVS_UNIT_TEST(sched, retryable_retry_then_success) {
     AVS_UNIT_ASSERT_NOT_NULL(task);
 
     // first retry - succeed
-    counter = 0;
+    result = ANJAY_SCHED_FINISH;
     assert_executes_after_delay(&env, backoff.delay);
     AVS_UNIT_ASSERT_NULL(task);
 
@@ -242,11 +247,10 @@ typedef struct {
     int n;
 } global_t;
 
-static int assert_task_null_oneshot_job(anjay_t *anjay, void *context) {
+static void assert_task_null_oneshot_job(anjay_t *anjay, void *context) {
     (void) anjay;
     global_t *global = (global_t *) context;
     AVS_UNIT_ASSERT_NULL(global->task);
-    return 0;
 }
 
 AVS_UNIT_TEST(sched, oneshot_job_handle_nullification) {
@@ -261,15 +265,16 @@ AVS_UNIT_TEST(sched, oneshot_job_handle_nullification) {
     teardown_test(&env);
 }
 
-static int assert_task_null_retryable_job(anjay_t *anjay, void *context) {
+static anjay_sched_retryable_result_t
+assert_task_null_retryable_job(anjay_t *anjay, void *context) {
     (void) anjay;
     global_t *global = (global_t *) context;
     AVS_UNIT_ASSERT_NULL(global->task);
     if (global->n < 2) {
         global->n++;
-        return -1;
+        return ANJAY_SCHED_RETRY;
     }
-    return 0;
+    return ANJAY_SCHED_FINISH;
 }
 AVS_UNIT_TEST(sched, retryable_job_handle_nullification) {
     sched_test_env_t env = setup_test();

@@ -75,7 +75,7 @@ static int try_security_instance(anjay_t *anjay,
         fw_log(WARNING, "could not read LwM2M server URI from "
                         "/%" PRIu16 "/%" PRIu16 "/%" PRIu16,
                path.oid, path.iid, path.rid);
-        return ANJAY_DM_FOREACH_CONTINUE;
+        return ANJAY_FOREACH_CONTINUE;
     }
 
     avs_url_t *server_url = avs_url_parse(raw_server_url);
@@ -83,10 +83,10 @@ static int try_security_instance(anjay_t *anjay,
         fw_log(WARNING, "Could not parse URL from "
                         "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 ": %s",
                path.oid, path.iid, path.rid, raw_server_url);
-        return ANJAY_DM_FOREACH_CONTINUE;
+        return ANJAY_FOREACH_CONTINUE;
     }
 
-    int retval = ANJAY_DM_FOREACH_CONTINUE;
+    int retval = ANJAY_FOREACH_CONTINUE;
     if (strcmp(avs_url_host(server_url), avs_url_host(args->url)) == 0) {
         bool service_matches = url_service_matches(server_url, args->url);
         if (!args->result || service_matches) {
@@ -112,7 +112,7 @@ static int try_security_instance(anjay_t *anjay,
                 args->result = &new_result->security_info;
                 new_result = NULL;
                 if (service_matches) {
-                    retval = ANJAY_DM_FOREACH_BREAK;
+                    retval = ANJAY_FOREACH_BREAK;
                 }
             }
             free(new_result);
@@ -125,6 +125,8 @@ static int try_security_instance(anjay_t *anjay,
 
 avs_net_security_info_t *
 anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
+    assert(anjay);
+    
     const anjay_dm_object_def_t *const *security_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!security_obj) {

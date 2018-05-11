@@ -35,6 +35,8 @@ typedef struct {
                           AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
     void (*cleanup)(anjay_downloader_t *dl,
                     AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    int (*reconnect)(anjay_downloader_t *dl,
+                     AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
 } anjay_download_ctx_vtable_t;
 
 typedef struct {

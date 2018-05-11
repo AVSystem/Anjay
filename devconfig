@@ -123,6 +123,7 @@ rm -f CMakeCache.txt
 rm -rf CMakeFiles
 ${CMAKE_COMMAND} \
     -D WITH_TEST=ON \
+    -D WITH_LICENSE_TEST=ON \
     -D WITH_DEMO=ON \
     -D WITH_EXTRA_WARNINGS=ON \
     -D WITH_CON_ATTR=ON \

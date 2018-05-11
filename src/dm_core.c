@@ -39,7 +39,7 @@
 #include "dm/dm_execute.h"
 #include "dm/query.h"
 #include "io_core.h"
-#include "observe_core.h"
+#include "observe/observe_core.h"
 #include "utils_core.h"
 #include "anjay_core.h"
 #include "access_control_utils.h"
@@ -1357,7 +1357,7 @@ int _anjay_dm_foreach_object(anjay_t *anjay,
         assert(*obj && **obj);
 
         int result = handler(anjay, *obj, data);
-        if (result == ANJAY_DM_FOREACH_BREAK) {
+        if (result == ANJAY_FOREACH_BREAK) {
             anjay_log(DEBUG, "foreach_object: break on /%u", (**obj)->oid);
             return 0;
         } else if (result) {
@@ -1385,7 +1385,7 @@ int _anjay_dm_foreach_instance(anjay_t *anjay,
     while (!(result = _anjay_dm_instance_it(anjay, obj, &iid, &cookie, NULL))
             && iid != ANJAY_IID_INVALID) {
         result = handler(anjay, obj, iid, data);
-        if (result == ANJAY_DM_FOREACH_BREAK) {
+        if (result == ANJAY_FOREACH_BREAK) {
             anjay_log(TRACE, "foreach_instance: break on /%u/%u", (*obj)->oid,
                       iid);
             return 0;
@@ -1480,7 +1480,8 @@ _anjay_dm_read_as_input_ctx(anjay_t *anjay, const anjay_uri_path_t *path) {
 
 anjay_ssid_t _anjay_dm_current_ssid(anjay_t *anjay) {
     return anjay->current_connection.server
-            ? anjay->current_connection.server->ssid : ANJAY_SSID_BOOTSTRAP;
+            ? _anjay_server_ssid(anjay->current_connection.server)
+            : ANJAY_SSID_BOOTSTRAP;
 }
 
 #ifdef ANJAY_TEST

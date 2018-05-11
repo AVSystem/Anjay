@@ -160,6 +160,13 @@ As you can see, dynamic memory management is semi-automatically handled by ``AVS
 Using functions defined above to create, register and free the Test object is similar
 as in previous tutorials.
 
+.. note::
+
+    Before calling ``delete_test_object()`` the object must be unregistered. You
+    can do this by calling ``anjay_unregister_object()``. Also ``anjay_delete()``
+    will deregister (but not delete) all of registered objects before destruction
+    of Anjay instance.
+
 Updating old, already implemented handlers to use ``AVS_LIST``
 --------------------------------------------------------------
 

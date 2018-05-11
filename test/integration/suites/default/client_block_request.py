@@ -294,6 +294,20 @@ class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test()):
 #    we do not expect retransmitted block.
 ICMP_ERROR_RESPONSE_SLEEP_SECONDS = 5
 
+class IcmpErrorResponseAfterNoResponsesAtAll(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
+    def runTest(self):
+        self.communicate('send-update')
+        # Allow client to contaminate our packet queue.
+        time.sleep(5)
+
+        with self.serv.fake_close():
+            time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
+
+        # client should abort and retry update in a while, and more importantly, we should
+        # have our recv queues clean, so that this test doesn't fail
+        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
+        self.block_recv()
+
 
 class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
     def runTest(self):

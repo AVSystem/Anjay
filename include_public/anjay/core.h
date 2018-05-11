@@ -400,11 +400,16 @@ int anjay_schedule_registration_update(anjay_t *anjay,
                                        anjay_ssid_t ssid);
 
 /**
- * Reconnects sockets associated with all connected servers. Should be called if
- * something related to the device's IP connection has changed.
+ * Reconnects sockets associated with all connected servers and ongoing
+ * downloads. Should be called if something related to the device's IP
+ * connection has changed.
  *
  * The reconnection will be performed during the next @ref anjay_sched_run call
  * and will trigger Registration Update.
+ *
+ * In case of ongoing downloads (started via @ref anjay_download or the
+ * <c>fw_update</c> module), if the reconnection fails, the download will be
+ * aborted with an error.
  *
  * Note: This function makes Anjay enter online mode.
  *

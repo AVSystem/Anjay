@@ -16,7 +16,8 @@
 
 #include <config.h>
 
-#include <anjay/persistence.h>
+#include <avsystem/commons/persistence.h>
+#include <anjay_modules/dm_utils.h>
 
 #include <string.h>
 #include <inttypes.h>
@@ -33,46 +34,46 @@ VISIBILITY_SOURCE_BEGIN
 static const char MAGIC_V0[] = { 'S', 'E', 'C', '\0' };
 static const char MAGIC_V1[] = { 'S', 'E', 'C', '\1' };
 
-static int handle_sized_v0_fields(anjay_persistence_context_t *ctx,
+static int handle_sized_v0_fields(avs_persistence_context_t *ctx,
                                   sec_instance_t *element) {
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &element->iid))
-            || (retval = anjay_persistence_bool(ctx,
-                                                &element->has_is_bootstrap))
-            || (retval = anjay_persistence_bool(ctx,
-                                                &element->has_udp_security_mode))
-            || (retval = anjay_persistence_bool(ctx, &element->has_ssid))
-            || (retval = anjay_persistence_bool(ctx,
-                                                &element->is_bootstrap))
-            || (retval = anjay_persistence_u16(ctx, &element->ssid))
-            || (retval = anjay_persistence_u32(ctx, (uint32_t *) &element->holdoff_s))
-            || (retval = anjay_persistence_u32(ctx, (uint32_t *) &element->bs_timeout_s)));
+    (void) ((retval = avs_persistence_u16(ctx, &element->iid))
+            || (retval = avs_persistence_bool(ctx, &element->has_is_bootstrap))
+            || (retval = avs_persistence_bool(ctx,
+                                              &element->has_udp_security_mode))
+            || (retval = avs_persistence_bool(ctx, &element->has_ssid))
+            || (retval = avs_persistence_bool(ctx, &element->is_bootstrap))
+            || (retval = avs_persistence_u16(ctx, &element->ssid))
+            || (retval = avs_persistence_u32(ctx,
+                                             (uint32_t *) &element->holdoff_s))
+            || (retval = avs_persistence_u32(
+                    ctx, (uint32_t *) &element->bs_timeout_s)));
     return retval;
 }
 
-static int handle_sized_v1_fields(anjay_persistence_context_t *ctx,
+static int handle_sized_v1_fields(avs_persistence_context_t *ctx,
                                   sec_instance_t *element) {
     int retval;
-    (void) ((retval = anjay_persistence_bool(ctx,
-                                             &element->has_sms_security_mode))
-            || (retval = anjay_persistence_bool(ctx,
-                                                &element->has_sms_key_params))
-            || (retval = anjay_persistence_bool(ctx,
-                                                &element->has_sms_secret_key)));
+    (void) ((retval = avs_persistence_bool(ctx,
+                                           &element->has_sms_security_mode))
+            || (retval = avs_persistence_bool(ctx,
+                                              &element->has_sms_key_params))
+            || (retval = avs_persistence_bool(ctx,
+                                              &element->has_sms_secret_key)));
     return retval;
 }
 
-static int handle_raw_buffer(anjay_persistence_context_t *ctx,
+static int handle_raw_buffer(avs_persistence_context_t *ctx,
                              anjay_raw_buffer_t *buffer) {
-    int retval = anjay_persistence_sized_buffer(ctx,
-                                                &buffer->data, &buffer->size);
+    int retval = avs_persistence_sized_buffer(ctx,
+                                              &buffer->data, &buffer->size);
     if (!buffer->capacity) {
         buffer->capacity = buffer->size;
     }
     return retval;
 }
 
-static int handle_instance(anjay_persistence_context_t *ctx,
+static int handle_instance(avs_persistence_context_t *ctx,
                            void *element_,
                            void *stream_version_) {
     sec_instance_t *element = (sec_instance_t *) element_;
@@ -80,25 +81,24 @@ static int handle_instance(anjay_persistence_context_t *ctx,
     int retval = 0;
     uint16_t udp_security_mode = (uint16_t) element->udp_security_mode;
     if ((retval = handle_sized_v0_fields(ctx, element))
-            || (retval = anjay_persistence_u16(ctx, &udp_security_mode))
-            || (retval = anjay_persistence_string(ctx, &element->server_uri))
+            || (retval = avs_persistence_u16(ctx, &udp_security_mode))
+            || (retval = avs_persistence_string(ctx, &element->server_uri))
             || (retval = handle_raw_buffer(
                     ctx, &element->public_cert_or_psk_identity))
             || (retval = handle_raw_buffer(ctx,
-                                            &element->private_cert_or_psk_key))
-            || (retval = handle_raw_buffer(ctx,
-                                            &element->server_public_key))) {
+                                           &element->private_cert_or_psk_key))
+            || (retval = handle_raw_buffer(ctx, &element->server_public_key))) {
         return retval;
     }
     element->udp_security_mode = (anjay_udp_security_mode_t) udp_security_mode;
     if (stream_version >= 1) {
         uint16_t sms_security_mode = (uint16_t) element->sms_security_mode;
         if ((retval = handle_sized_v1_fields(ctx, element))
-                || (retval = anjay_persistence_u16(ctx, &sms_security_mode))
+                || (retval = avs_persistence_u16(ctx, &sms_security_mode))
                 || (retval = handle_raw_buffer(ctx, &element->sms_key_params))
                 || (retval = handle_raw_buffer(ctx, &element->sms_secret_key))
-                || (retval = anjay_persistence_string(ctx,
-                                                      &element->sms_number))) {
+                || (retval = avs_persistence_string(ctx,
+                                                    &element->sms_number))) {
             return retval;
         }
         element->sms_security_mode =
@@ -107,9 +107,13 @@ static int handle_instance(anjay_persistence_context_t *ctx,
     return 0;
 }
 
-int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
+int anjay_security_object_persist(anjay_t *anjay,
                                   avs_stream_abstract_t *out_stream) {
-    sec_repr_t *repr = _anjay_sec_get(obj);
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *sec_obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+    sec_repr_t *repr = _anjay_sec_get(sec_obj);
     if (!repr) {
         return -1;
     }
@@ -117,25 +121,30 @@ int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
     if (retval) {
         return retval;
     }
-    anjay_persistence_context_t *ctx =
-            anjay_persistence_store_context_new(out_stream);
+    avs_persistence_context_t *ctx =
+            avs_persistence_store_context_new(out_stream);
     if (!ctx) {
         persistence_log(ERROR, "Out of memory");
         return -1;
     }
-    retval = anjay_persistence_list(ctx, (AVS_LIST(void) *) &repr->instances,
-                                    sizeof(sec_instance_t),
-                                    handle_instance, (void *) (intptr_t) 1);
-    anjay_persistence_context_delete(ctx);
+    retval = avs_persistence_list(ctx, (AVS_LIST(void) *) &repr->instances,
+                                  sizeof(sec_instance_t),
+                                  handle_instance, (void *) (intptr_t) 1, NULL);
+    avs_persistence_context_delete(ctx);
     if (!retval) {
         clear_modified(repr);
+        persistence_log(INFO, "Security Object state persisted");
     }
     return retval;
 }
 
-int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
+int anjay_security_object_restore(anjay_t *anjay,
                                   avs_stream_abstract_t *in_stream) {
-    sec_repr_t *repr = _anjay_sec_get(obj);
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *sec_obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+    sec_repr_t *repr = _anjay_sec_get(sec_obj);
     if (!repr) {
         return -1;
     }
@@ -159,26 +168,27 @@ int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
         persistence_log(ERROR, "Header magic constant mismatch");
         return -1;
     }
-    anjay_persistence_context_t *restore_ctx =
-            anjay_persistence_restore_context_new(in_stream);
+    avs_persistence_context_t *restore_ctx =
+            avs_persistence_restore_context_new(in_stream);
     if (!restore_ctx) {
         persistence_log(ERROR, "Cannot create persistence restore context");
         return -1;
     }
     repr->instances = NULL;
-    retval = anjay_persistence_list(restore_ctx,
-                                    (AVS_LIST(void) *) &repr->instances,
-                                    sizeof(sec_instance_t), handle_instance,
-                                    (void *) (intptr_t) version);
+    retval = avs_persistence_list(restore_ctx,
+                                  (AVS_LIST(void) *) &repr->instances,
+                                  sizeof(sec_instance_t), handle_instance,
+                                  (void *) (intptr_t) version, NULL);
     if (retval || (retval = _anjay_sec_object_validate(repr))) {
         _anjay_sec_destroy_instances(&repr->instances);
         repr->instances = backup.instances;
     } else {
         _anjay_sec_destroy_instances(&backup.instances);
     }
-    anjay_persistence_context_delete(restore_ctx);
+    avs_persistence_context_delete(restore_ctx);
     if (!retval) {
         clear_modified(repr);
+        persistence_log(INFO, "Security Object state restored");
     }
     return retval;
 }

@@ -25,13 +25,11 @@
 #include <anjay_test/dm.h>
 #include <anjay_test/mock_clock.h>
 
-#include "../anjay_core.h"
-#include "../sched_internal.h"
+#include "../../anjay_core.h"
+#include "../../sched_internal.h"
 
-// HACK to enable access to servers
-#define ANJAY_SERVERS_INTERNALS
-#include "../servers/connection_info.h"
-#undef ANJAY_SERVERS_INTERNALS
+#include "../../servers/connection_info.h"
+#include "../../servers/servers_internal.h"
 
 static void assert_observe_size(anjay_t *anjay, size_t sz) {
     size_t result = 0;
@@ -79,7 +77,8 @@ static void assert_observe(anjay_t *anjay,
                             connection_query(&key_query.connection));
     AVS_UNIT_ASSERT_NOT_NULL(conn);
     AVS_RBTREE_ELEM(anjay_observe_entry_t) entity =
-            AVS_RBTREE_FIND(conn->entries, entry_query(&key_query));
+            AVS_RBTREE_FIND(conn->entries,
+                            _anjay_observe_entry_query(&key_query));
     AVS_UNIT_ASSERT_NOT_NULL(entity);
     AVS_UNIT_ASSERT_NULL(entity->last_unsent);
     AVS_UNIT_ASSERT_NOT_NULL(entity->last_sent);
@@ -338,15 +337,16 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
 }
 
 static inline void
-remove_server(AVS_LIST(anjay_active_server_info_t) *server_ptr) {
-    _anjay_connection_internal_clean_socket(&(*server_ptr)->udp_connection);
+remove_server(AVS_LIST(anjay_server_info_t) *server_ptr) {
+    _anjay_connection_internal_clean_socket(
+            &(*server_ptr)->data_active.udp_connection);
     AVS_LIST_DELETE(server_ptr);
 }
 
 AVS_UNIT_TEST(observe, gc) {
     SUCCESS_TEST(14, 69, 514, 666, 777);
 
-    remove_server(&anjay->servers.active);
+    remove_server(&anjay->servers->servers);
 
     _anjay_observe_gc(anjay);
     assert_observe_size(anjay, 4);
@@ -355,7 +355,7 @@ AVS_UNIT_TEST(observe, gc) {
     ASSERT_SUCCESS_TEST_RESULT(666);
     ASSERT_SUCCESS_TEST_RESULT(777);
 
-    remove_server(AVS_LIST_NTH_PTR(&anjay->servers.active, 3));
+    remove_server(AVS_LIST_NTH_PTR(&anjay->servers->servers, 3));
 
     _anjay_observe_gc(anjay);
     assert_observe_size(anjay, 3);
@@ -363,7 +363,7 @@ AVS_UNIT_TEST(observe, gc) {
     ASSERT_SUCCESS_TEST_RESULT(514);
     ASSERT_SUCCESS_TEST_RESULT(666);
 
-    remove_server(AVS_LIST_NTH_PTR(&anjay->servers.active, 1));
+    remove_server(AVS_LIST_NTH_PTR(&anjay->servers->servers, 1));
 
     _anjay_observe_gc(anjay);
     assert_observe_size(anjay, 2);
@@ -1260,7 +1260,7 @@ static void test_observe_entry(anjay_t *anjay,
 
 static anjay_t *create_test_env(void) {
     anjay_t *anjay = (anjay_t *) calloc(1, sizeof(anjay_t));
-    _anjay_observe_init(anjay, false);
+    _anjay_observe_init(&anjay->observe, false);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 1);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 2);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 9, 4);
@@ -1276,7 +1276,7 @@ static anjay_t *create_test_env(void) {
 }
 
 static void destroy_test_env(anjay_t *anjay) {
-    _anjay_observe_cleanup(anjay);
+    _anjay_observe_cleanup(&anjay->observe, anjay->sched);
     free(anjay);
 }
 
@@ -1304,7 +1304,8 @@ static int mock_notify_entry(anjay_t *anjay,
     (void) obj;
     AVS_UNIT_ASSERT_NOT_NULL(MOCK_NOTIFY);
     mock_notify_entry_value_t *entry = AVS_LIST_DETACH(&MOCK_NOTIFY);
-    AVS_UNIT_ASSERT_EQUAL(entry_key_cmp(&entity->key, &entry->key), 0);
+    AVS_UNIT_ASSERT_EQUAL(_anjay_observe_key_cmp(&entity->key, &entry->key),
+                          0);
     int retval = entry->retval;
     AVS_LIST_DELETE(&entry);
     return retval;
@@ -1320,6 +1321,7 @@ static void expect_notify_entry(anjay_ssid_t ssid,
             AVS_LIST_NEW_ELEMENT(mock_notify_entry_value_t);
     AVS_UNIT_ASSERT_NOT_NULL(entry);
     entry->key.connection.ssid = ssid;
+    entry->key.connection.type = ANJAY_CONNECTION_UDP;
     entry->key.oid = oid;
     entry->key.iid = iid;
     entry->key.rid = rid;
@@ -1390,11 +1392,9 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     SUCCESS_TEST(14, 34);
 
     // deactivate the first server
-    anjay_active_server_info_t *inactive14 =
-            AVS_LIST_DETACH(&anjay->servers.active);
-    AVS_UNIT_ASSERT_NOT_NULL(AVS_LIST_INSERT_NEW(anjay_inactive_server_info_t,
-                                                 &anjay->servers.inactive));
-    anjay->servers.inactive->ssid = 14;
+    avs_net_abstract_socket_t *socket14 =
+            anjay->servers->servers->data_active.udp_connection.conn_socket_;
+    anjay->servers->servers->data_active.udp_connection.conn_socket_ = NULL;
     _anjay_observe_gc(anjay);
     assert_observe_size(anjay, 2);
 
@@ -1461,12 +1461,10 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // reactivate the server
-    AVS_LIST_DELETE(&anjay->servers.inactive);
-    AVS_UNIT_ASSERT_NULL(anjay->servers.inactive);
-    AVS_LIST_INSERT(&anjay->servers.active, inactive14);
+    anjay->servers->servers->data_active.udp_connection.conn_socket_ = socket14;
     _anjay_observe_gc(anjay);
     assert_observe_size(anjay, 2);
-    anjay->current_connection.server = inactive14;
+    anjay->current_connection.server = anjay->servers->servers;
     anjay->current_connection.conn_type = ANJAY_CONNECTION_UDP;
     _anjay_observe_sched_flush_current_connection(anjay);
     memset(&anjay->current_connection, 0, sizeof(anjay->current_connection));
@@ -1496,11 +1494,9 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     SUCCESS_TEST(14, 34);
 
     // deactivate the first server
-    anjay_active_server_info_t *inactive14 =
-            AVS_LIST_DETACH(&anjay->servers.active);
-    AVS_UNIT_ASSERT_NOT_NULL(AVS_LIST_INSERT_NEW(anjay_inactive_server_info_t,
-                                                 &anjay->servers.inactive));
-    anjay->servers.inactive->ssid = 14;
+    avs_net_abstract_socket_t *socket14 =
+            anjay->servers->servers->data_active.udp_connection.conn_socket_;
+    anjay->servers->servers->data_active.udp_connection.conn_socket_ = NULL;
     _anjay_observe_gc(anjay);
     assert_observe_size(anjay, 2);
 
@@ -1555,12 +1551,10 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // reactivate the server
-    AVS_LIST_DELETE(&anjay->servers.inactive);
-    AVS_UNIT_ASSERT_NULL(anjay->servers.inactive);
-    AVS_LIST_INSERT(&anjay->servers.active, inactive14);
+    anjay->servers->servers->data_active.udp_connection.conn_socket_ = socket14;
     _anjay_observe_gc(anjay);
     assert_observe_size(anjay, 2);
-    anjay->current_connection.server = inactive14;
+    anjay->current_connection.server = anjay->servers->servers;
     anjay->current_connection.conn_type = ANJAY_CONNECTION_UDP;
     _anjay_observe_sched_flush_current_connection(anjay);
     memset(&anjay->current_connection, 0, sizeof(anjay->current_connection));
@@ -1738,10 +1732,12 @@ AVS_UNIT_TEST(notify, storing_of_errors) {
 
     // sending is now scheduled, should receive the previous error
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    static const char NOTIFY_RESPONSE[] =
-            "\x50\xA0\x69\xEE"; // CoAP header only - no Observe option
-    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
-                                    sizeof(NOTIFY_RESPONSE) - 1);
+    static const char CON_NOTIFY_RESPONSE[] =
+            "\x40\xA0\x69\xEE"; // CoAP header only - no Observe option
+    avs_unit_mocksock_expect_output(mocksocks[0], CON_NOTIFY_RESPONSE,
+                                    sizeof(CON_NOTIFY_RESPONSE) - 1);
+    static const char CON_ACK[] = "\x60\x00\x69\xEE";
+    avs_unit_mocksock_input(mocksocks[0], CON_ACK, sizeof(CON_ACK) - 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // now the notification shall be gone
@@ -1794,19 +1790,21 @@ AVS_UNIT_TEST(notify, reconnect) {
 
     // mocking reconnect is rather hard, so let's just check it's scheduled
     AVS_UNIT_ASSERT_TRUE(anjay->sched->entries
-            == anjay->servers.active->sched_update_handle);
+            == anjay->servers->servers->sched_update_or_reactivate_handle);
     // encoded update args:
     // - SSID==14 (0x000E)
     // - reconnect required == true (hence the 1 at the higher-order byte)
     AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data, 0x1000E);
-    _anjay_sched_del(anjay->sched, &anjay->servers.active->sched_update_handle);
+    _anjay_sched_del(anjay->sched, &anjay->servers->servers->sched_update_or_reactivate_handle);
 
     // resend
     expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    static const char NOTIFY_RESPONSE[] =
-            "\x50\xA0\x69\xEE"; // CoAP header only - no Observe option
-    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
-                                    sizeof(NOTIFY_RESPONSE) - 1);
+    static const char CON_NOTIFY_RESPONSE[] =
+            "\x40\xA0\x69\xEE"; // CoAP header only - no Observe option
+    avs_unit_mocksock_expect_output(mocksocks[0], CON_NOTIFY_RESPONSE,
+                                    sizeof(CON_NOTIFY_RESPONSE) - 1);
+    static const char CON_RESET[] = "\x70\x00\x69\xEE";
+    avs_unit_mocksock_input(mocksocks[0], CON_RESET, sizeof(CON_RESET) - 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay->sched->entries);

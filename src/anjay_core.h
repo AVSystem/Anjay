@@ -22,7 +22,7 @@
 #include <avsystem/commons/net.h>
 
 #include "dm_core.h"
-#include "observe_core.h"
+#include "observe/observe_core.h"
 
 #include "servers.h"
 #include "utils_core.h"
@@ -48,7 +48,7 @@ struct anjay_struct {
     anjay_sched_t *sched;
     anjay_dm_t dm;
     uint16_t udp_listen_port;
-    anjay_servers_t servers;
+    anjay_servers_t *servers;
     anjay_sched_handle_t reload_servers_sched_job_handle;
 #ifdef WITH_OBSERVE
     anjay_observe_state_t observe;
@@ -84,9 +84,6 @@ struct anjay_struct {
 
 uint8_t _anjay_make_error_response_code(int handler_result);
 
-anjay_server_connection_t *
-_anjay_get_server_connection(anjay_connection_ref_t ref);
-
 const avs_coap_tx_params_t *
 _anjay_tx_params_for_conn_type(anjay_t *anjay,
                                anjay_connection_type_t conn_type);
@@ -96,8 +93,6 @@ int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref);
 void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay);
 
 void _anjay_release_server_stream(anjay_t *anjay);
-
-size_t _anjay_num_non_bootstrap_servers(anjay_t *anjay);
 
 /**
  * @param anjay Pointer to the Anjay object, passed to scheduled jobs. Not

@@ -78,6 +78,8 @@ static int cell_resource_read(anjay_t *anjay,
         {
             int result = ANJAY_ERR_INTERNAL;
             AVS_LIST(anjay_iid_t) profile_iids = NULL;
+            AVS_LIST(anjay_iid_t) iid = NULL;
+            anjay_output_ctx_t *array = NULL;
 
             const anjay_dm_object_def_t **apn_conn_profile =
                     demo_find_object(cell->demo, DEMO_OID_APN_CONN_PROFILE);
@@ -87,12 +89,11 @@ static int cell_resource_read(anjay_t *anjay,
 
             profile_iids = apn_conn_profile_list_activated(apn_conn_profile);
 
-            anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+            array = anjay_ret_array_start(ctx);
             if (!array) {
                 goto cleanup;
             }
 
-            AVS_LIST(anjay_iid_t) iid = NULL;
             AVS_LIST_FOREACH(iid, profile_iids) {
                 if (anjay_ret_array_index(array, *iid)
                         || anjay_ret_objlnk(array,

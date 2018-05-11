@@ -23,8 +23,17 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-typedef int (*anjay_sched_clb_t)(anjay_t *anjay, void *data);
 typedef void *anjay_sched_handle_t;
+
+typedef void (*anjay_sched_clb_t)(anjay_t *anjay, void *data);
+
+typedef enum {
+    ANJAY_SCHED_FINISH,
+    ANJAY_SCHED_RETRY
+} anjay_sched_retryable_result_t;
+
+typedef anjay_sched_retryable_result_t
+(*anjay_sched_retryable_clb_t)(anjay_t *anjay, void *data);
 
 typedef struct anjay_sched_struct anjay_sched_t;
 
@@ -120,7 +129,7 @@ int _anjay_sched_retryable(anjay_sched_t *sched,
                            anjay_sched_handle_t *out_handle,
                            avs_time_duration_t delay,
                            anjay_sched_retryable_backoff_t backoff,
-                           anjay_sched_clb_t clb,
+                           anjay_sched_retryable_clb_t clb,
                            void *clb_data);
 
 VISIBILITY_PRIVATE_HEADER_END

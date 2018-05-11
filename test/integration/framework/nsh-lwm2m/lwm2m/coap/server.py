@@ -90,11 +90,12 @@ def _disconnect_socket(old_sock, family):
 
 
 class Server(object):
-    def __init__(self, listen_port=0, use_ipv6=False):
+    def __init__(self, listen_port=0, use_ipv6=False, reuse_port=False):
         self._prev_remote_endpoint = None
         self.socket_timeout = None
         self.socket = None
         self.family = socket.AF_INET6 if use_ipv6 else socket.AF_INET
+        self.reuse_port = reuse_port
 
         self.reset(listen_port)
 
@@ -148,10 +149,22 @@ class Server(object):
         else:
             self._raw_udp_socket = _disconnect_socket(self._raw_udp_socket, self.family)
 
+    def _flush_recv_queue(self) -> None:
+        with _override_timeout(self._raw_udp_socket, 0):
+            try:
+                while True:
+                    self._raw_udp_socket.recv(4096)
+            except:
+                pass
+
     @contextlib.contextmanager
     def fake_close(self):
         try:
             self._fake_close()
+            # Sometimes there may be a packet that managed to arrive before socket
+            # went into "fake offline" mode. We certainly don't expect it after
+            # restoring the socket.
+            self._flush_recv_queue()
             yield
         finally:
             self._fake_unclose()
@@ -167,6 +180,7 @@ class Server(object):
 
         self.close()
         self.socket = socket.socket(self.family, socket.SOCK_DGRAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
         self.socket.bind(('', listen_port))
 
     def send(self, coap_packet: Packet) -> None:
@@ -209,7 +223,8 @@ class Server(object):
 
 class DtlsServer(Server):
     def __init__(self, psk_identity=None, psk_key=None, ca_path=None, ca_file=None,
-                 crt_file=None, key_file=None, listen_port=0, debug=False, use_ipv6=False):
+                 crt_file=None, key_file=None, listen_port=0, debug=False, use_ipv6=False,
+                 reuse_port=False):
         use_psk = (psk_identity and psk_key)
         use_certs = any((ca_path, ca_file, crt_file, key_file))
         if use_psk and use_certs:
@@ -233,7 +248,7 @@ class DtlsServer(Server):
         self._pymbedtls_context = Context(security, debug)
         self._security_mode = security.name()
 
-        super().__init__(listen_port, use_ipv6)
+        super().__init__(listen_port, use_ipv6, reuse_port=reuse_port)
 
     def connect_to_client(self, remote_addr: Tuple[str, int]) -> None:
         raise NotImplementedError('connect_to_client() not supported for DTLS servers')

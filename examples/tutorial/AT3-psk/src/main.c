@@ -52,10 +52,9 @@ static int main_loop(anjay_t *anjay) {
     return 0;
 }
 
-static const anjay_dm_object_def_t **create_and_init_security_object(void) {
-    const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
-    if (!security_obj) {
-        return NULL;
+static int setup_security_object(anjay_t *anjay) {
+    if (anjay_security_object_install(anjay)) {
+        return -1;
     }
 
     static const char PSK_IDENTITY[] = "identity";
@@ -72,19 +71,17 @@ static const anjay_dm_object_def_t **create_and_init_security_object(void) {
     };
 
     anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
-    if (anjay_security_object_add_instance(security_obj, &security_instance,
+    if (anjay_security_object_add_instance(anjay, &security_instance,
                                            &security_instance_id)) {
-        anjay_security_object_delete(security_obj);
-        security_obj = NULL;
+        return -1;
     }
 
-    return security_obj;
+    return 0;
 }
 
-static const anjay_dm_object_def_t **create_and_init_server_object(void) {
-    const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
-    if (!server_obj) {
-        return NULL;
+static int setup_server_object(anjay_t *anjay) {
+    if (anjay_server_object_install(anjay)) {
+        return -1;
     }
 
     const anjay_server_instance_t server_instance = {
@@ -97,12 +94,12 @@ static const anjay_dm_object_def_t **create_and_init_server_object(void) {
     };
 
     anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
-    if (anjay_server_object_add_instance(server_obj, &server_instance,
+    if (anjay_server_object_add_instance(anjay, &server_instance,
                                          &server_instance_id)) {
-        anjay_server_object_delete(server_obj);
-        return NULL;
+        return -1;
     }
-    return server_obj;
+
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -121,19 +118,8 @@ int main(int argc, char *argv[]) {
     int result = 0;
 
     // Instantiate necessary objects
-    const anjay_dm_object_def_t **security_obj =
-            create_and_init_security_object();
-    const anjay_dm_object_def_t **server_obj = create_and_init_server_object();
-
-    // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj) {
-        result = -1;
-        goto cleanup;
-    }
-
-    // Register them within Anjay
-    if (anjay_register_object(anjay, security_obj)
-            || anjay_register_object(anjay, server_obj)) {
+    if (setup_security_object(anjay)
+            || setup_server_object(anjay)) {
         result = -1;
         goto cleanup;
     }
@@ -142,11 +128,5 @@ int main(int argc, char *argv[]) {
 
 cleanup:
     anjay_delete(anjay);
-    if (security_obj) {
-        anjay_security_object_delete(security_obj);
-    }
-    if (server_obj) {
-        anjay_server_object_delete(server_obj);
-    }
     return result;
 }

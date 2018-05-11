@@ -46,7 +46,7 @@ static int find_server_iid_handler(anjay_t *anjay,
     }
     if (ssid == (int32_t) args->ssid) {
         args->out_iid = iid;
-        return ANJAY_DM_FOREACH_BREAK;
+        return ANJAY_FOREACH_BREAK;
     }
     return 0;
 }
@@ -78,29 +78,15 @@ static int security_iid_find_helper(anjay_t *anjay,
                                     void *data) {
     (void) obj;
     find_iid_args_t *args = (find_iid_args_t *) data;
-    bool looking_for_bootstrap = (args->ssid == ANJAY_SSID_BOOTSTRAP);
-
-    bool is_bootstrap = _anjay_is_bootstrap_security_instance(anjay, iid);
-    if (looking_for_bootstrap != is_bootstrap) {
-        return 0;
+    anjay_ssid_t ssid;
+    if (_anjay_ssid_from_security_iid(anjay, iid, &ssid)) {
+        return -1;
     }
-
-    if (!is_bootstrap) {
-        int64_t ssid;
-        const anjay_uri_path_t ssid_path =
-                MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, iid,
-                                   ANJAY_DM_RID_SECURITY_SSID);
-
-        if (_anjay_dm_res_read_i64(anjay, &ssid_path, &ssid)) {
-            return -1;
-        }
-        if (ssid != (int32_t) args->ssid) {
-            return 0;
-        }
+    if (ssid == args->ssid) {
+        args->out_iid = iid;
+        return ANJAY_FOREACH_BREAK;
     }
-
-    args->out_iid = iid;
-    return ANJAY_DM_FOREACH_BREAK;
+    return ANJAY_FOREACH_CONTINUE;
 }
 
 int _anjay_find_security_iid(anjay_t *anjay,

@@ -13,8 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Registering mandatory Objects
-=============================
+Installing mandatory Objects
+============================
 
 In order to be able to connect to some LwM2M Server and handle incoming
 packets our client has to have at least LwM2M Security (``/0``) and LwM2M
@@ -29,36 +29,38 @@ modules, and they can be used easily.
 
 When Anjay is first instantiated (as in our previous :ref:`hello world
 <anjay-hello-world>` example) it has no knowledge about the Data Model,
-i.e. no LwM2M Objects are registered within it. We must therefore register
-objects that we would like to use via object registration mechanism you are
-just going to be presented with in the next subsection.
+i.e. no LwM2M Objects are registered within it. Security and Server objects can
+be registered using installation mechanism, presented in the next subsection.
 
 .. _registering-objects:
 
-Registering Objects
-^^^^^^^^^^^^^^^^^^^
+Installing Objects
+^^^^^^^^^^^^^^^^^^
 
 .. highlight:: c
 
 Each LwM2M Object is defined by an instance of the ``anjay_dm_object_def_t``
-structure. To add support for a new Object, you'd need to fill that
-structure and implement appropriate callback functions, linking it to actual
-representation.  However, for now, we are going to use our preimplemented LwM2M
-Objects (Security, Server), so that you don't have to worry about initializing
-the structure on your own. But, if you are interested in this topic now,
-you may jump to :doc:`BT5_CustomObject` to get more information.
+structure. To add support for a new Object, you'd need to fill that structure
+and implement appropriate callback functions, linking it to actual
+representation and register created objects within Anjay. However, for now, we
+are going to install our preimplemented LwM2M Objects (Security, Server), so
+that you don't have to worry about initializing the structure and object
+registration on your own. In case you are interested in this topic at that
+moment, you may jump to :doc:`BT5_CustomObject` to get more information.
 
-To register an object we are going to use ``anjay_register_object`` function:
+To install objects we are going to use ``anjay_security_object_install()`` and
+``anjay_server_object_install()`` functions:
 
-.. snippet-source:: include_public/anjay/dm.h
+.. snippet-source:: modules/security/include_public/anjay/security.h
 
-    int anjay_register_object(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *def_ptr);
+    int anjay_security_object_install(anjay_t *anjay);
 
-Using it is pretty straightforward, as you'll see in the next subsection.
+.. snippet-source:: modules/server/include_public/anjay/server.h
 
-Registering Server and Security Objects
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    int anjay_server_object_install(anjay_t *anjay);
+
+Installing Server and Security Objects
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 We are going to modify the code from the :ref:`previous tutorial <anjay-hello-world>`.
 
@@ -83,19 +85,9 @@ We are going to modify the code from the :ref:`previous tutorial <anjay-hello-wo
         }
         int result = 0;
 
-        // Instantiate necessary objects
-        const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
-        const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
-
-        // For some reason we were unable to instantiate objects.
-        if (!security_obj || !server_obj) {
-            result = -1;
-            goto cleanup;
-        }
-
-        // Register them within Anjay
-        if (anjay_register_object(anjay, security_obj)
-                || anjay_register_object(anjay, server_obj)) {
+        // Install necessary objects
+        if (anjay_security_object_install(anjay)
+                || anjay_server_object_install(anjay)) {
             result = -1;
             goto cleanup;
         }
@@ -106,21 +98,13 @@ We are going to modify the code from the :ref:`previous tutorial <anjay-hello-wo
 
     cleanup:
         anjay_delete(anjay);
-        anjay_security_object_delete(security_obj);
-        anjay_server_object_delete(server_obj);
         return result;
     }
 
-As we promised, registering preimplemented Objects is really easy. However,
-errors might occur. Therefore it is extremely important to test return value
-of each API function to make sure everything goes as it supposed to. In this
-example we omitted it for clarity.
-
 .. note::
 
-    The order in which objects and Anjay are deleted is not accidental, as
-    during the instance destruction Anjay may still try to refer to object's
-    data, therefore premature object deletion could be disastrous in effects.
+    ``anjay_delete()`` will automatically delete installed modules after
+    destruction of Anjay instance.
 
 Adding necessary Security and Server entries
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -150,9 +134,9 @@ Instances:
 
     anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
     anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
-    anjay_security_object_add_instance(security_obj, &security_instance,
+    anjay_security_object_add_instance(anjay, &security_instance,
                                        &security_instance_id);
-    anjay_server_object_add_instance(server_obj, &server_instance,
+    anjay_server_object_add_instance(anjay, &server_instance,
                                      &server_instance_id);
 
 Great, so far it was really easy. But our client is currently unable to

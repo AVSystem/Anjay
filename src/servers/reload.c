@@ -24,15 +24,16 @@
 #include "servers_internal.h"
 #include "activate.h"
 #include "register_internal.h"
+#include "reload.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-static bool server_needs_reconnect(anjay_active_server_info_t *server) {
+static bool server_needs_reconnect(anjay_server_info_t *server) {
     anjay_connection_ref_t conn_ref = {
         .server = server
     };
-    for (conn_ref.conn_type = (anjay_connection_type_t) 0;
-            conn_ref.conn_type < ANJAY_CONNECTION_UNSET;
+    for (conn_ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
+            conn_ref.conn_type < ANJAY_CONNECTION_LIMIT_;
             conn_ref.conn_type =
                     (anjay_connection_type_t) (conn_ref.conn_type + 1)) {
         anjay_server_connection_t *connection =
@@ -45,88 +46,70 @@ static bool server_needs_reconnect(anjay_active_server_info_t *server) {
 }
 
 static int reload_active_server(anjay_t *anjay,
-                                anjay_servers_t *servers,
-                                AVS_LIST(anjay_active_server_info_t) server) {
-    assert(AVS_LIST_SIZE(server) == 1);
-
-    _anjay_servers_add_active(servers, server);
-
-    if (server->needs_reload || server_needs_reconnect(server)) {
-        server->needs_reload = false;
-        if (_anjay_server_refresh(anjay, server, false)) {
+                                anjay_server_info_t *server) {
+    assert(_anjay_server_active(server));
+    if (server->data_active.needs_reload || server_needs_reconnect(server)) {
+        server->data_active.needs_reload = false;
+        if (_anjay_active_server_refresh(anjay, server, false)) {
             goto connection_failure;
         }
     }
 
     if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
-        if (!_anjay_server_registration_connection_valid(server)) {
-            if (_anjay_server_setup_registration_connection(server)
-                    || _anjay_server_register(anjay, server)) {
+        if (!_anjay_server_registration_connection_valid(server)
+                || _anjay_server_registration_expired(server)) {
+            int result = _anjay_server_ensure_valid_registration(anjay, server);
+            if (result < 0) {
+                return result;
+            } else if (result) {
                 goto connection_failure;
             }
-        } else if (_anjay_server_registration_expired(server)
-                && _anjay_server_register(anjay, server)) {
-            goto connection_failure;
-        }
-
-        // Flush notifications pending since connectivity loss or entering
-        // offline mode.
-        // Ignore errors, failure to flush notifications is not fatal.
-        anjay_connection_key_t key = {
-            .ssid = server->ssid,
-            .type = server->registration_info.conn_type
-        };
-        _anjay_observe_sched_flush(anjay, key);
-
-        if (!server->sched_update_handle) {
-            return _anjay_server_reschedule_update_job(anjay, server);
+        } else {
+            _anjay_observe_sched_flush(anjay, (anjay_connection_key_t) {
+                .ssid = server->ssid,
+                .type = server->data_active.registration_info.conn_type
+            });
         }
     }
     return 0;
 connection_failure:
-    _anjay_server_deactivate(anjay, servers, server->ssid,
-                             AVS_TIME_DURATION_ZERO);
+    _anjay_server_deactivate(anjay, server->ssid, AVS_TIME_DURATION_ZERO);
     return 0;
 }
 
 static int reload_server_by_ssid(anjay_t *anjay,
                                  anjay_servers_t *old_servers,
-                                 anjay_servers_t *new_servers,
                                  anjay_ssid_t ssid) {
     anjay_log(TRACE, "reloading server SSID %u", ssid);
 
-    AVS_LIST(anjay_inactive_server_info_t) *inactive_server_ptr =
-            _anjay_servers_find_inactive_ptr(old_servers, ssid);
-    if (inactive_server_ptr) {
+    AVS_LIST(anjay_server_info_t) *server_ptr =
+            _anjay_servers_find_ptr(old_servers, ssid);
+    if (server_ptr) {
         anjay_log(TRACE, "reloading inactive server SSID %u", ssid);
-        _anjay_servers_add_inactive(new_servers,
-                                    AVS_LIST_DETACH(inactive_server_ptr));
-        return 0;
-    }
-
-    AVS_LIST(anjay_active_server_info_t) *active_server_ptr =
-            _anjay_servers_find_active_ptr(old_servers, ssid);
-    if (active_server_ptr) {
-        anjay_log(TRACE, "reloading active server SSID %u", ssid);
-        return reload_active_server(anjay, new_servers,
-                                    AVS_LIST_DETACH(active_server_ptr));
+        AVS_LIST(anjay_server_info_t) server = AVS_LIST_DETACH(server_ptr);
+        _anjay_servers_add(anjay->servers, server);
+        if (_anjay_server_active(server)) {
+            anjay_log(TRACE, "reloading active server SSID %u", ssid);
+            return reload_active_server(anjay, server);
+        } else {
+            return 0;
+        }
     }
 
     anjay_log(TRACE, "creating server SSID %u", ssid);
-    AVS_LIST(anjay_inactive_server_info_t) new_server =
+    AVS_LIST(anjay_server_info_t) new_server =
             _anjay_servers_create_inactive(ssid);
     if (!new_server) {
         return -1;
     }
 
-    _anjay_servers_add_inactive(new_servers, new_server);
-    return _anjay_server_sched_activate(anjay, new_servers,
-                                        ssid, AVS_TIME_DURATION_ZERO);
+    _anjay_servers_add(anjay->servers, new_server);
+    return _anjay_server_sched_activate(anjay, new_server,
+                                        AVS_TIME_DURATION_ZERO);
 }
 
 typedef struct {
     anjay_servers_t *old_servers;
-    anjay_servers_t *new_servers;
     int retval;
 } reload_servers_state_t;
 
@@ -144,8 +127,7 @@ reload_server_by_security_iid(anjay_t *anjay,
         return 0;
     }
 
-    if (reload_server_by_ssid(anjay, state->old_servers,
-                              state->new_servers, ssid)) {
+    if (reload_server_by_ssid(anjay, state->old_servers, ssid)) {
         anjay_log(TRACE, "could not reload server SSID %u", ssid);
         state->retval = -1;
     }
@@ -153,14 +135,14 @@ reload_server_by_security_iid(anjay_t *anjay,
     return 0;
 }
 
-static int reload_servers_sched_job(anjay_t *anjay, void *unused) {
+static void reload_servers_sched_job(anjay_t *anjay, void *unused) {
     (void)unused;
     anjay_log(TRACE, "reloading servers");
 
-    anjay_servers_t reloaded_servers = _anjay_servers_create();
+    anjay_servers_t old_servers = *anjay->servers;
+    memset(anjay->servers, 0, sizeof(*anjay->servers));
     reload_servers_state_t reload_state = {
-        .old_servers = &anjay->servers,
-        .new_servers = &reloaded_servers,
+        .old_servers = &old_servers,
         .retval = 0
     };
 
@@ -171,12 +153,15 @@ static int reload_servers_sched_job(anjay_t *anjay, void *unused) {
                                            &reload_state)
                     || reload_state.retval)) {
         // re-add old servers, don't discard them
-        while (anjay->servers.active) {
-            _anjay_servers_add_active(&reloaded_servers,
-                                      AVS_LIST_DETACH(&anjay->servers.active));
+        AVS_LIST(anjay_server_info_t) *server_ptr;
+        AVS_LIST(anjay_server_info_t) helper;
+        AVS_LIST_DELETABLE_FOREACH_PTR(server_ptr, helper,
+                                       &old_servers.servers) {
+            if (_anjay_server_active(*server_ptr)) {
+                _anjay_servers_add(anjay->servers,
+                                   AVS_LIST_DETACH(server_ptr));
+            }
         }
-        _anjay_servers_cleanup(anjay);
-        anjay->servers = reloaded_servers;
         anjay_log(ERROR, "reloading servers failed, re-scheduling job");
         _anjay_schedule_delayed_reload_servers(anjay);
     } else {
@@ -186,14 +171,13 @@ static int reload_servers_sched_job(anjay_t *anjay, void *unused) {
             anjay_log(WARNING,
                       "Security object not present, no servers to create");
         }
-        _anjay_servers_cleanup(anjay);
-        anjay->servers = reloaded_servers;
+        _anjay_observe_gc(anjay);
     }
 
-    anjay_log(TRACE, "servers reloaded; %lu active, %lu inactive",
-              (unsigned long)AVS_LIST_SIZE(anjay->servers.active),
-              (unsigned long)AVS_LIST_SIZE(anjay->servers.inactive));
-    return 0;
+    _anjay_servers_internal_deregister(anjay, &old_servers);
+    _anjay_servers_internal_cleanup(anjay, &old_servers);
+    anjay_log(TRACE, "%lu servers reloaded",
+              (unsigned long)AVS_LIST_SIZE(anjay->servers->servers));
 }
 
 static int schedule_reload_servers(anjay_t *anjay, bool delayed) {

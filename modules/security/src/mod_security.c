@@ -23,17 +23,13 @@
 #include <avsystem/commons/utils.h>
 
 #include <anjay_modules/io_utils.h>
+#include <anjay_modules/dm_utils.h>
 
 #include "mod_security.h"
 #include "security_transaction.h"
 #include "security_utils.h"
 
 VISIBILITY_SOURCE_BEGIN
-
-sec_repr_t *_anjay_sec_get(const anjay_dm_object_def_t *const *obj_ptr) {
-    assert(obj_ptr);
-    return AVS_CONTAINER_OF(obj_ptr, sec_repr_t, def);
-}
 
 static inline sec_instance_t *
 find_instance(sec_repr_t *repr, anjay_iid_t iid) {
@@ -451,7 +447,7 @@ sec_instance_reset(anjay_t *anjay,
 }
 
 static const anjay_dm_object_def_t SECURITY = {
-    .oid = 0,
+    .oid = ANJAY_DM_OID_SECURITY,
     .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
             SEC_RES_LWM2M_SERVER_URI,
             SEC_RES_BOOTSTRAP_SERVER,
@@ -483,20 +479,26 @@ static const anjay_dm_object_def_t SECURITY = {
     }
 };
 
-const anjay_dm_object_def_t **anjay_security_object_create(void) {
-    sec_repr_t *repr = (sec_repr_t *) calloc(1, sizeof(sec_repr_t));
-    if (!repr) {
-        return NULL;
-    }
-    repr->def = &SECURITY;
-    return &repr->def;
+sec_repr_t *_anjay_sec_get(const anjay_dm_object_def_t *const *obj_ptr) {
+    assert(obj_ptr && *obj_ptr == &SECURITY);
+    return AVS_CONTAINER_OF(obj_ptr, sec_repr_t, def);
 }
 
 int anjay_security_object_add_instance(
-        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_t *anjay,
         const anjay_security_instance_t *instance,
         anjay_iid_t *inout_iid) {
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *obj_ptr =
+            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
+    
+    if (!repr) {
+        security_log(ERROR, "Security object is not registered");
+        return -1;
+    }
+
     const bool modified_since_persist = repr->modified_since_persist;
     int retval = add_instance(repr, instance, inout_iid);
     if (!retval && (retval = _anjay_sec_object_validate(repr))) {
@@ -506,28 +508,81 @@ int anjay_security_object_add_instance(
             clear_modified(repr);
         }
     }
+    
+    if (!retval) {
+        if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
+            security_log(WARNING, "Could not schedule socket reload");
+        }
+    }
+
     return retval;
 }
 
-void anjay_security_object_purge(const anjay_dm_object_def_t *const *obj_ptr) {
-    sec_repr_t *sec = _anjay_sec_get(obj_ptr);
-    if (sec->instances) {
-        mark_modified(sec);
+static void security_purge(sec_repr_t *repr) {
+    if (repr->instances) {
+        mark_modified(repr);
     }
-    _anjay_sec_destroy_instances(&sec->instances);
-    _anjay_sec_destroy_instances(&sec->saved_instances);
+    _anjay_sec_destroy_instances(&repr->instances);
+    _anjay_sec_destroy_instances(&repr->saved_instances);
 }
 
-void anjay_security_object_delete(const anjay_dm_object_def_t **def) {
-    if (def) {
-        anjay_security_object_purge(def);
-        free(_anjay_sec_get(def));
+static void security_delete(anjay_t *anjay, void *repr) {
+    (void) anjay;
+    security_purge((sec_repr_t *) repr);
+    free(repr);
+}
+
+void anjay_security_object_purge(anjay_t *anjay) {
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *sec_obj =
+            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
+    sec_repr_t *repr = _anjay_sec_get(sec_obj);
+
+    security_purge(repr);
+
+    if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
+        security_log(WARNING, "Could not schedule socket reload");
     }
 }
 
-bool anjay_security_object_is_modified(
-        const anjay_dm_object_def_t *const *obj_ptr) {
-    return _anjay_sec_get(obj_ptr)->modified_since_persist;
+bool anjay_security_object_is_modified(anjay_t *anjay) {
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *sec_obj =
+            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
+    return _anjay_sec_get(sec_obj)->modified_since_persist;
+}
+
+static const anjay_dm_module_t SECURITY_MODULE = {
+    .deleter = security_delete
+};
+
+int anjay_security_object_install(anjay_t *anjay) {
+    assert(anjay);
+
+    sec_repr_t *repr = (sec_repr_t *) calloc(1, sizeof(sec_repr_t));
+    if (!repr) {
+        security_log(ERROR, "Out of memory");
+        return -1;
+    }
+
+    repr->def = &SECURITY;
+
+    if (_anjay_dm_module_install(anjay, &SECURITY_MODULE, repr)) {
+        free(repr);
+        return -1;
+    }
+
+    if (anjay_register_object(anjay, &repr->def)) {
+        // this will free repr
+        int result = _anjay_dm_module_uninstall(anjay, &SECURITY_MODULE);
+        assert(!result);
+        (void) result;
+        return -1;
+    }
+
+    return 0;
 }
 
 #ifdef ANJAY_TEST

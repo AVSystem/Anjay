@@ -16,6 +16,7 @@
 
 import os
 import sys
+import distutils.sysconfig
 from distutils.core import setup
 from distutils.extension import Extension
 
@@ -35,6 +36,13 @@ def library_exists(lib_name):
 
     return result == 0
 
+
+# Remove the "-Wstrict-prototypes" compiler option, which isn't valid for C++.
+# Taken from https://stackoverflow.com/a/29634231
+cfg_vars = distutils.sysconfig.get_config_vars()
+for key, value in cfg_vars.items():
+    if type(value) == str:
+        cfg_vars[key] = value.replace("-Wstrict-prototypes", "")
 
 extensions = [
     Extension('pymbedtls',

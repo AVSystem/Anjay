@@ -16,8 +16,9 @@
 
 #include <config.h>
 
+#include <avsystem/commons/persistence.h>
+
 #include <anjay/access_control.h>
-#include <anjay/persistence.h>
 
 #include "mod_access_control.h"
 
@@ -25,29 +26,34 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int handle_acl_entry(anjay_persistence_context_t *ctx,
+static int handle_acl_entry(avs_persistence_context_t *ctx,
                             void *element_,
                             void *user_data) {
     (void) user_data;
     acl_entry_t *element = (acl_entry_t *) element_;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &element->mask))
-                || (retval = anjay_persistence_u16(ctx, &element->ssid)));
+    (void) ((retval = avs_persistence_u16(ctx, &element->mask))
+                || (retval = avs_persistence_u16(ctx, &element->ssid)));
     return retval;
 }
 
-static int handle_acl(anjay_persistence_context_t *ctx,
+static void cleanup_acl_entry(void *element) {
+    // no resources allocated in acl_entry_t
+    (void) element;
+}
+
+static int handle_acl(avs_persistence_context_t *ctx,
                       access_control_instance_t *inst) {
-    int retval = anjay_persistence_bool(ctx, &inst->has_acl);
+    int retval = avs_persistence_bool(ctx, &inst->has_acl);
     if (!retval && inst->has_acl) {
-        retval = anjay_persistence_list(ctx, (AVS_LIST(void) *) &inst->acl,
-                                        sizeof(*inst->acl),
-                                        handle_acl_entry, NULL);
+        retval = avs_persistence_list(ctx, (AVS_LIST(void) *) &inst->acl,
+                                      sizeof(*inst->acl), handle_acl_entry,
+                                      NULL, cleanup_acl_entry);
     }
     return retval;
 }
 
-static int persist_instance(anjay_persistence_context_t *ctx,
+static int persist_instance(avs_persistence_context_t *ctx,
                             void *element_,
                             void *user_data) {
     (void) user_data;
@@ -57,10 +63,10 @@ static int persist_instance(anjay_persistence_context_t *ctx,
         return -1;
     }
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &element->target.oid))
-                || (retval = anjay_persistence_u16(ctx, &element->iid))
-                || (retval = anjay_persistence_u16(ctx, &target_iid))
-                || (retval = anjay_persistence_u16(ctx, &element->owner))
+    (void) ((retval = avs_persistence_u16(ctx, &element->target.oid))
+                || (retval = avs_persistence_u16(ctx, &element->iid))
+                || (retval = avs_persistence_u16(ctx, &target_iid))
+                || (retval = avs_persistence_u16(ctx, &element->owner))
                 || (retval = handle_acl(ctx, element)));
     return retval;
 }
@@ -71,12 +77,12 @@ static bool is_object_registered(anjay_t *anjay, anjay_oid_t oid) {
 }
 
 static int restore_instance(access_control_instance_t *out_instance,
-                            anjay_persistence_context_t *ctx) {
+                            avs_persistence_context_t *ctx) {
     anjay_iid_t target_iid;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &out_instance->iid))
-            || (retval = anjay_persistence_u16(ctx, &target_iid))
-            || (retval = anjay_persistence_u16(ctx, &out_instance->owner))
+    (void) ((retval = avs_persistence_u16(ctx, &out_instance->iid))
+            || (retval = avs_persistence_u16(ctx, &target_iid))
+            || (retval = avs_persistence_u16(ctx, &out_instance->owner))
             || (retval = handle_acl(ctx, out_instance)));
     if (!retval) {
         out_instance->target.iid = target_iid;
@@ -86,10 +92,10 @@ static int restore_instance(access_control_instance_t *out_instance,
 
 static int restore_instances(anjay_t *anjay,
                              AVS_LIST(access_control_instance_t) *instances_ptr,
-                             anjay_persistence_context_t *restore_ctx,
-                             anjay_persistence_context_t *ignore_ctx) {
+                             avs_persistence_context_t *restore_ctx,
+                             avs_persistence_context_t *ignore_ctx) {
     uint32_t count;
-    if (anjay_persistence_u32(restore_ctx, &count) || (count > UINT16_MAX)) {
+    if (avs_persistence_u32(restore_ctx, &count) || (count > UINT16_MAX)) {
         return -1;
     }
     AVS_LIST(access_control_instance_t) *tail = instances_ptr;
@@ -97,8 +103,7 @@ static int restore_instances(anjay_t *anjay,
         int retval;
         access_control_instance_t instance;
         memset(&instance, 0, sizeof(instance));
-        if ((retval = anjay_persistence_u16(restore_ctx,
-                                            &instance.target.oid))) {
+        if ((retval = avs_persistence_u16(restore_ctx, &instance.target.oid))) {
             return retval;
         }
         if (!is_object_registered(anjay, instance.target.oid)) {
@@ -128,16 +133,16 @@ static int restore_instances(anjay_t *anjay,
 static int restore(anjay_t *anjay,
                    access_control_t *ac,
                    avs_stream_abstract_t *in) {
-    anjay_persistence_context_t *restore_ctx =
-            anjay_persistence_restore_context_new(in);
-    anjay_persistence_context_t *ignore_ctx =
-            anjay_persistence_ignore_context_new(in);
+    avs_persistence_context_t *restore_ctx =
+            avs_persistence_restore_context_new(in);
+    avs_persistence_context_t *ignore_ctx =
+            avs_persistence_ignore_context_new(in);
+    access_control_state_t state = { NULL };
     int retval = -1;
     if (!restore_ctx || !ignore_ctx) {
         goto finish;
     }
 
-    access_control_state_t state = { NULL };
     if ((retval = restore_instances(anjay, &state.instances,
                                     restore_ctx, ignore_ctx))) {
         _anjay_access_control_clear_state(&state);
@@ -146,8 +151,8 @@ static int restore(anjay_t *anjay,
     _anjay_access_control_clear_state(&ac->current);
     ac->current = state;
 finish:
-    anjay_persistence_context_delete(restore_ctx);
-    anjay_persistence_context_delete(ignore_ctx);
+    avs_persistence_context_delete(restore_ctx);
+    avs_persistence_context_delete(ignore_ctx);
     return retval;
 }
 
@@ -165,16 +170,19 @@ int anjay_access_control_persist(anjay_t *anjay,
     if (retval) {
         return retval;
     }
-    anjay_persistence_context_t *ctx = anjay_persistence_store_context_new(out);
+    avs_persistence_context_t *ctx = avs_persistence_store_context_new(out);
     if (!ctx) {
         ac_log(ERROR, "Out of memory");
         return -1;
     }
-    retval = anjay_persistence_list(ctx,
-                                    (AVS_LIST(void) *) &ac->current.instances,
-                                    sizeof(*ac->current.instances),
-                                    persist_instance, NULL);
-    anjay_persistence_context_delete(ctx);
+    retval = avs_persistence_list(ctx,
+                                  (AVS_LIST(void) *) &ac->current.instances,
+                                  sizeof(*ac->current.instances),
+                                  persist_instance, NULL, NULL);
+    if (!retval) {
+        ac_log(INFO, "Access Control state persisted");
+    }
+    avs_persistence_context_delete(ctx);
     return retval;
 }
 
@@ -197,7 +205,10 @@ int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
         ac_log(ERROR, "header magic constant mismatch");
         return -1;
     }
-    return restore(anjay, ac, in);
+    if (!(retval = restore(anjay, ac, in))) {
+        ac_log(INFO, "Access Control state restored");
+    }
+    return retval;
 }
 
 #ifdef ANJAY_TEST

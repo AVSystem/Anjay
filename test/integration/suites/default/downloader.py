@@ -14,14 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from framework.lwm2m_test import *
-from framework.coap_file_server import CoapFileServerThread
-
-import sys
+import concurrent.futures
+import contextlib
 import os
-import tempfile
 import time
 
+from framework.coap_file_server import CoapFileServerThread
+from framework.lwm2m_test import *
 
 DUMMY_PAYLOAD = os.urandom(16 * 1024)
 
@@ -36,17 +35,14 @@ class CoapDownload:
 
             self.tempfile = tempfile.NamedTemporaryFile()
 
-
         @property
         def file_server(self):
             return self.file_server_thread.file_server
-
 
         def register_resource(self, path, *args, **kwargs):
             with self.file_server as file_server:
                 file_server.set_resource(path, *args, **kwargs)
                 return file_server.get_resource_uri(path)
-
 
         def tearDown(self):
             try:
@@ -55,7 +51,6 @@ class CoapDownload:
                 self.tempfile.close()
                 self.file_server_thread.join()
 
-
         def read(self, path: Lwm2mPath):
             req = Lwm2mRead(path)
             self.serv.send(req)
@@ -63,16 +58,76 @@ class CoapDownload:
             self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
             return res.content
 
-
         def wait_until_downloads_finished(self):
             while self.get_socket_count() > len(self.servers):
                 time.sleep(0.1)
 
+    class ReconnectTest(test_suite.Lwm2mSingleServerTest):
+        def setUp(self, coap_server: coap.Server = None):
+            super().setUp()
+            self.communicate('trim-servers 0')
+            self.assertDemoDeregisters()
+            self.file_server = (coap_server or coap.Server())
+            self.file_server.set_timeout(5)
+            self.tempfile = tempfile.NamedTemporaryFile()
+
+        def tearDown(self):
+            self.file_server.close()
+            self.tempfile.close()
+            super().tearDown(auto_deregister=False)
+
+        @contextlib.contextmanager
+        def downloadContext(self, path, psk_identity='', psk_key='', payload=DUMMY_PAYLOAD):
+            # "download" command blocks until a connection is made, so we need to listen() in a separate thread
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                listen_future = executor.submit(self.file_server.listen)
+                self.communicate(
+                    'download %s://127.0.0.1:%s%s %s %s %s' % (
+                        'coaps' if isinstance(self.file_server, coap.DtlsServer) else 'coap',
+                        self.file_server.get_listen_port(), path, self.tempfile.name, psk_identity, psk_key))
+                listen_future.result()
+            self.assertEqual(1, self.get_socket_count())
+
+            test_case = self
+
+            class DownloadContext:
+                def __init__(self):
+                    self.seq_num = 0
+                    self.block_size = 1024
+
+                @property
+                def read_offset(self):
+                    return self.seq_num * self.block_size
+
+                def transferData(self, bytes_limit=len(payload)):
+                    while self.read_offset < bytes_limit:
+                        req = test_case.file_server.recv()
+                        test_case.assertMsgEqual(CoapGet(path, options=[
+                            coap.Option.BLOCK2(seq_num=self.seq_num, block_size=self.block_size, has_more=0)]), req)
+                        block2opt = coap.Option.BLOCK2(
+                            seq_num=self.seq_num,
+                            has_more=(len(DUMMY_PAYLOAD) > self.read_offset + self.block_size),
+                            block_size=self.block_size)
+                        test_case.file_server.send(Lwm2mContent.matching(req)(
+                            content=DUMMY_PAYLOAD[self.read_offset:self.read_offset + self.block_size],
+                            options=[block2opt]))
+                        self.seq_num += 1
+
+            yield DownloadContext()
+
+            deadline = time.time() + 10
+            while self.get_socket_count() > 0:
+                if time.time() > deadline:
+                    self.fail('Download not finished in time')
+                time.sleep(0.1)
+
+            with open(self.tempfile.name, 'rb') as f:
+                self.assertEqual(f.read(), DUMMY_PAYLOAD)
+
 
 class CoapDownloadDoesNotBlockLwm2mTraffic(CoapDownload.Test):
     def runTest(self):
-        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
-                                             self.tempfile.name))
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name))
 
         for _ in range(10):
             self.read(ResPath.Device.SerialNumber)
@@ -85,8 +140,7 @@ class CoapDownloadDoesNotBlockLwm2mTraffic(CoapDownload.Test):
 
 class CoapDownloadIgnoresUnrelatedRequests(CoapDownload.Test):
     def runTest(self):
-        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
-                                             self.tempfile.name))
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name))
         self.assertEqual(2, self.get_socket_count())
 
         # wait for first request
@@ -152,8 +206,7 @@ class CoapDownloadRetransmissions(CoapDownload.Test):
 
 class CoapDownloadAbortsOnErrorResponse(CoapDownload.Test):
     def runTest(self):
-        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
-                                             self.tempfile.name))
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name))
         self.assertEqual(2, self.get_socket_count())
         with self.file_server as file_server:
             file_server.set_resource('/', None)
@@ -166,8 +219,7 @@ class CoapDownloadAbortsOnErrorResponse(CoapDownload.Test):
 
 class CoapDownloadAbortsOnETagChange(CoapDownload.Test):
     def runTest(self):
-        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD),
-                                             self.tempfile.name))
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name))
         self.assertEqual(2, self.get_socket_count())
 
         while True:
@@ -209,3 +261,45 @@ class CoapDownloadAbortsOnUnexpectedResponse(CoapDownload.Test):
         self.wait_until_downloads_finished()
         with open(self.tempfile.name, 'rb') as f:
             self.assertNotEqual(f.read(), DUMMY_PAYLOAD)
+
+
+class CoapDownloadResumption(CoapDownload.ReconnectTest):
+    def runTest(self):
+        with self.downloadContext('/test') as ctx:
+            ctx.transferData(len(DUMMY_PAYLOAD) / 2)
+
+            req = self.file_server.recv()
+            self.assertMsgEqual(CoapGet('/test', options=[
+                coap.Option.BLOCK2(seq_num=ctx.seq_num, block_size=ctx.block_size, has_more=0)]), req)
+
+            previous_port = self.file_server.get_remote_addr()[1]
+            self.file_server.reset()
+            self.communicate('reconnect')
+            self.file_server.listen()
+            self.assertNotEqual(self.file_server.get_remote_addr()[1], previous_port)
+
+            ctx.transferData()
+
+
+class CoapsDownloadResumption(CoapDownload.ReconnectTest):
+    PSK_IDENTITY = '1d3nt17y'
+    PSK_KEY = 's3cr3tk3y'
+
+    def setUp(self):
+        super().setUp(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY))
+
+    def runTest(self):
+        with self.downloadContext('/test', self.PSK_IDENTITY, self.PSK_KEY) as ctx:
+            ctx.transferData(len(DUMMY_PAYLOAD) / 2)
+
+            req = self.file_server.recv()
+            self.assertMsgEqual(CoapGet('/test', options=[
+                coap.Option.BLOCK2(seq_num=ctx.seq_num, block_size=ctx.block_size, has_more=0)]), req)
+
+            previous_port = self.file_server.get_remote_addr()[1]
+            self.file_server.reset()
+            self.communicate('reconnect')
+            self.file_server.listen()
+            self.assertNotEqual(self.file_server.get_remote_addr()[1], previous_port)
+
+            ctx.transferData()

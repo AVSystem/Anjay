@@ -50,6 +50,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .fw_security_info = {
         .mode = (avs_net_security_mode_t) -1
     },
+    .attr_storage_file = NULL,
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -183,6 +184,9 @@ static void print_option_help(const struct option *opt) {
         { 5, "PSK key", NULL, "Download firmware over encrypted channels using "
           "PSK-mode encryption with the specified key (provided as hexlified "
           "string); must be used together with --fw-psk-identity" },
+        { 6, "PERSISTENCE_FILE", NULL,
+          "File to load attribute storage data from at startup, and "
+          "store it at shutdown" },
     };
 
     int description_offset = 25;
@@ -318,10 +322,11 @@ static int load_buffer_from_file(uint8_t **out, size_t *out_size,
         return -1;
     }
     int result = -1;
+    long size;
     if (fseek(f, 0, SEEK_END)) {
         goto finish;
     }
-    long size = ftell(f);
+    size = ftell(f);
     if (size < 0 || (unsigned long) size > SIZE_MAX
             || fseek(f, 0, SEEK_SET)) {
         goto finish;
@@ -347,6 +352,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     const char *last_arg0_slash = strrchr(argv[0], '/');
     size_t arg0_prefix_length =
             (size_t) (last_arg0_slash ? (last_arg0_slash - argv[0] + 1) : 0);
+    bool identity_set, key_set;
 
     char default_cert_path[arg0_prefix_length + sizeof(DEFAULT_CERT_FILE)];
     memcpy(default_cert_path, argv[0], arg0_prefix_length);
@@ -362,35 +368,36 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     *parsed_args = DEFAULT_CMDLINE_ARGS;
 
     const struct option options[] = {
-        { "access-entry",               required_argument, 0, 'a' },
-        { "bootstrap",                  no_argument,       0, 'b' },
-        { "bootstrap-holdoff",          required_argument, 0, 'H' },
-        { "bootstrap-timeout",          required_argument, 0, 'T' },
-        { "endpoint-name",              required_argument, 0, 'e' },
-        { "help",                       no_argument,       0, 'h' },
-        { "lifetime",                   required_argument, 0, 'l' },
-        { "location-csv",               required_argument, 0, 'c' },
-        { "location-update-freq-s",     required_argument, 0, 'f' },
-        { "port",                       required_argument, 0, 'p' },
-        { "identity",                   required_argument, 0, 'i' },
-        { "client-cert-file",           required_argument, 0, 'C' },
-        { "key",                        required_argument, 0, 'k' },
-        { "key-file",                   required_argument, 0, 'K' },
-        { "binding",                    optional_argument, 0, 'q' },
-        { "security-iid",               required_argument, 0, 'D' },
-        { "security-mode",              required_argument, 0, 's' },
-        { "server-iid",                 required_argument, 0, 'd' },
-        { "server-uri",                 required_argument, 0, 'u' },
-        { "inbuf-size",                 required_argument, 0, 'I' },
-        { "outbuf-size",                required_argument, 0, 'O' },
-        { "cache-size",                 required_argument, 0, '$' },
-        { "confirmable-notifications",  no_argument,       0, 'N' },
-        { "max-icmp-failures",          required_argument, 0, 'U' },
-        { "fw-updated-marker-path",     required_argument, 0, 1 },
-        { "fw-cert-file",               required_argument, 0, 2 },
-        { "fw-cert-path",               required_argument, 0, 3 },
-        { "fw-psk-identity",            required_argument, 0, 4 },
-        { "fw-psk-key",                 required_argument, 0, 5 },
+        { "access-entry",                  required_argument, 0, 'a' },
+        { "bootstrap",                     no_argument,       0, 'b' },
+        { "bootstrap-holdoff",             required_argument, 0, 'H' },
+        { "bootstrap-timeout",             required_argument, 0, 'T' },
+        { "endpoint-name",                 required_argument, 0, 'e' },
+        { "help",                          no_argument,       0, 'h' },
+        { "lifetime",                      required_argument, 0, 'l' },
+        { "location-csv",                  required_argument, 0, 'c' },
+        { "location-update-freq-s",        required_argument, 0, 'f' },
+        { "port",                          required_argument, 0, 'p' },
+        { "identity",                      required_argument, 0, 'i' },
+        { "client-cert-file",              required_argument, 0, 'C' },
+        { "key",                           required_argument, 0, 'k' },
+        { "key-file",                      required_argument, 0, 'K' },
+        { "binding",                       optional_argument, 0, 'q' },
+        { "security-iid",                  required_argument, 0, 'D' },
+        { "security-mode",                 required_argument, 0, 's' },
+        { "server-iid",                    required_argument, 0, 'd' },
+        { "server-uri",                    required_argument, 0, 'u' },
+        { "inbuf-size",                    required_argument, 0, 'I' },
+        { "outbuf-size",                   required_argument, 0, 'O' },
+        { "cache-size",                    required_argument, 0, '$' },
+        { "confirmable-notifications",     no_argument,       0, 'N' },
+        { "max-icmp-failures",             required_argument, 0, 'U' },
+        { "fw-updated-marker-path",        required_argument, 0, 1 },
+        { "fw-cert-file",                  required_argument, 0, 2 },
+        { "fw-cert-path",                  required_argument, 0, 3 },
+        { "fw-psk-identity",               required_argument, 0, 4 },
+        { "fw-psk-key",                    required_argument, 0, 5 },
+        { "attribute-storage-persistence-file", required_argument, 0, 6 },
         { 0, 0, 0, 0 }
     };
     int num_servers = 0;
@@ -611,8 +618,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                             (avs_net_certificate_info_t) {
                                 .server_cert_validation = true,
                                 .trusted_certs =
-                                        avs_net_trusted_cert_source_from_paths(
-                                                NULL, optarg)
+                                        avs_net_trusted_cert_info_from_file(optarg)
                             });
             break;
         case 3:
@@ -627,8 +633,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                             (avs_net_certificate_info_t) {
                                 .server_cert_validation = true,
                                 .trusted_certs =
-                                        avs_net_trusted_cert_source_from_paths(
-                                                optarg, NULL)
+                                        avs_net_trusted_cert_info_from_path(optarg)
                             });
             break;
         case 4:
@@ -677,6 +682,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
+        case 6:
+            parsed_args->attr_storage_file = optarg;
+            break;
         case 0:
             goto finish;
         }
@@ -692,9 +700,9 @@ finish:
             entry->server_iid = (anjay_iid_t) entry->id;
         }
     }
-    bool identity_set =
+    identity_set =
             !!parsed_args->connection_args.public_cert_or_psk_identity_size;
-    bool key_set = !!parsed_args->connection_args.private_cert_or_psk_key_size;
+    key_set = !!parsed_args->connection_args.private_cert_or_psk_key_size;
     if ((identity_set && (cert_path != default_cert_path))
             || (key_set && (key_path != default_key_path))) {
         demo_log(ERROR, "Certificate information cannot be loaded both from "

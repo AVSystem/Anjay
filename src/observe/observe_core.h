@@ -20,11 +20,12 @@
 #include <avsystem/commons/rbtree.h>
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/stream/stream_outbuf.h>
+#include <avsystem/commons/persistence.h>
 
 #include <anjay_modules/observe.h>
 
-#include "coap/coap_stream.h"
-#include "servers.h"
+#include "../coap/coap_stream.h"
+#include "../servers.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -71,9 +72,11 @@ typedef struct {
     uint16_t format;
 } anjay_observe_key_t;
 
-int _anjay_observe_init(anjay_t *anjay, bool confirmable_notifications);
+int _anjay_observe_init(anjay_observe_state_t *observe,
+                        bool confirmable_notifications);
 
-void _anjay_observe_cleanup(anjay_t *anjay);
+void _anjay_observe_cleanup(anjay_observe_state_t *observe,
+                            anjay_sched_t *sched);
 
 int _anjay_observe_put_entry(anjay_t *anjay,
                              const anjay_observe_key_t *key,
@@ -101,11 +104,14 @@ int _anjay_observe_notify(anjay_t *anjay,
 anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
                                                 double *out_numeric);
 
+
 #else // WITH_OBSERVE
 
-#define _anjay_observe_init(...) ((int) 0)
+#define _anjay_observe_init(...) 0
 #define _anjay_observe_cleanup(...) ((void) 0)
 #define _anjay_observe_sched_flush_current_connection(...) ((void) 0)
+#define _anjay_observe_persist(...) 0
+#define _anjay_observe_restore(...) 0
 
 #endif // WITH_OBSERVE
 

@@ -40,6 +40,10 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
         self.assertMsgEqual(Lwm2mCreated.matching(req)(), res)
         self.assertEqual('/1337/1', res.get_location_path())
 
+        # force an Update so that change to the data model does not get notified later
+        self.communicate('send-update')
+        self.assertDemoUpdatesRegistration(content=ANY)
+
         req = Lwm2mRead('/1337/1/1')
         self.serv.send(req)
         res = self.serv.recv()

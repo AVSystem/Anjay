@@ -21,42 +21,13 @@ import time
 import traceback
 import unittest
 
-from .test_suite import Lwm2mTest
+from .test_suite import get_test_name, get_suite_name
 
 COLOR_DEFAULT = '\033[0m'
 COLOR_YELLOW = '\033[0;33m'
 COLOR_GREEN = '\033[0;32m'
 COLOR_RED = '\033[0;31m'
 COLOR_BLUE = '\033[0;34m'
-
-
-def get_test_name(test):
-    if isinstance(test, Lwm2mTest):
-        return test.test_name()
-    return test.id()
-
-
-def get_full_test_name(test):
-    if isinstance(test, Lwm2mTest):
-        return test.suite_name() + '/' + test.test_name()
-    return test.id()
-
-
-def get_suite_name(suite):
-    suite_names = []
-    for test in suite:
-        if isinstance(test, Lwm2mTest):
-            suite_names.append(test.suite_name())
-        elif isinstance(test, unittest.TestSuite):
-            suite_names.append(get_suite_name(test))
-        else:
-            suite_names.append(test.id())
-
-    suite_names = set(suite_names)
-    assert len(suite_names) == 1
-
-    suite_name = next(iter(suite_names))
-    return next(iter(suite_names)).replace('/', '.')
 
 
 class ResultStream:

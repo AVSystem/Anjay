@@ -492,6 +492,7 @@ static int send_continue(coap_server_t *server,
     assert(id);
     assert(server->curr_block.type == AVS_COAP_BLOCK1);
 
+    const avs_coap_msg_t *msg = NULL;
     avs_coap_msg_info_t info = avs_coap_msg_info_init();
     anjay_msg_details_t details = {
         .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
@@ -511,7 +512,7 @@ static int send_continue(coap_server_t *server,
         goto cleanup_info;
     }
 
-    const avs_coap_msg_t *msg = avs_coap_msg_build_without_payload(
+    msg = avs_coap_msg_build_without_payload(
             avs_coap_ensure_aligned_buffer(storage),
             storage_size, &info);
     if (msg) {

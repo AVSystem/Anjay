@@ -20,9 +20,15 @@
 
 #include <anjay_test/utils.h>
 
+static const anjay_configuration_t CONFIG = {
+    .endpoint_name = "test"
+};
+
 typedef struct {
-    const anjay_dm_object_def_t **stored;
-    const anjay_dm_object_def_t **restored;
+    anjay_t *anjay_stored;
+    anjay_t *anjay_restored;
+    const anjay_dm_object_def_t *const *stored;
+    const anjay_dm_object_def_t *const *restored;
     sec_repr_t *stored_repr;
     sec_repr_t *restored_repr;
     avs_stream_abstract_t *stream;
@@ -38,12 +44,16 @@ security_persistence_test_env_create() {
     security_persistence_test_env_t *env =
             (__typeof__(env)) calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
-    env->stored = anjay_security_object_create();
-    AVS_UNIT_ASSERT_NOT_NULL(env->stored);
-    env->restored = anjay_security_object_create();
-    AVS_UNIT_ASSERT_NOT_NULL(env->restored);
+    env->anjay_stored = anjay_new(&CONFIG);
+    AVS_UNIT_ASSERT_NOT_NULL(env->anjay_stored);
+    env->anjay_restored = anjay_new(&CONFIG);
+    AVS_UNIT_ASSERT_NOT_NULL(env->anjay_restored);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_install(env->anjay_stored));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_install(env->anjay_restored));
     env->stream = avs_stream_membuf_create();
     AVS_UNIT_ASSERT_NOT_NULL(env->stream);
+    env->stored = _anjay_dm_find_object_by_oid(env->anjay_stored, ANJAY_DM_OID_SECURITY);
+    env->restored = _anjay_dm_find_object_by_oid(env->anjay_restored, ANJAY_DM_OID_SECURITY);
     env->stored_repr = _anjay_sec_get(env->stored);
     env->restored_repr = _anjay_sec_get(env->restored);
     return env;
@@ -51,8 +61,8 @@ security_persistence_test_env_create() {
 
 static void
 security_persistence_test_env_destroy(security_persistence_test_env_t **env) {
-    anjay_security_object_delete((*env)->stored);
-    anjay_security_object_delete((*env)->restored);
+    anjay_delete((*env)->anjay_stored);
+    anjay_delete((*env)->anjay_restored);
     avs_stream_cleanup(&(*env)->stream);
     free(*env);
 }
@@ -60,8 +70,8 @@ security_persistence_test_env_destroy(security_persistence_test_env_t **env) {
 AVS_UNIT_TEST(security_persistence, empty_store_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
     AVS_UNIT_ASSERT_EQUAL(0, AVS_LIST_SIZE(env->stored_repr->instances));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_persist(env->stored, env->stream));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_restore(env->restored, env->stream));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_persist(env->anjay_stored, env->stream));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_restore(env->anjay_restored, env->stream));
     AVS_UNIT_ASSERT_EQUAL(0, AVS_LIST_SIZE(env->restored_repr->instances));
 }
 
@@ -142,13 +152,14 @@ AVS_UNIT_TEST(security_persistence, basic_store_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
     anjay_iid_t iid = ANJAY_IID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(
-            anjay_security_object_add_instance(env->stored, &BOOTSTRAP_INSTANCE, &iid));
-    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->stored));
+            anjay_security_object_add_instance(env->anjay_stored,
+                                               &BOOTSTRAP_INSTANCE, &iid));
+    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
     AVS_UNIT_ASSERT_SUCCESS(
-            anjay_security_object_persist(env->stored, env->stream));
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->stored));
+            anjay_security_object_persist(env->anjay_stored, env->stream));
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
     AVS_UNIT_ASSERT_SUCCESS(
-            anjay_security_object_restore(env->restored, env->stream));
+            anjay_security_object_restore(env->anjay_restored, env->stream));
     assert_objects_equal(_anjay_sec_get(env->stored),
                          _anjay_sec_get(env->restored));
 }
@@ -157,7 +168,7 @@ AVS_UNIT_TEST(security_persistence, invalid_object_to_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
     anjay_iid_t iid = ANJAY_IID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
-            env->stored, &BOOTSTRAP_INSTANCE, &iid));
+            env->anjay_stored, &BOOTSTRAP_INSTANCE, &iid));
 
     AVS_LIST(sec_instance_t) first_clone =
             _anjay_sec_clone_instances(_anjay_sec_get(env->stored));
@@ -171,12 +182,12 @@ AVS_UNIT_TEST(security_persistence, invalid_object_to_restore) {
     AVS_LIST_APPEND(&env->restored_repr->instances, second_clone);
 
     AVS_UNIT_ASSERT_SUCCESS(
-            anjay_security_object_persist(env->stored, env->stream));
+            anjay_security_object_persist(env->anjay_stored, env->stream));
 
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->restored));
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_restored));
     AVS_UNIT_ASSERT_FAILED(
-            anjay_security_object_restore(env->restored, env->stream));
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->restored));
+            anjay_security_object_restore(env->anjay_restored, env->stream));
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_restored));
 
     /* Restored Object remains untouched */
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(env->restored_repr->instances),
@@ -188,43 +199,43 @@ AVS_UNIT_TEST(security_persistence, invalid_object_to_restore) {
 AVS_UNIT_TEST(security_persistence, modification_flag_add_instance) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
     /* At the beginning security object is not modified */
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->stored));
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
     /* Invalid instance does not change the modification flag */
     anjay_iid_t iid = ANJAY_IID_INVALID;
     const anjay_security_instance_t invalid_instance = {
         .server_uri = ""
     };
-    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->stored,
+    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->anjay_stored,
                                                               &invalid_instance,
                                                               &iid));
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->stored));
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
     /* Same thing applies if the flag already was set to true */
     mark_modified(_anjay_sec_get(env->stored));
-    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->stored,
+    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->anjay_stored,
                                                               &invalid_instance,
                                                               &iid));
-    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->stored));
+    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
     clear_modified(_anjay_sec_get(env->stored));
 
     /* And valid instance does change the flag */
     AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
-            env->stored, &BOOTSTRAP_INSTANCE, &iid));
-    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->stored));
+            env->anjay_stored, &BOOTSTRAP_INSTANCE, &iid));
+    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
 }
 
 AVS_UNIT_TEST(security_persistence, modification_flag_purge) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
     /* Purged object remains unmodified after purge */
-    anjay_security_object_purge(env->stored);
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->stored));
+    anjay_security_object_purge(env->anjay_stored);
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
 
     anjay_iid_t iid = ANJAY_IID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
-            env->stored, &BOOTSTRAP_INSTANCE, &iid));
-    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->stored));
+            env->anjay_stored, &BOOTSTRAP_INSTANCE, &iid));
+    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
     /* Simulate persistence operation. */
     clear_modified(_anjay_sec_get(env->stored));
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->stored));
-    anjay_security_object_purge(env->stored);
-    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->stored));
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
+    anjay_security_object_purge(env->anjay_stored);
+    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
 }

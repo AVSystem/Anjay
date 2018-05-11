@@ -617,15 +617,15 @@ static int fw_write(anjay_t *anjay,
     }
 }
 
-static int perform_upgrade(anjay_t *anjay, void *fw_) {
+static void perform_upgrade(anjay_t *anjay, void *fw_) {
     fw_repr_t *fw = (fw_repr_t *) fw_;
 
     int result = user_state_perform_upgrade(&fw->user_state);
     if (result) {
+        fw_log(ERROR, "user_state_perform_upgrade() failed: %d", result);
         handle_err_result(anjay, fw, UPDATE_STATE_DOWNLOADED, result,
                           UPDATE_RESULT_FAILED);
     }
-    return result;
 }
 
 static int fw_execute(anjay_t *anjay,
@@ -729,7 +729,7 @@ initialize_fw_repr(anjay_t *anjay,
         repr->user_state.state = UPDATE_STATE_DOWNLOADED;
         repr->state = UPDATE_STATE_DOWNLOADED;
         return 0;
-    case ANJAY_FW_UPDATE_INITIAL_DOWNLOADING:
+    case ANJAY_FW_UPDATE_INITIAL_DOWNLOADING: {
         repr->user_state.state = UPDATE_STATE_DOWNLOADING;
         size_t resume_offset = initial_state->resume_offset;
         if (resume_offset > 0 && !initial_state->resume_etag) {
@@ -755,6 +755,7 @@ initialize_fw_repr(anjay_t *anjay,
             }
         }
         return 0;
+    }
     case ANJAY_FW_UPDATE_INITIAL_NEUTRAL:
     case ANJAY_FW_UPDATE_INITIAL_SUCCESS:
     case ANJAY_FW_UPDATE_INITIAL_INTEGRITY_FAILURE:
@@ -772,10 +773,7 @@ anjay_fw_update_install(anjay_t *anjay,
                         const anjay_fw_update_handlers_t *handlers,
                         void *user_arg,
                         const anjay_fw_update_initial_state_t *initial_state) {
-    if (!anjay) {
-        fw_log(ERROR, "Anjay object must not be NULL");
-        return -1;
-    }
+    assert(anjay);
 
     fw_repr_t *repr = (fw_repr_t *) calloc(1, sizeof(fw_repr_t));
     if (!repr) {

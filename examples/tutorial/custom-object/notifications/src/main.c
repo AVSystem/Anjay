@@ -49,30 +49,28 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
     }
 };
 
-static const anjay_dm_object_def_t **create_security_object() {
+static int setup_security_object(anjay_t *anjay) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
         .server_uri = "coap://127.0.0.1:5683",
         .security_mode = ANJAY_UDP_SECURITY_NOSEC
     };
 
-    const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
-    if (!security_obj) {
-        return NULL;
+    if (anjay_security_object_install(anjay)) {
+        return -1;
     }
 
     // let Anjay assign an Object Instance ID
     anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
-    if (anjay_security_object_add_instance(security_obj, &security_instance,
+    if (anjay_security_object_add_instance(anjay, &security_instance,
                                            &security_instance_id)) {
-        anjay_security_object_delete(security_obj);
-        return NULL;
+        return -1;
     }
 
-    return security_obj;
+    return 0;
 }
 
-static const anjay_dm_object_def_t **create_server_object() {
+static int setup_server_object(anjay_t *anjay) {
     const anjay_server_instance_t server_instance = {
         .ssid = 1,
         .lifetime = 86400,
@@ -82,19 +80,17 @@ static const anjay_dm_object_def_t **create_server_object() {
         .binding = ANJAY_BINDING_U
     };
 
-    const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
-    if (!server_obj) {
-        return NULL;
+    if (anjay_server_object_install(anjay)) {
+        return -1;
     }
 
     anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
-    if (anjay_server_object_add_instance(server_obj, &server_instance,
+    if (anjay_server_object_add_instance(anjay, &server_instance,
                                          &server_instance_id)) {
-        anjay_server_object_delete(server_obj);
-        return NULL;
+        return -1;
     }
 
-    return server_obj;
+    return 0;
 }
 
 int main_loop(anjay_t *anjay) {
@@ -162,11 +158,8 @@ int main() {
     // The module is cleaned up automatically in anjay_delete().
     int result = anjay_attr_storage_install(anjay);
 
-    const anjay_dm_object_def_t **security_obj = create_security_object();
-    const anjay_dm_object_def_t **server_obj = create_server_object();
-
-    if (anjay_register_object(anjay, security_obj)
-            || anjay_register_object(anjay, server_obj)) {
+    if (setup_security_object(anjay)
+            || setup_server_object(anjay)) {
         result = -1;
     }
 
@@ -186,8 +179,6 @@ int main() {
 
 cleanup:
     anjay_delete(anjay);
-    anjay_security_object_delete(security_obj);
-    anjay_security_object_delete(server_obj);
 
     // test object does not need cleanup
     return result;

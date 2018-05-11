@@ -21,23 +21,23 @@ assert sys.version_info >= (3, 5), "Python < 3.5 is unsupported"
 
 import unittest
 import os
-import re
 import collections
 import argparse
 import time
 import tempfile
+import textwrap
 import shutil
 
-from framework.pretty_test_runner import PrettyTestRunner, get_test_name, get_suite_name, get_full_test_name
+from framework.pretty_test_runner import PrettyTestRunner
 from framework.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREEN, COLOR_RED
-from framework.test_suite import Lwm2mTest, ensure_dir
+from framework.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, test_or_suite_matches_query_regex
 
 if sys.version_info[0] >= 3:
     sys.stderr = os.fdopen(2, 'w', 1)  # force line buffering
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 UNITTEST_PATH = os.path.join(ROOT_DIR, 'suites')
-DEFAULT_SUITE_REGEX = r'^default/'
+DEFAULT_SUITE_REGEX = r'^default\.'
 
 
 def traverse(tree, cls=None):
@@ -68,7 +68,7 @@ def discover_test_suites(test_config):
 def list_tests(suite, header='Available tests:'):
     print(header)
     for test in traverse(suite, cls=Lwm2mTest):
-        print('* %s: %s' % (test.suite_name(), test.test_name()))
+        print('* %s' % get_full_test_name(test))
     print('')
 
 
@@ -115,15 +115,13 @@ def filter_tests(suite, query_regex):
 
     for test in suite:
         if isinstance(test, unittest.TestCase):
-            name = get_test_name(test)
-            if (re.search(query_regex, get_test_name(test))
-                or re.search(query_regex, get_full_test_name(test))):
+            if test_or_suite_matches_query_regex(test, query_regex):
                 matching_tests.append(test)
         elif isinstance(test, unittest.TestSuite):
             if test.countTestCases() == 0:
                 continue
 
-            if re.search(query_regex, get_suite_name(test)):
+            if test_or_suite_matches_query_regex(test, query_regex):
                 matching_tests.append(test)
             else:
                 matching_suite = filter_tests(test, query_regex)
@@ -146,7 +144,36 @@ def merge_directory(src, dst):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=textwrap.dedent('''
+        Runs Anjay demo client against Python integration tests.
+
+        Following environment variables are recognized:
+
+          VALGRIND - can be set to Valgrind executable path + optional arguments. If set,
+                     demo client execution command will be prefixed with the value of this
+                     variable. Note that some tests ignore this command.
+
+          NO_DUMPCAP - if set and not empty, PCAP traffic recordings between demo client
+                       and mock server are not recorded.
+
+          RR - if set and not empty, demo client execution command is prefixed
+               with `rr record` to allow post-mortem debugging with `rr replay`.
+               Takes precedence over RRR.
+
+          RRR - if set and not empty, its value is is used for regex-matching applicable
+                tests or test suites. See REGEX MATCH RULES below. For matching
+                tests/suites, demo client execution command is prefixed with `rr record`
+                to allow post-mortem debugging with `rr replay`.
+
+        REGEX MATCH RULES
+        =================
+        {regex_match_rules_help}
+    '''.format(regex_match_rules_help=textwrap.indent(
+        textwrap.dedent(
+            test_or_suite_matches_query_regex.__doc__),
+        prefix=' ' * 8))),
+    formatter_class=argparse.RawDescriptionHelpFormatter)
+
     parser.add_argument('--list', '-l',
                         action='store_true',
                         help='only list matching test cases, do not execute them')
@@ -155,7 +182,7 @@ if __name__ == "__main__":
                         help='path to the demo application to use')
     parser.add_argument('query_regex',
                         type=str, default=DEFAULT_SUITE_REGEX, nargs='?',
-                        help='regex used to filter test cases, run against suite name, test case name and "suite: test" string')
+                        help='regex used to filter test cases. See REGEX MATCH RULES for details.')
 
     cmdline_args = parser.parse_args(sys.argv[1:])
 

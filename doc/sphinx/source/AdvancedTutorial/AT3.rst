@@ -170,10 +170,9 @@ Now the only thing left is to add the new Security object instance:
 .. snippet-source:: examples/tutorial/AT3-psk/src/main.c
 
     anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
-    if (anjay_security_object_add_instance(security_obj, &security_instance,
+    if (anjay_security_object_add_instance(anjay, &security_instance,
                                            &security_instance_id)) {
-        anjay_security_object_delete(security_obj);
-        security_obj = NULL;
+        return -1;
     }
 
 All remaining activities related to establishing secure communication channel
@@ -242,6 +241,8 @@ This function can then be used to fill the relevant fields in the
         .security_mode = ANJAY_UDP_SECURITY_CERTIFICATE
     };
 
+    int result = 0;
+
     if (load_buffer_from_file(
                 (uint8_t **) &security_instance.public_cert_or_psk_identity,
                 &security_instance.public_cert_or_psk_identity_size,
@@ -254,6 +255,7 @@ This function can then be used to fill the relevant fields in the
                 (uint8_t **) &security_instance.server_public_key,
                 &security_instance.server_public_key_size,
                 "server_cert.der")) {
+        result = -1;
         goto cleanup;
     }
 
@@ -262,9 +264,9 @@ Now the only thing left is to add the new Security object instance:
 .. snippet-source:: examples/tutorial/AT3-cert/src/main.c
 
     anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
-    if (!anjay_security_object_add_instance(security_obj, &security_instance,
-                                            &security_instance_id)) {
-        success = true;
+    if (anjay_security_object_add_instance(anjay, &security_instance,
+                                           &security_instance_id)) {
+        result = -1;
     }
 
 ``anjay_security_object_add_instance()`` copies the buffers present in the

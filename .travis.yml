@@ -100,14 +100,10 @@ matrix:
          DEVCONFIG_FLAGS="--with-valgrind --without-analysis"
          DOCKER_IMAGE=centos7
 
-# 2018-03-14: Coverity Scan is in "planned maintenance mode" since 2018-02-20.
-# We have no idea when - or if - it will be up again, so this stage is disabled
-# for now.
-#
-#  - stage: coverity
-#    os: linux
-#    env: DOCKER_IMAGE=coverity
-#         DEVCONFIG_FLAGS="--without-analysis"
+  - stage: coverity
+    os: linux
+    env: DOCKER_IMAGE=coverity
+         DEVCONFIG_FLAGS="--without-analysis"
 
 before_script:
   - source travis/prepare.sh

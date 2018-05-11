@@ -43,13 +43,6 @@ typedef struct {
 } anjay_server_instance_t;
 
 /**
- * Creates Server Object ready to get registered in Anjay.
- *
- * @returns pointer to Server Object or NULL in case of error.
- */
-const anjay_dm_object_def_t **anjay_server_object_create(void);
-
-/**
  * Adds new Instance of Server Object and returns newly created Instance id
  * via @p inout_iid .
  *
@@ -61,14 +54,14 @@ const anjay_dm_object_def_t **anjay_server_object_create(void);
  * finishes (internally a deep copy of @ref anjay_server_instance_t is
  * performed).
  *
- * @param obj       Server Object to operate on.
+ * @param anjay     Anjay instance with Server Object installed to operate on.
  * @param instance  Server Instance to insert.
  * @param inout_iid Server Instance id to use or @ref ANJAY_IID_INVALID .
  *
  * @return 0 on success, negative value in case of an error or if the instance
  * of specified id already exists.
  */
-int anjay_server_object_add_instance(const anjay_dm_object_def_t *const *obj,
+int anjay_server_object_add_instance(anjay_t *anjay,
                                      const anjay_server_instance_t *instance,
                                      anjay_iid_t *inout_iid);
 
@@ -76,25 +69,18 @@ int anjay_server_object_add_instance(const anjay_dm_object_def_t *const *obj,
 /**
  * Removes all instances of Server Object leaving it in an empty state.
  *
- * @param obj   Server Object to purge.
+ * @param anjay Anjay instance with Security Object installed to purge.
  */
-void anjay_server_object_purge(const anjay_dm_object_def_t *const *obj);
-
-/**
- * Deletes Server Object
- *
- * @param server    Server Object to remove.
- */
-void anjay_server_object_delete(const anjay_dm_object_def_t **server);
+void anjay_server_object_purge(anjay_t *anjay);
 
 /**
  * Dumps Server Object Instance into the @p out_stream .
  *
- * @param obj           Server Object.
+ * @param anjay         Anjay instance with Server Object installed.
  * @param out_stream    Stream to write to.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_server_object_persist(const anjay_dm_object_def_t *const *obj,
+int anjay_server_object_persist(anjay_t *anjay,
                                 avs_stream_abstract_t *out_stream);
 
 /**
@@ -103,18 +89,31 @@ int anjay_server_object_persist(const anjay_dm_object_def_t *const *obj,
  * Note: if restore fails, then Server Object will be left untouched, on
  * success though all Instances stored within the Object will be purged.
  *
- * @param obj       Server Object.
+ * @param anjay     Anjay instance with Server Object installed.
  * @param in_stream Stream to read from.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_server_object_restore(const anjay_dm_object_def_t *const *obj,
+int anjay_server_object_restore(anjay_t *anjay,
                                 avs_stream_abstract_t *in_stream);
 
 /**
- * Checks whether the Server Object has been modified since last successful
- * call to @ref anjay_server_object_persist or @ref anjay_server_object_restore.
+ * Checks whether the Server Object from Anjay instance has been modified since
+ * last successful call to @ref anjay_server_object_persist or @ref
+ * anjay_server_object_restore.
  */
-bool anjay_server_object_is_modified(const anjay_dm_object_def_t *const *obj);
+bool anjay_server_object_is_modified(anjay_t *anjay);
+
+/**
+ * Installs the Server Object in an Anjay instance.
+ *
+ * The Server module does not require explicit cleanup; all resources
+ * will be automatically freed up during the call to @ref anjay_delete.
+ *
+ * @param anjay Anjay instance for which the Server Object is installed.
+ *
+ * @returns 0 on success, or a negative value in case of error.
+ */
+int anjay_server_object_install(anjay_t *anjay);
 
 #ifdef __cplusplus
 }

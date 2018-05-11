@@ -32,6 +32,7 @@ VISIBILITY_SOURCE_BEGIN
 typedef struct {
     anjay_download_ctx_common_t common;
     avs_net_ssl_configuration_t ssl_configuration;
+    avs_net_resolved_endpoint_t preferred_endpoint;
     avs_http_t *client;
     avs_url_t *parsed_url;
     avs_stream_abstract_t *stream;
@@ -87,27 +88,25 @@ static inline bool etag_matches(const anjay_etag_t *etag,
             && memcmp(etag->value, &text[1], etag->size) == 0;
 }
 
-static int send_request(anjay_t *anjay, void *id_) {
+static void send_request(anjay_t *anjay, void *id_) {
     int error_code = ANJAY_DOWNLOAD_ERR_FAILED;
     uintptr_t id = (uintptr_t) id_;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!ctx_ptr) {
         dl_log(DEBUG, "download id = %" PRIuPTR "expired", id);
-        return 0;
+        return;
     }
 
+    AVS_LIST(const avs_http_header_t) received_headers = NULL;
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
     int result = avs_http_open_stream(&ctx->stream, ctx->client,
                                       AVS_HTTP_GET, AVS_HTTP_CONTENT_IDENTITY,
                                       ctx->parsed_url, NULL, NULL);
-    avs_url_free(ctx->parsed_url);
-    ctx->parsed_url = NULL;
     if (result || !ctx->stream) {
         goto error;
     }
 
-    AVS_LIST(const avs_http_header_t) received_headers = NULL;
     avs_http_set_header_storage(ctx->stream, &received_headers);
 
     char ifmatch[258];
@@ -168,12 +167,10 @@ static int send_request(anjay_t *anjay, void *id_) {
         }
     }
     avs_http_set_header_storage(ctx->stream, NULL);
-
-    return 0;
+    return;
 error:
     _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
                                      error_code, result);
-    return 0;
 }
 
 static avs_net_abstract_socket_t *get_http_socket(anjay_downloader_t *dl,
@@ -236,15 +233,27 @@ static void cleanup_http_transfer(anjay_downloader_t *dl,
                                   AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     (void) dl;
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
-    if (ctx->send_request_job) {
-        _anjay_sched_del(_anjay_downloader_get_anjay(dl)->sched,
-                         &ctx->send_request_job);
-    }
+    _anjay_sched_del(_anjay_downloader_get_anjay(dl)->sched,
+                     &ctx->send_request_job);
     free(ctx->etag);
     avs_stream_cleanup(&ctx->stream);
     avs_url_free(ctx->parsed_url);
     avs_http_free(ctx->client);
     AVS_LIST_DELETE(ctx_ptr);
+}
+
+static int reconnect_http_transfer(anjay_downloader_t *dl,
+                                   AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
+    avs_stream_cleanup(&ctx->stream);
+    anjay_t *anjay = _anjay_downloader_get_anjay(dl);
+    _anjay_sched_del(anjay->sched, &ctx->send_request_job);
+    if (_anjay_sched_now(anjay->sched, &ctx->send_request_job, send_request,
+                         (void *) ctx->common.id)) {
+        dl_log(ERROR, "could not schedule download job");
+        return -ENOMEM;
+    }
+    return 0;
 }
 
 int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
@@ -261,7 +270,8 @@ int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     static const anjay_download_ctx_vtable_t VTABLE = {
         .get_socket = get_http_socket,
         .handle_packet = handle_http_packet,
-        .cleanup = cleanup_http_transfer
+        .cleanup = cleanup_http_transfer,
+        .reconnect = reconnect_http_transfer
     };
     ctx->common.vtable = &VTABLE;
 
@@ -277,6 +287,8 @@ int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
         goto error;
     }
     ctx->ssl_configuration.security = cfg->security_info;
+    ctx->ssl_configuration.backend_configuration.preferred_endpoint =
+            &ctx->preferred_endpoint;
     avs_http_ssl_configuration(ctx->client, &ctx->ssl_configuration);
 
     if (!(ctx->parsed_url = avs_url_parse(cfg->url))) {

@@ -46,20 +46,20 @@ support persistence:
 .. snippet-source:: modules/security/include_public/anjay/security.h
 
     // ...
-    int anjay_security_object_persist(const anjay_dm_object_def_t *const *obj,
+    int anjay_security_object_persist(anjay_t *anjay,
                                       avs_stream_abstract_t *out_stream);
     // ...
-    int anjay_security_object_restore(const anjay_dm_object_def_t *const *obj,
+    int anjay_security_object_restore(anjay_t *anjay,
                                       avs_stream_abstract_t *in_stream);
 
 
 .. snippet-source:: modules/server/include_public/anjay/server.h
 
     // ...
-    int anjay_server_object_persist(const anjay_dm_object_def_t *const *obj,
+    int anjay_server_object_persist(anjay_t *anjay,
                                     avs_stream_abstract_t *out_stream);
     // ...
-    int anjay_server_object_restore(const anjay_dm_object_def_t *const *obj,
+    int anjay_server_object_restore(anjay_t *anjay,
                                     avs_stream_abstract_t *in_stream);
 
 
@@ -88,9 +88,7 @@ startup (if a valid persistence file exists).
 
     #define PERSISTENCE_FILENAME "at2-persistence.dat"
 
-    int persist_objects(anjay_t *anjay,
-                        const anjay_dm_object_def_t **security_obj,
-                        const anjay_dm_object_def_t **server_obj) {
+    int persist_objects(anjay_t *anjay) {
         avs_log(tutorial, INFO, "Persisting objects to %s", PERSISTENCE_FILENAME);
 
         avs_stream_abstract_t *file_stream =
@@ -103,12 +101,12 @@ startup (if a valid persistence file exists).
 
         int result;
 
-        if ((result = anjay_security_object_persist(security_obj, file_stream))) {
+        if ((result = anjay_security_object_persist(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not persist Security Object");
             goto finish;
         }
 
-        if ((result = anjay_server_object_persist(server_obj, file_stream))) {
+        if ((result = anjay_server_object_persist(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not persist Server Object");
             goto finish;
         }
@@ -125,11 +123,7 @@ startup (if a valid persistence file exists).
 
 .. snippet-source:: examples/tutorial/AT2/src/main.c
 
-    int restore_objects_if_possible(
-            anjay_t *anjay,
-            const anjay_dm_object_def_t **security_obj,
-            const anjay_dm_object_def_t **server_obj) {
-
+    int restore_objects_if_possible(anjay_t *anjay) {
         avs_log(tutorial, INFO, "Attempting to restore objects from persistence");
         int result;
 
@@ -156,12 +150,12 @@ startup (if a valid persistence file exists).
             return -1;
         }
 
-        if ((result = anjay_security_object_restore(security_obj, file_stream))) {
+        if ((result = anjay_security_object_restore(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not restore Security Object");
             goto finish;
         }
 
-        if ((result = anjay_server_object_restore(server_obj, file_stream))) {
+        if ((result = anjay_server_object_restore(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not restore Server Object");
             goto finish;
         }

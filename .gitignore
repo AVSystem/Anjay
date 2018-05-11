@@ -26,6 +26,7 @@ CPackConfig.cmake
 CPackSourceConfig.cmake
 CTestTestfile.cmake
 Testing/
+anjay_config_log.h
 config.h
 posix-config.h
 anjay-*.cmake

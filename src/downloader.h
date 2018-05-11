@@ -36,6 +36,8 @@ typedef struct {
 
     uintptr_t next_id;
     AVS_LIST(anjay_download_ctx_t) downloads;
+
+    anjay_sched_handle_t reconnect_job_handle;
 } anjay_downloader_t;
 
 /**
@@ -105,6 +107,8 @@ int _anjay_downloader_handle_packet(anjay_downloader_t *dl,
 
 void _anjay_downloader_abort(anjay_downloader_t *dl,
                              anjay_download_handle_t handle);
+
+int _anjay_downloader_sched_reconnect_all(anjay_downloader_t *dl);
 
 VISIBILITY_PRIVATE_HEADER_END
 

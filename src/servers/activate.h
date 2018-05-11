@@ -30,7 +30,6 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 /**
  * Schedules a @ref _anjay_server_activate execution after given @p delay.
- * Does nothing if there is no inactive server with given @p ssid .
  *
  * Activation is performed as a retryable job, so it does not need to be
  * repeated by the caller.
@@ -39,9 +38,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  * Registration Updates.
  */
 int _anjay_server_sched_activate(anjay_t *anjay,
-                                 anjay_servers_t *servers,
-                                 anjay_ssid_t ssid,
-                                 avs_time_duration_t delay);
+                                 anjay_server_info_t *server,
+                                 avs_time_duration_t reactivate_delay);
 
 int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay);
 
@@ -54,42 +52,26 @@ int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay);
  *
  * Does not modify scheduled update job for @p server.
  */
-void _anjay_servers_add_active(anjay_servers_t *servers,
-                               AVS_LIST(anjay_active_server_info_t) server);
+void _anjay_servers_add(anjay_servers_t *servers,
+                        AVS_LIST(anjay_server_info_t) server);
 /**
- * Removes active server entry associated with @p ssid and creates a new
- * inactive server entry. Fails if there is no active server entry with such
- * @p ssid .
+ * Deactivates the active server entry associated with @p ssid . Fails if there
+ * is no active server entry with such @p ssid .
  *
  * If @p reactivate_delay is not AVS_TIME_DURATION_INVALID, schedules a
  * reactivate job after @p reactivate_delay. The job is a retryable one, so
  * the caller does not need to worry about reactivating the server manually.
  */
-anjay_inactive_server_info_t *
-_anjay_server_deactivate(anjay_t *anjay,
-                         anjay_servers_t *servers,
-                         anjay_ssid_t ssid,
-                         avs_time_duration_t reactivate_delay);
+int _anjay_server_deactivate(anjay_t *anjay,
+                             anjay_ssid_t ssid,
+                             avs_time_duration_t reactivate_delay);
 
 /**
  * Creates a new detached inactive server entry for given @p ssid .
  *
  * Does not schedule the reactivate job for created entry.
  */
-AVS_LIST(anjay_inactive_server_info_t)
-_anjay_servers_create_inactive(anjay_ssid_t ssid);
-
-/**
- * Inserts an inactive server entry into @p servers.
- *
- * This function is meant to be used only for initialization of the @p servers
- * object, which should NOT contain any server entry with the same SSID as
- * @p server .
- *
- * Does not modify the reactivate job associated with @p server.
- */
-void _anjay_servers_add_inactive(anjay_servers_t *servers,
-                                 AVS_LIST(anjay_inactive_server_info_t) server);
+AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_ssid_t ssid);
 
 /**
  * Checks whether it is possible to connect to a non-Bootstrap Server before

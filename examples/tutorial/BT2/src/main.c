@@ -17,19 +17,9 @@ int main(int argc, char *argv[]) {
     }
     int result = 0;
 
-    // Instantiate necessary objects
-    const anjay_dm_object_def_t **security_obj = anjay_security_object_create();
-    const anjay_dm_object_def_t **server_obj = anjay_server_object_create();
-
-    // For some reason we were unable to instantiate objects.
-    if (!security_obj || !server_obj) {
-        result = -1;
-        goto cleanup;
-    }
-
-    // Register them within Anjay
-    if (anjay_register_object(anjay, security_obj)
-            || anjay_register_object(anjay, server_obj)) {
+    // Install necessary objects
+    if (anjay_security_object_install(anjay)
+            || anjay_server_object_install(anjay)) {
         result = -1;
         goto cleanup;
     }
@@ -51,16 +41,14 @@ int main(int argc, char *argv[]) {
 
     anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
     anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
-    anjay_security_object_add_instance(security_obj, &security_instance,
+    anjay_security_object_add_instance(anjay, &security_instance,
                                        &security_instance_id);
-    anjay_server_object_add_instance(server_obj, &server_instance,
+    anjay_server_object_add_instance(anjay, &server_instance,
                                      &server_instance_id);
 
     // Event loop will go here
 
 cleanup:
     anjay_delete(anjay);
-    anjay_security_object_delete(security_obj);
-    anjay_server_object_delete(server_obj);
     return result;
 }

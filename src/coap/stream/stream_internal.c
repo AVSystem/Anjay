@@ -294,6 +294,7 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
                               size_t out_buffer_size) {
     coap_stream_t *stream = (coap_stream_t *)calloc(1, sizeof(coap_stream_t));
     if (!stream) {
+        coap_log(ERROR, "Out of memory");
         return -1;
     }
 
@@ -314,6 +315,7 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
     if (!stream->data.common.in.buffer
             || !stream->data.common.out.buffer
             || !stream->id_source) {
+        coap_log(ERROR, "Out of memory");
         coap_close((avs_stream_abstract_t *) stream);
         free(stream);
         return -1;

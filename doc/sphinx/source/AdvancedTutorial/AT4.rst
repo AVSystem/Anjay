@@ -109,15 +109,17 @@ Server Instances.
 
 .. highlight:: c
 
-We start with installation of the Access Control module:
+We start with installation of the Attribute Storage, Access Control, Security
+Object and Server Object modules:
 
 .. snippet-source:: examples/tutorial/AT4/src/main.c
 
     int result;
     if (anjay_attr_storage_install(anjay)
-        || anjay_access_control_install(anjay)) {
+            || anjay_access_control_install(anjay)
+            || anjay_security_object_install(anjay)
+            || anjay_server_object_install(anjay)) {
         result = -1;
-        goto cleanup;
     }
 
 Then we setup two LwM2M Servers:
@@ -158,16 +160,16 @@ Then we setup two LwM2M Servers:
 
     // Setup first LwM2M Server
     anjay_iid_t server_instance_iid1 = ANJAY_IID_INVALID;
-    anjay_security_object_add_instance(security_obj, &security_instance1,
+    anjay_security_object_add_instance(anjay, &security_instance1,
                                        &(anjay_iid_t) { ANJAY_IID_INVALID });
-    anjay_server_object_add_instance(server_obj, &server_instance1,
+    anjay_server_object_add_instance(anjay, &server_instance1,
                                      &server_instance_iid1);
 
     // Setup second LwM2M Server
     anjay_iid_t server_instance_iid2 = ANJAY_IID_INVALID;
-    anjay_security_object_add_instance(security_obj, &security_instance2,
+    anjay_security_object_add_instance(anjay, &security_instance2,
                                        &(anjay_iid_t) { ANJAY_IID_INVALID });
-    anjay_server_object_add_instance(server_obj, &server_instance2,
+    anjay_server_object_add_instance(anjay, &server_instance2,
                                      &server_instance_iid2);
 
 And finally, we are ready to set access lists:
@@ -194,3 +196,17 @@ is an owner of, which corresponds to instances it has created), but that's
 outside of the scope of this tutorial. We recommend you to look at the LwM2M
 Specification for more details on Access Control Object, as well as at our
 `API docs <../api>`_.
+
+.. note::
+    
+    Please notice ``cleanup`` tag at end of ``main()`` function. It is important
+    to delete your own implemented objects after calling ``anjay_delete()``, as
+    during the instance destruction Anjay may still try to refer to object's
+    data and premature object deletion could be disastrous in effects.
+
+    .. snippet-source:: examples/tutorial/AT4/src/main.c
+
+        cleanup:
+            anjay_delete(anjay);
+            delete_test_object(test_obj);
+            return result;

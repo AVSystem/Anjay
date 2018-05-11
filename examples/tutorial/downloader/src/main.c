@@ -62,7 +62,7 @@ static int request_coap_download(anjay_t *anjay,
         return -1;
     }
 
-    avs_net_psk_t psk = {
+    avs_net_psk_info_t psk = {
         .psk = psk_key,
         .psk_size = strlen(psk_key),
         .identity = psk_identity,

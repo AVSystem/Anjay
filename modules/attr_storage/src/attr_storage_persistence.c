@@ -19,43 +19,42 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <avsystem/commons/persistence.h>
+
 #include <anjay_modules/dm_utils.h>
 #include <anjay_modules/io_utils.h>
 #include <anjay_modules/raw_buffer.h>
-#include <anjay/persistence.h>
 
 #include "mod_attr_storage.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-#define HANDLE_LIST(Type, Ctx, ListPtr, ...) \
-        anjay_persistence_list((Ctx), (AVS_LIST(void) *) (ListPtr), \
-                               sizeof(**(ListPtr)), \
-                               handle_##Type, __VA_ARGS__)
+#define HANDLE_LIST(Type, Ctx, ListPtr, UserPtr) \
+        avs_persistence_list((Ctx), (AVS_LIST(void) *) (ListPtr), \
+                             sizeof(**(ListPtr)), handle_##Type, UserPtr, NULL)
 
 //// DATA STRUCTURE HANDLERS ///////////////////////////////////////////////////
 
-static int handle_dm_attributes(anjay_persistence_context_t *ctx,
+static int handle_dm_attributes(avs_persistence_context_t *ctx,
                                 anjay_dm_attributes_t *attrs) {
     int retval;
-    (void) ((retval = anjay_persistence_u32(
-                    ctx, (uint32_t *) &attrs->min_period))
-            || (retval = anjay_persistence_u32(
-                    ctx, (uint32_t *) &attrs->max_period)));
+    (void) ((retval = avs_persistence_u32(ctx, (uint32_t *) &attrs->min_period))
+            || (retval = avs_persistence_u32(ctx,
+                                             (uint32_t *) &attrs->max_period)));
     return retval;
 }
 
-static int handle_resource_attributes(anjay_persistence_context_t *ctx,
+static int handle_resource_attributes(avs_persistence_context_t *ctx,
                                       anjay_dm_resource_attributes_t *attrs) {
     int retval;
     (void) ((retval = handle_dm_attributes(ctx, &attrs->common))
-            || (retval = anjay_persistence_double(ctx, &attrs->greater_than))
-            || (retval = anjay_persistence_double(ctx, &attrs->less_than))
-            || (retval = anjay_persistence_double(ctx, &attrs->step)));
+            || (retval = avs_persistence_double(ctx, &attrs->greater_than))
+            || (retval = avs_persistence_double(ctx, &attrs->less_than))
+            || (retval = avs_persistence_double(ctx, &attrs->step)));
     return retval;
 }
 
-static int handle_custom_attributes(anjay_persistence_context_t *ctx,
+static int handle_custom_attributes(avs_persistence_context_t *ctx,
                                     anjay_dm_internal_attrs_t *attrs,
                                     int version) {
     int retval = 0;
@@ -65,7 +64,7 @@ static int handle_custom_attributes(anjay_persistence_context_t *ctx,
 #ifdef WITH_CON_ATTR
         con = (int8_t) attrs->custom.data.con;
 #endif // WITH_CON_ATTR
-        retval = anjay_persistence_bytes(ctx, (uint8_t *) &con, 1);
+        retval = avs_persistence_bytes(ctx, (uint8_t *) &con, 1);
     }
 #ifdef WITH_CON_ATTR
     if (!retval) {
@@ -83,7 +82,7 @@ static int handle_custom_attributes(anjay_persistence_context_t *ctx,
     return retval;
 }
 
-static int handle_internal_attrs(anjay_persistence_context_t *ctx,
+static int handle_internal_attrs(avs_persistence_context_t *ctx,
                                  anjay_dm_internal_attrs_t *attrs,
                                  int version) {
     int retval;
@@ -92,7 +91,7 @@ static int handle_internal_attrs(anjay_persistence_context_t *ctx,
     return retval;
 }
 
-static int handle_internal_res_attrs(anjay_persistence_context_t *ctx,
+static int handle_internal_res_attrs(avs_persistence_context_t *ctx,
                                      anjay_dm_internal_res_attrs_t *attrs,
                                      int version) {
     int retval;
@@ -103,45 +102,45 @@ static int handle_internal_res_attrs(anjay_persistence_context_t *ctx,
     return retval;
 }
 
-static int handle_default_attrs(anjay_persistence_context_t *ctx,
+static int handle_default_attrs(avs_persistence_context_t *ctx,
                                 void *attrs_,
                                 void *version_as_ptr) {
     fas_default_attrs_t *attrs = (fas_default_attrs_t *) attrs_;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &attrs->ssid))
+    (void) ((retval = avs_persistence_u16(ctx, &attrs->ssid))
             || (retval = handle_internal_attrs(
                     ctx, &attrs->attrs, (int) (intptr_t) version_as_ptr)));
     return retval;
 }
 
-static int handle_resource_attrs(anjay_persistence_context_t *ctx,
+static int handle_resource_attrs(avs_persistence_context_t *ctx,
                                  void *attrs_,
                                  void *version_as_ptr) {
     fas_resource_attrs_t *attrs = (fas_resource_attrs_t *) attrs_;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &attrs->ssid))
+    (void) ((retval = avs_persistence_u16(ctx, &attrs->ssid))
             || (retval = handle_internal_res_attrs(
                     ctx, &attrs->attrs, (int) (intptr_t) version_as_ptr)));
     return retval;
 }
 
-static int handle_resource_entry(anjay_persistence_context_t *ctx,
+static int handle_resource_entry(avs_persistence_context_t *ctx,
                                  void *resource_,
                                  void *version_as_ptr) {
     fas_resource_entry_t *resource = (fas_resource_entry_t *) resource_;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &resource->rid))
+    (void) ((retval = avs_persistence_u16(ctx, &resource->rid))
             || (retval = HANDLE_LIST(resource_attrs, ctx, &resource->attrs,
                                      version_as_ptr)));
     return retval;
 }
 
-static int handle_instance_entry(anjay_persistence_context_t *ctx,
+static int handle_instance_entry(avs_persistence_context_t *ctx,
                                  void *instance_,
                                  void *version_as_ptr) {
     fas_instance_entry_t *instance = (fas_instance_entry_t *) instance_;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &instance->iid))
+    (void) ((retval = avs_persistence_u16(ctx, &instance->iid))
             || (retval = HANDLE_LIST(default_attrs, ctx,
                                      &instance->default_attrs, version_as_ptr))
             || (retval = HANDLE_LIST(resource_entry, ctx,
@@ -149,12 +148,12 @@ static int handle_instance_entry(anjay_persistence_context_t *ctx,
     return retval;
 }
 
-static int handle_object(anjay_persistence_context_t *ctx,
+static int handle_object(avs_persistence_context_t *ctx,
                          void *object_,
                          void *version_as_ptr) {
     fas_object_entry_t *object = (fas_object_entry_t *) object_;
     int retval;
-    (void) ((retval = anjay_persistence_u16(ctx, &object->oid))
+    (void) ((retval = avs_persistence_u16(ctx, &object->oid))
             || (retval = HANDLE_LIST(default_attrs, ctx,
                                      &object->default_attrs, version_as_ptr))
             || (retval = HANDLE_LIST(instance_entry, ctx, &object->instances,
@@ -364,13 +363,16 @@ int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
     if (retval) {
         return retval;
     }
-    anjay_persistence_context_t *ctx = anjay_persistence_store_context_new(out);
+    avs_persistence_context_t *ctx = avs_persistence_store_context_new(out);
     if (!ctx) {
         fas_log(ERROR, "Out of memory");
         return -1;
     }
     retval = HANDLE_LIST(object, ctx, &attr_storage->objects, (void *) 2);
-    anjay_persistence_context_delete(ctx);
+    avs_persistence_context_delete(ctx);
+    if (!retval) {
+        fas_log(INFO, "Attribute Storage state persisted");
+    }
     return retval;
 }
 
@@ -400,8 +402,7 @@ int _anjay_attr_storage_restore_inner(anjay_t *anjay,
         return -1;
     }
 
-    anjay_persistence_context_t *ctx =
-            anjay_persistence_restore_context_new(in);
+    avs_persistence_context_t *ctx = avs_persistence_restore_context_new(in);
     if (!ctx) {
         fas_log(ERROR, "Out of memory");
         retval = -1;
@@ -411,10 +412,12 @@ int _anjay_attr_storage_restore_inner(anjay_t *anjay,
                 || (retval = (is_attr_storage_sane(attr_storage) ? 0 : -1))
                 || (retval = clear_nonexistent_entries(anjay,
                                                        attr_storage)));
-        anjay_persistence_context_delete(ctx);
+        avs_persistence_context_delete(ctx);
     }
     if (retval) {
         _anjay_attr_storage_clear(attr_storage);
+    } else {
+        fas_log(INFO, "Attribute Storage state restored");
     }
     return retval;
 }

@@ -16,15 +16,17 @@
 
 #include <config.h>
 
+#define ANJAY_SERVERS_INTERNALS
+
 #include "../servers.h"
 #include "../anjay_core.h"
 
-#define ANJAY_SERVERS_INTERNALS
-
 #include "connection_info.h"
+#include "servers_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
 
+// TODO: Offline and SMS? How to interpret?
 static void disable_connection(anjay_server_connection_t *connection) {
     avs_net_abstract_socket_t *socket =
             _anjay_connection_internal_get_socket(connection);
@@ -34,17 +36,18 @@ static void disable_connection(anjay_server_connection_t *connection) {
     connection->needs_reconnect = false;
 }
 
-static int enter_offline_job(anjay_t *anjay,
-                             void *dummy) {
+static void enter_offline_job(anjay_t *anjay, void *dummy) {
     (void) dummy;
-    AVS_LIST(anjay_active_server_info_t) server;
-    AVS_LIST_FOREACH(server, anjay->servers.active) {
-        disable_connection(&server->udp_connection);
-        _anjay_sched_del(anjay->sched, &server->sched_update_handle);
+    AVS_LIST(anjay_server_info_t) server;
+    AVS_LIST_FOREACH(server, anjay->servers->servers) {
+        if (_anjay_server_active(server)) {
+            disable_connection(&server->data_active.udp_connection);
+            _anjay_sched_del(anjay->sched,
+                             &server->sched_update_or_reactivate_handle);
+        }
     }
     _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
     anjay->offline = true;
-    return 0;
 }
 
 bool anjay_is_offline(anjay_t *anjay) {
@@ -59,18 +62,17 @@ int anjay_enter_offline(anjay_t *anjay) {
     return 0;
 }
 
-static int exit_offline_job(anjay_t *anjay, void *dummy) {
+static void exit_offline_job(anjay_t *anjay, void *dummy) {
     (void) dummy;
-    int result = _anjay_schedule_reload_servers(anjay);
-    if (result) {
-        return result;
+    if (!_anjay_schedule_reload_servers(anjay)) {
+        anjay->offline = false;
+        AVS_LIST(anjay_server_info_t) server;
+        AVS_LIST_FOREACH(server, anjay->servers->servers) {
+            if (_anjay_server_active(server)) {
+                server->data_active.udp_connection.needs_reconnect = true;
+            }
+        }
     }
-    anjay->offline = false;
-    AVS_LIST(anjay_active_server_info_t) server;
-    AVS_LIST_FOREACH(server, anjay->servers.active) {
-        server->udp_connection.needs_reconnect = true;
-    }
-    return 0;
 }
 
 int anjay_exit_offline(anjay_t *anjay) {
