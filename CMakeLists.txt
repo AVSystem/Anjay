@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.9.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.9.1" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -777,6 +777,21 @@ endif()
 cmake_dependent_option(WITH_STATIC_ANALYSIS "Perform static analysis of the codebase on `make check`" OFF WITH_TEST OFF)
 if(WITH_STATIC_ANALYSIS)
     find_program(SCAN_BUILD_BINARY scan-build)
+    if(NOT SCAN_BUILD_BINARY)
+        # some systems only have scan-build-x.y, where x.y is the version of LLVM
+        # let's try that
+        find_program(CLANG_BINARY clang)
+        if(CLANG_BINARY)
+            anjay_temp_name(_fname)
+            file(WRITE ${_fname} "__clang_major__ __clang_minor__")
+            execute_process(COMMAND "${CLANG_BINARY}" -E -P -x c ${_fname}
+                            OUTPUT_VARIABLE CLANG_VERSION_OUTPUT
+                            OUTPUT_STRIP_TRAILING_WHITESPACE)
+            file(REMOVE ${_fname})
+            string(REPLACE " " "." CLANG_VERSION_OUTPUT "${CLANG_VERSION_OUTPUT}")
+            find_program(SCAN_BUILD_BINARY "scan-build-${CLANG_VERSION_OUTPUT}")
+        endif()
+    endif()
     if(NOT SCAN_BUILD_BINARY)
         message(FATAL_ERROR "scan-build not found; specify path with -DSCAN_BUILD_BINARY or disable static analysis with -DWITH_STATIC_ANALYSIS=OFF")
     else()

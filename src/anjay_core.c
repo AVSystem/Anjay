@@ -179,7 +179,12 @@ void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay) {
 static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     anjay_log(TRACE, "deleting anjay object");
 
+    // we want to clear this now so that notifications won't be sent during
+    // _anjay_sched_delete()
+    _anjay_observe_cleanup(&anjay->observe, anjay->sched);
+
     _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
+    _anjay_sched_del(anjay->sched, &anjay->scheduled_notify.handle);
     _anjay_sched_delete(&anjay->sched);
 
 #ifdef WITH_DOWNLOADER
@@ -190,13 +195,15 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     if (deregister) {
         _anjay_servers_deregister(anjay);
     }
+    // Note: this MUST NOT be called before _anjay_sched_del(), because
+    // it free()s anjay->servers, which might be used without null-guards in
+    // scheduled jobs
     _anjay_servers_cleanup(anjay);
 
     assert(avs_stream_net_getsock(anjay->comm_stream) == NULL);
     avs_stream_cleanup(&anjay->comm_stream);
 
     _anjay_dm_cleanup(anjay);
-    _anjay_observe_cleanup(&anjay->observe, anjay->sched);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
 
     free(anjay->in_buffer);

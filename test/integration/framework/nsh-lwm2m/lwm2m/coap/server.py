@@ -241,7 +241,7 @@ class DtlsServer(Server):
         if use_psk:
             security = PskSecurity(psk_key, psk_identity)
         elif use_certs:
-            security = CertSecrity(ca_path, ca_file, crt_file, key_file)
+            security = CertSecurity(ca_path, ca_file, crt_file, key_file)
         else:
             raise ValueError("Neither PSK nor Certificates were configured for use with DTLS")
 
