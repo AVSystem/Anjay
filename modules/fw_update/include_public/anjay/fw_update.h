@@ -327,11 +327,16 @@ typedef const char *anjay_fw_update_get_version_t(void *user_ptr);
  *
  * @returns The callback shall return a negative value if it can be determined
  *          without a reboot that the firmware upgrade cannot be successfully
- *          performed. If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> values is
- *          returned, an equivalent value will be set in the Update Result
- *          Resource. If an update is to be attempted, it shall either return 0
- *          or perform a reboot internally without returning. In either case,
- *          a reboot or at least a reinitialization of the library is then
+ *          performed.
+ *
+ *          If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> values is returned, an
+ *          equivalent value will be set in the Update Result Resource.
+ *          Otherwise, if a non-zero value is returned, the Update Result
+ *          Resource is set to generic "Firmware update failed" code.
+ *
+ *          If an update is to be attempted, it shall either return 0 or
+ *          perform a reboot internally without returning. In either case, a
+ *          reboot or at least a reinitialization of the library is then
  *          required to pass the update result.
  */
 typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);

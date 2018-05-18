@@ -75,6 +75,7 @@ static void send_update_args_decode(anjay_ssid_t *out_ssid,
      * int32_t variable with value of unit. */
     const int32_t s_out_socket_needs = *out_socket_needs;
     assert(s_out_socket_needs >= 0 && *out_socket_needs < _SOCKET_NEEDS_LIMIT);
+    (void) s_out_socket_needs;
 }
 
 static anjay_sched_retryable_result_t
