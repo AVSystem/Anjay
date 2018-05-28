@@ -351,7 +351,7 @@ static int append_iid(anjay_t *anjay,
     }
     *new_element = iid;
     AVS_LIST_INSERT(*iids_append_ptr, new_element);
-    *iids_append_ptr = AVS_LIST_NEXT_PTR(*iids_append_ptr);
+    AVS_LIST_ADVANCE_PTR(iids_append_ptr);
     return 0;
 }
 

@@ -93,6 +93,7 @@ bool _anjay_can_retry_with_normal_server(anjay_t *anjay) {
     return false;
 }
 
+#ifdef WITH_BOOTSTRAP
 static bool should_retry_bootstrap(anjay_t *anjay) {
     if (anjay->bootstrap.in_progress) {
         // Bootstrap already in progress, no need to retry
@@ -113,6 +114,9 @@ static bool should_retry_bootstrap(anjay_t *anjay) {
     return bootstrap_server_found
             && !_anjay_can_retry_with_normal_server(anjay);
 }
+#else // WITH_BOOTSTRAP
+# define should_retry_bootstrap(...) false
+#endif // WITH_BOOTSTRAP
 
 bool anjay_all_connections_failed(anjay_t *anjay) {
     if (!anjay->servers->servers) {

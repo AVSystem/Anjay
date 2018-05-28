@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <assert.h>
-#include <time.h>
-
 #include "../objects.h"
 #include "../demo_utils.h"
+
+#include <assert.h>
+#include <time.h>
 
 #include <anjay/stats.h>
 

@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
+#include "../objects.h"
+#include "../demo_utils.h"
+
 #include <sys/param.h>
 
 #include <assert.h>
 #include <string.h>
 #include <unistd.h>
-
-#include "../objects.h"
-#include "../demo_utils.h"
 
 #define DEV_RES_MANUFACTURER 0                  // string
 #define DEV_RES_MODEL_NUMBER 1                  // string

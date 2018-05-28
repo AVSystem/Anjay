@@ -14,23 +14,22 @@
  * limitations under the License.
  */
 
+#include "demo.h"
+#include "demo_utils.h"
+#include "iosched.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-#include <poll.h>
-
 #include <avsystem/commons/list.h>
-
-#include "iosched.h"
-#include "demo_utils.h"
 
 typedef struct iosched_instant_entry {
     iosched_handler_t *handler;
 } iosched_instant_entry_t;
 
 typedef struct iosched_poll_entry {
-    int fd;
+    demo_fd_t fd;
     short events;
     iosched_poll_handler_t *handler;
 } iosched_poll_entry_t;
@@ -85,12 +84,12 @@ static void insert_entry(iosched_t *sched,
 }
 
 const iosched_entry_t *iosched_poll_entry_new(iosched_t *sched,
-                                              int fd,
+                                              demo_fd_t fd,
                                               short events,
                                               iosched_poll_handler_t *handler,
                                               void *arg,
                                               iosched_free_arg_t *free_arg) {
-    if (fd < 0 || !events || !handler) {
+    if (fd == (demo_fd_t) -1 || !events || !handler) {
         return NULL;
     }
 

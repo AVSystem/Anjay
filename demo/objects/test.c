@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
+#include "../demo.h"
+#include "../demo_utils.h"
+#include "../objects.h"
+
 #include <string.h>
 #include <assert.h>
-// for htonl
-#include <arpa/inet.h>
-
-#include "../objects.h"
-#include "../demo_utils.h"
 
 #include <avsystem/commons/vector.h>
 

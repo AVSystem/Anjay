@@ -31,7 +31,7 @@ typedef struct {
     Name = security_test_env_create();
 
 static security_test_env_t *
-security_test_env_create() {
+security_test_env_create(void) {
     security_test_env_t *env = (__typeof__(env)) calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
     env->anjay = anjay_new(&CONFIG);

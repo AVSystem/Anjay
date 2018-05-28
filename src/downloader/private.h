@@ -26,7 +26,7 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-#define dl_log(...) avs_log(downloader, __VA_ARGS__)
+#define dl_log(...) _anjay_log(downloader, __VA_ARGS__)
 
 typedef struct {
     avs_net_abstract_socket_t *(*get_socket)(anjay_downloader_t *dl,

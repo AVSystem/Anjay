@@ -147,7 +147,7 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
         avs_net_abstract_socket_t *udp_socket =
                 get_online_connection_socket(server, ANJAY_CONNECTION_UDP);
         if (udp_socket && !add_socket_onto_list(tail_ptr, udp_socket)) {
-            tail_ptr = AVS_LIST_NEXT_PTR(tail_ptr);
+            AVS_LIST_ADVANCE_PTR(&tail_ptr);
         }
 
         if (get_online_connection_socket(server, ANJAY_CONNECTION_SMS)) {

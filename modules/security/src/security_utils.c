@@ -177,7 +177,7 @@ AVS_LIST(sec_instance_t) _anjay_sec_clone_instances(const sec_repr_t *repr) {
                 _anjay_sec_destroy_instances(&retval);
                 return NULL;
             }
-            last = AVS_LIST_NEXT_PTR(last);
+            AVS_LIST_ADVANCE_PTR(&last);
         }
     }
     return retval;

@@ -30,10 +30,13 @@ set(SOURCES
     objects/device.c
     objects/ext_dev_info.c
     objects/geopoints.c
-    objects/ip_ping.c
     objects/location.c
     objects/portfolio.c
     objects/test.c)
+
+if(NOT WIN32)
+    set(SOURCES ${SOURCES} objects/ip_ping.c)
+endif()
 
 set(HEADERS
     firmware_update.h
@@ -63,4 +66,3 @@ add_custom_target(demo_firmware
                           -i ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
                           -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo.fw-pkg
                   DEPENDS demo)
-

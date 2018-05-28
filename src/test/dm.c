@@ -1844,7 +1844,7 @@ AVS_UNIT_TEST(dm_delete, failure) {
     DM_TEST_FINISH;
 }
 
-static int succeed(void) {
+static int succeed() {
     return 0;
 }
 
@@ -1856,7 +1856,7 @@ static int mock_get_id(anjay_input_ctx_t *in_ctx,
     return 0;
 }
 
-static int fail(void) {
+static int fail() {
     AVS_UNIT_ASSERT_TRUE(false);
     return -1;
 }

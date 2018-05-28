@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include "../objects.h"
+#include "../demo_utils.h"
+
 #include <assert.h>
 #include <inttypes.h>
 #include <string.h>
-
-#include "../objects.h"
-#include "../demo_utils.h"
 
 typedef enum {
     CS_SMS_TX_COUNTER       = 0,
@@ -264,4 +264,3 @@ void cs_object_release(const anjay_dm_object_def_t **def) {
         free(get_cs(def));
     }
 }
-

@@ -194,7 +194,7 @@ _anjay_copy_string_list(AVS_LIST(const anjay_string_t) input) {
         }
 
         memcpy((char *) (intptr_t) (*outptr)->c_str, input->c_str, len);
-        outptr = AVS_LIST_NEXT_PTR(outptr);
+        AVS_LIST_ADVANCE_PTR(&outptr);
     }
     return output;
 }
@@ -218,7 +218,7 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
         }
 
         memcpy((char *) (intptr_t) (*strings_list_endptr)->c_str, str, len);
-        strings_list_endptr = AVS_LIST_NEXT_PTR(strings_list_endptr);
+        AVS_LIST_ADVANCE_PTR(&strings_list_endptr);
         str = va_arg(list, const char *);
     }
 

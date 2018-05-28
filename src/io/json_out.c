@@ -22,7 +22,6 @@
 
 
 #include <avsystem/commons/list.h>
-#include <avsystem/commons/log.h>
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/utils.h>
 
@@ -32,7 +31,7 @@
 #include "base64_out.h"
 #include "vtable.h"
 
-#define json_log(level, ...) avs_log(json, level, __VA_ARGS__)
+#define json_log(level, ...) _anjay_log(json, level, __VA_ARGS__)
 
 VISIBILITY_SOURCE_BEGIN
 

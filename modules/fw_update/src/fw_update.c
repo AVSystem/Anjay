@@ -25,14 +25,14 @@
 #include <anjay_modules/downloader.h>
 #include <anjay_modules/io_utils.h>
 #include <anjay_modules/sched.h>
+#include <anjay_modules/utils_core.h>
 
 #include <avsystem/commons/errno.h>
-#include <avsystem/commons/log.h>
 #include <avsystem/commons/utils.h>
 
 VISIBILITY_SOURCE_BEGIN
 
-#define fw_log(level, ...) avs_log(fw_update, level, __VA_ARGS__)
+#define fw_log(level, ...) _anjay_log(fw_update, level, __VA_ARGS__)
 
 #define FW_OID 5
 
@@ -491,7 +491,7 @@ static int write_firmware_to_stream(anjay_t *anjay,
     // resource or setting it to an empty value.
     *out_is_reset_request = (written == 1 && first_byte == '\0');
 
-    fw_log(INFO, "write finished, %zu B written", written);
+    fw_log(INFO, "write finished, %lu B written", (unsigned long) written);
     return 0;
 }
 
@@ -730,6 +730,7 @@ initialize_fw_repr(anjay_t *anjay,
         repr->state = UPDATE_STATE_DOWNLOADED;
         return 0;
     case ANJAY_FW_UPDATE_INITIAL_DOWNLOADING: {
+#ifdef WITH_DOWNLOADER
         repr->user_state.state = UPDATE_STATE_DOWNLOADING;
         size_t resume_offset = initial_state->resume_offset;
         if (resume_offset > 0 && !initial_state->resume_etag) {
@@ -754,6 +755,10 @@ initialize_fw_repr(anjay_t *anjay,
                 fw_log(WARNING, "Could not retry firmware download");
             }
         }
+#else // WITH_DOWNLOADER
+        fw_log(WARNING,
+               "Unable to resume download: PULL download not supported");
+#endif // WITH_DOWNLOADER
         return 0;
     }
     case ANJAY_FW_UPDATE_INITIAL_NEUTRAL:

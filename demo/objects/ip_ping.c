@@ -18,14 +18,14 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#include "../demo.h"
+#include "../demo_utils.h"
+#include "../iosched.h"
+#include "../objects.h"
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include <poll.h>
-
-#include "../objects.h"
-#include "../iosched.h"
-#include "../demo_utils.h"
 
 #include <avsystem/commons/utils.h>
 

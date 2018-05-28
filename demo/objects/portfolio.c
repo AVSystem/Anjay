@@ -24,6 +24,8 @@
  * may be used to authenticate and to protect privacy of data contained in
  * those extensions. In addition, a service of data encryption is also defined
  */
+#include "../objects.h"
+
 #include <assert.h>
 #include <stdbool.h>
 #include <string.h>
@@ -31,8 +33,6 @@
 #include <anjay/anjay.h>
 #include <avsystem/commons/defs.h>
 #include <avsystem/commons/list.h>
-
-#include "../objects.h"
 
 /**
  * Identity: RW, Multiple, Mandatory

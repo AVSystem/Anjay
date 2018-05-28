@@ -446,7 +446,7 @@ int _anjay_dm_transaction_include_object(
         if (result) {
             // transaction_begin may have added new entries
             while (*it != new_entry) {
-                it = AVS_LIST_NEXT_PTR(it);
+                AVS_LIST_ADVANCE_PTR(&it);
             }
             AVS_LIST_DELETE(it);
             return result;

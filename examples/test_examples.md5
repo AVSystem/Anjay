@@ -6,8 +6,8 @@ fcd552eb4762e9a7494711473f63cc89	examples/tutorial/AT4/src/main.c
 366e0ae7aee049abff79f1ec51f75794	examples/tutorial/BT2/src/main.c
 39dd2aa07c93ea19857f9235fc0f3647	examples/tutorial/BT3/src/main.c
 2cad8e9cc582bffdccc1b73b2cc96297	examples/tutorial/custom-object/bootstrap-awareness/src/main.c
-68ff614ccd5e84680fceb660e89c643b	examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
-b94c68088be5371ed25866e720830261	examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
+a703ad069de234b385ea85dd6efcf9ee	examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
+db511f8976bc292ba624cfe89dfdb7cc	examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
 b4d5403329a643a30dff944bdec2dcd3	examples/tutorial/custom-object/notifications/src/main.c
 0b0f833fa66eb8ffd61032491e7c8355	examples/tutorial/custom-object/read-only-multiple-fixed/src/main.c
 e07b7e7f9f4b8b8c371fdde28e9a1ff4	examples/tutorial/custom-object/read-only-with-executable/src/main.c

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <stdio.h>
-#include <assert.h>
-
 #include "../objects.h"
 #include "../demo_utils.h"
+
+#include <stdio.h>
+#include <assert.h>
 
 #define APNCP_RES_PROFILE_NAME 0                            // string
 #define APNCP_RES_APN 1                                     // string

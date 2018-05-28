@@ -349,11 +349,11 @@ static void remove_attrs_for_servers_not_on_list(anjay_attr_storage_t *fas,
             remove_attrs_entry(fas, attrs_ptr);
         } else {
             while (ssid_ptr && *get_ssid_ptr(*attrs_ptr) > *ssid_ptr) {
-                ssid_ptr = AVS_LIST_NEXT(ssid_ptr);
+                AVS_LIST_ADVANCE(&ssid_ptr);
             }
             if (ssid_ptr && *get_ssid_ptr(*attrs_ptr) == *ssid_ptr) {
-                ssid_ptr = AVS_LIST_NEXT(ssid_ptr);
-                attrs_ptr = AVS_LIST_NEXT_PTR(attrs_ptr);
+                AVS_LIST_ADVANCE(&ssid_ptr);
+                AVS_LIST_ADVANCE_PTR(&attrs_ptr);
             }
         }
     }
@@ -434,11 +434,11 @@ void _anjay_attr_storage_remove_instances_not_on_sorted_list(
             remove_instance_entry(fas, instance_ptr);
         } else {
             while (iid && (*instance_ptr)->iid > *iid) {
-                iid = AVS_LIST_NEXT(iid);
+                AVS_LIST_ADVANCE(&iid);
             }
             if (iid && (*instance_ptr)->iid == *iid) {
-                iid = AVS_LIST_NEXT(iid);
-                instance_ptr = AVS_LIST_NEXT_PTR(instance_ptr);
+                AVS_LIST_ADVANCE(&iid);
+                AVS_LIST_ADVANCE_PTR(&instance_ptr);
             }
         }
     }

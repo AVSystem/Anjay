@@ -202,7 +202,7 @@ static int block_store_critical_options(AVS_LIST(coap_block_optbuf_t) *out,
         (*outptr)->length = length;
         memcpy((*outptr)->content, avs_coap_opt_value(optit.curr_opt),
                 length);
-        outptr = AVS_LIST_NEXT_PTR(outptr);
+        AVS_LIST_ADVANCE_PTR(&outptr);
     }
     return 0;
 err:
@@ -386,7 +386,7 @@ static int block_validate_critical_options(AVS_LIST(coap_block_optbuf_t) opts,
                       optbuf->optnum, optbuf->length, optnum, length);
             return -1;
         }
-        optbuf = AVS_LIST_NEXT(optbuf);
+        AVS_LIST_ADVANCE(&optbuf);
     }
     if (optbuf) {
         anjay_log(DEBUG, BVCO_LOG_MSG "expected " BVCO_LOG_OPT "; got end",
@@ -642,7 +642,6 @@ int _anjay_coap_server_read(coap_server_t *server,
             // different responses to the same server request, which is quite
             // disastrous.
 #else
-            (void) socket;
             coap_log(ERROR, "block: Block1 requests not supported");
             return -1;
 #endif

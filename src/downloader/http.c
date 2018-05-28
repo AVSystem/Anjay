@@ -49,12 +49,12 @@ typedef struct {
 } anjay_http_download_ctx_t;
 
 static int read_start_byte_from_content_range(const char *content_range,
-                                              size_t *out_start_byte) {
-    size_t end_byte;
+                                              uint64_t *out_start_byte) {
+    uint64_t end_byte;
     long long complete_length;
     int after_slash = 0;
     if (avs_match_token(&content_range, "bytes", AVS_SPACES)
-            || sscanf(content_range, "%zu-%zu/%n",
+            || sscanf(content_range, "%" SCNu64 "-%" SCNu64 "/%n",
                       out_start_byte, &end_byte, &after_slash) < 2
             || after_slash <= 0) {
         return -1;
@@ -62,7 +62,8 @@ static int read_start_byte_from_content_range(const char *content_range,
     return (strcmp(&content_range[after_slash], "*") == 0
             || (!_anjay_safe_strtoll(&content_range[after_slash],
                                      &complete_length)
-                    && (size_t) (complete_length - 1) == end_byte)) ? 0 : -1;
+                    && complete_length >= 1
+                    && (uint64_t) (complete_length - 1) == end_byte)) ? 0 : -1;
 }
 
 static anjay_etag_t *read_etag(const char *text) {
@@ -122,8 +123,8 @@ static void send_request(anjay_t *anjay, void *id_) {
     // see docs on UINT_STR_BUF_SIZE in Commons for details on this formula
     char range[sizeof("bytes=-") + (12 * sizeof(size_t)) / 5 + 1];
     if (ctx->bytes_written > 0) {
-        if (avs_simple_snprintf(range, sizeof(range), "bytes=%zu-",
-                                ctx->bytes_written) < 0
+        if (avs_simple_snprintf(range, sizeof(range), "bytes=%lu-",
+                                (unsigned long) ctx->bytes_written) < 0
                 || avs_http_add_header(ctx->stream, "Range", range)) {
             dl_log(ERROR, "Could not resume HTTP download: "
                           "could not send Range header");
@@ -145,13 +146,14 @@ static void send_request(anjay_t *anjay, void *id_) {
     AVS_LIST(const avs_http_header_t) it;
     AVS_LIST_FOREACH(it, received_headers) {
         if (avs_strcasecmp(it->key, "Content-Range") == 0) {
-            if (read_start_byte_from_content_range(it->value,
-                                                   &ctx->bytes_downloaded)
-                    || ctx->bytes_downloaded > ctx->bytes_written) {
+            uint64_t bytes_downloaded;
+            if (read_start_byte_from_content_range(it->value, &bytes_downloaded)
+                    || bytes_downloaded > ctx->bytes_written) {
                 dl_log(ERROR, "Could not resume HTTP download: "
                               "invalid Content-Range: %s", it->value);
                 goto error;
             }
+            ctx->bytes_downloaded = (size_t) bytes_downloaded;
         } else if (avs_strcasecmp(it->key, "ETag") == 0) {
             if (ctx->etag) {
                 if (!etag_matches(ctx->etag, it->value)) {

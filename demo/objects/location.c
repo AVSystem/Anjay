@@ -18,13 +18,13 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#include "../objects.h"
+#include "../demo_utils.h"
+
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "../objects.h"
-#include "../demo_utils.h"
 
 #include <avsystem/commons/utils.h>
 
@@ -257,17 +257,16 @@ static int update_location_csv(location_t *location) {
         return 0;
     }
 
-    int result;
-    char *line = NULL;
-    size_t n = 0;
-    do {
-        ssize_t length = getline(&line, &n, location->csv);
-        result = -1;
-        if (length >= 0) {
-            result = try_parse_location_line(location, line, (size_t) length);
+    int result = 0;
+    while (!feof(location->csv) && result == 0) {
+        char line[256];
+        if (fgets(line, sizeof(line), location->csv)) {
+            size_t length = strlen(line);
+            result = try_parse_location_line(location, line, length);
+        } else if (ferror(location->csv)) {
+            result = -1;
         }
-    } while (result == 0);
-    free(line);
+    }
 
     if (result < 0) {
         demo_log(ERROR, "Could not read data from CSV, "

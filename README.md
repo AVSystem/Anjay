@@ -22,6 +22,7 @@ The project has been created and is actively maintained by [AVSystem](https://ww
     * [Ubuntu 16.04 LTS](#ubuntu-1604-lts)
     * [CentOS 7](#centos-7)
     * [macOS Sierra with Homebrew](#macos-sierra-with-homebrewhttpsbrewsh)
+    * [Windows](#windows)
   * [Running the demo client](#running-the-demo-client)
   * [Detailed compilation guide](#detailed-compilation-guide)
 * [License](#license)
@@ -139,6 +140,10 @@ brew install cmake mbedtls
 brew install python3 openssl llvm
 pip3 install cryptography sphinx sphinx_rtd_theme
 ```
+
+#### Windows
+
+Windows support is currently in a preliminary stage. See [README.Windows.md](README.Windows.md) for details.
 
 ### Running the demo client
 

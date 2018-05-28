@@ -125,7 +125,7 @@ static int restore_instances(anjay_t *anjay,
         }
         *entry = instance;
         AVS_LIST_INSERT(tail, entry);
-        tail = AVS_LIST_NEXT_PTR(tail);
+        AVS_LIST_ADVANCE_PTR(&tail);
     }
     return 0;
 }

@@ -141,8 +141,8 @@ static int request_coap_block(anjay_downloader_t *dl,
     required_storage_size = avs_coap_msg_info_get_packet_storage_size(&info, 0);
     if (required_storage_size > anjay->out_buffer_size) {
         dl_log(ERROR, "CoAP output buffer too small to hold download request "
-                      "(at least %zu bytes is needed)",
-               required_storage_size);
+                      "(at least %lu bytes is needed)",
+               (unsigned long) required_storage_size);
         goto finish;
     }
     avs_coap_msg_builder_t builder;
@@ -210,8 +210,9 @@ static int request_next_coap_block(anjay_downloader_t *dl,
     int result;
     if ((result = request_coap_block(dl, ctx))
             || (result = schedule_coap_retransmission(dl, ctx))) {
-        dl_log(WARNING, "could not request block starting at %zu for download "
-               "id = %" PRIuPTR, ctx->bytes_downloaded, ctx->common.id);
+        dl_log(WARNING, "could not request block starting at %lu "
+                        "for download id = %" PRIuPTR,
+               (unsigned long) ctx->bytes_downloaded, ctx->common.id);
         _anjay_downloader_abort_transfer(dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED,
                                          map_coap_ctx_err_to_errno(result));
         return -1;
@@ -312,22 +313,24 @@ static int parse_coap_response(const avs_coap_msg_t *msg,
     const size_t obtained_offset = out_block2->seq_num * out_block2->size;
     if (expected_offset != obtained_offset) {
         dl_log(DEBUG,
-               "expected to get data from offset %zu but got %zu instead",
-               expected_offset, obtained_offset);
+               "expected to get data from offset %lu but got %lu instead",
+               (unsigned long) expected_offset,
+               (unsigned long) obtained_offset);
         return -1;
     }
 
     if (out_block2->size > ctx->block_size) {
-        dl_log(DEBUG, "block size renegotiation failed: requested %zu, got %zu",
-               ctx->block_size, (size_t)out_block2->size);
+        dl_log(DEBUG,
+               "block size renegotiation failed: requested %lu, got %" PRIu16,
+               (unsigned long) ctx->block_size, out_block2->size);
         return -1;
     } else if (out_block2->size < ctx->block_size) {
         // Allow late block size renegotiation, as we may be in the middle of
         // a download resumption, in which case we have no idea what block size
         // is appropriate. If it is not the case, and the server decided to send
         // us smaller blocks instead, it won't hurt us to get them anyway.
-        dl_log(DEBUG, "block size renegotiated: %zu -> %zu",
-               (size_t) ctx->block_size, (size_t) out_block2->size);
+        dl_log(DEBUG, "block size renegotiated: %lu -> %" PRIu16,
+               (unsigned long) ctx->block_size, out_block2->size);
         ctx->block_size = out_block2->size;
     }
 
@@ -389,8 +392,8 @@ static void handle_coap_response(const avs_coap_msg_t *msg,
         dl_log(INFO, "transfer id = %" PRIuPTR " finished", ctx->common.id);
         _anjay_downloader_abort_transfer(dl, ctx_ptr, 0, 0);
     } else if (!request_next_coap_block(dl, ctx_ptr)) {
-        dl_log(TRACE, "transfer id = %" PRIuPTR ": %zu B downloaded",
-               ctx->common.id, ctx->bytes_downloaded);
+        dl_log(TRACE, "transfer id = %" PRIuPTR ": %lu B downloaded",
+               ctx->common.id, (unsigned long) ctx->bytes_downloaded);
     }
 }
 
@@ -504,8 +507,8 @@ static size_t get_max_acceptable_block_size(size_t in_buffer_size) {
         block_size = AVS_COAP_MSG_BLOCK_MAX_SIZE;
     }
 
-    dl_log(TRACE, "input buffer size: %zu; max acceptable block size: %zu",
-           in_buffer_size, block_size);
+    dl_log(TRACE, "input buffer size: %lu; max acceptable block size: %lu",
+           (unsigned long) in_buffer_size, (unsigned long) block_size);
     return block_size;
 }
 

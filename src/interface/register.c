@@ -248,7 +248,7 @@ static int query_dm_instance(anjay_t *anjay,
         return -1;
     }
     AVS_LIST_INSERT(*cache_instance_insert_ptr, new_instance);
-    *cache_instance_insert_ptr = AVS_LIST_NEXT_PTR(*cache_instance_insert_ptr);
+    AVS_LIST_ADVANCE_PTR(cache_instance_insert_ptr);
 
     *new_instance = iid;
     return 0;
@@ -286,7 +286,7 @@ static int query_dm_object(anjay_t *anjay,
         return -1;
     }
     AVS_LIST_INSERT(*cache_object_insert_ptr, new_object);
-    *cache_object_insert_ptr = AVS_LIST_NEXT_PTR(*cache_object_insert_ptr);
+    AVS_LIST_ADVANCE_PTR(cache_object_insert_ptr);
 
     new_object->oid = (*obj)->oid;
     if ((*obj)->version
@@ -407,8 +407,8 @@ static bool iid_lists_equal(AVS_LIST(anjay_iid_t) left,
         if (*left != *right) {
             return false;
         }
-        left = AVS_LIST_NEXT(left);
-        right = AVS_LIST_NEXT(right);
+        AVS_LIST_ADVANCE(&left);
+        AVS_LIST_ADVANCE(&right);
     }
     return !(left || right);
 }
@@ -421,8 +421,8 @@ static bool dm_caches_equal(AVS_LIST(anjay_dm_cache_object_t) left,
                 || !iid_lists_equal(left->instances, right->instances)) {
             return false;
         }
-        left = AVS_LIST_NEXT(left);
-        right = AVS_LIST_NEXT(right);
+        AVS_LIST_ADVANCE(&left);
+        AVS_LIST_ADVANCE(&right);
     }
     return !(left || right);
 }

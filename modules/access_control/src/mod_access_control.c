@@ -51,7 +51,7 @@ int _anjay_access_control_clone_state(access_control_state_t *dest,
             goto error;
         }
         AVS_LIST_INSERT(dest_tail, dest_inst);
-        dest_tail = AVS_LIST_NEXT_PTR(dest_tail);
+        AVS_LIST_ADVANCE_PTR(&dest_tail);
         *dest_inst = *src_inst;
         dest_inst->acl = NULL;
         AVS_LIST(acl_entry_t) *dest_acl_tail = &dest_inst->acl;
@@ -62,7 +62,7 @@ int _anjay_access_control_clone_state(access_control_state_t *dest,
                 goto error;
             }
             AVS_LIST_INSERT(dest_acl_tail, dest_acl);
-            dest_acl_tail = AVS_LIST_NEXT_PTR(dest_acl_tail);
+            AVS_LIST_ADVANCE_PTR(&dest_acl_tail);
             *dest_acl = *src_acl;
         }
     }
@@ -154,7 +154,7 @@ int _anjay_access_control_add_instances_without_iids(
         // proposed_iid cannot possibly be GREATER than (*insert_ptr)->iid
         assert(proposed_iid == (*insert_ptr)->iid);
         ++proposed_iid;
-        insert_ptr = AVS_LIST_NEXT_PTR(insert_ptr);
+        AVS_LIST_ADVANCE_PTR(&insert_ptr);
     }
 
     if (*instances_to_move) {

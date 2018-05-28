@@ -105,7 +105,8 @@ error:
 }
 
 int open_temporary_file(char *path) {
-    mode_t old_umask = umask(S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+    mode_t old_umask = (mode_t) umask(
+            S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
     int fd = mkstemp(path);
     umask(old_umask);
     return fd;

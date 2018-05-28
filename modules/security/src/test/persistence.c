@@ -40,7 +40,7 @@ typedef struct {
     Name = security_persistence_test_env_create();
 
 static security_persistence_test_env_t *
-security_persistence_test_env_create() {
+security_persistence_test_env_create(void) {
     security_persistence_test_env_t *env =
             (__typeof__(env)) calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);

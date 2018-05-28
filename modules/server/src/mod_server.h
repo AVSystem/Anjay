@@ -21,7 +21,7 @@
 #include <anjay/core.h>
 #include <anjay/server.h>
 
-#include <avsystem/commons/log.h>
+#include <anjay_modules/utils_core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -63,7 +63,7 @@ static inline void clear_modified(server_repr_t *repr) {
     repr->modified_since_persist = false;
 }
 
-#define server_log(level, ...) avs_log(server, level, __VA_ARGS__)
+#define server_log(level, ...) _anjay_log(server, level, __VA_ARGS__)
 
 VISIBILITY_PRIVATE_HEADER_END
 

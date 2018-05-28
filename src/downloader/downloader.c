@@ -188,6 +188,7 @@ int _anjay_downloader_handle_packet(anjay_downloader_t *dl,
     return 0;
 }
 
+#if defined(WITH_HTTP_DOWNLOAD) || defined(WITH_BLOCK_DOWNLOAD)
 static uintptr_t find_free_id(anjay_downloader_t *dl) {
     uintptr_t id;
 
@@ -208,6 +209,7 @@ static uintptr_t find_free_id(anjay_downloader_t *dl) {
 static bool starts_with(const char *haystack, const char *needle) {
     return avs_strncasecmp(haystack, needle, strlen(needle)) == 0;
 }
+#endif // WITH_HTTP_DOWNLOAD || WITH_BLOCK_DOWNLOAD
 
 anjay_downloader_protocol_class_t
 _anjay_downloader_classify_protocol(const char *proto) {
@@ -227,6 +229,7 @@ _anjay_downloader_classify_protocol(const char *proto) {
         return ANJAY_DOWNLOADER_PROTO_ENCRYPTED;
     }
 #endif // WITH_HTTP_DOWNLOAD
+    (void) proto;
     return ANJAY_DOWNLOADER_PROTO_UNSUPPORTED;
 }
 

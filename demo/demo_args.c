@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#include "demo_args.h"
+
 #include <assert.h>
 #include <ctype.h>
 #include <getopt.h>
 #include <string.h>
 #include <inttypes.h>
-
-#include "demo_args.h"
 
 #define DEFAULT_PSK_IDENTITY "sesame"
 #define DEFAULT_PSK_KEY      "password"

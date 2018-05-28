@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+#include "demo.h"
+#include "demo_args.h"
+#include "demo_cmds.h"
+#include "firmware_update.h"
+#include "iosched.h"
+#include "objects.h"
+#include "demo_utils.h"
+
 #include <sys/time.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -21,9 +29,7 @@
 #include <string.h>
 #include <signal.h>
 
-#include <poll.h>
 #include <unistd.h>
-#include <netinet/in.h>
 
 #include <avsystem/commons/stream/stream_file.h>
 
@@ -32,14 +38,6 @@
 #include <anjay/fw_update.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
-
-#include "demo.h"
-#include "demo_args.h"
-#include "demo_cmds.h"
-#include "firmware_update.h"
-#include "iosched.h"
-#include "objects.h"
-#include "demo_utils.h"
 
 char **saved_argv;
 
@@ -298,9 +296,14 @@ static int demo_init(anjay_demo_t *demo,
             || firmware_update_install(demo->anjay, &demo->fw_update,
                                        cmdline_args->fw_updated_marker_path,
                                        fw_security_info_ptr)
+#ifndef _WIN32
             || !iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
                                        POLLIN | POLLHUP,
-                                       demo_command_dispatch, demo, NULL)) {
+                                       demo_command_dispatch, demo, NULL)
+#else // _WIN32
+#warning "TODO: Support stdin somehow on Windows"
+#endif // _WIN32
+            ) {
         return -1;
     }
 
@@ -328,8 +331,10 @@ static int demo_init(anjay_demo_t *demo,
             || install_object(demo, geopoints_object_create(demo),
                               geopoints_notify_time_dependent,
                               geopoints_object_release)
+#ifndef _WIN32
             || install_object(demo, ip_ping_object_create(demo->iosched), NULL,
                               ip_ping_object_release)
+#endif // _WIN32
             || install_object(demo, test_object_create(),
                               test_notify_time_dependent,
                               test_object_release)
@@ -412,7 +417,8 @@ static socket_entry_t *create_socket_entry(anjay_demo_t *demo,
         return NULL;
     }
 
-    const int sys_socket = *(const int*) avs_net_socket_get_system(socket);
+    const demo_fd_t sys_socket =
+            *(const demo_fd_t *) avs_net_socket_get_system(socket);
     entry->demo = demo;
     entry->socket = socket;
     entry->iosched_entry = iosched_poll_entry_new(demo->iosched, sys_socket,
@@ -502,8 +508,9 @@ static void log_handler(avs_log_level_t level,
     char timebuf[128];
     struct timeval now;
     gettimeofday(&now, NULL);
+    time_t seconds = now.tv_sec;
 
-    struct tm *now_tm = localtime(&now.tv_sec);
+    struct tm *now_tm = localtime(&seconds);
     assert(now_tm);
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", now_tm);
 
@@ -519,11 +526,16 @@ static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {
 }
 
 int main(int argc, char *argv[]) {
+#ifndef _WIN32
     // 0 ~ stdin, 1 ~ stdout, 2 ~ stderr; close everything else
     for (int fd = 3, maxfd = (int) sysconf(_SC_OPEN_MAX);
             fd < maxfd; ++fd) {
         close(fd);
     }
+#endif // WIN32
+
+    setbuf(stdout, NULL);
+    setbuf(stderr, NULL);
 
     avs_log_set_handler(log_handler);
     avs_log_set_default_level(AVS_LOG_TRACE);
@@ -537,8 +549,10 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+#ifdef SIGXFSZ
     // do not terminate after exceeding file size
     signal(SIGXFSZ, SIG_IGN);
+#endif // SIGXFSZ
 
     anjay_demo_t *demo = demo_new(&cmdline_args);
     if (!demo) {

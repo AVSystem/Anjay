@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
+#include "../demo.h"
+#include "../objects.h"
+#include "../demo_utils.h"
+
 #include <math.h>
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
-
-#include "../demo.h"
-#include "../objects.h"
-#include "../demo_utils.h"
 
 #define GEOPOINTS_LATITUDE    0 // double, degrees
 #define GEOPOINTS_LONGITUDE   1 // double, degrees

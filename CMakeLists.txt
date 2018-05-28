@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.9.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.9.2" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -84,8 +84,7 @@ endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/PosixFeatures.cmake)
 
-option(WITH_DEMO "Compile DEMO applications" ON)
-option(WITH_LIBRARY_SHARED "Compile Anjay as shared library" ON)
+option(WITH_LIBRARY_SHARED "Compile Anjay as shared library" "${UNIX}")
 cmake_dependent_option(WITH_STATIC_DEPS_LINKED
                        "Directly link shared library with its static dependencies such as avs_commons (e.g. for interpreted language bindings)"
                        OFF WITH_LIBRARY_SHARED OFF)
@@ -106,8 +105,8 @@ option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
 
 
-cmake_dependent_option(WITH_BLOCK_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
-cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF WITH_DOWNLOADER OFF)
+cmake_dependent_option(WITH_BLOCK_DOWNLOAD "Enable support for CoAP(S) downloads" ON "WITH_DOWNLOADER" OFF)
+cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF "WITH_DOWNLOADER" OFF)
 
 option(WITH_AVS_LOG "Enable logging support" ON)
 
@@ -376,7 +375,9 @@ if(WITH_HTTP_DOWNLOAD)
     list(APPEND AVS_COMMONS_COMPONENTS http)
 endif()
 if(WITH_MODULE_attr_storage
-   OR WITH_MODULE_access_control)
+   OR WITH_MODULE_access_control
+   OR WITH_MODULE_security
+   OR WITH_MODULE_server)
     list(APPEND AVS_COMMONS_COMPONENTS persistence)
 endif()
 
@@ -395,7 +396,7 @@ option(WITH_LOCAL_AVS_COMMONS "Use locally installed avs_commons libraries" OFF)
 if(WITH_LOCAL_AVS_COMMONS)
     # WITH_TEST is also defined in Commons
     # it defaults to ON there, but if we have external avs_commons, let's better not depend on avs_unit by default
-    option(WITH_TEST "Enable Anjay tests" OFF)
+    cmake_dependent_option(WITH_TEST "Enable Anjay tests" OFF WITH_AVS_UNIT OFF)
     if(WITH_TEST)
         set(AVS_COMMONS_COMPONENTS ${AVS_COMMONS_COMPONENTS} unit)
 
@@ -519,11 +520,24 @@ anjay_emit_deps(${PROJECT_NAME}_static ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
 
 ################# DEMO #########################################################
 
+set(DEMO_DEPENDENCIES
+    WITH_ACCESS_CONTROL
+    WITH_AVS_LOG
+    WITH_AVS_PERSISTENCE
+    WITH_MODULE_access_control
+    WITH_MODULE_attr_storage
+    WITH_MODULE_fw_update
+    WITH_MODULE_security
+    WITH_MODULE_server)
+
+cmake_dependent_option(WITH_DEMO "Compile DEMO applications" ON "${DEMO_DEPENDENCIES}" OFF)
+
 if(WITH_DEMO)
     find_program(OPENSSL_EXECUTABLE openssl)
     if(OPENSSL_EXECUTABLE)
         if(NOT EXISTS "${ANJAY_BUILD_OUTPUT_DIR}/certs/client.crt.der")
             execute_process(COMMAND
+                            env bash
                             "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-certs.sh"
                             "${ANJAY_BUILD_OUTPUT_DIR}/certs"
                             RESULT_VARIABLE RES)

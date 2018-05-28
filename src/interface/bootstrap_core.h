@@ -56,8 +56,6 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay);
 
 #define _anjay_bootstrap_update_reconnected(anjay) (-1)
 
-#define _anjay_bootstrap_init(anjay) ((void) 0)
-
 #define _anjay_bootstrap_cleanup(anjay) ((void) 0)
 
 #endif

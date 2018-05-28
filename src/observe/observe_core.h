@@ -20,7 +20,6 @@
 #include <avsystem/commons/rbtree.h>
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/stream/stream_outbuf.h>
-#include <avsystem/commons/persistence.h>
 
 #include <anjay_modules/observe.h>
 
@@ -109,7 +108,8 @@ anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
 
 #define _anjay_observe_init(...) 0
 #define _anjay_observe_cleanup(...) ((void) 0)
-#define _anjay_observe_sched_flush_current_connection(...) ((void) 0)
+#define _anjay_observe_sched_flush_current_connection(...) 0
+#define _anjay_observe_sched_flush(...) 0
 #define _anjay_observe_persist(...) 0
 #define _anjay_observe_restore(...) 0
 

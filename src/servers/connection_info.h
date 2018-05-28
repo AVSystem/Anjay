@@ -47,7 +47,7 @@ typedef struct {
      * from a server that has just been deleted by a Bootstrap Server.
      */
     avs_net_abstract_socket_t *conn_socket_;
-#if defined(__GNUC__) \
+#if defined(__GNUC__) && !defined(__CC_ARM) \
         && !(defined(ANJAY_SERVERS_CONNECTION_INFO_C) || defined(ANJAY_TEST))
 #pragma GCC poison conn_socket_
 #endif

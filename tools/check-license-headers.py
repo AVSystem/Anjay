@@ -48,6 +48,7 @@ IGNORE_PATTERNS = list(map(re.compile, [
     '^LICENSE$',
     '^NOTICE$',
     '^README\.md$',
+    '^README\.Windows\.md$',
     '^valgrind_test\.supp$',
     '\.png$'
 ]))

@@ -17,6 +17,9 @@
 #ifndef DEMO_OBJECTS_H
 #define DEMO_OBJECTS_H
 
+#include "iosched.h"
+#include "demo_utils.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -25,9 +28,6 @@
 #include <anjay/access_control.h>
 #include <anjay/server.h>
 #include <anjay/anjay.h>
-
-#include "iosched.h"
-#include "demo_utils.h"
 
 typedef struct anjay_demo_struct anjay_demo_t;
 

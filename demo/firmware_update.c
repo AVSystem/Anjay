@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "demo.h"
+#include "demo_utils.h"
+#include "firmware_update.h"
+
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,15 +27,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <arpa/inet.h>
-
 #include <avsystem/commons/persistence.h>
 
 #include <avsystem/commons/stream/stream_file.h>
 #include <avsystem/commons/utils.h>
-
-#include "demo_utils.h"
-#include "firmware_update.h"
 
 #define FORCE_ERROR_OUT_OF_MEMORY 1
 #define FORCE_ERROR_FAILED_UPDATE 2

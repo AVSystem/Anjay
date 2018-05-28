@@ -449,8 +449,7 @@ static int perform_adds_and_removes(anjay_t *anjay,
             if (!AVS_LIST_INSERT(acs_to_insert_append_ptr, new_instance)) {
                 return -1;
             }
-            acs_to_insert_append_ptr =
-                    AVS_LIST_APPEND_PTR(acs_to_insert_append_ptr);
+            AVS_LIST_ADVANCE_PTR(&acs_to_insert_append_ptr);
         }
     }
     int result = _anjay_access_control_add_instances_without_iids(

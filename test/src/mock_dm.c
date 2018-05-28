@@ -460,7 +460,7 @@ int _anjay_mock_dm_resource_write_attrs(anjay_t *anjay,
     DM_ACTION_RETURN;
 }
 
-static anjay_mock_dm_expected_command_t *new_expected_command() {
+static anjay_mock_dm_expected_command_t *new_expected_command(void) {
     anjay_mock_dm_expected_command_t *new_command =
             AVS_LIST_NEW_ELEMENT(anjay_mock_dm_expected_command_t);
     AVS_UNIT_ASSERT_NOT_NULL(new_command);

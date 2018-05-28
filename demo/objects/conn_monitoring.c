@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <assert.h>
-
 #include "../objects.h"
 #include "../demo_utils.h"
+
+#include <assert.h>
 
 #define CM_RES_NETWORK_BEARER           0 /* int */
 #define CM_RES_AVAILABLE_NETWORK_BEARER 1 /* array<int> */

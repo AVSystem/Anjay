@@ -619,10 +619,8 @@ static int dm_observe(anjay_t *anjay,
     return result;
 }
 #else // WITH_OBSERVE
-#define dm_observe(anjay, obj, details) \
-        (anjay_log(ERROR, "Not supported: Observe %s", \
-                   ANJAY_DEBUG_MAKE_PATH(&details->uri)), \
-                   ANJAY_ERR_NOT_IMPLEMENTED)
+#define dm_observe(...) (anjay_log(ERROR, "Observe support disabled"), \
+                         ANJAY_ERR_BAD_OPTION)
 #endif // WITH_OBSERVE
 
 static int dm_read_or_observe(anjay_t *anjay,

@@ -19,17 +19,17 @@
 #include <inttypes.h>
 #include <string.h>
 
-#include <avsystem/commons/log.h>
 #include <avsystem/commons/url.h>
 
 #include <anjay/fw_update.h>
 
 #include <anjay_modules/dm_utils.h>
 #include <anjay_modules/servers.h>
+#include <anjay_modules/utils_core.h>
 
 VISIBILITY_SOURCE_BEGIN
 
-#define fw_log(level, ...) avs_log(fw_update, level, __VA_ARGS__)
+#define fw_log(level, ...) _anjay_log(fw_update, level, __VA_ARGS__)
 
 #define DEFAULT_COAPS_PORT "5684"
 

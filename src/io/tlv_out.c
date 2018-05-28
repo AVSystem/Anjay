@@ -160,7 +160,7 @@ static char *add_buffered_entry(tlv_out_t *ctx, size_t length) {
     new_entry->id = ctx->next_id;
     ctx->next_id.id = -1;
     *ctx->next_entry_ptr = new_entry;
-    ctx->next_entry_ptr = AVS_LIST_NEXT_PTR(ctx->next_entry_ptr);
+    AVS_LIST_ADVANCE_PTR(&ctx->next_entry_ptr);
     return new_entry->data;
 }
 

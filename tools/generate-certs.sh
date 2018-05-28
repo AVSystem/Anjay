@@ -58,7 +58,8 @@ echo "* generating root cert - done"
 for NAME in client server; do
     echo "* generating $NAME cert"
     "$OPENSSL" ecparam -name prime256v1 -genkey -out "${NAME}.key"
-    "$OPENSSL" req -batch -new -subj '/CN=localhost' -key "${NAME}.key" -sha256 -out "${NAME}.csr"
+    # MSYS translates arguments that start with "/" to Windows paths... but /CN= is not a path, so we disable it for this call
+    MSYS2_ARG_CONV_EXCL='*' "$OPENSSL" req -batch -new -subj '/CN=localhost' -key "${NAME}.key" -sha256 -out "${NAME}.csr"
     "$OPENSSL" x509 -sha256 -req -in "${NAME}.csr" -CA root.crt -CAkey root.key -out "${NAME}.crt" -days 9999 -CAcreateserial
     cat "${NAME}.crt" root.crt > "${NAME}-and-root.crt"
     echo "* generating $NAME cert - done"

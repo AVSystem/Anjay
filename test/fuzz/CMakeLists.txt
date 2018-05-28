@@ -48,7 +48,7 @@ foreach(FUZZ_TEST_SOURCE ${FUZZ_TEST_SOURCES})
     string(REPLACE / _ FUZZ_TEST_NAME ${FUZZ_TEST_OUTPUT})
 
     add_executable(${FUZZ_TEST_NAME} ${FUZZ_TEST_SOURCE} ${ABSOLUTE_SOURCES})
-    target_link_libraries(${FUZZ_TEST_NAME} ${PROJECT_NAME})
+    target_link_libraries(${FUZZ_TEST_NAME} ${PROJECT_NAME}_static)
     set_property(TARGET ${FUZZ_TEST_NAME} APPEND PROPERTY COMPILE_DEFINITIONS
                  ANJAY_FUZZ_TEST)
 
