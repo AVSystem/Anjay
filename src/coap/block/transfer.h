@@ -40,7 +40,7 @@ int _anjay_coap_block_transfer_finish(coap_block_transfer_ctx_t *ctx);
 #define _anjay_coap_block_transfer_delete(ctx) ((void) 0)
 
 #define _anjay_coap_block_transfer_finish(ctx) \
-        (assert(0 && "should never happen"), -1)
+        (AVS_UNREACHABLE("should never happen"), -1)
 
 #endif
 

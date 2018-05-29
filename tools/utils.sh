@@ -16,7 +16,7 @@ log() {
     local FG_BOLD="\033[1m"
     local FG_DEFAULT="\033[0m"
 
-    echo -e "${FG_BOLD}$0: ${FUNCNAME[1]}:${FG_DEFAULT} $@" >&2
+    echo -e "$(date) ${FG_BOLD}$0: ${FUNCNAME[1]}:${FG_DEFAULT} $@" >&2
 }
 
 warn() {

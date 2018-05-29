@@ -294,7 +294,7 @@ static inline anjay_rid_t ssid_rid(anjay_oid_t oid) {
     case ANJAY_DM_OID_SERVER:
         return ANJAY_DM_RID_SERVER_SSID;
     default:
-        assert(0 && "Invalid object for Short Server ID query");
+        AVS_UNREACHABLE("Invalid object for Short Server ID query");
     }
     fas_log(ERROR, "Could not get valid RID");
     return (anjay_rid_t) -1;

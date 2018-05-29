@@ -69,7 +69,7 @@ _anjay_coap_block_response_last_request_id(coap_block_transfer_ctx_t *ctx);
 #else
 
 #define _anjay_coap_block_response_last_request_id(...) \
-        (assert(0 && "should never happen"), \
+        (AVS_UNREACHABLE("should never happen"), \
          (avs_coap_msg_identity_t) { .msg_id = 0 })
 
 #endif

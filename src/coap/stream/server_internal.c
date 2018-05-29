@@ -98,8 +98,8 @@ int _anjay_coap_server_setup_response(coap_server_t *server,
         return -1;
     }
 
-    assert(!has_error(server)
-           && "setup_response called with unsent error");
+    AVS_ASSERT(!has_error(server),
+               "setup_response called with unsent error");
     clear_error(server);
 
     if (!_anjay_coap_out_is_reset(&server->common.out)) {
@@ -329,7 +329,7 @@ static int receive_request(coap_server_t *server) {
         return 0;
     }
 
-    assert(0 && "invalid enum value");
+    AVS_UNREACHABLE("invalid enum value");
     return -1;
 }
 
@@ -586,7 +586,7 @@ static int receive_next_block_with_timeout(coap_server_t *server) {
 
         case PROCESS_BLOCK_REJECT_CONTINUE:
         default:
-            assert(0 && "should never happen");
+            AVS_UNREACHABLE("should never happen");
             return -1;
 
         case PROCESS_BLOCK_REJECT_ABORT:

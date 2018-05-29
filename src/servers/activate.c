@@ -239,9 +239,9 @@ void _anjay_servers_add(anjay_servers_t *servers,
             _anjay_servers_find_insert_ptr(servers, server->ssid);
 
     assert(insert_ptr);
-    assert((!*insert_ptr || (*insert_ptr)->ssid != server->ssid)
-           && "attempting to insert a duplicate of an already existing server "
-              "entry");
+    AVS_ASSERT((!*insert_ptr || (*insert_ptr)->ssid != server->ssid),
+               "attempting to insert a duplicate of an already existing server "
+               "entry");
 
     AVS_LIST_INSERT(insert_ptr, server);
 }

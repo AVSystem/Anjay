@@ -95,7 +95,7 @@ static void set_socket_timeout(avs_net_abstract_socket_t *socket,
                                (avs_net_socket_opt_value_t) {
                                    .recv_timeout = timeout
                                })) {
-        assert(0 && "could not set socket recv timeout");
+        AVS_UNREACHABLE("could not set socket recv timeout");
         coap_log(ERROR, "could not set socket recv timeout");
     }
 }
@@ -110,7 +110,7 @@ int _anjay_coap_common_recv_msg_with_timeout(avs_coap_ctx_t *ctx,
     avs_net_socket_opt_value_t original_recv_timeout;
     if (avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
                                &original_recv_timeout)) {
-        assert(0 && "could not get socket recv timeout");
+        AVS_UNREACHABLE("could not get socket recv timeout");
         coap_log(ERROR, "could not get socket recv timeout");
         return -1;
     }

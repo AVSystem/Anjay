@@ -175,7 +175,7 @@ static check_result_t check_response(coap_client_t *client,
         return process_separate_response(client, response);
 
     default:
-        assert(0 && "should never happen");
+        AVS_UNREACHABLE("should never happen");
     }
     coap_log(ERROR, "Invalid response");
     return CHECK_INVALID_RESPONSE;
@@ -208,7 +208,7 @@ static int process_received(const avs_coap_msg_t *response,
         break;
 
     default:
-        assert(0 && "invalid enum value");
+        AVS_UNREACHABLE("invalid enum value");
     }
 
     return (int)result;
@@ -253,7 +253,7 @@ static int accept_response_with_timeout(coap_client_t *client,
         return 0;
 
     default:
-        assert(0 && "should never happen");
+        AVS_UNREACHABLE("should never happen");
         return -1;
     }
 }

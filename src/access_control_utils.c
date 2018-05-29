@@ -250,7 +250,7 @@ bool _anjay_access_control_action_allowed(anjay_t *anjay,
     case ANJAY_ACTION_CANCEL_OBSERVE:
         return true;
     default:
-        assert(0 && "invalid enum value");
+        AVS_UNREACHABLE("invalid enum value");
         return false;
     }
 }

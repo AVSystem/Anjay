@@ -382,8 +382,8 @@ static void extract_device_info(const char *endpoint_name,
         demo_log(WARNING, "empty manufacturer part of endpoint name");
         strncpy(out_manufacturer, "Anjay", sizeof("Anjay"));
     } else {
-        assert((size_t)(dash - at) < manufacturer_size
-                && "manufacturer part of endpoint name too long");
+        AVS_ASSERT((size_t)(dash - at) < manufacturer_size,
+                   "manufacturer part of endpoint name too long");
         (void) manufacturer_size;
         strncpy(out_manufacturer, at, (size_t)(dash - at));
         at = dash + 1;
@@ -395,8 +395,8 @@ static void extract_device_info(const char *endpoint_name,
         demo_log(WARNING, "empty serial number part of endpoint name");
         strncpy(out_serial, "000001", sizeof("000001"));
     } else {
-        assert(serial_length < serial_size
-                && "serial number part of endpoint name too long");
+        AVS_ASSERT(serial_length < serial_size,
+                   "serial number part of endpoint name too long");
         (void) serial_size;
         strncpy(out_serial, at, serial_length);
     }

@@ -235,8 +235,8 @@ static void request_next_coap_block_job(anjay_t *anjay, void *id_) {
 static inline const char *etag_to_string(char *buf,
                                          size_t buf_size,
                                          const anjay_coap_etag_t *etag) {
-    assert(buf_size >= sizeof(etag->value) * 3 + 1
-            && "buffer too small to hold ETag");
+    AVS_ASSERT(buf_size >= sizeof(etag->value) * 3 + 1,
+               "buffer too small to hold ETag");
 
     for (size_t i = 0; i < etag->size; ++i) {
         snprintf(&buf[i * 3], buf_size - i * 3, "%02x ", etag->value[i]);

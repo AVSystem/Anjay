@@ -822,7 +822,7 @@ int _anjay_get_security_info(anjay_t *anjay,
         conn_def = &UDP_CONNECTION;
         break;
     default:
-        assert(0 && "Should never happen");
+        AVS_UNREACHABLE("Should never happen");
         return -1;
     }
 

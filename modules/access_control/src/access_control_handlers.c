@@ -577,7 +577,7 @@ static int add_ssid(AVS_RBTREE(anjay_ssid_t) ssids_list, anjay_ssid_t ssid) {
         }
         *elem = ssid;
         if (AVS_RBTREE_INSERT(ssids_list, elem) != elem) {
-            assert(0 && "Internal error: cannot add tree element");
+            AVS_UNREACHABLE("Internal error: cannot add tree element");
         }
     }
     return 0;

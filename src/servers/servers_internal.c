@@ -241,7 +241,7 @@ anjay_server_info_t *_anjay_servers_find_active(anjay_servers_t *servers,
                                                 anjay_ssid_t ssid) {
     AVS_LIST(anjay_server_info_t) *ptr =
             _anjay_servers_find_ptr(servers, ssid);
-    assert((!ptr || *ptr) && "_anjay_servers_find_ptr broken");
+    AVS_ASSERT((!ptr || *ptr), "_anjay_servers_find_ptr broken");
     return (ptr && *ptr && _anjay_server_active(*ptr)) ? *ptr : NULL;
 }
 

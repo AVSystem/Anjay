@@ -301,7 +301,7 @@ geopoints_instance_reset(anjay_t *anjay,
                          anjay_iid_t iid) {
     (void) anjay;
     geopoint_t *inst = find_instance(get_geopoints(obj_ptr), iid);
-    assert(inst && "could not find instance");
+    AVS_ASSERT(inst, "could not find instance");
     memset(inst, 0, sizeof(geopoint_t));
     inst->iid = iid;
     return 0;

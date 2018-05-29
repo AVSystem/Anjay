@@ -228,7 +228,7 @@ static anjay_id_type_t convert_id_type(uint8_t typefield) {
     tlv_id_type_t tlv_type = (tlv_id_type_t) ((typefield >> 6) & 3);
     switch (tlv_type) {
     default:
-        assert(0 && "Invalid TLV ID type");
+        AVS_UNREACHABLE("Invalid TLV ID type");
     case TLV_ID_IID:
         return ANJAY_ID_IID;
     case TLV_ID_RIID:

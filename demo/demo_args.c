@@ -565,7 +565,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         case 'u': {
-                assert(num_servers < MAX_SERVERS && "Too many servers");
+                AVS_ASSERT(num_servers < MAX_SERVERS, "Too many servers");
                 server_entry_t *entry =
                         &parsed_args->connection_args.servers[num_servers++];
                 entry->uri = optarg;

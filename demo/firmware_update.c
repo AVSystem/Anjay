@@ -78,8 +78,8 @@ static void maybe_delete_firmware_file(fw_update_logic_t *fw) {
 }
 
 void firmware_update_set_package_path(fw_update_logic_t *fw, const char *path) {
-    assert(!fw->stream
-               && "cannot set package path while a download is in progress");
+    AVS_ASSERT(!fw->stream,
+               "cannot set package path while a download is in progress");
     char *new_target_path = avs_strdup(path);
     if (!new_target_path) {
         demo_log(ERROR, "out of memory");

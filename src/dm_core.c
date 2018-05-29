@@ -298,7 +298,7 @@ const char *_anjay_debug_make_path__(char *buffer,
             result = avs_simple_snprintf(buffer, buffer_size, "%s", "/");
         }
         if (result < 0) {
-            assert(0 && "should never happen");
+            AVS_UNREACHABLE("should never happen");
             return "<error>";
         }
 

@@ -373,7 +373,7 @@ static const char *action_to_string(anjay_request_action_t action) {
     case ANJAY_ACTION_CANCEL_OBSERVE:   return "Cancel Observe";
     case ANJAY_ACTION_BOOTSTRAP_FINISH: return "Bootstrap Finish";
     }
-    assert(0 && "invalid enum value");
+    AVS_UNREACHABLE("invalid enum value");
     return "<invalid action>";
 }
 
@@ -751,7 +751,7 @@ _anjay_tx_params_for_conn_type(anjay_t *anjay,
     case ANJAY_CONNECTION_UDP:
         return &anjay->udp_tx_params;
     default:
-        assert(0 && "Should never happen");
+        AVS_UNREACHABLE("Should never happen");
         return NULL;
     }
 }
@@ -877,7 +877,7 @@ void anjay_download_abort(anjay_t *anjay,
 
 void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr) {
     if (*smsdrv_ptr) {
-        assert(0 && "SMS drivers not supported by this version of Anjay");
+        AVS_UNREACHABLE("SMS drivers not supported by this version of Anjay");
     }
 }
 

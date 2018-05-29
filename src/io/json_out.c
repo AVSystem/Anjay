@@ -154,7 +154,7 @@ update_node_path(json_out_t *ctx, anjay_id_type_t type, uint16_t id) {
     push_path_elem(ctx, type, id);
 
     if (ctx->num_base_path_elems > ctx->num_path_elems) {
-        assert(0 && "Should never happen");
+        AVS_UNREACHABLE("Should never happen");
         /* But we need to be prepared for that on production. */
         ctx->num_base_path_elems = ctx->num_path_elems;
         json_log(ERROR, "num_path_elems < num_base_path_elems!");

@@ -113,8 +113,8 @@ static void execute_task(anjay_sched_t *sched,
                 AVS_LIST_DELETE(&entry);
             } else {
                 if (entry->handle_ptr) {
-                    assert(*entry->handle_ptr == NULL
-                           && "handle must not be modified if the job fails");
+                    AVS_ASSERT(*entry->handle_ptr == NULL,
+                               "handle must not be modified if the job fails");
                     *entry->handle_ptr = handle;
                 }
                 update_backoff(backoff);
@@ -257,8 +257,8 @@ static int schedule(anjay_sched_t *sched,
                     avs_time_duration_t delay,
                     anjay_sched_clb_union_t clb,
                     void *clb_data) {
-    assert((!out_handle || *out_handle == NULL)
-               && "Dangerous non-initialized out_handle");
+    AVS_ASSERT((!out_handle || *out_handle == NULL),
+               "Dangerous non-initialized out_handle");
     AVS_LIST(anjay_sched_entry_t) entry
             = create_entry(backoff_config ? SCHED_TASK_RETRYABLE
                                           : SCHED_TASK_ONESHOT,
@@ -315,10 +315,10 @@ int _anjay_sched_del(anjay_sched_t *sched, anjay_sched_handle_t *handle) {
     anjay_sched_entry_t **task_ptr = find_task_entry_ptr(sched, handle);
     if (!task_ptr) {
         sched_log(ERROR, "cannot delete task %p - not found", *handle);
-        assert(0 && "Dangling handle detected");
+        AVS_UNREACHABLE("Dangling handle detected");
         result = -1;
     } else if (handle != (*task_ptr)->handle_ptr) {
-        assert(0 && "Removing task via non-original handle");
+        AVS_UNREACHABLE("Removing task via non-original handle");
         result = -1;
     } else {
         if ((*task_ptr)->handle_ptr) {

@@ -303,7 +303,7 @@ apncp_instance_reset(anjay_t *anjay,
                      anjay_iid_t iid) {
     (void) anjay;
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
-    assert(inst && "could not find instance");
+    AVS_ASSERT(inst, "could not find instance");
     inst->has_auth_type = false;
     inst->has_profile_name = false;
     inst->enabled = false;

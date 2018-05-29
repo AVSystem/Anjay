@@ -156,7 +156,7 @@ static int coap_setsock(avs_stream_abstract_t *stream_,
     }
 
     if (stream->data.common.socket != NULL && sock != NULL) {
-        assert(0 && "swapping socket on an not-yet-released stream");
+        AVS_UNREACHABLE("swapping socket on an not-yet-released stream");
         return -1;
     }
 
@@ -224,7 +224,7 @@ static int coap_read(avs_stream_abstract_t *stream_,
 
     switch (stream->state) {
     case STREAM_STATE_IDLE:
-        assert(0 && "should never happen");
+        AVS_UNREACHABLE("should never happen");
         break;
     case STREAM_STATE_SERVER:
         result = _anjay_coap_server_read(get_server(stream), out_bytes_read,
@@ -353,7 +353,7 @@ int _anjay_coap_stream_setup_response(avs_stream_abstract_t *stream,
     if (coap) {
         return coap->setup_response(stream, details);
     }
-    assert(0 && "`coap' pointer is NULL");
+    AVS_UNREACHABLE("`coap' pointer is NULL");
     return -1;
 }
 

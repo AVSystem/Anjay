@@ -234,7 +234,7 @@ static int test_array_write(AVS_LIST(test_value_instance_t) *out_instances,
                             anjay_input_ctx_t *input_array) {
     int result;
     test_value_instance_t instance;
-    assert(*out_instances == NULL && "Nonempty list provided");
+    AVS_ASSERT(*out_instances == NULL, "Nonempty list provided");
 
     while ((result = anjay_get_array_index(input_array, &instance.index)) == 0) {
         if (anjay_get_i32(input_array, &instance.value)) {
