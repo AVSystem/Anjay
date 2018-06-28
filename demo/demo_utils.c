@@ -83,11 +83,11 @@ int fetch_bytes(anjay_input_ctx_t *ctx, void **buffer, size_t *out_size) {
             goto error;
         }
         if (*out_size + bytes_read == 0) {
-            free(*buffer);
+            avs_free(*buffer);
             *buffer = NULL;
             return 0;
         }
-        void *block = realloc(*buffer, *out_size + bytes_read);
+        void *block = avs_realloc(*buffer, *out_size + bytes_read);
         if (!block) {
             result = ANJAY_ERR_INTERNAL;
             goto error;
@@ -99,7 +99,7 @@ int fetch_bytes(anjay_input_ctx_t *ctx, void **buffer, size_t *out_size) {
     return 0;
 
 error:
-    free(*buffer);
+    avs_free(*buffer);
     *buffer = NULL;
     return result;
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/stream_v_table.h>
 
@@ -304,8 +304,8 @@ AVS_UNIT_TEST(dynamic_in, plain) {
 AVS_UNIT_TEST(dynamic_in, no_content_format) {
     TEST_ENV_COMMON("\x50\x01\x00\x00\xFF" "514");
     anjay_input_ctx_t *ctx;
-    AVS_UNIT_ASSERT_EQUAL(_anjay_input_dynamic_create(&ctx, &coap, true),
-                          ANJAY_ERR_BAD_REQUEST);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_dynamic_create(&ctx, &coap, true));
+    _anjay_input_ctx_destroy(&ctx);
     avs_stream_cleanup(&coap);
 }
 
@@ -349,7 +349,7 @@ AVS_UNIT_TEST(dynamic_in, unrecognized) {
     TEST_ENV_COMMON(COAP_HEADER(LITERAL_COAP_FORMAT_FIRSTOPT_UNKNOWN) "514");
     anjay_input_ctx_t *ctx;
     AVS_UNIT_ASSERT_EQUAL(_anjay_input_dynamic_create(&ctx, &coap, true),
-                          ANJAY_ERR_BAD_REQUEST);
+                          ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT);
     avs_stream_cleanup(&coap);
 }
 

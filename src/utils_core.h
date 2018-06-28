@@ -33,6 +33,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 int _anjay_safe_strtoll(const char *in, long long *value);
 int _anjay_safe_strtod(const char *in, double *value);
+int _anjay_safe_strtof(const char *in, float *value);
 
 AVS_LIST(const anjay_string_t)
 _anjay_copy_string_list(AVS_LIST(const anjay_string_t) input);
@@ -40,6 +41,11 @@ _anjay_copy_string_list(AVS_LIST(const anjay_string_t) input);
 AVS_LIST(const anjay_string_t)
 _anjay_make_string_list(const char *string,
                         ... /* strings */) AVS_F_SENTINEL;
+
+// Const pointer cast is to ensure, that passed NULL will have the proper type,
+// regardless of toolchain used
+#define ANJAY_MAKE_STRING_LIST(...) \
+    _anjay_make_string_list(__VA_ARGS__, (const char *) NULL)
 
 AVS_LIST(const anjay_string_t)
 _anjay_make_query_string_list(const char *version,
@@ -61,12 +67,23 @@ static inline void _anjay_update_ret(int *var, int new_retval) {
     }
 }
 
-int _anjay_create_connected_udp_socket(anjay_t *anjay,
-                                       avs_net_abstract_socket_t **out,
-                                       avs_net_socket_type_t type,
-                                       const char *bind_port,
-                                       const void *config,
-                                       const anjay_url_t *uri);
+typedef struct {
+    avs_net_af_t family;
+    char (*last_local_port_buffer)[ANJAY_MAX_URL_PORT_SIZE];
+    uint16_t static_port_preference;
+} anjay_socket_bind_config_t;
+
+int _anjay_bind_and_connect_socket(avs_net_abstract_socket_t *socket,
+                                   const anjay_socket_bind_config_t *bind_conf,
+                                   const char *remote_host,
+                                   const char *remote_port);
+
+int
+_anjay_create_connected_udp_socket(avs_net_abstract_socket_t **out,
+                                   avs_net_socket_type_t type,
+                                   const void *socket_config,
+                                   const anjay_socket_bind_config_t *bind_conf,
+                                   const anjay_url_t *uri);
 
 static inline size_t _anjay_max_power_of_2_not_greater_than(size_t bound) {
     int exponent = -1;

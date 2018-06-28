@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/unit/test.h>
 
@@ -516,6 +516,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
+    AVS_UNIT_ASSERT_NULL(anjay_get_socket_entries(anjay));
     AVS_UNIT_ASSERT_NULL(
             anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 
@@ -548,6 +549,7 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     avs_unit_mocksock_expect_remote_port(mocksocks[0], "8378");
     avs_unit_mocksock_expect_connect(mocksocks[0],
                                      "server.example.org", "8378");
+    avs_unit_mocksock_expect_local_port(mocksocks[0], "65432");
     avs_unit_mocksock_expect_get_opt(mocksocks[0],
                                      AVS_NET_SOCKET_OPT_SESSION_RESUMED,
                                      (avs_net_socket_opt_value_t) {
@@ -610,12 +612,28 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     ////// ASSERT QUEUE MODE //////
     AVS_UNIT_ASSERT_NOT_NULL(
             anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
-    AVS_UNIT_ASSERT_NOT_NULL(anjay_get_sockets(anjay));
+    {
+        AVS_LIST(avs_net_abstract_socket_t *const) sockets =
+                anjay_get_sockets(anjay);
+        AVS_UNIT_ASSERT_NOT_NULL(sockets);
+        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(sockets), 1);
+        avs_net_abstract_socket_t *socket = *sockets;
+
+        AVS_LIST(const anjay_socket_entry_t) entries =
+                anjay_get_socket_entries(anjay);
+        AVS_UNIT_ASSERT_NOT_NULL(entries);
+        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(entries), 1);
+        AVS_UNIT_ASSERT_TRUE(entries->socket == socket);
+        AVS_UNIT_ASSERT_EQUAL(entries->transport, ANJAY_SOCKET_TRANSPORT_UDP);
+        AVS_UNIT_ASSERT_EQUAL(entries->ssid, 42);
+        AVS_UNIT_ASSERT_TRUE(entries->queue_mode);
+    }
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
+    AVS_UNIT_ASSERT_NULL(anjay_get_socket_entries(anjay));
     AVS_UNIT_ASSERT_NULL(
             anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 
@@ -651,7 +669,22 @@ AVS_UNIT_TEST(queue_mode, change) {
                                     WRITE_RESPONSE, sizeof(WRITE_RESPONSE) - 1);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(anjay_get_sockets(anjay)), 1);
+    {
+        AVS_LIST(avs_net_abstract_socket_t *const) sockets =
+                anjay_get_sockets(anjay);
+        AVS_UNIT_ASSERT_NOT_NULL(sockets);
+        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(sockets), 1);
+        avs_net_abstract_socket_t *socket = *sockets;
+
+        AVS_LIST(const anjay_socket_entry_t) entries =
+                anjay_get_socket_entries(anjay);
+        AVS_UNIT_ASSERT_NOT_NULL(entries);
+        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(entries), 1);
+        AVS_UNIT_ASSERT_TRUE(entries->socket == socket);
+        AVS_UNIT_ASSERT_EQUAL(entries->transport, ANJAY_SOCKET_TRANSPORT_UDP);
+        AVS_UNIT_ASSERT_EQUAL(entries->ssid, 1);
+        AVS_UNIT_ASSERT_FALSE(entries->queue_mode);
+    }
     AVS_UNIT_ASSERT_NULL(
             anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 
@@ -717,6 +750,7 @@ AVS_UNIT_TEST(queue_mode, change) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
+    AVS_UNIT_ASSERT_NULL(anjay_get_socket_entries(anjay));
     AVS_UNIT_ASSERT_NULL(
             anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
 

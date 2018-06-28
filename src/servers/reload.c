@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include "../dm/query.h"
 
@@ -50,14 +50,24 @@ static int reload_active_server(anjay_t *anjay,
     assert(_anjay_server_active(server));
     if (server->data_active.needs_reload || server_needs_reconnect(server)) {
         server->data_active.needs_reload = false;
-        if (_anjay_active_server_refresh(anjay, server, false)) {
+        if (_anjay_active_server_refresh(anjay, server)) {
             goto connection_failure;
         }
     }
 
-    if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
-        if (!_anjay_server_registration_connection_valid(server)
-                || _anjay_server_registration_expired(server)) {
+    if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+        if (!_anjay_server_primary_connection_valid(server)) {
+            return _anjay_bootstrap_update_reconnected(anjay);
+        }
+    } else {
+        if (!_anjay_server_primary_connection_valid(server)) {
+            // invalidate registration lifetime, so that retries of the call
+            // to this function will actually retry registering even if
+            // reconnection succeeds
+            server->data_active.registration_info.expire_time =
+                    AVS_TIME_REAL_INVALID;
+        }
+        if (_anjay_server_registration_expired(server)) {
             int result = _anjay_server_ensure_valid_registration(anjay, server);
             if (result < 0) {
                 return result;
@@ -67,7 +77,7 @@ static int reload_active_server(anjay_t *anjay,
         } else {
             _anjay_observe_sched_flush(anjay, (anjay_connection_key_t) {
                 .ssid = server->ssid,
-                .type = server->data_active.registration_info.conn_type
+                .type = server->data_active.primary_conn_type
             });
         }
     }
@@ -75,6 +85,21 @@ static int reload_active_server(anjay_t *anjay,
 connection_failure:
     _anjay_server_deactivate(anjay, server->ssid, AVS_TIME_DURATION_ZERO);
     return 0;
+}
+
+static anjay_sched_retryable_result_t
+reload_server_by_ssid_job(anjay_t *anjay, void *ssid_) {
+    anjay_ssid_t ssid = (anjay_ssid_t) (uintptr_t) ssid_;
+    assert(ssid != ANJAY_SSID_ANY);
+
+    AVS_LIST(anjay_server_info_t) server =
+            _anjay_servers_find_active(anjay->servers, ssid);
+    if (!server) {
+        return ANJAY_SCHED_RETRY;
+    }
+
+    return reload_active_server(anjay, server) ? ANJAY_SCHED_RETRY
+                                               : ANJAY_SCHED_FINISH;
 }
 
 static int reload_server_by_ssid(anjay_t *anjay,
@@ -85,7 +110,6 @@ static int reload_server_by_ssid(anjay_t *anjay,
     AVS_LIST(anjay_server_info_t) *server_ptr =
             _anjay_servers_find_ptr(old_servers, ssid);
     if (server_ptr) {
-        anjay_log(TRACE, "reloading inactive server SSID %u", ssid);
         AVS_LIST(anjay_server_info_t) server = AVS_LIST_DETACH(server_ptr);
         _anjay_servers_add(anjay->servers, server);
         if (_anjay_server_active(server)) {
@@ -199,4 +223,45 @@ int _anjay_schedule_reload_servers(anjay_t *anjay) {
 
 int _anjay_schedule_delayed_reload_servers(anjay_t *anjay) {
     return schedule_reload_servers(anjay, true);
+}
+
+int _anjay_schedule_reload_server(anjay_t *anjay, anjay_server_info_t *server) {
+    assert(_anjay_server_active(server));
+    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
+    if (_anjay_sched_retryable(anjay->sched,
+                               &server->sched_update_or_reactivate_handle,
+                               AVS_TIME_DURATION_ZERO,
+                               ANJAY_SERVER_RETRYABLE_BACKOFF,
+                               reload_server_by_ssid_job,
+                               (void *) (uintptr_t) server->ssid)) {
+        anjay_log(ERROR, "could not schedule reload_server_by_ssid_job");
+        return -1;
+    }
+    return 0;
+}
+
+int _anjay_schedule_reconnect_servers(anjay_t *anjay) {
+    int result = _anjay_schedule_reload_servers(anjay);
+    if (result) {
+        return result;
+    }
+    anjay->offline = false;
+    AVS_LIST(anjay_server_info_t) server;
+    AVS_LIST_FOREACH(server, anjay->servers->servers) {
+        anjay_connection_ref_t ref = {
+            .server = server
+        };
+        for (ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
+                ref.conn_type < ANJAY_CONNECTION_LIMIT_;
+                ref.conn_type =
+                        (anjay_connection_type_t) (ref.conn_type + 1)) {
+            anjay_server_connection_t *connection =
+                    _anjay_get_server_connection(ref);
+            if (connection
+                    && _anjay_connection_internal_get_socket(connection)) {
+                connection->needs_reconnect = true;
+            }
+        }
+    }
+    return 0;
 }

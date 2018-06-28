@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/unit/test.h>
 #include <anjay_test/mock_clock.h>

@@ -52,7 +52,6 @@ typedef struct {
 
 typedef struct {
     AVS_LIST(const anjay_string_t) endpoint_path;
-    anjay_connection_type_t conn_type;
     avs_time_real_t expire_time;
     bool needs_update;
     anjay_update_parameters_t last_update_params;
@@ -112,10 +111,12 @@ int _anjay_servers_foreach_active(anjay_t *anjay,
 anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server);
 
 anjay_connection_type_t
-_anjay_server_registration_conn_type(anjay_server_info_t *server);
+_anjay_server_primary_conn_type(anjay_server_info_t *server);
 
 const anjay_registration_info_t *
 _anjay_server_registration_info(anjay_server_info_t *server);
+
+bool _anjay_server_registration_expired(anjay_server_info_t *server);
 
 // Note: if any of the move_* parameters are NULL,
 // the relevant fields are not updated
@@ -174,12 +175,13 @@ void
 _anjay_connection_schedule_queue_mode_close(anjay_t *anjay,
                                             anjay_connection_ref_t ref);
 
-int _anjay_server_setup_registration_connection(anjay_server_info_t *server);
+int _anjay_server_setup_primary_connection(anjay_server_info_t *server);
 
 avs_net_abstract_socket_t *
 _anjay_connection_get_online_socket(anjay_connection_ref_t ref);
 
-int _anjay_connection_bring_online(anjay_connection_ref_t ref,
+int _anjay_connection_bring_online(anjay_t *anjay,
+                                   anjay_connection_ref_t ref,
                                    bool *out_session_resumed);
 
 void _anjay_connection_suspend(anjay_connection_ref_t conn_ref);

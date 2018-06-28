@@ -851,6 +851,10 @@ class FirmwareUpdateRestartWithDownloadingOverHttp(FirmwareUpdate.TestWithPartia
 
         self.wait_for_half_download()
 
+        self.assertEqual(2, self.get_socket_count())
+        self.assertEqual(1, self.get_non_lwm2m_socket_count())
+        self.assertEqual('TCP', self.get_transport(socket_index=-1))
+
         self.demo_process.kill()
 
         # restart demo app

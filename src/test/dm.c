@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <math.h>
 
@@ -504,7 +504,7 @@ AVS_UNIT_TEST(dm_write, resource) {
     DM_TEST_FINISH;
 }
 
-AVS_UNIT_TEST(dm_write, resource_invalid_format) {
+AVS_UNIT_TEST(dm_write, resource_unsupported_format) {
     DM_TEST_INIT;
     static const char REQUEST[] =
             "\x40\x03\xFA\x3E" // CoAP header
@@ -515,7 +515,8 @@ AVS_UNIT_TEST(dm_write, resource_invalid_format) {
             "\xFF"
             "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
+    // 4.15 Unsupported Content Format.
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x8f\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -527,11 +528,12 @@ AVS_UNIT_TEST(dm_write, resource_with_mismatched_tlv_rid) {
             "\xB2" "42" // OID
             "\x03" "514" // IID
             "\x01" "4" // RID
-            "\x12\x42\x42" // Content-Format TLV
+            "\x12\x2d\x16" // Content-Format TLV
             "\xFF"
             "\xc5\x05" // mismatched resource id, RID Uri-Path was 4 but in the payload it is 5
             "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 514, 1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
@@ -558,7 +560,7 @@ AVS_UNIT_TEST(dm_write, instance) {
     DM_TEST_FINISH;
 }
 
-AVS_UNIT_TEST(dm_write, instance_invalid_format) {
+AVS_UNIT_TEST(dm_write, instance_unsupported_format) {
     DM_TEST_INIT;
     static const char REQUEST[] =
             "\x40\x03\xFA\x3E" // CoAP header
@@ -569,7 +571,8 @@ AVS_UNIT_TEST(dm_write, instance_invalid_format) {
             "\xc1\x00\x0d"
             "\xc5\x06" "Hello";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
+    // 4.15 Unsupported Content Format
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x8f\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }

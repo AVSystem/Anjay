@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 
@@ -486,10 +486,16 @@ static void handle_coap_message(anjay_downloader_t *dl,
     handle_coap_response(msg, dl, ctx_ptr);
 }
 
-static avs_net_abstract_socket_t *get_coap_socket(anjay_downloader_t *dl,
-                                                  anjay_download_ctx_t *ctx) {
+static int get_coap_socket(anjay_downloader_t *dl,
+                           anjay_download_ctx_t *ctx,
+                           avs_net_abstract_socket_t **out_socket,
+                           anjay_socket_transport_t *out_transport) {
     (void) dl;
-    return ((anjay_coap_download_ctx_t *) ctx)->socket;
+    if (!(*out_socket = ((anjay_coap_download_ctx_t *) ctx)->socket)) {
+        return -1;
+    }
+    *out_transport = ANJAY_SOCKET_TRANSPORT_UDP;
+    return 0;
 }
 
 static size_t get_max_acceptable_block_size(size_t in_buffer_size) {
@@ -616,9 +622,8 @@ int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     // get duplicated between these "identical" sockets, or we may get some
     // kind of load-balancing behavior. In the last case, the client would
     // randomly handle or ignore LwM2M requests and CoAP download responses.
-    result = _anjay_create_connected_udp_socket(anjay, &ctx->socket,
-                                                socket_type, NULL, config,
-                                                &ctx->uri);
+    result = _anjay_create_connected_udp_socket(&ctx->socket, socket_type,
+                                                config, NULL, &ctx->uri);
     if (!ctx->socket) {
         dl_log(ERROR, "could not create CoAP socket");
         goto error;

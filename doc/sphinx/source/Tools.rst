@@ -118,6 +118,7 @@ for which, the generator outputs the following source:
 
     #include <anjay/anjay.h>
     #include <avsystem/commons/defs.h>
+    #include <avsystem/commons/memory.h>
     #include <avsystem/commons/list.h>
 
     /**
@@ -430,7 +431,7 @@ for which, the generator outputs the following source:
 
     const anjay_dm_object_def_t **some_object_name_object_create(void) {
         some_object_name_t *obj = (some_object_name_t *)
-                calloc(1, sizeof(some_object_name_t));
+                avs_calloc(1, sizeof(some_object_name_t));
         if (!obj) {
             return NULL;
         }
@@ -450,7 +451,7 @@ for which, the generator outputs the following source:
 
             // TODO: object cleanup
 
-            free(obj);
+            avs_free(obj);
         }
     }
 

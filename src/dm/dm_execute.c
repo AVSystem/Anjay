@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -148,7 +148,7 @@ ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
 
 anjay_execute_ctx_t *_anjay_execute_ctx_create(anjay_input_ctx_t *ctx) {
     anjay_execute_ctx_t *ret =
-            (anjay_execute_ctx_t *) calloc(1, sizeof(anjay_execute_ctx_t));
+            (anjay_execute_ctx_t *) avs_calloc(1, sizeof(anjay_execute_ctx_t));
     if (ret) {
         ret->input_ctx = ctx;
         ret->arg = -1;
@@ -159,7 +159,7 @@ anjay_execute_ctx_t *_anjay_execute_ctx_create(anjay_input_ctx_t *ctx) {
 
 void _anjay_execute_ctx_destroy(anjay_execute_ctx_t **ctx) {
     if (ctx) {
-        free(*ctx);
+        avs_free(*ctx);
         *ctx = NULL;
     }
 }

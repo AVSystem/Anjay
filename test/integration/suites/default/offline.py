@@ -122,7 +122,6 @@ class OfflineWithReconnect(test_suite.Lwm2mDtlsSingleServerTest):
             self.serv.recv(timeout_s=OFFLINE_INTERVAL)
         self.communicate('reconnect')
         self.assertDtlsReconnect()
-        self.assertDemoUpdatesRegistration()
 
 
 class OfflineWithoutDtlsTest(test_suite.Lwm2mSingleServerTest):
@@ -143,4 +142,4 @@ class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mDtlsSingleServerTest
 
         self.communicate('exit-offline')
         self.assertDtlsReconnect()
-        # no Update because it doesn't work while in offline moed
+        # no Update because it doesn't work while in offline mode

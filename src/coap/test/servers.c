@@ -18,7 +18,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include <config.h>
+#include <anjay_config.h>
 
 #ifdef ANJAY_TEST
 

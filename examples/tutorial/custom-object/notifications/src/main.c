@@ -5,6 +5,8 @@
 #include <anjay/server.h>
 #include <anjay/attr_storage.h>
 
+#include <avsystem/commons/time.h>
+
 static int test_resource_read(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid,
@@ -20,7 +22,7 @@ static int test_resource_read(anjay_t *anjay,
     case 0:
         return anjay_ret_string(ctx, "Test object");
     case 1:
-        return anjay_ret_i32(ctx, (int32_t)time(NULL));
+        return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds);
     default:
         // control will never reach this part due to object's supported_rids
         return 0;

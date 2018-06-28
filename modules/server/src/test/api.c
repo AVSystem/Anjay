@@ -32,7 +32,7 @@ typedef struct {
 
 static server_test_env_t *
 server_test_env_create(void) {
-    server_test_env_t *env = (__typeof__(env)) calloc(1, sizeof(*env));
+    server_test_env_t *env = (__typeof__(env)) avs_calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
     env->anjay = anjay_new(&CONFIG);
     AVS_UNIT_ASSERT_NOT_NULL(env->anjay);
@@ -42,7 +42,7 @@ server_test_env_create(void) {
 
 static void server_test_env_destroy(server_test_env_t **env) {
     anjay_delete((*env)->anjay);
-    free(*env);
+    avs_free(*env);
 }
 
 static const anjay_server_instance_t instance1 = {

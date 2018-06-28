@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 #include <string.h>
@@ -91,7 +91,7 @@ static int try_security_instance(anjay_t *anjay,
         bool service_matches = url_service_matches(server_url, args->url);
         if (!args->result || service_matches) {
             result_buffer_t *new_result =
-                    (result_buffer_t *) calloc(1, sizeof(result_buffer_t));
+                    (result_buffer_t *) avs_calloc(1, sizeof(result_buffer_t));
             int get_result = _anjay_get_security_info(
                     anjay, &new_result->security_info, &new_result->dtls_keys,
                     security_iid, ANJAY_CONNECTION_UDP);
@@ -106,7 +106,7 @@ static int try_security_instance(anjay_t *anjay,
                               "encrypted connection, ignoring",
                        ANJAY_DM_OID_SECURITY, security_iid);
             } else {
-                free(args->result);
+                avs_free(args->result);
                 AVS_STATIC_ASSERT(offsetof(result_buffer_t, security_info) == 0,
                                   result_buffer_security_info_offset);
                 args->result = &new_result->security_info;
@@ -115,7 +115,7 @@ static int try_security_instance(anjay_t *anjay,
                     retval = ANJAY_FOREACH_BREAK;
                 }
             }
-            free(new_result);
+            avs_free(new_result);
         }
     }
 
@@ -126,7 +126,7 @@ static int try_security_instance(anjay_t *anjay,
 avs_net_security_info_t *
 anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
     assert(anjay);
-    
+
     const anjay_dm_object_def_t *const *security_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!security_obj) {

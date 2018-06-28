@@ -29,8 +29,10 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define dl_log(...) _anjay_log(downloader, __VA_ARGS__)
 
 typedef struct {
-    avs_net_abstract_socket_t *(*get_socket)(anjay_downloader_t *dl,
-                                             anjay_download_ctx_t *ctx);
+    int (*get_socket)(anjay_downloader_t *dl,
+                      anjay_download_ctx_t *ctx,
+                      avs_net_abstract_socket_t **out_socket,
+                      anjay_socket_transport_t *out_transport);
     void (*handle_packet)(anjay_downloader_t *dl,
                           AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
     void (*cleanup)(anjay_downloader_t *dl,

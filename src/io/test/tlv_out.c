@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/unit/test.h>
+#include <avsystem/commons/memory.h>
 
 #include "bigdata.h"
 
 ///////////////////////////////////////////////////////////// ENCODING // SIMPLE
 
 static anjay_output_ctx_t *new_tlv_out(avs_stream_abstract_t *stream) {
-    tlv_out_t *out = (tlv_out_t *) calloc(1, sizeof(tlv_out_t));
+    tlv_out_t *out = (tlv_out_t *) avs_calloc(1, sizeof(tlv_out_t));
     AVS_UNIT_ASSERT_NOT_NULL(out);
     out->vtable = &TLV_OUT_VTABLE;
     out->next_entry_ptr = &out->entries;
@@ -40,7 +41,7 @@ static anjay_output_ctx_t *new_tlv_out(avs_stream_abstract_t *stream) {
 #define TEST_ENV(Size) char buf[Size]; TEST_ENV_COMMON(Size)
 
 #define TEST_ENV_HEAP(Size) \
-    char *buf = (char *) malloc(Size); TEST_ENV_COMMON(Size)
+    char *buf = (char *) avs_malloc(Size); TEST_ENV_COMMON(Size)
 
 #define VERIFY_BYTES(Data) do { \
     AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&outbuf), sizeof(Data) - 1);\
@@ -131,7 +132,7 @@ AVS_UNIT_TEST(tlv_out, bytes_overlength) {
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 1));
     AVS_UNIT_ASSERT_FAILED(anjay_ret_string(out, DATA20MB));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
-    free(buf);
+    avs_free(buf);
 }
 
 AVS_UNIT_TEST(tlv_out, zero_id) {
@@ -280,7 +281,7 @@ AVS_UNIT_TEST(tlv_out_array, too_long) {
     }
     AVS_UNIT_ASSERT_FAILED(anjay_ret_array_finish(array));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
-    free(buf);
+    avs_free(buf);
 }
 
 AVS_UNIT_TEST(tlv_out_array, nonarray) {

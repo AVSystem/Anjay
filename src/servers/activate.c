@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 #include <avsystem/commons/errno.h>
@@ -51,7 +51,7 @@ static int initialize_active_server(anjay_t *anjay,
         goto finish;
     }
 
-    if ((result = _anjay_active_server_refresh(anjay, server, false))) {
+    if ((result = _anjay_active_server_refresh(anjay, server))) {
         anjay_log(TRACE, "could not initialize sockets for SSID %u",
                   server->ssid);
         goto finish;
@@ -265,8 +265,7 @@ int _anjay_server_deactivate(anjay_t *anjay,
     _anjay_server_cleanup(anjay, *server_ptr);
     // we don't do the following in _anjay_server_cleanup() so that conn_type
     // can be reused after restoring from persistence in activate_server_job()
-    (*server_ptr)->data_active.registration_info.conn_type =
-            ANJAY_CONNECTION_UNSET;
+    (*server_ptr)->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
     if (avs_time_duration_valid(reactivate_delay)
             && _anjay_server_sched_activate(anjay, *server_ptr,
                                             reactivate_delay)) {
@@ -288,7 +287,6 @@ _anjay_servers_create_inactive(anjay_ssid_t ssid) {
     }
 
     new_server->ssid = ssid;
-    new_server->data_active.registration_info.conn_type =
-            ANJAY_CONNECTION_UNSET;
+    new_server->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
     return new_server;
 }

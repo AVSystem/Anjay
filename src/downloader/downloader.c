@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 
 #include <avsystem/commons/errno.h>
+#include <avsystem/commons/memory.h>
 #include <avsystem/commons/utils.h>
 
 #include "../anjay_core.h"
@@ -112,12 +113,19 @@ void _anjay_downloader_cleanup(anjay_downloader_t *dl) {
     _anjay_coap_id_source_release(&dl->id_source);
 }
 
-static avs_net_abstract_socket_t *get_ctx_socket(anjay_downloader_t *dl,
-                                                 anjay_download_ctx_t *ctx) {
+static int get_ctx_socket(anjay_downloader_t *dl,
+                          anjay_download_ctx_t *ctx,
+                          avs_net_abstract_socket_t **out_socket,
+                          anjay_socket_transport_t *out_transport) {
     assert(dl);
     assert(ctx);
     assert(ctx->common.vtable);
-    return ctx->common.vtable->get_socket(dl, ctx);
+    int result = ctx->common.vtable->get_socket(dl, ctx,
+                                                out_socket, out_transport);
+    if (!result) {
+        assert(*out_socket);
+    }
+    return result;
 }
 
 static AVS_LIST(anjay_download_ctx_t) *
@@ -125,7 +133,12 @@ find_ctx_ptr_by_socket(anjay_downloader_t *dl,
                        avs_net_abstract_socket_t *socket) {
     AVS_LIST(anjay_download_ctx_t) *ctx;
     AVS_LIST_FOREACH_PTR(ctx, &dl->downloads) {
-        if (get_ctx_socket(dl, *ctx) == socket) {
+        avs_net_abstract_socket_t *ctx_socket = NULL;
+        if (!get_ctx_socket(dl, *ctx, &ctx_socket,
+                            &(anjay_socket_transport_t) {
+                                (anjay_socket_transport_t) 0
+                            })
+                && ctx_socket == socket) {
             return ctx;
         }
     }
@@ -133,23 +146,26 @@ find_ctx_ptr_by_socket(anjay_downloader_t *dl,
     return NULL;
 }
 
-int _anjay_downloader_get_sockets(
-        anjay_downloader_t *dl,
-        AVS_LIST(avs_net_abstract_socket_t *const) *out_socks) {
-    AVS_LIST(avs_net_abstract_socket_t *const) sockets = NULL;
+int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
+                                  AVS_LIST(anjay_socket_entry_t) *out_socks) {
+    AVS_LIST(anjay_socket_entry_t) sockets = NULL;
     AVS_LIST(anjay_download_ctx_t) dl_ctx;
 
     AVS_LIST_FOREACH(dl_ctx, dl->downloads) {
-        avs_net_abstract_socket_t *socket = get_ctx_socket(dl, dl_ctx);
-        if (socket) {
-            AVS_LIST(avs_net_abstract_socket_t *) elem =
-                    AVS_LIST_NEW_ELEMENT(avs_net_abstract_socket_t *);
+        avs_net_abstract_socket_t *socket = NULL;
+        anjay_socket_transport_t transport;
+        if (!get_ctx_socket(dl, dl_ctx, &socket, &transport)) {
+            AVS_LIST(anjay_socket_entry_t) elem =
+                    AVS_LIST_NEW_ELEMENT(anjay_socket_entry_t);
             if (!elem) {
                 AVS_LIST_CLEAR(&sockets);
                 return -1;
             }
 
-            *elem = socket;
+            elem->socket = socket;
+            elem->transport = transport;
+            elem->ssid = ANJAY_SSID_ANY;
+            elem->queue_mode = false;
             AVS_LIST_INSERT(&sockets, elem);
         }
     }
@@ -195,7 +211,7 @@ static uintptr_t find_free_id(anjay_downloader_t *dl) {
     // One could think this can loop forever if all download IDs are in use.
     // However, uintptr_t is an integer as large as a pointer, and a normal
     // pointer needs to be able to address every byte that may be allocated
-    // by malloc(). Since we use more than one byte per download object,
+    // by avs_malloc(). Since we use more than one byte per download object,
     // we can safely assume we will run out of RAM before running out
     // of download IDs.
     do {

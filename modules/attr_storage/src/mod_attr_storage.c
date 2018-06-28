@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 #include <inttypes.h>
@@ -52,7 +52,7 @@ static void fas_delete(anjay_t *anjay, void *fas_) {
     assert(fas);
     _anjay_attr_storage_clear(fas);
     avs_stream_cleanup(&fas->saved_state.persist_data);
-    free(fas);
+    avs_free(fas);
 }
 
 const anjay_dm_module_t _anjay_attr_storage_MODULE = {
@@ -80,7 +80,7 @@ int anjay_attr_storage_install(anjay_t *anjay) {
         return -1;
     }
     anjay_attr_storage_t *fas =
-            (anjay_attr_storage_t *) calloc(1, sizeof(anjay_attr_storage_t));
+            (anjay_attr_storage_t *) avs_calloc(1, sizeof(anjay_attr_storage_t));
     if (!fas) {
         fas_log(ERROR, "out of memory");
         return -1;
@@ -89,7 +89,7 @@ int anjay_attr_storage_install(anjay_t *anjay) {
             || _anjay_dm_module_install(anjay,
                                         &_anjay_attr_storage_MODULE, fas)) {
         avs_stream_cleanup(&fas->saved_state.persist_data);
-        free(fas);
+        avs_free(fas);
         return -1;
     }
     return 0;
@@ -309,8 +309,7 @@ query_ssid(anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid) {
     const anjay_uri_path_t uri = MAKE_RESOURCE_PATH(oid, iid, ssid_rid(oid));
     int result = _anjay_dm_res_read_i64(anjay, &uri, &ssid);
     if (result || ssid <= 0 || ssid >= UINT16_MAX) {
-        fas_log(WARNING, "Could not get valid SSID via /%" PRIu16 "/%" PRIu16,
-                oid, iid);
+        /* Most likely a Bootstrap instance, ignore. */
         return 0;
     }
     return (anjay_ssid_t) ssid;

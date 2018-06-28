@@ -22,6 +22,7 @@
 #include <time.h>
 
 #include <avsystem/commons/log.h>
+#include <avsystem/commons/time.h>
 
 #include <anjay/anjay.h>
 
@@ -40,7 +41,8 @@
 extern char **saved_argv;
 
 static inline unsigned time_to_rand(void) {
-    return 1103515245u * (unsigned) time(NULL) + 12345u;
+    return 1103515245u * (unsigned) avs_time_real_now().since_real_epoch.seconds
+           + 12345u;
 }
 
 // this is the most precise representation possible using the double type

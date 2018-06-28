@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -48,7 +48,7 @@ anjay_sched_t *_anjay_sched_get(anjay_t *anjay) {
 }
 
 anjay_sched_t *_anjay_sched_new(anjay_t *anjay) {
-    anjay_sched_t *sched = (anjay_sched_t *) calloc(1, sizeof(anjay_sched_t));
+    anjay_sched_t *sched = (anjay_sched_t *) avs_calloc(1, sizeof(anjay_sched_t));
     if (sched) {
         sched->anjay = anjay;
     }
@@ -166,7 +166,7 @@ void _anjay_sched_delete(anjay_sched_t **sched_ptr) {
             *(*sched_ptr)->entries->handle_ptr = NULL;
         }
     }
-    free(*sched_ptr);
+    avs_free(*sched_ptr);
     *sched_ptr = NULL;
 }
 

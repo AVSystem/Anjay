@@ -26,9 +26,7 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 bool
-_anjay_server_registration_connection_valid(anjay_server_info_t *server);
-
-bool _anjay_server_registration_expired(anjay_server_info_t *server);
+_anjay_server_primary_connection_valid(anjay_server_info_t *server);
 
 /**
  * Makes sure that the @p server has a valid registration state. May send

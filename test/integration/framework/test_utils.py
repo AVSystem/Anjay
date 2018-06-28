@@ -244,6 +244,11 @@ class RID:
         ResInitIntArray = 9
         ResRawBytes = 10
         ResOpaqueArray = 11
+        ResInt = 12
+        ResBool = 13
+        ResFloat = 14
+        ResString = 15
+        ResObjlnk = 16
 
     class Portfolio:
         Identity = 0

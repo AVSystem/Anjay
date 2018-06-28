@@ -26,7 +26,7 @@ if(WITH_FUZZ_TESTS)
 endif()
 
 project(anjay C)
-set(ANJAY_VERSION "1.9.3" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.10.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
@@ -76,7 +76,7 @@ endif()
 
 option(WITH_EXTRA_WARNINGS "Enable extra compilation warnings" OFF)
 if(WITH_EXTRA_WARNINGS)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra -Winit-self -Wmissing-declarations -Wc++-compat -Wsign-conversion -Wconversion -Wcast-qual -Wno-variadic-macros -Wno-long-long")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Wall -Wextra -Winit-self -Wmissing-declarations -Wc++-compat -Wsign-conversion -Wconversion -Wcast-qual -Wvla -Wno-variadic-macros -Wno-long-long")
     if(CMAKE_C_COMPILER_ID MATCHES "GNU")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wjump-misses-init")
     endif()
@@ -90,6 +90,7 @@ cmake_dependent_option(WITH_STATIC_DEPS_LINKED
                        OFF WITH_LIBRARY_SHARED OFF)
 
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
+option(WITH_ATTR_STORAGE "Enable Attribute storage module" ON)
 option(WITH_BLOCK_RECEIVE "Enable support for receiving CoAP BLOCK transfers" ON)
 option(WITH_BLOCK_SEND "Enable support for sending data in CoAP BLOCK mode" ON)
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
@@ -103,6 +104,7 @@ endif()
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
+option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
 
 
 cmake_dependent_option(WITH_BLOCK_DOWNLOAD "Enable support for CoAP(S) downloads" ON "WITH_DOWNLOADER" OFF)
@@ -354,7 +356,13 @@ macro(DEFINE_MODULE MOD_NAME MOD_DEFAULT MOD_DESC)
     endif()
 endmacro()
 
-DEFINE_MODULE(attr_storage ON "Automatic attribute storage module")
+if(WITH_ATTR_STORAGE)
+    if(WITH_AVS_PERSISTENCE)
+        DEFINE_MODULE(attr_storage ON "Automatic attribute storage module")
+    else()
+        message(FATAL_ERROR "Attribute storage module cannot be used if persistence is turned off")
+    endif()
+endif()
 if(WITH_ACCESS_CONTROL)
     DEFINE_MODULE(access_control ON "Access control object implementation module")
 endif()
@@ -370,14 +378,11 @@ set(DEPS_LIBRARIES "")
 set(DEPS_LIBRARIES_WEAK "")
 
 # avs_commons required components.
-set(AVS_COMMONS_COMPONENTS algorithm coap list vector rbtree buffer net stream utils)
+set(AVS_COMMONS_COMPONENTS algorithm coap list vector rbtree buffer net stream utils compat_threading)
 if(WITH_HTTP_DOWNLOAD)
     list(APPEND AVS_COMMONS_COMPONENTS http)
 endif()
-if(WITH_MODULE_attr_storage
-   OR WITH_MODULE_access_control
-   OR WITH_MODULE_security
-   OR WITH_MODULE_server)
+if(WITH_AVS_PERSISTENCE)
     list(APPEND AVS_COMMONS_COMPONENTS persistence)
 endif()
 
@@ -448,7 +453,7 @@ include_directories(${PUBLIC_INCLUDE_DIRS}
 
 ################# FEATURE LIST LOG #############################################
 
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in" CONFIG_FILE_CONTENTS)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/config/anjay_config.h.in" CONFIG_FILE_CONTENTS)
 set(CONFIG_FILE_VARIABLES)
 foreach(CONFIG_FILE_LINE IN LISTS CONFIG_FILE_CONTENTS)
     if(CONFIG_FILE_LINE MATCHES "\#[ \t]*define[ \t]+([A-Za-z_0-9]+)[ \t]+\@([A-Za-z_0-9]+)\@")
@@ -458,7 +463,7 @@ foreach(CONFIG_FILE_LINE IN LISTS CONFIG_FILE_CONTENTS)
         set(CONFIG_FILE_VARIABLE "${CMAKE_MATCH_1}")
         set(CONFIG_FILE_VARIABLE_TYPE "FLAG")
     elseif(CONFIG_FILE_LINE MATCHES "#[ \t]*cmakedefine" OR CONFIG_FILE_LINE MATCHES "\@[A-Za-z_0-9]+\@")
-        message(SEND_ERROR "Found unloggable line in config.h.in: ${CONFIG_FILE_LINE}")
+        message(SEND_ERROR "Found unloggable line in anjay_config.h.in: ${CONFIG_FILE_LINE}")
     else()
         set(CONFIG_FILE_VARIABLE "")
     endif()
@@ -487,8 +492,8 @@ endforeach()
 
 ################# LINK #########################################################
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/config.h.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/config/config.h")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/anjay_config.h.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/config/anjay_config.h")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/anjay_config_log.h.in"
                "${CMAKE_CURRENT_BINARY_DIR}/config/anjay_config_log.h")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/config")
@@ -576,7 +581,7 @@ if(WITH_TEST)
                      ANJAY_TEST
                      "ANJAY_BIN_DIR=\"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\"")
 
-        set(TEST_COMPILE_FLAGS "-Wno-pedantic -Wno-overlength-strings")
+        set(TEST_COMPILE_FLAGS "-Wno-pedantic -Wno-overlength-strings -Wno-vla")
         if(CMAKE_C_COMPILER_ID MATCHES "GNU")
             set(TEST_COMPILE_FLAGS "${TEST_COMPILE_FLAGS} -Wno-jump-misses-init")
         endif()

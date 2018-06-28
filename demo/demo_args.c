@@ -22,6 +22,8 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include <avsystem/commons/memory.h>
+
 #define DEFAULT_PSK_IDENTITY "sesame"
 #define DEFAULT_PSK_KEY      "password"
 
@@ -261,7 +263,7 @@ static int parse_hexstring(const char *str, uint8_t **out, size_t *out_size) {
     if (*out) {
         return -1;
     }
-    *out = (uint8_t *) malloc(length / 2);
+    *out = (uint8_t *) avs_malloc(length / 2);
     *out_size = 0;
     if (!*out) {
         return -1;
@@ -271,7 +273,7 @@ static int parse_hexstring(const char *str, uint8_t **out, size_t *out_size) {
     while (*curr) {
         unsigned value;
         if (sscanf(curr, "%2x", &value) != 1 || (uint8_t) value != value) {
-            free(*out);
+            avs_free(*out);
             return -1;
         }
         *data++ = (uint8_t) value;
@@ -306,7 +308,7 @@ static void build_getopt_string(const struct option *options,
 
 static int clone_buffer(uint8_t **out, size_t *out_size,
                         const void *src, size_t src_size) {
-    *out = (uint8_t *) malloc(src_size);
+    *out = (uint8_t *) avs_malloc(src_size);
     if (!*out) {
         return -1;
     }
@@ -332,11 +334,11 @@ static int load_buffer_from_file(uint8_t **out, size_t *out_size,
         goto finish;
     }
     *out_size = (size_t) size;
-    if (!(*out = (uint8_t *) malloc(*out_size))) {
+    if (!(*out = (uint8_t *) avs_malloc(*out_size))) {
         goto finish;
     }
     if (fread(*out, *out_size, 1, f) != 1) {
-        free(*out);
+        avs_free(*out);
         *out = NULL;
         goto finish;
     }
@@ -353,19 +355,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     size_t arg0_prefix_length =
             (size_t) (last_arg0_slash ? (last_arg0_slash - argv[0] + 1) : 0);
     bool identity_set, key_set;
-
-    char default_cert_path[arg0_prefix_length + sizeof(DEFAULT_CERT_FILE)];
-    memcpy(default_cert_path, argv[0], arg0_prefix_length);
-    strcpy(default_cert_path + arg0_prefix_length, DEFAULT_CERT_FILE);
-
-    char default_key_path[arg0_prefix_length + sizeof(DEFAULT_KEY_FILE)];
-    memcpy(default_key_path, argv[0], arg0_prefix_length);
-    strcpy(default_key_path + arg0_prefix_length, DEFAULT_KEY_FILE);
-
-    const char *cert_path = default_cert_path;
-    const char *key_path = default_key_path;
-
-    *parsed_args = DEFAULT_CMDLINE_ARGS;
+    int num_servers = 0;
 
     const struct option options[] = {
         { "access-entry",                  required_argument, 0, 'a' },
@@ -400,7 +390,28 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "attribute-storage-persistence-file", required_argument, 0, 6 },
         { 0, 0, 0, 0 }
     };
-    int num_servers = 0;
+
+    int retval = -1;
+
+    *parsed_args = DEFAULT_CMDLINE_ARGS;
+
+    char *default_cert_path = (char *) avs_malloc(
+            arg0_prefix_length + sizeof(DEFAULT_CERT_FILE));
+    char *default_key_path = (char *) avs_malloc(
+            arg0_prefix_length + sizeof(DEFAULT_KEY_FILE));
+    const char *cert_path = default_cert_path;
+    const char *key_path = default_key_path;
+
+    if (!default_cert_path || !default_key_path) {
+        demo_log(ERROR, "Out of memory");
+        goto finish;
+    }
+
+    memcpy(default_cert_path, argv[0], arg0_prefix_length);
+    strcpy(default_cert_path + arg0_prefix_length, DEFAULT_CERT_FILE);
+
+    memcpy(default_key_path, argv[0], arg0_prefix_length);
+    strcpy(default_key_path + arg0_prefix_length, DEFAULT_KEY_FILE);
 
     char getopt_str[3 * ARRAY_SIZE(options)];
     build_getopt_string(options, getopt_str, sizeof(getopt_str));
@@ -412,9 +423,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case '?':
             demo_log(ERROR, "unrecognized cmdline argument: %s",
                      argv[option_index]);
-            goto error;
-        case -1:
             goto finish;
+        case -1:
+            goto process;
         case 'a': {
             /* optind is the index of the next argument to be processed, which
                means that argv[optind-1] is the current one. We shall fail if
@@ -424,13 +435,13 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     || *argv[optind] == '-'
                     || (optind + 1 < argc && *argv[optind + 1] != '-')) {
                 demo_log(ERROR, "invalid pair OID SSID");
-                goto error;
+                goto finish;
             }
 
             AVS_LIST(access_entry_t) entry =
                 AVS_LIST_NEW_ELEMENT(access_entry_t);
             if (!entry) {
-                goto error;
+                goto finish;
             }
 
             // We ignore the fact, that someone passes bad input, and silently
@@ -448,13 +459,13 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'H':
             if (parse_i32(optarg,
                           &parsed_args->connection_args.bootstrap_holdoff_s)) {
-                goto error;
+                goto finish;
             }
             break;
         case 'T':
             if (parse_i32(optarg,
                           &parsed_args->connection_args.bootstrap_timeout_s)) {
-                goto error;
+                goto finish;
             }
             break;
         case 'e':
@@ -465,10 +476,10 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             for (size_t i = 0; options[i].name || options[i].val; ++i) {
                 print_option_help(&options[i]);
             }
-            goto error;
+            goto finish;
         case 'l':
             if (parse_i32(optarg, &parsed_args->connection_args.lifetime)) {
-                goto error;
+                goto finish;
             }
             break;
         case 'c':
@@ -482,7 +493,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                         || freq > INT32_MAX) {
                     demo_log(ERROR, "invalid location update frequency: %s",
                              optarg);
-                    goto error;
+                    goto finish;
                 }
 
                 parsed_args->location_update_frequency_s = (time_t)freq;
@@ -495,7 +506,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                         || port <= 0
                         || port > UINT16_MAX) {
                     demo_log(ERROR, "invalid UDP port number: %s", optarg);
-                    goto error;
+                    goto finish;
                 }
 
                 parsed_args->udp_listen_port = (uint16_t)port;
@@ -507,7 +518,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                                 &parsed_args->connection_args
                                          .public_cert_or_psk_identity_size)) {
                 demo_log(ERROR, "Invalid identity");
-                goto error;
+                goto finish;
             }
             break;
         case 'C':
@@ -520,7 +531,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                         &parsed_args->connection_args
                                  .private_cert_or_psk_key_size)) {
                 demo_log(ERROR, "Invalid key");
-                goto error;
+                goto finish;
             }
             break;
         case 'K':
@@ -545,14 +556,14 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 if (parse_u16(optarg,
                               &parsed_args->connection_args.servers[idx]
                                                            .security_iid)) {
-                    goto error;
+                    goto finish;
                 }
             }
             break;
         case 's':
             if (parse_security_mode(
                     optarg, &parsed_args->connection_args.security_mode)) {
-                goto error;
+                goto finish;
             }
             break;
         case 'd': {
@@ -560,7 +571,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 if (parse_u16(optarg,
                               &parsed_args->connection_args.servers[idx]
                                                            .server_iid)) {
-                    goto error;
+                    goto finish;
                 }
             }
             break;
@@ -576,19 +587,19 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'I':
             if (parse_i32(optarg, &parsed_args->inbuf_size)
                     || parsed_args->inbuf_size <= 0) {
-                goto error;
+                goto finish;
             }
             break;
         case 'O':
             if (parse_i32(optarg, &parsed_args->outbuf_size)
                     || parsed_args->outbuf_size <= 0) {
-                goto error;
+                goto finish;
             }
             break;
         case '$':
             if (parse_i32(optarg, &parsed_args->msg_cache_size)
                     || parsed_args->msg_cache_size < 0) {
-                goto error;
+                goto finish;
             }
             break;
         case 'N':
@@ -598,7 +609,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             int32_t max_icmp_failures;
             if (parse_i32(optarg, &max_icmp_failures)
                     || max_icmp_failures < 0) {
-                goto error;
+                goto finish;
             }
             parsed_args->max_icmp_failures = (uint32_t)max_icmp_failures;
             break;
@@ -611,7 +622,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
-                goto error;
+                goto finish;
             }
             parsed_args->fw_security_info =
                     avs_net_security_info_from_certificates(
@@ -626,7 +637,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
-                goto error;
+                goto finish;
             }
             parsed_args->fw_security_info =
                     avs_net_security_info_from_certificates(
@@ -642,12 +653,12 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                             != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
-                goto error;
+                goto finish;
             }
             if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.data.psk.identity) {
                 demo_log(ERROR, "--fw-psk-identity specified more than once");
-                goto error;
+                goto finish;
             }
             if (parse_hexstring(
                     optarg,
@@ -655,7 +666,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                             &parsed_args->fw_security_info.data.psk.identity,
                     &parsed_args->fw_security_info.data.psk.identity_size)) {
                 demo_log(ERROR, "Invalid PSK identity for firmware upgrade");
-                goto error;
+                goto finish;
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
@@ -665,12 +676,12 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                             != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
-                goto error;
+                goto finish;
             }
             if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.data.psk.psk) {
                 demo_log(ERROR, "--fw-psk-key specified more than once");
-                goto error;
+                goto finish;
             }
             if (parse_hexstring(
                     optarg,
@@ -678,7 +689,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                             &parsed_args->fw_security_info.data.psk.psk,
                     &parsed_args->fw_security_info.data.psk.psk_size)) {
                 demo_log(ERROR, "Invalid pre-shared key for firmware upgrade");
-                goto error;
+                goto finish;
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
@@ -686,10 +697,10 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->attr_storage_file = optarg;
             break;
         case 0:
-            goto finish;
+            goto process;
         }
     }
-finish:
+process:
     for (int i = 0; i < AVS_MAX(num_servers, 1); ++i) {
         server_entry_t *entry = &parsed_args->connection_args.servers[i];
         entry->id = (anjay_ssid_t) (i + 1);
@@ -707,7 +718,7 @@ finish:
             || (key_set && (key_path != default_key_path))) {
         demo_log(ERROR, "Certificate information cannot be loaded both from "
                         "file and immediate hex data at the same time");
-        goto error;
+        goto finish;
     }
     if (parsed_args->connection_args.security_mode == ANJAY_UDP_SECURITY_PSK) {
         if (!identity_set
@@ -717,7 +728,7 @@ finish:
                                      .public_cert_or_psk_identity_size,
                             DEFAULT_PSK_IDENTITY,
                             sizeof(DEFAULT_PSK_IDENTITY) - 1)) {
-            goto error;
+            goto finish;
         }
         if (!key_set
             && clone_buffer(
@@ -725,14 +736,14 @@ finish:
                        &parsed_args->connection_args
                                 .private_cert_or_psk_key_size,
                        DEFAULT_PSK_KEY, sizeof(DEFAULT_PSK_KEY) - 1)) {
-            goto error;
+            goto finish;
         }
     } else if (parsed_args->connection_args.security_mode
             == ANJAY_UDP_SECURITY_CERTIFICATE) {
         if (identity_set ^ key_set) {
             demo_log(ERROR, "Setting public cert but not private cert (and "
                             "other way around) makes little sense");
-            goto error;
+            goto finish;
         } else if (!identity_set) {
             if (load_buffer_from_file(&parsed_args->connection_args
                                               .public_cert_or_psk_identity,
@@ -741,7 +752,7 @@ finish:
                                       cert_path)) {
                 demo_log(ERROR, "Could not load certificate from %s",
                          cert_path);
-                goto error;
+                goto finish;
             }
             if (load_buffer_from_file(&parsed_args->connection_args
                                               .private_cert_or_psk_key,
@@ -750,7 +761,7 @@ finish:
                                       key_path)) {
                 demo_log(ERROR, "Could not load private key from %s",
                          key_path);
-                goto error;
+                goto finish;
             }
         }
     }
@@ -759,10 +770,14 @@ finish:
                     || !parsed_args->fw_security_info.data.psk.psk)) {
         demo_log(ERROR, "Both identity and key must be provided when using PSK "
                         "for firmware upgrade security");
-        goto error;
+        goto finish;
     }
-    return 0;
-error:
-    AVS_LIST_CLEAR(&parsed_args->access_entries);
-    return -1;
+    retval = 0;
+finish:
+    if (retval) {
+        AVS_LIST_CLEAR(&parsed_args->access_entries);
+    }
+    avs_free(default_cert_path);
+    avs_free(default_key_path);
+    return retval;
 }

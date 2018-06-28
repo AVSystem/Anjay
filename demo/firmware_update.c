@@ -31,6 +31,7 @@
 
 #include <avsystem/commons/stream/stream_file.h>
 #include <avsystem/commons/utils.h>
+#include <avsystem/commons/memory.h>
 
 #define FORCE_ERROR_OUT_OF_MEMORY 1
 #define FORCE_ERROR_FAILED_UPDATE 2
@@ -45,7 +46,7 @@ static char *generate_random_target_filepath(void) {
     if (fd == -1) {
         demo_log(ERROR, "could not generate firmware filename: %s",
                  strerror(errno));
-        free(result);
+        avs_free(result);
         return NULL;
     }
     close(fd);
@@ -72,7 +73,7 @@ static void maybe_delete_firmware_file(fw_update_logic_t *fw) {
     if (fw->next_target_path) {
         unlink(fw->next_target_path);
         demo_log(INFO, "Deleted %s", fw->next_target_path);
-        free(fw->next_target_path);
+        avs_free(fw->next_target_path);
         fw->next_target_path = NULL;
     }
 }
@@ -86,7 +87,7 @@ void firmware_update_set_package_path(fw_update_logic_t *fw, const char *path) {
         return;
     }
 
-    free(fw->administratively_set_target_path);
+    avs_free(fw->administratively_set_target_path);
     fw->administratively_set_target_path = new_target_path;
     demo_log(INFO, "firmware package path set to %s",
              fw->administratively_set_target_path);
@@ -201,7 +202,7 @@ static int unpack_firmware_in_place(fw_update_logic_t *fw) {
 
 cleanup:
     unlink(tmp_path);
-    free(tmp_path);
+    avs_free(tmp_path);
     if (result) {
         maybe_delete_firmware_file(fw);
     }
@@ -381,7 +382,7 @@ static void fw_reset(void *fw_) {
         fclose(fw->stream);
         fw->stream = NULL;
     }
-    free(fw->package_uri);
+    avs_free(fw->package_uri);
     fw->package_uri = NULL;
     maybe_delete_firmware_file(fw);
     delete_persistence_file(fw);
@@ -402,17 +403,17 @@ static int fw_stream_open(void *fw_,
     }
 
     if (maybe_create_firmware_file(fw)) {
-        free(uri);
+        avs_free(uri);
         return -1;
     }
 
     if (!(fw->stream = fopen(fw->next_target_path, "wb"))) {
         demo_log(ERROR, "could not open file: %s", fw->next_target_path);
-        free(uri);
+        avs_free(uri);
         return -1;
     }
 
-    free(fw->package_uri);
+    avs_free(fw->package_uri);
     fw->package_uri = uri;
     if (write_persistence_file(fw->persistence_file,
                                ANJAY_FW_UPDATE_INITIAL_DOWNLOADING, package_uri,
@@ -523,13 +524,14 @@ static int restore_etag(avs_persistence_context_t *ctx,
     uint16_t size16;
     int result = avs_persistence_u16(ctx, &size16);
     if (!result && size16 <= UINT8_MAX) {
-        *etag = (anjay_etag_t *) malloc(offsetof(anjay_etag_t, value) + size16);
+        *etag = (anjay_etag_t *) avs_malloc(offsetof(anjay_etag_t, value)
+                                            + size16);
         if (!*etag) {
             return -1;
         }
         (*etag)->size = (uint8_t) size16;
         if ((result = avs_persistence_bytes(ctx, (*etag)->value, size16))) {
-            free(*etag);
+            avs_free(*etag);
             *etag = NULL;
         }
     }
@@ -578,8 +580,8 @@ static persistence_file_data_t read_persistence_file(const char *path) {
             || restore_etag(ctx, &data.etag)) {
         demo_log(WARNING,
                  "Invalid data in the firmware state persistence file");
-        free(data.uri);
-        free(data.download_file);
+        avs_free(data.uri);
+        avs_free(data.download_file);
         memset(&data, 0, sizeof(data));
     }
     data.result = (anjay_fw_update_initial_result_t) result8;
@@ -643,8 +645,8 @@ int firmware_update_install(anjay_t *anjay,
 
     int result = anjay_fw_update_install(anjay, &FW_UPDATE_HANDLERS, fw,
                                          &state);
-    free(data.uri);
-    free(data.etag);
+    avs_free(data.uri);
+    avs_free(data.etag);
     if (result) {
         firmware_update_destroy(fw);
     }
@@ -655,7 +657,7 @@ void firmware_update_destroy(fw_update_logic_t *fw_update) {
     if (fw_update->stream) {
         fclose(fw_update->stream);
     }
-    free(fw_update->package_uri);
-    free(fw_update->administratively_set_target_path);
-    free(fw_update->next_target_path);
+    avs_free(fw_update->package_uri);
+    avs_free(fw_update->administratively_set_target_path);
+    avs_free(fw_update->next_target_path);
 }

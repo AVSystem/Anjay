@@ -125,6 +125,20 @@ class CoapDownload:
                 self.assertEqual(f.read(), DUMMY_PAYLOAD)
 
 
+class CoapDownloadSockets(CoapDownload.Test):
+    def runTest(self):
+        self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name))
+
+        self.assertEqual(2, self.get_socket_count())
+        self.assertEqual(1, self.get_non_lwm2m_socket_count())
+        self.assertEqual('UDP', self.get_transport(socket_index=-1))
+
+        # make sure the download is actually done
+        self.wait_until_downloads_finished()
+        with open(self.tempfile.name, 'rb') as f:
+            self.assertEqual(f.read(), DUMMY_PAYLOAD)
+
+
 class CoapDownloadDoesNotBlockLwm2mTraffic(CoapDownload.Test):
     def runTest(self):
         self.communicate('download %s %s' % (self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name))

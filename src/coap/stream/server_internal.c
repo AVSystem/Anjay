@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
@@ -27,6 +27,7 @@
 #include "../coap_log.h"
 
 #include <avsystem/commons/coap/block_utils.h>
+#include <avsystem/commons/memory.h>
 
 #include "../content_format.h"
 #include "../id_source/static.h"
@@ -507,7 +508,7 @@ static int send_continue(coap_server_t *server,
 
     int result = -1;
     size_t storage_size = avs_coap_msg_info_get_storage_size(&info);
-    void *storage = malloc(storage_size);
+    void *storage = avs_malloc(storage_size);
     if (!storage) {
         goto cleanup_info;
     }
@@ -520,7 +521,7 @@ static int send_continue(coap_server_t *server,
                                    server->common.socket, msg);
     }
 
-    free(storage);
+    avs_free(storage);
 cleanup_info:
     avs_coap_msg_info_reset(&info);
     return result;

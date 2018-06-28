@@ -251,7 +251,7 @@ static const anjay_dm_object_def_t CONN_STATISTICS = {
 
 const anjay_dm_object_def_t **cs_object_create(void) {
     conn_stats_repr_t *repr = (conn_stats_repr_t *)
-            calloc(1, sizeof(conn_stats_repr_t));
+            avs_calloc(1, sizeof(conn_stats_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -261,6 +261,6 @@ const anjay_dm_object_def_t **cs_object_create(void) {
 
 void cs_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
-        free(get_cs(def));
+        avs_free(get_cs(def));
     }
 }

@@ -213,11 +213,11 @@ just load contents of certificate files in DER format into memory:
             goto finish;
         }
         *out_size = (size_t) size;
-        if (!(*out = (uint8_t *) malloc(*out_size))) {
+        if (!(*out = (uint8_t *) avs_malloc(*out_size))) {
             goto finish;
         }
         if (fread(*out, *out_size, 1, f) != 1) {
-            free(*out);
+            avs_free(*out);
             *out = NULL;
             goto finish;
         }
@@ -276,6 +276,6 @@ file loading routine:
 
 .. snippet-source:: examples/tutorial/AT3-cert/src/main.c
 
-    free((uint8_t *) security_instance.public_cert_or_psk_identity);
-    free((uint8_t *) security_instance.private_cert_or_psk_key);
-    free((uint8_t *) security_instance.server_public_key);
+    avs_free((uint8_t *) security_instance.public_cert_or_psk_identity);
+    avs_free((uint8_t *) security_instance.private_cert_or_psk_key);
+    avs_free((uint8_t *) security_instance.server_public_key);

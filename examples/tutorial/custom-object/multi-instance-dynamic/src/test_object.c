@@ -340,7 +340,7 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
 };
 
 const anjay_dm_object_def_t **create_test_object(void) {
-    test_object_t *repr = (test_object_t *) calloc(1, sizeof(test_object_t));
+    test_object_t *repr = (test_object_t *) avs_calloc(1, sizeof(test_object_t));
     if (repr) {
         repr->obj_def = &OBJECT_DEF;
         return &repr->obj_def;
@@ -355,5 +355,5 @@ void delete_test_object(const anjay_dm_object_def_t **obj) {
     test_object_t *repr = get_test_object(obj);
     AVS_LIST_CLEAR(&repr->instances);
     AVS_LIST_CLEAR(&repr->backup_instances);
-    free(repr);
+    avs_free(repr);
 }

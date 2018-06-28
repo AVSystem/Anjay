@@ -23,6 +23,7 @@
 #include <assert.h>
 
 #include <avsystem/commons/list.h>
+#include <avsystem/commons/memory.h>
 
 typedef struct iosched_instant_entry {
     iosched_handler_t *handler;
@@ -56,7 +57,7 @@ struct iosched_struct {
 };
 
 iosched_t *iosched_create(void) {
-    return (iosched_t *) calloc(1, sizeof(iosched_t));
+    return (iosched_t *) avs_calloc(1, sizeof(iosched_t));
 }
 
 void iosched_release(iosched_t *sched) {
@@ -66,7 +67,7 @@ void iosched_release(iosched_t *sched) {
                 sched->entries->free_arg(sched->entries->arg);
             }
         }
-        free(sched);
+        avs_free(sched);
     }
 }
 
@@ -176,18 +177,23 @@ static nfds_t get_poll_fds(iosched_t *sched,
 
 static int handle_poll_entries(iosched_t *sched,
                                int poll_timeout_ms) {
-    struct pollfd poll_fds[AVS_LIST_SIZE(sched->entries)];
-    nfds_t poll_fds_count = get_poll_fds(sched, poll_fds, ARRAY_SIZE(poll_fds));
+    size_t num_entries = AVS_LIST_SIZE(sched->entries);
+    struct pollfd *poll_fds =
+            (struct pollfd *) avs_malloc(sizeof(struct pollfd) * num_entries);
+    if (!poll_fds) {
+        return -1;
+    }
+    nfds_t poll_fds_count = get_poll_fds(sched, poll_fds, num_entries);
+    size_t i = 0;
 
     int result = poll(poll_fds, poll_fds_count, poll_timeout_ms);
     if (result <= 0) {
-        return result;
+        goto finish;
     }
 
     AVS_LIST(iosched_entry_t) *entry;
     AVS_LIST(iosched_entry_t) helper;
 
-    size_t i = 0;
     AVS_LIST_DELETABLE_FOREACH_PTR(entry, helper, &sched->entries) {
         while (i < poll_fds_count
                && poll_fds[i].fd != (*entry)->data.poll.fd) {
@@ -204,7 +210,10 @@ static int handle_poll_entries(iosched_t *sched,
         ++i;
     }
 
-    return 0;
+    result = 0;
+finish:
+    avs_free(poll_fds);
+    return result;
 }
 
 int iosched_run(iosched_t *sched, int timeout_ms) {

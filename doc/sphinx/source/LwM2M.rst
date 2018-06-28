@@ -499,8 +499,8 @@ may be one of the following:
 - ``S`` - SMS connection in standard mode
 - ``SQ`` - SMS connection in queue mode
 - ``US`` - both UDP and SMS connections active, both in standard mode
-- ``UQS`` - both UDP and SMS connections active; UDP in standard mode, SMS in
-  queue mode
+- ``UQS`` - both UDP and SMS connections active; UDP in queue mode, SMS in
+  standard mode
 
 The "queue mode" mentioned here is a special mode of operation in which the
 client device is not required to actively listen for incoming packets. The

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <string.h>
 
@@ -142,7 +142,7 @@ static int finish_user_stream(fw_repr_t *fw) {
     int result = fw->user_state.handlers->stream_finish(fw->user_state.arg);
     if (result) {
         fw->user_state.state = UPDATE_STATE_IDLE;
-        free(fw->security_from_dm);
+        avs_free(fw->security_from_dm);
         fw->security_from_dm = NULL;
     } else {
         fw->user_state.state = UPDATE_STATE_DOWNLOADED;
@@ -153,7 +153,7 @@ static int finish_user_stream(fw_repr_t *fw) {
 static void reset_user_state(fw_repr_t *fw) {
     fw->user_state.handlers->reset(fw->user_state.arg);
     fw->user_state.state = UPDATE_STATE_IDLE;
-    free(fw->security_from_dm);
+    avs_free(fw->security_from_dm);
     fw->security_from_dm = NULL;
 }
 
@@ -247,9 +247,9 @@ static int fw_read(anjay_t *anjay,
     case FW_RES_PACKAGE_URI:
         return anjay_ret_string(ctx, fw->package_uri ? fw->package_uri : "");
     case FW_RES_STATE:
-        return anjay_ret_i32(ctx, fw->state);
+        return anjay_ret_i32(ctx, (int32_t) fw->state);
     case FW_RES_UPDATE_RESULT:
-        return anjay_ret_i32(ctx, fw->result);
+        return anjay_ret_i32(ctx, (int32_t) fw->result);
     case FW_RES_PKG_NAME: {
         const char *name = user_state_get_name(&fw->user_state);
         if (name) {
@@ -318,13 +318,13 @@ static int fw_read(anjay_t *anjay,
 
 #ifdef WITH_DOWNLOADER
 static anjay_downloader_protocol_class_t classify_protocol(const char *uri) {
+    char buf[6] = "";
     const char *colon = strchr(uri, ':');
-    if (!colon) {
+    size_t proto_length = colon ? (size_t) (colon - uri) : 0;
+    if (proto_length >= sizeof(buf)) {
         return ANJAY_DOWNLOADER_PROTO_UNSUPPORTED;
     }
-    char buf[colon + 1 - uri];
-    memcpy(buf, uri, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    memcpy(buf, uri, proto_length);
     return _anjay_downloader_classify_protocol(buf);
 }
 
@@ -585,13 +585,16 @@ static int fw_write(anjay_t *anjay,
 
             if (!result && len > 0 && classify_protocol(new_uri)
                     == ANJAY_DOWNLOADER_PROTO_UNSUPPORTED) {
+                fw_log(ERROR,
+                       "unsupported download protocol required for uri %s",
+                       new_uri);
                 set_update_result(anjay, fw,
                                   UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
                 result = ANJAY_ERR_BAD_REQUEST;
             }
 
             if (!result) {
-                free((void *) (intptr_t) fw->package_uri);
+                avs_free((void *) (intptr_t) fw->package_uri);
                 fw->package_uri = new_uri;
 
                 if (len == 0) {
@@ -606,7 +609,7 @@ static int fw_write(anjay_t *anjay,
                     // write itself succeeded; do not propagate error
                 }
             } else {
-                free(new_uri);
+                avs_free(new_uri);
             }
 
             return result;
@@ -702,9 +705,9 @@ static void fw_delete(anjay_t *anjay, void *fw_) {
     (void) anjay;
     fw_repr_t *fw = (fw_repr_t *) fw_;
     _anjay_sched_del(_anjay_sched_get(anjay), &fw->update_job);
-    free(fw->security_from_dm);
-    free((void *) (intptr_t) fw->package_uri);
-    free(fw);
+    avs_free(fw->security_from_dm);
+    avs_free((void *) (intptr_t) fw->package_uri);
+    avs_free(fw);
 }
 
 static const anjay_dm_module_t FIRMWARE_UPDATE_MODULE = {
@@ -780,7 +783,7 @@ anjay_fw_update_install(anjay_t *anjay,
                         const anjay_fw_update_initial_state_t *initial_state) {
     assert(anjay);
 
-    fw_repr_t *repr = (fw_repr_t *) calloc(1, sizeof(fw_repr_t));
+    fw_repr_t *repr = (fw_repr_t *) avs_calloc(1, sizeof(fw_repr_t));
     if (!repr) {
         fw_log(ERROR, "Out of memory");
         return -1;
@@ -792,7 +795,7 @@ anjay_fw_update_install(anjay_t *anjay,
 
     if (initialize_fw_repr(anjay, repr, initial_state)
             || _anjay_dm_module_install(anjay, &FIRMWARE_UPDATE_MODULE, repr)) {
-        free(repr);
+        avs_free(repr);
         return -1;
     }
 

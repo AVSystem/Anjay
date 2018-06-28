@@ -124,7 +124,7 @@ going to introduce two functions, namely ``create_test_object``:
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
 
     const anjay_dm_object_def_t **create_test_object(void) {
-        test_object_t *repr = (test_object_t *) calloc(1, sizeof(test_object_t));
+        test_object_t *repr = (test_object_t *) avs_calloc(1, sizeof(test_object_t));
         if (repr) {
             repr->obj_def = &OBJECT_DEF;
             return &repr->obj_def;
@@ -148,7 +148,7 @@ and ``delete_test_object``:
         test_object_t *repr = get_test_object(obj);
         AVS_LIST_CLEAR(&repr->instances);
         AVS_LIST_CLEAR(&repr->backup_instances);
-        free(repr);
+        avs_free(repr);
     }
 
 As you can see, dynamic memory management is semi-automatically handled by ``AVS_LIST``.

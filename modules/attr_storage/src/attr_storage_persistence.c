@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -370,9 +370,6 @@ int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
     }
     retval = HANDLE_LIST(object, ctx, &attr_storage->objects, (void *) 2);
     avs_persistence_context_delete(ctx);
-    if (!retval) {
-        fas_log(INFO, "Attribute Storage state persisted");
-    }
     return retval;
 }
 
@@ -416,8 +413,6 @@ int _anjay_attr_storage_restore_inner(anjay_t *anjay,
     }
     if (retval) {
         _anjay_attr_storage_clear(attr_storage);
-    } else {
-        fas_log(INFO, "Attribute Storage state restored");
     }
     return retval;
 }
@@ -432,6 +427,7 @@ int anjay_attr_storage_persist(anjay_t *anjay, avs_stream_abstract_t *out) {
     int retval = _anjay_attr_storage_persist_inner(fas, out);
     if (!retval) {
         fas->modified_since_persist = false;
+        fas_log(INFO, "Attribute Storage state persisted");
     }
     return retval;
 }
@@ -444,6 +440,9 @@ int anjay_attr_storage_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
         return -1;
     }
     int retval = _anjay_attr_storage_restore_inner(anjay, fas, in);
+    if (!retval) {
+        fas_log(INFO, "Attribute Storage state restored");
+    }
     fas->modified_since_persist = (retval != 0);
     return retval;
 }

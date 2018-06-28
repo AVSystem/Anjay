@@ -33,8 +33,8 @@ typedef struct {
 
 static inline void
 _anjay_mock_coap_stream_cleanup(anjay_mock_coap_stream_ctx_t *ctx) {
-    free(ctx->in_buffer);
-    free(ctx->out_buffer);
+    avs_free(ctx->in_buffer);
+    avs_free(ctx->out_buffer);
 }
 
 #define SCOPED_MOCK_COAP_STREAM(Name)                             \

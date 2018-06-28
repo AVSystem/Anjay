@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 
@@ -169,7 +169,7 @@ static int send_register(anjay_t *anjay,
     if ((server_uri->uri_path && !details.uri_path)
             || (server_uri->uri_query && !details.uri_query)
             || !AVS_LIST_APPEND(&details.uri_path,
-                                _anjay_make_string_list("rd", NULL))
+                                ANJAY_MAKE_STRING_LIST("rd"))
             || !AVS_LIST_APPEND(&details.uri_query,
                                 _anjay_make_query_string_list(
                                         ANJAY_SUPPORTED_ENABLER_VERSION,
@@ -360,7 +360,7 @@ static int bind_server_stream(anjay_registration_update_ctx_t *ctx) {
     assert(ctx->server);
     anjay_connection_ref_t connection = {
         .server = ctx->server,
-        .conn_type = _anjay_server_registration_conn_type(ctx->server)
+        .conn_type = _anjay_server_primary_conn_type(ctx->server)
     };
     if (connection.conn_type == ANJAY_CONNECTION_UNSET) {
         anjay_log(ERROR, "no valid registration connection for server %u",

@@ -16,7 +16,7 @@
 
 #ifndef SERVER_MOD_SERVER_H
 #define SERVER_MOD_SERVER_H
-#include <config.h>
+#include <anjay_config.h>
 
 #include <anjay/core.h>
 #include <anjay/server.h>

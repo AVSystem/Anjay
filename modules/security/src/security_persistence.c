@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
+#ifdef WITH_AVS_PERSISTENCE
 #include <avsystem/commons/persistence.h>
+#endif // WITH_AVS_PERSISTENCE
+
 #include <anjay_modules/dm_utils.h>
 
 #include <string.h>
@@ -30,6 +33,8 @@ VISIBILITY_SOURCE_BEGIN
 
 #define persistence_log(level, ...) \
     _anjay_log(security_persistence, level, __VA_ARGS__)
+
+#ifdef WITH_AVS_PERSISTENCE
 
 static const char MAGIC_V0[] = { 'S', 'E', 'C', '\0' };
 static const char MAGIC_V1[] = { 'S', 'E', 'C', '\1' };
@@ -196,3 +201,21 @@ int anjay_security_object_restore(anjay_t *anjay,
 #ifdef ANJAY_TEST
 #include "test/persistence.c"
 #endif
+
+#else // WITH_AVS_PERSISTENCE
+
+int anjay_security_object_persist(anjay_t *anjay,
+                                  avs_stream_abstract_t *out_stream) {
+    (void) anjay; (void) out_stream;
+    persistence_log(ERROR, "Persistence not compiled in");
+    return -1;
+}
+
+int anjay_security_object_restore(anjay_t *anjay,
+                                  avs_stream_abstract_t *in_stream) {
+    (void) anjay; (void) in_stream;
+    persistence_log(ERROR, "Persistence not compiled in");
+    return -1;
+}
+
+#endif // WITH_AVS_PERSISTENCE

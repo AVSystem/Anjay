@@ -18,6 +18,7 @@
 #define ANJAY_COAP_IDSOURCE_H
 
 #include <avsystem/commons/coap/msg.h>
+#include <avsystem/commons/memory.h>
 
 #include <stdlib.h>
 
@@ -38,7 +39,7 @@ struct coap_id_source {
 static inline void
 _anjay_coap_id_source_release(coap_id_source_t **src) {
     if (src && *src) {
-        free(*src);
+        avs_free(*src);
         *src = NULL;
     }
 }

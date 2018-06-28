@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 #include <string.h>
@@ -663,7 +663,7 @@ static void ac_delete(anjay_t *anjay, void *access_control_) {
             (access_control_t *) access_control_;
     _anjay_access_control_clear_state(&access_control->current);
     _anjay_access_control_clear_state(&access_control->saved_state);
-    free(access_control);
+    avs_free(access_control);
 }
 
 static const anjay_dm_module_t ACCESS_CONTROL_MODULE = {
@@ -701,14 +701,14 @@ int anjay_access_control_install(anjay_t *anjay) {
         return -1;
     }
     access_control_t *access_control =
-        (access_control_t *) calloc(1, sizeof(access_control_t));
+        (access_control_t *) avs_calloc(1, sizeof(access_control_t));
     if (!access_control) {
         return -1;
     }
     access_control->obj_def = &ACCESS_CONTROL;
     if (_anjay_dm_module_install(anjay, &ACCESS_CONTROL_MODULE,
                                  access_control)) {
-        free(access_control);
+        avs_free(access_control);
         return -1;
     }
     if (anjay_register_object(anjay, &access_control->obj_def)) {

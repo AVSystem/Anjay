@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 
 #include <avsystem/commons/errno.h>
 #include <avsystem/commons/http.h>
+#include <avsystem/commons/memory.h>
 #include <avsystem/commons/stream/stream_net.h>
 #include <avsystem/commons/utils.h>
 
@@ -73,7 +74,7 @@ static anjay_etag_t *read_etag(const char *text) {
         return NULL;
     }
     anjay_etag_t *result = (anjay_etag_t *)
-            malloc(offsetof(anjay_etag_t, value) + (len - 2));
+            avs_malloc(offsetof(anjay_etag_t, value) + (len - 2));
     if (result) {
         result->size = (uint8_t) (len - 2);
         memcpy(result->value, &text[1], result->size);
@@ -175,10 +176,17 @@ error:
                                      error_code, result);
 }
 
-static avs_net_abstract_socket_t *get_http_socket(anjay_downloader_t *dl,
-                                                  anjay_download_ctx_t *ctx) {
+static int get_http_socket(anjay_downloader_t *dl,
+                           anjay_download_ctx_t *ctx,
+                           avs_net_abstract_socket_t **out_socket,
+                           anjay_socket_transport_t *out_transport) {
     (void) dl;
-    return avs_stream_net_getsock(((anjay_http_download_ctx_t *) ctx)->stream);
+    if (!(*out_socket = avs_stream_net_getsock(
+            ((anjay_http_download_ctx_t *) ctx)->stream))) {
+        return -1;
+    }
+    *out_transport = ANJAY_SOCKET_TRANSPORT_TCP;
+    return 0;
 }
 
 static void handle_http_packet(anjay_downloader_t *dl,
@@ -237,7 +245,7 @@ static void cleanup_http_transfer(anjay_downloader_t *dl,
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
     _anjay_sched_del(_anjay_downloader_get_anjay(dl)->sched,
                      &ctx->send_request_job);
-    free(ctx->etag);
+    avs_free(ctx->etag);
     avs_stream_cleanup(&ctx->stream);
     avs_url_free(ctx->parsed_url);
     avs_http_free(ctx->client);
@@ -305,7 +313,7 @@ int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     ctx->bytes_written = cfg->start_offset;
     if (cfg->etag) {
         size_t struct_size = offsetof(anjay_etag_t, value) + cfg->etag->size;
-        if (!(ctx->etag = (anjay_etag_t *) malloc(struct_size))) {
+        if (!(ctx->etag = (anjay_etag_t *) avs_malloc(struct_size))) {
             dl_log(ERROR, "could not copy ETag");
             result = -ENOMEM;
             goto error;

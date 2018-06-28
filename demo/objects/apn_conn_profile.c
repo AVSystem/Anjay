@@ -195,7 +195,7 @@ static int apncp_resource_read(anjay_t *anjay,
     case APNCP_RES_ENABLE_STATUS:
         return anjay_ret_bool(ctx, inst->enabled);
     case APNCP_RES_AUTHENTICATION_TYPE:
-        return anjay_ret_i32(ctx, inst->auth_type);
+        return anjay_ret_i32(ctx, (int32_t) inst->auth_type);
     default:
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -334,7 +334,7 @@ static const anjay_dm_object_def_t apn_conn_profile = {
 
 const anjay_dm_object_def_t **apn_conn_profile_object_create(void) {
     apn_conn_profile_repr_t *repr = (apn_conn_profile_repr_t *)
-            calloc(1, sizeof(apn_conn_profile_repr_t));
+            avs_calloc(1, sizeof(apn_conn_profile_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -349,7 +349,7 @@ void apn_conn_profile_object_release(const anjay_dm_object_def_t **def) {
         apn_conn_profile_repr_t *apncp = get_apncp(def);
         AVS_LIST_CLEAR(&apncp->instances);
         AVS_LIST_CLEAR(&apncp->saved_instances);
-        free(apncp);
+        avs_free(apncp);
     }
 }
 

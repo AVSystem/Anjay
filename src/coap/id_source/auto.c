@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include "auto.h"
 
 #include <stdlib.h>
+
+#include <avsystem/commons/memory.h>
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -55,7 +57,7 @@ coap_id_source_t *_anjay_coap_id_source_auto_new(anjay_rand_seed_t rand_seed,
                                                  size_t token_size) {
     assert(token_size <= AVS_COAP_MAX_TOKEN_LENGTH);
     coap_default_id_src_t *src = (coap_default_id_src_t *)
-            malloc(sizeof(coap_default_id_src_t));
+            avs_malloc(sizeof(coap_default_id_src_t));
     if (!src) {
         return NULL;
     }

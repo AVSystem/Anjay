@@ -224,7 +224,7 @@ static const anjay_dm_object_def_t cell_connectivity = {
 const anjay_dm_object_def_t **
 cell_connectivity_object_create(anjay_demo_t *demo) {
     cell_connectivity_repr_t *repr = (cell_connectivity_repr_t *)
-            calloc(1, sizeof(cell_connectivity_repr_t));
+            avs_calloc(1, sizeof(cell_connectivity_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -237,6 +237,6 @@ cell_connectivity_object_create(anjay_demo_t *demo) {
 
 void cell_connectivity_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
-        free(get_cell(def));
+        avs_free(get_cell(def));
     }
 }

@@ -13,8 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Few notes on general usage
-==========================
+A few notes on general usage
+============================
 
 Pros and cons of being single threaded
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

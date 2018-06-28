@@ -16,7 +16,7 @@
 
 #ifndef SECURITY_TRANSACTION_H
 #define SECURITY_TRANSACTION_H
-#include <config.h>
+#include <anjay_config.h>
 
 #include "mod_security.h"
 

@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/unit/memstream.h>
 #include <avsystem/commons/unit/test.h>
+#include <avsystem/commons/memory.h>
 
 #include "bigdata.h"
 #include <anjay/core.h>
@@ -34,7 +35,7 @@
 } while (0)
 
 #define TLV_BYTES_TEST_DATA(Header, Data) do { \
-    char *buf = (char *) malloc(sizeof(Data) + sizeof(Header)); \
+    char *buf = (char *) avs_malloc(sizeof(Data) + sizeof(Header)); \
     size_t bytes_read; \
     bool message_finished; \
     AVS_UNIT_ASSERT_SUCCESS( \
@@ -43,7 +44,7 @@
     AVS_UNIT_ASSERT_EQUAL(bytes_read, sizeof(Data) - 1); \
     AVS_UNIT_ASSERT_TRUE(message_finished); \
     AVS_UNIT_ASSERT_EQUAL_BYTES(buf, Data); \
-    free(buf); \
+    avs_free(buf); \
 } while (0)
 
 #define TLV_BYTES_TEST_ID(IdType, Id) do { \
@@ -197,12 +198,16 @@ AVS_UNIT_TEST(tlv_in_bytes, premature_end) {
 AVS_UNIT_TEST(tlv_in_bytes, no_data) {
     TEST_ENV(16);
 
-    char buf[16];
+    unsigned seed = (unsigned) avs_time_real_now().since_real_epoch.seconds;
+    const char init = (char) avs_rand_r(&seed);
+    char buf[16] = { init };
     size_t bytes_read;
     bool message_finished;
-    AVS_UNIT_ASSERT_FAILED(
+    AVS_UNIT_ASSERT_SUCCESS(
             anjay_get_bytes(in, &bytes_read, &message_finished,
                             buf, sizeof(buf)));
+    /* buffer untouched, read 0 bytes */
+    AVS_UNIT_ASSERT_EQUAL(buf[0], init);
 
     TEST_TEARDOWN;
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -320,35 +320,95 @@ fail:
     return NULL;
 }
 
-int _anjay_create_connected_udp_socket(anjay_t *anjay,
-                                       avs_net_abstract_socket_t **out,
-                                       avs_net_socket_type_t type,
-                                       const char *bind_port,
-                                       const void *config,
-                                       const anjay_url_t *uri) {
-    (void) anjay;
+static int bind_socket(avs_net_abstract_socket_t *socket,
+                       const anjay_socket_bind_config_t *bind_conf) {
+    const char *local_addr = NULL;
+    char static_preferred_port[ANJAY_MAX_URL_PORT_SIZE] = "";
+    if (bind_conf) {
+        if (bind_conf->family == AVS_NET_AF_INET4) {
+            local_addr = "0.0.0.0";
+        } else if (bind_conf->family == AVS_NET_AF_INET6) {
+            local_addr = "::";
+        }
 
+        if (bind_conf->static_port_preference) {
+            if (avs_simple_snprintf(static_preferred_port,
+                                    sizeof(static_preferred_port), "%" PRIu16,
+                                    bind_conf->static_port_preference) < 0) {
+                AVS_UNREACHABLE("Could not convert preferred port number");
+            }
+        } else if (bind_conf->last_local_port_buffer
+                && **bind_conf->last_local_port_buffer) {
+            if (!avs_net_socket_bind(socket, local_addr,
+                                     *bind_conf->last_local_port_buffer)) {
+                return 0;
+            }
+            anjay_log(WARNING,
+                      "could not bind socket to last known address [%s]:%s",
+                      local_addr ? local_addr : "",
+                      *bind_conf->last_local_port_buffer);
+        }
+    }
+
+    if ((local_addr || *static_preferred_port)
+            && avs_net_socket_bind(socket, local_addr, static_preferred_port)) {
+        anjay_log(ERROR, "could not bind socket to [%s]:%s",
+                  local_addr ? local_addr : "", static_preferred_port);
+        return -1;
+    }
+
+    return 0;
+}
+
+int _anjay_bind_and_connect_socket(avs_net_abstract_socket_t *socket,
+                                   const anjay_socket_bind_config_t *bind_conf,
+                                   const char *remote_host,
+                                   const char *remote_port) {
+    if (bind_socket(socket, bind_conf)) {
+        return -1;
+    }
+
+    if (avs_net_socket_connect(socket, remote_host, remote_port)) {
+        anjay_log(ERROR, "could not connect to %s:%s",
+                  remote_host, remote_port);
+        return -1;
+    }
+
+    if (bind_conf && bind_conf->last_local_port_buffer) {
+        if (!avs_net_socket_get_local_port(socket,
+                                           *bind_conf->last_local_port_buffer,
+                                           ANJAY_MAX_URL_PORT_SIZE)) {
+            anjay_log(DEBUG, "bound to port %s",
+                      *bind_conf->last_local_port_buffer);
+        } else {
+            anjay_log(WARNING, "could not store bound local port");
+            (*bind_conf->last_local_port_buffer)[0] = '\0';
+        }
+    }
+
+    return 0;
+}
+
+int
+_anjay_create_connected_udp_socket(avs_net_abstract_socket_t **out,
+                                   avs_net_socket_type_t type,
+                                   const void *socket_config,
+                                   const anjay_socket_bind_config_t *bind_conf,
+                                   const anjay_url_t *uri) {
     int result = 0;
     assert(!*out);
 
     switch (type) {
     case AVS_NET_UDP_SOCKET:
     case AVS_NET_DTLS_SOCKET:
-        if (avs_net_socket_create(out, type, config)) {
+        if (avs_net_socket_create(out, type, socket_config)) {
             result = -ENOMEM;
             anjay_log(ERROR, "could not create CoAP socket");
             goto fail;
         }
 
-        if (bind_port && *bind_port
-                && avs_net_socket_bind(*out, NULL, bind_port)) {
-            anjay_log(ERROR, "could not bind socket to port %s", bind_port);
-            goto fail;
-        }
-
-        if (avs_net_socket_connect(*out, uri->host, uri->port)) {
-            anjay_log(ERROR, "could not connect to %s:%s",
-                      uri->host, uri->port);
+        if (_anjay_bind_and_connect_socket(*out, bind_conf,
+                                           uri->host, uri->port)) {
             goto fail;
         }
 

@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <errno.h>
 #include <inttypes.h>
 
 #include <anjay_modules/time_defs.h>
+
+#include <avsystem/commons/memory.h>
 
 #define ANJAY_SERVERS_INTERNALS
 
@@ -52,7 +54,7 @@ void _anjay_server_cleanup(const anjay_t *anjay, anjay_server_info_t *server) {
 }
 
 anjay_servers_t *_anjay_servers_create(void) {
-    return (anjay_servers_t *) calloc(1, sizeof(anjay_servers_t));
+    return (anjay_servers_t *) avs_calloc(1, sizeof(anjay_servers_t));
 }
 
 void _anjay_servers_internal_deregister(anjay_t *anjay,
@@ -86,7 +88,7 @@ void _anjay_servers_deregister(anjay_t *anjay) {
 void _anjay_servers_cleanup(anjay_t *anjay) {
     if (anjay->servers) {
         _anjay_servers_internal_cleanup(anjay, anjay->servers);
-        free(anjay->servers);
+        avs_free(anjay->servers);
         anjay->servers = NULL;
     }
 }
@@ -121,24 +123,33 @@ get_online_connection_socket(anjay_server_info_t *server,
                                                });
 }
 
-static int
-add_socket_onto_list(AVS_LIST(avs_net_abstract_socket_t *const) *tail_ptr,
-                     avs_net_abstract_socket_t *socket) {
-    AVS_LIST_INSERT_NEW(avs_net_abstract_socket_t *const, tail_ptr);
+static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
+                                avs_net_abstract_socket_t *socket,
+                                anjay_socket_transport_t transport,
+                                anjay_ssid_t ssid,
+                                bool queue_mode) {
+    assert(!*tail_ptr);
+    AVS_LIST_INSERT_NEW(anjay_socket_entry_t, tail_ptr);
     if (!*tail_ptr) {
         anjay_log(ERROR, "Out of memory while building socket list");
         return -1;
     }
-    *(avs_net_abstract_socket_t **) (intptr_t) *tail_ptr = socket;
+    (*tail_ptr)->socket = socket;
+    (*tail_ptr)->transport = transport;
+    (*tail_ptr)->ssid = ssid;
+    (*tail_ptr)->queue_mode = queue_mode;
     return 0;
 }
 
-AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
+AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay) {
     AVS_LIST_CLEAR(&anjay->servers->public_sockets);
-    AVS_LIST(avs_net_abstract_socket_t *const) *tail_ptr =
-            &anjay->servers->public_sockets;
+    AVS_LIST(anjay_socket_entry_t) *tail_ptr = &anjay->servers->public_sockets;
 
+    // Note that there is at most one SMS socket (as the modem connection is
+    // common to all servers) so "sms_active" and "sms_queue_mode" are common
+    // for all of them.
     bool sms_active = false;
+    bool sms_queue_mode = true;
     anjay_server_info_t *server;
     AVS_LIST_FOREACH(server, anjay->servers->servers) {
         if (!_anjay_server_active(server)) {
@@ -146,24 +157,46 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
         }
         avs_net_abstract_socket_t *udp_socket =
                 get_online_connection_socket(server, ANJAY_CONNECTION_UDP);
-        if (udp_socket && !add_socket_onto_list(tail_ptr, udp_socket)) {
+        if (udp_socket
+                && !add_socket_onto_list(
+                        tail_ptr, udp_socket, ANJAY_SOCKET_TRANSPORT_UDP,
+                        server->ssid,
+                        server->data_active.udp_connection.queue_mode)) {
             AVS_LIST_ADVANCE_PTR(&tail_ptr);
         }
 
+#ifdef WITH_SMS
         if (get_online_connection_socket(server, ANJAY_CONNECTION_SMS)) {
             sms_active = true;
+            if (!server->data_active.sms_connection.queue_mode) {
+                sms_queue_mode = false;
+            }
         }
+#endif // WITH_SMS
     }
 
     if (sms_active) {
         assert(_anjay_sms_router(anjay));
-        add_socket_onto_list(tail_ptr, _anjay_sms_poll_socket(anjay));
+        add_socket_onto_list(tail_ptr, _anjay_sms_poll_socket(anjay),
+                             ANJAY_SOCKET_TRANSPORT_SMS, ANJAY_SSID_ANY,
+                             sms_queue_mode);
     }
 
 #ifdef WITH_DOWNLOADER
     _anjay_downloader_get_sockets(&anjay->downloader, tail_ptr);
 #endif // WITH_DOWNLOADER
     return anjay->servers->public_sockets;
+}
+
+AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
+    // We rely on the fact that the "socket" field is first in
+    // anjay_socket_entry_t, which means that both "entry" and "&entry->socket"
+    // point to exactly the same memory location. The "next" pointer location in
+    // AVS_LIST is independent from the stored data type, so it's safe to do
+    // such "cast".
+    AVS_STATIC_ASSERT(offsetof(anjay_socket_entry_t, socket) == 0,
+                      entry_socket_is_first_field);
+    return &anjay_get_socket_entries(anjay)->socket;
 }
 
 anjay_server_info_t *
@@ -191,10 +224,9 @@ int _anjay_schedule_socket_update(anjay_t *anjay,
     anjay_server_info_t *server;
     if (!_anjay_ssid_from_security_iid(anjay, security_iid, &ssid)
             && (server = _anjay_servers_find_active(anjay->servers, ssid))) {
-        // mark that the registration connection is no longer valid;
+        // mark that the primary connection is no longer valid;
         // prevents superfluous Deregister
-        server->data_active.registration_info.conn_type
-                = ANJAY_CONNECTION_UNSET;
+        server->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
         return _anjay_sched_now(anjay->sched, NULL, deactivate_server_job,
                                 (void *) (uintptr_t) ssid);
     }
@@ -326,7 +358,7 @@ static void disable_server_with_timeout_job(anjay_t *anjay, void *data_) {
             anjay_log(INFO, "server %" PRIu16 " disabled", data->ssid);
         }
     }
-    free(data);
+    avs_free(data);
 }
 
 int anjay_disable_server_with_timeout(anjay_t *anjay,
@@ -338,7 +370,7 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
     }
 
     disable_server_data_t *data = (disable_server_data_t *)
-            malloc(sizeof(*data));
+            avs_malloc(sizeof(*data));
 
     if (!data) {
         anjay_log(ERROR, "out of memory");
@@ -350,7 +382,7 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
 
     if (_anjay_sched_now(anjay->sched, NULL,
                          disable_server_with_timeout_job, data)) {
-        free(data);
+        avs_free(data);
         anjay_log(ERROR, "could not schedule disable_server_with_timeout_job");
         return -1;
     }
@@ -409,8 +441,8 @@ anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server) {
 }
 
 anjay_connection_type_t
-_anjay_server_registration_conn_type(anjay_server_info_t *server) {
-    return server->data_active.registration_info.conn_type;
+_anjay_server_primary_conn_type(anjay_server_info_t *server) {
+    return server->data_active.primary_conn_type;
 }
 
 void _anjay_server_require_reload(anjay_server_info_t *server) {

@@ -146,7 +146,7 @@ static void demo_delete(anjay_demo_t *demo) {
 
     iosched_release(demo->iosched);
     AVS_LIST_CLEAR(&demo->allocated_strings);
-    free(demo);
+    avs_free(demo);
 }
 
 static bool has_bootstrap_server(anjay_demo_t *demo) {
@@ -373,7 +373,7 @@ static int demo_init(anjay_demo_t *demo,
 }
 
 static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
-    anjay_demo_t *demo = (anjay_demo_t*) calloc(1, sizeof(anjay_demo_t));
+    anjay_demo_t *demo = (anjay_demo_t*) avs_calloc(1, sizeof(anjay_demo_t));
     if (!demo) {
         return NULL;
     }
@@ -519,9 +519,9 @@ static void log_handler(avs_log_level_t level,
 }
 
 static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {
-    free(cmdline_args->connection_args.public_cert_or_psk_identity);
-    free(cmdline_args->connection_args.private_cert_or_psk_key);
-    free(cmdline_args->connection_args.server_public_key);
+    avs_free(cmdline_args->connection_args.public_cert_or_psk_identity);
+    avs_free(cmdline_args->connection_args.private_cert_or_psk_key);
+    avs_free(cmdline_args->connection_args.server_public_key);
     AVS_LIST_CLEAR(&cmdline_args->access_entries);
 }
 

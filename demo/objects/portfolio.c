@@ -397,7 +397,7 @@ static const anjay_dm_object_def_t OBJ_DEF = {
 };
 
 const anjay_dm_object_def_t **portfolio_object_create(void) {
-    portfolio_t *obj = (portfolio_t *) calloc(1, sizeof(portfolio_t));
+    portfolio_t *obj = (portfolio_t *) avs_calloc(1, sizeof(portfolio_t));
     if (!obj) {
         return NULL;
     }
@@ -409,6 +409,6 @@ void portfolio_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
         portfolio_t *obj = get_obj(def);
         AVS_LIST_CLEAR(&obj->instances);
-        free(obj);
+        avs_free(obj);
     }
 }

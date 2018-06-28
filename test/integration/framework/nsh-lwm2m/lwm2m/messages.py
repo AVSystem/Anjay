@@ -643,9 +643,13 @@ class Lwm2mCreate(Lwm2mMsg):
                  content: EscapedBytes = b'',
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
-                 options: List[coap.Option] = ANY):
+                 options: List[coap.Option] = ANY,
+                 format: coap.ContentFormatOption = coap.Option.CONTENT_FORMAT.APPLICATION_LWM2M_TLV):
         if isinstance(path, str):
             path = Lwm2mObjectPath(path)
+
+        if isinstance(format, int):
+            format = coap.Option.CONTENT_FORMAT(format)
 
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_POST,
@@ -653,7 +657,7 @@ class Lwm2mCreate(Lwm2mMsg):
                          token=token,
                          options=concat_if_not_any(
                              path.to_uri_options(),
-                             [coap.Option.CONTENT_FORMAT.APPLICATION_LWM2M_TLV],
+                             [format],
                              options),
                          content=content)
 

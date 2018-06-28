@@ -515,7 +515,7 @@ anjay_fw_update_install(anjay_t *anjay,
  * @returns Security information found, or <c>NULL</c> if no suitable LwM2M
  *          Security Object instance could be found. The returned structure is
  *          heap-allocated; to release all memory allocated for it, it is enough
- *          to call <c>free()</c> on the returned pointer.
+ *          to call <c>avs_free()</c> on the returned pointer.
  */
 avs_net_security_info_t *
 anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *uri);

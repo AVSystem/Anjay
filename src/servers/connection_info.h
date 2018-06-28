@@ -72,7 +72,8 @@ _anjay_connection_internal_clean_socket(anjay_server_connection_t *connection);
 bool _anjay_connection_is_online(anjay_server_connection_t *connection);
 
 int
-_anjay_connection_internal_bring_online(anjay_server_connection_t *connection,
+_anjay_connection_internal_bring_online(anjay_t *anjay,
+                                        anjay_server_connection_t *connection,
                                         bool *out_session_resumed);
 
 /**
@@ -80,9 +81,7 @@ _anjay_connection_internal_bring_online(anjay_server_connection_t *connection,
  *          @li a positive errno value in case of a primary socket (UDP) error,
  *          @li a negative value in case of other error.
  */
-int _anjay_active_server_refresh(anjay_t *anjay,
-                                 anjay_server_info_t *server,
-                                 bool force_reconnect);
+int _anjay_active_server_refresh(anjay_t *anjay, anjay_server_info_t *server);
 
 VISIBILITY_PRIVATE_HEADER_END
 

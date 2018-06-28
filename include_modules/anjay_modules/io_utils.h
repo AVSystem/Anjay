@@ -48,7 +48,7 @@ int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr);
 int _anjay_io_fetch_bytes(anjay_input_ctx_t *ctx, anjay_raw_buffer_t *buffer);
 
 /**
- * Fetches string from @p ctx. It calls free() on @p *out and, on success,
+ * Fetches string from @p ctx. It calls avs_free() on @p *out and, on success,
  * reinitializes @p *out properly with a pointer to (heap allocated) obtained
  * data.
  */

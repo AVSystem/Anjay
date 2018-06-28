@@ -23,11 +23,11 @@ static int load_buffer_from_file(uint8_t **out, size_t *out_size,
         goto finish;
     }
     *out_size = (size_t) size;
-    if (!(*out = (uint8_t *) malloc(*out_size))) {
+    if (!(*out = (uint8_t *) avs_malloc(*out_size))) {
         goto finish;
     }
     if (fread(*out, *out_size, 1, f) != 1) {
-        free(*out);
+        avs_free(*out);
         *out = NULL;
         goto finish;
     }
@@ -121,9 +121,9 @@ static int setup_security_object(anjay_t *anjay) {
         result = -1;
     }
 cleanup:
-    free((uint8_t *) security_instance.public_cert_or_psk_identity);
-    free((uint8_t *) security_instance.private_cert_or_psk_key);
-    free((uint8_t *) security_instance.server_public_key);
+    avs_free((uint8_t *) security_instance.public_cert_or_psk_identity);
+    avs_free((uint8_t *) security_instance.private_cert_or_psk_key);
+    avs_free((uint8_t *) security_instance.server_public_key);
 
     return result;
 }

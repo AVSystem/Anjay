@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <string.h>
 #include <inttypes.h>
@@ -104,7 +104,7 @@ _anjay_coap_block_transfer_new(uint16_t max_block_size,
     }
 
     coap_block_transfer_ctx_t *ctx = (coap_block_transfer_ctx_t *)
-            calloc(1, sizeof(coap_block_transfer_ctx_t));
+            avs_calloc(1, sizeof(coap_block_transfer_ctx_t));
 
     if (!ctx) {
         return NULL;
@@ -136,7 +136,7 @@ _anjay_coap_block_transfer_new(uint16_t max_block_size,
 void _anjay_coap_block_transfer_delete(coap_block_transfer_ctx_t **ctx) {
     if (ctx && *ctx) {
         avs_coap_msg_info_reset(&(*ctx)->info);
-        free(*ctx);
+        avs_free(*ctx);
         *ctx = NULL;
     }
 }
@@ -343,12 +343,16 @@ static int flush_blocks(coap_block_transfer_ctx_t *ctx,
         return result;
     }
 
-    // TODO: consider failing if storage_size too big to limit stack usage
-    AVS_ALIGNED_STACK_BUF(aligned_storage, storage_size);
-
-    return flush_blocks_with_buffer(
-            ctx, avs_coap_ensure_aligned_buffer(aligned_storage),
+    void *storage = avs_malloc(storage_size);
+    if (!storage) {
+        coap_log(ERROR, "out of memory");
+        return -1;
+    }
+    result = flush_blocks_with_buffer(
+            ctx, avs_coap_ensure_aligned_buffer(storage),
             storage_size, final_block_action);
+    avs_free(storage);
+    return result;
 }
 
 int _anjay_coap_block_transfer_write(coap_block_transfer_ctx_t *ctx,

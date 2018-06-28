@@ -32,7 +32,7 @@ typedef struct {
 
 static security_test_env_t *
 security_test_env_create(void) {
-    security_test_env_t *env = (__typeof__(env)) calloc(1, sizeof(*env));
+    security_test_env_t *env = (__typeof__(env)) avs_calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
     env->anjay = anjay_new(&CONFIG);
     AVS_UNIT_ASSERT_NOT_NULL(env->anjay);
@@ -42,7 +42,7 @@ security_test_env_create(void) {
 
 static void security_test_env_destroy(security_test_env_t **env) {
     anjay_delete((*env)->anjay);
-    free(*env);
+    avs_free(*env);
 }
 
 static const anjay_security_instance_t instance1 = {

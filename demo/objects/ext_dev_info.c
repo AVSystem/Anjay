@@ -133,7 +133,7 @@ static const anjay_dm_object_def_t EXT_DEV_INFO = {
 };
 
 const anjay_dm_object_def_t **ext_dev_info_object_create(void) {
-    extdev_repr_t *repr = (extdev_repr_t *) calloc(1, sizeof(extdev_repr_t));
+    extdev_repr_t *repr = (extdev_repr_t *) avs_calloc(1, sizeof(extdev_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -146,7 +146,7 @@ const anjay_dm_object_def_t **ext_dev_info_object_create(void) {
 
 void ext_dev_info_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
-        free(get_extdev(def));
+        avs_free(get_extdev(def));
     }
 }
 

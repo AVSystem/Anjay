@@ -155,11 +155,11 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
 
 /* Used in COAP_MSG() to specify a list of Uri-Path options. */
 #define PATH(... /* Segments */) \
-    .uri_path = _anjay_make_string_list(__VA_ARGS__, NULL)
+    .uri_path = ANJAY_MAKE_STRING_LIST(__VA_ARGS__)
 
 /* Used in COAP_MSG() to specify a list of Uri-Query options. */
 #define QUERY(... /* Segments */) \
-    .uri_query = _anjay_make_string_list(__VA_ARGS__, NULL)
+    .uri_query = ANJAY_MAKE_STRING_LIST(__VA_ARGS__)
 
 /* Used in COAP_MSG() to specify the Accept option. */
 #define ACCEPT(Format) \

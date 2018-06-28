@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -25,6 +25,7 @@
 #include <stdlib.h>
 
 #include <avsystem/commons/errno.h>
+#include <avsystem/commons/memory.h>
 #include <avsystem/commons/stream/stream_net.h>
 #include <avsystem/commons/stream_v_table.h>
 
@@ -95,8 +96,8 @@ static int init(anjay_t *anjay,
     const size_t extra_bytes_required = offsetof(avs_coap_msg_t, content);
     anjay->in_buffer_size = config->in_buffer_size + extra_bytes_required;
     anjay->out_buffer_size = config->out_buffer_size + extra_bytes_required;
-    anjay->in_buffer = (uint8_t *) malloc(anjay->in_buffer_size);
-    anjay->out_buffer = (uint8_t *) malloc(anjay->out_buffer_size);
+    anjay->in_buffer = (uint8_t *) avs_malloc(anjay->in_buffer_size);
+    anjay->out_buffer = (uint8_t *) avs_malloc(anjay->out_buffer_size);
 
     if (_anjay_coap_stream_create(&anjay->comm_stream, anjay->coap_ctx,
                                   anjay->in_buffer, anjay->in_buffer_size,
@@ -156,7 +157,7 @@ const char *anjay_get_version(void) {
 anjay_t *anjay_new(const anjay_configuration_t *config) {
     anjay_log(INFO, "Initializing Anjay " ANJAY_VERSION);
     _anjay_log_feature_list();
-    anjay_t *out = (anjay_t *) calloc(1, sizeof(*out));
+    anjay_t *out = (anjay_t *) avs_calloc(1, sizeof(*out));
     if (!out) {
         anjay_log(ERROR, "Out of memory");
         return NULL;
@@ -196,7 +197,7 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
         _anjay_servers_deregister(anjay);
     }
     // Note: this MUST NOT be called before _anjay_sched_del(), because
-    // it free()s anjay->servers, which might be used without null-guards in
+    // it avs_free()s anjay->servers, which might be used without null-guards in
     // scheduled jobs
     _anjay_servers_cleanup(anjay);
 
@@ -206,9 +207,9 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     _anjay_dm_cleanup(anjay);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
 
-    free(anjay->in_buffer);
-    free(anjay->out_buffer);
-    free(anjay);
+    avs_free(anjay->in_buffer);
+    avs_free(anjay->out_buffer);
+    avs_free(anjay);
 }
 
 void anjay_delete(anjay_t *anjay) {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 #include <inttypes.h>
@@ -846,6 +846,7 @@ static int dm_write(anjay_t *anjay,
         if (uri->has_rid) {
             const uint16_t format =
                     _anjay_translate_legacy_content_format(content_format);
+
             if (format == ANJAY_COAP_FORMAT_TLV) {
                 retval = _anjay_dm_check_if_tlv_rid_matches_uri_rid(in_ctx,
                                                                     uri->rid);
@@ -1089,7 +1090,7 @@ static int set_create_response_location(anjay_oid_t oid,
             .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
             .msg_code = make_success_response_code(ANJAY_ACTION_CREATE),
             .format = AVS_COAP_FORMAT_NONE,
-            .location_path = _anjay_make_string_list(oid_str, iid_str, NULL)
+            .location_path = ANJAY_MAKE_STRING_LIST(oid_str, iid_str)
         };
         if (!msg_details.location_path) {
             result = -1;
@@ -1251,7 +1252,7 @@ int _anjay_dm_check_if_tlv_rid_matches_uri_rid(anjay_input_ctx_t *in_ctx,
     if (!retval && type == ANJAY_ID_RID && uri_rid == id) {
         return 0;
     }
-    return retval ? retval : ANJAY_ERR_BAD_REQUEST;
+    return ANJAY_ERR_BAD_REQUEST;
 }
 
 static int invoke_transactional_action(anjay_t *anjay,

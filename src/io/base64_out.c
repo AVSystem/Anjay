@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/base64.h>
 
@@ -34,7 +34,7 @@ typedef struct base64_ret_bytes_ctx {
     size_t num_bytes_left;
 } base64_ret_bytes_ctx_t;
 
-#define TEXT_CHUNK_SIZE 3 * 64u
+#define TEXT_CHUNK_SIZE (3 * 64u)
 AVS_STATIC_ASSERT(TEXT_CHUNK_SIZE % 3 == 0, chunk_must_be_a_multiple_of_3);
 
 static int base64_ret_encode_and_write(base64_ret_bytes_ctx_t *ctx,
@@ -43,14 +43,14 @@ static int base64_ret_encode_and_write(base64_ret_bytes_ctx_t *ctx,
     if (!buffer_size) {
         return 0;
     }
+    char encoded[4 * (TEXT_CHUNK_SIZE / 3) + 1];
     size_t encoded_size = avs_base64_encoded_size(buffer_size);
-    assert(encoded_size <= 4 * (TEXT_CHUNK_SIZE / 3) + 1);
-    char encoded[encoded_size];
-    int retval = avs_base64_encode(encoded, sizeof(encoded), buffer, buffer_size);
+    assert(encoded_size <= sizeof(encoded));
+    int retval = avs_base64_encode(encoded, encoded_size, buffer, buffer_size);
     if (retval) {
         return retval;
     }
-    return avs_stream_write(ctx->stream, encoded, sizeof(encoded) - 1);
+    return avs_stream_write(ctx->stream, encoded, encoded_size - 1);
 }
 
 static int base64_ret_bytes_flush(base64_ret_bytes_ctx_t *ctx,
@@ -114,7 +114,7 @@ anjay_ret_bytes_ctx_t *
 _anjay_base64_ret_bytes_ctx_new(avs_stream_abstract_t *stream,
                                 size_t length) {
     base64_ret_bytes_ctx_t *ctx =
-            (base64_ret_bytes_ctx_t *) calloc(1,
+            (base64_ret_bytes_ctx_t *) avs_calloc(1,
                                               sizeof(base64_ret_bytes_ctx_t));
     if (ctx) {
         ctx->vtable = &BASE64_OUT_BYTES_VTABLE;
@@ -141,6 +141,6 @@ _anjay_base64_ret_bytes_ctx_delete(anjay_ret_bytes_ctx_t **ctx_) {
     }
     base64_ret_bytes_ctx_t *ctx = (base64_ret_bytes_ctx_t *) *ctx_;
     assert(ctx->vtable == &BASE64_OUT_BYTES_VTABLE);
-    free(ctx);
+    avs_free(ctx);
     *ctx_ = NULL;
 }

@@ -9,13 +9,13 @@ Anjay is currently not supported or regularly tested (which means that builds ma
 - Building as a shared library (DLL) is not currently supported
 - Demo application has limited functionality - internal command line and IP Ping object are not available
 - Testing frameworks are not supported
-- SMS binding is not supported (applicable to commercial verion only)
+- SMS binding is not supported (applicable to commercial version only)
 
 ## Prerequisites
 
 ### Note about symbolic links
 
-Anjay repository on Github makes use of symbolic links. They are necessary for successful compilation of the project. You will need to either:
+Anjay repository on GitHub makes use of symbolic links. They are necessary for successful compilation of the project. You will need to either:
 
 - use Windows 10 version 1703 or later and enable developer mode, or
 - run Git with elevated privileges

@@ -23,6 +23,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <avsystem/commons/memory.h>
+
 #define DEV_RES_MANUFACTURER 0                  // string
 #define DEV_RES_MODEL_NUMBER 1                  // string
 #define DEV_RES_SERIAL_NUMBER 2                 // string
@@ -162,13 +164,14 @@ static int dev_read(anjay_t *anjay,
             anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
             if (!array
                     || anjay_ret_array_index(array, 0)
-                    || anjay_ret_i32(array, dev->last_error)) {
+                    || anjay_ret_i32(array, (int32_t) dev->last_error)) {
                 return ANJAY_ERR_INTERNAL;
             }
             return anjay_ret_array_finish(array);
         }
     case DEV_RES_CURRENT_TIME:
-        return anjay_ret_i64(ctx, (int64_t)(time(NULL) + dev->current_time_offset));
+        return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds
+                                          + dev->current_time_offset);
     case DEV_RES_UTC_OFFSET:
         return anjay_ret_string(ctx, dev->utc_offset);
     case DEV_RES_TIMEZONE:
@@ -204,17 +207,25 @@ static int dev_read(anjay_t *anjay,
 static int read_string(anjay_input_ctx_t *ctx,
                        char *buffer,
                        size_t buffer_size) {
-    char tmp[buffer_size];
-    int result = anjay_get_string(ctx, tmp, sizeof(tmp));
+    char *tmp = (char *) avs_malloc(buffer_size);
+    if (!tmp) {
+        demo_log(ERROR, "Out of memory");
+        return -1;
+    }
+    int result = anjay_get_string(ctx, tmp, buffer_size);
     if (result < 0) {
-        return result;
+        goto finish;
     } else if (result == ANJAY_BUFFER_TOO_SHORT) {
         demo_log(DEBUG, "buffer too short to fit full value");
-        return ANJAY_ERR_INTERNAL;
+        result = ANJAY_ERR_INTERNAL;
+        goto finish;
     }
 
     memcpy(buffer, tmp, buffer_size);
-    return 0;
+    result = 0;
+finish:
+    avs_free(tmp);
+    return result;
 }
 
 static int dev_write(anjay_t *anjay,
@@ -407,7 +418,7 @@ static void extract_device_info(const char *endpoint_name,
 
 const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
                                                    const char *endpoint_name) {
-    dev_repr_t *repr = (dev_repr_t*)calloc(1, sizeof(dev_repr_t));
+    dev_repr_t *repr = (dev_repr_t*)avs_calloc(1, sizeof(dev_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -426,6 +437,6 @@ const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
 
 void device_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
-        free(get_dev(def));
+        avs_free(get_dev(def));
     }
 }

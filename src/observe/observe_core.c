@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 #include <math.h>
@@ -615,7 +615,7 @@ static int ensure_conn_online(anjay_t *anjay, anjay_connection_ref_t ref) {
     if (_anjay_connection_current_mode(ref) == ANJAY_CONNECTION_QUEUE
             && !_anjay_connection_get_online_socket(ref)) {
         bool session_resumed;
-        if (_anjay_connection_bring_online(ref, &session_resumed)) {
+        if (_anjay_connection_bring_online(anjay, ref, &session_resumed)) {
             anjay_log(ERROR, "broken socket for server %" PRIu16,
                       _anjay_server_ssid(ref.server));
             if (_anjay_schedule_server_reconnect(anjay, ref.server)) {
@@ -630,7 +630,7 @@ static int ensure_conn_online(anjay_t *anjay, anjay_connection_ref_t ref) {
                 anjay_log(ERROR,
                           "could not schedule reregister for server %" PRIu16,
                           _anjay_server_ssid(ref.server));
-            }
+           }
             return AVS_COAP_CTX_ERR_NETWORK;
         }
     }
@@ -712,11 +712,10 @@ static int send_entry(anjay_t *anjay,
         }
         value_sent(conn_state);
         entry->last_sent->identity.msg_id = notify_id.msg_id;
-    } else if (result == AVS_COAP_CTX_ERR_NETWORK) {
+    } else if (result == AVS_COAP_CTX_ERR_NETWORK
+            || result == AVS_COAP_CTX_ERR_TIMEOUT) {
         anjay_log(ERROR, "network communication error while sending Observe");
         _anjay_schedule_server_reconnect(anjay, server);
-        // reschedule notification
-        sched_flush_send_queue(anjay, conn_state);
     }
     return result;
 }
@@ -725,7 +724,22 @@ static bool server_active(anjay_t *anjay, anjay_ssid_t ssid) {
     if (anjay_is_offline(anjay)) {
         return false;
     }
-    return !!_anjay_servers_find_active(anjay->servers, ssid);
+    anjay_server_info_t *server =
+            _anjay_servers_find_active(anjay->servers, ssid);
+    if (!server) {
+        return false;
+    }
+    // Checking registration state here is a hack that improves performance in
+    // NoSec mode, by preventing Notifications to trigger re-registration
+    // attempts when it has already been established that we need to
+    // re-register.
+    //
+    // Thus, backoff during re-registration starts to work correctly-ish - ICMP
+    // error limits are not honoured properly (because the errors come from
+    // recv() rather than connect() - this is also the reason why the socket is
+    // not closed, which would effectively deactivate the server), but otherwise
+    // the backoff is sane.
+    return !_anjay_server_registration_expired(server);
 }
 
 typedef struct {

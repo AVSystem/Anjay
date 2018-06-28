@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <string.h>
 
@@ -499,7 +499,7 @@ static void server_purge(server_repr_t *repr) {
 static void server_delete(anjay_t *anjay, void *repr) {
     (void) anjay;
     server_purge((server_repr_t*) repr);
-    free(repr);
+    avs_free(repr);
 }
 
 void anjay_server_object_purge(anjay_t *anjay) {
@@ -531,7 +531,7 @@ static const anjay_dm_module_t SERVER_MODULE = {
 int anjay_server_object_install(anjay_t *anjay) {
     assert(anjay);
     
-    server_repr_t *repr = (server_repr_t *) calloc(1, sizeof(server_repr_t));
+    server_repr_t *repr = (server_repr_t *) avs_calloc(1, sizeof(server_repr_t));
     if (!repr) {
         server_log(ERROR, "Out of memory");
         return -1;
@@ -540,7 +540,7 @@ int anjay_server_object_install(anjay_t *anjay) {
     repr->def = &SERVER;
 
     if (_anjay_dm_module_install(anjay, &SERVER_MODULE, repr)) {
-        free(repr);
+        avs_free(repr);
         return -1;
     }
 

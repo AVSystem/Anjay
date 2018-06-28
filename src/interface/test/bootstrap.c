@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <errno.h>
 
@@ -145,7 +145,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_with_mismatched_tlv_rid) {
             "\xB2" "42" // OID
             "\x03" "514" // IID
             "\x01" "4" // RID
-            "\x12\x42\x42" // Content-Format TLV
+            "\x12\x2d\x16" // Content-Format TLV
             "\xFF"
             "\xc5\x05" // mismatched resource id, RID Uri-Path was 4 but in the payload it is 5
             "Hello";
@@ -202,11 +202,12 @@ AVS_UNIT_TEST(bootstrap_write, instance_with_redundant_tlv_header) {
             "\x40\x03\xFA\x3E" // CoAP header
             "\xB2" "42" // OID
             "\x02" "69" // IID
-            "\x12\x42\x42" // Content-Format TLV
+            "\x12\x2d\x16" // Content-Format TLV
             "\xFF"
             "\x08\x45\x08\xc6\x0a" // Redundant \x08\x45
             "DDDDDD";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
@@ -218,11 +219,12 @@ AVS_UNIT_TEST(bootstrap_write, instance_with_redundant_and_incorrect_tlv_header)
             "\x40\x03\xFA\x3E" // CoAP header
             "\xB2" "42" // OID
             "\x02" "69" // IID
-            "\x12\x42\x42" // Content-Format TLV
+            "\x12\x2d\x16" // Content-Format TLV
             "\xFF"
             "\x08\x01\x08\xc6\x0a" // IID is 69 but TLV payload contains IID 1
             "DDDDDD";
     avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x80\xFA\x3E");
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
@@ -584,40 +586,6 @@ AVS_UNIT_TEST(bootstrap_delete, bs) {
     DM_TEST_FINISH;
 }
 
-static int assert_null_notify_perform(anjay_t *anjay,
-                                      anjay_notify_queue_t queue) {
-    (void) anjay;
-    AVS_UNIT_ASSERT_NULL(queue);
-    return 0;
-}
-
-AVS_UNIT_TEST(bootstrap_finish, success) {
-    AVS_UNIT_MOCK(_anjay_notify_perform) = assert_null_notify_perform;
-    DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
-     static const char REQUEST[] =
-            "\x40\x02\xFA\x3E" // CoAP header
-            "\xB2" "bs"; // OID
-    avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], "\x60\x44\xFA\x3E");
-    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_UNIT_MOCK_INVOCATIONS(_anjay_notify_perform), 1);
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_UNIT_MOCK_INVOCATIONS(_anjay_notify_perform), 1);
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 0);
-    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_UNIT_MOCK_INVOCATIONS(_anjay_notify_perform), 1);
-    AVS_UNIT_ASSERT_EQUAL(
-            AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_instance_remove), 1);
-    DM_TEST_FINISH;
-}
-
 static int fail_notify_perform(anjay_t *anjay,
                                anjay_notify_queue_t queue) {
     (void) anjay; (void) queue;
@@ -733,10 +701,8 @@ AVS_UNIT_TEST(bootstrap_reconnect, reconnect) {
     // mocking reconnect is rather hard, so let's just check it's scheduled
     AVS_UNIT_ASSERT_TRUE(anjay->sched->entries
             == anjay->servers->servers->sched_update_or_reactivate_handle);
-    // encoded update args:
-    // - SSID==65535 (0xFFFF; fake-SSID for Bootstrap Server)
-    // - reconnect required == true (hence the 1 at the higher-order byte)
-    AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data, 0x1FFFF);
+    AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data,
+                          ANJAY_SSID_BOOTSTRAP);
     _anjay_sched_del(anjay->sched,
                      &anjay->servers->servers->sched_update_or_reactivate_handle);
 

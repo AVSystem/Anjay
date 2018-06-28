@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <string.h>
 
@@ -100,8 +100,8 @@ void _anjay_sec_destroy_instance_fields(sec_instance_t *instance) {
     if (!instance) {
         return;
     }
-    free((char *) (intptr_t) instance->server_uri);
-    free((char *) (intptr_t) instance->sms_number);
+    avs_free((char *) (intptr_t) instance->server_uri);
+    avs_free((char *) (intptr_t) instance->sms_number);
     _anjay_raw_buffer_clear(&instance->public_cert_or_psk_identity);
     _anjay_raw_buffer_clear(&instance->private_cert_or_psk_key);
     _anjay_raw_buffer_clear(&instance->server_public_key);

@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 #include <stdlib.h>
 
+#include <avsystem/commons/memory.h>
 #include <avsystem/commons/stream_v_table.h>
 #include <avsystem/commons/utils.h>
 
@@ -267,7 +268,7 @@ int _anjay_output_ctx_destroy(anjay_output_ctx_t **ctx_ptr) {
         if (ctx->vtable->close) {
             retval = ctx->vtable->close(*ctx_ptr);
         }
-        free(ctx);
+        avs_free(ctx);
         *ctx_ptr = NULL;
     }
     return retval;
@@ -361,7 +362,7 @@ avs_stream_abstract_t *_anjay_input_bytes_stream(anjay_input_ctx_t *ctx) {
         NULL
     };
     bytes_stream_t specimen = { &VTABLE, ctx };
-    bytes_stream_t *out = (bytes_stream_t *) malloc(sizeof(bytes_stream_t));
+    bytes_stream_t *out = (bytes_stream_t *) avs_malloc(sizeof(bytes_stream_t));
     if (out) {
         memcpy(out, &specimen, sizeof(bytes_stream_t));
     }
@@ -450,7 +451,7 @@ anjay_input_ctx_t *anjay_get_array(anjay_input_ctx_t *ctx) {
 int _anjay_input_get_id(anjay_input_ctx_t *ctx,
                         anjay_id_type_t *out_type, uint16_t *out_id) {
     if (!ctx->vtable->get_id) {
-        return -1;
+        return ANJAY_ERR_BAD_REQUEST;
     }
     return ctx->vtable->get_id(ctx, out_type, out_id);
 }
@@ -479,7 +480,7 @@ int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr) {
         if (ctx->vtable->close) {
             retval = ctx->vtable->close(*ctx_ptr);
         }
-        free(ctx);
+        avs_free(ctx);
         *ctx_ptr = NULL;
     }
     return retval;

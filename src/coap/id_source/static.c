@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include "static.h"
 
 #include <stdlib.h>
+
+#include <avsystem/commons/memory.h>
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -41,7 +43,7 @@ static const coap_id_source_vt_t *const ID_SRC_STATIC_VTABLE =
 coap_id_source_t *
 _anjay_coap_id_source_new_static(const avs_coap_msg_identity_t *id) {
     coap_static_id_src_t *src = (coap_static_id_src_t *)
-            malloc(sizeof(coap_static_id_src_t));
+            avs_malloc(sizeof(coap_static_id_src_t));
     if (!src) {
         return NULL;
     }

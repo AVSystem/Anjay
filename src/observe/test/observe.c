@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <errno.h>
 #include <math.h>
@@ -1259,7 +1259,7 @@ static void test_observe_entry(anjay_t *anjay,
 }
 
 static anjay_t *create_test_env(void) {
-    anjay_t *anjay = (anjay_t *) calloc(1, sizeof(anjay_t));
+    anjay_t *anjay = (anjay_t *) avs_calloc(1, sizeof(anjay_t));
     _anjay_observe_init(&anjay->observe, false);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 1);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 2);
@@ -1277,7 +1277,7 @@ static anjay_t *create_test_env(void) {
 
 static void destroy_test_env(anjay_t *anjay) {
     _anjay_observe_cleanup(&anjay->observe, anjay->sched);
-    free(anjay);
+    avs_free(anjay);
 }
 
 static const anjay_dm_object_def_t *const *fake_object(anjay_t *anjay,
@@ -1582,7 +1582,8 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meiko"));
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
-    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
+    // this is a hack: all other errno values trigger reconnection
+    avs_unit_mocksock_expect_errno(mocksocks[0], EMSGSIZE);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // second notification
@@ -1599,7 +1600,7 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Kaito"));
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
-    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
+    avs_unit_mocksock_expect_errno(mocksocks[0], EMSGSIZE);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // anjay_serve() with reschedule notification sending
@@ -1659,7 +1660,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meiko"));
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
-    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
+    avs_unit_mocksock_expect_errno(mocksocks[0], EMSGSIZE);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // second notification
@@ -1677,7 +1678,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Kaito"));
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
-    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
+    avs_unit_mocksock_expect_errno(mocksocks[0], EMSGSIZE);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // anjay_serve() with reschedule notification sending...
@@ -1720,7 +1721,7 @@ AVS_UNIT_TEST(notify, storing_of_errors) {
     _anjay_mock_dm_expect_object_read_default_attrs(
             anjay, &OBJ, 14, -1, &ANJAY_DM_INTERNAL_ATTRS_EMPTY);
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
-    avs_unit_mocksock_expect_errno(mocksocks[0], ETIMEDOUT);
+    avs_unit_mocksock_expect_errno(mocksocks[0], EMSGSIZE);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     // second notification - should not actually do anything
@@ -1791,22 +1792,12 @@ AVS_UNIT_TEST(notify, reconnect) {
     // mocking reconnect is rather hard, so let's just check it's scheduled
     AVS_UNIT_ASSERT_TRUE(anjay->sched->entries
             == anjay->servers->servers->sched_update_or_reactivate_handle);
-    // encoded update args:
-    // - SSID==14 (0x000E)
-    // - reconnect required == true (hence the 1 at the higher-order byte)
-    AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data, 0x1000E);
+    AVS_UNIT_ASSERT_EQUAL((uintptr_t) anjay->sched->entries->clb_data, 14);
     _anjay_sched_del(anjay->sched, &anjay->servers->servers->sched_update_or_reactivate_handle);
 
-    // resend
-    expect_read_notif_storing(anjay, &FAKE_SERVER, 14, true);
-    static const char CON_NOTIFY_RESPONSE[] =
-            "\x40\xA0\x69\xEE"; // CoAP header only - no Observe option
-    avs_unit_mocksock_expect_output(mocksocks[0], CON_NOTIFY_RESPONSE,
-                                    sizeof(CON_NOTIFY_RESPONSE) - 1);
-    static const char CON_RESET[] = "\x70\x00\x69\xEE";
-    avs_unit_mocksock_input(mocksocks[0], CON_RESET, sizeof(CON_RESET) - 1);
+    // we cannot check if notifications will be re-sent, as they are sent from
+    // within the reconnect routine
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-
     AVS_UNIT_ASSERT_NULL(anjay->sched->entries);
 
     DM_TEST_FINISH;

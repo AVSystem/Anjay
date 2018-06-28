@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/stream/stream_net.h>
 #include <avsystem/commons/unit/test.h>
@@ -39,8 +39,8 @@ _anjay_mock_coap_stream_create(avs_stream_abstract_t **stream_,
     in_buffer_size += offsetof(avs_coap_msg_t, content);
     out_buffer_size += offsetof(avs_coap_msg_t, content);
     anjay_mock_coap_stream_ctx_t ctx = {
-        .in_buffer = (uint8_t *) malloc(in_buffer_size),
-        .out_buffer = (uint8_t *) malloc(out_buffer_size),
+        .in_buffer = (uint8_t *) avs_malloc(in_buffer_size),
+        .out_buffer = (uint8_t *) avs_malloc(out_buffer_size),
     };
     avs_coap_ctx_t *coap_ctx = NULL;
     AVS_UNIT_ASSERT_SUCCESS(avs_coap_ctx_create(&coap_ctx, 0));

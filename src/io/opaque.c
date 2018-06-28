@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <stdlib.h>
 
@@ -82,11 +82,11 @@ anjay_output_ctx_t *
 _anjay_output_opaque_create(avs_stream_abstract_t *stream,
                             int *errno_ptr,
                             anjay_msg_details_t *inout_details) {
-    opaque_out_t *ctx = (opaque_out_t *) calloc(1, sizeof(opaque_out_t));
+    opaque_out_t *ctx = (opaque_out_t *) avs_calloc(1, sizeof(opaque_out_t));
     if (ctx && ((*errno_ptr = _anjay_handle_requested_format(
                     &inout_details->format, ANJAY_COAP_FORMAT_OPAQUE))
             || _anjay_coap_stream_setup_response(stream, inout_details))) {
-        free(ctx);
+        avs_free(ctx);
         return NULL;
     }
     if (ctx) {
@@ -124,15 +124,26 @@ static int opaque_in_close(anjay_input_ctx_t *ctx_) {
     return 0;
 }
 
+static int bad_request() {
+    return ANJAY_ERR_BAD_REQUEST;
+}
+
 static const anjay_input_ctx_vtable_t OPAQUE_IN_VTABLE = {
     .some_bytes = opaque_get_some_bytes,
-    .close = opaque_in_close
+    .close = opaque_in_close,
+    .string = (anjay_input_ctx_string_t) bad_request,
+    .i32 = (anjay_input_ctx_i32_t) bad_request,
+    .i64 = (anjay_input_ctx_i64_t) bad_request,
+    .f32 = (anjay_input_ctx_f32_t) bad_request,
+    .f64 = (anjay_input_ctx_f64_t) bad_request,
+    .boolean = (anjay_input_ctx_boolean_t) bad_request,
+    .objlnk = (anjay_input_ctx_objlnk_t) bad_request,
 };
 
 int _anjay_input_opaque_create(anjay_input_ctx_t **out,
                                avs_stream_abstract_t **stream_ptr,
                                bool autoclose) {
-    opaque_in_t *ctx = (opaque_in_t *) calloc(1, sizeof(opaque_in_t));
+    opaque_in_t *ctx = (opaque_in_t *) avs_calloc(1, sizeof(opaque_in_t));
     *out = (anjay_input_ctx_t *) ctx;
     if (!ctx) {
         return -1;

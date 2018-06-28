@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 #include <string.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS

@@ -75,7 +75,7 @@ General guidelines
 - When using bitfields, make sure they are not saved to persistent storage nor sent over the network - their memory layout is implementation-defined, making them non-portable.
 - Avoid recursion - when writing code for an embedded platform, it is important to determine a hard limit on the stack space used by a program.
 - Include license information at the top of each file you add.
-- Use visibility macros defined in ``config.h`` to prevent internal symbols from being exported when using a GCC-compatible compiler. See `Visibility macros`_ section for examples.
+- Use visibility macros defined in ``anjay_config.h`` to prevent internal symbols from being exported when using a GCC-compatible compiler. See `Visibility macros`_ section for examples.
 
 
 Visibility macros
@@ -95,7 +95,7 @@ Visibility macros
 
 - Source files (``.c``)::
 
-    #include <config.h>
+    #include <anjay_config.h>
 
     // ... includes
 

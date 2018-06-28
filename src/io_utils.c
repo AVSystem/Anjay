@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <string.h>
 
@@ -76,7 +76,7 @@ static int generic_getter(anjay_input_ctx_t *ctx,
         }
         if (chunk_bytes_read > 0) {
             char *bigger_buffer =
-                    (char *) realloc(buffer, buffer_size + chunk_bytes_read);
+                    (char *) avs_realloc(buffer, buffer_size + chunk_bytes_read);
             if (!bigger_buffer) {
                 result = ANJAY_ERR_INTERNAL;
                 goto error;
@@ -90,7 +90,7 @@ static int generic_getter(anjay_input_ctx_t *ctx,
     *out_bytes_read = buffer_size;
     return 0;
 error:
-    free(buffer);
+    avs_free(buffer);
     return result;
 }
 
@@ -103,7 +103,7 @@ int _anjay_io_fetch_bytes(anjay_input_ctx_t *ctx, anjay_raw_buffer_t *buffer) {
 }
 
 int _anjay_io_fetch_string(anjay_input_ctx_t *ctx, char **out) {
-    free(*out);
+    avs_free(*out);
     *out = NULL;
     size_t bytes_read = 0;
     return generic_getter(ctx, out, &bytes_read, string_getter);

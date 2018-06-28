@@ -42,7 +42,7 @@ typedef struct {
 static server_persistence_test_env_t *
 server_persistence_test_env_create(void) {
     server_persistence_test_env_t *env =
-            (__typeof__(env)) calloc(1, sizeof(*env));
+            (__typeof__(env)) avs_calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
     env->anjay_stored = anjay_new(&CONFIG);
     AVS_UNIT_ASSERT_NOT_NULL(env->anjay_stored);
@@ -66,7 +66,7 @@ server_persistence_test_env_destroy(server_persistence_test_env_t **env) {
     anjay_delete((*env)->anjay_stored);
     anjay_delete((*env)->anjay_restored);
     avs_stream_cleanup(&(*env)->stream);
-    free(*env);
+    avs_free(*env);
 }
 
 static void assert_instances_equal(const server_instance_t *a,

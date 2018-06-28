@@ -16,7 +16,7 @@
 
 #ifndef SERVER_UTILS_H
 #define SERVER_UTILS_H
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 

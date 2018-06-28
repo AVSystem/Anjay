@@ -19,6 +19,10 @@ import time
 
 from framework.lwm2m_test import *
 
+COAP_DEFAULT_ACK_RANDOM_FACTOR = 1.5
+COAP_DEFAULT_ACK_TIMEOUT = 2
+COAP_DEFAULT_MAX_RETRANSMIT = 4
+
 
 class ReconnectRetryTest(test_suite.PcapEnabledTest, test_suite.Lwm2mDtlsSingleServerTest):
     def setup_demo_with_servers(self, **kwargs):
@@ -48,4 +52,89 @@ class ReconnectRetryTest(test_suite.PcapEnabledTest, test_suite.Lwm2mDtlsSingleS
         self.wait_until_icmp_unreachable_count(5, timeout_s=8)
         self._server_close_stack.close()  # unclose the server socket
         self.assertDemoRegisters(self.serv, timeout_s=16)
+        self.assertEqual(5, len(self.read_icmp_unreachable_packets()))
+
+
+# Tests below check that Anjay does not go crazy when faced with network connection problems while attempting to send
+# Notify messages. Some previous versions could easily get into an infinite loop of repeating the Notify message without
+# any backoff, and so on - so we test that the behaviour is sane.
+
+
+class NotificationTimeoutReconnectTest(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Timestamp)
+
+        first_pkt = self.serv.recv(timeout_s=2)
+        first_attempt = time.time()
+        self.assertIsInstance(first_pkt, Lwm2mNotify)
+
+        for attempt in range(COAP_DEFAULT_MAX_RETRANSMIT):
+            self.assertIsInstance(self.serv.recv(timeout_s=30), Lwm2mNotify)
+        last_attempt = time.time()
+
+        transmit_span_lower_bound = COAP_DEFAULT_ACK_TIMEOUT * ((2 ** COAP_DEFAULT_MAX_RETRANSMIT) - 1)
+        transmit_span_upper_bound = transmit_span_lower_bound * COAP_DEFAULT_ACK_RANDOM_FACTOR
+
+        self.assertGreater(last_attempt - first_attempt, transmit_span_lower_bound - 1)
+        self.assertLess(last_attempt - first_attempt, transmit_span_upper_bound + 1)
+
+        self.assertDtlsReconnect(timeout_s=COAP_DEFAULT_ACK_RANDOM_FACTOR * COAP_DEFAULT_ACK_TIMEOUT * (
+                    2 ** COAP_DEFAULT_MAX_RETRANSMIT) + 1)
+
+        pkt = self.serv.recv(timeout_s=1)
+        self.assertIsInstance(pkt, Lwm2mNotify)
+        self.assertEqual(pkt.content, first_pkt.content)
+        self.serv.send(Lwm2mReset.matching(pkt)())
+
+
+class NotificationIcmpReconnectTest(test_suite.PcapEnabledTest,
+                                    test_suite.Lwm2mSingleServerTest,
+                                    test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Timestamp)
+
+        with self.serv.fake_close():
+            first_attempt = time.time()
+            self.wait_until_icmp_unreachable_count(5, timeout_s=15)
+            last_attempt = time.time()
+            self.assertAlmostEqual(last_attempt - first_attempt, 8, delta=1)
+
+        self.assertDemoRegisters(self.serv, timeout_s=10)
+
+        pkt = self.serv.recv(timeout_s=1)
+        self.assertIsInstance(pkt, Lwm2mNotify)
+        self.serv.send(Lwm2mReset.matching(pkt)())
+        self.assertEqual(5, len(self.read_icmp_unreachable_packets()))
+
+
+class NotificationDtlsIcmpReconnectTest(test_suite.PcapEnabledTest,
+                                        test_suite.Lwm2mDtlsSingleServerTest,
+                                        test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--confirmable-notifications'])
+
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Timestamp)
+
+        with self.serv.fake_close():
+            first_attempt = time.time()
+            self.wait_until_icmp_unreachable_count(5, timeout_s=10)
+            last_attempt = time.time()
+            self.assertAlmostEqual(last_attempt - first_attempt, 5, delta=1)
+
+        self.assertDtlsReconnect(timeout_s=10)
+        self.assertDemoRegisters(self.serv)
+
+        pkt = self.serv.recv(timeout_s=1)
+        self.assertIsInstance(pkt, Lwm2mNotify)
+        self.serv.send(Lwm2mReset.matching(pkt)())
         self.assertEqual(5, len(self.read_icmp_unreachable_packets()))

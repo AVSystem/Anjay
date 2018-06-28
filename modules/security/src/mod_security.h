@@ -16,7 +16,7 @@
 
 #ifndef SECURITY_SECURITY_H
 #define SECURITY_SECURITY_H
-#include <config.h>
+#include <anjay_config.h>
 
 #include <anjay/core.h>
 

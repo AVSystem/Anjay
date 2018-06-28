@@ -16,7 +16,7 @@
 
 #ifndef SERVER_TRANSACTION_H
 #define SERVER_TRANSACTION_H
-#include <config.h>
+#include <anjay_config.h>
 
 #include "mod_server.h"
 

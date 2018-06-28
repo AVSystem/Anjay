@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
@@ -292,7 +292,7 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
                               size_t in_buffer_size,
                               uint8_t *out_buffer,
                               size_t out_buffer_size) {
-    coap_stream_t *stream = (coap_stream_t *)calloc(1, sizeof(coap_stream_t));
+    coap_stream_t *stream = (coap_stream_t *)avs_calloc(1, sizeof(coap_stream_t));
     if (!stream) {
         coap_log(ERROR, "Out of memory");
         return -1;
@@ -305,19 +305,21 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
 
     stream->data.common.in.buffer_size = in_buffer_size;
     stream->data.common.in.buffer = in_buffer;
-    stream->data.common.in.rand_seed = (anjay_rand_seed_t) time(NULL);
+    stream->data.common.in.rand_seed =
+            (anjay_rand_seed_t) avs_time_real_now().since_real_epoch.seconds;
 
     stream->data.common.out = _anjay_coap_out_init(out_buffer, out_buffer_size);
 
-    stream->id_source =
-            _anjay_coap_id_source_auto_new((anjay_rand_seed_t) time(NULL), 8);
+    stream->id_source = _anjay_coap_id_source_auto_new(
+            (anjay_rand_seed_t) avs_time_real_now().since_real_epoch.seconds,
+            8);
 
     if (!stream->data.common.in.buffer
             || !stream->data.common.out.buffer
             || !stream->id_source) {
         coap_log(ERROR, "Out of memory");
         coap_close((avs_stream_abstract_t *) stream);
-        free(stream);
+        avs_free(stream);
         return -1;
     }
     reset(stream);

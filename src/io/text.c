@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -174,11 +174,11 @@ anjay_output_ctx_t *
 _anjay_output_text_create(avs_stream_abstract_t *stream,
                           int *errno_ptr,
                           anjay_msg_details_t *inout_details) {
-    text_out_t *ctx = (text_out_t *) calloc(1, sizeof(text_out_t));
+    text_out_t *ctx = (text_out_t *) avs_calloc(1, sizeof(text_out_t));
     if (ctx && ((*errno_ptr = _anjay_handle_requested_format(
                     &inout_details->format, ANJAY_COAP_FORMAT_PLAINTEXT))
             || _anjay_coap_stream_setup_response(stream, inout_details))) {
-        free(ctx);
+        avs_free(ctx);
         return NULL;
     }
     if (ctx) {
@@ -296,120 +296,143 @@ static int text_get_string(anjay_input_ctx_t *ctx,
     return message_finished ? 0 : ANJAY_BUFFER_TOO_SHORT;
 }
 
-#define DEF_GETNUM(Type, Bufsize, ...) \
-static int safe_strto##Type (const char *in, TYPE##Type *value) { \
-    char *endptr = NULL; \
-    if (!*in || isspace((unsigned char)*in)) { \
-        return -1; \
-    } \
-    errno = 0; \
-    TYPE##Type tmp = strto##Type (in, &endptr __VA_ARGS__); \
-    if (errno || !endptr || *endptr) { \
-        return -1; \
-    } \
-    *value = tmp; \
-    return 0; \
-} \
-\
-static int text_get_##Type (anjay_input_ctx_t *ctx, TYPE##Type *value) { \
-    char buf[Bufsize]; \
-    int retval = anjay_get_string(ctx, buf, sizeof(buf)); \
-    if (retval) { \
-        return retval; \
-    } \
-    return safe_strto##Type (buf, value); \
+static int map_str_conversion_result(const char *input, const char *endptr) {
+    return (!*input || isspace((unsigned char) *input) || errno || !endptr
+            || *endptr)
+                   ? -1
+                   : 0;
 }
 
-#if LLONG_MAX == INT64_MAX
-#define TYPEll int64_t
-#else
-#define TYPEll long long
-#endif
-
-#define TYPEf float
-#define TYPEd double
-
-DEF_GETNUM(ll, 32,, 0)
-DEF_GETNUM(f, ANJAY_MAX_FLOAT_STRING_SIZE, )
-DEF_GETNUM(d, ANJAY_MAX_DOUBLE_STRING_SIZE, )
+int _anjay_safe_strtof(const char *in, float *value) {
+    errno = 0;
+    char *endptr = NULL;
+    *value = strtof(in, &endptr);
+    return map_str_conversion_result(in, endptr);
+}
 
 int _anjay_safe_strtoll(const char *in, long long *value) {
-    TYPEll out;
-    if (safe_strtoll(in, &out)) {
-        return -1;
-    }
-    *value = (long long)out;
-    return 0;
+    errno = 0;
+    char *endptr = NULL;
+    *value = strtoll(in, &endptr, 0);
+    return map_str_conversion_result(in, endptr);
 }
 
 int _anjay_safe_strtod(const char *in, double *value) {
-    return safe_strtod(in, value);
+    errno = 0;
+    char *endptr = NULL;
+    *value = strtod(in, &endptr);
+    return map_str_conversion_result(in, endptr);
 }
 
-#define DEF_GETI(Bits) \
-static int text_get_i##Bits (anjay_input_ctx_t *ctx, int##Bits##_t *value) { \
-    TYPEll ll_value; \
-    int retval = text_get_ll(ctx, &ll_value); \
-    if (retval) { \
-        return retval; \
-    } \
-    if (ll_value < INT##Bits##_MIN || ll_value > INT##Bits##_MAX) { \
-        return -1; \
-    } \
-    *value = (int##Bits##_t) ll_value; \
-    return 0; \
+static int map_get_string_error(int retval) {
+    /**
+     * NOTE: this function should be used ONLY when getting data to a fixed
+     * buffer and when we know for sure that the input cannot be longer.
+     */
+    if (retval == ANJAY_BUFFER_TOO_SHORT) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    return retval;
 }
 
-#if LLONG_MAX == INT64_MAX
-#define text_get_i64 text_get_ll
-#else
-DEF_GETI(64)
+#define MAX_LONG_LONG_BUF_SIZE 32
+static int text_get_i64(anjay_input_ctx_t *ctx, int64_t *value) {
+    char buf[MAX_LONG_LONG_BUF_SIZE];
+    int retval = anjay_get_string(ctx, buf, sizeof(buf));
+    if (retval) {
+        return map_get_string_error(retval);
+    }
+    long long ll;
+    if (_anjay_safe_strtoll(buf, &ll)
+#if LLONG_MAX != INT64_MAX
+            || ll < INT64_MIN
+            || ll > INT64_MAX
 #endif
+            ) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    *value = (int64_t) ll;
+    return 0;
+}
+#undef MAX_LONG_LONG_BUF_SIZE
 
-DEF_GETI(32)
-
-static int text_get_bool(anjay_input_ctx_t *ctx, bool *value) {
-    TYPEll ll_value;
-    int retval = text_get_ll(ctx, &ll_value);
+static int text_get_i32(anjay_input_ctx_t *ctx, int32_t *value) {
+    int64_t i64;
+    int retval = text_get_i64(ctx, &i64);
     if (retval) {
         return retval;
     }
-    switch (ll_value) {
-    case 0:
-        *value = false;
-        return 0;
-    case 1:
-        *value = true;
-        return 0;
-    default:
-        return -1;
+    if (i64 < INT32_MIN || i64 > INT32_MAX) {
+        return ANJAY_ERR_BAD_REQUEST;
     }
+    *value = (int32_t) i64;
+    return 0;
+}
+
+static int text_get_bool(anjay_input_ctx_t *ctx, bool *value) {
+    int64_t i64;
+    int retval = text_get_i64(ctx, &i64);
+    if (retval) {
+        return retval;
+    }
+    if (i64 == 0) {
+        *value = false;
+    } else if (i64 == 1) {
+        *value = true;
+    } else {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    return 0;
+}
+
+static int text_get_f(anjay_input_ctx_t *ctx, float *value) {
+    char buf[ANJAY_MAX_FLOAT_STRING_SIZE];
+    int retval = anjay_get_string(ctx, buf, sizeof(buf));
+    if (retval) {
+        return map_get_string_error(retval);
+    }
+    if (_anjay_safe_strtof(buf, value)) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    return 0;
+}
+
+static int text_get_d(anjay_input_ctx_t *ctx, double *value) {
+    char buf[ANJAY_MAX_DOUBLE_STRING_SIZE];
+    int retval = anjay_get_string(ctx, buf, sizeof(buf));
+    if (retval) {
+        return map_get_string_error(retval);
+    }
+    if (_anjay_safe_strtod(buf, value)) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    return 0;
 }
 
 static int text_get_objlnk(anjay_input_ctx_t *ctx,
-                           anjay_oid_t *out_oid, anjay_iid_t *out_iid) {
-    char buf[16];
+                           anjay_oid_t *out_oid,
+                           anjay_iid_t *out_iid) {
+    char buf[sizeof("65535:65535")];
     int retval = anjay_get_string(ctx, buf, sizeof(buf));
     if (retval) {
-        return retval;
+        return map_get_string_error(retval);
     }
     char *colon = strchr(buf, ':');
     if (!colon) {
-        return -1;
+        return ANJAY_ERR_BAD_REQUEST;
     }
     *colon = '\0';
-    TYPEll oid, iid;
-    if (!(retval = (safe_strtoll(buf, &oid)
-            || safe_strtoll(colon + 1, &iid)) ? -1 : 0)) {
-        if (oid >= 0 && oid <= UINT16_MAX
-                && iid >= 0 && iid <= UINT16_MAX) {
-            *out_oid = (anjay_oid_t) oid;
-            *out_iid = (anjay_iid_t) iid;
-        } else {
-            retval = -1;
-        }
+    long long oid;
+    long long iid;
+    if (_anjay_safe_strtoll(buf, &oid)
+            || _anjay_safe_strtoll(colon + 1, &iid)
+            || oid < 0 || oid > UINT16_MAX
+            || iid < 0 || iid > UINT16_MAX) {
+        return ANJAY_ERR_BAD_REQUEST;
     }
-    return retval;
+    *out_oid = (anjay_oid_t) oid;
+    *out_iid = (anjay_iid_t) iid;
+    return 0;
 }
 
 static int text_in_close(anjay_input_ctx_t *ctx_) {
@@ -435,7 +458,7 @@ static const anjay_input_ctx_vtable_t TEXT_IN_VTABLE = {
 int _anjay_input_text_create(anjay_input_ctx_t **out,
                              avs_stream_abstract_t **stream_ptr,
                              bool autoclose) {
-    text_in_t *ctx = (text_in_t *) calloc(1, sizeof(text_in_t));
+    text_in_t *ctx = (text_in_t *) avs_calloc(1, sizeof(text_in_t));
     *out = (anjay_input_ctx_t *) ctx;
     if (!ctx) {
         return -1;

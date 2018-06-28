@@ -96,14 +96,23 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         else:
             return Lwm2mErrorResponse.matching(req)(code=expect_error_code)
 
+    def create_instance_with_arbitrary_payload(self, server, oid, format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                                               iid=None, payload=b'', expect_error_code=None, **kwargs):
+        if iid is None:
+            raise ValueError("IID cannot be None")
+
+        req = Lwm2mCreate(path='/%d' % oid, content=payload, format=format)
+        expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
     def create_instance_with_payload(self, server, oid, iid=None, payload=b'', expect_error_code=None, **kwargs):
         if iid is None:
             raise ValueError("IID cannot be None")
 
         instance_tlv = TLV.make_instance(instance_id=iid, content=payload).serialize()
-        req = Lwm2mCreate('/%d' % oid, instance_tlv)
-        expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
-        return self._perform_action(server, req, expected_res, **kwargs)
+        return self.create_instance_with_arbitrary_payload(server=server, oid=oid, iid=iid,
+                                                           payload=instance_tlv, expect_error_code=expect_error_code,
+                                                           **kwargs)
 
     def create_instance(self, server, oid, iid=None, expect_error_code=None, **kwargs):
         instance_tlv = None if iid is None else TLV.make_instance(instance_id=iid).serialize()
@@ -132,9 +141,10 @@ class Lwm2mDmOperations(Lwm2mAsserts):
     def read_object(self, server, oid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d' % oid, expect_error_code, accept=accept, **kwargs)
 
-    def write_instance(self, server, oid, iid, content=b'', partial=False, expect_error_code=None, **kwargs):
+    def write_instance(self, server, oid, iid, content=b'', partial=False, expect_error_code=None,
+                       format=coap.ContentFormat.APPLICATION_LWM2M_TLV, **kwargs):
         req = Lwm2mWrite('/%d/%d' % (oid, iid), content,
-                         format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                         format=format,
                          update=partial)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
@@ -599,10 +609,17 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def get_socket_count(self):
         return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
 
+    def get_non_lwm2m_socket_count(self):
+        return int(self.communicate('non-lwm2m-socket-count',
+                                    match_regex='NON_LWM2M_SOCKET_COUNT==([0-9]+)\n').group(1))
+
     def get_demo_port(self, server_index=None):
         if server_index is None:
             server_index = -1
         return int(self.communicate('get-port %s' % (server_index,), match_regex='PORT==([0-9]+)\n').group(1))
+
+    def get_transport(self, socket_index=-1):
+        return self.communicate('get-transport %s' % (socket_index,), match_regex='TRANSPORT==([0-9a-zA-Z]+)\n').group(1)
 
 
 class SingleServerAccessor:

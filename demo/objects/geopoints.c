@@ -333,7 +333,7 @@ static const anjay_dm_object_def_t GEOPOINTS = {
 
 const anjay_dm_object_def_t **
 geopoints_object_create(anjay_demo_t *demo) {
-    geopoints_t *repr = (geopoints_t *) calloc(1, sizeof(geopoints_t));
+    geopoints_t *repr = (geopoints_t *) avs_calloc(1, sizeof(geopoints_t));
     if (!repr) {
         return NULL;
     }
@@ -349,7 +349,7 @@ void geopoints_object_release(const anjay_dm_object_def_t **def) {
         geopoints_t *geopoints = get_geopoints(def);
         AVS_LIST_CLEAR(&geopoints->instances);
         AVS_LIST_CLEAR(&geopoints->saved_instances);
-        free(geopoints);
+        avs_free(geopoints);
     }
 }
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #define ANJAY_SERVERS_INTERNALS
 
@@ -22,6 +22,7 @@
 #include "../anjay_core.h"
 
 #include "connection_info.h"
+#include "reload.h"
 #include "servers_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -62,23 +63,6 @@ int anjay_enter_offline(anjay_t *anjay) {
     return 0;
 }
 
-static void exit_offline_job(anjay_t *anjay, void *dummy) {
-    (void) dummy;
-    if (!_anjay_schedule_reload_servers(anjay)) {
-        anjay->offline = false;
-        AVS_LIST(anjay_server_info_t) server;
-        AVS_LIST_FOREACH(server, anjay->servers->servers) {
-            if (_anjay_server_active(server)) {
-                server->data_active.udp_connection.needs_reconnect = true;
-            }
-        }
-    }
-}
-
 int anjay_exit_offline(anjay_t *anjay) {
-    if (_anjay_sched_now(anjay->sched, NULL, exit_offline_job, NULL)) {
-        anjay_log(ERROR, "could not schedule enter_offline_job");
-        return -1;
-    }
-    return 0;
+    return _anjay_schedule_reconnect_servers(anjay);
 }

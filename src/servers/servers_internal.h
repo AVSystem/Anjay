@@ -32,7 +32,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 struct anjay_servers_struct {
     AVS_LIST(anjay_server_info_t) servers;
 
-    AVS_LIST(avs_net_abstract_socket_t *const) public_sockets;
+    AVS_LIST(anjay_socket_entry_t) public_sockets;
 };
 
 struct anjay_server_info_struct {
@@ -46,6 +46,7 @@ struct anjay_server_info_struct {
         bool needs_reload;
         anjay_server_connection_t udp_connection;
 
+        anjay_connection_type_t primary_conn_type;
         anjay_registration_info_t registration_info;
     } data_active;
 

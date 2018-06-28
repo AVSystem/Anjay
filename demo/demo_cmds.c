@@ -26,6 +26,8 @@
 #include <anjay/attr_storage.h>
 #include <anjay/security.h>
 
+#include <avsystem/commons/memory.h>
+
 static int parse_ssid(const char *text,
                       anjay_ssid_t *out_ssid) {
     unsigned id;
@@ -83,13 +85,18 @@ static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
         return;
     }
 
-    char filename[strlen(args_string) + 1];
+    char *filename = (char *) avs_malloc(strlen(args_string) + 1);
+    if (!filename) {
+        demo_log(ERROR, "Out of memory");
+        return;
+    }
     filename[0] = '\0';
     unsigned long frequency_s = 1;
     sscanf(args_string, "%s %lu", filename, &frequency_s);
     if (!location_open_csv(location_obj, filename, (time_t) frequency_s)) {
         demo_log(INFO, "Successfully opened CSV file");
     }
+    avs_free(filename);
 }
 
 static size_t count_servers(const server_connection_args_t *args) {
@@ -183,6 +190,55 @@ static void cmd_get_port(anjay_demo_t *demo, const char *args_string) {
         avs_net_socket_get_local_port(*socket, port, sizeof(port));
     }
     printf("PORT==%s\n", port);
+}
+
+static void cmd_get_transport(anjay_demo_t *demo, const char *args_string) {
+    int index;
+    if (sscanf(args_string, "%d", &index) != 1) {
+        demo_log(ERROR, "Invalid index: %s", args_string);
+        return;
+    }
+
+    AVS_LIST(const anjay_socket_entry_t) entries =
+            anjay_get_socket_entries(demo->anjay);
+    int num_sockets = (int) AVS_LIST_SIZE(entries);
+    if (index < 0) {
+        index = num_sockets + index;
+    }
+    if (index < 0 || index >= num_sockets) {
+        demo_log(ERROR, "Index out of range: %d; num_sockets == %d",
+                        index, num_sockets);
+    }
+    AVS_LIST(const anjay_socket_entry_t) entry =
+            AVS_LIST_NTH(entries, (size_t) index);
+    switch (entry->transport) {
+    case ANJAY_SOCKET_TRANSPORT_UDP:
+        puts("TRANSPORT==UDP");
+        break;
+    case ANJAY_SOCKET_TRANSPORT_TCP:
+        puts("TRANSPORT==TCP");
+        break;
+    case ANJAY_SOCKET_TRANSPORT_SMS:
+        puts("TRANSPORT==SMS");
+        break;
+    default:
+        printf("TRANSPORT==%d\n", (int) entry->transport);
+    }
+}
+
+static void cmd_non_lwm2m_socket_count(anjay_demo_t *demo,
+                                       const char *args_string) {
+    (void) args_string;
+    AVS_LIST(const anjay_socket_entry_t) entry =
+            anjay_get_socket_entries(demo->anjay);
+    unsigned long non_lwm2m_sockets = 0;
+    AVS_LIST_ITERATE(entry) {
+        if (entry->ssid == ANJAY_SSID_ANY
+                && entry->transport != ANJAY_SOCKET_TRANSPORT_SMS) {
+            ++non_lwm2m_sockets;
+        }
+    }
+    printf("NON_LWM2M_SOCKET_COUNT==%lu\n", non_lwm2m_sockets);
 }
 
 static void cmd_enter_offline(anjay_demo_t *demo, const char *args_string) {
@@ -301,7 +357,11 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
 }
 
 static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
-    char path[strlen(args_string) + 1];
+    char *path = (char *) avs_malloc(strlen(args_string) + 1);
+    if (!path) {
+        demo_log(ERROR, "Out of memory");
+        return;
+    }
     int path_len = 0;
     const char *args = NULL, *pmin = NULL, *pmax = NULL, *lt = NULL, *gt = NULL,
                *st = NULL;
@@ -341,23 +401,25 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
                     (anjay_rid_t) rid, &attrs)) {
             demo_log(ERROR, "failed to set resource level attributes");
         }
-        return;
+        goto finish;
     case 2:
         if (anjay_attr_storage_set_instance_attrs(
                     demo->anjay, 1, (anjay_oid_t) oid, (anjay_iid_t) iid,
                     &attrs.common)) {
             demo_log(ERROR, "failed to set instance level attributes");
         }
-        return;
+        goto finish;
     case 1:
         if (anjay_attr_storage_set_object_attrs(
                     demo->anjay, 1, (anjay_oid_t) oid, &attrs.common)) {
             demo_log(ERROR, "failed to set object level attributes");
         }
-        return;
+        goto finish;
     }
 error:
     demo_log(ERROR, "bad syntax - see help");
+finish:
+    avs_free(path);
 }
 
 static void cmd_enable_server(anjay_demo_t *demo, const char *args_string) {
@@ -402,10 +464,16 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 cmd_trim_servers,
                 "Remove LwM2M Servers with specified ID and higher"),
     CMD_HANDLER("socket-count", "", cmd_socket_count,
-                "Display number of server sockets currently registered"),
+                "Display number of sockets currently listening"),
     CMD_HANDLER("get-port", "index", cmd_get_port,
-                "Display listening port number of a server socket with the "
-                "specified index (also supports Python-like negative indices)"),
+                "Display listening port number of a socket with the specified "
+                "index (also supports Python-like negative indices)"),
+    CMD_HANDLER("non-lwm2m-socket-count", "", cmd_non_lwm2m_socket_count,
+                "Display number of sockets currently listening that are not "
+                "affiliated to any LwM2M server connetion"),
+    CMD_HANDLER("get-transport", "index", cmd_get_transport,
+                "Display transport used by a socket with the specified index "
+                "(also supports Python-like negative indices)"),
     CMD_HANDLER("enter-offline", "", cmd_enter_offline, "Enters Offline mode"),
     CMD_HANDLER("exit-offline", "", cmd_exit_offline, "Exits Offline mode"),
     CMD_HANDLER("notify", "", cmd_notify,

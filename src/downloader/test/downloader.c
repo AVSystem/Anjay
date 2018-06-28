@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <avsystem/commons/unit/test.h>
-#include <avsystem/commons/unit/mock_helpers.h>
 #include <anjay_test/coap/socket.h>
 #include <anjay_test/coap/stream.h>
 #include <anjay_test/mock_clock.h>
+#include <avsystem/commons/memory.h>
+#include <avsystem/commons/unit/mock_helpers.h>
+#include <avsystem/commons/unit/test.h>
 
 #include "../../coap/id_source/auto.h"
 #include "../../coap/test/utils.h"
@@ -39,70 +40,70 @@ typedef struct {
     size_t num_mocksocks;
 } dl_test_env_t;
 
-static int allocate_mocksock(anjay_t *anjay,
-                             avs_net_abstract_socket_t **out,
-                             avs_net_socket_type_t type,
-                             const char *bind_port,
-                             const void *config,
-                             const anjay_url_t *uri) {
-    (void) type; (void) bind_port; (void) config;
+dl_test_env_t ENV;
 
-    dl_test_env_t *env = AVS_CONTAINER_OF(anjay, dl_test_env_t, anjay);
-    AVS_UNIT_ASSERT_TRUE(env->num_mocksocks < AVS_ARRAY_SIZE(env->mocksock));
-    *out = env->mocksock[env->num_mocksocks++];
+static int allocate_mocksock(avs_net_abstract_socket_t **out,
+                             avs_net_socket_type_t type,
+                             const void *socket_config,
+                             const anjay_socket_bind_config_t *bind_conf,
+                             const anjay_url_t *uri) {
+    (void) type; (void) socket_config; (void) bind_conf;
+
+    AVS_UNIT_ASSERT_TRUE(ENV.num_mocksocks < AVS_ARRAY_SIZE(ENV.mocksock));
+    *out = ENV.mocksock[ENV.num_mocksocks++];
 
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(*out, uri->host, uri->port));
 
     return 0;
 }
 
-static void setup(dl_test_env_t *env) {
-    *env = (dl_test_env_t){0};
+static void setup(void) {
+    memset(&ENV, 0, sizeof(ENV));
 
     AVS_UNIT_MOCK(_anjay_create_connected_udp_socket) = allocate_mocksock;
 
-    for (size_t i = 0; i < AVS_ARRAY_SIZE(env->mocksock); ++i) {
-        _anjay_mocksock_create(&env->mocksock[i], 1252, 1252);
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(ENV.mocksock); ++i) {
+        _anjay_mocksock_create(&ENV.mocksock[i], 1252, 1252);
     }
 
-    env->anjay = (anjay_t) {
-        .sched = _anjay_sched_new(&env->anjay),
+    ENV.anjay = (anjay_t) {
+        .sched = _anjay_sched_new(&ENV.anjay),
         .udp_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS
     };
-    AVS_UNIT_ASSERT_SUCCESS(avs_coap_ctx_create(&env->anjay.coap_ctx, 0));
+    AVS_UNIT_ASSERT_SUCCESS(avs_coap_ctx_create(&ENV.anjay.coap_ctx, 0));
 
     // this particular seed ensures generated message IDs start from 0
     coap_id_source_t *id_source = _anjay_coap_id_source_auto_new(4235699843U, 0);
-    _anjay_downloader_init(&env->anjay.downloader, &env->anjay, &id_source);
+    _anjay_downloader_init(&ENV.anjay.downloader, &ENV.anjay, &id_source);
 
     _anjay_mock_clock_start(avs_time_monotonic_from_scalar(1, AVS_TIME_S));
 
     enum { ARBITRARY_SIZE = 4096 };
     // used by the downloader internally
-    env->anjay.out_buffer = (uint8_t *) malloc(ARBITRARY_SIZE);
-    env->anjay.out_buffer_size = ARBITRARY_SIZE;
-    AVS_UNIT_ASSERT_NOT_NULL(env->anjay.out_buffer);
+    ENV.anjay.out_buffer = (uint8_t *) avs_malloc(ARBITRARY_SIZE);
+    ENV.anjay.out_buffer_size = ARBITRARY_SIZE;
+    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay.out_buffer);
 
-    env->anjay.in_buffer = (uint8_t *) malloc(ARBITRARY_SIZE);
-    env->anjay.in_buffer_size = ARBITRARY_SIZE;
-    AVS_UNIT_ASSERT_NOT_NULL(env->anjay.in_buffer);
+    ENV.anjay.in_buffer = (uint8_t *) avs_malloc(ARBITRARY_SIZE);
+    ENV.anjay.in_buffer_size = ARBITRARY_SIZE;
+    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay.in_buffer);
 }
 
-static void teardown(dl_test_env_t *env) {
+static void teardown() {
     _anjay_mock_clock_finish();
 
-    _anjay_downloader_cleanup(&env->anjay.downloader);
-    _anjay_sched_delete(&env->anjay.sched);
-    avs_coap_ctx_cleanup(&env->anjay.coap_ctx);
+    _anjay_downloader_cleanup(&ENV.anjay.downloader);
+    _anjay_sched_delete(&ENV.anjay.sched);
+    avs_coap_ctx_cleanup(&ENV.anjay.coap_ctx);
 
-    for (size_t i = 0; i < AVS_ARRAY_SIZE(env->mocksock); ++i) {
-        avs_net_socket_cleanup(&env->mocksock[i]);
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(ENV.mocksock); ++i) {
+        avs_net_socket_cleanup(&ENV.mocksock[i]);
     }
 
-    free(env->anjay.out_buffer);
-    free(env->anjay.in_buffer);
+    avs_free(ENV.anjay.out_buffer);
+    avs_free(ENV.anjay.in_buffer);
 
-    memset(env, 0, sizeof(*env));
+    memset(&ENV, 0, sizeof(ENV));
 }
 
 typedef struct {
@@ -175,74 +176,79 @@ static void on_download_finished(anjay_t *anjay,
 }
 
 typedef struct {
-    dl_test_env_t base;
+    dl_test_env_t *base;
     handler_data_t data;
     anjay_download_config_t cfg;
-    avs_net_abstract_socket_t *mocksock; // alias for base.mocksock[0]
+    avs_net_abstract_socket_t *mocksock; // alias for SIMPLE_ENV.base->mocksock[0]
 } dl_simple_test_env_t;
 
-static void setup_simple(dl_simple_test_env_t *env,
-                         const char *url) {
-    setup(&env->base);
-    env->data = (handler_data_t){ .anjay = &env->base.anjay };
-    env->cfg = (anjay_download_config_t){
+dl_simple_test_env_t SIMPLE_ENV;
+
+static void setup_simple(const char *url) {
+    memset(&SIMPLE_ENV, 0, sizeof(SIMPLE_ENV));
+    setup();
+    SIMPLE_ENV.base = &ENV;
+    SIMPLE_ENV.data = (handler_data_t){ .anjay = &SIMPLE_ENV.base->anjay };
+    SIMPLE_ENV.cfg = (anjay_download_config_t){
         .url = url,
         .on_next_block = on_next_block,
         .on_download_finished = on_download_finished,
-        .user_data = &env->data,
+        .user_data = &SIMPLE_ENV.data,
     };
-    env->mocksock = env->base.mocksock[0];
+    SIMPLE_ENV.mocksock = SIMPLE_ENV.base->mocksock[0];
 }
 
-static void teardown_simple(dl_simple_test_env_t *env) {
-    teardown(&env->base);
+static void teardown_simple() {
+    teardown();
+    memset(&SIMPLE_ENV, 0, sizeof(SIMPLE_ENV));
 }
 
-static int handle_packet(dl_simple_test_env_t *env) {
-    AVS_LIST(avs_net_abstract_socket_t *const) sock = NULL;
-    _anjay_downloader_get_sockets(&env->base.anjay.downloader, &sock);
+static int handle_packet(void) {
+    AVS_LIST(anjay_socket_entry_t) sock = NULL;
+    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay.downloader, &sock);
     if (!sock) {
         return -1;
     }
 
     AVS_UNIT_ASSERT_EQUAL(1, AVS_LIST_SIZE(sock));
-    AVS_UNIT_ASSERT_TRUE(env->mocksock == *sock);
+    AVS_UNIT_ASSERT_TRUE(SIMPLE_ENV.mocksock == sock->socket);
 
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_downloader_handle_packet(&env->base.anjay.downloader, *sock));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_handle_packet(
+            &SIMPLE_ENV.base->anjay.downloader, sock->socket));
 
     AVS_LIST_CLEAR(&sock);
     return 0;
 }
 
-static void perform_simple_download(dl_simple_test_env_t *env) {
+static void perform_simple_download(void) {
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &env->base.anjay.downloader, &handle, &env->cfg));
+            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     do {
-        _anjay_sched_run(env->base.anjay.sched);
-    } while (!handle_packet(env));
+        _anjay_sched_run(SIMPLE_ENV.base->anjay.sched);
+    } while (!handle_packet());
 
-    avs_unit_mocksock_assert_expects_met(env->mocksock);
+    avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
 }
 
 AVS_UNIT_TEST(downloader, empty_has_no_sockets) {
-    dl_test_env_t env __attribute__((__cleanup__(teardown)));
-    setup(&env);
+    setup();
 
-    AVS_LIST(avs_net_abstract_socket_t *const) socks = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_get_sockets(&env.anjay.downloader,
+    AVS_LIST(anjay_socket_entry_t) socks = NULL;
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_get_sockets(&ENV.anjay.downloader,
                                                           &socks));
     AVS_UNIT_ASSERT_NULL(socks);
+
+    teardown();
 }
 
 static void assert_download_not_possible(anjay_downloader_t *dl,
                                          const anjay_download_config_t *cfg) {
     size_t num_downloads = 0;
 
-    AVS_LIST(avs_net_abstract_socket_t *const) socks = NULL;
+    AVS_LIST(anjay_socket_entry_t) socks = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_get_sockets(dl, &socks));
     num_downloads = AVS_LIST_SIZE(socks);
     AVS_LIST_CLEAR(&socks);
@@ -258,20 +264,24 @@ static void assert_download_not_possible(anjay_downloader_t *dl,
 }
 
 AVS_UNIT_TEST(downloader, cannot_download_without_handlers) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
-    env.cfg.on_next_block = NULL;
-    env.cfg.on_download_finished = NULL;
-    assert_download_not_possible(&env.base.anjay.downloader, &env.cfg);
+    SIMPLE_ENV.cfg.on_next_block = NULL;
+    SIMPLE_ENV.cfg.on_download_finished = NULL;
+    assert_download_not_possible(&SIMPLE_ENV.base->anjay.downloader,
+                                 &SIMPLE_ENV.cfg);
 
-    env.cfg.on_next_block = NULL;
-    env.cfg.on_download_finished = on_download_finished;
-    assert_download_not_possible(&env.base.anjay.downloader, &env.cfg);
+    SIMPLE_ENV.cfg.on_next_block = NULL;
+    SIMPLE_ENV.cfg.on_download_finished = on_download_finished;
+    assert_download_not_possible(&SIMPLE_ENV.base->anjay.downloader,
+                                 &SIMPLE_ENV.cfg);
 
-    env.cfg.on_next_block = on_next_block;
-    env.cfg.on_download_finished = NULL;
-    assert_download_not_possible(&env.base.anjay.downloader, &env.cfg);
+    SIMPLE_ENV.cfg.on_next_block = on_next_block;
+    SIMPLE_ENV.cfg.on_download_finished = NULL;
+    assert_download_not_possible(&SIMPLE_ENV.base->anjay.downloader,
+                                 &SIMPLE_ENV.cfg);
+
+    teardown_simple();
 }
 
 #define DESPAIR \
@@ -279,38 +289,38 @@ AVS_UNIT_TEST(downloader, cannot_download_without_handlers) {
     "at a memory dump and you see that a pointer has a value of 7."
 
 AVS_UNIT_TEST(downloader, coap_download_single_block) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // expect packets
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
     const avs_coap_msg_t *res = COAP_MSG(ACK, CONTENT, ID(0),
                                          BLOCK2(0, 128, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock,
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock,
                                     &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
                           .result = 0
                       });
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, coap_download_multiple_blocks) {
     static const size_t BLOCK_SIZE = 16;
 
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // setup expects
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     size_t num_blocks = DIV_CEIL(sizeof(DESPAIR) - 1, BLOCK_SIZE);
     for (size_t i = 0; i < num_blocks; ++i) {
@@ -319,9 +329,9 @@ AVS_UNIT_TEST(downloader, coap_download_multiple_blocks) {
         const avs_coap_msg_t *res = COAP_MSG(ACK, CONTENT, ID(i),
                                              BLOCK2(i, BLOCK_SIZE, DESPAIR));
 
-        avs_unit_mocksock_expect_output(env.mocksock,
+        avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock,
                                         &req->content, req->length);
-        avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+        avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
         bool is_last_block = (i + 1) * BLOCK_SIZE >= sizeof(DESPAIR) - 1;
         size_t size = is_last_block ? sizeof(DESPAIR) - 1 - i * BLOCK_SIZE
@@ -332,72 +342,77 @@ AVS_UNIT_TEST(downloader, coap_download_multiple_blocks) {
             .result = 0
         };
         memcpy(args.data, &DESPAIR[i * BLOCK_SIZE], size);
-        expect_next_block(&env.data, args);
+        expect_next_block(&SIMPLE_ENV.data, args);
 
         if (is_last_block) {
-            expect_download_finished(&env.data, 0);
+            expect_download_finished(&SIMPLE_ENV.data, 0);
         }
     }
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, download_abort_on_cleanup) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &env.base.anjay.downloader, &handle, &env.cfg));
+            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
-    expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_ABORTED);
-    _anjay_downloader_cleanup(&env.base.anjay.downloader);
+    expect_download_finished(&SIMPLE_ENV.data, ANJAY_DOWNLOAD_ERR_ABORTED);
+    _anjay_downloader_cleanup(&SIMPLE_ENV.base->anjay.downloader);
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, download_abort_on_reset_response) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // expect packets
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
     const avs_coap_msg_t *res = COAP_MSG(RST, EMPTY, ID(0), NO_PAYLOAD);
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     // expect handler calls
-    expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_FAILED);
+    expect_download_finished(&SIMPLE_ENV.data, ANJAY_DOWNLOAD_ERR_FAILED);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, unsupported_protocol) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "gopher://127.0.0.1:5683");
+    setup_simple("gopher://127.0.0.1:5683");
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_EQUAL(
-            _anjay_downloader_download(&env.base.anjay.downloader, &handle,
-                                       &env.cfg),
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay.downloader,
+                                       &handle, &SIMPLE_ENV.cfg),
             -EPROTONOSUPPORT);
     AVS_UNIT_ASSERT_NULL(handle);
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, unrelated_socket) {
-    dl_test_env_t env __attribute__((__cleanup__(teardown)));
-    setup(&env);
+    setup();
 
-    AVS_UNIT_ASSERT_FAILED(_anjay_downloader_handle_packet(&env.anjay.downloader,
-                                                           env.mocksock[0]));
+    AVS_UNIT_ASSERT_FAILED(_anjay_downloader_handle_packet(&ENV.anjay.downloader,
+                                                           ENV.mocksock[0]));
+
+    teardown();
 }
 
 AVS_UNIT_TEST(downloader, coap_download_separate_response) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // expect packets
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
@@ -405,26 +420,27 @@ AVS_UNIT_TEST(downloader, coap_download_separate_response) {
                                          BLOCK2(0, 128, DESPAIR));
     const avs_coap_msg_t *res_res = COAP_MSG(ACK, EMPTY, ID(1), NO_PAYLOAD);
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
-    avs_unit_mocksock_expect_output(env.mocksock,
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock,
                                     &res_res->content, res_res->length);
 
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
                           .result = 0
                       });
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, coap_download_unexpected_packet) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // expect packets
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
@@ -433,50 +449,52 @@ AVS_UNIT_TEST(downloader, coap_download_unexpected_packet) {
     const avs_coap_msg_t *res = COAP_MSG(ACK, CONTENT, ID(0),
                                          BLOCK2(0, 128, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &unk1->content, unk1->length);
-    avs_unit_mocksock_input(env.mocksock, &unk2->content, unk2->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &unk1->content, unk1->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &unk2->content, unk2->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
                           .result = 0
                       });
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, coap_download_abort_from_handler) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // expect packets
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
     const avs_coap_msg_t *res = COAP_MSG(ACK, CONTENT, ID(0),
                                          BLOCK2(0, 128, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
                           .result = -1 // request abort
                       });
-    expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_FAILED);
+    expect_download_finished(&SIMPLE_ENV.data, ANJAY_DOWNLOAD_ERR_FAILED);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, coap_download_expired) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // expect packets
     const avs_coap_msg_t *req1 = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
@@ -487,59 +505,61 @@ AVS_UNIT_TEST(downloader, coap_download_expired) {
     const avs_coap_msg_t *res2 = COAP_MSG(ACK, CONTENT, ID(1), ETAG("nje"),
                                           BLOCK2(1, 64, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock, &req1->content, req1->length);
-    avs_unit_mocksock_input(env.mocksock, &res1->content, res1->length);
-    avs_unit_mocksock_expect_output(env.mocksock, &req2->content, req2->length);
-    avs_unit_mocksock_input(env.mocksock, &res2->content, res2->length);
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req1->content, req1->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res1->content, res1->length);
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req2->content, req2->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res2->content, res2->length);
 
     static const anjay_coap_etag_t etag = { .size = 3, .value = "tag" };
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = 64,
                           .etag = (const anjay_etag_t *) &etag,
                           .result = 0 // request abort
                       });
-    expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_EXPIRED);
+    expect_download_finished(&SIMPLE_ENV.data, ANJAY_DOWNLOAD_ERR_EXPIRED);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, buffer_too_small_to_download) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
-    env.base.anjay.out_buffer_size = 3;
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+    SIMPLE_ENV.base->anjay.out_buffer_size = 3;
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &env.base.anjay.downloader, &handle, &env.cfg));
+            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
-    expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_FAILED);
-    _anjay_sched_run(env.base.anjay.sched);
+    expect_download_finished(&SIMPLE_ENV.data, ANJAY_DOWNLOAD_ERR_FAILED);
+    _anjay_sched_run(SIMPLE_ENV.base->anjay.sched);
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, retry) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
     const avs_coap_msg_t *res = COAP_MSG(ACK, CONTENT, ID(0), ETAG("tag"),
                                          BLOCK2(0, 128, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &env.base.anjay.downloader, &handle, &env.cfg));
+            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    _anjay_sched_run(env.base.anjay.sched);
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    _anjay_sched_run(SIMPLE_ENV.base->anjay.sched);
 
     // request retransmissions
     avs_time_duration_t last_time_to_next = AVS_TIME_DURATION_INVALID;
@@ -547,13 +567,13 @@ AVS_UNIT_TEST(downloader, retry) {
         // make sure there's a retransmission job scheduled
         avs_time_duration_t time_to_next;
         AVS_UNIT_ASSERT_SUCCESS(
-                _anjay_sched_time_to_next(env.base.anjay.sched,
+                _anjay_sched_time_to_next(SIMPLE_ENV.base->anjay.sched,
                                           &time_to_next));
         _anjay_mock_clock_advance(time_to_next);
 
-        avs_unit_mocksock_expect_output(env.mocksock,
+        avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock,
                                         &req->content, req->length);
-        _anjay_sched_run(env.base.anjay.sched);
+        _anjay_sched_run(SIMPLE_ENV.base->anjay.sched);
 
         // ...and it's roughly exponential backoff
         if (avs_time_duration_valid(last_time_to_next)) {
@@ -567,58 +587,59 @@ AVS_UNIT_TEST(downloader, retry) {
     }
 
     // handle response
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     static const anjay_coap_etag_t etag = { .size = 3, .value = "tag" };
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
                           .etag = (const anjay_etag_t *) &etag,
                           .result = 0 // request abort
                       });
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    handle_packet(&env);
+    handle_packet();
 
     // retransmission job should be canceled
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_sched_time_to_next(env.base.anjay.sched, NULL));
+            _anjay_sched_time_to_next(SIMPLE_ENV.base->anjay.sched, NULL));
 
-    avs_unit_mocksock_assert_expects_met(env.mocksock);
+    avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, missing_separate_response) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
     const avs_coap_msg_t *req_ack = COAP_MSG(ACK, EMPTY, ID(0), NO_PAYLOAD);
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &env.base.anjay.downloader, &handle, &env.cfg));
+            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    _anjay_sched_run(env.base.anjay.sched);
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    _anjay_sched_run(SIMPLE_ENV.base->anjay.sched);
 
     // retransmission job should be scheduled
     avs_time_duration_t time_to_next;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(env.base.anjay.sched,
-                                                      &time_to_next));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(
+            SIMPLE_ENV.base->anjay.sched, &time_to_next));
     AVS_UNIT_ASSERT_TRUE(avs_time_duration_to_fscalar(time_to_next,
                                                       AVS_TIME_S) < 5.0);
 
     // separate ACK
-    avs_unit_mocksock_input(env.mocksock, &req_ack->content, req_ack->length);
-    AVS_UNIT_ASSERT_SUCCESS(handle_packet(&env));
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &req_ack->content, req_ack->length);
+    AVS_UNIT_ASSERT_SUCCESS(handle_packet());
 
     // abort job should be scheduled to run after EXCHANGE_LIFETIME
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(env.base.anjay.sched,
-                                                      &time_to_next));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(
+            SIMPLE_ENV.base->anjay.sched, &time_to_next));
 
     static const avs_coap_tx_params_t tx_params =
             ANJAY_COAP_DEFAULT_UDP_TX_PARAMS;
@@ -628,50 +649,52 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
                              AVS_TIME_S));
 
     // no separate response should abort the transfer after EXCHANGE_LIFETIME
-    expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_FAILED);
+    expect_download_finished(&SIMPLE_ENV.data, ANJAY_DOWNLOAD_ERR_FAILED);
 
     _anjay_mock_clock_advance(time_to_next);
-    _anjay_sched_run(env.base.anjay.sched);
+    _anjay_sched_run(SIMPLE_ENV.base->anjay.sched);
 
-    avs_unit_mocksock_assert_expects_met(env.mocksock);
+    avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
+
+    teardown_simple();
 }
 
-static size_t num_downloads_in_progress(dl_simple_test_env_t *env) {
-    AVS_LIST(avs_net_abstract_socket_t *const) sock = NULL;
-    _anjay_downloader_get_sockets(&env->base.anjay.downloader, &sock);
+static size_t num_downloads_in_progress(void) {
+    AVS_LIST(anjay_socket_entry_t) sock = NULL;
+    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay.downloader, &sock);
     size_t result = AVS_LIST_SIZE(sock);
     AVS_LIST_CLEAR(&sock);
     return result;
 }
 
 AVS_UNIT_TEST(downloader, abort) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &env.base.anjay.downloader, &handle, &env.cfg));
+            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // retransmission job scheduled
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched_time_to_next(env.base.anjay.sched, NULL));
-    AVS_UNIT_ASSERT_EQUAL(1, num_downloads_in_progress(&env));
+            _anjay_sched_time_to_next(SIMPLE_ENV.base->anjay.sched, NULL));
+    AVS_UNIT_ASSERT_EQUAL(1, num_downloads_in_progress());
 
-    expect_download_finished(&env.data, ANJAY_DOWNLOAD_ERR_ABORTED);
-    _anjay_downloader_abort(&env.base.anjay.downloader, handle);
+    expect_download_finished(&SIMPLE_ENV.data, ANJAY_DOWNLOAD_ERR_ABORTED);
+    _anjay_downloader_abort(&SIMPLE_ENV.base->anjay.downloader, handle);
 
     // retransmission job canceled
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_sched_time_to_next(env.base.anjay.sched, NULL));
-    AVS_UNIT_ASSERT_EQUAL(0, num_downloads_in_progress(&env));
+            _anjay_sched_time_to_next(SIMPLE_ENV.base->anjay.sched, NULL));
+    AVS_UNIT_ASSERT_EQUAL(0, num_downloads_in_progress());
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, uri_path_query) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683/uri/path?query=string&another");
+    setup_simple("coap://127.0.0.1:5683/uri/path?query=string&another");
 
     // expect packets
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0),
@@ -681,54 +704,56 @@ AVS_UNIT_TEST(downloader, uri_path_query) {
     const avs_coap_msg_t *res = COAP_MSG(ACK, CONTENT, ID(0),
                                          BLOCK2(0, 128, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock,
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock,
                                     &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
                           .result = 0
                       });
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, in_buffer_size_enforces_smaller_initial_block_size) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // the downloader should realize it cannot hold blocks bigger than 128 bytes
     // and request that size
-    env.base.anjay.in_buffer_size = 256;
+    SIMPLE_ENV.base->anjay.in_buffer_size = 256;
 
     // expect packets
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 128));
     const avs_coap_msg_t *res = COAP_MSG(ACK, CONTENT, ID(0),
                                          BLOCK2(0, 128, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock,
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock,
                                     &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t){
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t){
                           .data = DESPAIR,
                           .data_size = sizeof(DESPAIR) - 1,
                           .result = 0
                       });
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, renegotiation_while_requesting_more_than_available) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
     // We request as much as we can (i.e. 1024 bytes)
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 1024));
@@ -738,45 +763,46 @@ AVS_UNIT_TEST(downloader, renegotiation_while_requesting_more_than_available) {
     const avs_coap_msg_t *res =
             COAP_MSG(ACK, CONTENT, ID(0), BLOCK2(0, 128, DESPAIR));
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
-    avs_unit_mocksock_expect_output(env.mocksock,
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock,
                                     &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     // expect handler calls
-    expect_next_block(&env.data, (on_next_block_args_t) {
+    expect_next_block(&SIMPLE_ENV.data, (on_next_block_args_t) {
                             .data = DESPAIR,
                             .data_size = sizeof(DESPAIR) - 1,
                             .result = 0
                       });
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, renegotiation_after_first_packet) {
-    dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-    setup_simple(&env, "coap://127.0.0.1:5683");
+    setup_simple("coap://127.0.0.1:5683");
 
-    avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+    avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     on_next_block_args_t args;
     memset(&args, 0, sizeof(args));
 
     // We request as much as we can (i.e. 64 bytes due to limit of in_buffer_size)
-    env.base.anjay.in_buffer_size = 128;
+    SIMPLE_ENV.base->anjay.in_buffer_size = 128;
     const avs_coap_msg_t *req = COAP_MSG(CON, GET, ID(0), BLOCK2(0, 64));
 
     // The server responds with 64 bytes of the first block
     const avs_coap_msg_t *res =
             COAP_MSG(ACK, CONTENT, ID(0), BLOCK2(0, 64, DESPAIR));
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     memset(args.data, 0, sizeof(args.data));
     strncpy(args.data, DESPAIR, 64);
     args.data_size = strlen(args.data);
-    expect_next_block(&env.data, args);
+    expect_next_block(&SIMPLE_ENV.data, args);
 
     // We then request another block with negotiated 64 bytes
     req = COAP_MSG(CON, GET, ID(1), BLOCK2(1, 64));
@@ -784,41 +810,42 @@ AVS_UNIT_TEST(downloader, renegotiation_after_first_packet) {
     // with a different seq-num that is however valid in terms of offset, i.e.
     // it has seq_num=2 which corresponds to the data past the first 64 bytes
     res = COAP_MSG(ACK, CONTENT, ID(1), BLOCK2(2, 32, DESPAIR));
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     memset(args.data, 0, sizeof(args.data));
     strncpy(args.data, DESPAIR + 64, 32);
     args.data_size = strlen(args.data);
-    expect_next_block(&env.data, args);
+    expect_next_block(&SIMPLE_ENV.data, args);
 
     // Last block - no surprises this time.
     req = COAP_MSG(CON, GET, ID(2), BLOCK2(3, 32));
     res = COAP_MSG(ACK, CONTENT, ID(2), BLOCK2(3, 32, DESPAIR));
-    avs_unit_mocksock_expect_output(env.mocksock, &req->content, req->length);
-    avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+    avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content, req->length);
+    avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
     memset(args.data, 0, sizeof(args.data));
     strncpy(args.data, DESPAIR + 64 + 32, 32);
     args.data_size = strlen(args.data);
-    expect_next_block(&env.data, args);
+    expect_next_block(&SIMPLE_ENV.data, args);
 
-    expect_download_finished(&env.data, 0);
+    expect_download_finished(&SIMPLE_ENV.data, 0);
 
-    perform_simple_download(&env);
+    perform_simple_download();
+
+    teardown_simple();
 }
 
 AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
     for (size_t offset = 0; offset < sizeof(DESPAIR); ++offset) {
-        dl_simple_test_env_t env __attribute__((__cleanup__(teardown_simple)));
-        setup_simple(&env, "coap://127.0.0.1:5683");
+        setup_simple("coap://127.0.0.1:5683");
 
-        avs_unit_mocksock_expect_connect(env.mocksock, "127.0.0.1", "5683");
+        avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
         on_next_block_args_t args;
         memset(&args, 0, sizeof(args));
 
-        env.base.anjay.in_buffer_size = 64;
+        SIMPLE_ENV.base->anjay.in_buffer_size = 64;
         enum { BLOCK_SIZE = 32 };
 
         size_t current_offset = offset;
@@ -830,9 +857,9 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
             const avs_coap_msg_t *res =
                     COAP_MSG(ACK, CONTENT, ID(msg_id),
                              BLOCK2(seq_num, BLOCK_SIZE, DESPAIR));
-            avs_unit_mocksock_expect_output(env.mocksock, &req->content,
+            avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                             req->length);
-            avs_unit_mocksock_input(env.mocksock, &res->content, res->length);
+            avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
 
             // Copy contents from the current_offset till the end of the
             // enclosing block.
@@ -848,23 +875,25 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
             // See BLOCK2 macro - it ignores terminating '\0', so strlen() must
             // be used to compute actual data length.
             args.data_size = strlen(args.data);
-            expect_next_block(&env.data, args);
+            expect_next_block(&SIMPLE_ENV.data, args);
 
             current_offset += bytes_till_block_end;
             ++msg_id;
         }
-        expect_download_finished(&env.data, 0);
+        expect_download_finished(&SIMPLE_ENV.data, 0);
 
-        env.cfg.start_offset = offset;
+        SIMPLE_ENV.cfg.start_offset = offset;
         anjay_download_handle_t handle = NULL;
         AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-                &env.base.anjay.downloader, &handle, &env.cfg));
+                &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
         AVS_UNIT_ASSERT_NOT_NULL(handle);
 
         do {
-            _anjay_sched_run(env.base.anjay.sched);
-        } while (!handle_packet(&env));
+            _anjay_sched_run(SIMPLE_ENV.base->anjay.sched);
+        } while (!handle_packet());
 
-        avs_unit_mocksock_assert_expects_met(env.mocksock);
+        avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
+
+        teardown_simple();
     }
 }

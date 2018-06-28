@@ -94,19 +94,13 @@ class ReconnectTest(test_suite.Lwm2mDtlsSingleServerTest):
 
         original_remote_addr = self.serv.get_remote_addr()
 
-        # should send an Update with reconnect
-        self.serv.reset()
-        self.communicate('reconnect')
-        pkt = self.serv.recv()
+        with self.serv.fake_close():
+            self.communicate('reconnect')
+
+        self.assertDtlsReconnect()
 
         # should retain remote port after reconnecting
         self.assertEqual(original_remote_addr, self.serv.get_remote_addr())
-        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT,
-                                        query=[],
-                                        content=b''),
-                            pkt)
-
-        self.serv.send(Lwm2mChanged.matching(pkt)())
 
 
 class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):
@@ -213,7 +207,7 @@ class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
 
         # make sure that client retries
         self.serv.reset()
-        self.assertDemoRegisters()
+        self.assertDemoRegisters(timeout_s=10)
 
 
 class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTest):
@@ -229,7 +223,8 @@ class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTe
 
         # make sure that client retries
         self.assertDtlsReconnect(timeout_s=5)
-        self.assertDemoUpdatesRegistration(timeout_s=5)
+        # TODO: Update would be sufficient, but our server handling code is a pile of spaghetti for now...
+        self.assertDemoRegisters(timeout_s=5)
 
 
 class ConcurrentRequestWhileWaitingForResponse(test_suite.Lwm2mSingleServerTest):

@@ -67,7 +67,7 @@ The Read handler for our test object might be implemented as follows:
        case 0:
            return anjay_ret_string(ctx, "Test object");
        case 1:
-           return anjay_ret_i32(ctx, (int32_t)time(NULL));
+           return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds);
        default:
            // control will never reach this part due to object's supported_rids
            return 0;

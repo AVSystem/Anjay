@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/coap/msg_opt.h>
 #include <avsystem/commons/stream.h>
@@ -50,8 +50,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
         .msg_type = AVS_COAP_MSG_CONFIRMABLE,
         .msg_code = AVS_COAP_CODE_NOT_FOUND,
         .format = ANJAY_COAP_FORMAT_JSON,
-        .uri_path = _anjay_make_string_list("1", "2", "3", NULL),
-        .uri_query = _anjay_make_string_list("foo=bar", "baz=qux", NULL)
+        .uri_path = ANJAY_MAKE_STRING_LIST("1", "2", "3"),
+        .uri_query = ANJAY_MAKE_STRING_LIST("foo=bar", "baz=qux")
     };
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -681,10 +681,10 @@ AVS_UNIT_TEST(coap_stream, response_options) {
         .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
         .msg_code = AVS_COAP_CODE_CHANGED,
         .format = AVS_COAP_FORMAT_NONE,
-        .uri_path = _anjay_make_string_list("w", "ryj", "z", "kopa", NULL),
-        .uri_query = _anjay_make_string_list("albo=lepiej", "w=jadra", NULL),
-        .location_path = _anjay_make_string_list("slychac", "trzask", "bylo",
-                                                 "zalozyc", "kask", NULL)
+        .uri_path = ANJAY_MAKE_STRING_LIST("w", "ryj", "z", "kopa"),
+        .uri_query = ANJAY_MAKE_STRING_LIST("albo=lepiej", "w=jadra"),
+        .location_path = ANJAY_MAKE_STRING_LIST("slychac", "trzask", "bylo",
+                                                "zalozyc", "kask")
     };
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <avsystem/commons/stream_v_table.h>
 #include <avsystem/commons/utils.h>
@@ -53,7 +53,11 @@ static int tlv_get_some_bytes(anjay_input_ctx_t *ctx_,
         uint16_t placeholder_id;
         int retval =
                 _anjay_input_get_id(ctx_, &placeholder_type, &placeholder_id);
-        if (retval) {
+        if (retval == ANJAY_GET_INDEX_END) {
+            *out_message_finished = true;
+            *out_bytes_read = 0;
+            return 0;
+        } else if (retval) {
             return retval;
         }
     }
@@ -121,9 +125,10 @@ static int tlv_get_string(anjay_input_ctx_t *ctx,
 static int tlv_get_i##Bits (anjay_input_ctx_t *ctx, int##Bits##_t *value) { \
     uint8_t bytes[Bits / 8]; \
     size_t bytes_read = 0; \
-    if (tlv_read_whole_entry(ctx, &bytes_read, bytes, sizeof(bytes)) \
+    int retval; \
+    if ((retval = tlv_read_whole_entry(ctx, &bytes_read, bytes, sizeof(bytes))) \
             || !avs_is_power_of_2(bytes_read)) { \
-        return -1; \
+        return retval ? retval : ANJAY_ERR_BAD_REQUEST; \
     } \
     *value = (bytes_read > 0 && ((int8_t) bytes[0]) < 0) ? -1 : 0; \
     for (size_t i = 0; i < bytes_read; ++i) { \
@@ -143,8 +148,9 @@ static int tlv_get_##Type (anjay_input_ctx_t *ctx, Type *value) { \
         uint64_t f64; \
     } data; \
     size_t bytes_read = 0; \
-    if (tlv_read_whole_entry(ctx, &bytes_read, &data, 8)) { \
-        return -1; \
+    int retval = tlv_read_whole_entry(ctx, &bytes_read, &data, 8); \
+    if (retval) { \
+        return retval; \
     } \
     switch (bytes_read) { \
     case 4: \
@@ -154,7 +160,7 @@ static int tlv_get_##Type (anjay_input_ctx_t *ctx, Type *value) { \
         *value = (Type) _anjay_ntohd(data.f64); \
         return 0; \
     default: \
-        return -1; \
+        return ANJAY_ERR_BAD_REQUEST; \
     } \
 }
 
@@ -164,8 +170,12 @@ DEF_GETF(double)
 static int tlv_get_bool(anjay_input_ctx_t *ctx, bool *value) {
     char raw;
     size_t bytes_read = 0;
-    if (tlv_read_whole_entry(ctx, &bytes_read, &raw, 1) || bytes_read != 1) {
-        return -1;
+    int retval = tlv_read_whole_entry(ctx, &bytes_read, &raw, 1);
+    if (retval) {
+        return retval;
+    }
+    if (bytes_read != 1) {
+        return ANJAY_ERR_BAD_REQUEST;
     }
     switch (raw) {
     case 0:
@@ -175,7 +185,7 @@ static int tlv_get_bool(anjay_input_ctx_t *ctx, bool *value) {
         *value = true;
         return 0;
     default:
-        return -1;
+        return ANJAY_ERR_BAD_REQUEST;
     }
 }
 
@@ -352,7 +362,7 @@ static const avs_stream_v_table_t TLV_SINGLE_MSG_STREAM_WRAPPER_VTABLE = {
 int _anjay_input_tlv_create(anjay_input_ctx_t **out,
                             avs_stream_abstract_t **stream_ptr,
                             bool autoclose) {
-    tlv_in_t *ctx = (tlv_in_t *) calloc(1, sizeof(tlv_in_t));
+    tlv_in_t *ctx = (tlv_in_t *) avs_calloc(1, sizeof(tlv_in_t));
     *out = (anjay_input_ctx_t *) ctx;
     if (!ctx) {
         return -1;

@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
+#ifdef WITH_AVS_PERSISTENCE
 #include <avsystem/commons/persistence.h>
+#endif // WITH_AVS_PERSISTENCE
 
 #include <anjay/access_control.h>
 
@@ -25,6 +27,8 @@
 #include <string.h>
 
 VISIBILITY_SOURCE_BEGIN
+
+#ifdef WITH_AVS_PERSISTENCE
 
 static int handle_acl_entry(avs_persistence_context_t *ctx,
                             void *element_,
@@ -214,3 +218,20 @@ int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
 #ifdef ANJAY_TEST
 #include "test/persistence.c"
 #endif // ANJAY_TEST
+
+#else // WITH_AVS_PERSISTENCE
+
+int anjay_access_control_persist(anjay_t *anjay,
+                                 avs_stream_abstract_t *out) {
+    (void) anjay; (void) out;
+    ac_log(ERROR, "Persistence not compiled in");
+    return -1;
+}
+
+int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
+    (void) anjay; (void) in;
+    ac_log(ERROR, "Persistence not compiled in");
+    return -1;
+}
+
+#endif // WITH_AVS_PERSISTENCE

@@ -42,7 +42,7 @@ INCLUDE_WHITELIST = {
     # r'wchar\.h',
     # r'wctype\.h',
     r'anjay_config_log\.h',
-    r'config\.h',
+    r'anjay_config\.h',
     r'avsystem/commons/[^.]*\.h',
     r'anjay/[^.]*\.h',
     r'anjay_modules/[^.]*\.h',

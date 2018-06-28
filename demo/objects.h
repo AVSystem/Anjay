@@ -24,6 +24,7 @@
 #include <stdbool.h>
 
 #include <avsystem/commons/list.h>
+#include <avsystem/commons/time.h>
 
 #include <anjay/access_control.h>
 #include <anjay/server.h>

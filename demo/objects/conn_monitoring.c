@@ -168,7 +168,7 @@ static const anjay_dm_object_def_t CONN_MONITORING = {
 
 const anjay_dm_object_def_t **cm_object_create(void) {
     conn_monitoring_repr_t *repr = (conn_monitoring_repr_t *)
-            calloc(1, sizeof(conn_monitoring_repr_t));
+            avs_calloc(1, sizeof(conn_monitoring_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -180,7 +180,7 @@ const anjay_dm_object_def_t **cm_object_create(void) {
 
 void cm_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
-        free(get_cm(def));
+        avs_free(get_cm(def));
     }
 }
 

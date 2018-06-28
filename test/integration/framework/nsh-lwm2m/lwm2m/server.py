@@ -24,6 +24,9 @@ class Lwm2mServer:
         self.set_timeout(timeout_s=5)
 
     def send(self, pkt: coap.Packet):
+        if not isinstance(pkt, coap.Packet):
+            raise ValueError(('pkt is %r, expected coap.Packet; did you forget additional parentheses? ' +
+                             'valid syntax: Lwm2mSomething.matching(pkt)()') % (type(pkt),))
         self._coap_server.send(pkt.fill_placeholders())
 
     def recv(self, timeout_s=-1):

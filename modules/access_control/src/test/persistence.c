@@ -41,7 +41,7 @@ static const anjay_dm_supported_rids_t MOCK_SUPPORTED_RIDS =
 
 static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
     anjay_dm_object_def_t *obj =
-            (anjay_dm_object_def_t *) calloc(1, sizeof(anjay_dm_object_def_t));
+            (anjay_dm_object_def_t *) avs_calloc(1, sizeof(anjay_dm_object_def_t));
     if (obj) {
         obj->oid = oid;
         obj->supported_rids = MOCK_SUPPORTED_RIDS;
@@ -236,6 +236,6 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     anjay_delete(anjay1);
     anjay_delete(anjay2);
 
-    free((anjay_dm_object_def_t *) (intptr_t) mock_obj1);
-    free((anjay_dm_object_def_t *) (intptr_t) mock_obj2);
+    avs_free((anjay_dm_object_def_t *) (intptr_t) mock_obj1);
+    avs_free((anjay_dm_object_def_t *) (intptr_t) mock_obj2);
 }

@@ -259,6 +259,70 @@ void anjay_delete(anjay_t *anjay);
  */
 AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay);
 
+typedef enum {
+    ANJAY_SOCKET_TRANSPORT_UDP,
+    ANJAY_SOCKET_TRANSPORT_TCP,
+    ANJAY_SOCKET_TRANSPORT_SMS
+} anjay_socket_transport_t;
+
+/**
+ * A structure that describes an open socket used by Anjay. Returned by
+ * @ref anjay_get_socket_entries.
+ */
+typedef struct {
+    /**
+     * The socket described by this structure. It is intended to be used
+     * directly only for checking whether there is data ready, using mechanisms
+     * such as <c>select()</c> or <c>poll()</c>.
+     */
+    avs_net_abstract_socket_t *socket;
+
+    /**
+     * Transport layer used by <c>socket</c>.
+     */
+    anjay_socket_transport_t transport;
+
+    /**
+     * SSID of the server to which the socket is related. May be:
+     * - <c>ANJAY_SSID_ANY</c> if the socket is not directly and unambiguously
+     *   related to any server, which includes:
+     *   - download sockets
+     *   - SMS communication socket (common for all servers)
+     * - <c>ANJAY_SSID_BOOTSTRAP</c> for the Bootstrap Server socket
+     * - any other value for sockets related to regular LwM2M servers
+     */
+    anjay_ssid_t ssid;
+
+    /**
+     * Flag that is true in the following cases:
+     * - it is a UDP communication socket for a regular LwM2M server that is
+     *   configured to use the "queue mode", or
+     * - it is an SMS communication socket and all LwM2M servers that use this
+     *   transport use the "queue mode"
+     *
+     * In either case, a queue mode socket will stop being returned from
+     * @ref anjay_get_sockets and @ref anjay_get_socket_entries after period
+     * defined by CoAP <c>MAX_TRANSMIT_WAIT</c> since last communication.
+     */
+    bool queue_mode;
+} anjay_socket_entry_t;
+
+/**
+ * Retrieves a list of structures that describe sockets used for communication
+ * with LwM2M servers. Returned list must not be freed nor modified.
+ *
+ * The returned data is equivalent to the one that can be retrieved using
+ * @ref anjay_get_sockets - but includes additional data that describes the
+ * socket in addition to the socket itself. See @ref anjay_socket_entry_t for
+ * details.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns A list of valid server socket entries on success,
+ *          NULL when the device is not connected to any server.
+ */
+AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay);
+
 /**
  * Reads a message from given @p ready_socket and handles it appropriately.
  *
@@ -312,6 +376,9 @@ typedef uint16_t anjay_riid_t;
 /** Low-level CoAP error code; used internally by Anjay in case of unrecoverable
  * problems during block-wise transfer. */
 #define ANJAY_ERR_REQUEST_ENTITY_INCOMPLETE  (-ANJAY_COAP_STATUS(4,  8))
+/** The server requested operation has a Content Format option that is unsupported
+ * by Anjay. */
+#define ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT (-ANJAY_COAP_STATUS(4, 15))
 /** Unspecified error, no other error code was suitable. */
 #define ANJAY_ERR_INTERNAL                   (-ANJAY_COAP_STATUS(5,  0))
 /** Operation is not implemented by the LwM2M Client. */
@@ -405,7 +472,8 @@ int anjay_schedule_registration_update(anjay_t *anjay,
  * connection has changed.
  *
  * The reconnection will be performed during the next @ref anjay_sched_run call
- * and will trigger Registration Update.
+ * and will trigger sending any messages necessary to maintain valid
+ * registration (DTLS session resumption and/or Register or Update RPCs).
  *
  * In case of ongoing downloads (started via @ref anjay_download or the
  * <c>fw_update</c> module), if the reconnection fails, the download will be

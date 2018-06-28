@@ -72,7 +72,8 @@ static int validate_instance(sec_instance_t *it) {
                 it, "missing mandatory 'Short Server ID' resource value");
         return -1;
     }
-    if (_anjay_sec_validate_udp_security_mode(it->udp_security_mode)) {
+    if (_anjay_sec_validate_udp_security_mode(
+            (int32_t) it->udp_security_mode)) {
         LOG_VALIDATION_FAILED(it, "UDP Security mode %d not supported",
                               (int) it->udp_security_mode);
         return -1;
@@ -96,7 +97,8 @@ static int validate_instance(sec_instance_t *it) {
         }
     }
     if (it->has_sms_security_mode) {
-        if (_anjay_sec_validate_sms_security_mode(it->sms_security_mode)) {
+        if (_anjay_sec_validate_sms_security_mode(
+                (int32_t) it->sms_security_mode)) {
             LOG_VALIDATION_FAILED(it, "SMS Security mode %d not supported",
                                   (int) it->sms_security_mode);
             return -1;

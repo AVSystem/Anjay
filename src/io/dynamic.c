@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 #include <stdlib.h>
@@ -282,7 +282,7 @@ _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
                              int *errno_ptr,
                              anjay_msg_details_t *details_template,
                              const anjay_uri_path_t *uri) {
-    dynamic_out_t *ctx = (dynamic_out_t *) calloc(1, sizeof(dynamic_out_t));
+    dynamic_out_t *ctx = (dynamic_out_t *) avs_calloc(1, sizeof(dynamic_out_t));
     if (!ctx) {
         return NULL;
     }
@@ -294,7 +294,7 @@ _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
     ctx->uri = *uri;
     if (ctx->details.format != AVS_COAP_FORMAT_NONE
             && !ensure_backend(ctx, ctx->details.format)) {
-        free(ctx);
+        avs_free(ctx);
         return NULL;
     }
     return (anjay_output_ctx_t *) ctx;
@@ -314,13 +314,14 @@ int _anjay_input_dynamic_create(anjay_input_ctx_t **out,
     }
     switch (_anjay_translate_legacy_content_format(format)) {
     case ANJAY_COAP_FORMAT_PLAINTEXT:
+    case AVS_COAP_FORMAT_NONE:
         return _anjay_input_text_create(out, stream_ptr, autoclose);
     case ANJAY_COAP_FORMAT_TLV:
         return _anjay_input_tlv_create(out, stream_ptr, autoclose);
     case ANJAY_COAP_FORMAT_OPAQUE:
         return _anjay_input_opaque_create(out, stream_ptr, autoclose);
     default:
-        return ANJAY_ERR_BAD_REQUEST;
+        return ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT;
     }
 }
 

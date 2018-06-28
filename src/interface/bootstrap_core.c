@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <inttypes.h>
 
@@ -512,12 +512,10 @@ static int schedule_bootstrap_timeout(anjay_t *anjay) {
 
     int64_t timeout;
     if (!_anjay_dm_res_read_i64(anjay, &res_path, &timeout) && timeout > 0) {
-        /* This is only ever called from _anjay_bootstrap_finish() if
-         * in_progess was originally true. purge_bootstrap_handle is reset
-         * when setting in_progress to true (see
-         * start_bootstrap_if_not_already_started()) and never touched anywhere
-         * else than there and here, so it's certainly NULL here and it's safe
-         * to call _anjay_sched(). There's an assert for that inside it. */
+        /* This function is called on each Bootstrap Finish -- i.e. we might
+         * have already scheduled a purge. For this reason, we need to release
+         * the purge job handle first. */
+        _anjay_sched_del(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle);
         if (_anjay_sched(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle,
                          avs_time_duration_from_scalar(timeout, AVS_TIME_S),
                          purge_bootstrap, NULL)) {
@@ -533,6 +531,7 @@ static int bootstrap_finish_impl(anjay_t *anjay, bool perform_timeout) {
     anjay_log(TRACE, "Bootstrap Sequence finished");
 
     cancel_client_initiated_bootstrap(anjay);
+    start_bootstrap_if_not_already_started(anjay);
     int retval = commit_bootstrap(anjay);
     if (retval) {
         anjay_log(ERROR,
@@ -668,7 +667,7 @@ static int send_request_bootstrap(anjay_t *anjay) {
     if ((server_uri->uri_path && !details.uri_path)
             || (server_uri->uri_query && !details.uri_query)
             || !AVS_LIST_APPEND(&details.uri_path,
-                                _anjay_make_string_list("bs", NULL))
+                                ANJAY_MAKE_STRING_LIST("bs"))
             || !AVS_LIST_APPEND(&details.uri_query,
                                 _anjay_make_query_string_list(
                                         NULL, anjay->endpoint_name, NULL,
@@ -729,12 +728,12 @@ request_bootstrap(anjay_t *anjay, void *dummy) {
 
     anjay_server_info_t *server =
             _anjay_servers_find_active(anjay->servers, ANJAY_SSID_BOOTSTRAP);
-    if (!server || _anjay_server_setup_registration_connection(server)) {
+    if (!server || _anjay_server_setup_primary_connection(server)) {
         return ANJAY_SCHED_RETRY;
     }
     anjay_connection_ref_t connection = {
         .server = server,
-        .conn_type = _anjay_server_registration_conn_type(server)
+        .conn_type = _anjay_server_primary_conn_type(server)
     };
     if (!connection.server
             || _anjay_bind_server_stream(anjay, connection)) {

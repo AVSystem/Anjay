@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 #include <stdlib.h>
@@ -22,10 +22,12 @@
 
 #include <anjay_modules/raw_buffer.h>
 
+#include <avsystem/commons/memory.h>
+
 VISIBILITY_SOURCE_BEGIN
 
 void _anjay_raw_buffer_clear(anjay_raw_buffer_t *buffer) {
-    free(buffer->data);
+    avs_free(buffer->data);
     buffer->data = NULL;
     buffer->size = 0;
     buffer->capacity = 0;
@@ -43,7 +45,7 @@ int _anjay_raw_buffer_from_data(anjay_raw_buffer_t *dst,
     if (!size) {
         return 0;
     }
-    dst->data = malloc(size);
+    dst->data = avs_malloc(size);
     if (!dst->data) {
         return -1;
     }

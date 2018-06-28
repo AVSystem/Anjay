@@ -303,13 +303,13 @@ static const anjay_dm_object_def_t LOCATION = {
 };
 
 const anjay_dm_object_def_t **location_object_create(void) {
-    location_t *repr = (location_t *) calloc(1, sizeof(location_t));
+    location_t *repr = (location_t *) avs_calloc(1, sizeof(location_t));
     if (!repr) {
         return NULL;
     }
 
     repr->def = &LOCATION;
-    repr->timestamp = time(NULL);
+    repr->timestamp = avs_time_real_now().since_real_epoch.seconds;
     repr->rand_seed = (unsigned) repr->timestamp;
 
     // initial coordinates are of the AVSystem HQ
@@ -321,7 +321,7 @@ const anjay_dm_object_def_t **location_object_create(void) {
 
 void location_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
-        free(get_location(def));
+        avs_free(get_location(def));
     }
 }
 

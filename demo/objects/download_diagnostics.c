@@ -288,7 +288,7 @@ static const anjay_dm_object_def_t DOWNLOAD_DIAG = {
 
 const anjay_dm_object_def_t **download_diagnostics_object_create(void) {
     download_diag_repr_t *repr = (download_diag_repr_t *)
-            calloc(1, sizeof(download_diag_repr_t));
+            avs_calloc(1, sizeof(download_diag_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -300,6 +300,6 @@ void download_diagnostics_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
         download_diag_repr_t *repr = get_diag(def);
         assert(!repr->dl_handle);
-        free(repr);
+        avs_free(repr);
     }
 }

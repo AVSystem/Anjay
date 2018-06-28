@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 #include <string.h>
 
 #include <avsystem/commons/list.h>
+#include <avsystem/commons/memory.h>
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/utils.h>
 
@@ -306,7 +307,7 @@ static int tlv_slave_finish(tlv_out_t *ctx, tlv_id_type_t next_id_type) {
                     entry->data_length;
         }
     }
-    char *buffer = (char *) (data_size ? malloc(data_size) : NULL);
+    char *buffer = (char *) (data_size ? avs_malloc(data_size) : NULL);
     int retval = ((!data_size || buffer) ? 0 : -1);
     avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&outbuf, buffer, data_size);
@@ -323,7 +324,7 @@ static int tlv_slave_finish(tlv_out_t *ctx, tlv_id_type_t next_id_type) {
         anjay_ret_bytes_ctx_t *bytes = add_entry(ctx->parent, length);
         retval = !bytes ? -1 : anjay_ret_bytes_append(bytes, buffer, length);
     }
-    free(buffer);
+    avs_free(buffer);
     ctx->parent->next_id.type = next_id_type;
     _anjay_output_ctx_destroy((anjay_output_ctx_t **) &ctx);
     return retval;
@@ -417,7 +418,7 @@ static anjay_output_ctx_t *tlv_slave_start(tlv_out_t *ctx,
     if (ctx->slave
             || ctx->next_id.type != expected_type
             || ctx->next_id.id < 0
-            || !(object = (tlv_out_t *) calloc(1, sizeof(tlv_out_t)))) {
+            || !(object = (tlv_out_t *) avs_calloc(1, sizeof(tlv_out_t)))) {
         return NULL;
     }
     object->vtable = &TLV_OUT_VTABLE;
@@ -432,7 +433,7 @@ static anjay_output_ctx_t *tlv_slave_start(tlv_out_t *ctx,
 
 anjay_output_ctx_t *
 _anjay_output_raw_tlv_create(avs_stream_abstract_t *stream) {
-    tlv_out_t *ctx = (tlv_out_t *) calloc(1, sizeof(tlv_out_t));
+    tlv_out_t *ctx = (tlv_out_t *) avs_calloc(1, sizeof(tlv_out_t));
 
     if (ctx) {
         ctx->vtable = &TLV_OUT_VTABLE;
@@ -452,7 +453,7 @@ _anjay_output_tlv_create(avs_stream_abstract_t *stream,
     if (ctx && ((*errno_ptr = _anjay_handle_requested_format(
                     &inout_details->format, ANJAY_COAP_FORMAT_TLV))
             || _anjay_coap_stream_setup_response(stream, inout_details))) {
-        free(ctx);
+        avs_free(ctx);
         return NULL;
     }
     return ctx;

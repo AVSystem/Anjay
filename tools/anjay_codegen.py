@@ -90,6 +90,7 @@ TEMPLATE = """\
 
 #include <anjay/anjay.h>
 #include <avsystem/commons/defs.h>
+#include <avsystem/commons/memory.h>
 {% if obj.multiple %}
 #include <avsystem/commons/list.h>
 {% endif %}
@@ -401,7 +402,7 @@ static int resource_dim(anjay_t *anjay,
 
 const anjay_dm_object_def_t **{{ obj_name_snake }}_object_create(void) {
     {{ obj_repr_type }} *obj = ({{ obj_repr_type }} *)
-            calloc(1, sizeof({{ obj_repr_type }}));
+            avs_calloc(1, sizeof({{ obj_repr_type }}));
     if (!obj) {
         return NULL;
     }
@@ -423,7 +424,7 @@ void {{ obj_name_snake }}_object_release(const anjay_dm_object_def_t **def) {
 
         // TODO: object cleanup
 
-        free(obj);
+        avs_free(obj);
     }
 }
 """

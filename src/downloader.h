@@ -92,9 +92,8 @@ int _anjay_downloader_download(anjay_downloader_t *dl,
  * Retrieves all sockets used for downloads managed by @p dl and prepends them
  * to @p out_socks.
  */
-int _anjay_downloader_get_sockets(
-        anjay_downloader_t *dl,
-        AVS_LIST(avs_net_abstract_socket_t *const) *out_socks);
+int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
+                                  AVS_LIST(anjay_socket_entry_t) *out_socks);
 
 /**
  * @returns @li 0 if @p socket was a downloaded socket and the incoming packet

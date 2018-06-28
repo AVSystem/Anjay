@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -137,7 +137,8 @@ static int add_instance(sec_repr_t *repr,
     new_instance->has_is_bootstrap = true;
     new_instance->has_udp_security_mode = true;
     new_instance->has_sms_security_mode =
-            !_anjay_sec_validate_sms_security_mode(instance->sms_security_mode);
+            !_anjay_sec_validate_sms_security_mode(
+                    (int32_t) instance->sms_security_mode);
     new_instance->has_sms_key_params = !!instance->sms_key_parameters;
     new_instance->has_sms_secret_key = !!instance->sms_secret_key;
 
@@ -529,7 +530,7 @@ static void security_purge(sec_repr_t *repr) {
 static void security_delete(anjay_t *anjay, void *repr) {
     (void) anjay;
     security_purge((sec_repr_t *) repr);
-    free(repr);
+    avs_free(repr);
 }
 
 void anjay_security_object_purge(anjay_t *anjay) {
@@ -561,7 +562,7 @@ static const anjay_dm_module_t SECURITY_MODULE = {
 int anjay_security_object_install(anjay_t *anjay) {
     assert(anjay);
 
-    sec_repr_t *repr = (sec_repr_t *) calloc(1, sizeof(sec_repr_t));
+    sec_repr_t *repr = (sec_repr_t *) avs_calloc(1, sizeof(sec_repr_t));
     if (!repr) {
         security_log(ERROR, "Out of memory");
         return -1;
@@ -570,7 +571,7 @@ int anjay_security_object_install(anjay_t *anjay) {
     repr->def = &SECURITY;
 
     if (_anjay_dm_module_install(anjay, &SECURITY_MODULE, repr)) {
-        free(repr);
+        avs_free(repr);
         return -1;
     }
 

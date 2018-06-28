@@ -15,7 +15,7 @@
  */
 
 #define _GNU_SOURCE // for RTLD_NEXT
-#include <config.h>
+#include <anjay_config.h>
 
 #include <dlfcn.h>
 

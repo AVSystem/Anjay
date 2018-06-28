@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <anjay_modules/dm_utils.h>
 #include <anjay_modules/notify.h>

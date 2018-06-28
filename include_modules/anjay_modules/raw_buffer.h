@@ -17,7 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_RAW_BUFFER_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_RAW_BUFFER_H
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <stdio.h>
 
@@ -48,7 +48,7 @@ typedef struct {
     }
 
 /**
- * Calls free() on buffer->data and resets its state by setting buffer->data
+ * Calls avs_free() on buffer->data and resets its state by setting buffer->data
  * to NULL and buffer->size to 0 and buffer->capacity to 0.
  *
  * WARNING: do not call this function if @ref anjay_raw_buffer_t was created

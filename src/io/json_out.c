@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <assert.h>
 #include <string.h>
@@ -566,7 +566,7 @@ _anjay_output_json_create(avs_stream_abstract_t *stream,
                           int *errno_ptr,
                           anjay_msg_details_t *inout_details,
                           const anjay_uri_path_t *uri) {
-    json_out_t *ctx = (json_out_t *) calloc(1, sizeof(json_out_t));
+    json_out_t *ctx = (json_out_t *) avs_calloc(1, sizeof(json_out_t));
     if (ctx) {
         ctx->vtable = &JSON_OUT_VTABLE;
         ctx->errno_ptr = errno_ptr;
@@ -599,6 +599,6 @@ _anjay_output_json_create(avs_stream_abstract_t *stream,
     }
     return (anjay_output_ctx_t *) ctx;
 error:
-    free(ctx);
+    avs_free(ctx);
     return NULL;
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <config.h>
+#include <anjay_config.h>
 
 #include <math.h>
 
@@ -112,7 +112,7 @@ static const anjay_output_ctx_vtable_t OBSERVE_OUT_VTABLE = {
 anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
                                                 double *out_numeric) {
     *out_numeric = NAN;
-    observe_out_t *ctx = (observe_out_t *) calloc(1, sizeof(observe_out_t));
+    observe_out_t *ctx = (observe_out_t *) avs_calloc(1, sizeof(observe_out_t));
     if (ctx) {
         ctx->vtable = &OBSERVE_OUT_VTABLE;
         ctx->backend = backend;

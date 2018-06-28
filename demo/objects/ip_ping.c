@@ -120,7 +120,7 @@ static int ip_ping_resource_read(anjay_t *anjay,
     case IP_PING_DSCP:
         return anjay_ret_i32(ctx, ping->configuration.dscp);
     case IP_PING_STATE:
-        return anjay_ret_i32(ctx, ping->stats.state);
+        return anjay_ret_i32(ctx, (int32_t) ping->stats.state);
     case IP_PING_SUCCESS_COUNT:
         return anjay_ret_i64(ctx, ping->stats.success_count);
     case IP_PING_ERROR_COUNT:
@@ -428,7 +428,7 @@ static const anjay_dm_object_def_t IP_PING = {
 };
 
 const anjay_dm_object_def_t **ip_ping_object_create(iosched_t *iosched) {
-    ip_ping_t *repr = (ip_ping_t *) calloc(1, sizeof(ip_ping_t));
+    ip_ping_t *repr = (ip_ping_t *) avs_calloc(1, sizeof(ip_ping_t));
     if (!repr) {
         return NULL;
     }
@@ -443,6 +443,6 @@ void ip_ping_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
         ip_ping_t *ping = get_ip_ping(def);
         ip_ping_command_state_cleanup(ping);
-        free(ping);
+        avs_free(ping);
     }
 }
