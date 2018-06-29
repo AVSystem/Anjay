@@ -13,15 +13,22 @@
 # limitations under the License.
 
 if(NOT "${CMAKE_C_COMPILER}" MATCHES "^(.*/)?afl-gcc$")
-    message(FATAL_ERROR "AFL fuzz tests require compiling with afl-gcc, but CMAKE_C_COMPILER is set to ${CMAKE_C_COMPILER}")
+    message(STATUS "AFL fuzz tests require compiling with afl-gcc, but CMAKE_C_COMPILER is set to ${CMAKE_C_COMPILER}")
+    return()
+endif()
+
+if(AFL_FUZZER_DIR)
+    set(AFL_FUZZ_EXECUTABLE "${AFL_FUZZER_DIR}/afl-fuzz")
+else()
+    set(AFL_FUZZ_EXECUTABLE "afl-fuzz")
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
 
-set(FUZZ_TEST_NAMES "" PARENT_SCOPE)
-set(FUZZ_TEST_ARG_LISTS "" PARENT_SCOPE)
-set(FUZZ_TEST_CASE_DIRS "" PARENT_SCOPE)
-set(FUZZ_TEST_FINDINGS_DIRS "" PARENT_SCOPE)
+set(FUZZ_TEST_NAMES "")
+set(FUZZ_TEST_ARG_LISTS "")
+set(FUZZ_TEST_CASE_DIRS "")
+set(FUZZ_TEST_FINDINGS_DIRS "")
 
 macro(add_fuzz_target NAME EXECUTABLE)
     get_filename_component(EXECUTABLE "${EXECUTABLE}" ABSOLUTE)
@@ -31,12 +38,12 @@ macro(add_fuzz_target NAME EXECUTABLE)
     list(APPEND FUZZ_TEST_CASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/test_cases/${NAME}")
     list(APPEND FUZZ_TEST_FINDINGS_DIRS "${CMAKE_CURRENT_BINARY_DIR}/findings/${NAME}")
 
-    set("FUZZ_TEST_ARG_LIST_${NAME}" "${EXECUTABLE}" ${ARGN} PARENT_SCOPE)
+    set("FUZZ_TEST_ARG_LIST_${NAME}" "${EXECUTABLE}" ${ARGN})
 
-    set(FUZZ_TEST_NAMES "${FUZZ_TEST_NAMES}" PARENT_SCOPE)
-    set(FUZZ_TEST_ARG_LISTS "${FUZZ_TEST_ARG_LISTS}" PARENT_SCOPE)
-    set(FUZZ_TEST_CASE_DIRS "${FUZZ_TEST_CASE_DIRS}" PARENT_SCOPE)
-    set(FUZZ_TEST_FINDINGS_DIRS "${FUZZ_TEST_FINDINGS_DIRS}" PARENT_SCOPE)
+    set(FUZZ_TEST_NAMES "${FUZZ_TEST_NAMES}")
+    set(FUZZ_TEST_ARG_LISTS "${FUZZ_TEST_ARG_LISTS}")
+    set(FUZZ_TEST_CASE_DIRS "${FUZZ_TEST_CASE_DIRS}")
+    set(FUZZ_TEST_FINDINGS_DIRS "${FUZZ_TEST_FINDINGS_DIRS}")
 endmacro()
 
 file(GLOB_RECURSE FUZZ_TEST_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.c)
@@ -48,9 +55,30 @@ foreach(FUZZ_TEST_SOURCE ${FUZZ_TEST_SOURCES})
     string(REPLACE / _ FUZZ_TEST_NAME ${FUZZ_TEST_OUTPUT})
 
     add_executable(${FUZZ_TEST_NAME} ${FUZZ_TEST_SOURCE} ${ABSOLUTE_SOURCES})
-    target_link_libraries(${FUZZ_TEST_NAME} ${PROJECT_NAME}_static)
+    target_link_libraries(${FUZZ_TEST_NAME} PRIVATE ${PROJECT_NAME}_static)
     set_property(TARGET ${FUZZ_TEST_NAME} APPEND PROPERTY COMPILE_DEFINITIONS
                  ANJAY_FUZZ_TEST)
 
     add_fuzz_target(${FUZZ_TEST_NAME} "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${FUZZ_TEST_NAME}")
+endforeach()
+
+set(AFL_FUZZ_TIMEOUT_MS 1000)
+
+list(LENGTH FUZZ_TEST_NAMES FUZZ_TEST_COUNT)
+math(EXPR FUZZ_TEST_MAX "${FUZZ_TEST_COUNT} - 1")
+
+foreach(i RANGE ${FUZZ_TEST_MAX})
+    list(GET FUZZ_TEST_NAMES ${i} FUZZ_TEST_NAME)
+    list(GET FUZZ_TEST_ARG_LISTS ${i} FUZZ_TEST_ARG_LIST_NAME)
+    list(GET FUZZ_TEST_CASE_DIRS ${i} FUZZ_TEST_CASE_DIR)
+    list(GET FUZZ_TEST_FINDINGS_DIRS ${i} FUZZ_TEST_FINDINGS_DIR)
+
+    message(STATUS "Adding fuzz test target: fuzz_${FUZZ_TEST_NAME}: ${${FUZZ_TEST_ARG_LIST_NAME}}")
+    add_custom_target(fuzz_${FUZZ_TEST_NAME}
+                      COMMAND mkdir -p "${FUZZ_TEST_FINDINGS_DIR}"
+                      COMMAND "${AFL_FUZZ_EXECUTABLE}" -i "${FUZZ_TEST_CASE_DIR}"
+                                                       -o "${FUZZ_TEST_FINDINGS_DIR}"
+                                                       -t ${AFL_FUZZ_TIMEOUT_MS}
+                                                       "${${FUZZ_TEST_ARG_LIST_NAME}}"
+                                                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endforeach()
