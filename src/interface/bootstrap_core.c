@@ -303,7 +303,7 @@ static int bootstrap_write(anjay_t *anjay,
                            const anjay_uri_path_t *uri,
                            anjay_input_ctx_t *in_ctx) {
     anjay_log(DEBUG, "Bootstrap Write %s", ANJAY_DEBUG_MAKE_PATH(uri));
-    if (!uri->has_oid) {
+    if (!_anjay_uri_path_has_oid(uri)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
     cancel_client_initiated_bootstrap(anjay);
@@ -316,17 +316,21 @@ static int bootstrap_write(anjay_t *anjay,
     }
 
     int retval;
-    if (uri->has_iid) {
-        if (uri->has_rid) {
-            retval =
-                    with_instance_on_demand(anjay, obj, uri->iid, in_ctx,
-                                            write_resource,
-                                            (void *) (uintptr_t) uri->rid);
-        } else {
-            retval = write_instance(anjay, obj, uri->iid, in_ctx);
-        }
-    } else {
+    switch (uri->type) {
+    case ANJAY_PATH_RESOURCE:
+        retval = with_instance_on_demand(anjay, obj, uri->iid, in_ctx,
+                                         write_resource,
+                                         (void *) (uintptr_t) uri->rid);
+        break;
+    case ANJAY_PATH_INSTANCE:
+        retval = write_instance(anjay, obj, uri->iid, in_ctx);
+        break;
+    case ANJAY_PATH_OBJECT:
         retval = write_object(anjay, obj, in_ctx);
+        break;
+    case ANJAY_PATH_ROOT:
+        AVS_UNREACHABLE("According to specification Bootstrap Write is required"
+                        " to have parameter Object ID");
     }
     if (!retval && uri->oid == ANJAY_DM_OID_SECURITY) {
         if (has_multiple_bootstrap_security_instances(anjay)) {
@@ -413,13 +417,13 @@ static int bootstrap_delete(anjay_t *anjay,
     cancel_client_initiated_bootstrap(anjay);
     start_bootstrap_if_not_already_started(anjay);
 
-    if (request->is_bs_uri || request->uri.has_rid) {
+    if (request->is_bs_uri || _anjay_uri_path_has_rid(&request->uri)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
 
     int delete_retval = 0;
     int retval = 0;
-    if (request->uri.has_oid) {
+    if (_anjay_uri_path_has_oid(&request->uri)) {
         const anjay_dm_object_def_t *const *obj =
                 _anjay_dm_find_object_by_oid(anjay, request->uri.oid);
         if (!obj || !*obj) {
@@ -427,7 +431,7 @@ static int bootstrap_delete(anjay_t *anjay,
             return 0;
         }
 
-        if (request->uri.has_iid) {
+        if (_anjay_uri_path_has_iid(&request->uri)) {
             int present = _anjay_dm_instance_present(anjay, obj,
                                                      request->uri.iid, NULL);
             if (present > 0) {
@@ -451,11 +455,11 @@ static int bootstrap_delete(anjay_t *anjay,
 #ifdef WITH_DISCOVER
 static int bootstrap_discover(anjay_t *anjay,
                               const anjay_request_t *request) {
-    if (request->uri.has_iid || request->uri.has_rid) {
+    if (_anjay_uri_path_has_iid(&request->uri)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
 
-    if (request->uri.has_oid) {
+    if (_anjay_uri_path_has_oid(&request->uri)) {
         const anjay_dm_object_def_t *const *obj =
                 _anjay_dm_find_object_by_oid(anjay, request->uri.oid);
         if (!obj) {
@@ -571,7 +575,7 @@ int _anjay_bootstrap_object_write(anjay_t *anjay,
                                   anjay_oid_t oid,
                                   anjay_input_ctx_t *in_ctx) {
     const anjay_uri_path_t uri = {
-        .has_oid = true,
+        .type = ANJAY_PATH_OBJECT,
         .oid = oid
     };
     return bootstrap_write(anjay, &uri, in_ctx);
@@ -591,7 +595,7 @@ static int invoke_action(anjay_t *anjay,
             return result;
         }
 
-        if (format == ANJAY_COAP_FORMAT_TLV && request->uri.has_rid) {
+        if (format == ANJAY_COAP_FORMAT_TLV && _anjay_uri_path_has_rid(&request->uri)) {
             result = _anjay_dm_check_if_tlv_rid_matches_uri_rid(
                     in_ctx, request->uri.rid);
         }

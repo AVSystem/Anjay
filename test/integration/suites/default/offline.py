@@ -28,6 +28,10 @@ class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mCreated.matching(req)(), self.serv.recv())
 
+        # Force Update so that we won't have differing data models during exit-offline
+        self.communicate('send-update')
+        self.assertDemoUpdatesRegistration(content=ANY)
+
         # Observe: Timestamp
         observe_req = Lwm2mObserve('/1337/0/0')
         self.serv.send(observe_req)

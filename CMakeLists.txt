@@ -14,21 +14,11 @@
 
 cmake_minimum_required(VERSION 2.8.12)
 
-option(WITH_FUZZ_TESTS "Compile fuzz tests using the AFL fuzzer" OFF)
-if(WITH_FUZZ_TESTS)
-    if(AFL_FUZZER_DIR)
-        set(CMAKE_C_COMPILER "${AFL_FUZZER_DIR}/afl-gcc")
-        set(AFL_FUZZ_EXECUTABLE "${AFL_FUZZER_DIR}/afl-fuzz")
-    else()
-        set(CMAKE_C_COMPILER "afl-gcc")
-        set(AFL_FUZZ_EXECUTABLE "afl-fuzz")
-    endif()
-endif()
-
 project(anjay C)
-set(ANJAY_VERSION "1.10.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.10.2" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
+set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(ANJAY_BUILD_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/lib")
@@ -690,106 +680,8 @@ endif(WITH_TEST)
 
 ################# FUZZ TESTING #################################################
 
-if(WITH_FUZZ_TESTS)
-    add_subdirectory(test/fuzz)
-
-    set(AFL_FUZZ_TIMEOUT_MS 1000)
-
-    list(LENGTH FUZZ_TEST_NAMES FUZZ_TEST_COUNT)
-    math(EXPR FUZZ_TEST_MAX "${FUZZ_TEST_COUNT} - 1")
-
-    foreach(i RANGE ${FUZZ_TEST_MAX})
-        list(GET FUZZ_TEST_NAMES ${i} FUZZ_TEST_NAME)
-        list(GET FUZZ_TEST_ARG_LISTS ${i} FUZZ_TEST_ARG_LIST_NAME)
-        list(GET FUZZ_TEST_CASE_DIRS ${i} FUZZ_TEST_CASE_DIR)
-        list(GET FUZZ_TEST_FINDINGS_DIRS ${i} FUZZ_TEST_FINDINGS_DIR)
-
-        message(STATUS "Adding fuzz test target: fuzz_${FUZZ_TEST_NAME}: ${${FUZZ_TEST_ARG_LIST_NAME}}")
-        add_custom_target(fuzz_${FUZZ_TEST_NAME}
-                          COMMAND mkdir -p "${FUZZ_TEST_FINDINGS_DIR}"
-                          COMMAND "${AFL_FUZZ_EXECUTABLE}" -i "${FUZZ_TEST_CASE_DIR}"
-                                                           -o "${FUZZ_TEST_FINDINGS_DIR}"
-                                                           -t ${AFL_FUZZ_TIMEOUT_MS}
-                                                           "${${FUZZ_TEST_ARG_LIST_NAME}}"
-                                                           WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test/fuzz")
-    endforeach()
-endif()
-
-################# DOCS #########################################################
-
-add_custom_target(doc)
-
-set(ANJAY_SPHINX_DOC_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx/source")
-set(ANJAY_SPHINX_DOC_CONF_DIR "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx")
-
-cmake_dependent_option(WITH_DOC_CHECK "Enables/disables sphinx documentation validation" OFF WITH_TEST OFF)
-
-if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
-    find_program(SPHINX_BUILD_EXECUTABLE sphinx-build
-                 HINTS $ENV{SPHINX_DIR} PATH_SUFFIXES bin)
-
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sphinx.cmake)
-
-    configure_file(${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in
-                   ${ANJAY_SPHINX_DOC_CONF_DIR}/conf.py
-                   @ONLY)
-    add_custom_target(doc_sphinx
-                      COMMAND ${SPHINX_BUILD_EXECUTABLE}
-                              -b html
-                              -c ${ANJAY_SPHINX_DOC_CONF_DIR}
-                              ${ANJAY_SPHINX_DOC_ROOT_DIR}
-                              ${ANJAY_SPHINX_DOC_CONF_DIR}/html
-                      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
-
-    add_dependencies(doc doc_sphinx)
-
-    if(WITH_DOC_CHECK)
-        if(NOT SPHINX_BUILD_EXECUTABLE)
-            message(FATAL_ERROR "Sphinx not found (this can be suppressed by WITH_DOC_CHECK=OFF)")
-        endif()
-        # sphinx-based .. snippet-source:: validation
-        add_test(NAME test_doc
-                 COMMAND ${SPHINX_BUILD_EXECUTABLE}
-                         -Q -b snippet_source_lint
-                         -c ${ANJAY_SPHINX_DOC_CONF_DIR}
-                         ${ANJAY_SPHINX_DOC_ROOT_DIR}
-                         ${ANJAY_SPHINX_DOC_CONF_DIR}/lint
-                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc/sphinx)
-        set_property(TEST test_doc APPEND PROPERTY ENVIRONMENT
-                     "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"
-                     "ANJAY_SPHINX_DOC_ROOT_DIR=${ANJAY_SPHINX_DOC_ROOT_DIR}"
-                     "CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
-                     "SNIPPET_SOURCE_MD5FILE=${CMAKE_CURRENT_SOURCE_DIR}/examples/test_examples.md5")
-
-        add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc$$'")
-        add_dependencies(anjay_unit_check doc_check)
-    endif()
-endif()
-
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in")
-    find_package(Doxygen)
-
-    set(DOXYGEN_INPUT_PATHS ${PUBLIC_INCLUDE_DIRS})
-    # doxygen expects whitespace-separated list, cmake stores them as
-    # semicolon-separated strings
-    string(REPLACE ";" " " DOXYGEN_INPUT_PATHS "${DOXYGEN_INPUT_PATHS}")
-
-    set(DOXYGEN_OUTPUT_DIR ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen)
-
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in
-                   ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen/Doxyfile
-                   @ONLY)
-
-    add_custom_target(doc_doxygen
-                      COMMAND ${DOXYGEN_EXECUTABLE} ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen/Doxyfile
-                      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-
-
-    if(TARGET doc_sphinx)
-        add_dependencies(doc_sphinx doc_doxygen)
-    endif()
-    add_dependencies(doc doc_doxygen)
-endif()
+add_subdirectory(test/fuzz)
+add_subdirectory(doc)
 
 ################# STATIC ANALYSIS ##############################################
 
@@ -822,40 +714,7 @@ if(WITH_STATIC_ANALYSIS)
     endif()
 endif()
 
-################# EXAMPLES #####################################################
-
-set(ANJAY_EXAMPLES_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/examples/build")
-set(ANJAY_TUTORIALS_ANJAY_BUILD_DIR "${ANJAY_EXAMPLES_BUILD_DIR}/anjay-build")
-set(ANJAY_TUTORIALS_ANJAY_INSTALL_DIR "${ANJAY_EXAMPLES_BUILD_DIR}/anjay")
-
-add_custom_target(examples)
-add_custom_command(TARGET examples
-                   COMMAND ${CMAKE_COMMAND} -E make_directory "${ANJAY_EXAMPLES_BUILD_DIR}"
-                   COMMAND ${CMAKE_COMMAND} -E make_directory "${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
-                   COMMAND ${CMAKE_COMMAND} -E make_directory "${ANJAY_TUTORIALS_ANJAY_BUILD_DIR}")
-
-add_custom_command(TARGET examples
-                   COMMAND ${CMAKE_COMMAND}
-                        -H${CMAKE_CURRENT_SOURCE_DIR}
-                        -B.
-                        -DCMAKE_INSTALL_PREFIX="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
-                        -DWITH_LIBRARY_SHARED=OFF
-                        -DWITH_DEMO=OFF
-                   COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
-                   WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})
-
-add_custom_command(TARGET examples
-                   COMMAND ${CMAKE_COMMAND}
-                        -H${CMAKE_CURRENT_SOURCE_DIR}/examples/tutorial/
-                        -B.
-                        -DCMAKE_PREFIX_PATH="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
-                        -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
-                   COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
-                   WORKING_DIRECTORY "${ANJAY_EXAMPLES_BUILD_DIR}")
-
-if(TARGET check)
-    add_dependencies(check examples)
-endif()
+add_subdirectory(examples)
 
 ################# INSTALL ######################################################
 

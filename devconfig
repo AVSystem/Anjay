@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 rm -rf avs_commons/install
 rm -rf avs_commons/git/CMakeFiles
 rm -f avs_commons/git/CMakeCache.txt
@@ -63,6 +64,7 @@ while [ $# -gt 0 ]; do
             C_FLAGS="$1"
             ;;
         '--fuzz-tests')
+            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DCMAKE_TOOLCHAIN_FILE=$SCRIPT_DIR/cmake/toolchain/afl-gcc.cmake"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DWITH_FUZZ_TESTS=ON"
             [[ "$AFL_FUZZER_DIR" ]] && EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DAFL_FUZZER_DIR=$AFL_FUZZER_DIR"
             ;;

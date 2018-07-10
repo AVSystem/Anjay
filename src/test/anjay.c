@@ -267,30 +267,30 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("1")), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 1);
-    AVS_UNIT_ASSERT_FALSE(uri.has_iid);
-    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_iid(&uri));
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
 
     // OID+IID
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("2", "3")), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 2);
-    AVS_UNIT_ASSERT_TRUE(uri.has_iid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_iid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.iid, 3);
-    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
 
     // OID+IID+RID
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("4", "5", "6")), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 4);
-    AVS_UNIT_ASSERT_TRUE(uri.has_iid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_iid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.iid, 5);
-    AVS_UNIT_ASSERT_TRUE(uri.has_rid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_rid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.rid, 6);
 
     // max valid OID/IID/RID
@@ -298,28 +298,28 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
             COAP_MSG(CON, GET, ID(0), PATH("65535", "65534", "65535")),
             &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(uri.has_oid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 65535);
-    AVS_UNIT_ASSERT_TRUE(uri.has_iid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_iid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.iid, 65534);
-    AVS_UNIT_ASSERT_TRUE(uri.has_rid);
+    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_rid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.rid, 65535);
 
     // Bootstrap URI
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("bs")), &is_bs, &uri));
     AVS_UNIT_ASSERT_TRUE(is_bs);
-    AVS_UNIT_ASSERT_FALSE(uri.has_oid);
-    AVS_UNIT_ASSERT_FALSE(uri.has_iid);
-    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_oid(&uri));
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_iid(&uri));
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
 
     // no Request-Uri
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_FALSE(uri.has_oid);
-    AVS_UNIT_ASSERT_FALSE(uri.has_iid);
-    AVS_UNIT_ASSERT_FALSE(uri.has_rid);
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_oid(&uri));
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_iid(&uri));
+    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
 
     // prefix
     AVS_UNIT_ASSERT_FAILED(parse_request_uri(
@@ -382,16 +382,14 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_POST;
-    request.uri.has_iid = true;
-    request.uri.has_rid = true;
+    request.uri.type = ANJAY_PATH_RESOURCE;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_EXECUTE);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_POST;
-    request.uri.has_iid = false;
-    request.uri.has_rid = false;
+    request.uri.type = ANJAY_PATH_OBJECT;
     request.content_format = ANJAY_COAP_FORMAT_PLAINTEXT;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
@@ -399,8 +397,7 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_POST;
-    request.uri.has_iid = true;
-    request.uri.has_rid = false;
+    request.uri.type = ANJAY_PATH_INSTANCE;
     request.content_format = ANJAY_COAP_FORMAT_TLV;
     AVS_UNIT_ASSERT_SUCCESS(parse_action(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));

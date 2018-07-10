@@ -381,8 +381,7 @@ static const char *action_to_string(anjay_request_action_t action) {
 static int code_to_action(uint8_t code,
                           uint16_t requested_format,
                           bool is_bs_uri,
-                          bool has_iid,
-                          bool has_rid,
+                          anjay_uri_path_type_t path_type,
                           bool has_content_format,
                           anjay_request_action_t *out_action) {
     switch (code) {
@@ -396,12 +395,19 @@ static int code_to_action(uint8_t code,
     case AVS_COAP_CODE_POST:
         if (is_bs_uri) {
             *out_action = ANJAY_ACTION_BOOTSTRAP_FINISH;
-        } else if (has_rid) {
-            *out_action = ANJAY_ACTION_EXECUTE;
-        } else if (has_iid) {
-            *out_action = ANJAY_ACTION_WRITE_UPDATE;
         } else {
-            *out_action = ANJAY_ACTION_CREATE;
+            switch (path_type) {
+            case ANJAY_PATH_RESOURCE:
+                *out_action = ANJAY_ACTION_EXECUTE;
+                break;
+            case ANJAY_PATH_INSTANCE:
+                *out_action = ANJAY_ACTION_WRITE_UPDATE;
+                break;
+            case ANJAY_PATH_OBJECT:
+            case ANJAY_PATH_ROOT:
+                *out_action = ANJAY_ACTION_CREATE;
+                break;
+            }
         }
         return 0;
     case AVS_COAP_CODE_PUT:
@@ -425,8 +431,7 @@ static int get_msg_action(avs_coap_msg_type_t msg_type,
                           uint8_t code,
                           uint16_t requested_format,
                           bool is_bs_uri,
-                          bool has_iid,
-                          bool has_rid,
+                          anjay_uri_path_type_t path_type,
                           bool has_content_format,
                           anjay_request_action_t *out_action) {
     int result = 0;
@@ -435,8 +440,8 @@ static int get_msg_action(avs_coap_msg_type_t msg_type,
         *out_action = ANJAY_ACTION_CANCEL_OBSERVE;
         break;
     case AVS_COAP_MSG_CONFIRMABLE:
-        result = code_to_action(code, requested_format, is_bs_uri, has_iid,
-                                has_rid, has_content_format, out_action);
+        result = code_to_action(code, requested_format, is_bs_uri, path_type,
+                                has_content_format, out_action);
         break;
     default:
         anjay_log(ERROR, "invalid CoAP message type: %d", (int) msg_type);
@@ -461,8 +466,7 @@ static int parse_action(const avs_coap_msg_t *msg,
                           inout_request->request_code,
                           inout_request->requested_format,
                           inout_request->is_bs_uri,
-                          inout_request->uri.has_iid,
-                          inout_request->uri.has_rid,
+                          inout_request->uri.type,
                           inout_request->content_format
                                   != AVS_COAP_FORMAT_NONE,
                           &inout_request->action);
@@ -515,18 +519,16 @@ static int parse_dm_uri(const avs_coap_msg_t *msg,
     char uri[ANJAY_MAX_URI_SEGMENT_SIZE] = "";
     size_t uri_size;
 
-    out_uri->has_oid = false;
-    out_uri->has_iid = false;
-    out_uri->has_rid = false;
+    out_uri->type = ANJAY_PATH_ROOT;
 
     struct {
         uint16_t *id;
-        bool *has_id;
+        anjay_uri_path_type_t type;
         uint16_t max_valid_value;
     } ids[] = {
-        { &out_uri->oid, &out_uri->has_oid, UINT16_MAX },
-        { &out_uri->iid, &out_uri->has_iid, UINT16_MAX - 1 },
-        { &out_uri->rid, &out_uri->has_rid, UINT16_MAX }
+        { &out_uri->oid, ANJAY_PATH_OBJECT, UINT16_MAX },
+        { &out_uri->iid, ANJAY_PATH_INSTANCE, UINT16_MAX - 1 },
+        { &out_uri->rid, ANJAY_PATH_RESOURCE, UINT16_MAX }
     };
 
     avs_coap_opt_iterator_t optit = AVS_COAP_OPT_ITERATOR_EMPTY;
@@ -543,7 +545,7 @@ static int parse_dm_uri(const avs_coap_msg_t *msg,
         if (parse_request_uri_segment(uri, ids[i].id, ids[i].max_valid_value)) {
             return -1;
         }
-        *ids[i].has_id = true;
+        out_uri->type = ids[i].type;
     }
 
     // 3 or more segments...
@@ -565,9 +567,7 @@ static int parse_request_uri(const avs_coap_msg_t *msg,
         return result;
     }
     if (*out_is_bs) {
-        out_uri->has_oid = false;
-        out_uri->has_iid = false;
-        out_uri->has_rid = false;
+        out_uri->type = ANJAY_PATH_ROOT;
         return 0;
     } else {
         return parse_dm_uri(msg, out_uri);

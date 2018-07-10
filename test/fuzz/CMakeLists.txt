@@ -12,9 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if(NOT "${CMAKE_C_COMPILER}" MATCHES "^(.*/)?afl-gcc$")
-    message(STATUS "AFL fuzz tests require compiling with afl-gcc, but CMAKE_C_COMPILER is set to ${CMAKE_C_COMPILER}")
+option(WITH_FUZZ_TESTS "Compile fuzz tests using the AFL fuzzer" OFF)
+if(NOT WITH_FUZZ_TESTS)
     return()
+endif()
+
+if(NOT "${CMAKE_C_COMPILER}" MATCHES "^(.*/)?afl-gcc$")
+    message(FATAL_ERROR "AFL fuzz tests require compiling with afl-gcc, but CMAKE_C_COMPILER is set to ${CMAKE_C_COMPILER}")
 endif()
 
 if(AFL_FUZZER_DIR)
@@ -80,5 +84,6 @@ foreach(i RANGE ${FUZZ_TEST_MAX})
                                                        -o "${FUZZ_TEST_FINDINGS_DIR}"
                                                        -t ${AFL_FUZZ_TIMEOUT_MS}
                                                        "${${FUZZ_TEST_ARG_LIST_NAME}}"
-                                                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+                                                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                      DEPENDS ${FUZZ_TEST_NAME})
 endforeach()

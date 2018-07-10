@@ -62,16 +62,17 @@ send_update_sched_job(anjay_t *anjay, void *ssid_) {
         return ANJAY_SCHED_FINISH;
     } else {
         server->data_active.registration_info.needs_update = true;
-        int result = _anjay_server_ensure_valid_registration(anjay, server);
-        if (!result) {
+        switch (_anjay_server_registration_update_if_necessary(anjay, server)) {
+        case ANJAY_UPDATE_SUCCESS:
             return ANJAY_SCHED_FINISH;
-        } else if (result < 0) {
+        case ANJAY_UPDATE_NEEDS_REGISTRATION:
+            break;
+        case ANJAY_UPDATE_FAILED:
             return ANJAY_SCHED_RETRY;
         }
     }
-    // mark that the registration connection is no longer valid;
-    // prevents superfluous Deregister
-    server->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
+    // mark that the registration is expired; prevents superfluous Deregister
+    server->data_active.registration_info.expire_time = AVS_TIME_REAL_INVALID;
     _anjay_server_deactivate(anjay, ssid, AVS_TIME_DURATION_ZERO);
     return ANJAY_SCHED_FINISH;
 }
@@ -261,48 +262,40 @@ int _anjay_schedule_server_reconnect(anjay_t *anjay,
     return _anjay_schedule_reload_server(anjay, server);
 }
 
-static int try_register(anjay_t *anjay,
-                        anjay_registration_update_ctx_t *ctx) {
-    int retval = _anjay_register(ctx);
-    if (retval) {
-        anjay_log(DEBUG, "re-registration failed");
-    } else {
-        _anjay_bootstrap_notify_regular_connection_available(anjay);
-    }
-    return retval;
-}
-
 static int
-ensure_registration_update_with_ctx(anjay_t *anjay,
-                                    anjay_registration_update_ctx_t *ctx,
-                                    anjay_server_info_t *server) {
+registration_update_if_necessary_with_ctx(anjay_t *anjay,
+                                          anjay_registration_update_ctx_t *ctx,
+                                          anjay_server_info_t *server) {
+    (void) anjay;
+
     if (!_anjay_server_primary_connection_valid(server)) {
         anjay_log(INFO, "No valid existing connection to Registration "
-                  "Interface for SSID = %u, re-registering", server->ssid);
+                  "Interface for SSID = %u, needs re-registration",
+                  server->ssid);
         server->data_active.registration_info.expire_time =
                 AVS_TIME_REAL_INVALID;
-        if (_anjay_server_setup_primary_connection(server)) {
-            return 1;
-        }
+        return (int) ANJAY_UPDATE_NEEDS_REGISTRATION;
     }
 
     if (_anjay_server_registration_expired(server)) {
-        return try_register(anjay, ctx);
+        return (int) ANJAY_UPDATE_NEEDS_REGISTRATION;
     }
 
     if (!_anjay_needs_registration_update(ctx)) {
-        return 0;
+        return (int) ANJAY_UPDATE_SUCCESS;
     }
 
     int retval = _anjay_update_registration(ctx);
     switch (retval) {
     case 0:
-        return 0;
+        return (int) ANJAY_UPDATE_SUCCESS;
 
     case ANJAY_REGISTRATION_UPDATE_REJECTED:
         anjay_log(DEBUG, "update rejected for SSID = %u; "
-                         "needs re-registering", server->ssid);
-        return try_register(anjay, ctx);
+                         "needs re-registration", server->ssid);
+        server->data_active.registration_info.expire_time =
+                AVS_TIME_REAL_INVALID;
+        return (int) ANJAY_UPDATE_NEEDS_REGISTRATION;
 
     case AVS_COAP_CTX_ERR_NETWORK:
         anjay_log(ERROR, "network communication error while updating "
@@ -316,16 +309,54 @@ ensure_registration_update_with_ctx(anjay_t *anjay,
             .server = server,
             .conn_type = server->data_active.primary_conn_type
         });
-        return retval;
+        return (int) ANJAY_UPDATE_FAILED;
 
     default:
         anjay_log(ERROR, "could not send registration update: %d", retval);
-        return retval;
+        return (int) ANJAY_UPDATE_FAILED;
     }
 }
 
-int _anjay_server_ensure_valid_registration(anjay_t *anjay,
-                                            anjay_server_info_t *server) {
+static int
+ensure_valid_registration_with_ctx(anjay_t *anjay,
+                                   anjay_registration_update_ctx_t *ctx,
+                                   anjay_server_info_t *server) {
+    switch (registration_update_if_necessary_with_ctx(anjay, ctx, server)) {
+    case (int) ANJAY_UPDATE_SUCCESS:
+        return (int) ANJAY_REGISTRATION_SUCCESS;
+    case (int) ANJAY_UPDATE_NEEDS_REGISTRATION: {
+        if (!_anjay_server_primary_connection_valid(server)
+                && _anjay_server_setup_primary_connection(server)) {
+            return (int) ANJAY_REGISTRATION_FAILED;
+        }
+        int retval = _anjay_register(ctx);
+        if (retval) {
+            anjay_log(DEBUG, "re-registration failed");
+            if (retval == ANJAY_ERR_FORBIDDEN) {
+                return (int) ANJAY_REGISTRATION_FORBIDDEN;
+            } else {
+                return (int) ANJAY_REGISTRATION_FAILED;
+            }
+        } else {
+            _anjay_bootstrap_notify_regular_connection_available(anjay);
+            return (int) ANJAY_REGISTRATION_SUCCESS;
+        }
+    }
+    default:
+        AVS_UNREACHABLE("Invalid value of anjay_update_result_t");
+        // fall-through
+    case (int) ANJAY_UPDATE_FAILED:
+        return (int) ANJAY_REGISTRATION_FAILED;
+    }
+}
+
+typedef int registration_action_t(anjay_t *anjay,
+                                  anjay_registration_update_ctx_t *ctx,
+                                  anjay_server_info_t *server);
+
+static int perform_registration_action(anjay_t *anjay,
+                                       anjay_server_info_t *server,
+                                       registration_action_t *action) {
     assert(_anjay_server_active(server));
     assert(server->ssid != ANJAY_SSID_BOOTSTRAP);
 
@@ -334,7 +365,7 @@ int _anjay_server_ensure_valid_registration(anjay_t *anjay,
         return -1;
     }
 
-    int retval = ensure_registration_update_with_ctx(anjay, &ctx, server);
+    int retval = action(anjay, &ctx, server);
     if (!retval) {
         // Ignore errors, failure to flush notifications is not fatal.
         _anjay_observe_sched_flush(anjay, (anjay_connection_key_t) {
@@ -345,11 +376,28 @@ int _anjay_server_ensure_valid_registration(anjay_t *anjay,
 
     _anjay_registration_update_ctx_release(&ctx);
 
-    if (!retval) {
+    if (!retval && _anjay_server_reschedule_update_job(anjay, server)) {
         // Updates are retryable, we only need to reschedule after success
-        retval = _anjay_server_reschedule_update_job(anjay, server);
+        retval = -1;
     }
     return retval;
+}
+
+anjay_update_result_t
+_anjay_server_registration_update_if_necessary(anjay_t *anjay,
+                                               anjay_server_info_t *server) {
+    int result = perform_registration_action(
+            anjay, server, registration_update_if_necessary_with_ctx);
+    return result >= 0 ? (anjay_update_result_t) result : ANJAY_UPDATE_FAILED;
+}
+
+anjay_registration_result_t
+_anjay_server_ensure_valid_registration(anjay_t *anjay,
+                                        anjay_server_info_t *server) {
+    int result = perform_registration_action(
+            anjay, server, ensure_valid_registration_with_ctx);
+    return result >= 0
+            ? (anjay_registration_result_t) result : ANJAY_REGISTRATION_FAILED;
 }
 
 int _anjay_server_deregister(anjay_t *anjay,

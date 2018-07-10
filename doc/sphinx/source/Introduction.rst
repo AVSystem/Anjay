@@ -26,8 +26,8 @@ Protocol support status
 -----------------------
 
 The basis for this implementation was the *OMA Lightweight Machine to Machine
-Technical Specification, Version 1.0 - 8 Feb 2017*, document number
-``OMA-TS-LightweightM2M-V1_0-20170208-A``. In case of ambiguities, existing
+Technical Specification, Version 1.0.2 - 9 Feb 2018*, document number
+``OMA-TS-LightweightM2M-V1_0_2-20180209-A``. In case of ambiguities, existing
 implementations were considered as a reference.
 
 The following features are **supported**:

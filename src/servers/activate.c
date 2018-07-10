@@ -30,47 +30,72 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int initialize_active_server(anjay_t *anjay,
-                                    anjay_server_info_t *server) {
+typedef enum {
+    IAS_SUCCESS = 0,
+    IAS_FORBIDDEN,
+    IAS_FAILED,
+    IAS_CONNECTION_REFUSED,
+    IAS_CONNECTION_ERROR
+} initialize_active_server_result_t;
+
+static initialize_active_server_result_t
+initialize_active_server(anjay_t *anjay, anjay_server_info_t *server) {
     if (anjay_is_offline(anjay)) {
         anjay_log(TRACE,
                   "Anjay is offline, not initializing server SSID %" PRIu16,
                   server->ssid);
-        return -1;
+        return IAS_FAILED;
     }
 
     assert(!_anjay_server_active(server));
     assert(server->ssid != ANJAY_SSID_ANY);
-    int result = -1;
+    initialize_active_server_result_t result = IAS_FAILED;
     anjay_iid_t security_iid;
+    int refresh_result;
     if (_anjay_find_security_iid(anjay, server->ssid, &security_iid)) {
         anjay_log(ERROR, "could not find server Security IID");
-        goto finish;
-    }
-    if (_anjay_server_get_uri(anjay, security_iid, &server->data_active.uri)) {
-        goto finish;
-    }
-
-    if ((result = _anjay_active_server_refresh(anjay, server))) {
-        anjay_log(TRACE, "could not initialize sockets for SSID %u",
-                  server->ssid);
-        goto finish;
-    }
-    if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
-        if ((result = _anjay_server_ensure_valid_registration(anjay, server))) {
-            anjay_log(ERROR, "could not ensure registration to server SSID %u",
+    } else if (!_anjay_server_get_uri(anjay, security_iid,
+                                      &server->data_active.uri)) {
+        if ((refresh_result = _anjay_active_server_refresh(anjay, server))) {
+            anjay_log(TRACE, "could not initialize sockets for SSID %u",
                       server->ssid);
-            goto finish;
+            if (refresh_result == EPROTO || refresh_result == ETIMEDOUT) {
+                result = IAS_CONNECTION_ERROR;
+            } else if (refresh_result == ECONNREFUSED) {
+                result = IAS_CONNECTION_REFUSED;
+            } else {
+                result = IAS_FAILED;
+            }
+        } else if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
+            switch (_anjay_server_ensure_valid_registration(anjay, server)) {
+            case ANJAY_REGISTRATION_SUCCESS:
+                result = IAS_SUCCESS;
+                break;
+            case ANJAY_REGISTRATION_FAILED:
+                result = IAS_FAILED;
+                break;
+            case ANJAY_REGISTRATION_FORBIDDEN:
+                result = IAS_FORBIDDEN;
+                break;
+            }
+            if (result != IAS_SUCCESS) {
+                anjay_log(ERROR,
+                          "could not ensure registration to server SSID %u",
+                          server->ssid);
+            }
+        } else {
+            if (!_anjay_bootstrap_account_prepare(anjay)) {
+                result = IAS_SUCCESS;
+            } else {
+                anjay_log(ERROR,
+                          "could not prepare bootstrap account for SSID %u",
+                          server->ssid);
+            }
         }
-    } else if ((result = _anjay_bootstrap_account_prepare(anjay))) {
-        anjay_log(ERROR, "could not prepare bootstrap account for SSID %u",
-                  server->ssid);
-        goto finish;
     }
 
-    result = 0;
-finish:
-    if (!result) {
+    if (result == IAS_SUCCESS) {
+        server->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
         server->data_inactive.reactivate_failed = false;
         server->data_inactive.num_icmp_failures = 0;
     }
@@ -145,23 +170,22 @@ activate_server_job(anjay_t *anjay, void *ssid_) {
         return ANJAY_SCHED_FINISH;
     }
 
-    int socket_error = 0;
-    if (!(socket_error = initialize_active_server(anjay,
-                                                  *server_ptr))) {
+    initialize_active_server_result_t registration_result =
+            initialize_active_server(anjay, *server_ptr);
+    if (registration_result == IAS_SUCCESS) {
         return ANJAY_SCHED_FINISH;
     }
 
-    _anjay_server_cleanup(anjay, *server_ptr);
+    _anjay_server_clean_active_data(anjay, *server_ptr);
     (*server_ptr)->data_active.needs_reload = false;
     (*server_ptr)->data_inactive.reactivate_failed = true;
     uint32_t *num_icmp_failures =
             &(*server_ptr)->data_inactive.num_icmp_failures;
 
-    if (socket_error == ECONNREFUSED) {
+    if (registration_result == IAS_CONNECTION_REFUSED) {
         ++*num_icmp_failures;
-    } else if (socket_error == ANJAY_ERR_FORBIDDEN
-                    || socket_error == ETIMEDOUT
-                    || socket_error == EPROTO) {
+    } else if (registration_result == IAS_FORBIDDEN
+            || registration_result == IAS_CONNECTION_ERROR) {
         *num_icmp_failures = anjay->max_icmp_failures;
     }
 
@@ -184,6 +208,7 @@ activate_server_job(anjay_t *anjay, void *ssid_) {
             }
         }
         // kill this job.
+        (*server_ptr)->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
         return ANJAY_SCHED_FINISH;
     }
     // We had a failure with either a bootstrap or a non-bootstrap server,
@@ -196,6 +221,8 @@ int _anjay_server_sched_activate(anjay_t *anjay,
                                  avs_time_duration_t reactivate_delay) {
     // start the backoff procedure from the beginning
     assert(!_anjay_server_active(server));
+    server->data_inactive.reactivate_time =
+            avs_time_real_add(avs_time_real_now(), reactivate_delay);
     server->data_inactive.reactivate_failed = false;
     server->data_inactive.num_icmp_failures = 0;
     _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
@@ -256,13 +283,14 @@ int _anjay_server_deactivate(anjay_t *anjay,
         return -1;
     }
 
-    if (_anjay_server_active(*server_ptr)) {
+    if (_anjay_server_active(*server_ptr)
+            && !_anjay_server_registration_expired(*server_ptr)) {
         // Return value intentionally ignored.
         // There isn't much we can do in case it fails and De-Register is
         // optional anyway. _anjay_serve_deregister logs the error cause.
         _anjay_server_deregister(anjay, *server_ptr);
     }
-    _anjay_server_cleanup(anjay, *server_ptr);
+    _anjay_server_clean_active_data(anjay, *server_ptr);
     // we don't do the following in _anjay_server_cleanup() so that conn_type
     // can be reused after restoring from persistence in activate_server_job()
     (*server_ptr)->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
@@ -288,5 +316,6 @@ _anjay_servers_create_inactive(anjay_ssid_t ssid) {
 
     new_server->ssid = ssid;
     new_server->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
+    new_server->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
     return new_server;
 }

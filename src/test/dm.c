@@ -32,16 +32,14 @@ AVS_UNIT_TEST(debug, debug_make_path_macro) {
     request.uri.oid = 0;
     request.uri.iid = 1;
     request.uri.rid = 2;
-    request.uri.has_oid = false;
-    request.uri.has_iid = false;
-    request.uri.has_rid = false;
+    request.uri.type = ANJAY_PATH_ROOT;
 
     AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/");
-    request.uri.has_oid = true;
+    request.uri.type = ANJAY_PATH_OBJECT;
     AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/0");
-    request.uri.has_iid = true;
+    request.uri.type = ANJAY_PATH_INSTANCE;
     AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/0/1");
-    request.uri.has_rid = true;
+    request.uri.type = ANJAY_PATH_RESOURCE;
     AVS_UNIT_ASSERT_EQUAL_STRING(ANJAY_DEBUG_MAKE_PATH(&request.uri), "/0/1/2");
 
     request.uri.oid = 65535;
@@ -1927,16 +1925,15 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
         .vtable = &in_ctx_vtable
     };
 
-#define ASSERT_ACTION_FAILS(...) \
-    { \
-        avs_coap_msg_identity_t request_identity = { 0 }; \
-        anjay_request_t request = { \
-            .requested_format = AVS_COAP_FORMAT_NONE, \
-            .uri = MAKE_RESOURCE_PATH(1337, 0, 0), \
-            .action = __VA_ARGS__ \
-        }; \
-        AVS_UNIT_ASSERT_FAILED(invoke_action(&anjay, &def_ptr, \
-                                             &request_identity, &request, \
+#define ASSERT_ACTION_FAILS(...)                                              \
+    {                                                                         \
+        avs_coap_msg_identity_t request_identity = { 0 };                     \
+        anjay_request_t request = {                                           \
+            .requested_format = AVS_COAP_FORMAT_NONE,                         \
+            .action = __VA_ARGS__                                             \
+        };                                                                    \
+        AVS_UNIT_ASSERT_FAILED(invoke_action(&anjay, &def_ptr,                \
+                                             &request_identity, &request,     \
                                              (anjay_input_ctx_t *) &in_ctx)); \
     }
 
@@ -1944,18 +1941,29 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
     anjay.current_connection.server = &(anjay_server_info_t) {
         .ssid = 0
     };
-    ASSERT_ACTION_FAILS(ANJAY_ACTION_READ)
-    ASSERT_ACTION_FAILS(ANJAY_ACTION_DISCOVER)
-    ASSERT_ACTION_FAILS(ANJAY_ACTION_WRITE)
-    ASSERT_ACTION_FAILS(ANJAY_ACTION_WRITE_UPDATE)
+    anjay_uri_path_t uri_object = MAKE_OBJECT_PATH(1337);  
+    anjay_uri_path_t uri_instance = MAKE_INSTANCE_PATH(1337, 0);
+    anjay_uri_path_t uri_resource = MAKE_RESOURCE_PATH(1337, 0, 0);
+    ASSERT_ACTION_FAILS(ANJAY_ACTION_READ,
+                        .uri = uri_resource)
+    ASSERT_ACTION_FAILS(ANJAY_ACTION_DISCOVER,
+                        .uri = uri_resource)
+    ASSERT_ACTION_FAILS(ANJAY_ACTION_WRITE,
+                        .uri = uri_resource)
+    ASSERT_ACTION_FAILS(ANJAY_ACTION_WRITE_UPDATE,
+                        .uri = uri_resource)
     ASSERT_ACTION_FAILS(ANJAY_ACTION_WRITE_ATTRIBUTES,
+                        .uri = uri_resource,
                         .attributes = {
                             .has_min_period = true
                         })
-    ASSERT_ACTION_FAILS(ANJAY_ACTION_EXECUTE)
-    ASSERT_ACTION_FAILS(ANJAY_ACTION_DELETE)
+    ASSERT_ACTION_FAILS(ANJAY_ACTION_EXECUTE,
+                        .uri = uri_resource)
+    ASSERT_ACTION_FAILS(ANJAY_ACTION_DELETE,
+                        .uri = uri_instance)
     in_ctx_vtable.get_id = mock_get_id;
-    ASSERT_ACTION_FAILS(ANJAY_ACTION_CREATE)
+    ASSERT_ACTION_FAILS(ANJAY_ACTION_CREATE,
+                        .uri = uri_object)
 
     // Cancel Observe does not call any handlers, so it does not fail
 }

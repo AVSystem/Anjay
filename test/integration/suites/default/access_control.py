@@ -178,6 +178,23 @@ class ChangingReadFlagsMatterTest(AccessControl.Test):
         self.read_instance(server=self.servers[0], oid=TEST_OID, iid=1)
 
 
+class ChangingFlagsNotifiesTest(AccessControl.Test):
+    def runTest(self):
+        self.create_instance(server=self.servers[1], oid=TEST_OID)
+
+        observe_req = Lwm2mObserve('/2')
+        self.servers[0].send(observe_req)
+        self.assertMsgEqual(Lwm2mContent.matching(observe_req)(), self.servers[0].recv())
+
+        # Update SSID 1 access rights
+        self.update_access(server=self.servers[1], oid=TEST_OID, iid=1,
+                           acl=[make_acl_entry(1, ACCESS_MASK_READ),
+                                make_acl_entry(2, ACCESS_MASK_OWNER)])
+
+        # notification should arrive
+        self.assertMsgEqual(Lwm2mNotify(observe_req.token), self.servers[0].recv())
+
+
 class ExecuteTest(AccessControl.Test):
     def runTest(self):
         self.create_instance(server=self.servers[1], oid=TEST_OID)
@@ -205,11 +222,19 @@ class DeleteTest(AccessControl.Test):
     def runTest(self):
         self.create_instance(server=self.servers[1], oid=TEST_OID)
 
+        observe_req = Lwm2mObserve('/2')
+        self.servers[0].send(observe_req)
+        self.assertMsgEqual(Lwm2mContent.matching(observe_req)(), self.servers[0].recv())
+
         ac_iid = self.find_access_control_instance(server=self.servers[1], oid=TEST_OID, iid=1)
 
         self.delete_instance(server=self.servers[0], oid=TEST_OID, iid=1,
                              expect_error_code=coap.Code.RES_UNAUTHORIZED)
         self.delete_instance(server=self.servers[1], oid=TEST_OID, iid=1)
+
+        # notification should arrive
+        self.assertMsgEqual(Lwm2mNotify(observe_req.token), self.servers[0].recv())
+
         # Instance is removed, so its corresponding Access Control Instance
         # should be removed automatically too. The answer shall be NOT_FOUND
         # according to the spec.

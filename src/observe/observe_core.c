@@ -582,17 +582,21 @@ static inline ssize_t read_new_value(anjay_t *anjay,
                                      double *out_numeric,
                                      char *buffer,
                                      size_t size) {
+    anjay_uri_path_type_t path_type = ANJAY_PATH_OBJECT;
+    if (entry->key.rid >= 0) {
+        path_type = ANJAY_PATH_RESOURCE;
+    } else if (entry->key.iid != ANJAY_IID_INVALID) {
+        path_type = ANJAY_PATH_INSTANCE;
+    }
     return _anjay_dm_read_for_observe(
             anjay, obj,
             &(const anjay_dm_read_args_t) {
                 .ssid = entry->key.connection.ssid,
                 .uri = {
-                    .has_oid = true,
                     .oid = entry->key.oid,
-                    .has_iid = (entry->key.iid != ANJAY_IID_INVALID),
                     .iid = entry->key.iid,
-                    .has_rid = (entry->key.rid >= 0),
                     .rid = (anjay_rid_t) entry->key.rid,
+                    .type = path_type
                 },
                 .requested_format = entry->key.format,
                 .observe_serial = true

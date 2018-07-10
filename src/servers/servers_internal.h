@@ -52,6 +52,15 @@ struct anjay_server_info_struct {
 
     // These fields are valid only for inactive servers
     struct {
+        // When a reactivate job is scheduled (and its handle stored in
+        // sched_update_or_reactivate_handle), this field is filled with the
+        // time for which the reactivate job is (initially) scheduled. If Anjay
+        // enters offline mode, we delete all such jobs (because we don't want
+        // servers to be activated during offline mode) - but thanks to this
+        // value, we can reschedule activation at appropriate time after exiting
+        // offline mode.
+        avs_time_real_t reactivate_time;
+
         bool reactivate_failed;
         uint32_t num_icmp_failures;
     } data_inactive;
@@ -72,6 +81,9 @@ void _anjay_servers_internal_deregister(anjay_t *anjay,
 
 void _anjay_servers_internal_cleanup(anjay_t *anjay,
                                      anjay_servers_t *servers);
+
+void _anjay_server_clean_active_data(const anjay_t *anjay,
+                                     anjay_server_info_t *server);
 
 /**
  * Cleans up server data. Does not send De-Register message.

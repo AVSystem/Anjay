@@ -25,45 +25,69 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+typedef enum {
+    ANJAY_PATH_ROOT,
+    ANJAY_PATH_OBJECT,
+    ANJAY_PATH_INSTANCE,
+    ANJAY_PATH_RESOURCE
+} anjay_uri_path_type_t;
+
 typedef struct {
-    bool has_oid;
+    anjay_uri_path_type_t type;
     anjay_oid_t oid;
-
-    bool has_iid;
     anjay_iid_t iid;
-
-    bool has_rid;
     anjay_rid_t rid;
 } anjay_uri_path_t;
 
+static inline bool _anjay_uri_path_has_rid(const anjay_uri_path_t *path) {
+    return path->type == ANJAY_PATH_RESOURCE;
+}
+
+static inline bool _anjay_uri_path_has_iid(const anjay_uri_path_t *path) {
+    return path->type == ANJAY_PATH_INSTANCE || _anjay_uri_path_has_rid(path);
+}
+
+static inline bool _anjay_uri_path_has_oid(const anjay_uri_path_t *path) {
+    return path->type == ANJAY_PATH_OBJECT || _anjay_uri_path_has_iid(path);
+}
+
 static inline bool _anjay_uri_path_equal(const anjay_uri_path_t *left,
                                          const anjay_uri_path_t *right) {
-    return (left->has_oid
-                    ? (right->has_oid && left->oid == right->oid)
-                    : !right->has_oid)
-            && (left->has_iid
-                    ? (right->has_iid && left->iid == right->iid)
-                    : !right->has_iid)
-            && (left->has_rid
-                    ? (right->has_rid && left->rid == right->rid)
-                    : !right->has_rid);
+    return (_anjay_uri_path_has_oid(left)
+                    ? (_anjay_uri_path_has_oid(right) && left->oid == right->oid)
+                    : !_anjay_uri_path_has_oid(right))
+            && (_anjay_uri_path_has_iid(left)
+                    ? (_anjay_uri_path_has_iid(right) && left->iid == right->iid)
+                    : !_anjay_uri_path_has_iid(right))
+            && (_anjay_uri_path_has_rid(left)
+                    ? (_anjay_uri_path_has_rid(right) && left->rid == right->rid)
+                    : !_anjay_uri_path_has_rid(right));
 }
 
 #define ASSERT_RESOURCE_PATH(uri) \
-    do {                          \
-        assert((uri).has_oid);    \
-        assert((uri).has_iid);    \
-        assert((uri).has_rid);    \
-    } while (0)
+    assert((uri).type == ANJAY_PATH_RESOURCE)
+
+#define MAKE_OBJECT_PATH(Oid)     \
+    (anjay_uri_path_t) {          \
+        .oid = (Oid),             \
+        .type = ANJAY_PATH_OBJECT \
+    }
+
+#define MAKE_INSTANCE_PATH(Oid, Iid)      \
+    (anjay_uri_path_t) {                  \
+        .oid = (Oid),                     \
+        .iid = (Iid),                     \
+        .type = ANJAY_PATH_INSTANCE       \
+    }
 
 #define MAKE_INSTANCE_OR_RESOURCE_PATH(Oid, Iid, Rid) \
     (anjay_uri_path_t) {                              \
         .oid = (Oid),                                 \
         .iid = (Iid),                                 \
         .rid = (anjay_rid_t)(Rid),                    \
-        .has_oid = true,                              \
-        .has_iid = true,                              \
-        .has_rid = (0 <= (Rid) && (Rid) < UINT16_MAX) \
+        .type = (0 <= (Rid) && (Rid) < UINT16_MAX)    \
+                ? ANJAY_PATH_RESOURCE                 \
+                : ANJAY_PATH_INSTANCE                 \
     }
 
 #define MAKE_RESOURCE_PATH(Oid, Iid, Rid) \
@@ -71,9 +95,7 @@ static inline bool _anjay_uri_path_equal(const anjay_uri_path_t *left,
         .oid = (Oid),                     \
         .iid = (Iid),                     \
         .rid = (Rid),                     \
-        .has_oid = true,                  \
-        .has_iid = true,                  \
-        .has_rid = true                   \
+        .type = ANJAY_PATH_RESOURCE       \
     }
 
 typedef enum anjay_request_action {

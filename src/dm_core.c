@@ -278,12 +278,11 @@ const char *_anjay_debug_make_path__(char *buffer,
                                      size_t buffer_size,
                                      const anjay_uri_path_t *uri) {
     assert(uri);
-    assert(uri->has_iid || !uri->has_rid);
 
     const uint16_t *ids[] = {
-        uri->has_oid ? &uri->oid : NULL,
-        uri->has_iid ? &uri->iid : NULL,
-        uri->has_rid ? &uri->rid : NULL,
+        _anjay_uri_path_has_oid(uri) ? &uri->oid : NULL,
+        _anjay_uri_path_has_iid(uri) ? &uri->iid : NULL,
+        _anjay_uri_path_has_rid(uri) ? &uri->rid : NULL,
         NULL
     };
     const uint16_t **id_ptr = ids;
@@ -427,7 +426,7 @@ static int read_object(anjay_t *anjay,
                        const anjay_dm_object_def_t *const *obj,
                        const anjay_dm_read_args_t *details,
                        anjay_output_ctx_t *out_ctx) {
-    assert(details->uri.has_oid);
+    assert(_anjay_uri_path_has_oid(&details->uri));
     int result = 0;
     anjay_iid_t iid;
     void *cookie = NULL;
@@ -456,7 +455,7 @@ dm_read_spawn_ctx(avs_stream_abstract_t *stream,
                   int *errno_ptr,
                   const anjay_dm_read_args_t *details) {
     uint16_t requested_format = details->requested_format;
-    if (!details->uri.has_rid) {
+    if (!_anjay_uri_path_has_rid(&details->uri)) {
         int ret = _anjay_handle_requested_format(&requested_format,
                                                  ANJAY_COAP_FORMAT_TLV);
 #ifdef WITH_JSON
@@ -491,9 +490,9 @@ static int dm_read(anjay_t *anjay,
                    const anjay_dm_read_args_t *details,
                    anjay_output_ctx_t *out_ctx) {
     anjay_log(DEBUG, "Read %s", ANJAY_DEBUG_MAKE_PATH(&details->uri));
-    assert(details->uri.has_oid);
+    assert(_anjay_uri_path_has_oid(&details->uri));
     int result = 0;
-    if (details->uri.has_iid) {
+    if (_anjay_uri_path_has_iid(&details->uri)) {
         const anjay_action_info_t info = {
             .iid = details->uri.iid,
             .oid = details->uri.oid,
@@ -504,7 +503,7 @@ static int dm_read(anjay_t *anjay,
         if (!(result = ensure_instance_present(anjay, obj, details->uri.iid))) {
             if (!_anjay_access_control_action_allowed(anjay, &info)) {
                 result = ANJAY_ERR_UNAUTHORIZED;
-            } else if (details->uri.has_rid) {
+            } else if (_anjay_uri_path_has_rid(&details->uri)) {
                 result = read_resource(anjay, obj, details->uri.iid, details->uri.rid,
                                        out_ctx);
             } else {
@@ -536,8 +535,12 @@ static void build_observe_key(anjay_t *anjay,
     result->connection.ssid = _anjay_dm_current_ssid(anjay);
     result->connection.type = anjay->current_connection.conn_type;
     result->oid = request->uri.oid;
-    result->iid = (request->uri.has_iid ? request->uri.iid : ANJAY_IID_INVALID);
-    result->rid = (request->uri.has_rid ? request->uri.rid : ANJAY_RID_EMPTY);
+    result->iid = _anjay_uri_path_has_iid(&request->uri)
+        ? request->uri.iid
+        : ANJAY_IID_INVALID;
+    result->rid = _anjay_uri_path_has_rid(&request->uri)
+        ? request->uri.rid
+        : ANJAY_RID_EMPTY;
     result->format = request->requested_format;
 }
 
@@ -587,7 +590,7 @@ static int dm_observe(anjay_t *anjay,
                       const avs_coap_msg_identity_t *request_identity,
                       const anjay_request_t *request) {
     anjay_log(DEBUG, "Observe %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
-    assert(request->uri.has_oid);
+    assert(_anjay_uri_path_has_oid(&request->uri));
     char buf[ANJAY_MAX_OBSERVABLE_RESOURCE_SIZE];
     double numeric = NAN;
     anjay_msg_details_t observe_details;
@@ -690,9 +693,9 @@ static int dm_discover(anjay_t *anjay,
         return result;
     }
 
-    if (request->uri.has_iid) {
+    if (_anjay_uri_path_has_iid(&request->uri)) {
         if (!(result = ensure_instance_present(anjay, obj, request->uri.iid))) {
-            if (request->uri.has_rid) {
+            if (_anjay_uri_path_has_rid(&request->uri)) {
                 if (!(result = ensure_resource_supported_and_present(
                         anjay, obj, request->uri.iid, request->uri.rid))) {
                     result = _anjay_discover_resource(
@@ -826,7 +829,7 @@ static int dm_write(anjay_t *anjay,
                     anjay_request_action_t action,
                     uint16_t content_format) {
     anjay_log(DEBUG, "Write %s", ANJAY_DEBUG_MAKE_PATH(uri));
-    if (!uri->has_iid) {
+    if (!_anjay_uri_path_has_iid(uri)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
@@ -843,7 +846,7 @@ static int dm_write(anjay_t *anjay,
             return ANJAY_ERR_UNAUTHORIZED;
         }
 
-        if (uri->has_rid) {
+        if (_anjay_uri_path_has_rid(uri)) {
             const uint16_t format =
                     _anjay_translate_legacy_content_format(content_format);
 
@@ -986,16 +989,16 @@ static int dm_write_attributes(anjay_t *anjay,
                                const anjay_request_t *request) {
     anjay_log(DEBUG, "Write Attributes %s",
               ANJAY_DEBUG_MAKE_PATH(&request->uri));
-    assert(request->uri.has_oid);
+    assert(_anjay_uri_path_has_oid(&request->uri));
     if (request_attrs_empty(&request->attributes)) {
         return 0;
     }
-    if (!request->uri.has_rid
+    if (!_anjay_uri_path_has_rid(&request->uri)
             && !resource_specific_request_attrs_empty(&request->attributes)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
     int result;
-    if (request->uri.has_iid) {
+    if (_anjay_uri_path_has_iid(&request->uri)) {
         if (!(result = ensure_instance_present(anjay, obj, request->uri.iid))) {
 
             const anjay_action_info_t info = {
@@ -1009,7 +1012,7 @@ static int dm_write_attributes(anjay_t *anjay,
 
             if (!_anjay_access_control_action_allowed(anjay, &info)) {
                 result = ANJAY_ERR_UNAUTHORIZED;
-            } else if (request->uri.has_rid) {
+            } else if (_anjay_uri_path_has_rid(&request->uri)) {
                 result = dm_write_resource_attrs(anjay, obj, request->uri.iid,
                                                  request->uri.rid,
                                                  &request->attributes);
@@ -1038,8 +1041,8 @@ static int dm_execute(anjay_t *anjay,
                       const anjay_request_t *request,
                       anjay_input_ctx_t *in_ctx) {
     anjay_log(DEBUG, "Execute %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
-    assert(request->uri.has_oid);
-    if (!request->uri.has_iid || !request->uri.has_rid) {
+    assert(_anjay_uri_path_has_oid(&request->uri));
+    if (request->uri.type != ANJAY_PATH_RESOURCE) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
@@ -1170,9 +1173,7 @@ static int dm_create(anjay_t *anjay,
                      const anjay_request_t *request,
                      anjay_input_ctx_t *in_ctx) {
     anjay_log(DEBUG, "Create %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
-    if (request->uri.has_rid) {
-        return ANJAY_ERR_METHOD_NOT_ALLOWED;
-    }
+    assert(request->uri.type == ANJAY_PATH_OBJECT);
 
     if (!_anjay_access_control_action_allowed(
             anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
@@ -1211,7 +1212,7 @@ static int dm_delete(anjay_t *anjay,
                      const anjay_dm_object_def_t *const *obj,
                      const anjay_request_t *request) {
     anjay_log(DEBUG, "Delete %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
-    if (!request->uri.has_iid || request->uri.has_rid) {
+    if (request->uri.type != ANJAY_PATH_INSTANCE) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
@@ -1315,7 +1316,7 @@ int _anjay_dm_perform_action(anjay_t *anjay,
                              const avs_coap_msg_identity_t *request_identity,
                              const anjay_request_t *request) {
     const anjay_dm_object_def_t *const *obj = NULL;
-    if (request->uri.has_oid) {
+    if (_anjay_uri_path_has_oid(&request->uri)) {
         if (!(obj = _anjay_dm_find_object_by_oid(anjay, request->uri.oid))
                 || !*obj) {
             anjay_log(ERROR, "Object not found: %u", request->uri.oid);

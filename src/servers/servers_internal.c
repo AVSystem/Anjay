@@ -44,12 +44,17 @@ static void connection_cleanup(const anjay_t *anjay,
                      &connection->queue_mode_close_socket_clb_handle);
 }
 
+void _anjay_server_clean_active_data(const anjay_t *anjay,
+                                     anjay_server_info_t *server) {
+    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
+    connection_cleanup(anjay, &server->data_active.udp_connection);
+}
+
 void _anjay_server_cleanup(const anjay_t *anjay, anjay_server_info_t *server) {
     anjay_log(TRACE, "clear_server SSID %u", server->ssid);
 
-    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
+    _anjay_server_clean_active_data(anjay, server);
     _anjay_registration_info_cleanup(&server->data_active.registration_info);
-    connection_cleanup(anjay, &server->data_active.udp_connection);
     _anjay_url_cleanup(&server->data_active.uri);
 }
 
@@ -224,9 +229,9 @@ int _anjay_schedule_socket_update(anjay_t *anjay,
     anjay_server_info_t *server;
     if (!_anjay_ssid_from_security_iid(anjay, security_iid, &ssid)
             && (server = _anjay_servers_find_active(anjay->servers, ssid))) {
-        // mark that the primary connection is no longer valid;
-        // prevents superfluous Deregister
-        server->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
+        // mark the registration as expired; prevents superfluous Deregister
+        server->data_active.registration_info.expire_time =
+                AVS_TIME_REAL_INVALID;
         return _anjay_sched_now(anjay->sched, NULL, deactivate_server_job,
                                 (void *) (uintptr_t) ssid);
     }

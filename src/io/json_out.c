@@ -279,10 +279,10 @@ static int write_variable(avs_stream_abstract_t *stream,
 static int write_uri(avs_stream_abstract_t *stream,
                      const anjay_uri_path_t *path) {
     int retval = avs_stream_write_f(stream, "/%d", path->oid);
-    if (!retval && path->has_iid) {
+    if (!retval &&  _anjay_uri_path_has_iid(path)) {
         retval = avs_stream_write_f(stream, "/%d", path->iid);
     }
-    if (!retval && path->has_rid) {
+    if (!retval &&  _anjay_uri_path_has_rid(path)) {
         retval = avs_stream_write_f(stream, "/%d", path->rid);
     }
     return retval;
@@ -571,17 +571,15 @@ _anjay_output_json_create(avs_stream_abstract_t *stream,
         ctx->vtable = &JSON_OUT_VTABLE;
         ctx->errno_ptr = errno_ptr;
         ctx->stream = stream;
-        if (uri->has_oid) {
+        if (_anjay_uri_path_has_oid(uri)) {
             update_node_path(ctx, ANJAY_ID_OID, uri->oid);
             ++ctx->num_base_path_elems;
         }
-        if (uri->has_iid) {
-            assert(uri->has_oid);
+        if (_anjay_uri_path_has_iid(uri)) {
             update_node_path(ctx, ANJAY_ID_IID, uri->iid);
             ++ctx->num_base_path_elems;
         }
-        if (uri->has_rid) {
-            assert(uri->has_iid);
+        if (_anjay_uri_path_has_rid(uri)) {
             update_node_path(ctx, ANJAY_ID_RID, uri->rid);
             ++ctx->num_base_path_elems;
         }

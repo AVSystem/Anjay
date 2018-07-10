@@ -29,22 +29,39 @@ VISIBILITY_SOURCE_BEGIN
 
 // TODO: Offline and SMS? How to interpret?
 static void disable_connection(anjay_server_connection_t *connection) {
-    avs_net_abstract_socket_t *socket =
-            _anjay_connection_internal_get_socket(connection);
-    if (socket) {
-        avs_net_socket_close(socket);
-    }
+    _anjay_connection_internal_clean_socket(connection);
     connection->needs_reconnect = false;
 }
 
 static void enter_offline_job(anjay_t *anjay, void *dummy) {
     (void) dummy;
+    avs_time_real_t now = avs_time_real_now();
     AVS_LIST(anjay_server_info_t) server;
     AVS_LIST_FOREACH(server, anjay->servers->servers) {
+        _anjay_sched_del(anjay->sched,
+                         &server->sched_update_or_reactivate_handle);
         if (_anjay_server_active(server)) {
-            disable_connection(&server->data_active.udp_connection);
-            _anjay_sched_del(anjay->sched,
-                             &server->sched_update_or_reactivate_handle);
+            // If the server is active, we clean up all its sockets, essentially
+            // deactivating it. We don't schedule reactivation, as that would
+            // fill the sched_update_or_reactivate_handle field we have just
+            // cleared - but rather we store the reactivation time of "now".
+            // Note that after exiting offline mode, this will schedule
+            // reactivation with negative delay, but it will effectively cause
+            // the reactivation to be scheduled for immediate execution.
+            anjay_connection_ref_t ref = {
+                .server = server
+            };
+            for (ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
+                    ref.conn_type < ANJAY_CONNECTION_LIMIT_;
+                    ref.conn_type =
+                            (anjay_connection_type_t) (ref.conn_type + 1)) {
+                anjay_server_connection_t *connection =
+                        _anjay_get_server_connection(ref);
+                if (connection) {
+                    disable_connection(connection);
+                }
+            }
+            server->data_inactive.reactivate_time = now;
         }
     }
     _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);

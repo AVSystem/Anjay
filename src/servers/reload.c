@@ -48,10 +48,17 @@ static bool server_needs_reconnect(anjay_server_info_t *server) {
 static int reload_active_server(anjay_t *anjay,
                                 anjay_server_info_t *server) {
     assert(_anjay_server_active(server));
+    if (server->ssid != ANJAY_SSID_BOOTSTRAP
+            && _anjay_server_registration_expired(server)) {
+        // Registration expired - we need to re-register, but we only call
+        // Register from activate_server, so we need to deactivate first.
+        goto deactivate;
+    }
+
     if (server->data_active.needs_reload || server_needs_reconnect(server)) {
         server->data_active.needs_reload = false;
         if (_anjay_active_server_refresh(anjay, server)) {
-            goto connection_failure;
+            goto deactivate;
         }
     }
 
@@ -66,23 +73,15 @@ static int reload_active_server(anjay_t *anjay,
             // reconnection succeeds
             server->data_active.registration_info.expire_time =
                     AVS_TIME_REAL_INVALID;
+            goto deactivate;
         }
-        if (_anjay_server_registration_expired(server)) {
-            int result = _anjay_server_ensure_valid_registration(anjay, server);
-            if (result < 0) {
-                return result;
-            } else if (result) {
-                goto connection_failure;
-            }
-        } else {
-            _anjay_observe_sched_flush(anjay, (anjay_connection_key_t) {
-                .ssid = server->ssid,
-                .type = server->data_active.primary_conn_type
-            });
-        }
+        _anjay_observe_sched_flush(anjay, (anjay_connection_key_t) {
+            .ssid = server->ssid,
+            .type = server->data_active.primary_conn_type
+        });
     }
     return 0;
-connection_failure:
+deactivate:
     _anjay_server_deactivate(anjay, server->ssid, AVS_TIME_DURATION_ZERO);
     return 0;
 }
@@ -115,6 +114,12 @@ static int reload_server_by_ssid(anjay_t *anjay,
         if (_anjay_server_active(server)) {
             anjay_log(TRACE, "reloading active server SSID %u", ssid);
             return reload_active_server(anjay, server);
+        } else if (!server->sched_update_or_reactivate_handle
+                && avs_time_real_valid(server->data_inactive.reactivate_time)) {
+            return _anjay_server_sched_activate(
+                    anjay, server, avs_time_real_diff(
+                            server->data_inactive.reactivate_time,
+                            avs_time_real_now()));
         } else {
             return 0;
         }

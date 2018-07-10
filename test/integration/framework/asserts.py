@@ -107,14 +107,17 @@ class Lwm2mAsserts:
                             version=DEMO_LWM2M_VERSION,
                             location=DEFAULT_REGISTER_ENDPOINT,
                             lifetime=None,
-                            timeout_s=2):
+                            timeout_s=2,
+                            respond=True):
         serv = server or self.serv
 
         pkt = serv.recv(timeout_s=timeout_s)
         expected = Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (version, DEMO_ENDPOINT_NAME,
                                                                lifetime if lifetime is not None else 86400))
         self.assertMsgEqual(expected, pkt)
-        serv.send(Lwm2mCreated(location=location, msg_id=pkt.msg_id, token=pkt.token))
+        if respond:
+            serv.send(Lwm2mCreated(location=location, msg_id=pkt.msg_id, token=pkt.token))
+        return pkt
 
     def assertDemoUpdatesRegistration(self,
                                       server=None,
@@ -123,7 +126,8 @@ class Lwm2mAsserts:
                                       binding: Optional[str] = None,
                                       sms_number: Optional[str] = None,
                                       content: bytes = b'',
-                                      timeout_s: float = 1):
+                                      timeout_s: float = 1,
+                                      respond: bool = True):
         serv = server or self.serv
 
         query_args = (([('lt', lifetime)] if lifetime is not None else [])
@@ -137,7 +141,9 @@ class Lwm2mAsserts:
 
         pkt = serv.recv(timeout_s=timeout_s)
         self.assertMsgEqual(Lwm2mUpdate(path, content=content), pkt)
-        serv.send(Lwm2mChanged.matching(pkt)())
+        if respond:
+            serv.send(Lwm2mChanged.matching(pkt)())
+        return pkt
 
     def assertDemoDeregisters(self, server=None, path=DEFAULT_REGISTER_ENDPOINT, timeout_s=1):
         serv = server or self.serv

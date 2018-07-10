@@ -76,4 +76,3 @@ class PredefinedPortRebind(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2
 
         # with port free again, allow demo to reconnect so that we can then shutdown cleanly
         self.serv.listen(timeout_s=15)
-        self.assertDemoRegisters()
