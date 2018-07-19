@@ -113,7 +113,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 ``` sh
 sudo apt-get install git build-essential cmake libmbedtls-dev
 # Optionally for tests:
-sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-jinja2 python3-sphinx clang
+sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-jinja2 python3-sphinx python3-requests clang
 ```
 
 #### CentOS 7
@@ -129,7 +129,7 @@ sudo yum install -y valgrind valgrind-devel openssl openssl-devel python35u pyth
 # Use update-alternatives to create a /usr/bin/python3 symlink with priority 0
 # (lowest possible)
 sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.5 0
-sudo python3 -m pip install cryptography jinja2
+sudo python3 -m pip install cryptography jinja2 requests
 ```
 
 #### macOS Sierra with [Homebrew](https://brew.sh/)
@@ -138,7 +138,7 @@ sudo python3 -m pip install cryptography jinja2
 brew install cmake mbedtls
 # Optionally for tests:
 brew install python3 openssl llvm
-pip3 install cryptography sphinx sphinx_rtd_theme
+pip3 install cryptography sphinx sphinx_rtd_theme requests
 ```
 
 #### Windows

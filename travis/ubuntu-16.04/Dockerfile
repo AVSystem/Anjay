@@ -16,7 +16,7 @@ FROM ubuntu:16.04
 RUN apt-get update
 RUN apt-get install -y git build-essential cmake libmbedtls-dev \
     libssl-dev python3 libpython3-dev python3-cryptography \
-    python3-sphinx valgrind <CC_PKG> <CXX_PKG>
+    python3-sphinx valgrind python3-requests <CC_PKG> <CXX_PKG>
 RUN sed -i -e "s/-Wdate-time/ /g" \
     /usr/lib/python3.5/config-3.5m-x86_64-linux-gnu/Makefile \
     /usr/lib/python3.5/plat-x86_64-linux-gnu/_sysconfigdata_m.py
