@@ -43,20 +43,23 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
             message(FATAL_ERROR "Sphinx not found (this can be suppressed by WITH_DOC_CHECK=OFF)")
         endif()
         # sphinx-based .. snippet-source:: validation
-        add_test(NAME test_doc
+        add_test(NAME test_doc_snippet
                  COMMAND ${SPHINX_BUILD_EXECUTABLE}
                          -Q -b snippet_source_lint
                          -c ${ANJAY_SPHINX_DOC_CONF_DIR}
                          ${ANJAY_SPHINX_DOC_ROOT_DIR}
                          ${ANJAY_SPHINX_DOC_CONF_DIR}/lint
                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sphinx)
-        set_property(TEST test_doc APPEND PROPERTY ENVIRONMENT
+        add_test(NAME test_doc_url
+                 COMMAND ./runtest.py
+                 WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/test/doc)
+        set_property(TEST test_doc_snippet APPEND PROPERTY ENVIRONMENT
                      "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"
                      "ANJAY_SPHINX_DOC_ROOT_DIR=${ANJAY_SPHINX_DOC_ROOT_DIR}"
                      "CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
                      "SNIPPET_SOURCE_MD5FILE=${ANJAY_SOURCE_DIR}/examples/test_examples.md5")
 
-        add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc$$'")
+        add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc_.*$$'")
         add_dependencies(anjay_unit_check doc_check)
     endif()
 endif()

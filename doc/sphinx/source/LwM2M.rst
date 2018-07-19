@@ -19,7 +19,7 @@ OMA LwM2M - Brief description
 .. contents:: :local:
 
 `Lightweight Machine to Machine
-<https://openmobilealliance.hs-sites.com/lightweight-m2m-specification-from-oma>`_
+<https://www.omaspecworks.org/what-is-oma-specworks/iot/lightweight-m2m-lwm2m/>`_
 is a protocol developed by the `Open Mobile Alliance
 <https://openmobilealliance.org/>`_ for remote device management in the Internet
 of Things and other Machine-to-Machine applications.
@@ -39,7 +39,7 @@ Anjay is designed to hide most of the protocol details from application
 developers - however, a rudimentary understanding of the protocol is necessary
 to understand the general philosophy and semantics of the parts that remain to
 be implemented. You are encouraged to read the `full specification
-<https://openmobilealliance.hs-sites.com/lightweight-m2m-specification-from-oma>`_,
+<https://www.omaspecworks.org/what-is-oma-specworks/iot/lightweight-m2m-lwm2m/>`_,
 but this article provides a quick summary of the most important concepts.
 
 Clients and servers

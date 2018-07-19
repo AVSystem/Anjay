@@ -32,7 +32,7 @@ matrix:
   include:
   - stage: test
     os: osx
-    env: DEVCONFIG_FLAGS="--with-asan --without-analysis"
+    env: DEVCONFIG_FLAGS="--with-asan --without-analysis -DWITH_POISONING=OFF"
 
   - stage: test
     os: linux

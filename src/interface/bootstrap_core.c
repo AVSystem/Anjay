@@ -315,7 +315,7 @@ static int bootstrap_write(anjay_t *anjay,
         return ANJAY_ERR_NOT_FOUND;
     }
 
-    int retval;
+    int retval = -1;
     switch (uri->type) {
     case ANJAY_PATH_RESOURCE:
         retval = with_instance_on_demand(anjay, obj, uri->iid, in_ctx,

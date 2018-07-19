@@ -74,3 +74,9 @@ class UnsupportedCreate(test_suite.Lwm2mSingleServerTest):
                                   TLV.make_resource(2, 5.0),
                                   TLV.make_resource(3, b''),
                                   TLV.make_resource(4, 0)]))), res)
+
+
+class RootPathOnCreate(test_suite.Lwm2mSingleServerTest,
+                       test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        self.create(self.serv, path='/', expect_error_code=coap.Code.RES_BAD_REQUEST)

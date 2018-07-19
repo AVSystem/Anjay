@@ -34,7 +34,7 @@ If POSIX ``clock_gettime`` function is not available:
 
 .. note::
     For signatures and detailed description of listed functions, see
-    `avs_commons <https://github.com/AVSystem/avs_commons/blob/master/time/include_public/avsystem/commons/time.h>`_
+    `avs_commons <https://github.com/AVSystem/avs_commons/blob/master/utils/include_public/avsystem/commons/time.h>`_
 
 
 Networking API

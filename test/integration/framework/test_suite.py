@@ -120,6 +120,11 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
+    def create(self, server, path, expect_error_code=None, **kwargs):
+        req = Lwm2mCreate(Lwm2mPath(path), None)
+        expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
     def delete_instance(self, server, oid, iid, expect_error_code=None, **kwargs):
         req = Lwm2mDelete('/%d/%d' % (oid, iid))
         expected_res = self._make_expected_res(req, Lwm2mDeleted, expect_error_code)
