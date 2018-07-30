@@ -276,6 +276,8 @@ static int demo_init(anjay_demo_t *demo,
 #endif
         .confirmable_notifications = cmdline_args->confirmable_notifications,
         .max_icmp_failures = &cmdline_args->max_icmp_failures,
+        .disable_server_initiated_bootstrap =
+                cmdline_args->disable_server_initiated_bootstrap,
     };
 
     const avs_net_security_info_t *fw_security_info_ptr = NULL;

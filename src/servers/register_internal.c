@@ -338,6 +338,8 @@ ensure_valid_registration_with_ctx(anjay_t *anjay,
                 return (int) ANJAY_REGISTRATION_FAILED;
             }
         } else {
+            // Failure to handle Bootstrap state is not a failure of the
+            // Register operation - hence, not checking return value.
             _anjay_bootstrap_notify_regular_connection_available(anjay);
             return (int) ANJAY_REGISTRATION_SUCCESS;
         }

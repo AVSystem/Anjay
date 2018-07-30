@@ -36,7 +36,7 @@ except ImportError:
 
 T = TypeVar('T')
 
-def read_with_timeout(fd, timeout_s):
+def read_byte_with_timeout(fd, timeout_s):
     import select
     deadline = time.time() + timeout_s
     while True:
@@ -45,7 +45,7 @@ def read_with_timeout(fd, timeout_s):
             return b''
         r, w, x = select.select([fd], [], [fd], partial_timeout)
         if len(r) > 0 or len(x) > 0:
-            buf = fd.read()
+            buf = fd.read(1)
             if buf is not None and len(buf) > 0:
                 return buf
 
@@ -57,7 +57,7 @@ def read_until_match(fd, regex, timeout_s):
         partial_timeout = deadline - time.time()
         if partial_timeout < 0:
             return None
-        out += read_with_timeout(fd, partial_timeout)
+        out += read_byte_with_timeout(fd, partial_timeout)
         match = re.search(regex, out.decode(errors='replace'))
         if match:
             return match
@@ -358,22 +358,25 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             return '%s or ((icmp[0] = 3) and (icmp[1] = 3) and (icmp[17] = 17) and (%s))' % (udp_filter, icmp_pu_filter)
 
         self.dumpcap_file_path = self.logs_path('pcap', extension='.pcapng')
-        self.dumpcap_process = subprocess.Popen(
-            [self.DUMPCAP_COMMAND, '-w', self.dumpcap_file_path, '-i', 'lo', '-f', _filter_expr()],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            bufsize=1)
+        dumpcap_command = [self.DUMPCAP_COMMAND, '-w', self.dumpcap_file_path, '-i', 'lo', '-f', _filter_expr()]
+        self.dumpcap_process = subprocess.Popen(dumpcap_command,
+                                                stdin=subprocess.DEVNULL,
+                                                stdout=subprocess.DEVNULL,
+                                                stderr=subprocess.PIPE,
+                                                bufsize=0)
 
         # It takes a little while (around 0.5-0.6 seconds on a normal PC) for dumpcap to initialize and actually start
         # capturing packets. We want all relevant packets captured, so we need to wait until dumpcap reports it's ready.
         # Also, if we haven't done this, there would be a possibility that _terminate_dumpcap() would be called before
         # full initialization of dumpcap - it would then essentially ignore the SIGTERM and our test would hang waiting
         # for dumpcap's termination that would never come.
+        dumpcap_stderr = b''
         while True:
-            line = self.dumpcap_process.stderr.readline()
-            if line.startswith(b'File:'):
+            dumpcap_stderr += read_byte_with_timeout(self.dumpcap_process.stderr, 1)
+            if b'File:' in dumpcap_stderr:
                 break
+            if self.dumpcap_process.poll() is not None:
+                raise ChildProcessError('Could not start %r\n' % (dumpcap_command,))
 
         def _reader_func():
             try:
@@ -391,6 +394,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 servers=1,
                                 num_servers_passed=None,
                                 bootstrap_server=False,
+                                server_initiated_bootstrap_allowed=True,
                                 extra_cmdline_args=[],
                                 auto_register=True,
                                 version=DEMO_LWM2M_VERSION,
@@ -448,7 +452,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             self.bootstrap_server = None
 
         if self.bootstrap_server is not None:
-            demo_args += ['--bootstrap']
+            demo_args += ['--bootstrap' if server_initiated_bootstrap_allowed else '--bootstrap=client-initiated-only']
             all_servers = [self.bootstrap_server] + self.servers
             all_servers_passed = [self.bootstrap_server] + servers_passed
         else:
@@ -546,7 +550,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             partial_timeout = deadline - time.time()
             if partial_timeout < 0:
                 break
-            out += read_with_timeout(self.demo_process.log_file, partial_timeout)
+            out += read_byte_with_timeout(self.demo_process.log_file, partial_timeout)
         return out.decode(errors='replace')
 
     def _terminate_demo_impl(self, demo, timeout_s):

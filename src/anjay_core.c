@@ -112,6 +112,7 @@ static int init(anjay_t *anjay,
         return -1;
     }
 
+    _anjay_bootstrap_init(anjay, !config->disable_server_initiated_bootstrap);
     if (_anjay_observe_init(&anjay->observe,
                             config->confirmable_notifications)) {
         return -1;

@@ -21,6 +21,24 @@ from typing import Tuple, Optional
 
 from .packet import Packet
 
+import enum
+
+class SecurityMode(enum.Enum):
+    PreSharedKey = 0
+    RawPublicKey = 1
+    Certificate = 2
+    NoSec = 3
+
+    def __str__(self):
+        if self.value == SecurityMode.PreSharedKey:
+            return 'psk'
+        elif self.value == SecurityMode.RawPublicKey:
+            return 'rpk'
+        elif self.value == SecurityMode.Certificate:
+            return 'cert'
+        else:
+            return 'nosec'
+
 
 @contextlib.contextmanager
 def _override_timeout(sock, timeout_s=-1):

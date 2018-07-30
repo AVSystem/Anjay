@@ -81,6 +81,15 @@ AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_ssid_t ssid);
  */
 bool _anjay_can_retry_with_normal_server(anjay_t *anjay);
 
+/**
+ * Checks whether now is a right moment to initiate Client Initiated Bootstrap
+ * as per requirements in the specification.
+ *
+ * @returns true if all requirements for Client Initiated Bootstrap are met,
+ *          false otherwise.
+ */
+bool _anjay_should_retry_bootstrap(anjay_t *anjay);
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif // ANJAY_SERVERS_ACTIVATE_H

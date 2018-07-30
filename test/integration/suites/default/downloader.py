@@ -18,6 +18,9 @@ import concurrent.futures
 import contextlib
 import os
 import time
+import http.server
+import threading
+import tempfile
 
 from framework.coap_file_server import CoapFileServerThread
 from framework.lwm2m_test import *
@@ -317,3 +320,116 @@ class CoapsDownloadResumption(CoapDownload.ReconnectTest):
             self.assertNotEqual(self.file_server.get_remote_addr()[1], previous_port)
 
             ctx.transferData()
+
+
+class HttpDownload:
+    class Test(test_suite.Lwm2mSingleServerTest):
+        def make_request_handler(self):
+            raise NotImplementedError
+
+        def _create_server(self):
+            return http.server.HTTPServer(('', 0), self.make_request_handler())
+
+        def cv_wait(self):
+            with self._response_cv:
+                self._response_cv.wait()
+
+        def cv_notify_all(self):
+            with self._response_cv:
+                self._response_cv.notify_all()
+
+        def setUp(self, *args, **kwargs):
+            self.http_server = self._create_server()
+            self._response_cv = threading.Condition()
+
+            super().setUp(*args, **kwargs)
+
+            self.server_thread = threading.Thread(target=lambda: self.http_server.serve_forever())
+            self.server_thread.start()
+
+        def tearDown(self):
+            try:
+                super().tearDown()
+            finally:
+                self.cv_notify_all()
+                self.http_server.shutdown()
+                self.server_thread.join()
+
+class HttpSinglePacketDownloadDoesNotHangIfRemoteServerDoesntCloseConnection(HttpDownload.Test):
+    CONTENT = b'foo'
+
+    def make_request_handler(self):
+        test_case = self
+
+        class RequestHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(http.HTTPStatus.OK)
+                self.send_header('Content-type', 'text/plain')
+                self.send_header('Content-length', str(len(test_case.CONTENT)))
+                self.end_headers()
+                self.wfile.write(test_case.CONTENT)
+                self.wfile.flush()
+
+                # Returning from this method makes the server close a TCP
+                # connection. Prevent this to check if the client behaves
+                # correctly even if server does not do this.
+                test_case.cv_wait()
+
+            def log_request(code='-', size='-'):
+                # don't display logs on successful request
+                pass
+
+        return RequestHandler
+
+    def runTest(self):
+        with tempfile.NamedTemporaryFile() as temp_file:
+            self.communicate('download http://127.0.0.1:%s %s' % (
+                self.http_server.server_address[1], temp_file.name))
+
+        LIMIT_S = 10
+        for _ in range(LIMIT_S * 10):
+            # when download finishes, its socket gets closed, leaving only LwM2M one
+            if self.get_socket_count() <= 1:
+                break
+            time.sleep(0.1)
+        else:
+            self.fail('download not completed on time')
+
+
+class HttpDownloadDoesNotBlockOnNoPayloadAfterHeaders(HttpDownload.Test):
+    CONTENT = b'foo'
+
+    def make_request_handler(self):
+        test_case = self
+
+        class RequestHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(http.HTTPStatus.OK)
+                self.send_header('Content-type', 'text/plain')
+                self.send_header('Content-length', str(len(test_case.CONTENT)))
+                self.end_headers()
+                self.wfile.flush()
+
+                # stop transferring data after receiving headers
+                test_case.cv_wait()
+
+                self.wfile.write(test_case.CONTENT)
+                self.wfile.flush()
+
+            def log_request(code='-', size='-'):
+                # don't display logs on successful request
+                pass
+
+        return RequestHandler
+
+    def runTest(self):
+        with tempfile.NamedTemporaryFile() as temp_file:
+            self.communicate('download http://127.0.0.1:%s %s' % (
+                self.http_server.server_address[1], temp_file.name))
+
+            # at this point, download should be started
+            # make sure that it does not block regular client operation
+            self.communicate('send-update', timeout=15)
+            self.assertDemoUpdatesRegistration()
+
+            self.cv_notify_all()

@@ -53,6 +53,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
         .mode = (avs_net_security_mode_t) -1
     },
     .attr_storage_file = NULL,
+    .disable_server_initiated_bootstrap = false,
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -103,13 +104,13 @@ static int parse_security_mode(const char *mode_string,
 static const char *help_arg_list(const struct option *opt) {
     switch (opt->has_arg) {
     case required_argument:
-        return "ARG";
+        return " ARG";
     case optional_argument:
-        return "[ ARG ]";
+        return "[=ARG]";
     case no_argument:
-        return "";
+        return " ";
     default:
-        return "<ERROR>";
+        return " <ERROR>";
     }
 }
 
@@ -122,7 +123,10 @@ static void print_option_help(const struct option *opt) {
     } HELP_INFO[] = {
         { 'a', "OBJECT_ID SHORT_SERVER_ID", NULL,
           "allow Short Server ID to instantiate Object ID." },
-        { 'b', NULL, NULL, "treat first URI as Bootstrap Server." },
+        { 'b', "client-initiated-only", NULL,
+          "treat first URI as Bootstrap Server. Unless the optional "
+          "\"client-initiated-only\" is specified, both Client-Initiated and "
+          "Server-Initiated bootstrap modes are available." },
         { 'H', "SECONDS", "0",
           "number of seconds to wait before attempting "
           "Client Initiated Bootstrap." },
@@ -148,7 +152,7 @@ static void print_option_help(const struct option *opt) {
         { 'K', "PRIVATE_KEY_FILE", "$(dirname $0)/../certs/client.key.der",
           "DER-formatted PKCS#8 private key complementary to the certificate "
           "specified with -C. Mutually exclusive with -k" },
-        { 'q', "[BINDING_MODE=UQ]", "U", "set the Binding Mode to use." },
+        { 'q', "BINDING_MODE=UQ", "U", "set the Binding Mode to use." },
         { 's', "MODE", NULL, "set security mode, one of: psk rpk cert nosec." },
         { 'u', "URI", DEFAULT_CMDLINE_ARGS.connection_args.servers[0].uri,
           "server URI to use. Note: coap:// URIs require --security-mode nosec "
@@ -199,20 +203,24 @@ static void print_option_help(const struct option *opt) {
         description_offset -= 4;
     }
 
-    int chars_written;
-    fprintf(stderr, "--%s %n", opt->name, &chars_written);
+    int chars_written = 0;
+    fprintf(stderr, "--%s%n", opt->name, &chars_written);
 
+    int padding = description_offset - chars_written - 1;
     for (size_t i = 0; i < ARRAY_SIZE(HELP_INFO); ++i) {
         if (opt->val == HELP_INFO[i].opt_val) {
-            int padding = description_offset - chars_written;
-            if (HELP_INFO[i].args) {
-                int arg_length = (int) strlen(HELP_INFO[i].args);
-                if (arg_length + 1 > padding) {
-                    padding = arg_length + 1;
-                }
+            const char *args = HELP_INFO[i].args ? HELP_INFO[i].args : "";
+            const char *arg_prefix = "";
+            const char *arg_suffix = "";
+            if (opt->has_arg == required_argument) {
+                arg_prefix = " ";
+            } else if (opt->has_arg == optional_argument) {
+                arg_prefix = "[=";
+                arg_suffix = "]";
             }
-            fprintf(stderr, "%*s- %s", (padding > 0 ? -padding : 0),
-                    HELP_INFO[i].args ? HELP_INFO[i].args : "",
+            padding -= (int) (strlen(arg_prefix) + strlen(args));
+            fprintf(stderr, "%s%s%*s - %s",
+                    arg_prefix, args, padding > 0 ? -padding : 0, arg_suffix,
                     HELP_INFO[i].help);
             if (HELP_INFO[i].default_value) {
                 fprintf(stderr, " (default: %s)", HELP_INFO[i].default_value);
@@ -222,7 +230,8 @@ static void print_option_help(const struct option *opt) {
         }
     }
 
-    fprintf(stderr, "%-15s - [NO DESCRIPTION]\n", help_arg_list(opt));
+    fprintf(stderr, "%*s - [NO DESCRIPTION]\n",
+            padding > 0 ? -padding : 0, help_arg_list(opt));
 }
 
 static int parse_i32(const char *str, int32_t *out_value) {
@@ -359,7 +368,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 
     const struct option options[] = {
         { "access-entry",                  required_argument, 0, 'a' },
-        { "bootstrap",                     no_argument,       0, 'b' },
+        { "bootstrap",                     optional_argument, 0, 'b' },
         { "bootstrap-holdoff",             required_argument, 0, 'H' },
         { "bootstrap-timeout",             required_argument, 0, 'T' },
         { "endpoint-name",                 required_argument, 0, 'e' },
@@ -455,6 +464,17 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         }
         case 'b':
             parsed_args->connection_args.servers[0].is_bootstrap = true;
+            if (optarg && *optarg) {
+                if (strcmp(optarg, "client-initiated-only") == 0) {
+                    parsed_args->disable_server_initiated_bootstrap = true;
+                } else {
+                    demo_log(ERROR,
+                             "Invalid bootstrap optional argument: \"%s\"; "
+                             "available options: client-initiated-only",
+                             optarg);
+                    goto finish;
+                }
+            }
             break;
         case 'H':
             if (parse_i32(optarg,

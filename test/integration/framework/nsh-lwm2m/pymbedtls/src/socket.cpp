@@ -348,6 +348,8 @@ unique_ptr<Socket> ServerSocket::accept(py::object handshake_timeouts_s) {
 
     call_method<void>(client_py_sock, "bind", bound_addr);
 
+    // we have called recvfrom() on py_socket_ and we now want that data
+    // to show up on the client_socket - so let's swap them
     swap(py_socket_, client_py_sock);
 
     call_method<void>(client_py_sock, "connect", remote_addr);

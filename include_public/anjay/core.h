@@ -88,30 +88,40 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
     }
 
 typedef struct anjay_configuration {
-    /** Endpoint name as presented to the LwM2M server. Must be non-NULL, or
-     * otherwise @ref anjay_new() will fail. */
+    /**
+     * Endpoint name as presented to the LwM2M server. Must be non-NULL, or
+     * otherwise @ref anjay_new() will fail.
+     */
     const char *endpoint_name;
 
-    /** UDP port number that all listening sockets will be bound to. It may be
+    /**
+     * UDP port number that all listening sockets will be bound to. It may be
      * left at 0 - in that case, connection with each server will use a freshly
-     * generated ephemeral port number. */
+     * generated ephemeral port number.
+     */
     uint16_t udp_listen_port;
 
-    /** DTLS version to use for communication. AVS_NET_SSL_VERSION_DEFAULT will
+    /**
+     * DTLS version to use for communication. AVS_NET_SSL_VERSION_DEFAULT will
      * be automatically mapped to AVS_NET_SSL_VERSION_TLSv1_2, which is the
-     * version mandated by LwM2M specification. */
+     * version mandated by LwM2M specification.
+     */
     avs_net_ssl_version_t dtls_version;
 
-    /** Maximum size of a single incoming CoAP message. Decreasing this value
+    /**
+     * Maximum size of a single incoming CoAP message. Decreasing this value
      * reduces memory usage, but packets bigger than this value will
-     * be dropped. */
+     * be dropped.
+     */
     size_t in_buffer_size;
 
-    /** Maximum size of a single outgoing CoAP message. If the message exceeds
+    /**
+     * Maximum size of a single outgoing CoAP message. If the message exceeds
      * this size, the library performs the block-wise CoAP transfer
      * ( https://tools.ietf.org/html/rfc7959 ).
      * NOTE: in case of block-wise transfers, this value limits the payload size
-     * for a single block, not the size of a whole packet. */
+     * for a single block, not the size of a whole packet.
+     */
     size_t out_buffer_size;
 
     /**
@@ -124,7 +134,8 @@ typedef struct anjay_configuration {
      */
     size_t msg_cache_size;
 
-    /** Socket configuration to use when creating UDP sockets.
+    /**
+     * Socket configuration to use when creating UDP sockets.
      *
      * Note that:
      * - <c>reuse_addr</c> will be forced to true.
@@ -156,33 +167,41 @@ typedef struct anjay_configuration {
      */
     const avs_coap_tx_params_t *sms_tx_params;
 
-    /** Controls whether Notify operations are conveyed using Confirmable CoAP
-     * messages by default. */
+    /**
+     * Controls whether Notify operations are conveyed using Confirmable CoAP
+     * messages by default.
+     */
     bool confirmable_notifications;
 
-    /** Specifies the cellular modem driver to use, enabling the SMS transport
+    /**
+     * Specifies the cellular modem driver to use, enabling the SMS transport
      * if not NULL.
      *
      * NOTE: in the Apache-licensed version of Anjay, this feature is not
      * supported, this field exists only for API compatibility with the
-     * commercial version, and setting it to non-NULL will cause an error. */
+     * commercial version, and setting it to non-NULL will cause an error.
+     */
     anjay_smsdrv_t *sms_driver;
 
-    /** Phone number at which the local device is reachable, formatted as an
+    /**
+     * Phone number at which the local device is reachable, formatted as an
      * MSISDN (international number without neither the international dialing
      * prefix nor the "+" sign).
      *
      * NOTE: Either both <c>sms_driver</c> and <c>local_msisdn</c> have to be
-     * <c>NULL</c>, or both have to be non-<c>NULL</c>. */
+     * <c>NULL</c>, or both have to be non-<c>NULL</c>.
+     */
     const char *local_msisdn;
 
-    /** If set to true, Anjay will prefer using Concatenated SMS messages when
+    /**
+     * If set to true, Anjay will prefer using Concatenated SMS messages when
      * seding large chunks of data over the SMS transport.
      *
      * NOTE: This is only a preference; even if set to true, Concatenated SMS
      * may not be used e.g. when the SMS driver does not support it; even if set
      * to false, Concatenated SMS may be used in cases when it is impossible to
-     * split the message in another way, e.g. during DTLS handshake. */
+     * split the message in another way, e.g. during DTLS handshake.
+     */
     bool prefer_multipart_sms;
 
     /**
@@ -197,6 +216,18 @@ typedef struct anjay_configuration {
      * call e.g. @ref anjay_schedule_reconnect() method.
      */
     const uint32_t *max_icmp_failures;
+
+    /**
+     * If set to true, connection to the Bootstrap Server will be closed
+     * immediately after making a successful connection to any regular LwM2M
+     * Server and only opened again if (re)connection to a regular server is
+     * rejected.
+     *
+     * If set to false, Server-Initiated Bootstrap is possible, i.e. the
+     * Bootstrap Server can reach the client at any time to re-initiate the
+     * bootstrap sequence.
+     */
+    bool disable_server_initiated_bootstrap;
 } anjay_configuration_t;
 
 /**

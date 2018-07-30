@@ -655,7 +655,7 @@ static int64_t duration_to_ns(avs_time_duration_t ts) {
 
 AVS_UNIT_TEST(bootstrap_backoff, backoff) {
     DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
-    AVS_UNIT_ASSERT_SUCCESS(schedule_request_bootstrap(anjay, 0));
+    AVS_UNIT_ASSERT_SUCCESS(schedule_request_bootstrap(anjay));
 
     // after initial failure, Request Bootstrap requests are re-sent with
     // exponential backoff with a factor of 2, starting with 3s, capped at 120s
@@ -692,7 +692,7 @@ AVS_UNIT_TEST(bootstrap_backoff, backoff) {
 
 AVS_UNIT_TEST(bootstrap_reconnect, reconnect) {
     DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
-    AVS_UNIT_ASSERT_SUCCESS(schedule_request_bootstrap(anjay, 0));
+    AVS_UNIT_ASSERT_SUCCESS(schedule_request_bootstrap(anjay));
 
     avs_unit_mocksock_output_fail(mocksocks[0], -1);
     avs_unit_mocksock_expect_errno(mocksocks[0], ECONNRESET);

@@ -118,30 +118,29 @@ bool _anjay_can_retry_with_normal_server(anjay_t *anjay) {
     return false;
 }
 
+bool _anjay_should_retry_bootstrap(anjay_t *anjay) {
 #ifdef WITH_BOOTSTRAP
-static bool should_retry_bootstrap(anjay_t *anjay) {
     if (anjay->bootstrap.in_progress) {
         // Bootstrap already in progress, no need to retry
         return false;
     }
-    bool bootstrap_server_found = false;
+    bool bootstrap_server_exists = false;
     AVS_LIST(anjay_server_info_t) it;
     AVS_LIST_FOREACH(it, AVS_LIST_NEXT(anjay->servers->servers)) {
-        if (_anjay_server_active(it)) {
-            if (it->ssid == ANJAY_SSID_BOOTSTRAP) {
-                bootstrap_server_found = true;
-            } else {
-                // Bootstrap Server is not the only active one
-                return false;
-            }
+        if (it->ssid == ANJAY_SSID_BOOTSTRAP) {
+            bootstrap_server_exists = true;
+        } else if (_anjay_server_active(it)) {
+            // Bootstrap Server is not the only active one
+            return false;
         }
     }
-    return bootstrap_server_found
+    return bootstrap_server_exists
             && !_anjay_can_retry_with_normal_server(anjay);
-}
 #else // WITH_BOOTSTRAP
-# define should_retry_bootstrap(...) false
+    (void) anjay;
+    return false;
 #endif // WITH_BOOTSTRAP
+}
 
 bool anjay_all_connections_failed(anjay_t *anjay) {
     if (!anjay->servers->servers) {
@@ -189,31 +188,31 @@ activate_server_job(anjay_t *anjay, void *ssid_) {
         *num_icmp_failures = anjay->max_icmp_failures;
     }
 
-    if (*num_icmp_failures >= anjay->max_icmp_failures) {
-        if (ssid == ANJAY_SSID_BOOTSTRAP) {
-            anjay_log(DEBUG, "Bootstrap Server could not be reached. "
-                             "Disabling all communication.");
-            // Abort any further bootstrap retries.
-            _anjay_bootstrap_cleanup(anjay);
-        } else {
-            if (_anjay_dm_ssid_exists(anjay, ANJAY_SSID_BOOTSTRAP)) {
-                if (should_retry_bootstrap(anjay)) {
-                    _anjay_bootstrap_account_prepare(anjay);
-                }
-            } else {
-                anjay_log(DEBUG,
-                          "Non-Bootstrap Server %" PRIu16
-                          " could not be reached.",
-                          ssid);
-            }
-        }
-        // kill this job.
-        (*server_ptr)->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
-        return ANJAY_SCHED_FINISH;
+    if (*num_icmp_failures < anjay->max_icmp_failures) {
+        // We had a failure with either a bootstrap or a non-bootstrap server,
+        // retry till it's possible.
+        return ANJAY_SCHED_RETRY;
     }
-    // We had a failure with either a bootstrap or a non-bootstrap server,
-    // retry till it's possible.
-    return ANJAY_SCHED_RETRY;
+
+    if (ssid == ANJAY_SSID_BOOTSTRAP) {
+        anjay_log(DEBUG, "Bootstrap Server could not be reached. "
+                         "Disabling all communication.");
+        // Abort any further bootstrap retries.
+        _anjay_bootstrap_cleanup(anjay);
+    } else if (_anjay_should_retry_bootstrap(anjay)) {
+        if (_anjay_servers_find_active(anjay->servers, ANJAY_SSID_BOOTSTRAP)) {
+            _anjay_bootstrap_account_prepare(anjay);
+        } else {
+            anjay_enable_server(anjay, ANJAY_SSID_BOOTSTRAP);
+        }
+    } else {
+        anjay_log(DEBUG,
+                  "Non-Bootstrap Server %" PRIu16 " could not be reached.",
+                  ssid);
+    }
+    // kill this job.
+    (*server_ptr)->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
+    return ANJAY_SCHED_FINISH;
 }
 
 int _anjay_server_sched_activate(anjay_t *anjay,

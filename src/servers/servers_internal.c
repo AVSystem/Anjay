@@ -410,6 +410,15 @@ int anjay_enable_server(anjay_t *anjay,
         return -1;
     }
 
+    if (ssid == ANJAY_SSID_BOOTSTRAP
+            && !_anjay_bootstrap_server_initiated_allowed(anjay)
+            && !_anjay_should_retry_bootstrap(anjay)) {
+        anjay_log(TRACE, "Server-Initiated Bootstrap is disabled and "
+                         "Client-Initiated Bootstrap is currently not allowed, "
+                         "not enabling Bootstrap Server");
+        return -1;
+    }
+
     return _anjay_server_sched_activate(anjay, *server_ptr,
                                         AVS_TIME_DURATION_ZERO);
 }

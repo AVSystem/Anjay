@@ -133,8 +133,13 @@ static int reload_server_by_ssid(anjay_t *anjay,
     }
 
     _anjay_servers_add(anjay->servers, new_server);
-    return _anjay_server_sched_activate(anjay, new_server,
-                                        AVS_TIME_DURATION_ZERO);
+    int result = 0;
+    if (ssid != ANJAY_SSID_BOOTSTRAP
+            || _anjay_bootstrap_server_initiated_allowed(anjay)) {
+        result = _anjay_server_sched_activate(anjay, new_server,
+                                              AVS_TIME_DURATION_ZERO);
+    }
+    return result;
 }
 
 typedef struct {
@@ -177,10 +182,30 @@ static void reload_servers_sched_job(anjay_t *anjay, void *unused) {
 
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
-    if (obj && (_anjay_dm_foreach_instance(anjay, obj,
-                                           reload_server_by_security_iid,
-                                           &reload_state)
-                    || reload_state.retval)) {
+    if (obj
+            && _anjay_dm_foreach_instance(anjay, obj,
+                                          reload_server_by_security_iid,
+                                          &reload_state)
+            && !reload_state.retval) {
+        reload_state.retval = -1;
+    }
+
+    // If the only entry we have is a bootstrap server that's inactive and not
+    // scheduled for activation - schedule that. It's necessary to perform
+    // Client-Initiated Bootstrap if Server-Initiated Bootstrap is disabled in
+    // configuration.
+    if (!reload_state.retval
+            && anjay->servers->servers
+            && !AVS_LIST_NEXT(anjay->servers->servers)
+            && anjay->servers->servers->ssid == ANJAY_SSID_BOOTSTRAP
+            && !_anjay_server_active(anjay->servers->servers)
+            && !anjay->servers->servers->sched_update_or_reactivate_handle
+            && !anjay->servers->servers->data_inactive.reactivate_failed) {
+        reload_state.retval = _anjay_server_sched_activate(
+                anjay, anjay->servers->servers, AVS_TIME_DURATION_ZERO);
+    }
+
+    if (reload_state.retval) {
         // re-add old servers, don't discard them
         AVS_LIST(anjay_server_info_t) *server_ptr;
         AVS_LIST(anjay_server_info_t) helper;

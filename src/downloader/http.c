@@ -90,6 +90,56 @@ static inline bool etag_matches(const anjay_etag_t *etag,
             && memcmp(etag->value, &text[1], etag->size) == 0;
 }
 
+static void handle_http_packet(anjay_downloader_t *dl,
+                               AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
+    anjay_t *anjay = _anjay_downloader_get_anjay(dl);
+
+    int nonblock_read_ready;
+    do {
+        size_t bytes_read;
+        char message_finished = 0;
+        if (avs_stream_read(ctx->stream, &bytes_read, &message_finished,
+                            anjay->in_buffer, anjay->in_buffer_size)) {
+            _anjay_downloader_abort_transfer(dl, ctx_ptr,
+                                             ANJAY_DOWNLOAD_ERR_FAILED,
+                                             avs_stream_errno(ctx->stream));
+            return;
+        }
+        if (bytes_read) {
+            assert(ctx->bytes_written >= ctx->bytes_downloaded);
+            if (ctx->bytes_downloaded + bytes_read > ctx->bytes_written) {
+                size_t bytes_to_write = ctx->bytes_downloaded + bytes_read
+                        - ctx->bytes_written;
+                assert(bytes_read >= bytes_to_write);
+                if (ctx->common.on_next_block(
+                            anjay,
+                            &anjay->in_buffer[bytes_read - bytes_to_write],
+                            bytes_to_write, ctx->etag,
+                            ctx->common.user_data)) {
+                    _anjay_downloader_abort_transfer(
+                            dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED, errno);
+                    return;
+                }
+                ctx->bytes_written += bytes_to_write;
+            }
+            ctx->bytes_downloaded += bytes_read;
+        }
+        if (message_finished) {
+            dl_log(INFO, "HTTP transfer id = %" PRIuPTR " finished",
+                   ctx->common.id);
+            _anjay_downloader_abort_transfer(dl, ctx_ptr, 0, 0);
+            return;
+        }
+        if ((nonblock_read_ready = avs_stream_nonblock_read_ready(ctx->stream))
+                < 0) {
+            _anjay_downloader_abort_transfer(dl, ctx_ptr,
+                                             ANJAY_DOWNLOAD_ERR_FAILED, EIO);
+            return;
+        }
+    } while (nonblock_read_ready > 0);
+}
+
 static void send_request(anjay_t *anjay, void *id_) {
     int error_code = ANJAY_DOWNLOAD_ERR_FAILED;
     uintptr_t id = (uintptr_t) id_;
@@ -170,6 +220,29 @@ static void send_request(anjay_t *anjay, void *id_) {
         }
     }
     avs_http_set_header_storage(ctx->stream, NULL);
+
+    /*
+     * If the whole downloaded file is small enough and is received before
+     * we end handling HTTP headers, it may be read by the underlying
+     * buffered_netstream alongside the last chunk of HTTP headers. In that
+     * case, the poll()/select() recommended for use in main program loop
+     * will never report data being available on the download socket, even
+     * though we have *some* data cached in the buffered_netstream internal
+     * buffer. We avoid this case by explicitly handling any buffered data
+     * here.
+     *
+     * Also, we must not call handle_http_packet unconditionally, because if
+     * there is no data buffered, the call would block waiting until a first
+     * chunk of data is received from the server.
+     */
+    result = avs_stream_nonblock_read_ready(ctx->stream);
+    if (result < 0) {
+        error_code = ANJAY_DOWNLOAD_ERR_FAILED;
+        result = avs_stream_errno(ctx->stream);
+        goto error;
+    } else if (result > 0) {
+        handle_http_packet(&anjay->downloader, ctx_ptr);
+    }
     return;
 error:
     _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
@@ -187,56 +260,6 @@ static int get_http_socket(anjay_downloader_t *dl,
     }
     *out_transport = ANJAY_SOCKET_TRANSPORT_TCP;
     return 0;
-}
-
-static void handle_http_packet(anjay_downloader_t *dl,
-                               AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
-    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
-    anjay_t *anjay = _anjay_downloader_get_anjay(dl);
-
-    int nonblock_read_ready;
-    do {
-        size_t bytes_read;
-        char message_finished = 0;
-        if (avs_stream_read(ctx->stream, &bytes_read, &message_finished,
-                            anjay->in_buffer, anjay->in_buffer_size)) {
-            _anjay_downloader_abort_transfer(dl, ctx_ptr,
-                                             ANJAY_DOWNLOAD_ERR_FAILED,
-                                             avs_stream_errno(ctx->stream));
-            return;
-        }
-        if (bytes_read) {
-            assert(ctx->bytes_written >= ctx->bytes_downloaded);
-            if (ctx->bytes_downloaded + bytes_read > ctx->bytes_written) {
-                size_t bytes_to_write = ctx->bytes_downloaded + bytes_read
-                        - ctx->bytes_written;
-                assert(bytes_read >= bytes_to_write);
-                if (ctx->common.on_next_block(
-                            anjay,
-                            &anjay->in_buffer[bytes_read - bytes_to_write],
-                            bytes_to_write, ctx->etag,
-                            ctx->common.user_data)) {
-                    _anjay_downloader_abort_transfer(
-                            dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED, errno);
-                    return;
-                }
-                ctx->bytes_written += bytes_to_write;
-            }
-            ctx->bytes_downloaded += bytes_read;
-        }
-        if (message_finished) {
-            dl_log(INFO, "HTTP transfer id = %" PRIuPTR " finished",
-                   ctx->common.id);
-            _anjay_downloader_abort_transfer(dl, ctx_ptr, 0, 0);
-            return;
-        }
-        if ((nonblock_read_ready = avs_stream_nonblock_read_ready(ctx->stream))
-                < 0) {
-            _anjay_downloader_abort_transfer(dl, ctx_ptr,
-                                             ANJAY_DOWNLOAD_ERR_FAILED, EIO);
-            return;
-        }
-    } while (nonblock_read_ready > 0);
 }
 
 static void cleanup_http_transfer(anjay_downloader_t *dl,
