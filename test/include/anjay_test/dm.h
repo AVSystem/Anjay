@@ -208,8 +208,18 @@ static const anjay_dm_object_def_t *const OBJ_WITH_RES_OPS =
 
 #define DM_TEST_FINISH _anjay_test_dm_finish(anjay)
 
-#define DM_TEST_EXPECT_RESPONSE(Mocksock, Response) \
-    avs_unit_mocksock_expect_output(Mocksock, Response, sizeof(Response) - 1)
+#define DM_TEST_EXPECT_RESPONSE(Mocksock, Type, Code, Id, \
+    .../* Payload, Opts... */) do { \
+    const avs_coap_msg_t *response = COAP_MSG(Type, Code, Id, __VA_ARGS__); \
+    avs_unit_mocksock_expect_output(Mocksock, response->content, \
+                                    response->length); \
+} while (0)
+
+#define DM_TEST_REQUEST(Mocksock, Type, Code, Id, \
+    .../* Payload, Opts... */) do { \
+    const avs_coap_msg_t *request = COAP_MSG(Type, Code, Id, __VA_ARGS__); \
+    avs_unit_mocksock_input(Mocksock, request->content, request->length); \
+} while (0)
 
 #define DM_TEST_EXPECT_READ_NULL_ATTRS(Ssid, Iid, Rid) do { \
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, Iid, 1); \

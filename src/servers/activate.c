@@ -20,6 +20,7 @@
 #include <avsystem/commons/errno.h>
 
 #include "../dm/query.h"
+#include "../servers_utils.h"
 
 #define ANJAY_SERVERS_INTERNALS
 
@@ -38,6 +39,40 @@ typedef enum {
     IAS_CONNECTION_ERROR
 } initialize_active_server_result_t;
 
+static int read_server_uri(anjay_t *anjay,
+                           anjay_iid_t security_iid,
+                           anjay_url_t *out_uri) {
+    char raw_uri[ANJAY_MAX_URL_RAW_LENGTH];
+
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SERVER_URI);
+
+    if (_anjay_dm_res_read_string(anjay, &path, raw_uri, sizeof(raw_uri))) {
+        anjay_log(ERROR, "could not read LwM2M server URI");
+        return -1;
+    }
+
+    anjay_url_t uri = ANJAY_URL_EMPTY;
+    if (_anjay_parse_url(raw_uri, &uri)) {
+        _anjay_url_cleanup(&uri);
+        anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
+        return -1;
+    }
+    if (!*uri.port) {
+        switch (uri.protocol) {
+        case ANJAY_URL_PROTOCOL_COAP:
+            strcpy(uri.port, "5683");
+            break;
+        case ANJAY_URL_PROTOCOL_COAPS:
+            strcpy(uri.port, "5684");
+            break;
+        }
+    }
+    *out_uri = uri;
+    return 0;
+}
+
 static initialize_active_server_result_t
 initialize_active_server(anjay_t *anjay, anjay_server_info_t *server) {
     if (anjay_is_offline(anjay)) {
@@ -54,8 +89,7 @@ initialize_active_server(anjay_t *anjay, anjay_server_info_t *server) {
     int refresh_result;
     if (_anjay_find_security_iid(anjay, server->ssid, &security_iid)) {
         anjay_log(ERROR, "could not find server Security IID");
-    } else if (!_anjay_server_get_uri(anjay, security_iid,
-                                      &server->data_active.uri)) {
+    } else if (!read_server_uri(anjay, security_iid, &server->data_active.uri)) {
         if ((refresh_result = _anjay_active_server_refresh(anjay, server))) {
             anjay_log(TRACE, "could not initialize sockets for SSID %u",
                       server->ssid);
@@ -142,6 +176,11 @@ bool _anjay_should_retry_bootstrap(anjay_t *anjay) {
 #endif // WITH_BOOTSTRAP
 }
 
+/**
+ * Checks whether all servers are inactive and have reached the limit of ICMP
+ * failures (see the activation flow described in
+ * _anjay_schedule_reload_servers() docs for details).
+ */
 bool anjay_all_connections_failed(anjay_t *anjay) {
     if (!anjay->servers->servers) {
         return false;
@@ -157,26 +196,24 @@ bool anjay_all_connections_failed(anjay_t *anjay) {
     return true;
 }
 
-static anjay_sched_retryable_result_t
-activate_server_job(anjay_t *anjay, void *ssid_) {
-    anjay_ssid_t ssid = (anjay_ssid_t) (uintptr_t) ssid_;
+static void activate_server_job(anjay_t *anjay, const void *ssid_ptr) {
+    anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
 
     AVS_LIST(anjay_server_info_t) *server_ptr =
             _anjay_servers_find_ptr(anjay->servers, ssid);
 
     if (!server_ptr || _anjay_server_active(*server_ptr)) {
         anjay_log(TRACE, "not an inactive server: SSID = %u", ssid);
-        return ANJAY_SCHED_FINISH;
+        return;
     }
 
     initialize_active_server_result_t registration_result =
             initialize_active_server(anjay, *server_ptr);
     if (registration_result == IAS_SUCCESS) {
-        return ANJAY_SCHED_FINISH;
+        return;
     }
 
     _anjay_server_clean_active_data(anjay, *server_ptr);
-    (*server_ptr)->data_active.needs_reload = false;
     (*server_ptr)->data_inactive.reactivate_failed = true;
     uint32_t *num_icmp_failures =
             &(*server_ptr)->data_inactive.num_icmp_failures;
@@ -191,7 +228,13 @@ activate_server_job(anjay_t *anjay, void *ssid_) {
     if (*num_icmp_failures < anjay->max_icmp_failures) {
         // We had a failure with either a bootstrap or a non-bootstrap server,
         // retry till it's possible.
-        return ANJAY_SCHED_RETRY;
+        if (_anjay_servers_schedule_next_retryable(
+                anjay->sched, *server_ptr, activate_server_job, ssid)) {
+            anjay_log(ERROR,
+                      "could not reschedule reactivate job for server SSID %u",
+                      ssid);
+        }
+        return;
     }
 
     if (ssid == ANJAY_SSID_BOOTSTRAP) {
@@ -200,7 +243,7 @@ activate_server_job(anjay_t *anjay, void *ssid_) {
         // Abort any further bootstrap retries.
         _anjay_bootstrap_cleanup(anjay);
     } else if (_anjay_should_retry_bootstrap(anjay)) {
-        if (_anjay_servers_find_active(anjay->servers, ANJAY_SSID_BOOTSTRAP)) {
+        if (_anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP)) {
             _anjay_bootstrap_account_prepare(anjay);
         } else {
             anjay_enable_server(anjay, ANJAY_SSID_BOOTSTRAP);
@@ -212,7 +255,6 @@ activate_server_job(anjay_t *anjay, void *ssid_) {
     }
     // kill this job.
     (*server_ptr)->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
-    return ANJAY_SCHED_FINISH;
 }
 
 int _anjay_server_sched_activate(anjay_t *anjay,
@@ -224,12 +266,10 @@ int _anjay_server_sched_activate(anjay_t *anjay,
             avs_time_real_add(avs_time_real_now(), reactivate_delay);
     server->data_inactive.reactivate_failed = false;
     server->data_inactive.num_icmp_failures = 0;
-    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
-    if (_anjay_sched_retryable(anjay->sched,
-                               &server->sched_update_or_reactivate_handle,
-                               reactivate_delay, ANJAY_SERVER_RETRYABLE_BACKOFF,
-                               activate_server_job,
-                               (void *) (uintptr_t) server->ssid)) {
+    _anjay_sched_del(anjay->sched, &server->next_action_handle);
+    if (_anjay_servers_schedule_first_retryable(
+            anjay->sched, server, reactivate_delay,
+            activate_server_job, server->ssid)) {
         anjay_log(TRACE, "could not schedule reactivate job for server SSID %u",
                   server->ssid);
         return -1;

@@ -19,29 +19,9 @@
 #include <avsystem/commons/unit/test.h>
 #include <anjay_test/mock_clock.h>
 
-static void increment_task(anjay_t *anjay, void *counter_) {
+static void increment_task(anjay_t *anjay, const void *counter_ptr_ptr) {
     (void)anjay;
-    ++*(int*)counter_;
-}
-
-static anjay_sched_retryable_result_t
-increment_and_succeed_task(anjay_t *anjay, void *counter_) {
-    (void)anjay;
-    ++*(int*)counter_;
-    return ANJAY_SCHED_FINISH;
-}
-
-static anjay_sched_retryable_result_t
-increment_and_fail_task(anjay_t *anjay, void *counter_) {
-    (void)anjay;
-    ++*(int*)counter_;
-    return ANJAY_SCHED_RETRY;
-}
-
-static anjay_sched_retryable_result_t
-return_result_task(anjay_t *anjay, void *value_) {
-    (void)anjay;
-    return *(anjay_sched_retryable_result_t*)value_;
+    ++**(int *const *) counter_ptr_ptr;
 }
 
 typedef struct {
@@ -66,7 +46,8 @@ AVS_UNIT_TEST(sched, sched_now) {
     int counter = 0;
     anjay_sched_handle_t task = NULL;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched_now(env.sched, &task, increment_task, &counter));
+            _anjay_sched_now(env.sched, &task, increment_task,
+                             &(int *) { &counter }, sizeof(int *)));
     AVS_UNIT_ASSERT_NOT_NULL(task);
     AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env.sched));
     AVS_UNIT_ASSERT_EQUAL(1, counter);
@@ -83,7 +64,8 @@ AVS_UNIT_TEST(sched, sched_delayed) {
     int counter = 0;
     anjay_sched_handle_t task = NULL;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched(env.sched, &task, delay, increment_task, &counter));
+            _anjay_sched(env.sched, &task, delay, increment_task,
+                         &(int *) { &counter }, sizeof(int *)));
     AVS_UNIT_ASSERT_NOT_NULL(task);
     AVS_UNIT_ASSERT_EQUAL(0, _anjay_sched_run(env.sched));
     AVS_UNIT_ASSERT_EQUAL(0, counter);
@@ -105,7 +87,8 @@ AVS_UNIT_TEST(sched, sched_del) {
     int counter = 0;
     anjay_sched_handle_t task = NULL;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched(env.sched, &task, delay, increment_task, &counter));
+            _anjay_sched(env.sched, &task, delay, increment_task,
+                         &(int *) { &counter }, sizeof(int *)));
     AVS_UNIT_ASSERT_NOT_NULL(task);
     AVS_UNIT_ASSERT_EQUAL(0, _anjay_sched_run(env.sched));
     AVS_UNIT_ASSERT_EQUAL(0, counter);
@@ -120,136 +103,14 @@ AVS_UNIT_TEST(sched, sched_del) {
     teardown_test(&env);
 }
 
-static void assert_executes_after_delay(sched_test_env_t *env,
-                                        avs_time_duration_t delay) {
-    avs_time_duration_t epsilon = avs_time_duration_from_scalar(1, AVS_TIME_MS);
-
-    avs_time_duration_t time_to_next;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(env->sched,
-                                                      &time_to_next));
-
-    AVS_UNIT_ASSERT_TRUE(avs_time_duration_less(time_to_next, delay));
-    delay = avs_time_duration_diff(delay, epsilon);
-    AVS_UNIT_ASSERT_TRUE(avs_time_duration_less(delay, time_to_next));
-
-    _anjay_mock_clock_advance(time_to_next);
-    AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env->sched));
-}
-
-AVS_UNIT_TEST(sched, retryable_retry) {
-    sched_test_env_t env = setup_test();
-
-    const anjay_sched_retryable_backoff_t backoff = {
-        .delay = avs_time_duration_from_scalar(1, AVS_TIME_S),
-        .max_delay = avs_time_duration_from_scalar(5, AVS_TIME_S)
-    };
-
-    int counter = 0;
-    anjay_sched_handle_t task = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched_retryable(env.sched, &task, AVS_TIME_DURATION_ZERO,
-                                   backoff, increment_and_fail_task, &counter));
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // initial execution
-    AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env.sched));
-    AVS_UNIT_ASSERT_EQUAL(1, counter);
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // first retry
-    assert_executes_after_delay(&env, backoff.delay);
-    AVS_UNIT_ASSERT_EQUAL(2, counter);
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // second retry
-    assert_executes_after_delay(&env, avs_time_duration_mul(backoff.delay, 2));
-    AVS_UNIT_ASSERT_EQUAL(3, counter);
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // third retry
-    assert_executes_after_delay(&env, avs_time_duration_mul(backoff.delay, 4));
-    AVS_UNIT_ASSERT_EQUAL(4, counter);
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // following attempts should use max_delay
-    assert_executes_after_delay(&env, backoff.max_delay);
-    AVS_UNIT_ASSERT_EQUAL(5, counter);
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    assert_executes_after_delay(&env, backoff.max_delay);
-    AVS_UNIT_ASSERT_EQUAL(6, counter);
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    teardown_test(&env);
-    AVS_UNIT_ASSERT_NULL(task);
-}
-
-AVS_UNIT_TEST(sched, retryable_success) {
-    sched_test_env_t env = setup_test();
-
-    const anjay_sched_retryable_backoff_t backoff = {
-        .delay = { 1, 0 },
-        .max_delay = { 4, 0 }
-    };
-
-    int counter = 0;
-    anjay_sched_handle_t task = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_retryable(
-            env.sched, &task, AVS_TIME_DURATION_ZERO, backoff,
-            increment_and_succeed_task, &counter));
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // initial execution - success
-    AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env.sched));
-    AVS_UNIT_ASSERT_EQUAL(1, counter);
-    AVS_UNIT_ASSERT_NULL(task);
-
-    // the task should not be repeated after success
-    avs_time_duration_t time_to_next;
-    AVS_UNIT_ASSERT_FAILED(_anjay_sched_time_to_next(env.sched, &time_to_next));
-
-    teardown_test(&env);
-}
-
-AVS_UNIT_TEST(sched, retryable_retry_then_success) {
-    sched_test_env_t env = setup_test();
-
-    const anjay_sched_retryable_backoff_t backoff = {
-        .delay = { 1, 0 },
-        .max_delay = { 4, 0 }
-    };
-
-    anjay_sched_retryable_result_t result = ANJAY_SCHED_RETRY;
-    anjay_sched_handle_t task = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_retryable(
-            env.sched, &task, AVS_TIME_DURATION_ZERO, backoff,
-            return_result_task, &result));
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // initial execution - fail
-    AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env.sched));
-    AVS_UNIT_ASSERT_NOT_NULL(task);
-
-    // first retry - succeed
-    result = ANJAY_SCHED_FINISH;
-    assert_executes_after_delay(&env, backoff.delay);
-    AVS_UNIT_ASSERT_NULL(task);
-
-    // the task should not be repeated after success
-    avs_time_duration_t time_to_next;
-    AVS_UNIT_ASSERT_FAILED(_anjay_sched_time_to_next(env.sched, &time_to_next));
-
-    teardown_test(&env);
-}
-
 typedef struct {
     anjay_sched_handle_t task;
     int n;
 } global_t;
 
-static void assert_task_null_oneshot_job(anjay_t *anjay, void *context) {
+static void assert_task_null_oneshot_job(anjay_t *anjay, const void *context) {
     (void) anjay;
-    global_t *global = (global_t *) context;
+    global_t *global = *(global_t *const *) context;
     AVS_UNIT_ASSERT_NULL(global->task);
 }
 
@@ -258,49 +119,10 @@ AVS_UNIT_TEST(sched, oneshot_job_handle_nullification) {
 
     global_t global = { NULL, 0 };
     AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_now(
-            env.sched, &global.task, assert_task_null_oneshot_job, &global));
+            env.sched, &global.task, assert_task_null_oneshot_job,
+            &(global_t *) { &global }, sizeof(global_t *)));
     AVS_UNIT_ASSERT_NOT_NULL(global.task);
     AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env.sched));
-    AVS_UNIT_ASSERT_NULL(global.task);
-    teardown_test(&env);
-}
-
-static anjay_sched_retryable_result_t
-assert_task_null_retryable_job(anjay_t *anjay, void *context) {
-    (void) anjay;
-    global_t *global = (global_t *) context;
-    AVS_UNIT_ASSERT_NULL(global->task);
-    if (global->n < 2) {
-        global->n++;
-        return ANJAY_SCHED_RETRY;
-    }
-    return ANJAY_SCHED_FINISH;
-}
-AVS_UNIT_TEST(sched, retryable_job_handle_nullification) {
-    sched_test_env_t env = setup_test();
-    const anjay_sched_retryable_backoff_t backoff = {
-        .delay = { 1, 0 },
-        .max_delay = { 5, 0 }
-    };
-    global_t global = { NULL, 0 };
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_retryable(
-            env.sched, &global.task, AVS_TIME_DURATION_ZERO, backoff,
-            assert_task_null_retryable_job, &global));
-    AVS_UNIT_ASSERT_NOT_NULL(global.task);
-
-    // Failure (n == 0)
-    AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env.sched));
-    AVS_UNIT_ASSERT_EQUAL(1, global.n);
-    AVS_UNIT_ASSERT_NOT_NULL(global.task);
-
-    // Failure (n == 1)
-    assert_executes_after_delay(&env, backoff.delay);
-    AVS_UNIT_ASSERT_EQUAL(2, global.n);
-    AVS_UNIT_ASSERT_NOT_NULL(global.task);
-
-    // Success (n == 2)
-    assert_executes_after_delay(&env, avs_time_duration_mul(backoff.delay, 2));
-    AVS_UNIT_ASSERT_EQUAL(2, global.n);
     AVS_UNIT_ASSERT_NULL(global.task);
     teardown_test(&env);
 }

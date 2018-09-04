@@ -36,7 +36,7 @@ except ImportError:
 
 T = TypeVar('T')
 
-def read_byte_with_timeout(fd, timeout_s):
+def read_some_with_timeout(fd, timeout_s):
     import select
     deadline = time.time() + timeout_s
     while True:
@@ -45,20 +45,28 @@ def read_byte_with_timeout(fd, timeout_s):
             return b''
         r, w, x = select.select([fd], [], [fd], partial_timeout)
         if len(r) > 0 or len(x) > 0:
-            buf = fd.read(1)
+            buf = fd.read(65536)
             if buf is not None and len(buf) > 0:
                 return buf
 
 
 def read_until_match(fd, regex, timeout_s):
     deadline = time.time() + timeout_s
-    out = b''
+    out = bytearray()
     while True:
+        # Retain only the last two lines - two, because the regexes sometimes check for the end-of-line
+        last_lf = out.rfind(b'\n')
+        if last_lf >= 0:
+            second_to_last_lf = out.rfind(b'\n', 0, last_lf)
+            if second_to_last_lf >= 0:
+                del out[0:second_to_last_lf + 1]
+
         partial_timeout = deadline - time.time()
         if partial_timeout < 0:
             return None
-        out += read_byte_with_timeout(fd, partial_timeout)
-        match = re.search(regex, out.decode(errors='replace'))
+        out += read_some_with_timeout(fd, partial_timeout)
+
+        match = re.search(regex, out)
         if match:
             return match
 
@@ -162,7 +170,7 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
-    def execute_resource(self, server, oid, iid, rid, content='', expect_error_code=None, **kwargs):
+    def execute_resource(self, server, oid, iid, rid, content=b'', expect_error_code=None, **kwargs):
         req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid), content=content)
         expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
@@ -309,7 +317,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         if timeout_s is not None:
             # wait until demo process starts
             if read_until_match(self.demo_process.log_file,
-                                regex=re.escape('*** ANJAY DEMO STARTUP FINISHED ***'),
+                                regex=re.escape(b'*** ANJAY DEMO STARTUP FINISHED ***'),
                                 timeout_s=timeout_s) is None:
                 raise self.failureException('demo executable did not start in time')
 
@@ -370,9 +378,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         # Also, if we haven't done this, there would be a possibility that _terminate_dumpcap() would be called before
         # full initialization of dumpcap - it would then essentially ignore the SIGTERM and our test would hang waiting
         # for dumpcap's termination that would never come.
-        dumpcap_stderr = b''
+        dumpcap_stderr = bytearray(b'')
         while True:
-            dumpcap_stderr += read_byte_with_timeout(self.dumpcap_process.stderr, 1)
+            dumpcap_stderr += read_some_with_timeout(self.dumpcap_process.stderr, 1)
             if b'File:' in dumpcap_stderr:
                 break
             if self.dumpcap_process.poll() is not None:
@@ -538,19 +546,22 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.demo_process.stdin.flush()
 
         if match_regex:
-            return read_until_match(self.demo_process.log_file, match_regex, timeout_s=timeout)
+            result = read_until_match(self.demo_process.log_file, match_regex.encode(), timeout_s=timeout)
+            if result is not None:
+                # we need to convert bytes-based match object to string-based one...
+                return re.search(match_regex, result.group(0).decode(errors='replace'))
 
         return None
 
     def read_logs_for(self, timeout_s):
         deadline = time.time() + timeout_s
-        out = b''
+        out = bytearray()
         self.seek_demo_log_to_end()
         while True:
             partial_timeout = deadline - time.time()
             if partial_timeout < 0:
                 break
-            out += read_byte_with_timeout(self.demo_process.log_file, partial_timeout)
+            out += read_some_with_timeout(self.demo_process.log_file, partial_timeout)
         return out.decode(errors='replace')
 
     def _terminate_demo_impl(self, demo, timeout_s):
@@ -617,6 +628,13 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
     def get_socket_count(self):
         return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
+
+    def wait_until_socket_count(self, expected, timeout_s):
+        deadline = time.time() + timeout_s
+        while self.get_socket_count() != expected:
+            if time.time() > deadline:
+                raise TimeoutError('Desired socket count not reached')
+            time.sleep(0.1)
 
     def get_non_lwm2m_socket_count(self):
         return int(self.communicate('non-lwm2m-socket-count',
@@ -714,13 +732,14 @@ class PcapEnabledTest(Lwm2mTest):
 
         with open(self.dumpcap_file_path, 'rb') as f:
             r = dpkt.pcapng.Reader(f)
-            return [decode_packet(pkt[1]).data for pkt in r.readpkts()]
+            for pkt in iter(r):
+                yield decode_packet(pkt[1]).data
 
-    def read_icmp_unreachable_packets(self):
-        result = []
+    def count_icmp_unreachable_packets(self):
+        result = 0
         for pkt in self.read_pcap():
             if isinstance(pkt, dpkt.ip.IP) and isinstance(pkt.data, dpkt.icmp.ICMP) and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach):
-                result.append(pkt)
+                result += 1
         return result
 
     def wait_until_icmp_unreachable_count(self, value, timeout_s=None, step_s=0.1):
@@ -728,7 +747,7 @@ class PcapEnabledTest(Lwm2mTest):
             timeout_s = self.DEFAULT_MSG_TIMEOUT
         deadline = time.time() + timeout_s
         while True:
-            if len(self.read_icmp_unreachable_packets()) >= value:
+            if self.count_icmp_unreachable_packets() >= value:
                 return
             if time.time() >= deadline:
                 raise TimeoutError('ICMP Unreachable packet not generated')

@@ -31,6 +31,7 @@
 
 #include "../content_format.h"
 #include "../coap_stream.h"
+#include "utils.h"
 
 #define TEST_PORT_UDP_ECHO 4322
 #define TEST_PORT_UDP_ACK 4323
@@ -198,9 +199,10 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL(id.token.size, 0);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69ED);
 
-        static const char RESPONSE[] = "\x50\x45\x69\xED";
-        avs_unit_mocksock_expect_output(mocksock, RESPONSE,
-                                        sizeof(RESPONSE) - 1);
+        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT, ID(0x69ED),
+                                                  NO_PAYLOAD);
+        avs_unit_mocksock_expect_output(mocksock, response->content,
+                                        response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
 
         // last request identity should be available until the stream is reset
@@ -223,9 +225,10 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL(id.token.size, 0);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69EE);
 
-        static const char RESPONSE[] = "\x50\x45\x69\xEE";
-        avs_unit_mocksock_expect_output(mocksock, RESPONSE,
-                                        sizeof(RESPONSE) - 1);
+        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT, ID(0x69EE),
+                                                  NO_PAYLOAD);
+        avs_unit_mocksock_expect_output(mocksock, response->content,
+                                        response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
     }
     {
@@ -244,9 +247,11 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL_BYTES(&id.token.bytes, TOKEN);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69EF);
 
-        static const char RESPONSE[] = "\x58\x45\x69\xEF" TOKEN;
-        avs_unit_mocksock_expect_output(mocksock, RESPONSE,
-                                        sizeof(RESPONSE) - 1);
+        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT,
+                                                  ID(0x69EF, TOKEN),
+                                                  NO_PAYLOAD);
+        avs_unit_mocksock_expect_output(mocksock, response->content,
+                                        response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
 #undef TOKEN
     }
@@ -260,9 +265,10 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL(id.token.size, 0);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69F0);
 
-        static const char RESPONSE[] = "\x50\x45\x69\xF0";
-        avs_unit_mocksock_expect_output(mocksock, RESPONSE,
-                                        sizeof(RESPONSE) - 1);
+        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT, ID(0x69F0),
+                                                  NO_PAYLOAD);
+        avs_unit_mocksock_expect_output(mocksock, response->content,
+                                        response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
     }
     avs_unit_mocksock_assert_io_clean(mocksock);
@@ -499,10 +505,11 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
         _anjay_mock_clock_start((avs_time_monotonic_t) { { 514, 777 << 15 } });
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL));
-        static const char RESPONSE[] = "\x50\x45\x69\xED" // CoAP header
-                                       "\x63\x01\x03\x09";
-        avs_unit_mocksock_expect_output(mocksock, RESPONSE,
-                                        sizeof(RESPONSE) - 1);
+        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT,
+                                                  ID(0x69ED), OBSERVE(0x010309),
+                                                  NO_PAYLOAD);
+        avs_unit_mocksock_expect_output(mocksock, response->content,
+                                        response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
         _anjay_mock_clock_finish();
     }
@@ -511,10 +518,11 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
         _anjay_mock_clock_start((avs_time_monotonic_t) { { 777, 514 << 15 } });
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL));
-        static const char RESPONSE[] = "\x50\x45\x69\xEE" // CoAP header
-                                       "\x63\x84\x82\x02";
-        avs_unit_mocksock_expect_output(mocksock, RESPONSE,
-                                        sizeof(RESPONSE) - 1);
+        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT,
+                                                  ID(0x69EE), OBSERVE(0x848202),
+                                                  NO_PAYLOAD);
+        avs_unit_mocksock_expect_output(mocksock, response->content,
+                                        response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
         _anjay_mock_clock_finish();
     }
@@ -564,14 +572,13 @@ static void mock_receive_request(test_data_t *test,
 AVS_UNIT_TEST(coap_stream, response_empty) {
     test_data_t test = setup_test();
 
-    static const char REQUEST[] =
-            "\x40\x03\x00\x01"; // Confirmable, 0.03 Put, id = 1
-    mock_receive_request(&test, REQUEST, sizeof(REQUEST) - 1);
+    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
+    mock_receive_request(&test, request->content, request->length);
 
-    static const char RESPONSE[] =
-            "\x60\x44\x00\x01"; // Acknowledgement, 2.04 Changed, id = 1
-    avs_unit_mocksock_expect_output(test.mock_socket, RESPONSE,
-                                    sizeof(RESPONSE) - 1);
+    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001),
+                                              NO_PAYLOAD);
+    avs_unit_mocksock_expect_output(test.mock_socket, response->content,
+                                    response->length);
 
     const anjay_msg_details_t details = {.msg_type =
                                                  AVS_COAP_MSG_ACKNOWLEDGEMENT,
@@ -588,17 +595,14 @@ AVS_UNIT_TEST(coap_stream, response_token) {
     test_data_t test = setup_test();
 
 #define TOKEN "TOKEN123"
-    static const char REQUEST[] =
-            "\x48\x03\x00\x01" // Confirmable, 8-char token, 0.03 Put, id 1
-            TOKEN;
-    mock_receive_request(&test, REQUEST, sizeof(REQUEST) - 1);
 
-    static const char RESPONSE[] =
-            "\x68\x44\x00\x01" // Acknowledgement, 8-char token, 2.04 Changed,
-                               // id 1
-            TOKEN;
-    avs_unit_mocksock_expect_output(test.mock_socket, RESPONSE,
-                                    sizeof(RESPONSE) - 1);
+    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001, TOKEN));
+    mock_receive_request(&test, request->content, request->length);
+
+    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001, TOKEN),
+                                              NO_PAYLOAD);
+    avs_unit_mocksock_expect_output(test.mock_socket, response->content,
+                                    response->length);
 #undef TOKEN
 
     const anjay_msg_details_t details = {.msg_type =
@@ -618,15 +622,13 @@ AVS_UNIT_TEST(coap_stream, response_content) {
 #define CONTENT   \
     "jeden cios " \
     "tak by zlamal sie nos"
-    static const char REQUEST[] =
-            "\x40\x03\x00\x01"; // Confirmable, 0.03 Put, id = 1
-    mock_receive_request(&test, REQUEST, sizeof(REQUEST) - 1);
+    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
+    mock_receive_request(&test, request->content, request->length);
 
-    static const char RESPONSE[] =
-            "\x60\x44\x00\x01" // Acknowledgement, 2.04 Changed, id = 1
-            "\xFF" CONTENT;
-    avs_unit_mocksock_expect_output(test.mock_socket, RESPONSE,
-                                    sizeof(RESPONSE) - 1);
+    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001),
+                                              PAYLOAD(CONTENT));
+    avs_unit_mocksock_expect_output(test.mock_socket, response->content,
+                                    response->length);
 
     const anjay_msg_details_t details = {.msg_type =
                                                  AVS_COAP_MSG_ACKNOWLEDGEMENT,
@@ -646,36 +648,17 @@ AVS_UNIT_TEST(coap_stream, response_content) {
 AVS_UNIT_TEST(coap_stream, response_options) {
     test_data_t test = setup_test();
 
-    static const char REQUEST[] =
-            "\x40\x03\x00\x01"; // Confirmable, 0.03 Put, id = 1
-    mock_receive_request(&test, REQUEST, sizeof(REQUEST) - 1);
+    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
+    mock_receive_request(&test, request->content, request->length);
 
-    static const char RESPONSE[] =
-            "\x60\x44\x00\x01" // Acknowledgement, 2.04 Changed, id = 1
-            "\x87"
-            "slychac"
-            "\x06"
-            "trzask"
-            "\x04"
-            "bylo"
-            "\x07"
-            "zalozyc"
-            "\x04"
-            "kask"
-            "\x31"
-            "w"
-            "\x03"
-            "ryj"
-            "\x01"
-            "z"
-            "\x04"
-            "kopa"
-            "\x4b"
-            "albo=lepiej"
-            "\x07"
-            "w=jadra";
-    avs_unit_mocksock_expect_output(test.mock_socket, RESPONSE,
-                                    sizeof(RESPONSE) - 1);
+    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001),
+                                              LOCATION_PATH("slychac", "trzask",
+                                                            "bylo", "zalozyc",
+                                                            "kask"),
+                                              PATH("w", "ryj", "z", "kopa"),
+                                              QUERY("albo=lepiej", "w=jadra"));
+    avs_unit_mocksock_expect_output(test.mock_socket, response->content,
+                                    response->length);
 
     const anjay_msg_details_t details = {
         .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
@@ -715,6 +698,8 @@ AVS_UNIT_TEST(coap_stream, fuzz_1_invalid_block_size) {
     // > reserved, i.e. MUST NOT be sent and MUST lead to a 4.00 Bad Request
     // > response code upon reception in a request.
 
+    // Cannot use BLOCK macro because there are assertions forbidding setting
+    // wrong block size.
     static const char MESSAGE[] =
             "\x40"     // Confirmable, token size = 0
             "\x03"     // 0.03 Put
@@ -722,17 +707,15 @@ AVS_UNIT_TEST(coap_stream, fuzz_1_invalid_block_size) {
             "\xd1\x0e" // delta = 13 + 14, length = 1
             "\x07";    // seq_num = 0, has_more = 0, block_size = 2048
 
-    static const char BAD_OPTION_RES[] =
-            "\x60"      // Acknowledgement, token size = 0
-            "\x80"      // 4.00 Bad Request
-            "\x00\x01"; // message ID
+    const avs_coap_msg_t *bad_option_res = COAP_MSG(ACK, BAD_REQUEST,
+                                                    ID(0x0001));
 
     avs_net_abstract_socket_t *mocksock = NULL;
     _anjay_mocksock_create(&mocksock, 1252, 1252);
     avs_unit_mocksock_expect_connect(mocksock, "", "");
     avs_unit_mocksock_input(mocksock, MESSAGE, sizeof(MESSAGE) - 1);
-    avs_unit_mocksock_expect_output(mocksock, BAD_OPTION_RES,
-                                    sizeof(BAD_OPTION_RES) - 1);
+    avs_unit_mocksock_expect_output(mocksock, bad_option_res->content,
+                                    bad_option_res->length);
 
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", ""));
 

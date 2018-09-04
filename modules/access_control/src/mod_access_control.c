@@ -37,6 +37,7 @@ void _anjay_access_control_clear_state(access_control_state_t *state) {
     AVS_LIST_CLEAR(&state->instances) {
         AVS_LIST_CLEAR(&state->instances->acl);
     }
+    state->modified_since_persist = false;
 }
 
 int _anjay_access_control_clone_state(access_control_state_t *dest,
@@ -66,6 +67,7 @@ int _anjay_access_control_clone_state(access_control_state_t *dest,
             *dest_acl = *src_acl;
         }
     }
+    dest->modified_since_persist = src->modified_since_persist;
     return 0;
 error:
     _anjay_access_control_clear_state(dest);
@@ -366,6 +368,9 @@ static int set_acl(anjay_t *anjay,
 
     int result = set_acl_in_instance(anjay, ac_instance, ssid, access_mask);
     if (!ac_instance_needs_inserting) {
+        if (!result) {
+            _anjay_access_control_mark_modified(ac);
+        }
         return result;
     }
 
@@ -383,6 +388,7 @@ static int set_acl(anjay_t *anjay,
                 == 1);
         assert(!dm_changes->instance_set_changes.known_removed_iids);
         assert(!dm_changes->resources_changed);
+        _anjay_access_control_mark_modified(ac);
         _anjay_notify_instance_created(
                 anjay, dm_changes->oid,
                 *dm_changes->instance_set_changes.known_added_iids);

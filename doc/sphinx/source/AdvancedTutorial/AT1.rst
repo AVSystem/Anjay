@@ -95,9 +95,11 @@ These two functions can be used for this purpose:
 
 .. snippet-source:: modules/attr_storage/include_public/anjay/attr_storage.h
 
+    // ...
     int anjay_attr_storage_persist(anjay_t *anjay,
                                    avs_stream_abstract_t *out_stream);
 
+    // ...
     int anjay_attr_storage_restore(anjay_t *anjay,
                                    avs_stream_abstract_t *in_stream);
 

@@ -17,6 +17,7 @@
 import os
 import unittest
 
+from collections import namedtuple
 from framework.lwm2m_test import *
 
 msg_id_generator = SequentialMsgIdGenerator(42)
@@ -27,23 +28,25 @@ A_LOT_OF_STUFF = random_stuff(A_LOT)
 A_LITTLE = 32
 A_LITTLE_STUFF = random_stuff(A_LITTLE)
 
+Chunk = namedtuple('Chunk', ('idx', 'size', 'content'))
 
 def equal_chunk_splitter(chunk_size):
     def split(data):
-        return ((idx, chunk_size, chunk)
+        return (Chunk(idx, chunk_size, chunk)
                 for idx, chunk in enumerate(data[i:i + chunk_size]
                                             for i in range(0, len(data), chunk_size)))
 
     return split
 
 
-def packets_from_chunks(chunks, process_options=None, path='/5/0/0'):
-    for idx, (seq_num, chunk_size, chunk) in enumerate(chunks):
+def packets_from_chunks(chunks, process_options=None, path='/5/0/0',
+                        format=coap.ContentFormat.APPLICATION_OCTET_STREAM):
+    for idx, chunk in enumerate(chunks):
         has_more = (idx != len(chunks) - 1)
 
         options = (uri_path_to_options(path)
-                   + [coap.Option.CONTENT_FORMAT(coap.ContentFormat.APPLICATION_OCTET_STREAM),
-                      coap.Option.BLOCK1(seq_num=seq_num, has_more=has_more, block_size=chunk_size)])
+                   + [coap.Option.CONTENT_FORMAT(format),
+                      coap.Option.BLOCK1(seq_num=chunk.idx, has_more=has_more, block_size=chunk.size)])
 
         if process_options is not None:
             options = process_options(options, idx)
@@ -53,7 +56,7 @@ def packets_from_chunks(chunks, process_options=None, path='/5/0/0'):
                           token=random_stuff(size=5),
                           msg_id=next(msg_id_generator),
                           options=options,
-                          content=chunk)
+                          content=chunk.content)
 
 
 class BlockTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
@@ -176,7 +179,7 @@ class BlockVariableChunkSizeTest(BlockTest):
                 idx = 0
                 i = 0
                 while i < len(data):
-                    yield idx, chunk_size, data[i:i + chunk_size]
+                    yield Chunk(idx, chunk_size, data[i:i + chunk_size])
 
                     i += chunk_size
                     idx += 1
@@ -198,12 +201,12 @@ class BlockVariableChunkSizeTest(BlockTest):
                 # block sequence number specifies block offset in multiples of
                 # chunk_size, so the smallest chunk size must be used twice to ensure
                 # that sequence numbers are integers
-                yield 0, chunk_size, data[0:chunk_size]
+                yield Chunk(0, chunk_size, data[0:chunk_size])
                 i += chunk_size
                 idx += 1
 
                 while i < len(data):
-                    yield idx, chunk_size, data[i:i + chunk_size]
+                    yield Chunk(idx, chunk_size, data[i:i + chunk_size])
 
                     i += chunk_size
                     idx += 1
@@ -228,7 +231,7 @@ class BlockVariableChunkSizeTest(BlockTest):
 
                 while i < len(data):
                     for _ in range(max_size // chunk_size):
-                        yield idx, chunk_size, data[i:i + chunk_size]
+                        yield Chunk(idx, chunk_size, data[i:i + chunk_size])
 
                         i += chunk_size
                         idx += 1
@@ -403,6 +406,41 @@ class BlockBadBlock1SizeInTheMiddleOfTransfer(BlockTest):
 
         # an invalid block aborts the block transfer; De-Register should work
         # fine here
+
+
+class ValueSplitIntoSeparateBlocks(BlockTest):
+    def assertIntValueSplit(self, chunks, value):
+        chunks_content = [chunk.content for chunk in chunks]
+        chunk_pairs = zip(chunks_content[:-1], chunks_content[1:])
+        byte_value = value.to_bytes(4, byteorder='big')
+        value_parts = [(byte_value[:i], byte_value[i:]) for i in range(1, len(byte_value))]
+
+        for chunk_left, chunk_right in chunk_pairs:
+            for part_left, part_right in value_parts:
+                if chunk_left.endswith(part_left) and chunk_right.startswith(part_right):
+                    return
+
+        self.fail('Data does not split an integer')
+
+    def runTest(self):
+        oid, iid, rid = OID.Test, 1, RID.Test.IntArray
+        self.create_instance(self.serv, oid, iid)
+
+        value = 0x123456
+        array_content = enumerate([value] * 5)
+        content = TLV.make_multires(rid, array_content).serialize()
+        chunks = list(equal_chunk_splitter(16)(content))
+        self.assertIntValueSplit(chunks, value)
+
+        packets = packets_from_chunks(chunks, path='/%d/%d/%d' % (oid, iid, rid),
+                                      format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        for request in packets:
+            self.serv.send(request)
+            response = self.serv.recv()
+            self.assertIsSuccessResponse(response, request)
+
+        client_content = self.read_resource(self.serv, oid, iid, rid).content
+        self.assertEqual(content, client_content)
 
 
 class MessageInTheMiddleOfBlockTransfer:

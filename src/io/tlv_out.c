@@ -44,24 +44,11 @@ typedef struct {
 
 typedef struct {
     const anjay_ret_bytes_ctx_vtable_t *vtable;
-    char *out_ptr;
+    union {
+        char *buffer_ptr;
+        avs_stream_abstract_t *stream;
+    } output;
     size_t bytes_left;
-} tlv_buffered_bytes_t;
-
-typedef struct {
-    const anjay_ret_bytes_ctx_vtable_t *vtable;
-    avs_stream_abstract_t *stream;
-    size_t bytes_left;
-} tlv_streamed_bytes_t;
-
-typedef struct {
-    const anjay_ret_bytes_ctx_vtable_t *vtable;
-} tlv_null_bytes_t;
-
-typedef union {
-    tlv_buffered_bytes_t buffered;
-    tlv_streamed_bytes_t streamed;
-    tlv_null_bytes_t null;
 } tlv_bytes_t;
 
 typedef struct tlv_out_struct {
@@ -167,68 +154,78 @@ static char *add_buffered_entry(tlv_out_t *ctx, size_t length) {
 
 static int streamed_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
                                  const void *data,
-                                 size_t length) {
-    tlv_streamed_bytes_t *ctx = (tlv_streamed_bytes_t *) ctx_;
-    int retval = 0;
-    if (length) {
-        if (length > ctx->bytes_left) {
-            retval = -1;
-        } else {
-            retval = avs_stream_write(ctx->stream, data, length);
-        }
-    }
-    if (!retval && !(ctx->bytes_left -= length)) {
-        ctx->vtable = NULL;
-    }
-    return retval;
-}
+                                 size_t length);
 
 static const anjay_ret_bytes_ctx_vtable_t STREAMED_BYTES_VTABLE = {
     .append = streamed_bytes_append
 };
 
-static int buffered_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
+static int streamed_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
                                  const void *data,
                                  size_t length) {
-    tlv_buffered_bytes_t *ctx = (tlv_buffered_bytes_t *) ctx_;
+    tlv_bytes_t *ctx = (tlv_bytes_t *) ctx_;
+    assert(ctx->vtable == &STREAMED_BYTES_VTABLE);
     int retval = 0;
     if (length) {
         if (length > ctx->bytes_left) {
             retval = -1;
         } else {
-            memcpy(ctx->out_ptr, data, length);
-            ctx->out_ptr += length;
+            retval = avs_stream_write(ctx->output.stream, data, length);
         }
     }
-    if (!retval && !(ctx->bytes_left -= length)) {
-        ctx->vtable = NULL;
+    if (!retval) {
+        ctx->bytes_left -= length;
     }
     return retval;
 }
+
+static int buffered_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
+                                 const void *data,
+                                 size_t length);
 
 static const anjay_ret_bytes_ctx_vtable_t BUFFERED_BYTES_VTABLE = {
     .append = buffered_bytes_append
 };
 
+static int buffered_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
+                                 const void *data,
+                                 size_t length) {
+    tlv_bytes_t *ctx = (tlv_bytes_t *) ctx_;
+    assert(ctx->vtable == &BUFFERED_BYTES_VTABLE);
+    int retval = 0;
+    if (length) {
+        if (length > ctx->bytes_left) {
+            retval = -1;
+        } else {
+            memcpy(ctx->output.buffer_ptr, data, length);
+            ctx->output.buffer_ptr += length;
+        }
+    }
+    if (!retval) {
+        ctx->bytes_left -= length;
+    }
+    return retval;
+}
+
 static anjay_ret_bytes_ctx_t *add_entry(tlv_out_t *ctx, size_t length) {
-    if (length >> 24 || ctx->bytes_ctx.null.vtable) {
+    if (length >> 24 || ctx->bytes_ctx.bytes_left) {
         return NULL;
     }
     if (ctx->stream) {
         int retval = write_header(ctx->stream, &ctx->next_id, length);
         ctx->next_id.id = -1;
         if (!retval) {
-            ctx->bytes_ctx.streamed.vtable = &STREAMED_BYTES_VTABLE;
-            ctx->bytes_ctx.streamed.stream = ctx->stream;
-            ctx->bytes_ctx.streamed.bytes_left = length;
-            return (anjay_ret_bytes_ctx_t *) &ctx->bytes_ctx.streamed;
+            ctx->bytes_ctx.vtable = &STREAMED_BYTES_VTABLE;
+            ctx->bytes_ctx.output.stream = ctx->stream;
+            ctx->bytes_ctx.bytes_left = length;
+            return (anjay_ret_bytes_ctx_t *) &ctx->bytes_ctx;
         }
     } else if (ctx->parent) {
-        if ((ctx->bytes_ctx.buffered.out_ptr =
+        if ((ctx->bytes_ctx.output.buffer_ptr =
                 add_buffered_entry(ctx, length))) {
-            ctx->bytes_ctx.buffered.vtable = &BUFFERED_BYTES_VTABLE;
-            ctx->bytes_ctx.buffered.bytes_left = length;
-            return (anjay_ret_bytes_ctx_t *) &ctx->bytes_ctx.buffered;
+            ctx->bytes_ctx.vtable = &BUFFERED_BYTES_VTABLE;
+            ctx->bytes_ctx.bytes_left = length;
+            return (anjay_ret_bytes_ctx_t *) &ctx->bytes_ctx;
         }
     }
     return NULL;

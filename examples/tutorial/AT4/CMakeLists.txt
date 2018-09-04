@@ -5,7 +5,8 @@ find_package(anjay REQUIRED)
 
 set(TUTORIAL_SOURCES
     src/main.c
-    src/test_object.c)
+    src/test_object.c
+    src/test_object.h)
 
 include_directories(${ANJAY_INCLUDE_DIRS})
 

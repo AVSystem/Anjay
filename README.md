@@ -111,9 +111,9 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 #### Ubuntu 16.04 LTS
 
 ``` sh
-sudo apt-get install git build-essential cmake libmbedtls-dev
+sudo apt-get install git build-essential cmake libmbedtls-dev zlib1g-dev
 # Optionally for tests:
-sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-jinja2 python3-sphinx python3-requests clang
+sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-jinja2 python3-sphinx python3-requests clang valgrind clang-tools
 ```
 
 #### CentOS 7

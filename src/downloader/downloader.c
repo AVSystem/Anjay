@@ -299,7 +299,7 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
     }
 }
 
-static void reconnect_all_job(anjay_t *anjay, void *dummy) {
+static void reconnect_all_job(anjay_t *anjay, const void *dummy) {
     (void) dummy;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr;
     AVS_LIST(anjay_download_ctx_t) helper;
@@ -315,5 +315,6 @@ int _anjay_downloader_sched_reconnect_all(anjay_downloader_t *dl) {
         return 0;
     }
     return _anjay_sched_now(_anjay_downloader_get_anjay(dl)->sched,
-                            &dl->reconnect_job_handle, reconnect_all_job, NULL);
+                            &dl->reconnect_job_handle,
+                            reconnect_all_job, NULL, 0);
 }

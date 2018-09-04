@@ -44,7 +44,7 @@ class ReconnectRetryTest(test_suite.PcapEnabledTest, test_suite.Lwm2mDtlsSingleS
 
         # check that there are no more attempts
         time.sleep(16)
-        self.assertEqual(3, len(self.read_icmp_unreachable_packets()))
+        self.assertEqual(3, self.count_icmp_unreachable_packets())
 
         # attempt reconnection
         self.communicate('reconnect')
@@ -52,7 +52,7 @@ class ReconnectRetryTest(test_suite.PcapEnabledTest, test_suite.Lwm2mDtlsSingleS
         self.wait_until_icmp_unreachable_count(5, timeout_s=8)
         self._server_close_stack.close()  # unclose the server socket
         self.assertDemoRegisters(self.serv, timeout_s=16)
-        self.assertEqual(5, len(self.read_icmp_unreachable_packets()))
+        self.assertEqual(5, self.count_icmp_unreachable_packets())
 
 
 # Tests below check that Anjay does not go crazy when faced with network connection problems while attempting to send
@@ -112,7 +112,7 @@ class NotificationIcmpReconnectTest(test_suite.PcapEnabledTest,
         pkt = self.serv.recv(timeout_s=1)
         self.assertIsInstance(pkt, Lwm2mNotify)
         self.serv.send(Lwm2mReset.matching(pkt)())
-        self.assertEqual(5, len(self.read_icmp_unreachable_packets()))
+        self.assertEqual(5, self.count_icmp_unreachable_packets())
 
 
 class NotificationDtlsIcmpReconnectTest(test_suite.PcapEnabledTest,
@@ -137,4 +137,4 @@ class NotificationDtlsIcmpReconnectTest(test_suite.PcapEnabledTest,
         pkt = self.serv.recv(timeout_s=1)
         self.assertIsInstance(pkt, Lwm2mNotify)
         self.serv.send(Lwm2mReset.matching(pkt)())
-        self.assertEqual(5, len(self.read_icmp_unreachable_packets()))
+        self.assertEqual(5, self.count_icmp_unreachable_packets())

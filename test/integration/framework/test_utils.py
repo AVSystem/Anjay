@@ -249,6 +249,7 @@ class RID:
         ResFloat = 14
         ResString = 15
         ResObjlnk = 16
+        ResBytesZeroBegin = 17
 
     class Portfolio:
         Identity = 0

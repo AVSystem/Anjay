@@ -74,14 +74,6 @@ int _anjay_server_deactivate(anjay_t *anjay,
 AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_ssid_t ssid);
 
 /**
- * Checks whether it is possible to connect to a non-Bootstrap Server before
- * initiating Client Initiated Bootstrap.
- *
- * @returns true if it is possible, false otherwise.
- */
-bool _anjay_can_retry_with_normal_server(anjay_t *anjay);
-
-/**
  * Checks whether now is a right moment to initiate Client Initiated Bootstrap
  * as per requirements in the specification.
  *

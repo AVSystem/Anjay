@@ -37,7 +37,7 @@ typedef struct {
     /** Resource: Disable Timeout - or a negative value to disable presence */
     int32_t disable_timeout;
     /** Resource: Binding */
-    anjay_binding_mode_t binding;
+    const char *binding;
     /** Resource: Notification Storing When Disabled or Offline */
     bool notification_storing;
 } anjay_server_instance_t;

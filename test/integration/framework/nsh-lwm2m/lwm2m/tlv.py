@@ -134,7 +134,7 @@ class TLV:
         Encodes Multiple Resource Instances and their values in TLV
 
         resource_id -- ID of Resource to be encoded
-        instances   -- list of tuples, each of form (Resource ID, Value)
+        instances   -- list of tuples, each of form (Resource Instance ID, Value)
         """
         children = []
         for riid, value in instances:
@@ -259,6 +259,12 @@ class TLV:
             return 'resource instance %d = %s' % (self.identifier, self._get_resource_value())
         elif self.tlv_type == TLVType.RESOURCE:
             return 'resource %d = %s' % (self.identifier, self._get_resource_value())
+
+    def __eq__(self, other):
+        return (isinstance(other, TLV)
+                and self.tlv_type == other.tlv_type
+                and self.identifier == other.identifier
+                and self.value == other.value)
 
     def full_description(self):
         if self.tlv_type == TLVType.INSTANCE:

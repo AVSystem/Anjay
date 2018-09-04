@@ -85,22 +85,17 @@ class UpdateServerDownReconnectTest(test_suite.PcapEnabledTest, test_suite.Lwm2m
 
     def tearDown(self):
         super().tearDown()
-        self.assertEqual(len(self.read_icmp_unreachable_packets()), 1)
+        self.assertEqual(self.count_icmp_unreachable_packets(), 1)
 
 
 class ReconnectTest(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
 
-        original_remote_addr = self.serv.get_remote_addr()
+        self.communicate('reconnect')
 
-        with self.serv.fake_close():
-            self.communicate('reconnect')
-
+        # server is connected, so only a packet from the same remote port will pass this assertion
         self.assertDtlsReconnect()
-
-        # should retain remote port after reconnecting
-        self.assertEqual(original_remote_addr, self.serv.get_remote_addr())
 
 
 class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):

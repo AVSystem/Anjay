@@ -27,6 +27,40 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+////////////////////////////////////////////////////////////////////////////////
+///
+/// This is the API of the servers subsystem. Any of the files outside the
+/// servers/ subdirectory are ONLY supposed to call:
+///
+/// - APIs in this file
+/// - APIs in <anjay_modules/servers.h>
+/// - public APIs that are implemented inside the servers/ subdirectory - they
+///   can be queried using the following command after compilation:
+///
+///       nm CMakeFiles/anjay.dir/src/servers/*.o | grep ' T anjay'
+///
+///   and at the time of writing this documentation, consist of:
+///
+///     - anjay_all_connections_failed()
+///     - anjay_disable_server()
+///     - anjay_disable_server_with_timeout()
+///     - anjay_enable_server()
+///     - anjay_enter_offline()
+///     - anjay_exit_offline()
+///     - anjay_get_socket_entries()
+///     - anjay_is_offline()
+///     - anjay_schedule_reconnect()
+///     - anjay_schedule_registration_update()
+///
+/// As the documentation in public headers is written as a user's manual, the
+/// technical/developer documentation for public functions is written in the
+/// implementation files (*.c).
+///
+/// You may also want to look at servers_internal.h for data structure
+/// documentation.
+///
+////////////////////////////////////////////////////////////////////////////////
+
 // copied from avs_commons/git/http/src/headers.h
 // see description there for rationale; TODO: move this to public Commons API?
 // note that this _includes_ the terminating null byte
@@ -53,7 +87,6 @@ typedef struct {
 typedef struct {
     AVS_LIST(const anjay_string_t) endpoint_path;
     avs_time_real_t expire_time;
-    bool needs_update;
     anjay_update_parameters_t last_update_params;
 } anjay_registration_info_t;
 
@@ -63,6 +96,8 @@ typedef enum {
     ANJAY_CONNECTION_QUEUE
 } anjay_server_connection_mode_t;
 
+// inactive servers include administratively disabled ones
+// as well as those which were unreachable at connect attempt
 struct anjay_server_info_struct;
 typedef struct anjay_server_info_struct anjay_server_info_t;
 
@@ -79,21 +114,74 @@ typedef struct {
     anjay_connection_type_t conn_type;
 } anjay_connection_ref_t;
 
+////////////////////////////////////////////////////////////////////////////////
+// METHODS ON THE WHOLE SERVERS SUBSYSTEM //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Creates and initializes the servers structure. Currently implemented simply
+ * as a zero-filling allocation.
+ */
 anjay_servers_t *_anjay_servers_create(void);
 
-/** Deregisters from every active server. */
-void _anjay_servers_deregister(anjay_t *anjay);
 /**
- * Clears up the <c>servers</c> struct, and releases any allocated resources.
+ * Deregisters from every active server. It is currently only ever called from
+ * anjay_delete_impl(), because there are two flavours of anjay_delete() - the
+ * regular anjay_delete() is supposed to deregister from all servers on exit,
+ * but anjay_delete_with_registration_and_observe_persistence() (present only in
+ * the commercial version) shall not deregister from anywhere, because it would
+ * defeat its purpose.
+ *
+ * We could have _anjay_servers_cleanup() with a flag, but we decided that
+ * having a separate function for de-registration is more elegant.
+ */
+void _anjay_servers_deregister(anjay_t *anjay);
+
+/**
+ * Clears up the servers struct, and releases any allocated resources.
+ *
+ * It takes the whole anjay object as argument, because it needs to delete
+ * scheduler jobs (so it needs the scheduler reference from somewhere), but it's
+ * basically a fancy destructor for anjay->servers.
+ *
+ * Only ever called from anjay_delete_impl().
  */
 void _anjay_servers_cleanup(anjay_t *anjay);
 
+/**
+ * Removes all references to inactive servers (see docs for anjay_server_info_t
+ * above for an information what is considered "active") from internal
+ * structures.
+ *
+ * This is currently only called from start_bootstrap_if_not_already_started().
+ * Inactive servers are removed during the bootstrap process - this unschedules
+ * all reactivation jobs and generally prevents the inactive servers from
+ * interfering in any way. The inactive servers will be recreated (and most
+ * likely, scheduled to be reactivated, as an inactive server is basically a
+ * pathological case) during the next "reload" job.
+ *
+ * This was introduced in internal diff D5678, specifically to address the case
+ * that connections which failed registration attempts were retrying during the
+ * bootstrap procedure, which we were implementing as fallback. Probably there
+ * are other ways to achieve the same thing.
+ */
 void _anjay_servers_cleanup_inactive(anjay_t *anjay);
 
 typedef int anjay_servers_foreach_ssid_handler_t(anjay_t *anjay,
                                                  anjay_ssid_t ssid,
                                                  void *data);
 
+/**
+ * Iterates over ALL servers known to the server subsystem (note that they are
+ * cached since last reload, the data model is NOT queried directly) and returns
+ * their SSIDs.
+ *
+ * Currently used in two places:
+ * - access_control_utils.c :: is_single_ssid_environment() - to determine
+ *   whether Access Control is even applicable
+ * - _anjay_observe_gc() - to determine for which SSIDs to keep observe request
+ *   information
+ */
 int _anjay_servers_foreach_ssid(anjay_t *anjay,
                                 anjay_servers_foreach_ssid_handler_t *handler,
                                 void *data);
@@ -102,88 +190,320 @@ typedef int anjay_servers_foreach_handler_t(anjay_t *anjay,
                                             anjay_server_info_t *server,
                                             void *data);
 
-// inactive servers include administratively disabled ones
-// as well as those which were unreachable at connect attempt
+/**
+ * Iterates over ACTIVE servers known to the server subsystem. Active servers
+ * are those which have a valid socket created - valid, but not necessarily
+ * ready for communication, e.g. in queue mode.
+ *
+ * The sockets are returned as pointers to anjay_server_info_t, which allows
+ * calling more methods on them.
+ */
 int _anjay_servers_foreach_active(anjay_t *anjay,
                                   anjay_servers_foreach_handler_t *handler,
                                   void *data);
 
+/**
+ * Schedules the "servers reload" operation. It can primarily be thought as
+ * synchronizing the server connections contained within anjay->servers with the
+ * data model, but it also handles some actions that shall be executed when the
+ * servers are discovered to have changed state (registration, deregistration,
+ * sending outstanding notifications etc.).
+ *
+ * The job is scheduled immediately and the callback is
+ * reload_servers_sched_job(). Its semantics are as follows:
+ *
+ * 1. For each instance of the LwM2M Security object:
+ * 1.1. Read the SSID (and the Bootstrap Server flag, mapping it to 65535)
+ * 1.2. Call reload_server_by_ssid(), which does:
+ * 1.2.1. If the server has already existed and been active, call
+ *        reload_active_server(), which does:
+ * 1.2.1.1. If it's not a Bootstrap Server and its registration has expired,
+ *          deactivate it (scheduling a reactivation immediately) - see below
+ *          for explanation of the activation and deactivation flows
+ * 1.2.1.2. Call _anjay_active_server_refresh(). If it fails, deactivate the
+ *          server. See below for information about what that function does.
+ * 1.2.1.3. If it is a bootstrap server which does not have the "primary"
+ *          connection configured yet (for details, see
+ *          _anjay_server_primary_connection_valid()) - signifying a freshly
+ *          activated (or failed?) instance - call
+ *          _anjay_bootstrap_update_reconnected(), which reschedules
+ *          Client-Initiated Bootstrap if applicable. Eventually,
+ *          request_bootstrap() will call
+ *          _anjay_server_setup_primary_connection()
+ * 1.2.1.4. If it is a non-bootstrap server which does not have the "primary"
+ *          connection configured yet, invalidate the registration (to enforce
+ *          Register once everything goes well) and deactivate the server.
+ * 1.2.1.5. If it is a non-bootstrap server with proper connectivity, schedule
+ *          flush of the notifications (_anjay_observe_sched_flush()).
+ * 1.2.2. If the server has already existed, been inactive, is not already
+ *        scheduled for reactivation, but has data_inactive.reactivate_time set
+ *        - schedule reactivation. See the docs of that field in
+ *        anjay_server_info_t for details.
+ * 1.2.3. If the server has already existed and been inactive, in any other case
+ *        than described in 1.2.2 - consider reload a success.
+ * 1.2.4. If we're here, it means that the server has not previously existed.
+ *        Create a new inactive server entry and schedule its activation
+ *        immediately (unless it's the Bootstrap Server and Server-Initiated
+ *        Bootstrap is disabled - Client-Initiated Bootstrap will be handled
+ *        later).
+ * 2. If stage 1 was a success, and if the result is that we have only one
+ *    server in the data model, which is the Bootstrap Server, that is inactive
+ *    and not scheduled for activation - schedule its activation immediately.
+ *    This compensates for step 1.2.4 for Client-Initiated Bootstrap when
+ *    Server-Initiated Bootstrap is disabled.
+ * 3. If the reload in stage 1 was unsuccessful (which may happen in the case of
+ *    some REALLY FATAL error, such as failure to iterate over the data model or
+ *    to schedule a job), retain all the servers that has been successfully
+ *    reloaded, move the untouched remainder of servers that existed before
+ *    reloading to the current state, and reschedule whole procedure after
+ *    5 seconds.
+ * 4. Call _anjay_observe_gc() to remove observation entries for servers that
+ *    ceased to exist.
+ * 5. Call Deregister on all servers that ceased to exist but were previously
+ *    active.
+ * 6. Clean up.
+ *
+ * The "server reactivation" procedure is performed within the
+ * activate_server_job() function and basically consists of the following:
+ *
+ * 1. Call initialize_active_server(), which does:
+ * 1.1. Fail immediately if we're in offline mode.
+ * 1.2. Read the URI from the Security instance.
+ * 1.3. Call _anjay_active_server_refresh(), returning a failure (but see notes
+ *      below) if it fails
+ * 1.4. If it's not a Bootstrap Server, call
+ *      _anjay_server_ensure_valid_registration(), which:
+ *      - will do nothing if the server has valid registration and there is no
+ *        need to send the Update message whatsoever
+ *      - will send UPDATE message if the server has valid registration but some
+ *        of its details has changed (i.e., the values sent within the Update
+ *        message)
+ *      - will send REGISTER message if the server has no valid registration
+ *        (i.e. it's new or its session has been replaced instead of resumed),
+ *        or if the aforementioned attept to send Update failed (Updates
+ *        automatically degenerate to Registers within this function, and
+ *        internal structures tracking registration state are updated
+ *        accordingly) - NOTE THAT THIS IS THE **ONLY** PLACE IN THE ENTIRE CODE
+ *        FLOW IN WHICH THE REGISTER MESSAGE MAY BE SENT
+ * 1.5. If it is a Bootstrap Server, call _anjay_bootstrap_account_prepare(),
+ *      which will schedule Client-Initiated Bootstrap if applicable.
+ * 1.6. If the above was a success, reset the reactivate_failed flag, the
+ *      num_icmp_failures counter and the reactivate_time value.
+ * 2. If stage 1 was unsuccessful:
+ * 2.1. Clean up the sockets (essentially deactivating the server).
+ * 2.2. If there was an ECONNREFUSED error during _anjay_active_server_refresh()
+ *      (which covers DTLS handshake, but NOT the Register/Update messages -
+ *      TODO: NEEDS FIXING), increase the num_icmp_failures counter
+ * 2.3. If there was a 4.03 Forbidden response to the attempt to send Register
+ *      (note that Update is unaffected as it immediately degenerates to
+ *      Register) or if _anjay_active_server_refresh() failed due to EPROTO or
+ *      ETIMEDOUT (essentially a network failure during DTLS handshake other
+ *      than Connection Refused), max out the num_icmp_failures counter, causing
+ *      to immediately land in step 2.6.
+ * 2.4. If there was any other failure (e.g. some other error response to
+ *      Register) - do not touch the num_icmp_failures counter. Such failures
+ *      may happen indefinitely.
+ * 2.5. If the num_icmp_failures counter is smaller than the limit, retry the
+ *      activation job (uses backoff controlled by
+ *      _anjay_servers_schedule_{first,next}_retryable()).
+ * 2.6. If the ICMP failures limit has been reached:
+ * 2.6.1. If we're attempting to activate the Bootstrap Server, abort all
+ *        further Client-Initiated Bootstrap attempts.
+ * 2.6.2. Otherwise, if there is a Bootstrap Server, there are no active
+ *        non-Bootstrap servers, all other servers have reached the ICMP
+ *        failures limit and Bootstrap is not already in progress:
+ * 2.6.2.1. If the Bootstrap Server is active, call
+ *          _anjay_bootstrap_account_prepare(), eventually sending Request
+ *          Bootstrap.
+ * 2.6.2.2. Otherwise, schedule immediate activation of the Bootstrap Server -
+ *          this covers the case when Server-Initiated Bootstrap is disabled and
+ *          the Bootstrap Server is not active when not in the Client-Initiated
+ *          Bootstrap procedure.
+ * 2.6.3. Prevent activate_server_job() from ever being called again, until
+ *        anjay_schedule_reconnect() is manually called.
+ *
+ * Server deactivation is normally handled by _anjay_server_deactivate(). The
+ * server might also enter inactive state through enter_offline_job(), or in
+ * case of failure in activate_server_job(). Still, _anjay_server_deactivate()
+ * works as follows:
+ *
+ * 1. If the server has a valid registration - send Deregister. Intentionally
+ *    ignore errors if it fails for any reason - Deregister is optional anyway.
+ * 2. Call _anjay_server_clean_active_data(), which cleans up the sockets and
+ *    unschedules any planned jobs, and reset primary_conn_type to UNSET.
+ *    However, anjay_server_connection_t::nontransient_state fields are
+ *    intentionally NOT cleaned up, and they contain:
+ *    - preferred_endpoint, i.e. the preference which server IP address to use
+ *      if multiple are returned during DNS resolution
+ *    - DTLS session cache
+ *    - Last bound local port
+ * 3. Schedule reactivation after the specified amount of time.
+ */
+int _anjay_schedule_reload_servers(anjay_t *anjay);
+
+/**
+ * Checks whether it is possible to connect to a non-Bootstrap Server before
+ * initiating Client Initiated Bootstrap.
+ *
+ * It checks whether there are any inactive non-bootstrap servers that have not
+ * reached the ICMP failure limit (see the activation flow described in
+ * _anjay_schedule_reload_servers() docs for details).
+ */
+bool _anjay_can_retry_with_normal_server(anjay_t *anjay);
+
+////////////////////////////////////////////////////////////////////////////////
+// METHODS ON ACTIVE SERVERS ///////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Gets the SSID of the server in question.
+ */
 anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server);
 
+/**
+ * Returns the CACHED URI of the given server - the one that was most recently
+ * read in initialize_active_server().
+ *
+ * It is called from send_request_bootstrap() and send_register() to fill the
+ * Uri-Path option in the outgoing messages.
+ */
+const anjay_url_t *_anjay_server_uri(anjay_server_info_t *server);
+
+/**
+ * Gets the type of the server's current "primary" connection. The "primary"
+ * connection is the one on which the autonomous outgoing messages (i.e.
+ * Register/Update or Bootstrap Request) are sent. It is normally the first
+ * connection mentioned in the binding string (UDP for U, UQ, US and UQS, and
+ * SMS for S and SQ), but it may be NONE if a successful connection could not
+ * yet be established, or SMS for US or UQS if there is connectivity on the SMS
+ * channel, but no connectivity on the UDP channel.
+ *
+ * Called from bootstrap_core.c :: request_bootstrap() and
+ * register.c :: bind_server_stream(), to determine which connection to use for
+ * sending the aforementioned messages.
+ */
 anjay_connection_type_t
 _anjay_server_primary_conn_type(anjay_server_info_t *server);
 
+/**
+ * Recalculates the "primary" connection type. Basically the lowest-numbered
+ * anjay_connection_type_t value that has a valid connected socket associated
+ * with it is assigned to primary_conn_type.
+ *
+ * This is called from request_bootstrap() and
+ * ensure_valid_registration_with_ctx(), to determine on which connection to
+ * send either Request Bootstrap or Register.
+ */
+int _anjay_server_setup_primary_connection(anjay_server_info_t *server);
+
+/**
+ * Gets the information about current registration status of the server. These
+ * include the data sent within the Update method's payload, and also the
+ * endpoint path and the expiration time (the point in time at which the
+ * registration lifetime passes).
+ */
 const anjay_registration_info_t *
 _anjay_server_registration_info(anjay_server_info_t *server);
 
-bool _anjay_server_registration_expired(anjay_server_info_t *server);
-
-// Note: if any of the move_* parameters are NULL,
-// the relevant fields are not updated
+/**
+ * Updates the registration information (the same that can be queried through
+ * _anjay_server_registration_info()) within the server. The endpoint path and
+ * Update parameters can be updated directly through the arguments, and the
+ * expiration time is calculated by adding move_params->lifetime_s seconds to
+ * the RTC reading at the time of calling this function.
+ *
+ * NOTE: If any of the move_* parameters are NULL, the relevant fields are NOT
+ * updated, i.e., they are left untouched rather than being replaced with NULLs.
+ *
+ * This is called from _anjay_register() and _anjay_update_registration() to
+ * update the internally stored values with actual negotiated data, and from
+ * _anjay_schedule_socket_update() to invalidate registration.
+ */
 void _anjay_server_update_registration_info(
         anjay_server_info_t *server,
         AVS_LIST(const anjay_string_t) *move_endpoint_path,
         anjay_update_parameters_t *move_params);
 
-void _anjay_server_require_reload(anjay_server_info_t *server);
-
-const anjay_url_t *_anjay_server_uri(anjay_server_info_t *server);
-
-size_t _anjay_servers_count_non_bootstrap(anjay_t *anjay);
-
 /**
- * Returns an active server object associated with given @p socket .
- */
-anjay_server_info_t *
-_anjay_servers_find_by_udp_socket(anjay_servers_t *servers,
-                                  avs_net_abstract_socket_t *socket);
-
-/**
- * Returns a server object for given SSID.
+ * Schedules re-registration of the specified server.
  *
- * NOTE: the bootstrap server is identified by the ANJAY_SSID_BOOTSTRAP
- * constant instead of its actual SSID.
+ * It resets the registration validity time so that Deregister will not be sent,
+ * deactivates the server and schedules immediate reactivation.
+ *
+ * It is called from observe_core.c :: ensure_conn_online(), which actually
+ * contains somewhat low-level reconnection logic.
  */
-anjay_server_info_t *_anjay_servers_find_active(anjay_servers_t *servers,
-                                                anjay_ssid_t ssid);
-
-int _anjay_schedule_reload_servers(anjay_t *anjay);
-
-int _anjay_schedule_socket_update(anjay_t *anjay,
-                                  anjay_iid_t security_iid);
-
-#ifdef WITH_BOOTSTRAP
-/**
- * Returns true if the client has successfully registered to any non-bootstrap
- * server and its registration has not yet expired.
- */
-bool _anjay_servers_is_connected_to_non_bootstrap(anjay_servers_t *servers);
-#endif
-
 int _anjay_schedule_reregister(anjay_t *anjay, anjay_server_info_t *server);
 
+/**
+ * Schedules reconnection of the specified server - all its sockets are
+ * immediately closed (but not cleaned up - so the server is still considered
+ * active), and reload_server_by_ssid_job() is scheduled (immediately, with
+ * backoff controlled by _anjay_servers_schedule_{first,next}_retryable()). That
+ * job basically calls reload_active_server() - see documentation of
+ * _anjay_schedule_reload_servers() for details.
+ *
+ * It is called from ensure_conn_online(), request_bootstrap() and
+ * observe_core.c :: send_entry() in case of some network communication problem.
+ * It is intended for recovering from fatal network errors with a hope of
+ * preserving the CoAP association (which is possible if we're using DTLS and
+ * session resumption succeeds).
+ */
 int _anjay_schedule_server_reconnect(anjay_t *anjay,
                                      anjay_server_info_t *server);
 
-anjay_binding_mode_t
-_anjay_server_cached_binding_mode(anjay_server_info_t *server);
+////////////////////////////////////////////////////////////////////////////////
+// METHODS ON SERVER CONNECTIONS ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * Returns the mode (disabled, online or queue) of a specified connection.
+ *
+ * Aside from _anjay_server_actual_binding_mode(), it is called from
+ * observe_core.c :: ensure_conn_online() - that function checks if the
+ * connection is in queue mode, and only reconnects it if so.
+ */
 anjay_server_connection_mode_t
 _anjay_connection_current_mode(anjay_connection_ref_t ref);
 
+/**
+ * This function is called from _anjay_release_server_stream() - if the
+ * connection is in queue mode, it schedules closing of the socket (suspending
+ * the connection) after MAX_TRANSMIT_WAIT passes.
+ */
 void
 _anjay_connection_schedule_queue_mode_close(anjay_t *anjay,
                                             anjay_connection_ref_t ref);
 
-int _anjay_server_setup_primary_connection(anjay_server_info_t *server);
-
+/**
+ * Returns the socket associated with a given connection, if it exists and is in
+ * online state, ready for communication.
+ *
+ * It's used in _anjay_bind_server_stream(), get_online_connection_socket() and
+ * find_by_udp_socket_clb() to actually get the sockets, but also in various
+ * places to just check whether the connection is online.
+ */
 avs_net_abstract_socket_t *
 _anjay_connection_get_online_socket(anjay_connection_ref_t ref);
 
+/**
+ * This function only makes sense when the connection is in a suspended (active
+ * but not online) state. It rebinds and reconnects the socket. Data model is
+ * not queried, as all information (hostname, ports, DTLS security information)
+ * is retrieved from the pre-existing socket.
+ *
+ * It is called from observe_core.c :: ensure_conn_online().
+ */
 int _anjay_connection_bring_online(anjay_t *anjay,
                                    anjay_connection_ref_t ref,
                                    bool *out_session_resumed);
 
+/**
+ * Suspends the specified connection (or all connections in the server if
+ * conn_ref.conn_type == ANJAY_CONNECTION_UNSET). Suspending the connection
+ * means closing the socket, but not cleaning it up. The connection (and server)
+ * is then still considered active, but not online.
+ */
 void _anjay_connection_suspend(anjay_connection_ref_t conn_ref);
 
 

@@ -43,13 +43,11 @@ int _anjay_serv_fetch_validated_i32(anjay_input_ctx_t *ctx,
 
 int _anjay_serv_fetch_binding(anjay_input_ctx_t *ctx,
                               anjay_binding_mode_t *out_binding) {
-    char buf[16];
     int retval;
-    if ((retval = anjay_get_string(ctx, buf, sizeof(buf)))) {
+    if ((retval = anjay_get_string(ctx, *out_binding, sizeof(*out_binding)))) {
         return retval;
     }
-    *out_binding = anjay_binding_mode_from_str(buf);
-    return 0;
+    return anjay_binding_mode_valid(*out_binding) ? 0 : -1;
 }
 
 AVS_LIST(server_instance_t)

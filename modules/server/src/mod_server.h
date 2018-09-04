@@ -40,9 +40,9 @@ typedef enum {
 typedef struct {
     anjay_iid_t iid;
     anjay_server_instance_t data;
+    anjay_binding_mode_t binding_buf; // data.binding is either this or NULL
     /* mandatory resources */
     bool has_ssid;
-    bool has_binding;
     bool has_lifetime;
     bool has_notification_storing;
 } server_instance_t;
@@ -55,11 +55,11 @@ typedef struct {
     bool saved_modified_since_persist;
 } server_repr_t;
 
-static inline void mark_modified(server_repr_t *repr) {
+static inline void _anjay_serv_mark_modified(server_repr_t *repr) {
     repr->modified_since_persist = true;
 }
 
-static inline void clear_modified(server_repr_t *repr) {
+static inline void _anjay_serv_clear_modified(server_repr_t *repr) {
     repr->modified_since_persist = false;
 }
 

@@ -84,7 +84,10 @@ class Packet(object):
         self.msg_id = msg_id
         self.token = token
         self.options = sorted(options or [], key=operator.attrgetter('number')) if options is not ANY else ANY
-        self.content = content
+        if content is ANY or content is None:
+            self.content = content
+        else:
+            self.content = bytes(content)
 
     def __repr__(self):
         return ('coap.Packet(type=%s,\n'
@@ -104,6 +107,7 @@ class Packet(object):
 
     @staticmethod
     def parse(packet):
+        packet = memoryview(packet)
         if len(packet) < 4:
             raise ValueError("invalid CoAP message: %s" % hexlify(packet))
         version_type_token_length, code, msg_id = struct.unpack('!BBH', packet[:4])

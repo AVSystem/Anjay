@@ -620,8 +620,8 @@ static int fw_write(anjay_t *anjay,
     }
 }
 
-static void perform_upgrade(anjay_t *anjay, void *fw_) {
-    fw_repr_t *fw = (fw_repr_t *) fw_;
+static void perform_upgrade(anjay_t *anjay, const void *fw_ptr) {
+    fw_repr_t *fw = *(fw_repr_t *const *) fw_ptr;
 
     int result = user_state_perform_upgrade(&fw->user_state);
     if (result) {
@@ -692,7 +692,7 @@ static int fw_on_notify(anjay_t *anjay,
     if (!fw->update_job
             && fw->state == UPDATE_STATE_UPDATING
             && _anjay_sched_now(_anjay_sched_get(anjay), &fw->update_job,
-                                perform_upgrade, fw)) {
+                                perform_upgrade, &fw, sizeof(fw))) {
         // we don't need to reschedule notifying,
         // we're already in the middle of it
         fw->state = UPDATE_STATE_DOWNLOADED;

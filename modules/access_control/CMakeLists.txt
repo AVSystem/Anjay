@@ -13,9 +13,9 @@
 # limitations under the License.
 
 set(SOURCES
-    src/mod_access_control.c
     src/access_control_handlers.c
-    src/access_control_persistence.c)
+    src/access_control_persistence.c
+    src/mod_access_control.c)
 set(PRIVATE_HEADERS
     src/mod_access_control.h)
 set(PUBLIC_HEADERS

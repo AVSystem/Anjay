@@ -105,7 +105,7 @@ class Option(OptionLike):
         if len(data) < at + length:
             raise ValueError('incomplete option')
 
-        content = data[at:at + length]
+        content = bytes(data[at:at + length])
         return Option.get_class_by_number(number)(number, content), at + length
 
     @staticmethod

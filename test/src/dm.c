@@ -56,6 +56,7 @@ avs_net_abstract_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
     avs_unit_mocksock_expect_connect(socket, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
     anjay->servers->servers->data_active.udp_connection.conn_socket_ = socket;
+    anjay->servers->servers->data_active.udp_connection.mode = ANJAY_CONNECTION_ONLINE;
     anjay->servers->servers->data_active.primary_conn_type = ANJAY_CONNECTION_UDP;
     anjay->servers->servers->data_active.registration_info.expire_time.since_real_epoch.seconds = INT64_MAX;
     return _anjay_connection_internal_get_socket(

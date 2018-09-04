@@ -475,25 +475,19 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
 
     ////// INIT //////
     DM_TEST_INIT_WITH_SSIDS(42);
-    anjay->servers->servers->data_active.udp_connection.queue_mode = true;
-    static const char REQUEST[] =
-            "\x40\x01\xFA\x3E" // CoAP header
-            "\x60" // Observe
-            "\x52" "42" // OID
-            "\x02" "69" // IID
-            "\x01" "4"; // RID
-    avs_unit_mocksock_input(mocksocks[0], REQUEST, sizeof(REQUEST) - 1);
+    anjay->servers->servers->data_active.udp_connection.mode =
+            ANJAY_CONNECTION_QUEUE;
+    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFA3E), OBSERVE(0),
+                    PATH("42", "69", "4"));
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_INT(0, 514));
     DM_TEST_EXPECT_READ_NULL_ATTRS(42, 69, 4);
-    static const char RESPONSE[] =
-            "\x60\x45\xFA\x3E" // CoAP header
-            "\x63\xF4\x00\x00" // Observe option
-            "\x60" // Content-Format
-            "\xFF" "514";
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], RESPONSE);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFA3E),
+                            OBSERVE(0XF40000),
+                            CONTENT_FORMAT(PLAINTEXT),
+                            PAYLOAD("514"));
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     // observe::flush_send_queue()
@@ -535,11 +529,10 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Hello"));
-    static const char NOTIFY_RESPONSE[] =
-            "\x50\x45\x69\xED" // CoAP header
-            "\x63\x22\x80\x00" // Observe option
-            "\x60" // Content-Format
-            "\xFF" "Hello";
+    const avs_coap_msg_t *notify_response = COAP_MSG(NON, CONTENT, ID(0x69ED),
+                                                     OBSERVE(0x228000),
+                                                     CONTENT_FORMAT(PLAINTEXT),
+                                                     PAYLOAD("Hello"));
     avs_unit_mocksock_assert_expects_met(mocksocks[0]);
     avs_unit_mocksock_expect_remote_hostname(mocksocks[0],
                                              "server.example.org");
@@ -552,8 +545,8 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
                                      (avs_net_socket_opt_value_t) {
                                          .flag = true
                                      });
-    avs_unit_mocksock_expect_output(mocksocks[0], NOTIFY_RESPONSE,
-                                    sizeof(NOTIFY_RESPONSE) - 1);
+    avs_unit_mocksock_expect_output(mocksocks[0], notify_response->content,
+                                    notify_response->length);
 
     ////// EXECUTE SCHEDULER //////
     while (sched_time_to_next_s(anjay->sched) <= 0) {
@@ -561,44 +554,24 @@ AVS_UNIT_TEST(queue_mode, behaviour) {
     }
 
     ////// QUEUED RPC //////
-    static const char QUEUED_REQUEST[] =
-            "\x40\x01\xFB\x3E" // CoAP header
-            "\xB2" "42" // OID
-            "\x01" "3" // IID
-            "\x01" "1"; // RID
-    avs_unit_mocksock_input(mocksocks[0],
-                            QUEUED_REQUEST, sizeof(QUEUED_REQUEST) - 1);
+    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFB3E), PATH("42", "3", "1"));
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 3, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 3, 1, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 3, 1, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Hi!"));
-    static const char QUEUED_RESPONSE[] =
-            "\x60\x45\xFB\x3E" // CoAP header
-            "\xC0" // Content-Format
-            "\xFF" "Hi!";
-    avs_unit_mocksock_expect_output(mocksocks[0], QUEUED_RESPONSE,
-                                    sizeof(QUEUED_RESPONSE) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFB3E),
+                            CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Hi!"));
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     ////// NEXT QUEUED RPC - CANCEL NOTIFICATION //////
-    static const char QUEUED_REQUEST2[] =
-            "\x40\x01\xFC\x3E" // CoAP header
-            "\x61\x01" // Observe
-            "\x52" "42" // OID
-            "\x02" "69" // IID
-            "\x01" "4"; // RID
-    avs_unit_mocksock_input(mocksocks[0],
-                            QUEUED_REQUEST2, sizeof(QUEUED_REQUEST2) - 1);
+    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFC3E), OBSERVE(0x01),
+                    PATH("42", "69", "4"));
     _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meh"));
-    static const char QUEUED_RESPONSE2[] =
-            "\x60\x45\xFC\x3E" // CoAP header
-            "\xC0" // Content-Format
-            "\xFF" "Meh";
-    avs_unit_mocksock_expect_output(mocksocks[0], QUEUED_RESPONSE2,
-                                    sizeof(QUEUED_RESPONSE2) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFC3E),
+                            CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Meh"));
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     ////// EXECUTE SCHEDULER //////
@@ -641,16 +614,8 @@ AVS_UNIT_TEST(queue_mode, change) {
     DM_TEST_INIT_WITH_OBJECTS(&OBJ, &FAKE_SECURITY2, &FAKE_SERVER);
     ////// WRITE NEW BINDING //////
     // Write to Binding - dummy data to assert it is actually queried via Read
-    static const char WRITE_REQUEST[] =
-            "\x40\x03\xFA\x3E" // CoAP header
-            "\xB1" "1" // OID
-            "\x01" "1" // IID
-            "\x01" "7" // RID
-            "\x10" // Content-Format
-            "\xFF"
-            "dummy";
-    avs_unit_mocksock_input(mocksocks[0],
-                            WRITE_REQUEST, sizeof(WRITE_REQUEST) - 1);
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("1", "1", "7"),
+                    CONTENT_FORMAT(PLAINTEXT), PAYLOAD("dummy"));
     _anjay_mock_dm_expect_instance_present(anjay, &FAKE_SERVER, 1, 1);
     _anjay_mock_dm_expect_resource_write(anjay, &FAKE_SERVER, 1,
                                          ANJAY_DM_RID_SERVER_BINDING,
@@ -661,9 +626,7 @@ AVS_UNIT_TEST(queue_mode, change) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_SSID, 0,
                                         ANJAY_MOCK_DM_INT(0, 1));
-    static const char WRITE_RESPONSE[] = "\x60\x44\xFA\x3E"; // 2.04 Changed
-    avs_unit_mocksock_expect_output(mocksocks[0],
-                                    WRITE_RESPONSE, sizeof(WRITE_RESPONSE) - 1);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     {
@@ -728,16 +691,16 @@ AVS_UNIT_TEST(queue_mode, change) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_LIFETIME, 0,
                                         ANJAY_MOCK_DM_INT(0, 9001));
-    static const char UPDATE[] =
-            "\x40\x02\x69\xED"
-            "\xC1\x28" // Content-Format
-            "\x37" "lt=9001"
-            "\x04" "b=UQ"
-            "\xFF" "</1>,</42>";
-    avs_unit_mocksock_expect_output(mocksocks[0], UPDATE, sizeof(UPDATE) - 1);
-    static const char UPDATE_RESPONSE[] = "\x60\x44\x69\xED";
-    avs_unit_mocksock_input(mocksocks[0],
-                            UPDATE_RESPONSE, sizeof(UPDATE_RESPONSE) - 1);
+    const avs_coap_msg_t *update = COAP_MSG(CON, POST, ID(0x69ED),
+                                            CONTENT_FORMAT(APPLICATION_LINK),
+                                            QUERY("lt=9001", "b=UQ"),
+                                            PAYLOAD("</1>,</42>"));
+    avs_unit_mocksock_expect_output(mocksocks[0], update->content,
+                                    update->length);
+    const avs_coap_msg_t *update_response = COAP_MSG(ACK, CHANGED, ID(0x69ED),
+                                                     NO_PAYLOAD);
+    avs_unit_mocksock_input(mocksocks[0], update_response->content,
+                            update_response->length);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NOT_NULL(

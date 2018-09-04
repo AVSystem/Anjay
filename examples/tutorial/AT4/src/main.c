@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
         .default_min_period = -1,
         .default_max_period = -1,
         .disable_timeout = -1,
-        .binding = ANJAY_BINDING_U
+        .binding = "U"
     };
 
     // LwM2M Server account with SSID = 2
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
         .default_min_period = -1,
         .default_max_period = -1,
         .disable_timeout = -1,
-        .binding = ANJAY_BINDING_U
+        .binding = "U"
     };
 
     // Setup first LwM2M Server

@@ -13,15 +13,20 @@
 # limitations under the License.
 
 set(SOURCES
-    src/server_utils.c
-    src/server_transaction.c
     src/mod_server.c
-    src/server_persistence.c)
+    src/server_persistence.c
+    src/server_transaction.c
+    src/server_utils.c)
+set(PRIVATE_HEADERS
+    src/mod_server.h
+    src/server_transaction.h
+    src/server_utils.h)
 set(PUBLIC_HEADERS
     include_public/anjay/server.h)
 
 set(TEST_SOURCES
     ${SOURCES}
+    ${PRIVATE_HEADERS}
     ${PUBLIC_HEADERS})
 
 include(../module_common.cmake)

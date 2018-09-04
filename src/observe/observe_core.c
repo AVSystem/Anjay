@@ -23,6 +23,7 @@
 
 #include <anjay_modules/time_defs.h>
 
+#include "../servers_utils.h"
 #include "../coap/content_format.h"
 #include "../anjay_core.h"
 #include "../dm/query.h"
@@ -193,7 +194,7 @@ static void delete_connection_if_empty(
     }
 }
 
-static void trigger_observe(anjay_t *anjay, void *entry_);
+static void trigger_observe(anjay_t *anjay, const void *entry_ptr);
 
 static const anjay_observe_resource_value_t *
 newest_value(const anjay_observe_entry_t *entry) {
@@ -231,7 +232,7 @@ static int schedule_trigger(anjay_t *anjay,
 
     _anjay_sched_del(anjay->sched, &entry->notify_task);
     return _anjay_sched(anjay->sched, &entry->notify_task, delay,
-                        trigger_observe, entry);
+                        trigger_observe, &entry, sizeof(entry));
 }
 
 static AVS_LIST(anjay_observe_resource_value_t)
@@ -607,8 +608,7 @@ static int get_conn_ref(anjay_t *anjay,
                         anjay_connection_ref_t *out_ref,
                         anjay_ssid_t ssid,
                         anjay_connection_type_t conn_type) {
-    if (!(out_ref->server
-            = _anjay_servers_find_active(anjay->servers, ssid))) {
+    if (!(out_ref->server = _anjay_servers_find_active(anjay, ssid))) {
         return -1;
     }
     out_ref->conn_type = conn_type;
@@ -728,8 +728,7 @@ static bool server_active(anjay_t *anjay, anjay_ssid_t ssid) {
     if (anjay_is_offline(anjay)) {
         return false;
     }
-    anjay_server_info_t *server =
-            _anjay_servers_find_active(anjay->servers, ssid);
+    anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
     if (!server) {
         return false;
     }
@@ -862,8 +861,10 @@ static void flush_send_queue(anjay_t *anjay,
     }
 }
 
-static void flush_send_queue_job(anjay_t *anjay, void *conn) {
-    flush_send_queue(anjay, (anjay_observe_connection_entry_t *) conn, NULL);
+static void flush_send_queue_job(anjay_t *anjay, const void *conn_ptr) {
+    flush_send_queue(anjay,
+                     *(anjay_observe_connection_entry_t *const *) conn_ptr,
+                     NULL);
 }
 
 static int sched_flush_send_queue(anjay_t *anjay,
@@ -874,8 +875,8 @@ static int sched_flush_send_queue(anjay_t *anjay,
                         : "flush task already scheduled");
         return 0;
     }
-    if (_anjay_sched_now(anjay->sched, &conn->flush_task, flush_send_queue_job,
-                         conn)) {
+    if (_anjay_sched_now(anjay->sched, &conn->flush_task,
+                         flush_send_queue_job, &conn, sizeof(conn))) {
         anjay_log(WARNING, "Could not schedule notification flush");
         return -1;
     }
@@ -956,8 +957,8 @@ update_notification_value(anjay_t *anjay,
     return result;
 }
 
-static void trigger_observe(anjay_t *anjay, void *entry_) {
-    anjay_observe_entry_t *entry = (anjay_observe_entry_t *) entry_;
+static void trigger_observe(anjay_t *anjay, const void *entry_ptr) {
+    anjay_observe_entry_t *entry = *(anjay_observe_entry_t *const *) entry_ptr;
     AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) conn =
             AVS_RBTREE_FIND(anjay->observe.connection_entries,
                             connection_query(&entry->key.connection));

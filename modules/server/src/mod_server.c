@@ -18,6 +18,8 @@
 
 #include <string.h>
 
+#include <avsystem/commons/utils.h>
+
 #include <anjay_modules/dm_utils.h>
 
 #include "mod_server.h"
@@ -73,7 +75,7 @@ static int insert_created_instance(server_repr_t *repr,
             break;
         }
     }
-    mark_modified(repr);
+    _anjay_serv_mark_modified(repr);
     AVS_LIST_INSERT(ptr, new_instance);
     return 0;
 }
@@ -95,10 +97,20 @@ static int add_instance(server_repr_t *repr,
         return -1;
     }
     new_instance->data = *instance;
+    if (instance->binding) {
+        if (!anjay_binding_mode_valid(instance->binding)
+                || avs_simple_snprintf(new_instance->binding_buf,
+                                       sizeof(new_instance->binding_buf),
+                                       "%s", instance->binding) < 0) {
+            server_log(ERROR, "Unsupported binding mode: %s",
+                       instance->binding);
+            return -1;
+        }
+        new_instance->data.binding = new_instance->binding_buf;
+    }
     new_instance->iid = *inout_iid;
     new_instance->has_ssid = true;
     new_instance->has_lifetime = true;
-    new_instance->has_binding = true;
     new_instance->has_notification_storing = true;
     if (insert_created_instance(repr, new_instance)) {
         AVS_LIST_CLEAR(&new_instance);
@@ -114,7 +126,7 @@ static int del_instance(server_repr_t *repr, anjay_iid_t iid) {
     AVS_LIST_FOREACH_PTR(it, &repr->instances) {
         if ((*it)->iid == iid) {
             AVS_LIST_DELETE(it);
-            mark_modified(repr);
+            _anjay_serv_mark_modified(repr);
             return 0;
         } else if ((*it)->iid > iid) {
             break;
@@ -290,8 +302,10 @@ static int serv_read(anjay_t *anjay,
     case SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE:
         return anjay_ret_bool(ctx, inst->data.notification_storing);
     case SERV_RES_BINDING:
-        return anjay_ret_string(ctx,
-                                anjay_binding_mode_as_str(inst->data.binding));
+        if (!inst->data.binding) {
+            return ANJAY_ERR_NOT_FOUND;
+        }
+        return anjay_ret_string(ctx, inst->data.binding);
     case SERV_RES_DISABLE:
     case SERV_RES_REGISTRATION_UPDATE_TRIGGER:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -314,7 +328,7 @@ static int serv_write(anjay_t *anjay,
     assert(inst);
     int retval;
 
-    mark_modified(repr);
+    _anjay_serv_mark_modified(repr);
 
     switch ((server_rid_t) rid) {
     case SERV_RES_SSID:
@@ -337,8 +351,8 @@ static int serv_write(anjay_t *anjay,
         return _anjay_serv_fetch_validated_i32(ctx, 0, INT32_MAX,
                                                &inst->data.disable_timeout);
     case SERV_RES_BINDING:
-        if (!(retval = _anjay_serv_fetch_binding(ctx, &inst->data.binding))) {
-            inst->has_binding = true;
+        if (!(retval = _anjay_serv_fetch_binding(ctx, &inst->binding_buf))) {
+            inst->data.binding = inst->binding_buf;
         }
         return retval;
 
@@ -475,7 +489,7 @@ int anjay_server_object_add_instance(
         (void) del_instance(repr, *inout_iid);
         if (!modified_since_persist) {
             /* validation failed and so in the end no instace is added */
-            clear_modified(repr);
+            _anjay_serv_clear_modified(repr);
         }
     }
 
@@ -490,7 +504,7 @@ int anjay_server_object_add_instance(
 
 static void server_purge(server_repr_t *repr) {
     if (repr->instances) {
-        mark_modified(repr);
+        _anjay_serv_mark_modified(repr);
     }
     _anjay_serv_destroy_instances(&repr->instances);
     _anjay_serv_destroy_instances(&repr->saved_instances);
@@ -518,7 +532,7 @@ void anjay_server_object_purge(anjay_t *anjay) {
 
 bool anjay_server_object_is_modified(anjay_t *anjay) {
     assert(anjay);
-    
+
     const anjay_dm_object_def_t *const *server_obj =
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
     return _anjay_serv_get(server_obj)->modified_since_persist;
@@ -530,7 +544,7 @@ static const anjay_dm_module_t SERVER_MODULE = {
 
 int anjay_server_object_install(anjay_t *anjay) {
     assert(anjay);
-    
+
     server_repr_t *repr = (server_repr_t *) avs_calloc(1, sizeof(server_repr_t));
     if (!repr) {
         server_log(ERROR, "Out of memory");

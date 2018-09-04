@@ -23,30 +23,12 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #error "sched_internal.h is not meant to be included from outside sched.c"
 #endif
 
-typedef enum {
-    SCHED_TASK_ONESHOT,
-    SCHED_TASK_RETRYABLE
-} anjay_sched_task_type_t;
-
-typedef union {
-    anjay_sched_clb_t oneshot;
-    anjay_sched_retryable_clb_t retryable;
-} anjay_sched_clb_union_t;
-
 typedef struct {
-    anjay_sched_task_type_t type;
-
     anjay_sched_handle_t *handle_ptr;
     avs_time_monotonic_t when;
-    anjay_sched_clb_union_t clb;
-    void *clb_data;
+    anjay_sched_clb_t clb;
+    avs_max_align_t clb_data;
 } anjay_sched_entry_t;
-
-typedef struct {
-    anjay_sched_entry_t entry;
-
-    anjay_sched_retryable_backoff_t backoff;
-} anjay_sched_retryable_entry_t;
 
 struct anjay_sched_struct {
     anjay_t *anjay;

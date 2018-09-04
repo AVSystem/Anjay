@@ -33,16 +33,20 @@ typedef struct anjay_string {
 } anjay_string_t;
 
 #define ANJAY_MAX_URL_RAW_LENGTH 256
-#define ANJAY_MAX_URL_PROTO_SIZE sizeof("coaps")
-#define ANJAY_MAX_URL_HOSTNAME_SIZE (ANJAY_MAX_URL_RAW_LENGTH - ANJAY_MAX_URL_PROTO_SIZE - (sizeof("://" ":0") - 1))
+#define ANJAY_MAX_URL_HOSTNAME_SIZE (ANJAY_MAX_URL_RAW_LENGTH - sizeof("coaps://" ":0"))
 #define ANJAY_MAX_URL_PORT_SIZE sizeof("65535")
 
+typedef enum {
+    ANJAY_URL_PROTOCOL_COAP,
+    ANJAY_URL_PROTOCOL_COAPS
+} anjay_url_protocol_t;
+
 typedef struct anjay_url {
-    char protocol[ANJAY_MAX_URL_PROTO_SIZE];
+    anjay_url_protocol_t protocol;
     char host[ANJAY_MAX_URL_HOSTNAME_SIZE];
     char port[ANJAY_MAX_URL_PORT_SIZE];
-    AVS_LIST(anjay_string_t) uri_path;
-    AVS_LIST(anjay_string_t) uri_query;
+    AVS_LIST(const anjay_string_t) uri_path;
+    AVS_LIST(const anjay_string_t) uri_query;
 } anjay_url_t;
 
 #define ANJAY_URL_EMPTY                     \
@@ -66,6 +70,8 @@ int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url);
  * Frees any allocated memory by @ref _anjay_parse_url
  */
 void _anjay_url_cleanup(anjay_url_t *url);
+
+typedef char anjay_binding_mode_t[8];
 
 VISIBILITY_PRIVATE_HEADER_END
 

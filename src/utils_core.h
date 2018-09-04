@@ -35,8 +35,8 @@ int _anjay_safe_strtoll(const char *in, long long *value);
 int _anjay_safe_strtod(const char *in, double *value);
 int _anjay_safe_strtof(const char *in, float *value);
 
-AVS_LIST(const anjay_string_t)
-_anjay_copy_string_list(AVS_LIST(const anjay_string_t) input);
+int _anjay_copy_string_list(AVS_LIST(const anjay_string_t) *outptr,
+                            AVS_LIST(const anjay_string_t) input);
 
 AVS_LIST(const anjay_string_t)
 _anjay_make_string_list(const char *string,
@@ -51,7 +51,7 @@ AVS_LIST(const anjay_string_t)
 _anjay_make_query_string_list(const char *version,
                               const char *endpoint_name,
                               const int64_t *lifetime,
-                              anjay_binding_mode_t binding_mode,
+                              const char *binding_mode,
                               const char *sms_msisdn);
 
 #ifdef ANJAY_TEST

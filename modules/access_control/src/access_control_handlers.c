@@ -88,6 +88,7 @@ static int ac_instance_reset(anjay_t *anjay,
     inst->has_acl = false;
     inst->owner = 0;
     access_control->needs_validation = true;
+    _anjay_access_control_mark_modified(access_control);
     return 0;
 }
 
@@ -120,6 +121,7 @@ static int ac_instance_create(anjay_t *anjay,
         AVS_LIST_CLEAR(&new_instance);
     }
     access_control->needs_validation = true;
+    _anjay_access_control_mark_modified(access_control);
     return retval;
 }
 
@@ -134,6 +136,7 @@ static int ac_instance_remove(anjay_t *anjay,
         if ((*it)->iid == iid) {
             AVS_LIST_CLEAR(&(*it)->acl);
             AVS_LIST_DELETE(it);
+            _anjay_access_control_mark_modified(access_control);
             return 0;
         } else if ((*it)->iid > iid) {
             break;
@@ -289,6 +292,7 @@ static int ac_resource_write(anjay_t *anjay,
         }
         inst->target.oid = (anjay_oid_t) oid;
         access_control->needs_validation = true;
+        _anjay_access_control_mark_modified(access_control);
         return 0;
     }
     case ANJAY_DM_RID_ACCESS_CONTROL_OIID: {
@@ -301,6 +305,7 @@ static int ac_resource_write(anjay_t *anjay,
         }
         inst->target.iid = (anjay_iid_t) oiid;
         access_control->needs_validation = true;
+        _anjay_access_control_mark_modified(access_control);
         return 0;
     }
     case ANJAY_DM_RID_ACCESS_CONTROL_ACL: {
@@ -316,6 +321,7 @@ static int ac_resource_write(anjay_t *anjay,
             inst->acl = new_acl;
             inst->has_acl = true;
             access_control->needs_validation = true;
+            _anjay_access_control_mark_modified(access_control);
         } else {
             AVS_LIST_CLEAR(&new_acl);
         }
@@ -331,6 +337,7 @@ static int ac_resource_write(anjay_t *anjay,
         }
         inst->owner = (anjay_ssid_t) ssid;
         access_control->needs_validation = true;
+        _anjay_access_control_mark_modified(access_control);
         return 0;
     }
     default:
@@ -664,6 +671,23 @@ static void ac_delete(anjay_t *anjay, void *access_control_) {
     _anjay_access_control_clear_state(&access_control->current);
     _anjay_access_control_clear_state(&access_control->saved_state);
     avs_free(access_control);
+}
+
+void anjay_access_control_purge(anjay_t *anjay) {
+    assert(anjay);
+    access_control_t *ac = _anjay_access_control_get(anjay);
+    _anjay_access_control_clear_state(&ac->current);
+    _anjay_access_control_mark_modified(ac);
+    ac->needs_validation = false;
+    if (anjay_notify_instances_changed(anjay, ANJAY_DM_OID_ACCESS_CONTROL)) {
+        ac_log(WARNING, "Could not schedule access control instance "
+                        "changes notifications");
+    }
+}
+
+bool anjay_access_control_is_modified(anjay_t *anjay) {
+    assert(anjay);
+    return _anjay_access_control_get(anjay)->current.modified_since_persist;
 }
 
 static const anjay_dm_module_t ACCESS_CONTROL_MODULE = {

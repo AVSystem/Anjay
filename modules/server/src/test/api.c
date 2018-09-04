@@ -51,7 +51,7 @@ static const anjay_server_instance_t instance1 = {
     .default_min_period = -1,
     .default_max_period = -1,
     .disable_timeout = -1,
-    .binding = ANJAY_BINDING_U,
+    .binding = "U",
     .notification_storing = false
 };
 
@@ -61,7 +61,7 @@ static const anjay_server_instance_t instance2 = {
     .default_min_period = -1,
     .default_max_period = -1,
     .disable_timeout = -1,
-    .binding = ANJAY_BINDING_U,
+    .binding = "U",
     .notification_storing = false
 };
 

@@ -39,7 +39,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
         .bootstrap_holdoff_s = 0,
         .bootstrap_timeout_s = 0,
         .lifetime = 86400,
-        .binding_mode = ANJAY_BINDING_U,
+        .binding_mode = "U",
         .security_mode = ANJAY_UDP_SECURITY_NOSEC,
     },
     .location_csv = NULL,
@@ -558,19 +558,14 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             key_path = optarg;
             break;
         case 'q':
-            {
-                anjay_binding_mode_t binding_mode = ANJAY_BINDING_NONE;
-                if (optarg && *optarg) {
-                    binding_mode = anjay_binding_mode_from_str(optarg);
-                }
+            if (!optarg || !*optarg) {
                 // default to UQ if optional argument is not present
                 // for compatibility with legacy -q being --queue
-                if (binding_mode == ANJAY_BINDING_NONE) {
-                    binding_mode = ANJAY_BINDING_UQ;
-                }
-                parsed_args->connection_args.binding_mode = binding_mode;
-                break;
+                parsed_args->connection_args.binding_mode = "UQ";
+            } else {
+                parsed_args->connection_args.binding_mode = optarg;
             }
+            break;
         case 'D': {
                 int idx = num_servers == 0 ? 0 : num_servers - 1;
                 if (parse_u16(optarg,

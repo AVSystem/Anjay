@@ -19,10 +19,12 @@
 import urllib.request
 import argparse
 import collections
+import logging
 import sys
 import os
 from xml.etree import ElementTree
-
+from itertools import groupby
+from operator import attrgetter
 
 class Lwm2mObjectEntry:
     """
@@ -36,9 +38,12 @@ class Lwm2mObjectEntry:
 
     def __getattr__(self, name):
         node = self._tree.find(name)
-        if node is not None:
+        if node is not None and node.text is not None:
             return node.text.strip()
         return self._tree.get(name)
+
+    def __lt__(self, other):
+        return (self.ObjectID, self.Ver) < (other.ObjectID, other.Ver)
 
 
 def _read_url(url: str) -> bytes:
@@ -54,15 +59,17 @@ class Lwm2mObjectRegistry:
         root = ElementTree.fromstring(_read_url(ddf_url))
         entries = (Lwm2mObjectEntry(obj) for obj in root.findall('Item'))
 
-        self.objects = collections.OrderedDict(sorted((int(entry.ObjectID), entry) for entry in entries))
+        grouped = ((int(key), list(group)) for key, group in groupby(entries, attrgetter('ObjectID')))
+        self.objects = collections.OrderedDict(grouped)
 
 
 def _print_object_list():
-    for oid, obj in Lwm2mObjectRegistry().objects.items():
-        print('%d\t%s' % (oid, obj.Name))
+    for oid, objs in Lwm2mObjectRegistry().objects.items():
+        for obj in objs:
+            print('%d\t%s\t%s' % (oid, obj.Ver, obj.Name))
 
 
-def _print_object_definition(urn_or_oid):
+def get_object_definition(urn_or_oid, version):
     urn = urn_or_oid.strip()
     if urn.startswith('urn:oma:lwm2m:'):
         oid = int(urn.split(':')[-1])
@@ -70,27 +77,51 @@ def _print_object_definition(urn_or_oid):
         oid = int(urn)
 
     try:
-        object_ddf_url = Lwm2mObjectRegistry().objects[oid].DDF
-        print(_read_url(object_ddf_url).decode('utf-8-sig'))
+        objects = Lwm2mObjectRegistry().objects[oid]
+        available_versions_message = 'Available versions for object with ID %d: %s' % (
+            oid, ', '.join(str(obj.Ver) for obj in objects))
+
+        if version is None:
+            if (len(objects) > 1):
+                logging.info(available_versions_message)
+            object_ddf_url = max(objects).DDF
+        else:
+            object_ddf_url = next(obj for obj in objects if obj.Ver == version).DDF
+        return _read_url(object_ddf_url).decode('utf-8-sig')
     except KeyError:
         raise ValueError('Object with ID = %d not found' % oid)
+    except StopIteration:
+        raise ValueError(available_versions_message)
+
+
+def _print_object_definition(urn_or_oid, version):
+    print(get_object_definition(urn_or_oid, version))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Accesses LwM2M Object registry.")
-    parser.add_argument("--get-xml", type=str, metavar='urn_or_oid', help="Get Object definition XML by URN or ID")
-    parser.add_argument("--list", action='store_true', help="List all registered LwM2M Objects")
+    logging.getLogger().setLevel(logging.INFO)
+
+    parser = argparse.ArgumentParser(description="Accesses LwM2M Object registry")
+    parser.add_argument("-l", "--list", action='store_true', help="List all registered LwM2M Objects")
+    parser.add_argument("-g", "--get-xml", type=str, metavar='urn_or_oid', help="Get Object definition XML by URN or ID")
+    parser.add_argument("-v", "--object-version", metavar='ver', type=str, help=
+        "Explicitly choose version of an object if there exists more than one with the same ObjectID. Applicable only "
+        "with --get-xml argument. Without --object-version specified, most up to date version is chosen.")
 
     args = parser.parse_args()
 
     if args.list and args.get_xml is not None:
-        print('conflicting options: --list, --get-xml')
+        print('conflicting options: --list, --get-xml', file=sys.stderr)
+        sys.exit(1)
+
+    if args.object_version is not None and args.get_xml is None:
+        print('--object-version option is applicable only with --get-xml', file=sys.stderr)
         sys.exit(1)
 
     if args.list:
         _print_object_list()
     elif args.get_xml is not None:
-        _print_object_definition(args.get_xml)
+        _print_object_definition(args.get_xml, args.object_version)
     else:
         parser.print_usage()
         sys.exit(1)

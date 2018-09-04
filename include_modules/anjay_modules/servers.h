@@ -40,10 +40,20 @@ typedef struct {
     size_t secret_key_size;
 } anjay_server_dtls_keys_t;
 
-int _anjay_server_get_uri(anjay_t *anjay,
-                          anjay_iid_t security_iid,
-                          anjay_url_t *out_uri);
-
+/**
+ * Reads security information (security mode, keys etc.) for a given Security
+ * object instance. This is part of the servers subsystem because it reuses some
+ * private code that is also used when refreshing server connections - namely,
+ * connection_type_definition_t instances (UDP_CONNECTION and - in the
+ * commercial version - SMS_CONNECTION) that query the data model for security
+ * information, abstracting away the fact that UDP and SMS security information
+ * in stored in different resources.
+ *
+ * It's currently only used in the Firmware Update module, to allow deriving the
+ * security information from the data model when it's not explicitly specified.
+ * Incidentally, it always specifies UDP as the connection type, so the fact
+ * that it's so generic is not actually used...
+ */
 int _anjay_get_security_info(anjay_t *anjay,
                              avs_net_security_info_t *out_net_info,
                              anjay_server_dtls_keys_t *out_dtls_keys,

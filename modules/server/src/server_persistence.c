@@ -19,6 +19,7 @@
 #ifdef WITH_AVS_PERSISTENCE
 #include <avsystem/commons/persistence.h>
 #endif // WITH_AVS_PERSISTENCE
+#include <avsystem/commons/utils.h>
 
 #include <anjay_modules/dm_utils.h>
 #include <anjay_modules/utils_core.h>
@@ -42,10 +43,14 @@ static const char MAGIC[] = { 'S', 'R', 'V', '\0' };
 static int handle_sized_fields(avs_persistence_context_t *ctx,
                                void *element_) {
     server_instance_t *element = (server_instance_t *) element_;
+    bool has_binding;
     int retval = 0;
+    if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_STORE) {
+        has_binding = !!element->data.binding;
+    }
     (void) ((retval = avs_persistence_u16(ctx, &element->iid))
             || (retval = avs_persistence_bool(ctx, &element->has_ssid))
-            || (retval = avs_persistence_bool(ctx, &element->has_binding))
+            || (retval = avs_persistence_bool(ctx, &has_binding))
             || (retval = avs_persistence_bool(ctx, &element->has_lifetime))
             || (retval = avs_persistence_bool(
                         ctx, &element->has_notification_storing))
@@ -60,8 +65,21 @@ static int handle_sized_fields(avs_persistence_context_t *ctx,
                         ctx, (uint32_t *) &element->data.disable_timeout))
             || (retval = avs_persistence_bool(
                         ctx, &element->data.notification_storing)));
+    if (!retval && avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
+        element->data.binding = has_binding ? element->binding_buf : NULL;
+    }
     return retval;
 }
+
+typedef enum {
+    LEGACY_BINDING_NONE,
+    LEGACY_BINDING_U,
+    LEGACY_BINDING_UQ,
+    LEGACY_BINDING_S,
+    LEGACY_BINDING_SQ,
+    LEGACY_BINDING_US,
+    LEGACY_BINDING_UQS
+} legacy_binding_mode_t;
 
 static int persist_instance(avs_persistence_context_t *ctx,
                             void *element_,
@@ -69,7 +87,24 @@ static int persist_instance(avs_persistence_context_t *ctx,
     (void) user_data;
     server_instance_t *element = (server_instance_t *) element_;
     int retval = 0;
-    uint32_t binding = element->data.binding;
+    uint32_t binding;
+    if (!element->data.binding) {
+        binding = (uint32_t) LEGACY_BINDING_NONE;
+    } else if (strcmp(element->data.binding, "U") == 0) {
+        binding = (uint32_t) LEGACY_BINDING_U;
+    } else if (strcmp(element->data.binding, "UQ") == 0) {
+        binding = (uint32_t) LEGACY_BINDING_UQ;
+    } else if (strcmp(element->data.binding, "S") == 0) {
+        binding = (uint32_t) LEGACY_BINDING_S;
+    } else if (strcmp(element->data.binding, "SQ") == 0) {
+        binding = (uint32_t) LEGACY_BINDING_SQ;
+    } else if (strcmp(element->data.binding, "US") == 0) {
+        binding = (uint32_t) LEGACY_BINDING_US;
+    } else if (strcmp(element->data.binding, "UQS") == 0) {
+        binding = (uint32_t) LEGACY_BINDING_UQS;
+    } else {
+        return -1;
+    }
     (void) ((retval = handle_sized_fields(ctx, element_))
             || (retval = avs_persistence_u32(ctx, &binding)));
     return retval;
@@ -85,20 +120,41 @@ static int restore_instance(avs_persistence_context_t *ctx,
     (void) ((retval = handle_sized_fields(ctx, element_))
             || (retval = avs_persistence_u32(ctx, &binding)));
     if (!retval) {
+        const char *binding_str;
         switch (binding) {
-        case ANJAY_BINDING_NONE:
-        case ANJAY_BINDING_U:
-        case ANJAY_BINDING_UQ:
-        case ANJAY_BINDING_S:
-        case ANJAY_BINDING_SQ:
-        case ANJAY_BINDING_US:
-        case ANJAY_BINDING_UQS:
-            element->data.binding = (anjay_binding_mode_t) binding;
+        case LEGACY_BINDING_NONE:
+            binding_str = "";
+            break;
+        case LEGACY_BINDING_U:
+            binding_str = "U";
+            break;
+        case LEGACY_BINDING_UQ:
+            binding_str = "UQ";
+            break;
+        case LEGACY_BINDING_S:
+            binding_str = "S";
+            break;
+        case LEGACY_BINDING_SQ:
+            binding_str = "SQ";
+            break;
+        case LEGACY_BINDING_US:
+            binding_str = "US";
+            break;
+        case LEGACY_BINDING_UQS:
+            binding_str = "UQS";
             break;
         default:
             persistence_log(ERROR, "Invalid binding mode: %" PRIu32, binding);
             retval = -1;
             break;
+        }
+        if (!retval
+                && avs_simple_snprintf(element->binding_buf,
+                                       sizeof(element->binding_buf),
+                                       "%s", binding_str) < 0) {
+            persistence_log(ERROR, "Could not restore binding: %s",
+                            binding_str);
+            retval = -1;
         }
     }
     return retval;
@@ -129,7 +185,7 @@ int anjay_server_object_persist(anjay_t *anjay,
                                   persist_instance, NULL, NULL);
     avs_persistence_context_delete(ctx);
     if (!retval) {
-        clear_modified(repr);
+        _anjay_serv_clear_modified(repr);
         persistence_log(INFO, "Server Object state persisted");
     }
     return retval;
@@ -178,7 +234,7 @@ int anjay_server_object_restore(anjay_t *anjay,
     }
     avs_persistence_context_delete(restore_ctx);
     if (!retval) {
-        clear_modified(repr);
+        _anjay_serv_clear_modified(repr);
         persistence_log(INFO, "Server Object state restored");
     }
     return retval;

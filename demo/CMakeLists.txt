@@ -26,8 +26,8 @@ set(SOURCES
     objects/cell_connectivity.c
     objects/conn_monitoring.c
     objects/conn_statistics.c
-    objects/download_diagnostics.c
     objects/device.c
+    objects/download_diagnostics.c
     objects/ext_dev_info.c
     objects/geopoints.c
     objects/location.c
@@ -39,10 +39,13 @@ if(NOT WIN32)
 endif()
 
 set(HEADERS
+    demo.h
+    demo_args.h
+    demo_cmds.h
+    demo_utils.h
     firmware_update.h
     iosched.h
-    objects.h
-    demo_utils.h)
+    objects.h)
 
 set(ALL_SOURCES ${SOURCES} ${HEADERS})
 

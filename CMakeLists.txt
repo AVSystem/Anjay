@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 2.8.12)
 
 project(anjay C)
-set(ANJAY_VERSION "1.10.4" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.11.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -158,6 +158,7 @@ endmacro()
 ################# CODE #########################################################
 
 set(CORE_SOURCES
+    src/anjay_core.c
     src/coap/id_source/auto.c
     src/coap/id_source/static.c
     src/coap/stream/client_internal.c
@@ -166,6 +167,12 @@ set(CORE_SOURCES
     src/coap/stream/out.c
     src/coap/stream/server_internal.c
     src/coap/stream/stream_internal.c
+    src/dm/dm_attributes.c
+    src/dm/dm_execute.c
+    src/dm/dm_handlers.c
+    src/dm/modules.c
+    src/dm/query.c
+    src/dm_core.c
     src/interface/register.c
     src/io/base64_out.c
     src/io/dynamic.c
@@ -174,24 +181,19 @@ set(CORE_SOURCES
     src/io/text.c
     src/io/tlv_in.c
     src/io/tlv_out.c
-    src/dm_core.c
-    src/dm/dm_attributes.c
-    src/dm/dm_execute.c
-    src/dm/dm_handlers.c
-    src/dm/modules.c
-    src/dm/query.c
-    src/anjay_core.c
     src/io_core.c
     src/io_utils.c
     src/notify.c
-    src/servers/activate.c
-    src/servers/connection_info.c
-    src/servers/offline.c
-    src/servers/reload.c
-    src/servers/register_internal.c
-    src/servers/servers_internal.c
     src/raw_buffer.c
     src/sched.c
+    src/servers/activate.c
+    src/servers/connection_info.c
+    src/servers/connection_udp.c
+    src/servers/offline.c
+    src/servers/register_internal.c
+    src/servers/reload.c
+    src/servers/servers_internal.c
+    src/servers_utils.c
     src/utils_core.c)
 if(WITH_ACCESS_CONTROL)
     set(CORE_SOURCES ${CORE_SOURCES} src/access_control_utils.c)
@@ -210,8 +212,8 @@ if(WITH_HTTP_DOWNLOAD)
 endif()
 if(WITH_BLOCK_SEND)
     set(CORE_SOURCES ${CORE_SOURCES}
-        src/coap/block/response.c
         src/coap/block/request.c
+        src/coap/block/response.c
         src/coap/block/transfer.c)
 endif()
 if(WITH_BOOTSTRAP)
@@ -231,46 +233,55 @@ if(WITH_JSON)
 endif()
 set(CORE_PRIVATE_HEADERS
     src/access_control_utils.h
+    src/anjay_core.h
     src/coap/block/request.h
     src/coap/block/response.h
     src/coap/block/transfer.h
     src/coap/block/transfer_impl.h
-    src/coap/id_source/id_source.h
-    src/coap/id_source/auto.h
-    src/coap/id_source/static.h
+    src/coap/coap_log.h
     src/coap/coap_stream.h
+    src/coap/content_format.h
+    src/coap/id_source/auto.h
+    src/coap/id_source/id_source.h
+    src/coap/id_source/static.h
     src/coap/stream/client_internal.h
     src/coap/stream/common.h
     src/coap/stream/in.h
     src/coap/stream/out.h
     src/coap/stream/server_internal.h
     src/coap/stream/stream_internal.h
-    src/dm_core.h
-    src/dm/dm_attributes.h
     src/dm/discover.h
+    src/dm/dm_attributes.h
     src/dm/dm_execute.h
     src/dm/query.h
-    src/anjay_core.h
+    src/dm_core.h
+    src/downloader.h
+    src/downloader/private.h
     src/interface/bootstrap_core.h
     src/interface/register.h
-    src/io_core.h
+    src/io/base64_out.h
     src/io/tlv.h
     src/io/vtable.h
+    src/io_core.h
     src/observe/observe_core.h
+    src/observe/observe_internal.h
     src/sched_internal.h
     src/servers.h
     src/servers/activate.h
     src/servers/connection_info.h
+    src/servers/connections_internal.h
     src/servers/register_internal.h
     src/servers/reload.h
     src/servers/servers_internal.h
+    src/servers_utils.h
     src/utils_core.h)
 set(CORE_MODULES_HEADERS
-    include_modules/anjay_modules/dm_utils.h
     include_modules/anjay_modules/dm/attributes.h
     include_modules/anjay_modules/dm/execute.h
     include_modules/anjay_modules/dm/modules.h
+    include_modules/anjay_modules/dm_utils.h
     include_modules/anjay_modules/downloader.h
+    include_modules/anjay_modules/interface/bootstrap.h
     include_modules/anjay_modules/io_utils.h
     include_modules/anjay_modules/notify.h
     include_modules/anjay_modules/observe.h
@@ -298,22 +309,26 @@ make_absolute_sources(ABSOLUTE_SOURCES ${ALL_SOURCES})
 
 set(TEST_SOURCES
     ${ALL_SOURCES}
+    src/coap/test/block_response.c
     src/coap/test/servers.c
     src/coap/test/servers.h
     src/coap/test/stream.c
-    src/coap/test/block_response.c
+    src/coap/test/utils.h
+    src/downloader/test/downloader_mock.h
     src/interface/test/bootstrap_mock.h
     src/io/test/bigdata.h
     src/observe/test/observe_mock.h
-    test/src/coap/stream.c
-    test/src/coap/socket.c
-    test/src/dm.c
-    test/src/mock_clock.c
-    test/src/mock_dm.c
+    test/include/anjay_test/coap/socket.h
     test/include/anjay_test/coap/stream.h
     test/include/anjay_test/dm.h
     test/include/anjay_test/mock_clock.h
-    test/include/anjay_test/mock_dm.h)
+    test/include/anjay_test/mock_dm.h
+    test/include/anjay_test/utils.h
+    test/src/coap/socket.c
+    test/src/coap/stream.c
+    test/src/dm.c
+    test/src/mock_clock.c
+    test/src/mock_dm.c)
 make_absolute_sources(ABSOLUTE_TEST_SOURCES ${TEST_SOURCES})
 
 ################# MODULES ######################################################

@@ -137,7 +137,7 @@ int anjay_security_object_persist(anjay_t *anjay,
                                   handle_instance, (void *) (intptr_t) 1, NULL);
     avs_persistence_context_delete(ctx);
     if (!retval) {
-        clear_modified(repr);
+        _anjay_sec_clear_modified(repr);
         persistence_log(INFO, "Security Object state persisted");
     }
     return retval;
@@ -192,7 +192,7 @@ int anjay_security_object_restore(anjay_t *anjay,
     }
     avs_persistence_context_delete(restore_ctx);
     if (!retval) {
-        clear_modified(repr);
+        _anjay_sec_clear_modified(repr);
         persistence_log(INFO, "Security Object state restored");
     }
     return retval;

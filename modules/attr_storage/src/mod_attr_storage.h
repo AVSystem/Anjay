@@ -83,7 +83,8 @@ void _anjay_attr_storage_remove_instances_not_on_sorted_list(
         fas_object_entry_t *object,
         AVS_LIST(anjay_iid_t) iids);
 
-static inline void mark_modified(anjay_attr_storage_t *fas) {
+static inline void
+_anjay_attr_storage_mark_modified(anjay_attr_storage_t *fas) {
     fas->modified_since_persist = true;
 }
 
@@ -91,7 +92,7 @@ static void remove_resource_entry(anjay_attr_storage_t *fas,
                                   AVS_LIST(fas_resource_entry_t) *entry_ptr) {
     AVS_LIST_CLEAR(&(*entry_ptr)->attrs);
     AVS_LIST_DELETE(entry_ptr);
-    mark_modified(fas);
+    _anjay_attr_storage_mark_modified(fas);
 }
 
 static void remove_instance_entry(anjay_attr_storage_t *fas,
@@ -101,7 +102,7 @@ static void remove_instance_entry(anjay_attr_storage_t *fas,
         remove_resource_entry(fas, &(*entry_ptr)->resources);
     }
     AVS_LIST_DELETE(entry_ptr);
-    mark_modified(fas);
+    _anjay_attr_storage_mark_modified(fas);
 }
 
 static void remove_object_entry(anjay_attr_storage_t *fas,
@@ -111,7 +112,7 @@ static void remove_object_entry(anjay_attr_storage_t *fas,
         remove_instance_entry(fas, &(*entry_ptr)->instances);
     }
     AVS_LIST_DELETE(entry_ptr);
-    mark_modified(fas);
+    _anjay_attr_storage_mark_modified(fas);
 }
 
 static void

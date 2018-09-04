@@ -28,6 +28,7 @@
 #include "register.h"
 #include "../dm_core.h"
 #include "../dm/query.h"
+#include "../servers_utils.h"
 #include "../utils_core.h"
 
 #include "../coap/content_format.h"
@@ -160,14 +161,13 @@ static int send_register(anjay_t *anjay,
     anjay_msg_details_t details = {
         .msg_type = AVS_COAP_MSG_CONFIRMABLE,
         .msg_code = AVS_COAP_CODE_POST,
-        .format = ANJAY_COAP_FORMAT_APPLICATION_LINK,
-        .uri_path = _anjay_copy_string_list(server_uri->uri_path),
-        .uri_query = _anjay_copy_string_list(server_uri->uri_query)
+        .format = ANJAY_COAP_FORMAT_APPLICATION_LINK
     };
 
     int result = -1;
-    if ((server_uri->uri_path && !details.uri_path)
-            || (server_uri->uri_query && !details.uri_query)
+    if (_anjay_copy_string_list(&details.uri_path, server_uri->uri_path)
+            || _anjay_copy_string_list(&details.uri_query,
+                                       server_uri->uri_query)
             || !AVS_LIST_APPEND(&details.uri_path,
                                 ANJAY_MAKE_STRING_LIST("rd"))
             || !AVS_LIST_APPEND(&details.uri_query,
@@ -175,8 +175,8 @@ static int send_register(anjay_t *anjay,
                                         ANJAY_SUPPORTED_ENABLER_VERSION,
                                         anjay->endpoint_name,
                                         &params->lifetime_s,
-                                        params->binding_mode == ANJAY_BINDING_U
-                                                ? ANJAY_BINDING_NONE
+                                        strcmp(params->binding_mode, "U") == 0
+                                                ? NULL
                                                 : params->binding_mode,
                                         _anjay_local_msisdn(anjay)))) {
         anjay_log(ERROR, "could not initialize request headers");
@@ -330,8 +330,7 @@ static int init_update_parameters(anjay_t *anjay,
                             &out_params->lifetime_s)) {
         goto error;
     }
-    out_params->binding_mode = _anjay_server_cached_binding_mode(server);
-    if (out_params->binding_mode == ANJAY_BINDING_NONE) {
+    if (_anjay_server_actual_binding_mode(&out_params->binding_mode, server)) {
         goto error;
     }
     return 0;
@@ -437,9 +436,9 @@ static int send_update(anjay_t *anjay,
         lifetime_s_ptr = &new_params->lifetime_s;
     }
 
-    anjay_binding_mode_t binding_mode =
-            (old_params->binding_mode == new_params->binding_mode)
-                    ? ANJAY_BINDING_NONE : new_params->binding_mode;
+    const char *binding_mode =
+            (strcmp(old_params->binding_mode, new_params->binding_mode) == 0)
+                    ? NULL : new_params->binding_mode;
 
     bool dm_changed_since_last_update =
             !dm_caches_equal(old_params->dm, new_params->dm);
@@ -515,9 +514,8 @@ bool _anjay_needs_registration_update(anjay_registration_update_ctx_t *ctx) {
     const anjay_registration_info_t *info =
             _anjay_server_registration_info(ctx->server);
     const anjay_update_parameters_t *old_params = &info->last_update_params;
-    return info->needs_update
-            || old_params->lifetime_s != ctx->new_params.lifetime_s
-            || old_params->binding_mode != ctx->new_params.binding_mode
+    return old_params->lifetime_s != ctx->new_params.lifetime_s
+            || strcmp(old_params->binding_mode, ctx->new_params.binding_mode)
             || !dm_caches_equal(old_params->dm, ctx->new_params.dm);
 }
 

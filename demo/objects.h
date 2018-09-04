@@ -66,7 +66,7 @@ typedef struct {
     int32_t bootstrap_holdoff_s;
     int32_t bootstrap_timeout_s;
     int32_t lifetime;
-    anjay_binding_mode_t binding_mode;
+    const char *binding_mode;
     anjay_udp_security_mode_t security_mode;
     uint8_t *public_cert_or_psk_identity;
     size_t public_cert_or_psk_identity_size;

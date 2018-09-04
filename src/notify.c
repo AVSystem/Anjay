@@ -22,6 +22,7 @@
 #include "coap/content_format.h"
 
 #include "anjay_core.h"
+#include "servers_utils.h"
 #include "observe/observe_core.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -99,8 +100,7 @@ static int server_modified_notify(anjay_t *anjay,
         if (_anjay_dm_res_read_i64(anjay, &path, &ssid)
                 || ssid <= 0 || ssid >= UINT16_MAX) {
             _anjay_update_ret(&ret, -1);
-        } else if (_anjay_servers_find_active(anjay->servers,
-                                              (anjay_ssid_t) ssid)) {
+        } else if (_anjay_servers_find_active(anjay, (anjay_ssid_t) ssid)) {
             _anjay_update_ret(&ret,
                               anjay_schedule_registration_update(
                                       anjay, (anjay_ssid_t) ssid));
@@ -315,7 +315,7 @@ void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue) {
     }
 }
 
-static void notify_clb(anjay_t *anjay, void *dummy) {
+static void notify_clb(anjay_t *anjay, const void *dummy) {
     (void) dummy;
     _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
 }
@@ -325,7 +325,7 @@ static int reschedule_notify(anjay_t *anjay) {
         return 0;
     }
     return _anjay_sched_now(anjay->sched, &anjay->scheduled_notify.handle,
-                            notify_clb, NULL);
+                            notify_clb, NULL, 0);
 }
 
 int _anjay_notify_instance_created(anjay_t *anjay,

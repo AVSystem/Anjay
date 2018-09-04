@@ -25,15 +25,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef void *anjay_sched_handle_t;
 
-typedef void (*anjay_sched_clb_t)(anjay_t *anjay, void *data);
-
-typedef enum {
-    ANJAY_SCHED_FINISH,
-    ANJAY_SCHED_RETRY
-} anjay_sched_retryable_result_t;
-
-typedef anjay_sched_retryable_result_t
-(*anjay_sched_retryable_clb_t)(anjay_t *anjay, void *data);
+typedef void (*anjay_sched_clb_t)(anjay_t *anjay, const void *data);
 
 typedef struct anjay_sched_struct anjay_sched_t;
 
@@ -59,7 +51,9 @@ void _anjay_sched_delete(anjay_sched_t **sched_ptr);
  *                      information is required.
  * @param delay         Delay until the first job execution.
  * @param clb           Scheduled task.
- * @param clb_data      Opaque pointer passed to @p clb.
+ * @param clb_data      Pointer to data that will be passed to @p clb.
+ * @param clb_data_size Number of bytes at @p clb_data that will be stored in
+ *                      the job structure.
  *
  * @return 0 on success, negative value in case of error.
  */
@@ -67,7 +61,8 @@ int _anjay_sched(anjay_sched_t *sched,
                  anjay_sched_handle_t *out_handle,
                  avs_time_duration_t delay,
                  anjay_sched_clb_t clb,
-                 void *clb_data);
+                 const void *clb_data,
+                 size_t clb_data_size);
 /**
  * Removes job handle (pointed by @p handle) from the scheduler, and therefore
  * invalidates it by setting it to NULL.
@@ -87,50 +82,11 @@ int _anjay_sched_time_to_next(anjay_sched_t *sched, avs_time_duration_t *delay);
 static inline int _anjay_sched_now(anjay_sched_t *sched,
                                    anjay_sched_handle_t *out_handle,
                                    anjay_sched_clb_t clb,
-                                   void *clb_data) {
+                                   const void *clb_data,
+                                   size_t clb_data_size) {
     return _anjay_sched(sched, out_handle, AVS_TIME_DURATION_ZERO,
-                        clb, clb_data);
+                        clb, clb_data, clb_data_size);
 }
-
-typedef struct {
-    /** Delay until the first job retry after initial attempt fails. */
-    avs_time_duration_t delay;
-
-    /** Maximum delay between a failed job execution and next attempt. */
-    avs_time_duration_t max_delay;
-} anjay_sched_retryable_backoff_t;
-
-/**
- * Schedules a job that will be repeated until it succeeds or is explicitly
- * canceled using @ref _anjay_sched_del .
- *
- * First execution of the @p clb happens after @p delay . Following attempts use
- * an exponential backoff with a factor of 2, determined by @p backoff .
- *
- * Note: Similar as to @ref _anjay_sched behavior should be expected, except
- * that job handle invalidation is slightly more complicated:
- *  1. As in @ref _anjay_sched, @p *out_handle is set to NULL when the job
- *     is being executed or when the job execution finished successfully.
- *  2. If the job needs to retry, @p *out_handle is being restored.
- *
- * @param sched         Scheduler object to add the job into.
- * @param out_handle    Pointer to the storage of scheduler handle, that might
- *                      be used to cancel the job or NULL if no handle
- *                      information is required.
- * @param delay         Delay until the first job execution.
- * @param backoff       Backoff configuration.
- * @param clb           Scheduled task. Must return 0 on success and non-zero on
- *                      failure.
- * @param clb_data Opaque pointer passed to @p clb.
- *
- * @return 0 on success, negative value in case of an error.
- */
-int _anjay_sched_retryable(anjay_sched_t *sched,
-                           anjay_sched_handle_t *out_handle,
-                           avs_time_duration_t delay,
-                           anjay_sched_retryable_backoff_t backoff,
-                           anjay_sched_retryable_clb_t clb,
-                           void *clb_data);
 
 VISIBILITY_PRIVATE_HEADER_END
 

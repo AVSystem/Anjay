@@ -366,14 +366,14 @@ for which, the generator outputs the following source:
                 if (!array) {
                     return ANJAY_ERR_INTERNAL;
                 }
-            
+
                 anjay_riid_t riid;
                 int result = 0;
                 bool value; // TODO
                 while (result && (result = anjay_get_array_index(array, &riid)) == 0) {
                     result = anjay_get_bool(ctx, &value); // TODO
                 }
-            
+
                 return result;
             }
 

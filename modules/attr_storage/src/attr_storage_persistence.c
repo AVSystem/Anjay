@@ -163,20 +163,47 @@ static int handle_object(avs_persistence_context_t *ctx,
 
 // HELPERS /////////////////////////////////////////////////////////////////////
 
-static int stream_at_end(avs_stream_abstract_t *in) {
-    if (avs_stream_peek(in, 0) != EOF) {
-        return 0; // data ahead
-    }
+/**
+ * NOTE: The last byte is supposed to be a version number.
+ *
+ * Known versions are:
+ * - 0: used in development versions and up to Anjay 1.3.1
+ * - 1: briefly used and released as part of Anjay 1.0.0, when the attributes
+ *   were temporarily unified (i.e., Objects could have lt/gt/st attributes)
+ * - 2: current version
+ */
+typedef char fas_magic_t[4];
 
-    size_t bytes_read;
-    char message_finished;
-    char value;
-    int result = avs_stream_read(in, &bytes_read, &message_finished,
-                                 &value, sizeof(value));
-    if (!result && !bytes_read && message_finished) {
-        return 1;
+static const fas_magic_t MAGIC_V0 = { 'F', 'A', 'S', '\0' };
+static const fas_magic_t MAGIC_V2 = { 'F', 'A', 'S', '\2' };
+
+typedef enum {
+    RM_SUCCESS,
+    RM_ERROR,
+    RM_EOF
+} read_magic_result_t;
+
+static int read_magic_or_eof(avs_stream_abstract_t *stream, fas_magic_t *out) {
+    size_t bytes_read = 0;
+    char message_finished = 0;
+    while (bytes_read < sizeof(*out) && !message_finished) {
+        size_t current_read = 0;
+        // try to support broken implementations of read()
+        // that may not set message_finished to 0 when they should
+        message_finished = 0;
+        if (avs_stream_read(stream, &current_read, &message_finished,
+                            *out + bytes_read, sizeof(*out) - bytes_read)) {
+            return RM_ERROR;
+        }
+        bytes_read += current_read;
     }
-    return result < 0 ? result : -1;
+    if (bytes_read == sizeof(*out)) {
+        return RM_SUCCESS;
+    } else if (bytes_read == 0 && message_finished) {
+        return RM_EOF;
+    } else {
+        return RM_ERROR;
+    }
 }
 
 static bool is_attrs_list_sane(AVS_LIST(void) attrs_list,
@@ -345,18 +372,6 @@ static int clear_nonexistent_entries(anjay_t *anjay,
 
 //// PUBLIC FUNCTIONS //////////////////////////////////////////////////////////
 
-/**
- * NOTE: The last byte is supposed to be a version number.
- *
- * Known versions are:
- * - 0: used in development versions and up to Anjay 1.3.1
- * - 1: briefly used and released as part of Anjay 1.0.0, when the attributes
- *   were temporarily unified (i.e., Objects could have lt/gt/st attributes)
- * - 2: current version
- */
-static const char MAGIC_V0[] = { 'F', 'A', 'S', '\0' };
-static const char MAGIC_V2[] = { 'F', 'A', 'S', '\2' };
-
 int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *out) {
     int retval = avs_stream_write(out, MAGIC_V2, sizeof(MAGIC_V2));
@@ -377,16 +392,18 @@ int _anjay_attr_storage_restore_inner(anjay_t *anjay,
                                       anjay_attr_storage_t *attr_storage,
                                       avs_stream_abstract_t *in) {
     _anjay_attr_storage_clear(attr_storage);
-    int retval = stream_at_end(in);
-    if (retval) {
-        return (retval < 0) ? retval : 0;
-    }
 
-    AVS_STATIC_ASSERT(sizeof(MAGIC_V0) == sizeof(MAGIC_V2), magic_size);
-    char magic_buffer[sizeof(MAGIC_V2)];
-    retval = avs_stream_read_reliably(in, magic_buffer, sizeof(magic_buffer));
-    if (retval) {
-        return retval;
+    fas_magic_t magic_buffer;
+    AVS_STATIC_ASSERT(sizeof(MAGIC_V0) == sizeof(magic_buffer), magic_v0_size);
+    AVS_STATIC_ASSERT(sizeof(MAGIC_V2) == sizeof(magic_buffer), magic_v2_size);
+    switch (read_magic_or_eof(in, &magic_buffer)) {
+    case RM_SUCCESS:
+        break;
+    case RM_ERROR:
+        return -1;
+    case RM_EOF:
+        // empty stream, treat as success
+        return 0;
     }
 
     intptr_t version;
@@ -399,10 +416,10 @@ int _anjay_attr_storage_restore_inner(anjay_t *anjay,
         return -1;
     }
 
+    int retval = -1;
     avs_persistence_context_t *ctx = avs_persistence_restore_context_new(in);
     if (!ctx) {
         fas_log(ERROR, "Out of memory");
-        retval = -1;
     } else {
         (void) ((retval = HANDLE_LIST(object, ctx, &attr_storage->objects,
                                       (void *) version))

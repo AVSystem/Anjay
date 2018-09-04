@@ -20,6 +20,7 @@
 
 #include "access_control_utils.h"
 #include "io_core.h"
+#include "servers_utils.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -203,8 +204,23 @@ typedef struct {
     anjay_ssid_t owner;
 } get_owner_data_t;
 
+static int count_non_bootstrap_clb(anjay_t *anjay,
+                                   anjay_ssid_t ssid,
+                                   void *counter_ptr) {
+    (void) anjay;
+    if (ssid != ANJAY_SSID_BOOTSTRAP) {
+        ++*((size_t *) counter_ptr);
+    }
+    return ANJAY_FOREACH_CONTINUE;
+}
+
 static bool is_single_ssid_environment(anjay_t *anjay) {
-    return _anjay_servers_count_non_bootstrap(anjay) == 1;
+    size_t non_bootstrap_count = 0;
+    if (_anjay_servers_foreach_ssid(anjay, count_non_bootstrap_clb,
+                                    &non_bootstrap_count)) {
+        return false;
+    }
+    return non_bootstrap_count == 1;
 }
 
 bool _anjay_access_control_action_allowed(anjay_t *anjay,

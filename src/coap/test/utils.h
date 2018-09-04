@@ -25,6 +25,11 @@ struct coap_msg_args {
     uint8_t code;
     avs_coap_msg_identity_t id;
 
+    // The array is needed to set token with maximum length by convenient ID
+    // macro without invalid writing null-byte outside id.token.bytes[] array.
+    const char token_as_string__[AVS_COAP_MAX_TOKEN_LENGTH + 1];
+
+    const uint16_t *content_format;
     const uint16_t *accept;
     const uint32_t *observe;
 
@@ -35,6 +40,7 @@ struct coap_msg_args {
     const void *payload;
     size_t payload_size;
 
+    AVS_LIST(const anjay_string_t) location_path;
     AVS_LIST(const anjay_string_t) uri_path;
     AVS_LIST(const anjay_string_t) uri_query;
 };
@@ -63,6 +69,8 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
         .identity = args->id,
     };
 
+    memcpy(info.identity.token.bytes, args->token_as_string__, args->id.token.size);
+
     if (args->block1.valid) {
         AVS_UNIT_ASSERT_SUCCESS(
                 avs_coap_msg_info_opt_block(&info, &args->block1));
@@ -78,10 +86,16 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
                                              args->etag->size));
     }
 
+    AVS_UNIT_ASSERT_SUCCESS(add_string_options(&info, AVS_COAP_OPT_LOCATION_PATH,
+                                               args->location_path));
     AVS_UNIT_ASSERT_SUCCESS(add_string_options(&info, AVS_COAP_OPT_URI_PATH,
                                                args->uri_path));
     AVS_UNIT_ASSERT_SUCCESS(add_string_options(&info, AVS_COAP_OPT_URI_QUERY,
                                                args->uri_query));
+    if (args->content_format) {
+        AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_info_opt_u16(
+                &info, AVS_COAP_OPT_CONTENT_FORMAT, *args->content_format));
+    }
     if (args->accept) {
         AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_info_opt_u16(
                 &info, AVS_COAP_OPT_ACCEPT, *args->accept));
@@ -99,6 +113,7 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
             avs_coap_msg_builder_payload(&builder, args->payload,
                                          args->payload_size));
 
+    AVS_LIST_CLEAR(&args->location_path);
     AVS_LIST_CLEAR(&args->uri_path);
     AVS_LIST_CLEAR(&args->uri_query);
     avs_coap_msg_info_reset(&info);
@@ -114,6 +129,10 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
 /* Convenience macro for use in COAP_MSG, to allow skipping AVS_COAP_CODE_
  * prefix */
 #define CODE__(x) AVS_COAP_CODE_##x
+
+/* Convenience macro for use in COAP_MSG, to allow skipping ANJAY_COAP_FORMAT_
+ * prefix */
+#define FORMAT__(x) ANJAY_COAP_FORMAT_##x
 
 /* Allocates a 64k buffer on the stack, constructs a message inside it and
  * returns the message pointer.
@@ -144,7 +163,8 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
 #define ID(MsgId, .../* Token */) \
     .id = (avs_coap_msg_identity_t){ \
         (uint16_t)(MsgId), \
-        (avs_coap_token_t){sizeof(""__VA_ARGS__) - 1, __VA_ARGS__} }
+        (avs_coap_token_t){sizeof(""__VA_ARGS__) - 1, ""} }, \
+    .token_as_string__ = ""__VA_ARGS__
 
 /* Used in COAP_MSG() to specify ETag option value. */
 #define ETAG(Tag) \
@@ -153,6 +173,10 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
         .value = (Tag) \
     }
 
+/* Used in COAP_MSG() to specify a list of Location-Path options. */
+#define LOCATION_PATH(... /* Segments */) \
+    .location_path = ANJAY_MAKE_STRING_LIST(__VA_ARGS__)
+
 /* Used in COAP_MSG() to specify a list of Uri-Path options. */
 #define PATH(... /* Segments */) \
     .uri_path = ANJAY_MAKE_STRING_LIST(__VA_ARGS__)
@@ -160,6 +184,15 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
 /* Used in COAP_MSG() to specify a list of Uri-Query options. */
 #define QUERY(... /* Segments */) \
     .uri_query = ANJAY_MAKE_STRING_LIST(__VA_ARGS__)
+
+/* Used in COAP_MSG() to specify the Content-Format option even with
+ * unsupported value. */
+#define CONTENT_FORMAT_VALUE(Format) \
+    .content_format = (const uint16_t[1]) { (Format) }
+
+/* Used in COAP_MSG() to specify the Content-Format option using predefined
+ * constants. */
+#define CONTENT_FORMAT(Format) CONTENT_FORMAT_VALUE(FORMAT__(Format))
 
 /* Used in COAP_MSG() to specify the Accept option. */
 #define ACCEPT(Format) \
@@ -176,13 +209,17 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
     .payload = NULL, \
     .payload_size = 0
 
-/* Used in COAP_MSG() to define a non-block message payload (string literal).
- * Terminating nullbyte is not considered part of the payload. */
-#define PAYLOAD(Payload) \
+/* Used in COAP_MSG() to define a non-block message payload from external
+ * variable (not only string literal). */
+#define PAYLOAD_EXTERNAL(Payload, PayloadSize) \
     .block1 = {}, \
     .block2 = {}, \
     .payload = (Payload), \
-    .payload_size = sizeof(Payload) - 1,
+    .payload_size = PayloadSize,
+
+/* Used in COAP_MSG() to define a non-block message payload (string literal).
+ * Terminating nullbyte is not considered part of the payload. */
+#define PAYLOAD(Payload) PAYLOAD_EXTERNAL(Payload, sizeof(Payload) - 1)
 
 /**
  * Used in COAP_MSG to define BLOCK2 option, and optionally add block payload.

@@ -165,7 +165,7 @@ static int add_instance(sec_repr_t *repr,
                      *inout_iid, instance->ssid, instance->server_uri);
     }
 
-    mark_modified(repr);
+    _anjay_sec_mark_modified(repr);
     return 0;
 
 error:
@@ -179,7 +179,7 @@ static int del_instance(sec_repr_t *repr, anjay_iid_t iid) {
         if ((*it)->iid == iid) {
             AVS_LIST(sec_instance_t) element = AVS_LIST_DETACH(it);
             _anjay_sec_destroy_instances(&element);
-            mark_modified(repr);
+            _anjay_sec_mark_modified(repr);
             return 0;
         }
     }
@@ -287,7 +287,7 @@ static int sec_write(anjay_t *anjay,
     int retval;
     assert(inst);
 
-    mark_modified(repr);
+    _anjay_sec_mark_modified(repr);
 
     switch ((security_resource_t) rid) {
     case SEC_RES_LWM2M_SERVER_URI:
@@ -394,7 +394,7 @@ static int sec_instance_create(anjay_t *anjay,
     }
 
     AVS_LIST_INSERT(ptr, created);
-    mark_modified(repr);
+    _anjay_sec_mark_modified(repr);
     return 0;
 }
 
@@ -494,7 +494,7 @@ int anjay_security_object_add_instance(
     const anjay_dm_object_def_t *const *obj_ptr =
             _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
-    
+
     if (!repr) {
         security_log(ERROR, "Security object is not registered");
         return -1;
@@ -506,10 +506,10 @@ int anjay_security_object_add_instance(
         (void) del_instance(repr, *inout_iid);
         if (!modified_since_persist) {
             /* validation failed and so in the end no instace is added */
-            clear_modified(repr);
+            _anjay_sec_clear_modified(repr);
         }
     }
-    
+
     if (!retval) {
         if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
             security_log(WARNING, "Could not schedule socket reload");
@@ -521,7 +521,7 @@ int anjay_security_object_add_instance(
 
 static void security_purge(sec_repr_t *repr) {
     if (repr->instances) {
-        mark_modified(repr);
+        _anjay_sec_mark_modified(repr);
     }
     _anjay_sec_destroy_instances(&repr->instances);
     _anjay_sec_destroy_instances(&repr->saved_instances);

@@ -16,6 +16,7 @@
 
 #include <anjay_config.h>
 
+#include "../servers_utils.h"
 #include "../dm/query.h"
 
 #define ANJAY_SERVERS_INTERNALS
@@ -28,23 +29,6 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static bool server_needs_reconnect(anjay_server_info_t *server) {
-    anjay_connection_ref_t conn_ref = {
-        .server = server
-    };
-    for (conn_ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
-            conn_ref.conn_type < ANJAY_CONNECTION_LIMIT_;
-            conn_ref.conn_type =
-                    (anjay_connection_type_t) (conn_ref.conn_type + 1)) {
-        anjay_server_connection_t *connection =
-                _anjay_get_server_connection(conn_ref);
-        if (connection && connection->needs_reconnect) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static int reload_active_server(anjay_t *anjay,
                                 anjay_server_info_t *server) {
     assert(_anjay_server_active(server));
@@ -55,11 +39,8 @@ static int reload_active_server(anjay_t *anjay,
         goto deactivate;
     }
 
-    if (server->data_active.needs_reload || server_needs_reconnect(server)) {
-        server->data_active.needs_reload = false;
-        if (_anjay_active_server_refresh(anjay, server)) {
-            goto deactivate;
-        }
+    if (_anjay_active_server_refresh(anjay, server)) {
+        goto deactivate;
     }
 
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
@@ -86,19 +67,18 @@ deactivate:
     return 0;
 }
 
-static anjay_sched_retryable_result_t
-reload_server_by_ssid_job(anjay_t *anjay, void *ssid_) {
-    anjay_ssid_t ssid = (anjay_ssid_t) (uintptr_t) ssid_;
+static void reload_server_by_ssid_job(anjay_t *anjay, const void *ssid_ptr) {
+    anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
     assert(ssid != ANJAY_SSID_ANY);
 
     AVS_LIST(anjay_server_info_t) server =
-            _anjay_servers_find_active(anjay->servers, ssid);
-    if (!server) {
-        return ANJAY_SCHED_RETRY;
+            _anjay_servers_find_active(anjay, ssid);
+    if (server
+            && reload_active_server(anjay, server)
+            && _anjay_servers_schedule_next_retryable(
+                    anjay->sched, server, reload_server_by_ssid_job, ssid)) {
+        anjay_log(ERROR, "could not reschedule reload_server_by_ssid_job");
     }
-
-    return reload_active_server(anjay, server) ? ANJAY_SCHED_RETRY
-                                               : ANJAY_SCHED_FINISH;
 }
 
 static int reload_server_by_ssid(anjay_t *anjay,
@@ -114,7 +94,7 @@ static int reload_server_by_ssid(anjay_t *anjay,
         if (_anjay_server_active(server)) {
             anjay_log(TRACE, "reloading active server SSID %u", ssid);
             return reload_active_server(anjay, server);
-        } else if (!server->sched_update_or_reactivate_handle
+        } else if (!server->next_action_handle
                 && avs_time_real_valid(server->data_inactive.reactivate_time)) {
             return _anjay_server_sched_activate(
                     anjay, server, avs_time_real_diff(
@@ -169,7 +149,7 @@ reload_server_by_security_iid(anjay_t *anjay,
     return 0;
 }
 
-static void reload_servers_sched_job(anjay_t *anjay, void *unused) {
+static void reload_servers_sched_job(anjay_t *anjay, const void *unused) {
     (void)unused;
     anjay_log(TRACE, "reloading servers");
 
@@ -199,7 +179,7 @@ static void reload_servers_sched_job(anjay_t *anjay, void *unused) {
             && !AVS_LIST_NEXT(anjay->servers->servers)
             && anjay->servers->servers->ssid == ANJAY_SSID_BOOTSTRAP
             && !_anjay_server_active(anjay->servers->servers)
-            && !anjay->servers->servers->sched_update_or_reactivate_handle
+            && !anjay->servers->servers->next_action_handle
             && !anjay->servers->servers->data_inactive.reactivate_failed) {
         reload_state.retval = _anjay_server_sched_activate(
                 anjay, anjay->servers->servers, AVS_TIME_DURATION_ZERO);
@@ -240,7 +220,7 @@ static int schedule_reload_servers(anjay_t *anjay, bool delayed) {
     if (_anjay_sched(anjay->sched, &anjay->reload_servers_sched_job_handle,
                      avs_time_duration_from_scalar(delayed ? RELOAD_DELAY_S : 0,
                                                    AVS_TIME_S),
-                     reload_servers_sched_job, NULL)) {
+                     reload_servers_sched_job, NULL, 0)) {
         anjay_log(ERROR, "could not schedule reload_servers_job");
         return -1;
     }
@@ -257,20 +237,29 @@ int _anjay_schedule_delayed_reload_servers(anjay_t *anjay) {
 
 int _anjay_schedule_reload_server(anjay_t *anjay, anjay_server_info_t *server) {
     assert(_anjay_server_active(server));
-    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
-    if (_anjay_sched_retryable(anjay->sched,
-                               &server->sched_update_or_reactivate_handle,
-                               AVS_TIME_DURATION_ZERO,
-                               ANJAY_SERVER_RETRYABLE_BACKOFF,
-                               reload_server_by_ssid_job,
-                               (void *) (uintptr_t) server->ssid)) {
+    _anjay_sched_del(anjay->sched, &server->next_action_handle);
+    if (_anjay_servers_schedule_first_retryable(
+            anjay->sched, server, AVS_TIME_DURATION_ZERO,
+            reload_server_by_ssid_job, server->ssid)) {
         anjay_log(ERROR, "could not schedule reload_server_by_ssid_job");
         return -1;
     }
     return 0;
 }
 
-int _anjay_schedule_reconnect_servers(anjay_t *anjay) {
+/**
+ * Schedules reconnection of all servers, and even downloader sockets. This is
+ * basically:
+ *
+ * - The same as _anjay_schedule_server_reconnect() but for all servers at once,
+ *   See the docs there for details.
+ * - Exits offline mode if it is currently enabled
+ * - Reschedules activation (calls _anjay_server_sched_activate()) for all
+ *   servers that have reached the ICMP failure limit
+ * - Calls _anjay_downloader_sched_reconnect_all() to reconnect downloader
+ *   sockets
+ */
+int anjay_schedule_reconnect(anjay_t *anjay) {
     int result = _anjay_schedule_reload_servers(anjay);
     if (result) {
         return result;
@@ -278,20 +267,16 @@ int _anjay_schedule_reconnect_servers(anjay_t *anjay) {
     anjay->offline = false;
     AVS_LIST(anjay_server_info_t) server;
     AVS_LIST_FOREACH(server, anjay->servers->servers) {
-        anjay_connection_ref_t ref = {
-            .server = server
-        };
-        for (ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
-                ref.conn_type < ANJAY_CONNECTION_LIMIT_;
-                ref.conn_type =
-                        (anjay_connection_type_t) (ref.conn_type + 1)) {
-            anjay_server_connection_t *connection =
-                    _anjay_get_server_connection(ref);
-            if (connection
-                    && _anjay_connection_internal_get_socket(connection)) {
-                connection->needs_reconnect = true;
-            }
-        }
+        _anjay_connection_suspend((anjay_connection_ref_t) {
+            .server = server,
+            .conn_type = ANJAY_CONNECTION_UNSET
+        });
     }
-    return 0;
+    result = _anjay_servers_sched_reactivate_all_given_up(anjay);
+#ifdef WITH_DOWNLOADER
+    if (!result) {
+        result = _anjay_downloader_sched_reconnect_all(&anjay->downloader);
+    }
+#endif // WITH_DOWNLOADER
+    return result;
 }

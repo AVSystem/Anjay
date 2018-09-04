@@ -41,7 +41,7 @@ static int url_parse_chunks(const char **url,
                             char delimiter,
                             char parser_terminator,
                             url_parse_chunks_hint_t hint,
-                            AVS_LIST(anjay_string_t) *out_chunks) {
+                            AVS_LIST(const anjay_string_t) *out_chunks) {
     const char *ptr = *url;
     do {
         if ((*ptr == '\0' || *ptr == delimiter || *ptr == parser_terminator)
@@ -116,10 +116,18 @@ int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url) {
         return -1;
     }
     int result = (avs_url_user(avs_url) || avs_url_password(avs_url)) ? -1 : 0;
+    if (!result) {
+        const char *protocol = avs_url_protocol(avs_url);
+        if (avs_strcasecmp(protocol, "coap") == 0) {
+            out_parsed_url->protocol = ANJAY_URL_PROTOCOL_COAP;
+        } else if (avs_strcasecmp(protocol, "coaps") == 0) {
+            out_parsed_url->protocol = ANJAY_URL_PROTOCOL_COAPS;
+        } else {
+            anjay_log(ERROR, "Unknown or unsupported protocol: %s", protocol);
+            result = -1;
+        }
+    }
     (void) (result
-            || (result = copy_string(out_parsed_url->protocol,
-                                     sizeof(out_parsed_url->protocol),
-                                     avs_url_protocol(avs_url)))
             || (result = copy_string(out_parsed_url->host,
                                      sizeof(out_parsed_url->host),
                                      avs_url_host(avs_url)))
@@ -180,23 +188,23 @@ uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
 }
 #endif
 
-AVS_LIST(const anjay_string_t)
-_anjay_copy_string_list(AVS_LIST(const anjay_string_t) input) {
-    AVS_LIST(const anjay_string_t) output = NULL;
-    AVS_LIST(const anjay_string_t) *outptr = &output;
+int _anjay_copy_string_list(AVS_LIST(const anjay_string_t) *outptr,
+                            AVS_LIST(const anjay_string_t) input) {
+    assert(!*outptr);
+    AVS_LIST(const anjay_string_t) *endptr = outptr;
 
     AVS_LIST_ITERATE(input) {
         size_t len = strlen(input->c_str) + 1;
-        if (!(*outptr = (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
+        if (!(*endptr = (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
             anjay_log(ERROR, "out of memory");
-            AVS_LIST_CLEAR(&output);
-            break;
+            AVS_LIST_CLEAR(outptr);
+            return -1;
         }
 
-        memcpy((char *) (intptr_t) (*outptr)->c_str, input->c_str, len);
-        AVS_LIST_ADVANCE_PTR(&outptr);
+        memcpy((char *) (intptr_t) (*endptr)->c_str, input->c_str, len);
+        AVS_LIST_ADVANCE_PTR(&endptr);
     }
-    return output;
+    return 0;
 }
 
 AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
@@ -226,35 +234,15 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
     return strings_list;
 }
 
-static const struct {
-    anjay_binding_mode_t binding;
-    const char *str;
-} BINDING_MODE_AS_STR[] = {
-    { ANJAY_BINDING_U,   "U" },
-    { ANJAY_BINDING_UQ,  "UQ" },
-    { ANJAY_BINDING_S,   "S" },
-    { ANJAY_BINDING_SQ,  "SQ" },
-    { ANJAY_BINDING_US,  "US" },
-    { ANJAY_BINDING_UQS, "UQS" }
-};
-
-const char *anjay_binding_mode_as_str(anjay_binding_mode_t binding_mode) {
-    for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_MODE_AS_STR); ++i) {
-        if (BINDING_MODE_AS_STR[i].binding == binding_mode) {
-            return BINDING_MODE_AS_STR[i].str;
+bool anjay_binding_mode_valid(const char *binding_mode) {
+    static const char *const VALID_BINDINGS[] =
+            { "U", "UQ", "S", "SQ", "US", "UQS" };
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(VALID_BINDINGS); ++i) {
+        if (strcmp(binding_mode, VALID_BINDINGS[i]) == 0) {
+            return true;
         }
     }
-    return NULL;
-}
-
-anjay_binding_mode_t anjay_binding_mode_from_str(const char *str) {
-    for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_MODE_AS_STR); ++i) {
-        if (strcmp(str, BINDING_MODE_AS_STR[i].str) == 0) {
-            return BINDING_MODE_AS_STR[i].binding;
-        }
-    }
-    anjay_log(WARNING, "unsupported binding mode string: %s", str);
-    return ANJAY_BINDING_NONE;
+    return false;
 }
 
 static int append_string_query_arg(AVS_LIST(const anjay_string_t) *list,
@@ -278,9 +266,8 @@ AVS_LIST(const anjay_string_t)
 _anjay_make_query_string_list(const char *version,
                               const char *endpoint_name,
                               const int64_t *lifetime,
-                              anjay_binding_mode_t binding_mode,
+                              const char *binding_mode,
                               const char *sms_msisdn) {
-    const char *binding_mode_str = NULL;
     AVS_LIST(const anjay_string_t) list = NULL;
 
     if (version && append_string_query_arg(&list, "lwm2m", version)) {
@@ -303,9 +290,7 @@ _anjay_make_query_string_list(const char *version,
         AVS_LIST_APPEND(&list, lt);
     }
 
-    binding_mode_str = anjay_binding_mode_as_str(binding_mode);
-    if (binding_mode_str
-            && append_string_query_arg(&list, "b", binding_mode_str)) {
+    if (binding_mode && append_string_query_arg(&list, "b", binding_mode)) {
         goto fail;
     }
 

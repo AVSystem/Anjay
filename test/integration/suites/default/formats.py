@@ -147,3 +147,10 @@ class NonTlvAndNonJsonCreate(FormatTest.Test):
         self.create_instance_with_arbitrary_payload(self.serv, oid=OID.Test, iid=IID,
                                                     format=FormatTest.UNSUPPORTED_FORMAT,
                                                     expect_error_code=coap.Code.RES_UNSUPPORTED_CONTENT_FORMAT)
+
+class TlvRIDIncompatibleWithPathRID(FormatTest.Test):
+    def runTest(self):
+        self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter,
+                            format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                            content=TLV.make_resource(resource_id=RID.Test.ResBytesSize, content=123).serialize(),
+                            expect_error_code=coap.Code.RES_BAD_REQUEST)

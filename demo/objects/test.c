@@ -41,6 +41,7 @@
 #define TEST_RES_FLOAT                14
 #define TEST_RES_STRING               15
 #define TEST_RES_OBJLNK               16
+#define TEST_RES_BYTES_ZERO_BEGIN     17
 
 typedef struct test_array_entry_struct {
     anjay_riid_t index;
@@ -59,6 +60,7 @@ typedef struct test_instance_struct {
     int32_t volatile_res_value;
     int32_t bytes_size;
     int32_t bytes_burst;
+    bool bytes_zero_begin;
     void *raw_bytes;
     size_t raw_bytes_size;
     AVS_LIST(test_array_entry_t) array;
@@ -160,6 +162,7 @@ static int test_instance_create(anjay_t *anjay,
     created->execute_counter = 0;
     created->bytes_size = 0;
     created->bytes_burst = 1000;
+    created->bytes_zero_begin = false;
 
     AVS_LIST(test_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &test->instances) {
@@ -262,41 +265,43 @@ static int test_resource_read(anjay_t *anjay,
         return anjay_ret_array_finish(array);
     }
     case TEST_RES_BYTES: {
-        if (!inst->bytes_size) {
+        int result = 0;
+        if (!inst->bytes_size && !inst->bytes_zero_begin) {
             return 0;
         }
         anjay_ret_bytes_ctx_t *bytes_ctx =
                 anjay_ret_bytes_begin(ctx, (size_t) inst->bytes_size);
-        char *buffer = (char *) avs_malloc((size_t) inst->bytes_burst);
-        if (!buffer) {
-            demo_log(ERROR, "Out of memory");
-            return -1;
+        if (!bytes_ctx) {
+            return ANJAY_ERR_INTERNAL;
         }
-        int result = 0;
-        int32_t counter = 0;
-        for (int32_t offset = 0;
-                offset < inst->bytes_size;
-                offset += inst->bytes_burst) {
-            int32_t bytes_to_write = inst->bytes_size - offset;
-            if (bytes_to_write > inst->bytes_burst) {
-                bytes_to_write = inst->bytes_burst;
+        if (inst->bytes_size) {
+            char *buffer = (char *) avs_malloc((size_t) inst->bytes_burst);
+            if (!buffer) {
+                demo_log(ERROR, "Out of memory");
+                return -1;
             }
-            for (int32_t i = 0; i < bytes_to_write; ++i) {
-                buffer[i] = (char) (counter++ % 128);
+            int32_t counter = 0;
+            for (int32_t offset = 0;
+                    offset < inst->bytes_size;
+                    offset += inst->bytes_burst) {
+                int32_t bytes_to_write = inst->bytes_size - offset;
+                if (bytes_to_write > inst->bytes_burst) {
+                    bytes_to_write = inst->bytes_burst;
+                }
+                for (int32_t i = 0; i < bytes_to_write; ++i) {
+                    buffer[i] = (char) (counter++ % 128);
+                }
+                result = anjay_ret_bytes_append(bytes_ctx, buffer,
+                                                (size_t) bytes_to_write);
+                if (result) {
+                    break;
+                }
             }
-            result = anjay_ret_bytes_append(bytes_ctx, buffer,
-                                            (size_t) bytes_to_write);
-            if (result) {
-                break;
-            }
+            avs_free(buffer);
         }
-        avs_free(buffer);
         return result;
     }
     case TEST_RES_RAW_BYTES: {
-        if (!inst->raw_bytes_size) {
-            return 0;
-        }
         anjay_ret_bytes_ctx_t *bytes_ctx =
                 anjay_ret_bytes_begin(ctx, inst->raw_bytes_size);
         if (!bytes_ctx) {
@@ -347,6 +352,8 @@ static int test_resource_read(anjay_t *anjay,
     case TEST_RES_INCREMENT_COUNTER:
     case TEST_RES_INIT_INT_ARRAY:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    case TEST_RES_BYTES_ZERO_BEGIN:
+        return anjay_ret_bool(ctx, inst->bytes_zero_begin);
     default:
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -456,6 +463,8 @@ static int test_resource_write(anjay_t *anjay,
     case TEST_RES_OBJLNK:
         return anjay_get_objlnk(ctx, &inst->test_res_objlnk.oid,
                                 &inst->test_res_objlnk.iid);
+    case TEST_RES_BYTES_ZERO_BEGIN:
+        return anjay_get_bool(ctx, &inst->bytes_zero_begin);
     case TEST_RES_TIMESTAMP:
     case TEST_RES_INCREMENT_COUNTER:
     case TEST_RES_LAST_EXEC_ARGS_ARRAY:
@@ -715,7 +724,8 @@ const anjay_dm_object_def_t TEST_OBJECT = {
             TEST_RES_BOOL,
             TEST_RES_FLOAT,
             TEST_RES_STRING,
-            TEST_RES_OBJLNK),
+            TEST_RES_OBJLNK,
+            TEST_RES_BYTES_ZERO_BEGIN),
     .handlers = {
         .instance_it = test_instance_it,
         .instance_present = test_instance_present,

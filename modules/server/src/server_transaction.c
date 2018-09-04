@@ -51,7 +51,7 @@ static int validate_instance(server_instance_t *it) {
                 it, "missing mandatory 'Short Server ID' resource value");
         return -1;
     }
-    if (!it->has_binding) {
+    if (!it->data.binding) {
         LOG_VALIDATION_FAILED(it, "missing mandatory 'Binding' resource value");
         return -1;
     }
@@ -75,9 +75,9 @@ static int validate_instance(server_instance_t *it) {
         LOG_VALIDATION_FAILED(it, "Default Max Period is 0");
         return -1;
     }
-    if (it->data.binding == ANJAY_BINDING_NONE) {
-        LOG_VALIDATION_FAILED(it, "Incorrect binding mode %d",
-                              (int) it->data.binding);
+    if (!anjay_binding_mode_valid(it->data.binding)) {
+        LOG_VALIDATION_FAILED(it, "Incorrect binding mode %s",
+                              it->data.binding);
         return -1;
     }
     return 0;

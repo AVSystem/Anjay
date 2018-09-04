@@ -24,6 +24,7 @@
 
 #include "../anjay_core.h"
 #include "../servers.h"
+#include "../servers_utils.h"
 #include "../interface/register.h"
 
 #include "activate.h"
@@ -43,38 +44,41 @@ VISIBILITY_SOURCE_BEGIN
  * seconds. */
 #define ANJAY_MIN_UPDATE_INTERVAL_S 1
 
-static anjay_sched_retryable_result_t
-send_update_sched_job(anjay_t *anjay, void *ssid_) {
-    anjay_ssid_t ssid = (anjay_ssid_t) (uintptr_t) ssid_;
+static void send_update_sched_job(anjay_t *anjay, const void *ssid_ptr) {
+    anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
     assert(ssid != ANJAY_SSID_ANY);
 
     AVS_LIST(anjay_server_info_t) server =
-            _anjay_servers_find_active(anjay->servers, ssid);
+            _anjay_servers_find_active(anjay, ssid);
     if (!server) {
-        return ANJAY_SCHED_RETRY;
+        return;
     }
 
     if (_anjay_active_server_refresh(anjay, server)) {
         if (!_anjay_server_registration_expired(server)) {
-            return ANJAY_SCHED_RETRY;
+            goto retry;
         }
     } else if (ssid == ANJAY_SSID_BOOTSTRAP) {
-        return ANJAY_SCHED_FINISH;
+        return;
     } else {
-        server->data_active.registration_info.needs_update = true;
-        switch (_anjay_server_registration_update_if_necessary(anjay, server)) {
+        switch (_anjay_server_registration_update(anjay, server)) {
         case ANJAY_UPDATE_SUCCESS:
-            return ANJAY_SCHED_FINISH;
+            return;
         case ANJAY_UPDATE_NEEDS_REGISTRATION:
             break;
         case ANJAY_UPDATE_FAILED:
-            return ANJAY_SCHED_RETRY;
+            goto retry;
         }
     }
     // mark that the registration is expired; prevents superfluous Deregister
     server->data_active.registration_info.expire_time = AVS_TIME_REAL_INVALID;
     _anjay_server_deactivate(anjay, ssid, AVS_TIME_DURATION_ZERO);
-    return ANJAY_SCHED_FINISH;
+    return;
+retry:
+    if (_anjay_servers_schedule_next_retryable(anjay->sched, server,
+                                               send_update_sched_job, ssid)) {
+        anjay_log(ERROR, "could not reschedule send_update_sched_job");
+    }
 }
 
 /**
@@ -99,25 +103,19 @@ get_server_update_interval_margin(anjay_t *anjay,
     }
 }
 
-static int
-schedule_update(anjay_t *anjay,
-                anjay_sched_handle_t *out_handle,
-                const anjay_server_info_t *server,
-                avs_time_duration_t delay) {
+static int schedule_update(anjay_t *anjay,
+                           anjay_server_info_t *server,
+                           avs_time_duration_t delay) {
     anjay_log(DEBUG, "scheduling update for SSID %u after "
                      "%" PRId64 ".%09" PRId32,
               server->ssid, delay.seconds, delay.nanoseconds);
 
-    return _anjay_sched_retryable(anjay->sched, out_handle, delay,
-                                  ANJAY_SERVER_RETRYABLE_BACKOFF,
-                                  send_update_sched_job,
-                                  (void *) (uintptr_t) server->ssid);
+    return _anjay_servers_schedule_first_retryable(
+            anjay->sched, server, delay,
+            send_update_sched_job, server->ssid);
 }
 
-static int
-schedule_next_update(anjay_t *anjay,
-                     anjay_sched_handle_t *out_handle,
-                     anjay_server_info_t *server) {
+static int schedule_next_update(anjay_t *anjay, anjay_server_info_t *server) {
     assert(_anjay_server_active(server));
     avs_time_duration_t remaining = _anjay_register_time_remaining(
             &server->data_active.registration_info);
@@ -130,7 +128,7 @@ schedule_next_update(anjay_t *anjay,
                                                   AVS_TIME_S);
     }
 
-    return schedule_update(anjay, out_handle, server, remaining);
+    return schedule_update(anjay, server, remaining);
 }
 
 bool _anjay_server_primary_connection_valid(anjay_server_info_t *server) {
@@ -143,26 +141,10 @@ bool _anjay_server_primary_connection_valid(anjay_server_info_t *server) {
                        }) != NULL;
 }
 
-bool _anjay_server_registration_expired(anjay_server_info_t *server) {
-    assert(_anjay_server_active(server));
-    avs_time_duration_t remaining = _anjay_register_time_remaining(
-            &server->data_active.registration_info);
-    // avs_time_duration_less() returns false when either argument is INVALID;
-    // the direction of this comparison is chosen so that it causes the
-    // registration to be considered expired
-    if (!avs_time_duration_less(AVS_TIME_DURATION_ZERO, remaining)) {
-        anjay_log(DEBUG, "Registration Lifetime expired for SSID = %u, "
-                  "forcing re-register", server->ssid);
-        return true;
-    }
-    return false;
-}
-
 int _anjay_server_reschedule_update_job(anjay_t *anjay,
                                         anjay_server_info_t *server) {
-    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
-    if (schedule_next_update(anjay, &server->sched_update_or_reactivate_handle,
-                             server)) {
+    _anjay_sched_del(anjay->sched, &server->next_action_handle);
+    if (schedule_next_update(anjay, server)) {
         anjay_log(ERROR, "could not schedule next Update for server %u",
                   server->ssid);
         return -1;
@@ -172,9 +154,8 @@ int _anjay_server_reschedule_update_job(anjay_t *anjay,
 
 static int reschedule_update_for_server(anjay_t *anjay,
                                         anjay_server_info_t *server) {
-    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
-    if (schedule_update(anjay, &server->sched_update_or_reactivate_handle,
-                        server, AVS_TIME_DURATION_ZERO)) {
+    _anjay_sched_del(anjay->sched, &server->next_action_handle);
+    if (schedule_update(anjay, server, AVS_TIME_DURATION_ZERO)) {
         anjay_log(ERROR, "could not schedule send_update_sched_job");
         return -1;
     }
@@ -198,6 +179,23 @@ reschedule_update_for_all_servers(anjay_t *anjay) {
     return result;
 }
 
+/**
+ * Reschedules Update for a specified server or all servers. In the very end, it
+ * calls schedule_update(), which basically speeds up the scheduled Update
+ * operation (it is normally scheduled for "just before the lifetime expires",
+ * this function reschedules it to now. The scheduled job is
+ * send_update_sched_job() and it is also used for regular Updates.
+ *
+ * Aside from being a public API, this is also called in:
+ *
+ * - anjay_register_object() and anjay_unregister_object(), to force an Update
+ *   when the set of available Objects changed
+ * - serv_execute(), as a default implementation of Registration Update Trigger
+ * - server_modified_notify(), to force an Update whenever Lifetime or Binding
+ *   change
+ * - _anjay_schedule_reregister(), although that's probably rather superfluous -
+ *   see the docs of that function for details
+ */
 int anjay_schedule_registration_update(anjay_t *anjay,
                                        anjay_ssid_t ssid) {
     if (anjay_is_offline(anjay)) {
@@ -210,8 +208,7 @@ int anjay_schedule_registration_update(anjay_t *anjay,
     if (ssid == ANJAY_SSID_ANY) {
         result = reschedule_update_for_all_servers(anjay);
     } else {
-        anjay_server_info_t *server =
-                _anjay_servers_find_active(anjay->servers, ssid);
+        anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
         if (!server) {
             anjay_log(ERROR, "no active server with SSID = %u", ssid);
             result = -1;
@@ -223,68 +220,25 @@ int anjay_schedule_registration_update(anjay_t *anjay,
     return result;
 }
 
-int anjay_schedule_reconnect(anjay_t *anjay) {
-    int result = _anjay_schedule_reconnect_servers(anjay);
-    if (!result) {
-        result = _anjay_servers_sched_reactivate_all_given_up(anjay);
-    }
-#ifdef WITH_DOWNLOADER
-    if (!result) {
-        result = _anjay_downloader_sched_reconnect_all(&anjay->downloader);
-    }
-#endif // WITH_DOWNLOADER
-    return result;
-}
-
 int _anjay_schedule_reregister(anjay_t *anjay, anjay_server_info_t *server) {
-    // mark that the registration connection is no longer valid;
-    // forces re-register
     assert(_anjay_server_active(server));
-    server->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
-    return anjay_schedule_registration_update(anjay, server->ssid);
+    server->data_active.registration_info.expire_time = AVS_TIME_REAL_INVALID;
+    return _anjay_server_deactivate(anjay, server->ssid,
+                                    AVS_TIME_DURATION_ZERO);
 }
 
 int _anjay_schedule_server_reconnect(anjay_t *anjay,
                                      anjay_server_info_t *server) {
     assert(_anjay_server_active(server));
-    anjay_connection_ref_t ref = {
-        .server = server
-    };
-    for (ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
-            ref.conn_type < ANJAY_CONNECTION_LIMIT_;
-            ref.conn_type = (anjay_connection_type_t) (ref.conn_type + 1)) {
-        anjay_server_connection_t *connection =
-                _anjay_get_server_connection(ref);
-        if (connection && _anjay_connection_internal_get_socket(connection)) {
-            connection->needs_reconnect = true;
-        }
-    }
+    _anjay_connection_suspend((anjay_connection_ref_t) {
+        .server = server,
+        .conn_type = ANJAY_CONNECTION_UNSET
+    });
     return _anjay_schedule_reload_server(anjay, server);
 }
 
-static int
-registration_update_if_necessary_with_ctx(anjay_t *anjay,
-                                          anjay_registration_update_ctx_t *ctx,
-                                          anjay_server_info_t *server) {
-    (void) anjay;
-
-    if (!_anjay_server_primary_connection_valid(server)) {
-        anjay_log(INFO, "No valid existing connection to Registration "
-                  "Interface for SSID = %u, needs re-registration",
-                  server->ssid);
-        server->data_active.registration_info.expire_time =
-                AVS_TIME_REAL_INVALID;
-        return (int) ANJAY_UPDATE_NEEDS_REGISTRATION;
-    }
-
-    if (_anjay_server_registration_expired(server)) {
-        return (int) ANJAY_UPDATE_NEEDS_REGISTRATION;
-    }
-
-    if (!_anjay_needs_registration_update(ctx)) {
-        return (int) ANJAY_UPDATE_SUCCESS;
-    }
-
+static int registration_update_with_ctx(anjay_registration_update_ctx_t *ctx,
+                                        anjay_server_info_t *server) {
     int retval = _anjay_update_registration(ctx);
     switch (retval) {
     case 0:
@@ -321,7 +275,25 @@ static int
 ensure_valid_registration_with_ctx(anjay_t *anjay,
                                    anjay_registration_update_ctx_t *ctx,
                                    anjay_server_info_t *server) {
-    switch (registration_update_if_necessary_with_ctx(anjay, ctx, server)) {
+    anjay_update_result_t update_result;
+
+    if (!_anjay_server_primary_connection_valid(server)) {
+        anjay_log(INFO, "No valid existing connection to Registration "
+                  "Interface for SSID = %u, needs re-registration",
+                  server->ssid);
+        server->data_active.registration_info.expire_time =
+                AVS_TIME_REAL_INVALID;
+        update_result = ANJAY_UPDATE_NEEDS_REGISTRATION;
+    } else if (_anjay_server_registration_expired(server)) {
+        update_result = ANJAY_UPDATE_NEEDS_REGISTRATION;
+    } else if (!_anjay_needs_registration_update(ctx)) {
+        update_result = ANJAY_UPDATE_SUCCESS;
+    } else {
+        update_result = (anjay_update_result_t)
+                registration_update_with_ctx(ctx, server);
+    }
+
+    switch (update_result) {
     case (int) ANJAY_UPDATE_SUCCESS:
         return (int) ANJAY_REGISTRATION_SUCCESS;
     case (int) ANJAY_UPDATE_NEEDS_REGISTRATION: {
@@ -385,11 +357,33 @@ static int perform_registration_action(anjay_t *anjay,
     return retval;
 }
 
+static int
+registration_update_if_possible_with_ctx(anjay_t *anjay,
+                                         anjay_registration_update_ctx_t *ctx,
+                                         anjay_server_info_t *server) {
+    (void) anjay;
+
+    if (!_anjay_server_primary_connection_valid(server)) {
+        anjay_log(INFO, "No valid existing connection to Registration "
+                  "Interface for SSID = %u, needs re-registration",
+                  server->ssid);
+        server->data_active.registration_info.expire_time =
+                AVS_TIME_REAL_INVALID;
+        return (int) ANJAY_UPDATE_NEEDS_REGISTRATION;
+    }
+
+    if (_anjay_server_registration_expired(server)) {
+        return (int) ANJAY_UPDATE_NEEDS_REGISTRATION;
+    }
+
+    return registration_update_with_ctx(ctx, server);
+}
+
 anjay_update_result_t
-_anjay_server_registration_update_if_necessary(anjay_t *anjay,
-                                               anjay_server_info_t *server) {
+_anjay_server_registration_update(anjay_t *anjay,
+                                  anjay_server_info_t *server) {
     int result = perform_registration_action(
-            anjay, server, registration_update_if_necessary_with_ctx);
+            anjay, server, registration_update_if_possible_with_ctx);
     return result >= 0 ? (anjay_update_result_t) result : ANJAY_UPDATE_FAILED;
 }
 
@@ -456,14 +450,14 @@ void _anjay_server_update_registration_info(
         info->last_update_params.dm = move_params->dm;
         move_params->dm = tmp;
 
-        assert(move_params->lifetime_s >= 0);
         info->last_update_params.lifetime_s = move_params->lifetime_s;
-        info->last_update_params.binding_mode = move_params->binding_mode;
+        memcpy(&info->last_update_params.binding_mode,
+               &move_params->binding_mode,
+               sizeof(info->last_update_params.binding_mode));
 
         _anjay_update_parameters_cleanup(move_params);
     }
 
     info->expire_time =
             get_registration_expire_time(info->last_update_params.lifetime_s);
-    info->needs_update = false;
 }

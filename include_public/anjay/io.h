@@ -37,7 +37,7 @@ typedef struct anjay_ret_bytes_ctx_struct anjay_ret_bytes_ctx_t;
  * in conjunction with @ref anjay_ret_bytes_append to return a large blob of
  * data in multiple chunks.
  *
- * Example: file content in a RPC response.
+ * Example: file content in an RPC response.
  *
  * @code
  * FILE *file;
@@ -58,6 +58,10 @@ typedef struct anjay_ret_bytes_ctx_struct anjay_ret_bytes_ctx_t;
  * }
  *
  * @endcode
+ *
+ * If a zero-length value is to be returned, it is safe both not to call
+ * @ref anjay_ret_bytes_append at all, or to call it any number of times with
+ * a <c>length</c> argument equal to zero.
  *
  * @param ctx    Output context to write data into.
  * @param length Size of the data to be written.

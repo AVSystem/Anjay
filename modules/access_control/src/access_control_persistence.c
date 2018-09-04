@@ -185,6 +185,7 @@ int anjay_access_control_persist(anjay_t *anjay,
                                   persist_instance, NULL, NULL);
     if (!retval) {
         ac_log(INFO, "Access Control state persisted");
+        _anjay_access_control_clear_modified(ac);
     }
     avs_persistence_context_delete(ctx);
     return retval;
@@ -210,6 +211,7 @@ int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
         return -1;
     }
     if (!(retval = restore(anjay, ac, in))) {
+        _anjay_access_control_clear_modified(ac);
         ac_log(INFO, "Access Control state restored");
     }
     return retval;

@@ -37,10 +37,11 @@
 #include <anjay_config_log.h>
 
 #include "anjay_core.h"
-#include "utils_core.h"
 #include "dm_core.h"
-#include "io_core.h"
 #include "downloader.h"
+#include "io_core.h"
+#include "servers_utils.h"
+#include "utils_core.h"
 #include "coap/content_format.h"
 #include "coap/coap_stream.h"
 #include "coap/id_source/auto.h"
@@ -787,8 +788,7 @@ void _anjay_release_server_stream(anjay_t *anjay) {
 static int udp_serve(anjay_t *anjay,
                      avs_net_abstract_socket_t *ready_socket) {
     anjay_connection_ref_t connection = {
-        .server = _anjay_servers_find_by_udp_socket(anjay->servers,
-                                                    ready_socket),
+        .server = _anjay_servers_find_by_udp_socket(anjay, ready_socket),
         .conn_type = ANJAY_CONNECTION_UDP
     };
     if (!connection.server

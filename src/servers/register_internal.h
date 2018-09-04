@@ -35,17 +35,14 @@ typedef enum {
 } anjay_update_result_t;
 
 /**
- * Sends the Update message if registration is still valid and either
- * server->data_active.registration_info.needs_update is set or registration
- * information has changed.
+ * Sends the Update message.
  *
  * @param anjay  Anjay object to operate on.
  * @param server Active non-bootstrap server for which to manage the
  *               registration state.
  */
 anjay_update_result_t
-_anjay_server_registration_update_if_necessary(anjay_t *anjay,
-                                               anjay_server_info_t *server);
+_anjay_server_registration_update(anjay_t *anjay, anjay_server_info_t *server);
 
 typedef enum {
     ANJAY_REGISTRATION_SUCCESS = 0,

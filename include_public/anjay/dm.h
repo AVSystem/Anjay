@@ -401,7 +401,11 @@ anjay_dm_resource_operations_t(anjay_t *anjay,
  * @param iid     Object Instance ID.
  * @param rid     Resource ID.
  * @param ctx     Output context to write the resource value to using the
- *                anjay_ret_* function family.
+ *                <c>anjay_ret_*</c> function family.
+ *
+ * NOTE: One of the <c>anjay_ret_*</c> functions <strong>MUST</strong> be called
+ * in this handler before returning successfully. Failure to do so will result
+ * in 5.00 Internal Server Error being sent to the server.
  *
  * @returns This handler should return:
  * - 0 on success,
@@ -843,55 +847,12 @@ int anjay_unregister_object(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *def_ptr);
 
 /**
- * Possible types of the LwM2M server binding mode.
+ * Checks whether the passed string is a valid LwM2M Binding Mode.
+ *
+ * @return true for <c>"U"</c>, <c>"S"</c>, <c>"US"</c>, <c>"UQ"</c>,
+ *         <c>"SQ"</c>, <c>"UQS"</c>, false in any other case.
  */
-typedef enum {
-    ANJAY_BINDING_NONE,
-    ANJAY_BINDING_U,
-    ANJAY_BINDING_UQ,
-    ANJAY_BINDING_S,
-    ANJAY_BINDING_SQ,
-    ANJAY_BINDING_US,
-    ANJAY_BINDING_UQS
-} anjay_binding_mode_t;
-
-/**
- * Attempts to parse c-string pointed by @p str as LwM2M Binding Mode. The
- * accepted string representations and their respective values are as follows:
- *
- * +------------------------+----------------------------+
- * | Textual representation | anjay_binding_mode_t value |
- * +------------------------+----------------------------+
- * |          "U"           |       ANJAY_BINDING_U      |
- * +------------------------+----------------------------+
- * |          "S"           |       ANJAY_BINDING_S      |
- * +------------------------+----------------------------+
- * |          "US"          |       ANJAY_BINDING_US     |
- * +------------------------+----------------------------+
- * |          "UQ"          |       ANJAY_BINDING_UQ     |
- * +------------------------+----------------------------+
- * |          "SQ"          |       ANJAY_BINDING_SQ     |
- * +------------------------+----------------------------+
- * |          "UQS"         |       ANJAY_BINDING_UQS    |
- * +------------------------+----------------------------+
- * |      anything else     |       ANJAY_BINDING_NONE   |
- * +------------------------+----------------------------+
- *
- * @returns one of the value of @ref anjay_binding_mode_t enum that matches textual
- * representation in the above table.
- */
-anjay_binding_mode_t anjay_binding_mode_from_str(const char *str);
-
-/**
- * Converts binding mode to a textual representation (as in the table in @ref
- * anjay_binding_mode_from_str) .
- *
- * WARNING: returned value MUST NOT be modified or freed in any way.
- *
- * @return NULL if @p binding_mode is @ref ANJAY_BINDING_NONE, otherwise a textual
- * representation as the table shows in @ref anjay_binding_mode_from_str documentation.
- */
-const char *anjay_binding_mode_as_str(anjay_binding_mode_t binding_mode);
+bool anjay_binding_mode_valid(const char *binding_mode);
 
 /**
  * Possible values of the Security Mode Resource, as described in the Security

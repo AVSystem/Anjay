@@ -13,8 +13,8 @@
 # limitations under the License.
 
 set(SOURCES
-    src/mod_attr_storage.c
-    src/attr_storage_persistence.c)
+    src/attr_storage_persistence.c
+    src/mod_attr_storage.c)
 set(PRIVATE_HEADERS
     src/mod_attr_storage.h)
 set(PUBLIC_HEADERS

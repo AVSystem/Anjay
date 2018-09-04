@@ -83,7 +83,7 @@ static int fill_coap_request_info(avs_coap_msg_info_t *req_info,
     req_info->code = AVS_COAP_CODE_GET;
     req_info->identity = ctx->last_req_id;
 
-    AVS_LIST(anjay_string_t) elem;
+    AVS_LIST(const anjay_string_t) elem;
     AVS_LIST_FOREACH(elem, ctx->uri.uri_path) {
         if (avs_coap_msg_info_opt_string(req_info, AVS_COAP_OPT_URI_PATH,
                                          elem->c_str)) {
@@ -111,7 +111,7 @@ static int fill_coap_request_info(avs_coap_msg_info_t *req_info,
     return 0;
 }
 
-static void request_coap_block_job(anjay_t *anjay, void *id);
+static void request_coap_block_job(anjay_t *anjay, const void *id_ptr);
 
 static int
 schedule_coap_retransmission(anjay_downloader_t *dl,
@@ -122,8 +122,8 @@ schedule_coap_retransmission(anjay_downloader_t *dl,
                                 &dl->rand_seed);
     _anjay_sched_del(anjay->sched, &ctx->sched_job);
     return _anjay_sched(anjay->sched, &ctx->sched_job,
-                        ctx->retry_state.recv_timeout,
-                        request_coap_block_job, (void *) ctx->common.id);
+                        ctx->retry_state.recv_timeout, request_coap_block_job,
+                        &ctx->common.id, sizeof(ctx->common.id));
 }
 
 static int request_coap_block(anjay_downloader_t *dl,
@@ -163,8 +163,8 @@ finish:
     return result;
 }
 
-static void request_coap_block_job(anjay_t *anjay, void *id_) {
-    uintptr_t id = (uintptr_t)id_;
+static void request_coap_block_job(anjay_t *anjay, const void *id_ptr) {
+    uintptr_t id = *(const uintptr_t *) id_ptr;
 
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
@@ -221,8 +221,8 @@ static int request_next_coap_block(anjay_downloader_t *dl,
     return 0;
 }
 
-static void request_next_coap_block_job(anjay_t *anjay, void *id_) {
-    uintptr_t id = (uintptr_t)id_;
+static void request_next_coap_block_job(anjay_t *anjay, const void *id_ptr) {
+    uintptr_t id = *(const uintptr_t *) id_ptr;
     AVS_LIST(anjay_download_ctx_t) *ctx =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!ctx) {
@@ -397,8 +397,9 @@ static void handle_coap_response(const avs_coap_msg_t *msg,
     }
 }
 
-static void abort_transfer_job(anjay_t *anjay, void *ctx_) {
-    AVS_LIST(anjay_download_ctx_t) ctx = (AVS_LIST(anjay_download_ctx_t))ctx_;
+static void abort_transfer_job(anjay_t *anjay, const void *ctx_) {
+    AVS_LIST(anjay_download_ctx_t) ctx =
+            *(AVS_LIST(anjay_download_ctx_t) const *) ctx_;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             // IAR compiler does not support typeof, so AVS_LIST_FIND_PTR
             // returns void**, which is not implicitly-convertible
@@ -473,7 +474,7 @@ static void handle_coap_message(anjay_downloader_t *dl,
 
             _anjay_sched_del(anjay->sched, &ctx->sched_job);
             _anjay_sched(anjay->sched, &ctx->sched_job, abort_delay,
-                         abort_transfer_job, *ctx_ptr);
+                         abort_transfer_job, ctx_ptr, sizeof(*ctx_ptr));
             return;
         }
     } else {
@@ -536,7 +537,7 @@ static int reconnect_coap_transfer(anjay_downloader_t *dl,
         _anjay_sched_del(anjay->sched, &ctx->sched_job);
         if (_anjay_sched_now(anjay->sched, &ctx->sched_job,
                              request_next_coap_block_job,
-                             (void *) ctx->common.id)) {
+                             &ctx->common.id, sizeof(ctx->common.id))) {
             dl_log(WARNING, "could not schedule resumption for download "
                    "id = %" PRIuPTR, ctx->common.id);
             return -ENOMEM;
@@ -602,14 +603,17 @@ int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
 
     avs_net_socket_type_t socket_type;
     const void *config;
-    if (!avs_strcasecmp(ctx->uri.protocol, "coap")) {
+    switch (ctx->uri.protocol) {
+    case ANJAY_URL_PROTOCOL_COAP:
         socket_type = AVS_NET_UDP_SOCKET;
         config = (const void *) &ssl_config.backend_configuration;
-    } else if (!avs_strcasecmp(ctx->uri.protocol, "coaps")) {
+        break;
+    case ANJAY_URL_PROTOCOL_COAPS:
         socket_type = AVS_NET_DTLS_SOCKET;
         config = (const void *) &ssl_config;
-    } else {
-        dl_log(ERROR, "unsupported protocol: %s", ctx->uri.protocol);
+        break;
+    default:
+        dl_log(ERROR, "unsupported protocol ID: %d", (int) ctx->uri.protocol);
         result = -EPROTONOSUPPORT;
         goto error;
     }
@@ -642,7 +646,7 @@ int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
 
     if (_anjay_sched_now(anjay->sched, &ctx->sched_job,
                          request_next_coap_block_job,
-                         (void *) ctx->common.id)) {
+                         &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(ERROR, "could not schedule download job");
         result = -ENOMEM;
         goto error;

@@ -79,11 +79,11 @@ typedef struct {
     bool saved_modified_since_persist;
 } sec_repr_t;
 
-static inline void mark_modified(sec_repr_t *repr) {
+static inline void _anjay_sec_mark_modified(sec_repr_t *repr) {
     repr->modified_since_persist = true;
 }
 
-static inline void clear_modified(sec_repr_t *repr) {
+static inline void _anjay_sec_clear_modified(sec_repr_t *repr) {
     repr->modified_since_persist = false;
 }
 

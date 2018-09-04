@@ -117,6 +117,16 @@ void _anjay_attr_storage_clear(anjay_attr_storage_t *fas) {
     }
 }
 
+void anjay_attr_storage_purge(anjay_t *anjay) {
+    anjay_attr_storage_t *fas = _anjay_attr_storage_get(anjay);
+    if (!fas) {
+        fas_log(ERROR, "Attribute Storage is not installed");
+        return;
+    }
+    _anjay_attr_storage_clear(fas);
+    _anjay_attr_storage_mark_modified(fas);
+}
+
 //// HELPERS ///////////////////////////////////////////////////////////////////
 
 static bool implements_any_object_default_attrs_handlers(
@@ -318,7 +328,7 @@ query_ssid(anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid) {
 static void remove_attrs_entry(anjay_attr_storage_t *fas,
                                AVS_LIST(void) *attrs_ptr) {
     AVS_LIST_DELETE(attrs_ptr);
-    mark_modified(fas);
+    _anjay_attr_storage_mark_modified(fas);
 }
 
 static void remove_attrs_for_server(anjay_attr_storage_t *fas,
@@ -518,7 +528,7 @@ static int write_attrs_impl(anjay_attr_storage_t *fas,
         }
         memcpy(get_attrs_ptr(*out_attrs, attrs_field_offset), attrs,
                attrs_field_size);
-        mark_modified(fas);
+        _anjay_attr_storage_mark_modified(fas);
     } else if (found) {
         // entry exists, but writing EMPTY set of attributes
         // hence - removing

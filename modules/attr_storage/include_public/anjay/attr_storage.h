@@ -19,7 +19,7 @@
 
 #include <avsystem/commons/stream.h>
 
-#include <anjay/core.h>
+#include <anjay/dm.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,14 +59,54 @@ extern "C" {
 int anjay_attr_storage_install(anjay_t *anjay);
 
 /**
- * Checks whether the attribute storage has been modified since last call to
- * @ref anjay_attr_storage_persist or @ref anjay_attr_storage_restore.
+ * Checks whether the attribute storage has been modified since last successful
+ * call to @ref anjay_attr_storage_persist or @ref anjay_attr_storage_restore.
  */
 bool anjay_attr_storage_is_modified(anjay_t *anjay);
 
+/**
+ * Removes all attributes from all entities, leaving the Attribute Storage in an
+ * empty state.
+ *
+ * @param anjay Anjay instance with the Attribute Storage installed to purge.
+ */
+void anjay_attr_storage_purge(anjay_t *anjay);
+
+/**
+ * Dumps all set attributes to the @p out_stream.
+ *
+ * @param anjay         Anjay instance with the Attribute Storage installed.
+ * @param out_stream    Stream to write to.
+ * @return 0 in case of success, negative value in case of an error.
+ */
 int anjay_attr_storage_persist(anjay_t *anjay,
                                avs_stream_abstract_t *out_stream);
 
+/**
+ * Attempts to restore attribute storage from specified @p in_stream.
+ *
+ * Note: before attempting restoration, the Attribute Storage is cleared, so no
+ * previously set attributes will be retained. In particular, if restore fails,
+ * then the Attribute Storage will be completely cleared and
+ * @ref anjay_attr_storage_is_modified will return <c>true</c>.
+ *
+ * @param anjay     Anjay instance with Security Object installed.
+ * @param in_stream Stream to read from.
+ * @return 0 in case of success, negative value in case of an error.
+ *
+ * <strong>NOTE:</strong> For historical reasons, this function behaves
+ * differently than all other <c>*_restore()</c> functions in Anjay in two ways:
+ *
+ * - On failed restoration, the storage is cleared, rather than left untouched
+ * - Zero-length stream is treated as valid, and causes the storage to be
+ *   cleared with success returned, instead of causing an error
+ *
+ * Relying on these behaviours is <strong>DEPRECATED</strong>. Future versions
+ * of Anjay may change the semantics of this function so that it retains the
+ * contents of Attribute Storage on failure, and does not treat empty streams as
+ * valid. It is <strong>RECOMMENDED</strong> that any new code involving this
+ * function is written to work properly with both semantics.
+ */
 int anjay_attr_storage_restore(anjay_t *anjay,
                                avs_stream_abstract_t *in_stream);
 

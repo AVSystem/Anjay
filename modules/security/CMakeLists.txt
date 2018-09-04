@@ -13,15 +13,20 @@
 # limitations under the License.
 
 set(SOURCES
-    src/security_utils.c
-    src/security_transaction.c
     src/mod_security.c
-    src/security_persistence.c)
+    src/security_persistence.c
+    src/security_transaction.c
+    src/security_utils.c)
+set(PRIVATE_HEADERS
+    src/mod_security.h
+    src/security_transaction.h
+    src/security_utils.h)
 set(PUBLIC_HEADERS
     include_public/anjay/security.h)
 
 set(TEST_SOURCES
     ${SOURCES}
+    ${PRIVATE_HEADERS}
     ${PUBLIC_HEADERS})
 
 include(../module_common.cmake)

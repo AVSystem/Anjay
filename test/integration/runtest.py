@@ -21,7 +21,7 @@ assert sys.version_info >= (3, 5), "Python < 3.5 is unsupported"
 
 import unittest
 import os
-import collections
+import collections.abc
 import argparse
 import time
 import tempfile
@@ -44,7 +44,7 @@ def traverse(tree, cls=None):
     if cls is None or isinstance(tree, cls):
         yield tree
 
-    if isinstance(tree, collections.Iterable):
+    if isinstance(tree, collections.abc.Iterable):
         for elem in tree:
             for sub_elem in traverse(elem, cls):
                 yield sub_elem

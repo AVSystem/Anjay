@@ -28,6 +28,7 @@
 #include "../dm/query.h"
 #include "../anjay_core.h"
 #include "../servers.h"
+#include "../servers_utils.h"
 #include "../interface/register.h"
 
 #include "activate.h"
@@ -36,6 +37,38 @@
 #include "servers_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
+
+int _anjay_servers_schedule_first_retryable(anjay_sched_t *sched,
+                                            anjay_server_info_t *server,
+                                            avs_time_duration_t delay,
+                                            anjay_sched_clb_t clb,
+                                            anjay_ssid_t ssid) {
+    assert(!server->next_action_handle);
+    server->next_retry_delay = avs_time_duration_from_scalar(1, AVS_TIME_S);
+    return _anjay_sched(sched, &server->next_action_handle, delay,
+                        clb, &ssid, sizeof(ssid));
+}
+
+int _anjay_servers_schedule_next_retryable(anjay_sched_t *sched,
+                                           anjay_server_info_t *server,
+                                           anjay_sched_clb_t clb,
+                                           anjay_ssid_t ssid) {
+    static const avs_time_duration_t MAX_BACKOFF = { 120, 0 };
+
+    assert(!server->next_action_handle);
+    int result = _anjay_sched(sched, &server->next_action_handle,
+                              server->next_retry_delay,
+                              clb, &ssid, sizeof(ssid));
+    if (result) {
+        return result;
+    }
+    server->next_retry_delay =
+            avs_time_duration_mul(server->next_retry_delay, 2);
+    if (avs_time_duration_less(MAX_BACKOFF, server->next_retry_delay)) {
+        server->next_retry_delay = MAX_BACKOFF;
+    }
+    return 0;
+}
 
 static void connection_cleanup(const anjay_t *anjay,
                                anjay_server_connection_t *connection) {
@@ -46,7 +79,7 @@ static void connection_cleanup(const anjay_t *anjay,
 
 void _anjay_server_clean_active_data(const anjay_t *anjay,
                                      anjay_server_info_t *server) {
-    _anjay_sched_del(anjay->sched, &server->sched_update_or_reactivate_handle);
+    _anjay_sched_del(anjay->sched, &server->next_action_handle);
     connection_cleanup(anjay, &server->data_active.udp_connection);
 }
 
@@ -119,15 +152,6 @@ _anjay_connection_get_online_socket(anjay_connection_ref_t ref) {
     return _anjay_connection_internal_get_socket(connection);
 }
 
-static avs_net_abstract_socket_t *
-get_online_connection_socket(anjay_server_info_t *server,
-                             anjay_connection_type_t conn_type) {
-    return _anjay_connection_get_online_socket((anjay_connection_ref_t) {
-                                                   .server = server,
-                                                   .conn_type = conn_type
-                                               });
-}
-
 static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
                                 avs_net_abstract_socket_t *socket,
                                 anjay_socket_transport_t transport,
@@ -146,6 +170,11 @@ static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
     return 0;
 }
 
+/**
+ * Repopulates the public_sockets list, adding to it all online UDP LwM2M
+ * sockets, the single SMS router socket (if applicable) and all active
+ * download sockets (if applicable).
+ */
 AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay) {
     AVS_LIST_CLEAR(&anjay->servers->public_sockets);
     AVS_LIST(anjay_socket_entry_t) *tail_ptr = &anjay->servers->public_sockets;
@@ -155,25 +184,35 @@ AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay) {
     // for all of them.
     bool sms_active = false;
     bool sms_queue_mode = true;
-    anjay_server_info_t *server;
-    AVS_LIST_FOREACH(server, anjay->servers->servers) {
-        if (!_anjay_server_active(server)) {
+    anjay_connection_ref_t ref;
+    AVS_LIST_FOREACH(ref.server, anjay->servers->servers) {
+        if (!_anjay_server_active(ref.server)) {
             continue;
         }
+
+        ref.conn_type = ANJAY_CONNECTION_UDP;
+        anjay_server_connection_t *udp_connection =
+                _anjay_get_server_connection(ref);
+        assert(udp_connection);
         avs_net_abstract_socket_t *udp_socket =
-                get_online_connection_socket(server, ANJAY_CONNECTION_UDP);
+                _anjay_connection_internal_get_socket(udp_connection);
         if (udp_socket
+                && _anjay_connection_is_online(udp_connection)
                 && !add_socket_onto_list(
                         tail_ptr, udp_socket, ANJAY_SOCKET_TRANSPORT_UDP,
-                        server->ssid,
-                        server->data_active.udp_connection.queue_mode)) {
+                        ref.server->ssid,
+                        udp_connection->mode == ANJAY_CONNECTION_QUEUE)) {
             AVS_LIST_ADVANCE_PTR(&tail_ptr);
         }
 
 #ifdef WITH_SMS
-        if (get_online_connection_socket(server, ANJAY_CONNECTION_SMS)) {
+        ref.conn_type = ANJAY_CONNECTION_SMS;
+        anjay_server_connection_t *sms_connection =
+                _anjay_get_server_connection(ref);
+        assert(sms_connection);
+        if (_anjay_connection_is_online(sms_connection)) {
             sms_active = true;
-            if (!server->data_active.sms_connection.queue_mode) {
+            if (sms_connection->mode == ANJAY_CONNECTION_ONLINE) {
                 sms_queue_mode = false;
             }
         }
@@ -192,64 +231,6 @@ AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay) {
 #endif // WITH_DOWNLOADER
     return anjay->servers->public_sockets;
 }
-
-AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
-    // We rely on the fact that the "socket" field is first in
-    // anjay_socket_entry_t, which means that both "entry" and "&entry->socket"
-    // point to exactly the same memory location. The "next" pointer location in
-    // AVS_LIST is independent from the stored data type, so it's safe to do
-    // such "cast".
-    AVS_STATIC_ASSERT(offsetof(anjay_socket_entry_t, socket) == 0,
-                      entry_socket_is_first_field);
-    return &anjay_get_socket_entries(anjay)->socket;
-}
-
-anjay_server_info_t *
-_anjay_servers_find_by_udp_socket(anjay_servers_t *servers,
-                                  avs_net_abstract_socket_t *socket) {
-    AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, servers->servers) {
-        if (_anjay_connection_internal_get_socket(
-                &it->data_active.udp_connection) == socket) {
-            return it;
-        }
-    }
-
-    return NULL;
-}
-
-static void deactivate_server_job(anjay_t *anjay, void *ssid_) {
-    _anjay_server_deactivate(anjay, (anjay_ssid_t) (intptr_t) ssid_,
-                             AVS_TIME_DURATION_ZERO);
-}
-
-int _anjay_schedule_socket_update(anjay_t *anjay,
-                                  anjay_iid_t security_iid) {
-    anjay_ssid_t ssid;
-    anjay_server_info_t *server;
-    if (!_anjay_ssid_from_security_iid(anjay, security_iid, &ssid)
-            && (server = _anjay_servers_find_active(anjay->servers, ssid))) {
-        // mark the registration as expired; prevents superfluous Deregister
-        server->data_active.registration_info.expire_time =
-                AVS_TIME_REAL_INVALID;
-        return _anjay_sched_now(anjay->sched, NULL, deactivate_server_job,
-                                (void *) (uintptr_t) ssid);
-    }
-    return 0;
-}
-
-#ifdef WITH_BOOTSTRAP
-bool _anjay_servers_is_connected_to_non_bootstrap(anjay_servers_t *servers) {
-    AVS_LIST(anjay_server_info_t) server;
-    AVS_LIST_FOREACH(server, servers->servers) {
-        if (_anjay_server_active(server)
-                && server->ssid != ANJAY_SSID_BOOTSTRAP) {
-            return true;
-        }
-    }
-    return false;
-}
-#endif
 
 AVS_LIST(anjay_server_info_t) *
 _anjay_servers_find_insert_ptr(anjay_servers_t *servers, anjay_ssid_t ssid) {
@@ -274,55 +255,8 @@ _anjay_servers_find_ptr(anjay_servers_t *servers, anjay_ssid_t ssid) {
     return NULL;
 }
 
-anjay_server_info_t *_anjay_servers_find_active(anjay_servers_t *servers,
-                                                anjay_ssid_t ssid) {
-    AVS_LIST(anjay_server_info_t) *ptr =
-            _anjay_servers_find_ptr(servers, ssid);
-    AVS_ASSERT((!ptr || *ptr), "_anjay_servers_find_ptr broken");
-    return (ptr && *ptr && _anjay_server_active(*ptr)) ? *ptr : NULL;
-}
-
-static bool is_valid_coap_uri(const anjay_url_t *uri) {
-    if (strcmp(uri->protocol, "coap") && strcmp(uri->protocol, "coaps")) {
-        anjay_log(ERROR, "unsupported protocol: %s", uri->protocol);
-        return false;
-    }
-    return true;
-}
-
-int _anjay_server_get_uri(anjay_t *anjay,
-                          anjay_iid_t security_iid,
-                          anjay_url_t *out_uri) {
-    char raw_uri[ANJAY_MAX_URL_RAW_LENGTH];
-
-    const anjay_uri_path_t path =
-            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                               ANJAY_DM_RID_SECURITY_SERVER_URI);
-
-    if (_anjay_dm_res_read_string(anjay, &path, raw_uri, sizeof(raw_uri))) {
-        anjay_log(ERROR, "could not read LwM2M server URI");
-        return -1;
-    }
-
-    anjay_url_t uri = ANJAY_URL_EMPTY;
-    if (_anjay_parse_url(raw_uri, &uri) || !is_valid_coap_uri(&uri)) {
-        _anjay_url_cleanup(&uri);
-        anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
-        return -1;
-    }
-    if (!*uri.port) {
-        if (uri.protocol[4]) { // coap_s_
-            strcpy(uri.port, "5684");
-        } else { // coap_\0_
-            strcpy(uri.port, "5683");
-        }
-    }
-    *out_uri = uri;
-    return 0;
-}
-
-static void disable_server_job(anjay_t *anjay, void *ssid_) {
-    anjay_ssid_t ssid = (anjay_ssid_t)(intptr_t)ssid_;
+static void disable_server_job(anjay_t *anjay, const void *ssid_ptr) {
+    anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
 
     anjay_iid_t server_iid;
     if (_anjay_find_server_iid(anjay, ssid, &server_iid)) {
@@ -335,10 +269,15 @@ static void disable_server_job(anjay_t *anjay, void *ssid_) {
     }
 }
 
-int anjay_disable_server(anjay_t *anjay,
-                         anjay_ssid_t ssid) {
-    if (_anjay_sched_now(anjay->sched, NULL, disable_server_job,
-                         (void *) (uintptr_t) ssid)) {
+/**
+ * Disables a specified server - in a scheduler job which calls
+ * _anjay_server_deactivate(). The reactivation timeout is read from data model.
+ * See the documentation of _anjay_schedule_reload_servers() for details on how
+ * does the deactivation procedure work.
+ */
+int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid) {
+    if (_anjay_sched_now(anjay->sched, NULL,
+                         disable_server_job, &ssid, sizeof(ssid))) {
         anjay_log(ERROR, "could not schedule disable_server_job");
         return -1;
     }
@@ -350,8 +289,10 @@ typedef struct {
     avs_time_duration_t timeout;
 } disable_server_data_t;
 
-static void disable_server_with_timeout_job(anjay_t *anjay, void *data_) {
-    disable_server_data_t *data = (disable_server_data_t *) data_;
+static void disable_server_with_timeout_job(anjay_t *anjay,
+                                            const void *data_ptr_) {
+    const disable_server_data_t *data =
+            (const disable_server_data_t *) data_ptr_;
     if (_anjay_server_deactivate(anjay, data->ssid, data->timeout)) {
         anjay_log(ERROR, "unable to deactivate server: %" PRIu16, data->ssid);
     } else {
@@ -363,9 +304,19 @@ static void disable_server_with_timeout_job(anjay_t *anjay, void *data_) {
             anjay_log(INFO, "server %" PRIu16 " disabled", data->ssid);
         }
     }
-    avs_free(data);
 }
 
+/**
+ * Basically the same as anjay_disable_server(), but with explicit timeout value
+ * instead of reading it from the data model.
+ *
+ * Aside from being a public API, it is called from:
+ *
+ * - bootstrap_finish_impl(), to deactivate the Bootstrap Server connection if
+ *   Server-Initiated Bootstrap is disabled
+ * - serv_execute(), as a reference implementation of the Disable resource
+ * - _anjay_schedule_socket_update(), to force reconnection of all sockets
+ */
 int anjay_disable_server_with_timeout(anjay_t *anjay,
                                       anjay_ssid_t ssid,
                                       avs_time_duration_t timeout) {
@@ -374,20 +325,13 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
         return -1;
     }
 
-    disable_server_data_t *data = (disable_server_data_t *)
-            avs_malloc(sizeof(*data));
+    disable_server_data_t data = {
+        .ssid = ssid,
+        .timeout = timeout
+    };
 
-    if (!data) {
-        anjay_log(ERROR, "out of memory");
-        return -1;
-    }
-
-    data->ssid = ssid;
-    data->timeout = timeout;
-
-    if (_anjay_sched_now(anjay->sched, NULL,
-                         disable_server_with_timeout_job, data)) {
-        avs_free(data);
+    if (_anjay_sched_now(anjay->sched, NULL, disable_server_with_timeout_job,
+                         &data, sizeof(data))) {
         anjay_log(ERROR, "could not schedule disable_server_with_timeout_job");
         return -1;
     }
@@ -395,6 +339,13 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
     return 0;
 }
 
+/**
+ * Schedules server activation immediately, after some sanity checks.
+ *
+ * The activation request is rejected if someone tries to enable the Bootstrap
+ * Server, Client-Initiated Bootstrap is not supposed to be performed, and
+ * Server-Initiated Bootstrap is administratively disabled.
+ */
 int anjay_enable_server(anjay_t *anjay,
                         anjay_ssid_t ssid) {
     if (ssid == ANJAY_SSID_ANY) {
@@ -459,23 +410,8 @@ _anjay_server_primary_conn_type(anjay_server_info_t *server) {
     return server->data_active.primary_conn_type;
 }
 
-void _anjay_server_require_reload(anjay_server_info_t *server) {
-    server->data_active.needs_reload = true;
-}
-
 const anjay_url_t *_anjay_server_uri(anjay_server_info_t *server) {
     return &server->data_active.uri;
-}
-
-size_t _anjay_servers_count_non_bootstrap(anjay_t *anjay) {
-    size_t num_servers = 0;
-    AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
-        if (_anjay_server_ssid(it) != ANJAY_SSID_BOOTSTRAP) {
-            ++num_servers;
-        }
-    }
-    return num_servers;
 }
 
 int _anjay_servers_foreach_ssid(anjay_t *anjay,

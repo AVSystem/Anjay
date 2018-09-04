@@ -51,6 +51,7 @@ typedef struct {
 
 typedef struct {
     AVS_LIST(access_control_instance_t) instances;
+    bool modified_since_persist;
 } access_control_state_t;
 
 typedef struct {
@@ -60,6 +61,15 @@ typedef struct {
     bool needs_validation;
     bool sync_in_progress;
 } access_control_t;
+
+static inline void _anjay_access_control_mark_modified(access_control_t *repr) {
+    repr->current.modified_since_persist = true;
+}
+
+static inline void
+_anjay_access_control_clear_modified(access_control_t *repr) {
+    repr->current.modified_since_persist = false;
+}
 
 typedef const anjay_dm_object_def_t *const *obj_ptr_t;
 

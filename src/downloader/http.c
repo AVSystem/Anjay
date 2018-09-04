@@ -140,9 +140,9 @@ static void handle_http_packet(anjay_downloader_t *dl,
     } while (nonblock_read_ready > 0);
 }
 
-static void send_request(anjay_t *anjay, void *id_) {
+static void send_request(anjay_t *anjay, const void *id_ptr) {
     int error_code = ANJAY_DOWNLOAD_ERR_FAILED;
-    uintptr_t id = (uintptr_t) id_;
+    uintptr_t id = *(const uintptr_t *) id_ptr;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!ctx_ptr) {
@@ -282,7 +282,7 @@ static int reconnect_http_transfer(anjay_downloader_t *dl,
     anjay_t *anjay = _anjay_downloader_get_anjay(dl);
     _anjay_sched_del(anjay->sched, &ctx->send_request_job);
     if (_anjay_sched_now(anjay->sched, &ctx->send_request_job, send_request,
-                         (void *) ctx->common.id)) {
+                         &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(ERROR, "could not schedule download job");
         return -ENOMEM;
     }
@@ -346,7 +346,7 @@ int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
 
     if (_anjay_sched_now(_anjay_downloader_get_anjay(dl)->sched,
                          &ctx->send_request_job, send_request,
-                         (void *) ctx->common.id)) {
+                         &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(ERROR, "could not schedule download job");
         result = -ENOMEM;
         goto error;

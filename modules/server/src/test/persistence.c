@@ -76,10 +76,7 @@ static void assert_instances_equal(const server_instance_t *a,
     if (a->has_ssid) {
         AVS_UNIT_ASSERT_EQUAL(a->data.ssid, b->data.ssid);
     }
-    AVS_UNIT_ASSERT_EQUAL(a->has_binding, b->has_binding);
-    if (a->has_binding) {
-        AVS_UNIT_ASSERT_EQUAL(a->data.binding, b->data.binding);
-    }
+    AVS_UNIT_ASSERT_EQUAL_STRING(a->data.binding, b->data.binding);
     AVS_UNIT_ASSERT_EQUAL(a->has_lifetime, b->has_lifetime);
     if (a->has_lifetime) {
         AVS_UNIT_ASSERT_EQUAL(a->data.lifetime, b->data.lifetime);
@@ -112,7 +109,7 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .default_min_period = -1,
         .default_max_period = -1,
         .disable_timeout = -1,
-        .binding = ANJAY_BINDING_U,
+        .binding = "U",
         .notification_storing = true
     };
     anjay_iid_t iid = 1;
@@ -127,7 +124,6 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .iid = 1,
         .data = instance,
         .has_ssid = true,
-        .has_binding = true,
         .has_lifetime = true,
         .has_notification_storing = true
     };
@@ -147,11 +143,11 @@ AVS_UNIT_TEST(server_persistence, modification_flag_add_instance) {
             env->anjay_stored, &invalid_instance, &iid));
     AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->anjay_stored));
     /* Same thing applies if the flag already was set to true */
-    mark_modified(_anjay_serv_get(env->stored));
+    _anjay_serv_mark_modified(_anjay_serv_get(env->stored));
     AVS_UNIT_ASSERT_FAILED(anjay_server_object_add_instance(
             env->anjay_stored, &invalid_instance, &iid));
     AVS_UNIT_ASSERT_TRUE(anjay_server_object_is_modified(env->anjay_stored));
-    clear_modified(_anjay_serv_get(env->stored));
+    _anjay_serv_clear_modified(_anjay_serv_get(env->stored));
 
     const anjay_server_instance_t instance = {
         .ssid = 42,
@@ -159,7 +155,7 @@ AVS_UNIT_TEST(server_persistence, modification_flag_add_instance) {
         .default_min_period = -1,
         .default_max_period = -1,
         .disable_timeout = -1,
-        .binding = ANJAY_BINDING_U,
+        .binding = "U",
         .notification_storing = true
     };
     /* And valid instance does change the flag */
@@ -181,14 +177,14 @@ AVS_UNIT_TEST(server_persistence, modification_flag_purge) {
         .default_min_period = -1,
         .default_max_period = -1,
         .disable_timeout = -1,
-        .binding = ANJAY_BINDING_U,
+        .binding = "U",
         .notification_storing = true
     };
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_server_object_add_instance(env->anjay_stored, &instance, &iid));
     AVS_UNIT_ASSERT_TRUE(anjay_server_object_is_modified(env->anjay_stored));
     /* Simulate persistence operation. */
-    clear_modified(_anjay_serv_get(env->stored));
+    _anjay_serv_clear_modified(_anjay_serv_get(env->stored));
     AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->anjay_stored));
     anjay_server_object_purge(env->anjay_stored);
     AVS_UNIT_ASSERT_TRUE(anjay_server_object_is_modified(env->anjay_stored));

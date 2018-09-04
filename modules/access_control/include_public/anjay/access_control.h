@@ -43,6 +43,13 @@ extern "C" {
 int anjay_access_control_install(anjay_t *anjay);
 
 /**
+ * Removes all instances of Access Control Object, leaving it in an empty state.
+ *
+ * @param anjay ANJAY object with the Access Control module installed
+ */
+void anjay_access_control_purge(anjay_t *anjay);
+
+/**
  * Dumps Access Control Object Instances to the @p out_stream.
  *
  * @param anjay         ANJAY object with the Access Control module installed
@@ -61,6 +68,13 @@ int anjay_access_control_persist(anjay_t *anjay,
  */
 int anjay_access_control_restore(anjay_t *anjay,
                                  avs_stream_abstract_t *in_stream);
+
+/**
+ * Checks whether the Access Control Object from Anjay instance has been
+ * modified since last successful call to @ref anjay_access_control_persist or
+ * @ref anjay_access_control_restore.
+ */
+bool anjay_access_control_is_modified(anjay_t *anjay);
 
 /**
  * Assign permissions for Instance /OID/IID to a particular server.

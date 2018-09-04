@@ -79,7 +79,7 @@ class BasicClientBlockRequest:
                            seq_num_end=None,
                            validate=True,
                            send_ack=None):
-                payload = b''
+                payload = bytearray()
                 expected_seq_num = seq_num_begin
                 wait_for_more = True
 
