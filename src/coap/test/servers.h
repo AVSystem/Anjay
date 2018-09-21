@@ -31,18 +31,23 @@ avs_net_abstract_socket_t *_anjay_test_setup_udp_ack_echo_socket(uint16_t port);
 avs_net_abstract_socket_t *_anjay_test_setup_udp_reset_socket(uint16_t port);
 
 // responds with 2 packets: ACK with mismatched ID and then a correct Reset
-avs_net_abstract_socket_t *_anjay_test_setup_udp_mismatched_ack_then_reset_socket(uint16_t port);
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_mismatched_ack_then_reset_socket(uint16_t port);
 
 // always responds with random data
 avs_net_abstract_socket_t *_anjay_test_setup_udp_garbage_socket(uint16_t port);
 
 // responds with 2 packets: Reset with mismatched ID and then a correct ACK
-avs_net_abstract_socket_t *_anjay_test_setup_udp_mismatched_reset_then_ack_socket(uint16_t port);
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_mismatched_reset_then_ack_socket(uint16_t port);
 
 // responds with 2 packets: random data and then a correct ACK
-avs_net_abstract_socket_t *_anjay_test_setup_udp_garbage_then_ack_socket(uint16_t port);
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_garbage_then_ack_socket(uint16_t port);
 
-// responds with 3 packets: bare ACK, mismatched NON with garbage and NON with echo
-avs_net_abstract_socket_t *_anjay_test_setup_udp_long_separate_socket(uint16_t port);
+// responds with 3 packets: bare ACK, mismatched NON with garbage and NON with
+// echo
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_long_separate_socket(uint16_t port);
 
 #endif // ANJAY_COAP_TEST_SERVERS_H

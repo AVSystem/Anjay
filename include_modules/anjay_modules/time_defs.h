@@ -17,9 +17,9 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_TIME_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_TIME_H
 
+#include <assert.h>
 #include <stdint.h>
 #include <time.h>
-#include <assert.h>
 
 #include <avsystem/commons/time.h>
 
@@ -31,4 +31,3 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_TIME_H */
-

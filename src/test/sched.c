@@ -16,11 +16,11 @@
 
 #include <anjay_config.h>
 
-#include <avsystem/commons/unit/test.h>
 #include <anjay_test/mock_clock.h>
+#include <avsystem/commons/unit/test.h>
 
 static void increment_task(anjay_t *anjay, const void *counter_ptr_ptr) {
-    (void)anjay;
+    (void) anjay;
     ++**(int *const *) counter_ptr_ptr;
 }
 
@@ -30,9 +30,7 @@ typedef struct {
 
 static sched_test_env_t setup_test(void) {
     _anjay_mock_clock_start(avs_time_monotonic_from_scalar(0, AVS_TIME_S));
-    return (sched_test_env_t){
-        _anjay_sched_new(NULL)
-    };
+    return (sched_test_env_t) { _anjay_sched_new(NULL) };
 }
 
 static void teardown_test(sched_test_env_t *env) {
@@ -45,9 +43,9 @@ AVS_UNIT_TEST(sched, sched_now) {
 
     int counter = 0;
     anjay_sched_handle_t task = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched_now(env.sched, &task, increment_task,
-                             &(int *) { &counter }, sizeof(int *)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_now(env.sched, &task, increment_task,
+                                             &(int *) { &counter },
+                                             sizeof(int *)));
     AVS_UNIT_ASSERT_NOT_NULL(task);
     AVS_UNIT_ASSERT_EQUAL(1, _anjay_sched_run(env.sched));
     AVS_UNIT_ASSERT_EQUAL(1, counter);
@@ -63,9 +61,9 @@ AVS_UNIT_TEST(sched, sched_delayed) {
             avs_time_duration_from_scalar(1, AVS_TIME_S);
     int counter = 0;
     anjay_sched_handle_t task = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched(env.sched, &task, delay, increment_task,
-                         &(int *) { &counter }, sizeof(int *)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched(env.sched, &task, delay,
+                                         increment_task, &(int *) { &counter },
+                                         sizeof(int *)));
     AVS_UNIT_ASSERT_NOT_NULL(task);
     AVS_UNIT_ASSERT_EQUAL(0, _anjay_sched_run(env.sched));
     AVS_UNIT_ASSERT_EQUAL(0, counter);
@@ -86,9 +84,9 @@ AVS_UNIT_TEST(sched, sched_del) {
             avs_time_duration_from_scalar(1, AVS_TIME_S);
     int counter = 0;
     anjay_sched_handle_t task = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_sched(env.sched, &task, delay, increment_task,
-                         &(int *) { &counter }, sizeof(int *)));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_sched(env.sched, &task, delay,
+                                         increment_task, &(int *) { &counter },
+                                         sizeof(int *)));
     AVS_UNIT_ASSERT_NOT_NULL(task);
     AVS_UNIT_ASSERT_EQUAL(0, _anjay_sched_run(env.sched));
     AVS_UNIT_ASSERT_EQUAL(0, counter);

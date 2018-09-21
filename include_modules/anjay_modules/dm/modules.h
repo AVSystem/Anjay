@@ -101,4 +101,3 @@ void *_anjay_dm_module_get_arg(anjay_t *anjay, const anjay_dm_module_t *module);
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_DM_MODULES_H */
-

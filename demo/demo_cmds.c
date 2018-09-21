@@ -14,34 +14,31 @@
  * limitations under the License.
  */
 
-#include "demo.h"
 #include "demo_cmds.h"
+#include "demo.h"
 #include "demo_utils.h"
 #include "firmware_update.h"
 
 #include <ctype.h>
-#include <string.h>
 #include <inttypes.h>
+#include <string.h>
 
 #include <anjay/attr_storage.h>
 #include <anjay/security.h>
 
 #include <avsystem/commons/memory.h>
 
-static int parse_ssid(const char *text,
-                      anjay_ssid_t *out_ssid) {
+static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
     unsigned id;
-    if (sscanf(text, "%u", &id) < 1
-            || id > UINT16_MAX) {
+    if (sscanf(text, "%u", &id) < 1 || id > UINT16_MAX) {
         demo_log(ERROR, "invalid Short Server ID: %s", text);
         return -1;
     }
-    *out_ssid = (uint16_t)id;
+    *out_ssid = (uint16_t) id;
     return 0;
 }
 
-static void cmd_send_update(anjay_demo_t *demo,
-                            const char *args_string) {
+static void cmd_send_update(anjay_demo_t *demo, const char *args_string) {
     anjay_ssid_t ssid = ANJAY_SSID_ANY;
     if (*args_string && parse_ssid(args_string, &ssid)) {
         return;
@@ -56,9 +53,8 @@ static void cmd_send_update(anjay_demo_t *demo,
     }
 }
 
-static void cmd_reconnect(anjay_demo_t *demo,
-                          const char *args_string) {
-    (void)args_string;
+static void cmd_reconnect(anjay_demo_t *demo, const char *args_string) {
+    (void) args_string;
 
     if (anjay_schedule_reconnect(demo->anjay)) {
         demo_log(ERROR, "could not schedule reconnect");
@@ -163,7 +159,7 @@ static void cmd_trim_servers(anjay_demo_t *demo, const char *args_string) {
 static void cmd_socket_count(anjay_demo_t *demo, const char *args_string) {
     (void) args_string;
     printf("SOCKET_COUNT==%lu\n",
-           (unsigned long)AVS_LIST_SIZE(anjay_get_sockets(demo->anjay)));
+           (unsigned long) AVS_LIST_SIZE(anjay_get_sockets(demo->anjay)));
 }
 
 static void cmd_get_port(anjay_demo_t *demo, const char *args_string) {
@@ -180,8 +176,8 @@ static void cmd_get_port(anjay_demo_t *demo, const char *args_string) {
         index = num_sockets + index;
     }
     if (index < 0 || index >= num_sockets) {
-        demo_log(ERROR, "Index out of range: %d; num_sockets == %d",
-                        index, num_sockets);
+        demo_log(ERROR, "Index out of range: %d; num_sockets == %d", index,
+                 num_sockets);
     }
     char port[16] = "0";
     AVS_LIST(avs_net_abstract_socket_t *const) socket =
@@ -206,8 +202,8 @@ static void cmd_get_transport(anjay_demo_t *demo, const char *args_string) {
         index = num_sockets + index;
     }
     if (index < 0 || index >= num_sockets) {
-        demo_log(ERROR, "Index out of range: %d; num_sockets == %d",
-                        index, num_sockets);
+        demo_log(ERROR, "Index out of range: %d; num_sockets == %d", index,
+                 num_sockets);
     }
     AVS_LIST(const anjay_socket_entry_t) entry =
             AVS_LIST_NTH(entries, (size_t) index);
@@ -263,8 +259,8 @@ static void cmd_notify(anjay_demo_t *demo, const char *args_string) {
         (void) anjay_notify_instances_changed(demo->anjay, oid);
     } else {
         demo_log(WARNING, "notify usage:\n"
-                "1. notify /OID\n"
-                "2. notify /OID/IID/RID");
+                          "1. notify /OID\n"
+                          "2. notify /OID/IID/RID");
         return;
     }
 }
@@ -310,11 +306,9 @@ static int dl_write_next_block(anjay_t *anjay,
     return 0;
 }
 
-static void dl_finished(anjay_t *anjay,
-                        int result,
-                        void *user_data) {
+static void dl_finished(anjay_t *anjay, int result, void *user_data) {
     (void) anjay;
-    fclose((FILE *)user_data);
+    fclose((FILE *) user_data);
     demo_log(INFO, "download finished, result == %d", result);
 }
 
@@ -325,7 +319,8 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
     char psk_key[256] = "";
 
     if (sscanf(args_string, "%255s %255s %255s %255s", url, target_file,
-               psk_identity, psk_key) < 2) {
+               psk_identity, psk_key)
+            < 2) {
         demo_log(ERROR, "invalid URL or target file in: %s", args_string);
         return;
     }
@@ -429,8 +424,7 @@ static void cmd_enable_server(anjay_demo_t *demo, const char *args_string) {
     }
 
     if (anjay_enable_server(demo->anjay, ssid)) {
-        demo_log(ERROR, "could not enable server with SSID %" PRIu16,
-                 ssid);
+        demo_log(ERROR, "could not enable server with SSID %" PRIu16, ssid);
         return;
     }
 }
@@ -440,14 +434,15 @@ static void cmd_help(anjay_demo_t *demo, const char *args_string);
 struct cmd_handler_def {
     const char *cmd_name;
     size_t cmd_name_length;
-    void (*handler)(anjay_demo_t*, const char*);
+    void (*handler)(anjay_demo_t *, const char *);
     const char *help_args;
     const char *help_descr;
 };
 
 #define CMD_HANDLER(name, args, func, help) \
-{ (name), sizeof(name) - 1, (func), (args), (help) }
+    { (name), sizeof(name) - 1, (func), (args), (help) }
 static const struct cmd_handler_def COMMAND_HANDLERS[] = {
+    // clang-format off
     CMD_HANDLER("send-update", "[ssid=0]",
                 cmd_send_update, "Sends Update messages to LwM2M servers"),
     CMD_HANDLER("reconnect", "", cmd_reconnect,
@@ -489,6 +484,7 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("enable-server", "ssid", cmd_enable_server,
                 "Enables a server with given SSID."),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
+    // clang-format on
 };
 #undef CMD_HANDLER
 
@@ -534,8 +530,8 @@ static void print_with_indent(const char *text) {
 }
 
 static void cmd_help(anjay_demo_t *demo, const char *args_string) {
-    (void)demo;
-    (void)args_string;
+    (void) demo;
+    (void) args_string;
 
     puts("---");
     puts("LwM2M Demo client");
@@ -548,8 +544,7 @@ static void cmd_help(anjay_demo_t *demo, const char *args_string) {
     puts("---");
 }
 
-static void handle_command(anjay_demo_t *demo,
-                           const char *buf) {
+static void handle_command(anjay_demo_t *demo, const char *buf) {
     size_t cmdIdx = 0;
     static const size_t num_command_handlers =
             sizeof(COMMAND_HANDLERS) / sizeof(COMMAND_HANDLERS[0]);
@@ -569,7 +564,6 @@ static void handle_command(anjay_demo_t *demo,
     fflush(stdout);
 }
 
-
 void demo_command_dispatch(short revents, void *demo_) {
     anjay_demo_t *demo = (anjay_demo_t *) demo_;
     if (revents & POLLHUP) {
@@ -578,7 +572,7 @@ void demo_command_dispatch(short revents, void *demo_) {
     if (revents & POLLIN) {
         static char buf[500] = "";
 
-        if (fgets(buf, sizeof (buf), stdin) && buf[0]) {
+        if (fgets(buf, sizeof(buf), stdin) && buf[0]) {
             buf[strlen(buf) - 1] = 0;
             handle_command(demo, buf);
         }

@@ -30,9 +30,11 @@ typedef struct {
     anjay_ssid_t ssid;
     /** Resource: Lifetime */
     int32_t lifetime;
-    /** Resource: Default Minimum Period - or a negative value to disable presence */
+    /** Resource: Default Minimum Period - or a negative value to disable
+     * presence */
     int32_t default_min_period;
-    /** Resource: Default Maximum Period - or a negative value to disable presence */
+    /** Resource: Default Maximum Period - or a negative value to disable
+     * presence */
     int32_t default_max_period;
     /** Resource: Disable Timeout - or a negative value to disable presence */
     int32_t disable_timeout;
@@ -64,7 +66,6 @@ typedef struct {
 int anjay_server_object_add_instance(anjay_t *anjay,
                                      const anjay_server_instance_t *instance,
                                      anjay_iid_t *inout_iid);
-
 
 /**
  * Removes all instances of Server Object leaving it in an empty state.

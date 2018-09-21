@@ -67,12 +67,27 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
 /**
  * Default transmission params recommended by the CoAP specification (RFC 7252).
  */
-#define ANJAY_COAP_DEFAULT_UDP_TX_PARAMS  \
-    {                                     \
-        /* .ack_timeout_ms = */ { 2, 0 }, \
-        /* .ack_random_factor = */ 1.5,   \
-        /* .max_retransmit = */ 4         \
+// clang-format off
+#define ANJAY_COAP_DEFAULT_UDP_TX_PARAMS \
+    {                                    \
+        /* .ack_timeout = */ { 2, 0 },   \
+        /* .ack_random_factor = */ 1.5,  \
+        /* .max_retransmit = */ 4        \
     }
+// clang-format on
+
+/**
+ * Default handshake retransmission params recommended by the DTLS specification
+ * (RFC 6347), i.e: 1s for the initial response, growing exponentially (with
+ * each retransmission) up to maximum of 60s.
+ */
+// clang-format off
+#define ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS \
+    {                                       \
+        /* .min = */ { 1, 0 },              \
+        /* .max = */ { 60, 0 }              \
+    }
+// clang-format on
 
 /**
  * Default transmission params for SMS connections.
@@ -80,12 +95,14 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
  * This set of parameters ensures MAX_TRANSMIT_WAIT is equal to the default
  * (i.e. CoAP specified) MAX_TRANSMIT_WAIT, while disabling retransmissions.
  */
-#define ANJAY_COAP_DEFAULT_SMS_TX_PARAMS   \
-    {                                      \
-        /* .ack_timeout_ms = */ { 62, 0 }, \
-        /* .ack_random_factor = */ 1.5,    \
-        /* .max_retransmit = */ 0          \
+// clang-format off
+#define ANJAY_COAP_DEFAULT_SMS_TX_PARAMS \
+    {                                    \
+        /* .ack_timeout = */ { 62, 0 },  \
+        /* .ack_random_factor = */ 1.5,  \
+        /* .max_retransmit = */ 0        \
     }
+// clang-format on
 
 typedef struct anjay_configuration {
     /**
@@ -154,6 +171,42 @@ typedef struct anjay_configuration {
      * modified later on.
      */
     const avs_coap_tx_params_t *udp_tx_params;
+
+    /**
+     * Configuration of the DTLS handshake retransmission timeouts for UDP
+     * connection.
+     *
+     * If NULL, the default configuration
+     * @ref ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS will be selected.
+     *
+     * NOTE: Parameters are copied during @ref anjay_new() and cannot be
+     * modified later on.
+     *
+     * IMPORTANT: In case of a need to adjust DTLS retransmission params to
+     * match the CoAP retransmission params, the @ref udp_dtls_hs_tx_params
+     * shall be initialized as `dtls_hs_params` is in the following code
+     * snippet:
+     * @code
+     *  const avs_coap_tx_params_t coap_tx_params = {
+     *      // ... some initialization
+     *  };
+     *
+     *  // Without ACK_RANDOM_FACTOR = 1.0, it is impossible to create a DTLS HS
+     *  // configuration that matches CoAP retransmission configuration
+     *  // perfectly.
+     *  assert(coap_tx_params.ack_random_factor == 1.0);
+     *
+     *  const avs_net_dtls_handshake_timeouts_t dtls_hs_tx_params = {
+     *      .min = avs_time_duration_fmul(coap_tx_params.ack_timeout,
+     *                                    coap_tx_params.ack_random_factor),
+     *      .max = avs_time_duration_fmul(
+     *              coap_tx_params.ack_timeout,
+     *              (1 << coap_tx_params.max_retransmit)
+     *                  * coap_tx_params.ack_random_factor)
+     *  };
+     * @endcode
+     */
+    const avs_net_dtls_handshake_timeouts_t *udp_dtls_hs_tx_params;
 
     /**
      * Configuration of the CoAP transmission params for SMS connection, as per
@@ -363,8 +416,7 @@ AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay);
  * @returns 0 on success, a negative value in case of error. Note that it
  *          includes non-fatal errors, such as receiving a malformed packet.
  */
-int anjay_serve(anjay_t *anjay,
-                avs_net_abstract_socket_t *ready_socket);
+int anjay_serve(anjay_t *anjay, avs_net_abstract_socket_t *ready_socket);
 
 /** Object ID */
 typedef uint16_t anjay_oid_t;
@@ -386,37 +438,53 @@ typedef uint16_t anjay_riid_t;
 #define ANJAY_COAP_STATUS(Maj, Min) ((uint8_t) ((Maj << 5) | (Min & 0x1F)))
 
 /** Error values that may be returned from data model handlers. @{ */
-/** Request sent by the LwM2M Server was malformed or contained an invalid
- * value. */
-#define ANJAY_ERR_BAD_REQUEST                (-ANJAY_COAP_STATUS(4,  0))
-/** LwM2M Server is not allowed to perform the operation due to lack of
- * necessary access rights. */
-#define ANJAY_ERR_UNAUTHORIZED               (-ANJAY_COAP_STATUS(4,  1))
-/** Low-level CoAP error code; used internally by Anjay when CoAP option values
- * were invalid. */
-#define ANJAY_ERR_BAD_OPTION                 (-ANJAY_COAP_STATUS(4,  2))
-#define ANJAY_ERR_FORBIDDEN                  (-ANJAY_COAP_STATUS(4,  3))
+/**
+ * Request sent by the LwM2M Server was malformed or contained an invalid
+ * value.
+ */
+#define ANJAY_ERR_BAD_REQUEST (-ANJAY_COAP_STATUS(4, 0))
+/**
+ * LwM2M Server is not allowed to perform the operation due to lack of
+ * necessary access rights.
+ */
+#define ANJAY_ERR_UNAUTHORIZED (-ANJAY_COAP_STATUS(4, 1))
+/**
+ * Low-level CoAP error code; used internally by Anjay when CoAP option values
+ * were invalid.
+ */
+#define ANJAY_ERR_BAD_OPTION (-ANJAY_COAP_STATUS(4, 2))
+#define ANJAY_ERR_FORBIDDEN (-ANJAY_COAP_STATUS(4, 3))
 /** Target of the operation (Object/Instance/Resource) does not exist. */
-#define ANJAY_ERR_NOT_FOUND                  (-ANJAY_COAP_STATUS(4,  4))
-/** Operation is not allowed in current device state or the attempted operation
- * is invalid for this target (Object/Instance/Resource) */
-#define ANJAY_ERR_METHOD_NOT_ALLOWED         (-ANJAY_COAP_STATUS(4,  5))
-/** Low-level CoAP error code; used internally by Anjay when the client is
- * unable to encode response in requested content format. */
-#define ANJAY_ERR_NOT_ACCEPTABLE             (-ANJAY_COAP_STATUS(4,  6))
-/** Low-level CoAP error code; used internally by Anjay in case of unrecoverable
- * problems during block-wise transfer. */
-#define ANJAY_ERR_REQUEST_ENTITY_INCOMPLETE  (-ANJAY_COAP_STATUS(4,  8))
-/** The server requested operation has a Content Format option that is unsupported
- * by Anjay. */
+#define ANJAY_ERR_NOT_FOUND (-ANJAY_COAP_STATUS(4, 4))
+/**
+ * Operation is not allowed in current device state or the attempted operation
+ * is invalid for this target (Object/Instance/Resource)
+ */
+#define ANJAY_ERR_METHOD_NOT_ALLOWED (-ANJAY_COAP_STATUS(4, 5))
+/**
+ * Low-level CoAP error code; used internally by Anjay when the client is
+ * unable to encode response in requested content format.
+ */
+#define ANJAY_ERR_NOT_ACCEPTABLE (-ANJAY_COAP_STATUS(4, 6))
+/**
+ * Low-level CoAP error code; used internally by Anjay in case of unrecoverable
+ * problems during block-wise transfer.
+ */
+#define ANJAY_ERR_REQUEST_ENTITY_INCOMPLETE (-ANJAY_COAP_STATUS(4, 8))
+/**
+ * The server requested operation has a Content Format option that is
+ * unsupported by Anjay.
+ */
 #define ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT (-ANJAY_COAP_STATUS(4, 15))
 /** Unspecified error, no other error code was suitable. */
-#define ANJAY_ERR_INTERNAL                   (-ANJAY_COAP_STATUS(5,  0))
+#define ANJAY_ERR_INTERNAL (-ANJAY_COAP_STATUS(5, 0))
 /** Operation is not implemented by the LwM2M Client. */
-#define ANJAY_ERR_NOT_IMPLEMENTED            (-ANJAY_COAP_STATUS(5,  1))
-/** LwM2M Client is busy processing some other request; LwM2M Server may retry
- * sending the same request after some delay. */
-#define ANJAY_ERR_SERVICE_UNAVAILABLE        (-ANJAY_COAP_STATUS(5,  3))
+#define ANJAY_ERR_NOT_IMPLEMENTED (-ANJAY_COAP_STATUS(5, 1))
+/**
+ * LwM2M Client is busy processing some other request; LwM2M Server may retry
+ * sending the same request after some delay.
+ */
+#define ANJAY_ERR_SERVICE_UNAVAILABLE (-ANJAY_COAP_STATUS(5, 3))
 /** @} */
 
 /**
@@ -430,8 +498,7 @@ typedef uint16_t anjay_riid_t;
  *
  * @returns 0 on success, or a negative value if no tasks are scheduled.
  */
-int anjay_sched_time_to_next(anjay_t *anjay,
-                             avs_time_duration_t *out_delay);
+int anjay_sched_time_to_next(anjay_t *anjay, avs_time_duration_t *out_delay);
 
 /**
  * Determines time of next scheduled task in milliseconds.
@@ -494,8 +561,7 @@ int anjay_sched_run(anjay_t *anjay);
  *
  * @returns 0 on success, a negative value in case of error.
  */
-int anjay_schedule_registration_update(anjay_t *anjay,
-                                       anjay_ssid_t ssid);
+int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid);
 
 /**
  * Reconnects sockets associated with all connected servers and ongoing
@@ -572,8 +638,7 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
  *
  * @returns 0 on success, a negative value in case of error.
  */
-int anjay_enable_server(anjay_t *anjay,
-                        anjay_ssid_t ssid);
+int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid);
 
 /**
  * Checks whether anjay is currently in offline state.

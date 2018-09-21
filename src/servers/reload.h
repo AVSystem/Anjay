@@ -20,7 +20,7 @@
 #include <anjay/core.h>
 
 #if !defined(ANJAY_SERVERS_INTERNALS) && !defined(ANJAY_TEST)
-#error "Headers from servers/ are not meant to be included from outside"
+#    error "Headers from servers/ are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN

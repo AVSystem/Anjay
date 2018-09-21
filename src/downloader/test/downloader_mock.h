@@ -21,6 +21,6 @@
 
 AVS_UNIT_MOCK_CREATE(_anjay_create_connected_udp_socket)
 #define _anjay_create_connected_udp_socket(...) \
-        AVS_UNIT_MOCK_WRAPPER(_anjay_create_connected_udp_socket)(__VA_ARGS__)
+    AVS_UNIT_MOCK_WRAPPER(_anjay_create_connected_udp_socket)(__VA_ARGS__)
 
 #endif /* ANJAY_TEST_DOWNLOADER_MOCK_H */

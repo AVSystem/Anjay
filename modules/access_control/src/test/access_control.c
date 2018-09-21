@@ -30,21 +30,22 @@
 #include "../mod_access_control.h"
 
 #define TEST_OID 0x100
-static const anjay_dm_object_def_t *const TEST = &(const anjay_dm_object_def_t) {
-    .oid = TEST_OID,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
-    .handlers = {
-        .instance_it = _anjay_mock_dm_instance_it,
-        .instance_present = _anjay_mock_dm_instance_present,
-        .instance_create = _anjay_mock_dm_instance_create,
-        .instance_remove = _anjay_mock_dm_instance_remove,
-        .resource_present = _anjay_mock_dm_resource_present,
-        .resource_read = _anjay_mock_dm_resource_read,
-        .resource_write = _anjay_mock_dm_resource_write,
-        .resource_execute = _anjay_mock_dm_resource_execute,
-        .resource_dim = _anjay_mock_dm_resource_dim
-    }
-};
+static const anjay_dm_object_def_t *const TEST =
+        &(const anjay_dm_object_def_t) {
+            .oid = TEST_OID,
+            .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2, 3, 4, 5, 6),
+            .handlers = {
+                .instance_it = _anjay_mock_dm_instance_it,
+                .instance_present = _anjay_mock_dm_instance_present,
+                .instance_create = _anjay_mock_dm_instance_create,
+                .instance_remove = _anjay_mock_dm_instance_remove,
+                .resource_present = _anjay_mock_dm_resource_present,
+                .resource_read = _anjay_mock_dm_resource_read,
+                .resource_write = _anjay_mock_dm_resource_write,
+                .resource_execute = _anjay_mock_dm_resource_execute,
+                .resource_dim = _anjay_mock_dm_resource_dim
+            }
+        };
 
 AVS_UNIT_TEST(access_control, set_acl) {
     DM_TEST_INIT_WITH_OBJECTS(&FAKE_SECURITY, &TEST);
@@ -66,37 +67,32 @@ AVS_UNIT_TEST(access_control, set_acl) {
     }
 
     // NULL AC object ptr
-    AVS_UNIT_ASSERT_FAILED(
-            anjay_access_control_set_acl(NULL, TEST->oid, iid, ssid,
-                                         ANJAY_ACCESS_MASK_NONE));
+    AVS_UNIT_ASSERT_FAILED(anjay_access_control_set_acl(
+            NULL, TEST->oid, iid, ssid, ANJAY_ACCESS_MASK_NONE));
 
     // unknown Object ID
     AVS_UNIT_ASSERT_FAILED(
-            anjay_access_control_set_acl(anjay, (anjay_oid_t)(TEST->oid + 1),
+            anjay_access_control_set_acl(anjay, (anjay_oid_t) (TEST->oid + 1),
                                          iid, ssid, ANJAY_ACCESS_MASK_NONE));
 
     // uknown Object instance ID
-    _anjay_mock_dm_expect_instance_present(anjay, &TEST, (anjay_iid_t)(iid + 1),
-                                           0);
-    AVS_UNIT_ASSERT_FAILED(
-            anjay_access_control_set_acl(anjay, TEST->oid,
-                                         (anjay_iid_t)(iid + 1), ssid,
-                                         ANJAY_ACCESS_MASK_NONE));
+    _anjay_mock_dm_expect_instance_present(anjay, &TEST,
+                                           (anjay_iid_t) (iid + 1), 0);
+    AVS_UNIT_ASSERT_FAILED(anjay_access_control_set_acl(
+            anjay, TEST->oid, (anjay_iid_t) (iid + 1), ssid,
+            ANJAY_ACCESS_MASK_NONE));
 
     // Create flag in access mask
-    AVS_UNIT_ASSERT_FAILED(
-            anjay_access_control_set_acl(anjay, TEST->oid, iid, ssid,
-                                         ANJAY_ACCESS_MASK_CREATE));
-    AVS_UNIT_ASSERT_FAILED(
-            anjay_access_control_set_acl(anjay, TEST->oid, iid, ssid,
-                                         ANJAY_ACCESS_MASK_FULL));
+    AVS_UNIT_ASSERT_FAILED(anjay_access_control_set_acl(
+            anjay, TEST->oid, iid, ssid, ANJAY_ACCESS_MASK_CREATE));
+    AVS_UNIT_ASSERT_FAILED(anjay_access_control_set_acl(
+            anjay, TEST->oid, iid, ssid, ANJAY_ACCESS_MASK_FULL));
 
     {
         // valid call
-        anjay_access_mask_t mask = ANJAY_ACCESS_MASK_READ
-                                 | ANJAY_ACCESS_MASK_WRITE
-                                 | ANJAY_ACCESS_MASK_EXECUTE
-                                 | ANJAY_ACCESS_MASK_DELETE;
+        anjay_access_mask_t mask =
+                ANJAY_ACCESS_MASK_READ | ANJAY_ACCESS_MASK_WRITE
+                | ANJAY_ACCESS_MASK_EXECUTE | ANJAY_ACCESS_MASK_DELETE;
         AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_set_acl(anjay, TEST->oid,
                                                              iid, ssid, mask));
 

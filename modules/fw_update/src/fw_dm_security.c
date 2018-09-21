@@ -70,18 +70,20 @@ static int try_security_instance(anjay_t *anjay,
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
                                ANJAY_DM_RID_SECURITY_SERVER_URI);
 
-    if (_anjay_dm_res_read_string(anjay, &path,
-                                  raw_server_url, sizeof(raw_server_url))) {
-        fw_log(WARNING, "could not read LwM2M server URI from "
-                        "/%" PRIu16 "/%" PRIu16 "/%" PRIu16,
+    if (_anjay_dm_res_read_string(anjay, &path, raw_server_url,
+                                  sizeof(raw_server_url))) {
+        fw_log(WARNING,
+               "could not read LwM2M server URI from /%" PRIu16 "/%" PRIu16
+               "/%" PRIu16,
                path.oid, path.iid, path.rid);
         return ANJAY_FOREACH_CONTINUE;
     }
 
     avs_url_t *server_url = avs_url_parse(raw_server_url);
     if (!server_url) {
-        fw_log(WARNING, "Could not parse URL from "
-                        "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 ": %s",
+        fw_log(WARNING,
+               "Could not parse URL from /%" PRIu16 "/%" PRIu16 "/%" PRIu16
+               ": %s",
                path.oid, path.iid, path.rid, raw_server_url);
         return ANJAY_FOREACH_CONTINUE;
     }
@@ -96,14 +98,16 @@ static int try_security_instance(anjay_t *anjay,
                     anjay, &new_result->security_info, &new_result->dtls_keys,
                     security_iid, ANJAY_CONNECTION_UDP);
             if (get_result) {
-                fw_log(WARNING, "Could not read security information for server"
-                                " /%" PRIu16 "/%" PRIu16,
+                fw_log(WARNING,
+                       "Could not read security information for server "
+                       "/%" PRIu16 "/%" PRIu16,
                        ANJAY_DM_OID_SECURITY, security_iid);
             } else if (!new_result->dtls_keys.pk_or_identity_size
-                    && !new_result->dtls_keys.server_pk_or_identity_size
-                    && !new_result->dtls_keys.secret_key_size) {
-                fw_log(DEBUG, "Server /%" PRIu16 "/%" PRIu16 " does not use "
-                              "encrypted connection, ignoring",
+                       && !new_result->dtls_keys.server_pk_or_identity_size
+                       && !new_result->dtls_keys.secret_key_size) {
+                fw_log(DEBUG,
+                       "Server /%" PRIu16 "/%" PRIu16
+                       " does not use encrypted connection, ignoring",
                        ANJAY_DM_OID_SECURITY, security_iid);
             } else {
                 avs_free(args->result);
@@ -144,13 +148,15 @@ anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
         .result = NULL,
         .url = url
     };
-    _anjay_dm_foreach_instance(anjay, security_obj,
-                               try_security_instance, &args);
+    _anjay_dm_foreach_instance(anjay, security_obj, try_security_instance,
+                               &args);
     avs_url_free(url);
 
     if (!args.result) {
-        fw_log(WARNING, "Matching security information not found in data model "
-                        "for URL: %s", raw_url);
+        fw_log(WARNING,
+               "Matching security information not found in data model for URL: "
+               "%s",
+               raw_url);
     }
     return args.result;
 }

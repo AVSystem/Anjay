@@ -76,7 +76,8 @@ static int generic_getter(anjay_input_ctx_t *ctx,
         }
         if (chunk_bytes_read > 0) {
             char *bigger_buffer =
-                    (char *) avs_realloc(buffer, buffer_size + chunk_bytes_read);
+                    (char *) avs_realloc(buffer,
+                                         buffer_size + chunk_bytes_read);
             if (!bigger_buffer) {
                 result = ANJAY_ERR_INTERNAL;
                 goto error;

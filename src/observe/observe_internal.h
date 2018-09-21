@@ -67,4 +67,3 @@ int _anjay_observe_schedule_trigger(anjay_t *anjay,
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_OBSERVE_INTERNAL_H */
-

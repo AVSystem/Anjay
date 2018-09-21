@@ -22,10 +22,8 @@ using namespace std;
 
 namespace ssl {
 
-Context::Context(std::shared_ptr<SecurityInfo> security,
-                 bool debug)
-        : security_(security),
-          debug_(debug) {
+Context::Context(std::shared_ptr<SecurityInfo> security, bool debug)
+        : security_(security), debug_(debug) {
     memset(&session_cache_, 0, sizeof(session_cache_));
     mbedtls_ssl_cache_init(&session_cache_);
 }
@@ -34,4 +32,4 @@ Context::~Context() {
     mbedtls_ssl_cache_free(&session_cache_);
 }
 
-}
+} // namespace ssl

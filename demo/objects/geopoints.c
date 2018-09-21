@@ -15,19 +15,19 @@
  */
 
 #include "../demo.h"
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <string.h>
-#include <assert.h>
 
-#define GEOPOINTS_LATITUDE    0 // double, degrees
-#define GEOPOINTS_LONGITUDE   1 // double, degrees
-#define GEOPOINTS_RADIUS      2 // double, meters
+#define GEOPOINTS_LATITUDE 0    // double, degrees
+#define GEOPOINTS_LONGITUDE 1   // double, degrees
+#define GEOPOINTS_RADIUS 2      // double, meters
 #define GEOPOINTS_DESCRIPTION 3 // string
-#define GEOPOINTS_INSIDE      4 // bool
+#define GEOPOINTS_INSIDE 4      // bool
 
 typedef struct {
     anjay_iid_t iid;
@@ -56,8 +56,7 @@ get_geopoints(const anjay_dm_object_def_t *const *obj_ptr) {
     return container_of(obj_ptr, geopoints_t, def);
 }
 
-static geopoint_t *find_instance(const geopoints_t *repr,
-                                 anjay_iid_t iid) {
+static geopoint_t *find_instance(const geopoints_t *repr, anjay_iid_t iid) {
     AVS_LIST(geopoint_t) it;
     AVS_LIST_FOREACH(it, repr->instances) {
         if (it->iid == iid) {
@@ -74,7 +73,7 @@ static int geopoints_instance_it(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
                                  anjay_iid_t *out,
                                  void **cookie) {
-    (void)anjay;
+    (void) anjay;
 
     AVS_LIST(geopoint_t) inst = (AVS_LIST(geopoint_t)) *cookie;
 
@@ -89,10 +88,11 @@ static int geopoints_instance_it(anjay_t *anjay,
     return 0;
 }
 
-static int geopoints_instance_present(anjay_t *anjay,
-                                      const anjay_dm_object_def_t *const *obj_ptr,
-                                      anjay_iid_t iid) {
-    (void)anjay;
+static int
+geopoints_instance_present(anjay_t *anjay,
+                           const anjay_dm_object_def_t *const *obj_ptr,
+                           anjay_iid_t iid) {
+    (void) anjay;
     return find_instance(get_geopoints(obj_ptr), iid) != NULL;
 }
 
@@ -109,10 +109,11 @@ static anjay_iid_t get_new_iid(AVS_LIST(geopoint_t) instances) {
     return iid;
 }
 
-static int geopoints_instance_create(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_iid_t *inout_iid,
-                                     anjay_ssid_t ssid) {
+static int
+geopoints_instance_create(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t *inout_iid,
+                          anjay_ssid_t ssid) {
     (void) anjay;
     (void) ssid;
     geopoints_t *repr = get_geopoints(obj_ptr);
@@ -143,10 +144,11 @@ static int geopoints_instance_create(anjay_t *anjay,
     return 0;
 }
 
-static int geopoints_instance_remove(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_iid_t iid) {
-    (void)anjay;
+static int
+geopoints_instance_remove(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid) {
+    (void) anjay;
     geopoints_t *repr = get_geopoints(obj_ptr);
 
     AVS_LIST(geopoint_t) *it;
@@ -231,8 +233,7 @@ static int geopoints_resource_write(anjay_t *anjay,
         inst->radius_m = value;
         inst->has_radius_m = true;
         return 0;
-    case GEOPOINTS_DESCRIPTION:
-    {
+    case GEOPOINTS_DESCRIPTION: {
         char buf[sizeof(inst->description)];
         result = anjay_get_string(ctx, buf, sizeof(buf));
         if (result) {
@@ -295,10 +296,9 @@ geopoints_transaction_rollback(anjay_t *anjay,
     return 0;
 }
 
-static int
-geopoints_instance_reset(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj_ptr,
-                         anjay_iid_t iid) {
+static int geopoints_instance_reset(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid) {
     (void) anjay;
     geopoint_t *inst = find_instance(get_geopoints(obj_ptr), iid);
     AVS_ASSERT(inst, "could not find instance");
@@ -309,12 +309,11 @@ geopoints_instance_reset(anjay_t *anjay,
 
 static const anjay_dm_object_def_t GEOPOINTS = {
     .oid = DEMO_OID_GEOPOINTS,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            GEOPOINTS_LATITUDE,
-            GEOPOINTS_LONGITUDE,
-            GEOPOINTS_RADIUS,
-            GEOPOINTS_DESCRIPTION,
-            GEOPOINTS_INSIDE),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(GEOPOINTS_LATITUDE,
+                                              GEOPOINTS_LONGITUDE,
+                                              GEOPOINTS_RADIUS,
+                                              GEOPOINTS_DESCRIPTION,
+                                              GEOPOINTS_INSIDE),
     .handlers = {
         .instance_it = geopoints_instance_it,
         .instance_present = geopoints_instance_present,
@@ -331,8 +330,7 @@ static const anjay_dm_object_def_t GEOPOINTS = {
     }
 };
 
-const anjay_dm_object_def_t **
-geopoints_object_create(anjay_demo_t *demo) {
+const anjay_dm_object_def_t **geopoints_object_create(anjay_demo_t *demo) {
     geopoints_t *repr = (geopoints_t *) avs_calloc(1, sizeof(geopoints_t));
     if (!repr) {
         return NULL;
@@ -369,13 +367,13 @@ void geopoints_notify_time_dependent(anjay_t *anjay,
 
     AVS_LIST(geopoint_t) point;
     AVS_LIST_FOREACH(point, geopoints->instances) {
-        bool inside = (geo_distance_m(latitude, longitude,
-                                      point->latitude,
-                                      point->longitude) < point->radius_m);
+        bool inside = (geo_distance_m(latitude, longitude, point->latitude,
+                                      point->longitude)
+                       < point->radius_m);
         if (inside != point->inside) {
             point->inside = inside;
-            anjay_notify_changed(anjay,
-                                 (*def)->oid, point->iid, GEOPOINTS_INSIDE);
+            anjay_notify_changed(anjay, (*def)->oid, point->iid,
+                                 GEOPOINTS_INSIDE);
         }
     }
 }

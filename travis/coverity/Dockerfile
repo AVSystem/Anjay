@@ -14,7 +14,7 @@
 
 FROM ubuntu:16.04
 RUN apt-get update
-RUN apt-get install -y git build-essential cmake libmbedtls-dev \
+RUN apt-get install -y python3-pip git build-essential cmake libmbedtls-dev \
     libssl-dev python3 libpython3-dev wget python3-cryptography \
     python3-sphinx python3-requests valgrind curl <CC_PKG> <CXX_PKG>
 RUN sed -i -e "s/-Wdate-time/ /g" \

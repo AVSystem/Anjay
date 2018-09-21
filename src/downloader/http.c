@@ -56,25 +56,28 @@ static int read_start_byte_from_content_range(const char *content_range,
     int after_slash = 0;
     if (avs_match_token(&content_range, "bytes", AVS_SPACES)
             || sscanf(content_range, "%" SCNu64 "-%" SCNu64 "/%n",
-                      out_start_byte, &end_byte, &after_slash) < 2
+                      out_start_byte, &end_byte, &after_slash)
+                           < 2
             || after_slash <= 0) {
         return -1;
     }
     return (strcmp(&content_range[after_slash], "*") == 0
             || (!_anjay_safe_strtoll(&content_range[after_slash],
                                      &complete_length)
-                    && complete_length >= 1
-                    && (uint64_t) (complete_length - 1) == end_byte)) ? 0 : -1;
+                && complete_length >= 1
+                && (uint64_t) (complete_length - 1) == end_byte))
+                   ? 0
+                   : -1;
 }
 
 static anjay_etag_t *read_etag(const char *text) {
     size_t len = strlen(text);
-    if (len < 2 || len > UINT8_MAX + 2
-            || text[0] != '"' || text[len - 1] != '"') {
+    if (len < 2 || len > UINT8_MAX + 2 || text[0] != '"'
+            || text[len - 1] != '"') {
         return NULL;
     }
-    anjay_etag_t *result = (anjay_etag_t *)
-            avs_malloc(offsetof(anjay_etag_t, value) + (len - 2));
+    anjay_etag_t *result = (anjay_etag_t *) avs_malloc(
+            offsetof(anjay_etag_t, value) + (len - 2));
     if (result) {
         result->size = (uint8_t) (len - 2);
         memcpy(result->value, &text[1], result->size);
@@ -82,12 +85,11 @@ static anjay_etag_t *read_etag(const char *text) {
     return result;
 }
 
-static inline bool etag_matches(const anjay_etag_t *etag,
-                                const char *text) {
+static inline bool etag_matches(const anjay_etag_t *etag, const char *text) {
     size_t len = strlen(text);
-    return len == (size_t) (etag->size + 2)
-            && text[0] == '"' && text[len - 1] == '"'
-            && memcmp(etag->value, &text[1], etag->size) == 0;
+    return len == (size_t) (etag->size + 2) && text[0] == '"'
+           && text[len - 1] == '"'
+           && memcmp(etag->value, &text[1], etag->size) == 0;
 }
 
 static void handle_http_packet(anjay_downloader_t *dl,
@@ -109,14 +111,13 @@ static void handle_http_packet(anjay_downloader_t *dl,
         if (bytes_read) {
             assert(ctx->bytes_written >= ctx->bytes_downloaded);
             if (ctx->bytes_downloaded + bytes_read > ctx->bytes_written) {
-                size_t bytes_to_write = ctx->bytes_downloaded + bytes_read
-                        - ctx->bytes_written;
+                size_t bytes_to_write =
+                        ctx->bytes_downloaded + bytes_read - ctx->bytes_written;
                 assert(bytes_read >= bytes_to_write);
                 if (ctx->common.on_next_block(
                             anjay,
                             &anjay->in_buffer[bytes_read - bytes_to_write],
-                            bytes_to_write, ctx->etag,
-                            ctx->common.user_data)) {
+                            bytes_to_write, ctx->etag, ctx->common.user_data)) {
                     _anjay_downloader_abort_transfer(
                             dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED, errno);
                     return;
@@ -152,8 +153,8 @@ static void send_request(anjay_t *anjay, const void *id_ptr) {
 
     AVS_LIST(const avs_http_header_t) received_headers = NULL;
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
-    int result = avs_http_open_stream(&ctx->stream, ctx->client,
-                                      AVS_HTTP_GET, AVS_HTTP_CONTENT_IDENTITY,
+    int result = avs_http_open_stream(&ctx->stream, ctx->client, AVS_HTTP_GET,
+                                      AVS_HTTP_CONTENT_IDENTITY,
                                       ctx->parsed_url, NULL, NULL);
     if (result || !ctx->stream) {
         goto error;
@@ -164,7 +165,8 @@ static void send_request(anjay_t *anjay, const void *id_ptr) {
     char ifmatch[258];
     if (ctx->etag) {
         if (avs_simple_snprintf(ifmatch, sizeof(ifmatch), "\"%.*s\"",
-                                (int) ctx->etag->size, ctx->etag->value) < 0
+                                (int) ctx->etag->size, ctx->etag->value)
+                        < 0
                 || avs_http_add_header(ctx->stream, "If-Match", ifmatch)) {
             dl_log(ERROR, "Could not send If-Match header");
             goto error;
@@ -175,7 +177,8 @@ static void send_request(anjay_t *anjay, const void *id_ptr) {
     char range[sizeof("bytes=-") + (12 * sizeof(size_t)) / 5 + 1];
     if (ctx->bytes_written > 0) {
         if (avs_simple_snprintf(range, sizeof(range), "bytes=%lu-",
-                                (unsigned long) ctx->bytes_written) < 0
+                                (unsigned long) ctx->bytes_written)
+                        < 0
                 || avs_http_add_header(ctx->stream, "Range", range)) {
             dl_log(ERROR, "Could not resume HTTP download: "
                           "could not send Range header");
@@ -200,8 +203,10 @@ static void send_request(anjay_t *anjay, const void *id_ptr) {
             uint64_t bytes_downloaded;
             if (read_start_byte_from_content_range(it->value, &bytes_downloaded)
                     || bytes_downloaded > ctx->bytes_written) {
-                dl_log(ERROR, "Could not resume HTTP download: "
-                              "invalid Content-Range: %s", it->value);
+                dl_log(ERROR,
+                       "Could not resume HTTP download: "
+                       "invalid Content-Range: %s",
+                       it->value);
                 goto error;
             }
             ctx->bytes_downloaded = (size_t) bytes_downloaded;
@@ -245,8 +250,8 @@ static void send_request(anjay_t *anjay, const void *id_ptr) {
     }
     return;
 error:
-    _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
-                                     error_code, result);
+    _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr, error_code,
+                                     result);
 }
 
 static int get_http_socket(anjay_downloader_t *dl,
@@ -255,7 +260,7 @@ static int get_http_socket(anjay_downloader_t *dl,
                            anjay_socket_transport_t *out_transport) {
     (void) dl;
     if (!(*out_socket = avs_stream_net_getsock(
-            ((anjay_http_download_ctx_t *) ctx)->stream))) {
+                  ((anjay_http_download_ctx_t *) ctx)->stream))) {
         return -1;
     }
     *out_transport = ANJAY_SOCKET_TRANSPORT_TCP;
@@ -345,8 +350,8 @@ int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     }
 
     if (_anjay_sched_now(_anjay_downloader_get_anjay(dl)->sched,
-                         &ctx->send_request_job, send_request,
-                         &ctx->common.id, sizeof(ctx->common.id))) {
+                         &ctx->send_request_job, send_request, &ctx->common.id,
+                         sizeof(ctx->common.id))) {
         dl_log(ERROR, "could not schedule download job");
         result = -ENOMEM;
         goto error;

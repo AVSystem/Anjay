@@ -17,35 +17,35 @@
 #ifndef DEMO_OBJECTS_H
 #define DEMO_OBJECTS_H
 
-#include "iosched.h"
 #include "demo_utils.h"
+#include "iosched.h"
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/time.h>
 
 #include <anjay/access_control.h>
-#include <anjay/server.h>
 #include <anjay/anjay.h>
+#include <anjay/server.h>
 
 typedef struct anjay_demo_struct anjay_demo_t;
 
-#define DEMO_OID_SECURITY           0
-#define DEMO_OID_SERVER             1
-#define DEMO_OID_DEVICE             3
-#define DEMO_OID_CONN_MONITORING    4
-#define DEMO_OID_FIRMWARE_UPDATE    5
-#define DEMO_OID_LOCATION           6
-#define DEMO_OID_CONN_STATISTICS    7
+#define DEMO_OID_SECURITY 0
+#define DEMO_OID_SERVER 1
+#define DEMO_OID_DEVICE 3
+#define DEMO_OID_CONN_MONITORING 4
+#define DEMO_OID_FIRMWARE_UPDATE 5
+#define DEMO_OID_LOCATION 6
+#define DEMO_OID_CONN_STATISTICS 7
 #define DEMO_OID_CELL_CONNECTIVITY 10
-#define DEMO_OID_APN_CONN_PROFILE  11
-#define DEMO_OID_TEST            1337
-#define DEMO_OID_EXT_DEV_INFO   11111
-#define DEMO_OID_IP_PING        12359
-#define DEMO_OID_GEOPOINTS      12360
-#define DEMO_OID_DOWNLOAD_DIAG  12361
+#define DEMO_OID_APN_CONN_PROFILE 11
+#define DEMO_OID_TEST 1337
+#define DEMO_OID_EXT_DEV_INFO 11111
+#define DEMO_OID_IP_PING 12359
+#define DEMO_OID_GEOPOINTS 12360
+#define DEMO_OID_DOWNLOAD_DIAG 12361
 
 const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
                                                    const char *endpoint_name);
@@ -78,10 +78,10 @@ typedef struct {
     size_t server_public_key_size;
 } server_connection_args_t;
 
-#define DEMO_FOREACH_SERVER_ENTRY(It, ConnArgs) \
-        for ((It) = &(ConnArgs)->servers[0]; \
-                (It) < &(ConnArgs)->servers[MAX_SERVERS] && (It)->uri; \
-                ++(It))
+#define DEMO_FOREACH_SERVER_ENTRY(It, ConnArgs)                 \
+    for ((It) = &(ConnArgs)->servers[0];                        \
+         (It) < &(ConnArgs)->servers[MAX_SERVERS] && (It)->uri; \
+         ++(It))
 
 #define UNDEFINED_LIFETIME -1
 
@@ -106,8 +106,7 @@ void ext_dev_info_object_release(const anjay_dm_object_def_t **def);
 void ext_dev_info_notify_time_dependent(anjay_t *anjay,
                                         const anjay_dm_object_def_t **def);
 
-const anjay_dm_object_def_t **
-ip_ping_object_create(iosched_t *iosched);
+const anjay_dm_object_def_t **ip_ping_object_create(iosched_t *iosched);
 void ip_ping_object_release(const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **apn_conn_profile_object_create(void);
@@ -125,9 +124,11 @@ void location_object_release(const anjay_dm_object_def_t **def);
 void location_notify_time_dependent(anjay_t *anjay,
                                     const anjay_dm_object_def_t **def);
 void location_get(const anjay_dm_object_def_t **def,
-                  double *out_latitude, double *out_longitude);
+                  double *out_latitude,
+                  double *out_longitude);
 int location_open_csv(const anjay_dm_object_def_t **def,
-                      const char *file_name, time_t frequency_s);
+                      const char *file_name,
+                      time_t frequency_s);
 
 const anjay_dm_object_def_t **geopoints_object_create(anjay_demo_t *demo);
 void geopoints_object_release(const anjay_dm_object_def_t **def);

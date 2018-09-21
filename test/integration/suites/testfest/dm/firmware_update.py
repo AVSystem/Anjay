@@ -38,9 +38,9 @@ class FirmwareUpdate:
                 time.sleep(step_time)
             return observed_values
 
-        def setUp(self):
+        def setUp(self, extra_cmdline_args=[]):
             self.ANJAY_MARKER_FILE = generate_temp_filename(dir='/tmp', prefix='anjay-fw-updated-')
-            super().setUp(fw_updated_marker_path=self.ANJAY_MARKER_FILE)
+            super().setUp(fw_updated_marker_path=self.ANJAY_MARKER_FILE, extra_cmdline_args=extra_cmdline_args)
 
         def tearDown(self):
             # reset the state machine
@@ -51,8 +51,8 @@ class FirmwareUpdate:
             super().tearDown()
 
     class TestWithCoapServer(Test):
-        def setUp(self, coap_server=None):
-            super().setUp()
+        def setUp(self, coap_server=None, extra_cmdline_args=[]):
+            super().setUp(extra_cmdline_args=extra_cmdline_args)
 
             from framework.coap_file_server import CoapFileServerThread
             self.server_thread = CoapFileServerThread(coap_server=coap_server)
@@ -837,7 +837,7 @@ class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI_Co
             def send(self, *args, **kwargs):
                 pass
 
-        super().setUp(coap_server=MuteServer())
+        super().setUp(coap_server=MuteServer(), extra_cmdline_args=['--fwu-ack-timeout', '1'])
 
         with self.file_server as file_server:
             file_server.set_resource('/firmware', pkg)
@@ -881,7 +881,7 @@ class Test775_FirmwareUpdate_ErrorCase_ConnectionLostDuringDownloadPackageURI_Co
         #    Resource with value "4" indicates the firmware Package Delivery
         #    aborted due to connection lost dur the Package delivery.
         observed_values = self.collect_values(ResPath.FirmwareUpdate.State, b'0',
-                                              max_iterations=100, step_time=1)
+                                              max_iterations=50, step_time=1)
         self.assertEqual(b'0', observed_values[-1])
         self.assertEqual({b'0', b'1'}, set(observed_values))
         self.assertEqual(b'4', self.test_read(ResPath.FirmwareUpdate.UpdateResult))

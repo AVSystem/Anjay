@@ -45,19 +45,20 @@ static int url_parse_chunks(const char **url,
     const char *ptr = *url;
     do {
         if ((*ptr == '\0' || *ptr == delimiter || *ptr == parser_terminator)
-            && ptr != *url) {
-            const size_t chunk_len = (size_t)(ptr - *url - 1);
+                && ptr != *url) {
+            const size_t chunk_len = (size_t) (ptr - *url - 1);
 
             if (hint == URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR
-                && (*ptr == '\0' || *ptr == parser_terminator) && !chunk_len) {
+                    && (*ptr == '\0' || *ptr == parser_terminator)
+                    && !chunk_len) {
                 // trailing separator, ignoring
                 *url = ptr;
                 return 0;
             }
 
             if (out_chunks) {
-                AVS_LIST(anjay_string_t) chunk =
-                    (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(chunk_len + 1);
+                AVS_LIST(anjay_string_t) chunk = (AVS_LIST(
+                        anjay_string_t)) AVS_LIST_NEW_BUFFER(chunk_len + 1);
                 if (!chunk) {
                     anjay_log(ERROR, "out of memory");
                     return -1;
@@ -69,7 +70,7 @@ static int url_parse_chunks(const char **url,
                     memcpy(chunk, *url + 1, chunk_len);
 
                     if (avs_url_percent_decode(chunk->c_str,
-                                               &(size_t[]) { 0 }[0])) {
+                                               &(size_t[]){ 0 }[0])) {
                         return -1;
                     }
                 }
@@ -137,13 +138,13 @@ int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url) {
     if (!result) {
         const char *path_ptr = avs_url_path(avs_url);
         if (path_ptr) {
-            result = url_parse_chunks(
-                    &path_ptr, '/', '?', URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR,
-                    &out_parsed_url->uri_path);
+            result = url_parse_chunks(&path_ptr, '/', '?',
+                                      URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR,
+                                      &out_parsed_url->uri_path);
             if (!result && *path_ptr == '?') {
-                result = url_parse_chunks(
-                        &path_ptr, '&', '\0', URL_PARSE_HINT_NONE,
-                        &out_parsed_url->uri_query);
+                result = url_parse_chunks(&path_ptr, '&', '\0',
+                                          URL_PARSE_HINT_NONE,
+                                          &out_parsed_url->uri_query);
             }
         }
     }
@@ -168,14 +169,14 @@ uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
 
 #else
 
-#if AVS_RAND_MAX >= UINT32_MAX
-#define RAND32_ITERATIONS 1
-#elif AVS_RAND_MAX >= UINT16_MAX
-#define RAND32_ITERATIONS 2
-#else
+#    if AVS_RAND_MAX >= UINT32_MAX
+#        define RAND32_ITERATIONS 1
+#    elif AVS_RAND_MAX >= UINT16_MAX
+#        define RAND32_ITERATIONS 2
+#    else
 /* standard guarantees RAND_MAX to be at least 32767 */
-#define RAND32_ITERATIONS 3
-#endif
+#        define RAND32_ITERATIONS 3
+#    endif
 
 uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
     uint32_t result = 0;
@@ -219,7 +220,7 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
     while (str) {
         size_t len = strlen(str) + 1;
         if (!(*strings_list_endptr =
-                (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
+                      (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
             anjay_log(ERROR, "out of memory");
             AVS_LIST_CLEAR(&strings_list);
             break;
@@ -235,8 +236,8 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
 }
 
 bool anjay_binding_mode_valid(const char *binding_mode) {
-    static const char *const VALID_BINDINGS[] =
-            { "U", "UQ", "S", "SQ", "US", "UQS" };
+    static const char *const VALID_BINDINGS[] = { "U",  "UQ", "S",
+                                                  "SQ", "US", "UQS" };
     for (size_t i = 0; i < AVS_ARRAY_SIZE(VALID_BINDINGS); ++i) {
         if (strcmp(binding_mode, VALID_BINDINGS[i]) == 0) {
             return true;
@@ -253,7 +254,8 @@ static int append_string_query_arg(AVS_LIST(const anjay_string_t) *list,
             (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(size);
 
     if (!arg
-        || avs_simple_snprintf(arg->c_str, size, "%s=%s", name, value) < 0) {
+            || avs_simple_snprintf(arg->c_str, size, "%s=%s", name, value)
+                           < 0) {
         AVS_LIST_CLEAR(&arg);
     } else {
         AVS_LIST_APPEND(list, arg);
@@ -283,8 +285,10 @@ _anjay_make_query_string_list(const char *version,
         size_t lt_size = sizeof("lt=") + 16;
         AVS_LIST(anjay_string_t) lt =
                 (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(lt_size);
-        if (!lt || avs_simple_snprintf(lt->c_str, lt_size,
-                                       "lt=%" PRId64, *lifetime) < 0) {
+        if (!lt
+                || avs_simple_snprintf(lt->c_str, lt_size, "lt=%" PRId64,
+                                       *lifetime)
+                               < 0) {
             goto fail;
         }
         AVS_LIST_APPEND(&list, lt);
@@ -319,11 +323,12 @@ static int bind_socket(avs_net_abstract_socket_t *socket,
         if (bind_conf->static_port_preference) {
             if (avs_simple_snprintf(static_preferred_port,
                                     sizeof(static_preferred_port), "%" PRIu16,
-                                    bind_conf->static_port_preference) < 0) {
+                                    bind_conf->static_port_preference)
+                    < 0) {
                 AVS_UNREACHABLE("Could not convert preferred port number");
             }
         } else if (bind_conf->last_local_port_buffer
-                && **bind_conf->last_local_port_buffer) {
+                   && **bind_conf->last_local_port_buffer) {
             if (!avs_net_socket_bind(socket, local_addr,
                                      *bind_conf->last_local_port_buffer)) {
                 return 0;
@@ -354,8 +359,8 @@ int _anjay_bind_and_connect_socket(avs_net_abstract_socket_t *socket,
     }
 
     if (avs_net_socket_connect(socket, remote_host, remote_port)) {
-        anjay_log(ERROR, "could not connect to %s:%s",
-                  remote_host, remote_port);
+        anjay_log(ERROR, "could not connect to %s:%s", remote_host,
+                  remote_port);
         return -1;
     }
 
@@ -374,12 +379,12 @@ int _anjay_bind_and_connect_socket(avs_net_abstract_socket_t *socket,
     return 0;
 }
 
-int
-_anjay_create_connected_udp_socket(avs_net_abstract_socket_t **out,
-                                   avs_net_socket_type_t type,
-                                   const void *socket_config,
-                                   const anjay_socket_bind_config_t *bind_conf,
-                                   const anjay_url_t *uri) {
+int _anjay_create_connected_udp_socket(
+        avs_net_abstract_socket_t **out,
+        avs_net_socket_type_t type,
+        const void *socket_config,
+        const anjay_socket_bind_config_t *bind_conf,
+        const anjay_url_t *uri) {
     int result = 0;
     assert(!*out);
 
@@ -387,33 +392,33 @@ _anjay_create_connected_udp_socket(avs_net_abstract_socket_t **out,
     case AVS_NET_UDP_SOCKET:
     case AVS_NET_DTLS_SOCKET:
         if (avs_net_socket_create(out, type, socket_config)) {
-            result = -ENOMEM;
+            result = ENOMEM;
             anjay_log(ERROR, "could not create CoAP socket");
             goto fail;
         }
 
-        if (_anjay_bind_and_connect_socket(*out, bind_conf,
-                                           uri->host, uri->port)) {
+        if (_anjay_bind_and_connect_socket(*out, bind_conf, uri->host,
+                                           uri->port)) {
             goto fail;
         }
 
         return 0;
     default:
         anjay_log(ERROR, "unsupported socket type requested: %d", type);
-        return -EPROTONOSUPPORT;
+        return EPROTONOSUPPORT;
     }
 
 fail:
     if (*out) {
-        result = -avs_net_socket_errno(*out);
+        result = avs_net_socket_errno(*out);
     }
     if (!result) {
-        result = -EPROTO;
+        result = EPROTO;
     }
     avs_net_socket_cleanup(out);
     return result;
 }
 
 #ifdef ANJAY_TEST
-#include "test/utils.c"
+#    include "test/utils.c"
 #endif // ANJAY_TEST

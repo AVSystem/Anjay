@@ -17,8 +17,8 @@
 #ifndef ANJAY_COAP_IDSOURCE_AUTO_H
 #define ANJAY_COAP_IDSOURCE_AUTO_H
 
-#include "id_source.h"
 #include "../../utils_core.h"
+#include "id_source.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

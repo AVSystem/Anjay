@@ -18,11 +18,11 @@
 
 #define ANJAY_SERVERS_INTERNALS
 
-#include "../servers.h"
 #include "../anjay_core.h"
+#include "../servers.h"
 
-#include "connection_info.h"
 #include "reload.h"
+#include "server_connections.h"
 #include "servers_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -44,17 +44,11 @@ static void enter_offline_job(anjay_t *anjay, const void *dummy) {
             anjay_connection_ref_t ref = {
                 .server = server
             };
-            for (ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
-                    ref.conn_type < ANJAY_CONNECTION_LIMIT_;
-                    ref.conn_type =
-                            (anjay_connection_type_t) (ref.conn_type + 1)) {
-                anjay_server_connection_t *connection =
-                        _anjay_get_server_connection(ref);
-                if (connection) {
-                    _anjay_connection_internal_clean_socket(connection);
-                }
+            ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
+                _anjay_connection_internal_clean_socket(
+                        _anjay_get_server_connection(ref));
             }
-            server->data_inactive.reactivate_time = now;
+            server->reactivate_time = now;
         }
     }
     _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);

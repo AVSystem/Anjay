@@ -20,9 +20,11 @@
 #include <avsystem/commons/unit/mock_helpers.h>
 
 AVS_UNIT_MOCK_CREATE(_anjay_notify_perform)
-#define _anjay_notify_perform(...) AVS_UNIT_MOCK_WRAPPER(_anjay_notify_perform)(__VA_ARGS__)
+#define _anjay_notify_perform(...) \
+    AVS_UNIT_MOCK_WRAPPER(_anjay_notify_perform)(__VA_ARGS__)
 
 AVS_UNIT_MOCK_CREATE(_anjay_dm_instance_remove)
-#define _anjay_dm_instance_remove(...) AVS_UNIT_MOCK_WRAPPER(_anjay_dm_instance_remove)(__VA_ARGS__)
+#define _anjay_dm_instance_remove(...) \
+    AVS_UNIT_MOCK_WRAPPER(_anjay_dm_instance_remove)(__VA_ARGS__)
 
 #endif /* BOOTSTRAP_MOCK_H */

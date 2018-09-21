@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 
 #include <assert.h>
 
-#define CM_RES_NETWORK_BEARER           0 /* int */
+#define CM_RES_NETWORK_BEARER 0           /* int */
 #define CM_RES_AVAILABLE_NETWORK_BEARER 1 /* array<int> */
-#define CM_RES_RADIO_SIGNAL_STRENGTH    2 /* int */
-#define CM_RES_LINK_QUALITY             3 /* int */
-#define CM_RES_IP_ADDRESSES             4 /* array<string> */
-#define CM_RES_ROUTER_IP_ADDRESSES      5 /* array<string> */
-#define CM_RES_LINK_UTILIZATION         6 /* int */
-#define CM_RES_APN                      7 /* array<string> */
-#define CM_RES_CELL_ID                  8 /* int */
-#define CM_RES_SMNC                     9 /* int */
-#define CM_RES_SMCC                     10 /* int */
+#define CM_RES_RADIO_SIGNAL_STRENGTH 2    /* int */
+#define CM_RES_LINK_QUALITY 3             /* int */
+#define CM_RES_IP_ADDRESSES 4             /* array<string> */
+#define CM_RES_ROUTER_IP_ADDRESSES 5      /* array<string> */
+#define CM_RES_LINK_UTILIZATION 6         /* int */
+#define CM_RES_APN 7                      /* array<string> */
+#define CM_RES_CELL_ID 8                  /* int */
+#define CM_RES_SMNC 9                     /* int */
+#define CM_RES_SMCC 10                    /* int */
 
 typedef struct {
     const anjay_dm_object_def_t *def;
@@ -52,7 +52,9 @@ static int cm_resource_read(anjay_t *anjay,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
                             anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) obj_ptr; (void) iid;
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
 
     enum {
         NB_CELLULAR_GSM = 0,
@@ -89,7 +91,8 @@ static int cm_resource_read(anjay_t *anjay,
                 || anjay_ret_array_index(array, 4)
                 || anjay_ret_i32(array, NB_WIRELESS_BLUETOOTH)
                 || anjay_ret_array_finish(array))
-                ? -1 : 0;
+                       ? -1
+                       : 0;
     case CM_RES_RADIO_SIGNAL_STRENGTH:
         return anjay_ret_i32(ctx, signal_strength_dbm());
     case CM_RES_LINK_QUALITY:
@@ -99,13 +102,15 @@ static int cm_resource_read(anjay_t *anjay,
                 || anjay_ret_array_index(array, 0)
                 || anjay_ret_string(array, "10.10.53.53")
                 || anjay_ret_array_finish(array))
-                ? -1 : 0;
+                       ? -1
+                       : 0;
     case CM_RES_ROUTER_IP_ADDRESSES:
         return (!(array = anjay_ret_array_start(ctx))
                 || anjay_ret_array_index(array, 0)
                 || anjay_ret_string(array, "10.10.0.1")
                 || anjay_ret_array_finish(array))
-                ? -1 : 0;
+                       ? -1
+                       : 0;
     case CM_RES_LINK_UTILIZATION:
         return anjay_ret_i32(ctx, 50);
     case CM_RES_APN:
@@ -113,7 +118,8 @@ static int cm_resource_read(anjay_t *anjay,
                 || anjay_ret_array_index(array, 0)
                 || anjay_ret_string(array, "internet")
                 || anjay_ret_array_finish(array))
-                ? -1 : 0;
+                       ? -1
+                       : 0;
     case CM_RES_CELL_ID:
         return anjay_ret_i32(ctx, 12345);
     case CM_RES_SMNC:
@@ -129,7 +135,9 @@ static int cm_resource_dim(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
                            anjay_iid_t iid,
                            anjay_rid_t rid) {
-    (void) anjay; (void) obj_ptr; (void) iid;
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
 
     switch (rid) {
     case CM_RES_AVAILABLE_NETWORK_BEARER:
@@ -145,18 +153,17 @@ static int cm_resource_dim(anjay_t *anjay,
 
 static const anjay_dm_object_def_t CONN_MONITORING = {
     .oid = DEMO_OID_CONN_MONITORING,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            CM_RES_NETWORK_BEARER,
-            CM_RES_AVAILABLE_NETWORK_BEARER,
-            CM_RES_RADIO_SIGNAL_STRENGTH,
-            CM_RES_LINK_QUALITY,
-            CM_RES_IP_ADDRESSES,
-            CM_RES_ROUTER_IP_ADDRESSES,
-            CM_RES_LINK_UTILIZATION,
-            CM_RES_APN,
-            CM_RES_CELL_ID,
-            CM_RES_SMNC,
-            CM_RES_SMCC),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(CM_RES_NETWORK_BEARER,
+                                              CM_RES_AVAILABLE_NETWORK_BEARER,
+                                              CM_RES_RADIO_SIGNAL_STRENGTH,
+                                              CM_RES_LINK_QUALITY,
+                                              CM_RES_IP_ADDRESSES,
+                                              CM_RES_ROUTER_IP_ADDRESSES,
+                                              CM_RES_LINK_UTILIZATION,
+                                              CM_RES_APN,
+                                              CM_RES_CELL_ID,
+                                              CM_RES_SMNC,
+                                              CM_RES_SMCC),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -167,8 +174,8 @@ static const anjay_dm_object_def_t CONN_MONITORING = {
 };
 
 const anjay_dm_object_def_t **cm_object_create(void) {
-    conn_monitoring_repr_t *repr = (conn_monitoring_repr_t *)
-            avs_calloc(1, sizeof(conn_monitoring_repr_t));
+    conn_monitoring_repr_t *repr = (conn_monitoring_repr_t *) avs_calloc(
+            1, sizeof(conn_monitoring_repr_t));
     if (!repr) {
         return NULL;
     }

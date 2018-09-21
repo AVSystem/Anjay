@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 
 #include <sys/param.h>
 
@@ -25,29 +25,29 @@
 
 #include <avsystem/commons/memory.h>
 
-#define DEV_RES_MANUFACTURER 0                  // string
-#define DEV_RES_MODEL_NUMBER 1                  // string
-#define DEV_RES_SERIAL_NUMBER 2                 // string
-#define DEV_RES_FIRMWARE_VERSION 3              // string
+#define DEV_RES_MANUFACTURER 0     // string
+#define DEV_RES_MODEL_NUMBER 1     // string
+#define DEV_RES_SERIAL_NUMBER 2    // string
+#define DEV_RES_FIRMWARE_VERSION 3 // string
 #define DEV_RES_REBOOT 4
 #define DEV_RES_FACTORY_RESET 5
-#define DEV_RES_AVAILABLE_POWER_SOURCES 6       // array<int>
-#define DEV_RES_POWER_SOURCE_VOLTAGE 7          // array<int>
-#define DEV_RES_POWER_SOURCE_CURRENT 8          // array<int>
-#define DEV_RES_BATTERY_LEVEL 9                 // int
-#define DEV_RES_MEMORY_FREE 10                  // int
-#define DEV_RES_ERROR_CODE 11                   // int
+#define DEV_RES_AVAILABLE_POWER_SOURCES 6 // array<int>
+#define DEV_RES_POWER_SOURCE_VOLTAGE 7    // array<int>
+#define DEV_RES_POWER_SOURCE_CURRENT 8    // array<int>
+#define DEV_RES_BATTERY_LEVEL 9           // int
+#define DEV_RES_MEMORY_FREE 10            // int
+#define DEV_RES_ERROR_CODE 11             // int
 #define DEV_RES_RESET_ERROR_CODE 12
-#define DEV_RES_CURRENT_TIME 13                 // time
-#define DEV_RES_UTC_OFFSET 14                   // string
-#define DEV_RES_TIMEZONE 15                     // string
-#define DEV_RES_SUPPORTED_BINDING_AND_MODES 16  // string
-#define DEV_RES_DEVICE_TYPE 17                  // string
-#define DEV_RES_HARDWARE_VERSION 18             // string
-#define DEV_RES_SOFTWARE_VERSION 19             // string
-#define DEV_RES_BATTERY_STATUS 20               // int
-#define DEV_RES_MEMORY_TOTAL 21                 // int
-#define DEV_RES_EXTDEVINFO 22                   // objlnk
+#define DEV_RES_CURRENT_TIME 13                // time
+#define DEV_RES_UTC_OFFSET 14                  // string
+#define DEV_RES_TIMEZONE 15                    // string
+#define DEV_RES_SUPPORTED_BINDING_AND_MODES 16 // string
+#define DEV_RES_DEVICE_TYPE 17                 // string
+#define DEV_RES_HARDWARE_VERSION 18            // string
+#define DEV_RES_SOFTWARE_VERSION 19            // string
+#define DEV_RES_BATTERY_STATUS 20              // int
+#define DEV_RES_MEMORY_TOTAL 21                // int
+#define DEV_RES_EXTDEVINFO 22                  // objlnk
 
 typedef enum {
     DEV_ERR_NO_ERROR = 0,
@@ -89,23 +89,20 @@ static inline dev_repr_t *get_dev(const anjay_dm_object_def_t *const *obj_ptr) {
     return container_of(obj_ptr, dev_repr_t, def);
 }
 
-static int32_t randint_from_range(int32_t min_value,
-                                  int32_t max_value) {
+static int32_t randint_from_range(int32_t min_value, int32_t max_value) {
     assert(min_value <= max_value);
 
     // RNG-like predictable generation in range [min_value, max_value]
     int32_t diff = max_value - min_value;
-    return min_value + (int32_t)time_to_rand() % (diff + 1);
+    return min_value + (int32_t) time_to_rand() % (diff + 1);
 }
 
 static int32_t get_dc_voltage_mv(void) {
-    return randint_from_range(32 * 1000 - 500,
-                              32 * 1000 + 500);
+    return randint_from_range(32 * 1000 - 500, 32 * 1000 + 500);
 }
 
 static int32_t get_dc_current_ma(void) {
-    return randint_from_range(10 - 1,
-                              10 + 1);
+    return randint_from_range(10 - 1, 10 + 1);
 }
 
 static int dev_read(anjay_t *anjay,
@@ -113,7 +110,8 @@ static int dev_read(anjay_t *anjay,
                     anjay_iid_t iid,
                     anjay_rid_t rid,
                     anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
 
     dev_repr_t *dev = get_dev(obj_ptr);
 
@@ -126,49 +124,41 @@ static int dev_read(anjay_t *anjay,
         return anjay_ret_string(ctx, dev->serial_number);
     case DEV_RES_FIRMWARE_VERSION:
         return anjay_ret_string(ctx, anjay_get_version());
-    case DEV_RES_AVAILABLE_POWER_SOURCES:
-        {
-            anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-            if (!array
-                    || anjay_ret_array_index(array, 0)
-                    || anjay_ret_i32(array, (int32_t)POWER_SOURCE_DC)) {
-                return ANJAY_ERR_INTERNAL;
-            }
-            return anjay_ret_array_finish(array);
+    case DEV_RES_AVAILABLE_POWER_SOURCES: {
+        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+        if (!array || anjay_ret_array_index(array, 0)
+                || anjay_ret_i32(array, (int32_t) POWER_SOURCE_DC)) {
+            return ANJAY_ERR_INTERNAL;
         }
-    case DEV_RES_POWER_SOURCE_VOLTAGE:
-        {
-            anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-            if (!array
-                    || anjay_ret_array_index(array, 0)
-                    || anjay_ret_i32(array, get_dc_voltage_mv())) {
-                return ANJAY_ERR_INTERNAL;
-            }
-            return anjay_ret_array_finish(array);
+        return anjay_ret_array_finish(array);
+    }
+    case DEV_RES_POWER_SOURCE_VOLTAGE: {
+        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+        if (!array || anjay_ret_array_index(array, 0)
+                || anjay_ret_i32(array, get_dc_voltage_mv())) {
+            return ANJAY_ERR_INTERNAL;
         }
-    case DEV_RES_POWER_SOURCE_CURRENT:
-        {
-            anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-            if (!array
-                    || anjay_ret_array_index(array, 0)
-                    || anjay_ret_i32(array, get_dc_current_ma())) {
-                return ANJAY_ERR_INTERNAL;
-            }
-            return anjay_ret_array_finish(array);
+        return anjay_ret_array_finish(array);
+    }
+    case DEV_RES_POWER_SOURCE_CURRENT: {
+        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+        if (!array || anjay_ret_array_index(array, 0)
+                || anjay_ret_i32(array, get_dc_current_ma())) {
+            return ANJAY_ERR_INTERNAL;
         }
+        return anjay_ret_array_finish(array);
+    }
     case DEV_RES_BATTERY_LEVEL:
     case DEV_RES_MEMORY_FREE:
         return anjay_ret_i32(ctx, 0);
-    case DEV_RES_ERROR_CODE:
-        {
-            anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-            if (!array
-                    || anjay_ret_array_index(array, 0)
-                    || anjay_ret_i32(array, (int32_t) dev->last_error)) {
-                return ANJAY_ERR_INTERNAL;
-            }
-            return anjay_ret_array_finish(array);
+    case DEV_RES_ERROR_CODE: {
+        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+        if (!array || anjay_ret_array_index(array, 0)
+                || anjay_ret_i32(array, (int32_t) dev->last_error)) {
+            return ANJAY_ERR_INTERNAL;
         }
+        return anjay_ret_array_finish(array);
+    }
     case DEV_RES_CURRENT_TIME:
         return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds
                                           + dev->current_time_offset);
@@ -180,16 +170,14 @@ static int dev_read(anjay_t *anjay,
         return anjay_ret_string(ctx, "");
     case DEV_RES_SUPPORTED_BINDING_AND_MODES:
         return anjay_ret_string(ctx, "UQ");
-    case DEV_RES_EXTDEVINFO:
-        {
-            anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-            if (!array
-                    || anjay_ret_array_index(array, 0)
-                    || anjay_ret_objlnk(array, DEMO_OID_EXT_DEV_INFO, 0)) {
-                return ANJAY_ERR_INTERNAL;
-            }
-            return anjay_ret_array_finish(array);
+    case DEV_RES_EXTDEVINFO: {
+        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+        if (!array || anjay_ret_array_index(array, 0)
+                || anjay_ret_objlnk(array, DEMO_OID_EXT_DEV_INFO, 0)) {
+            return ANJAY_ERR_INTERNAL;
         }
+        return anjay_ret_array_finish(array);
+    }
     case DEV_RES_HARDWARE_VERSION:
     case DEV_RES_SOFTWARE_VERSION:
         return anjay_ret_string(ctx, "");
@@ -204,9 +192,8 @@ static int dev_read(anjay_t *anjay,
     }
 }
 
-static int read_string(anjay_input_ctx_t *ctx,
-                       char *buffer,
-                       size_t buffer_size) {
+static int
+read_string(anjay_input_ctx_t *ctx, char *buffer, size_t buffer_size) {
     char *tmp = (char *) avs_malloc(buffer_size);
     if (!tmp) {
         demo_log(ERROR, "Out of memory");
@@ -233,23 +220,23 @@ static int dev_write(anjay_t *anjay,
                      anjay_iid_t iid,
                      anjay_rid_t rid,
                      anjay_input_ctx_t *ctx) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
 
     dev_repr_t *dev = get_dev(obj_ptr);
 
     switch (rid) {
-    case DEV_RES_CURRENT_TIME:
-        {
-            int64_t new_time;
-            int result = anjay_get_i64(ctx, &new_time);
-            if (result) {
-                return result;
-            }
-
-            time_t now = time(NULL);
-            dev->current_time_offset = (time_t)new_time - now;
-            return 0;
+    case DEV_RES_CURRENT_TIME: {
+        int64_t new_time;
+        int result = anjay_get_i64(ctx, &new_time);
+        if (result) {
+            return result;
         }
+
+        time_t now = time(NULL);
+        dev->current_time_offset = (time_t) new_time - now;
+        return 0;
+    }
     case DEV_RES_UTC_OFFSET:
         return read_string(ctx, dev->utc_offset, sizeof(dev->utc_offset));
     case DEV_RES_TIMEZONE:
@@ -268,7 +255,8 @@ static void dev_instance_reset_impl(dev_repr_t *dev) {
 static int dev_instance_reset(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
 
     dev_instance_reset_impl(get_dev(obj_ptr));
     return 0;
@@ -299,15 +287,17 @@ static int dev_execute(anjay_t *anjay,
                        anjay_iid_t iid,
                        anjay_rid_t rid,
                        anjay_execute_ctx_t *ctx) {
-    (void) anjay; (void) iid; (void) ctx;
+    (void) anjay;
+    (void) iid;
+    (void) ctx;
 
     dev_repr_t *dev = get_dev(obj_ptr);
 
     switch (rid) {
     case DEV_RES_REBOOT:
     case DEV_RES_FACTORY_RESET:
-        if (!iosched_instant_entry_new(dev->iosched,
-                                       perform_reboot, NULL, NULL)) {
+        if (!iosched_instant_entry_new(dev->iosched, perform_reboot, NULL,
+                                       NULL)) {
             return ANJAY_ERR_INTERNAL;
         }
 
@@ -321,7 +311,9 @@ static int dev_dim(anjay_t *anjay,
                    const anjay_dm_object_def_t *const *obj_ptr,
                    anjay_iid_t iid,
                    anjay_rid_t rid) {
-    (void) anjay; (void) obj_ptr; (void) iid;
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
 
     switch (rid) {
     case DEV_RES_AVAILABLE_POWER_SOURCES:
@@ -337,29 +329,29 @@ static int dev_dim(anjay_t *anjay,
 
 static const anjay_dm_object_def_t DEVICE = {
     .oid = DEMO_OID_DEVICE,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            DEV_RES_MANUFACTURER,
-            DEV_RES_MODEL_NUMBER,
-            DEV_RES_SERIAL_NUMBER,
-            DEV_RES_FIRMWARE_VERSION,
-            DEV_RES_REBOOT,
-            DEV_RES_FACTORY_RESET,
-            DEV_RES_AVAILABLE_POWER_SOURCES,
-            DEV_RES_POWER_SOURCE_VOLTAGE,
-            DEV_RES_POWER_SOURCE_CURRENT,
-            DEV_RES_BATTERY_LEVEL,
-            DEV_RES_MEMORY_FREE,
-            DEV_RES_ERROR_CODE,
-            DEV_RES_CURRENT_TIME,
-            DEV_RES_UTC_OFFSET,
-            DEV_RES_TIMEZONE,
-            DEV_RES_SUPPORTED_BINDING_AND_MODES,
-            DEV_RES_DEVICE_TYPE,
-            DEV_RES_HARDWARE_VERSION,
-            DEV_RES_SOFTWARE_VERSION,
-            DEV_RES_BATTERY_STATUS,
-            DEV_RES_MEMORY_TOTAL,
-            DEV_RES_EXTDEVINFO),
+    .supported_rids =
+            ANJAY_DM_SUPPORTED_RIDS(DEV_RES_MANUFACTURER,
+                                    DEV_RES_MODEL_NUMBER,
+                                    DEV_RES_SERIAL_NUMBER,
+                                    DEV_RES_FIRMWARE_VERSION,
+                                    DEV_RES_REBOOT,
+                                    DEV_RES_FACTORY_RESET,
+                                    DEV_RES_AVAILABLE_POWER_SOURCES,
+                                    DEV_RES_POWER_SOURCE_VOLTAGE,
+                                    DEV_RES_POWER_SOURCE_CURRENT,
+                                    DEV_RES_BATTERY_LEVEL,
+                                    DEV_RES_MEMORY_FREE,
+                                    DEV_RES_ERROR_CODE,
+                                    DEV_RES_CURRENT_TIME,
+                                    DEV_RES_UTC_OFFSET,
+                                    DEV_RES_TIMEZONE,
+                                    DEV_RES_SUPPORTED_BINDING_AND_MODES,
+                                    DEV_RES_DEVICE_TYPE,
+                                    DEV_RES_HARDWARE_VERSION,
+                                    DEV_RES_SOFTWARE_VERSION,
+                                    DEV_RES_BATTERY_STATUS,
+                                    DEV_RES_MEMORY_TOTAL,
+                                    DEV_RES_EXTDEVINFO),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -393,10 +385,10 @@ static void extract_device_info(const char *endpoint_name,
         demo_log(WARNING, "empty manufacturer part of endpoint name");
         strncpy(out_manufacturer, "Anjay", sizeof("Anjay"));
     } else {
-        AVS_ASSERT((size_t)(dash - at) < manufacturer_size,
+        AVS_ASSERT((size_t) (dash - at) < manufacturer_size,
                    "manufacturer part of endpoint name too long");
         (void) manufacturer_size;
-        strncpy(out_manufacturer, at, (size_t)(dash - at));
+        strncpy(out_manufacturer, at, (size_t) (dash - at));
         at = dash + 1;
     }
 
@@ -412,13 +404,13 @@ static void extract_device_info(const char *endpoint_name,
         strncpy(out_serial, at, serial_length);
     }
 
-    demo_log(DEBUG, "manufacturer: %s; serial number: %s",
-             out_manufacturer, out_serial);
+    demo_log(DEBUG, "manufacturer: %s; serial number: %s", out_manufacturer,
+             out_serial);
 }
 
 const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
                                                    const char *endpoint_name) {
-    dev_repr_t *repr = (dev_repr_t*)avs_calloc(1, sizeof(dev_repr_t));
+    dev_repr_t *repr = (dev_repr_t *) avs_calloc(1, sizeof(dev_repr_t));
     if (!repr) {
         return NULL;
     }
@@ -428,9 +420,9 @@ const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
     repr->last_error = DEV_ERR_NO_ERROR;
 
     dev_instance_reset_impl(repr);
-    extract_device_info(endpoint_name,
-                        repr->manufacturer, sizeof(repr->manufacturer),
-                        repr->serial_number, sizeof(repr->serial_number));
+    extract_device_info(endpoint_name, repr->manufacturer,
+                        sizeof(repr->manufacturer), repr->serial_number,
+                        sizeof(repr->serial_number));
 
     return &repr->def;
 }

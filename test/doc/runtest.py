@@ -19,23 +19,15 @@ import argparse
 import logging
 import os
 import re
-import requests
+import grequests
 import sys
-from functools import lru_cache
+from collections import defaultdict
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 HTTP_STATUS_OK = 200
 FILE_EXTENSION = '.rst'
 REGEX = r'<(http.*?)>`_'
 DEFAULT_DOC_PATH = os.path.normpath(os.path.join(ROOT_DIR, '../../doc/sphinx/source'))
-
-@lru_cache()
-def is_valid_url(url):
-    logging.info('Processing %s', url)
-    try:
-        return requests.head(url, allow_redirects=True).status_code == HTTP_STATUS_OK
-    except requests.ConnectionError:
-        return False
 
 def explore(path):
     for root, directories, file_names in os.walk(path):
@@ -44,7 +36,7 @@ def explore(path):
             if file_path.lower().endswith(FILE_EXTENSION):
                 with open(file_path, encoding="utf-8") as f:
                     content = f.read()
-                    yield (file_name, content)
+                    yield (file_path, content)
 
 def find_urls(rst_content):
     lines = enumerate(rst_content.splitlines(), 1)
@@ -52,19 +44,28 @@ def find_urls(rst_content):
             for line_number, line_content in lines
             for found_url in re.findall(REGEX, line_content))
 
-def find_invalid_urls(rst_content):
-    return ((line_number, found_url)
-            for line_number, found_url in find_urls(rst_content)
-            if not is_valid_url(found_url))
+def find_invalid_urls(urls):
+    responses = grequests.map(grequests.head(url, allow_redirects=True)
+                              for url in urls)
+    invalid_urls = defaultdict(list)
+    for url, status in zip(urls, responses):
+        if not status or status.status_code != HTTP_STATUS_OK:
+            invalid_urls[url] = urls[url]
+    return invalid_urls
 
 def report(path):
-    found_invalid_urls = [(file_name, line_number, found_url)
-                          for file_name, content in explore(path)
-                          for line_number, found_url in find_invalid_urls(content)]
-    if found_invalid_urls:
+    urls = defaultdict(list)
+    for file_path, content in explore(path):
+        for line_number, found_url in find_urls(content):
+            urls[found_url].append((file_path, line_number))
+
+    invalid_urls = find_invalid_urls(urls)
+    if invalid_urls:
         logging.warning('There are invalid urls.')
-        for file_name, line_number, url in found_invalid_urls:
-            print('%s\t%s\t%s' % (file_name, line_number, url))
+        for (url, details) in invalid_urls.items():
+            print('URL: %s in:' % url)
+            for item in details:
+                print('\t%s:%s' % item)
         sys.exit(-1)
     else:
         logging.info('All urls are valid.')

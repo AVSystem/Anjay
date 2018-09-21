@@ -48,8 +48,9 @@ static int (*orig_clock_gettime)(clockid_t, struct timespec *);
 
 AVS_UNIT_GLOBAL_INIT(verbose) {
     (void) verbose;
-    orig_clock_gettime = (int (*)(clockid_t, struct timespec *)) (intptr_t)
-            dlsym(RTLD_NEXT, "clock_gettime");
+    typedef int (*clock_gettime_t)(clockid_t, struct timespec *);
+    orig_clock_gettime =
+            (clock_gettime_t) (intptr_t) dlsym(RTLD_NEXT, "clock_gettime");
 }
 
 int clock_gettime(clockid_t clock, struct timespec *t) {

@@ -58,4 +58,3 @@ _anjay_serv_clone_instances(const server_repr_t *repr) {
 void _anjay_serv_destroy_instances(AVS_LIST(server_instance_t) *instances) {
     AVS_LIST_CLEAR(instances);
 }
-

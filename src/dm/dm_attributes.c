@@ -16,8 +16,8 @@
 
 #include <anjay_config.h>
 
-#include <stdint.h>
 #include <inttypes.h>
+#include <stdint.h>
 
 #include "../anjay_core.h"
 #include "../utils_core.h"
@@ -103,9 +103,9 @@ int _anjay_dm_read_combined_server_attrs(anjay_t *anjay,
         if ((result = read_combined_period(anjay, server_iid,
                                            ANJAY_DM_RID_SERVER_DEFAULT_PMIN,
                                            &out->standard.min_period))
-            || (result = read_combined_period(anjay, server_iid,
-                                              ANJAY_DM_RID_SERVER_DEFAULT_PMAX,
-                                              &out->standard.max_period))) {
+                || (result = read_combined_period(
+                            anjay, server_iid, ANJAY_DM_RID_SERVER_DEFAULT_PMAX,
+                            &out->standard.max_period))) {
             return result;
         }
     }
@@ -123,8 +123,9 @@ int _anjay_dm_read_combined_instance_attrs(
         anjay_dm_internal_attrs_t *out) {
     if (!_anjay_dm_attributes_full(out)) {
         anjay_dm_internal_attrs_t instattrs = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
-        int result = _anjay_dm_instance_read_default_attrs(
-                anjay, obj, iid, ssid, &instattrs, NULL);
+        int result =
+                _anjay_dm_instance_read_default_attrs(anjay, obj, iid, ssid,
+                                                      &instattrs, NULL);
         if (result) {
             return result;
         }
@@ -140,8 +141,8 @@ int _anjay_dm_read_combined_object_attrs(
         anjay_dm_internal_attrs_t *out) {
     if (!_anjay_dm_attributes_full(out)) {
         anjay_dm_internal_attrs_t objattrs = ANJAY_DM_INTERNAL_ATTRS_EMPTY;
-        int result = _anjay_dm_object_read_default_attrs(
-                anjay, obj, ssid, &objattrs, NULL);
+        int result = _anjay_dm_object_read_default_attrs(anjay, obj, ssid,
+                                                         &objattrs, NULL);
         if (result) {
             return result;
         }
@@ -151,10 +152,9 @@ int _anjay_dm_read_combined_object_attrs(
 }
 
 bool _anjay_dm_attributes_empty(const anjay_dm_internal_attrs_t *attrs) {
-    return attrs->standard.min_period < 0
-            && attrs->standard.max_period < 0
+    return attrs->standard.min_period < 0 && attrs->standard.max_period < 0
 #ifdef WITH_CON_ATTR
-            && attrs->custom.data.con < 0
+           && attrs->custom.data.con < 0
 #endif
             ;
 }
@@ -162,17 +162,15 @@ bool _anjay_dm_attributes_empty(const anjay_dm_internal_attrs_t *attrs) {
 bool _anjay_dm_resource_attributes_empty(
         const anjay_dm_internal_res_attrs_t *attrs) {
     return _anjay_dm_attributes_empty(
-                    _anjay_dm_get_internal_attrs_const(&attrs->standard.common))
-            && isnan(attrs->standard.greater_than)
-            && isnan(attrs->standard.less_than)
-            && isnan(attrs->standard.step);
+                   _anjay_dm_get_internal_attrs_const(&attrs->standard.common))
+           && isnan(attrs->standard.greater_than)
+           && isnan(attrs->standard.less_than) && isnan(attrs->standard.step);
 }
 
 bool _anjay_dm_attributes_full(const anjay_dm_internal_attrs_t *attrs) {
-    return attrs->standard.min_period >= 0
-            && attrs->standard.max_period >= 0
+    return attrs->standard.min_period >= 0 && attrs->standard.max_period >= 0
 #ifdef WITH_CON_ATTR
-            && attrs->custom.data.con >= 0
+           && attrs->custom.data.con >= 0
 #endif
             ;
 }
@@ -187,9 +185,10 @@ int _anjay_dm_effective_attrs(anjay_t *anjay,
 
     if (query->obj && *query->obj) {
         if (query->rid >= 0) {
-            result = _anjay_dm_resource_read_attrs(
-                    anjay, query->obj, query->iid, (anjay_rid_t) query->rid,
-                    query->ssid, out, NULL);
+            result =
+                    _anjay_dm_resource_read_attrs(anjay, query->obj, query->iid,
+                                                  (anjay_rid_t) query->rid,
+                                                  query->ssid, out, NULL);
             if (result) {
                 return result;
             }

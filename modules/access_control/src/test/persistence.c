@@ -17,8 +17,8 @@
 #include <avsystem/commons/unit/mock_helpers.h>
 #include <avsystem/commons/unit/test.h>
 
-#include <avsystem/commons/stream/stream_outbuf.h>
 #include <avsystem/commons/stream/stream_inbuf.h>
+#include <avsystem/commons/stream/stream_outbuf.h>
 
 #include <anjay/access_control.h>
 #include <anjay/core.h>
@@ -41,7 +41,8 @@ static const anjay_dm_supported_rids_t MOCK_SUPPORTED_RIDS =
 
 static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
     anjay_dm_object_def_t *obj =
-            (anjay_dm_object_def_t *) avs_calloc(1, sizeof(anjay_dm_object_def_t));
+            (anjay_dm_object_def_t *) avs_calloc(1,
+                                                 sizeof(anjay_dm_object_def_t));
     if (obj) {
         obj->oid = oid;
         obj->supported_rids = MOCK_SUPPORTED_RIDS;
@@ -52,9 +53,8 @@ static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
 
 typedef bool comparator_t(const void *a, const void *b);
 
-static bool lists_equal(AVS_LIST(void) a,
-                        AVS_LIST(void) b,
-                        comparator_t *equals) {
+static bool
+lists_equal(AVS_LIST(void) a, AVS_LIST(void) b, comparator_t *equals) {
     AVS_LIST(void) p = a;
     AVS_LIST(void) q = b;
     while (p && q) {
@@ -76,11 +76,10 @@ static bool acl_entry_equal(const void *a, const void *b) {
 static bool instances_equal(const void *a, const void *b) {
     const access_control_instance_t *p = (const access_control_instance_t *) a;
     const access_control_instance_t *q = (const access_control_instance_t *) b;
-    return (p == q) || (p->iid == q->iid &&
-                        p->target.oid == q->target.oid &&
-                        p->target.iid == q->target.iid &&
-                        p->owner == q->owner &&
-                        lists_equal(p->acl, q->acl, acl_entry_equal));
+    return (p == q)
+           || (p->iid == q->iid && p->target.oid == q->target.oid
+               && p->target.iid == q->target.iid && p->owner == q->owner
+               && lists_equal(p->acl, q->acl, acl_entry_equal));
 }
 
 static bool aco_equal(access_control_t *a, access_control_t *b) {
@@ -104,8 +103,10 @@ typedef struct {
 } storage_ctx_t;
 
 static void init_context(storage_ctx_t *ctx) {
-    memcpy(&ctx->in, &AVS_STREAM_INBUF_STATIC_INITIALIZER, sizeof(avs_stream_inbuf_t));
-    memcpy(&ctx->out, &AVS_STREAM_OUTBUF_STATIC_INITIALIZER, sizeof(avs_stream_outbuf_t));
+    memcpy(&ctx->in, &AVS_STREAM_INBUF_STATIC_INITIALIZER,
+           sizeof(avs_stream_inbuf_t));
+    memcpy(&ctx->out, &AVS_STREAM_OUTBUF_STATIC_INITIALIZER,
+           sizeof(avs_stream_outbuf_t));
     ctx->out.buffer = ctx->buffer;
     ctx->out.buffer_size = sizeof(ctx->buffer);
     ctx->in.buffer = ctx->buffer;
@@ -115,7 +116,9 @@ AVS_UNIT_TEST(access_control_persistence, empty_aco) {
     anjay_t *anjay1 = ac_test_create_fake_anjay();
     anjay_t *anjay2 = ac_test_create_fake_anjay();
 
-    storage_ctx_t ctx = { .buffer = {} };
+    storage_ctx_t ctx = {
+        .buffer = {}
+    };
     init_context(&ctx);
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay1));
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay2));
@@ -137,7 +140,9 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     anjay_t *anjay1 = ac_test_create_fake_anjay();
     anjay_t *anjay2 = ac_test_create_fake_anjay();
 
-    storage_ctx_t ctx = { .buffer = {} };
+    storage_ctx_t ctx = {
+        .buffer = {}
+    };
     init_context(&ctx);
 
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay1));
@@ -193,9 +198,15 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
 
     AVS_LIST(acl_entry_t) acl1 = NULL;
     AVS_LIST_APPEND(&acl1, AVS_LIST_NEW_ELEMENT(acl_entry_t));
-    *acl1 = (acl_entry_t) { .mask = 0xFFFF, .ssid = 1 };
+    *acl1 = (acl_entry_t) {
+        .mask = 0xFFFF,
+        .ssid = 1
+    };
     AVS_LIST_INSERT(&acl1, AVS_LIST_NEW_ELEMENT(acl_entry_t));
-    *acl1 = (acl_entry_t) { .mask = 0xDEAD, .ssid = 0xBABE };
+    *acl1 = (acl_entry_t) {
+        .mask = 0xDEAD,
+        .ssid = 0xBABE
+    };
     access_control_instance_t instance1 = (access_control_instance_t) {
         .target = {
             .oid = 32,

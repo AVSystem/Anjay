@@ -23,14 +23,13 @@
 #include "discover.h"
 #include "query.h"
 
-#include "../dm_core.h"
 #include "../anjay_core.h"
+#include "../dm_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-static int print_period_attr(avs_stream_abstract_t *stream,
-                             const char *name,
-                             int32_t t) {
+static int
+print_period_attr(avs_stream_abstract_t *stream, const char *name, int32_t t) {
     if (t < 0) {
         return 0;
     }
@@ -47,7 +46,7 @@ static int print_con_attr(avs_stream_abstract_t *stream,
                               (int) value);
 }
 #else // WITH_CON_ATTR
-#define print_con_attr(...) 0
+#    define print_con_attr(...) 0
 #endif // WITH_CON_ATTR
 
 static int print_double_attr(avs_stream_abstract_t *stream,
@@ -100,7 +99,8 @@ static int print_discovered_object(avs_stream_abstract_t *stream,
         return retval;
     }
     if ((*obj)->version) {
-        if ((retval = avs_stream_write_f(stream, ";ver=\"%s\"", (*obj)->version))) {
+        if ((retval = avs_stream_write_f(stream, ";ver=\"%s\"",
+                                         (*obj)->version))) {
             return retval;
         }
     }
@@ -119,12 +119,13 @@ static int print_discovered_instance(avs_stream_abstract_t *stream,
     return print_attrs(stream, attrs);
 }
 
-static int print_discovered_resource(avs_stream_abstract_t *stream,
-                                     const anjay_dm_object_def_t *const *obj,
-                                     anjay_iid_t iid,
-                                     anjay_rid_t rid,
-                                     int32_t resource_dim,
-                                     const anjay_dm_internal_res_attrs_t *attrs) {
+static int
+print_discovered_resource(avs_stream_abstract_t *stream,
+                          const anjay_dm_object_def_t *const *obj,
+                          anjay_iid_t iid,
+                          anjay_rid_t rid,
+                          int32_t resource_dim,
+                          const anjay_dm_internal_res_attrs_t *attrs) {
     int retval =
             avs_stream_write_f(stream, "</%" PRIu16 "/%" PRIu16 "/%" PRIu16 ">",
                                (*obj)->oid, iid, rid);
@@ -162,8 +163,7 @@ static int read_resource_dim(anjay_t *anjay,
                              anjay_rid_t rid,
                              int32_t *out_dim) {
     int result = _anjay_dm_resource_dim(anjay, obj, iid, rid, NULL);
-    if (result == ANJAY_DM_DIM_INVALID
-            || result == ANJAY_ERR_METHOD_NOT_ALLOWED
+    if (result == ANJAY_DM_DIM_INVALID || result == ANJAY_ERR_METHOD_NOT_ALLOWED
             || result == ANJAY_ERR_NOT_IMPLEMENTED) {
         *out_dim = -1;
     } else if (result < 0) {
@@ -195,12 +195,12 @@ static int discover_resource(anjay_t *anjay,
         result = read_resource_dim(anjay, obj, iid, rid, &resource_dim);
     }
 
-    anjay_dm_internal_res_attrs_t resource_attributes
-            = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
+    anjay_dm_internal_res_attrs_t resource_attributes =
+            ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
     if (hint == WITH_RESOURCE_ATTRIBS) {
-        result = _anjay_dm_resource_read_attrs(
-                anjay, obj, iid, rid, _anjay_dm_current_ssid(anjay),
-                &resource_attributes, NULL);
+        result = _anjay_dm_resource_read_attrs(anjay, obj, iid, rid,
+                                               _anjay_dm_current_ssid(anjay),
+                                               &resource_attributes, NULL);
     } else if (hint == WITH_INHERITED_ATTRIBS) {
         anjay_dm_attrs_query_details_t details =
                 (anjay_dm_attrs_query_details_t) {
@@ -230,9 +230,8 @@ static int discover_instance_resources(anjay_t *anjay,
                                        discover_resource_hint_t hint) {
     int result = 0;
     for (size_t i = 0; i < (*obj)->supported_rids.count; ++i) {
-        result = _anjay_dm_resource_present(anjay, obj, iid,
-                                            (*obj)->supported_rids.rids[i],
-                                            NULL);
+        result = _anjay_dm_resource_present(
+                anjay, obj, iid, (*obj)->supported_rids.rids[i], NULL);
         if (result <= 0) {
             continue;
         }
@@ -253,8 +252,8 @@ static int discover_object_instance(anjay_t *anjay,
     int result = 0;
     (void) ((result = print_separator(anjay->comm_stream))
             || (result = print_discovered_instance(
-                    anjay->comm_stream, obj, iid,
-                    &ANJAY_DM_INTERNAL_ATTRS_EMPTY))
+                        anjay->comm_stream, obj, iid,
+                        &ANJAY_DM_INTERNAL_ATTRS_EMPTY))
             || (result = discover_instance_resources(anjay, obj, iid,
                                                      NO_ATTRIBS)));
     return result;
@@ -316,8 +315,8 @@ bootstrap_discover_object_instance(anjay_t *anjay,
     int result = 0;
     (void) ((result = print_separator(anjay->comm_stream))
             || (result = print_discovered_instance(
-                    anjay->comm_stream, obj, iid,
-                    &ANJAY_DM_INTERNAL_ATTRS_EMPTY)));
+                        anjay->comm_stream, obj, iid,
+                        &ANJAY_DM_INTERNAL_ATTRS_EMPTY)));
     if (result) {
         return result;
     }
@@ -345,8 +344,8 @@ int _anjay_bootstrap_discover_object(anjay_t *anjay,
     if (result) {
         return result;
     }
-    return _anjay_dm_foreach_instance(
-            anjay, obj, bootstrap_discover_object_instance, NULL);
+    return _anjay_dm_foreach_instance(anjay, obj,
+                                      bootstrap_discover_object_instance, NULL);
 }
 
 static int bootstrap_discover_object(anjay_t *anjay,

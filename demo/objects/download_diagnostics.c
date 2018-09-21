@@ -14,32 +14,32 @@
  * limitations under the License.
  */
 
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 #include <assert.h>
-#include <string.h>
 #include <inttypes.h>
-#include <unistd.h>
+#include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 typedef enum {
-    DOWNLOAD_DIAG_STATE         = 0,
-    DOWNLOAD_DIAG_URL           = 1,
-    DOWNLOAD_DIAG_ROM_TIME_US   = 2,
+    DOWNLOAD_DIAG_STATE = 0,
+    DOWNLOAD_DIAG_URL = 1,
+    DOWNLOAD_DIAG_ROM_TIME_US = 2,
     /* begin of transmission time */
-    DOWNLOAD_DIAG_BOM_TIME_US   = 3,
+    DOWNLOAD_DIAG_BOM_TIME_US = 3,
     /* end of transmission time */
-    DOWNLOAD_DIAG_EOM_TIME_US   = 4,
+    DOWNLOAD_DIAG_EOM_TIME_US = 4,
     /* total number of bytes transmitted between BOM_TIME and EOM_TIME */
-    DOWNLOAD_DIAG_TOTAL_BYTES   = 5,
-    DOWNLOAD_DIAG_RUN           = 6
+    DOWNLOAD_DIAG_TOTAL_BYTES = 5,
+    DOWNLOAD_DIAG_RUN = 6
 } download_diag_res_t;
 
 typedef enum {
-    DIAG_STATE_NONE             = 0,
-    DIAG_STATE_REQUESTED        = 1,
-    DIAG_STATE_COMPLETED        = 2,
-    DIAG_STATE_TRANSFER_FAILED  = 3
+    DIAG_STATE_NONE = 0,
+    DIAG_STATE_REQUESTED = 1,
+    DIAG_STATE_COMPLETED = 2,
+    DIAG_STATE_TRANSFER_FAILED = 3
 } download_diag_state_t;
 
 typedef struct {
@@ -56,7 +56,8 @@ typedef struct {
     download_diag_state_t state;
 } download_diag_repr_t;
 
-static download_diag_repr_t *get_diag(const anjay_dm_object_def_t *const *obj_ptr) {
+static download_diag_repr_t *
+get_diag(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
     return container_of(obj_ptr, download_diag_repr_t, def);
 }
@@ -89,16 +90,16 @@ static int dl_block_callback(anjay_t *anjay,
                              size_t data_size,
                              const anjay_etag_t *etag,
                              void *user_data) {
-    (void) anjay; (void) data; (void) etag;
+    (void) anjay;
+    (void) data;
+    (void) etag;
     download_diag_repr_t *repr = (download_diag_repr_t *) user_data;
     repr->stats.bytes_received += data_size;
     update_times(repr);
     return 0;
 }
 
-static void dl_finish_callback(anjay_t *anjay,
-                               int result,
-                               void *user_data) {
+static void dl_finish_callback(anjay_t *anjay, int result, void *user_data) {
     download_diag_repr_t *repr = (download_diag_repr_t *) user_data;
     update_times(repr);
     if (result) {
@@ -108,8 +109,7 @@ static void dl_finish_callback(anjay_t *anjay,
     }
 }
 
-static int diag_download_run(anjay_t *anjay,
-                             download_diag_repr_t *repr) {
+static int diag_download_run(anjay_t *anjay, download_diag_repr_t *repr) {
     if (repr->dl_handle) {
         demo_log(ERROR, "download diagnostic already in progress");
         return -1;
@@ -240,22 +240,21 @@ static int diag_resource_write(anjay_t *anjay,
     (void) ctx;
     download_diag_repr_t *repr = get_diag(obj_ptr);
     switch ((download_diag_res_t) rid) {
-    case DOWNLOAD_DIAG_URL:
-        {
-            if (repr->state == DIAG_STATE_REQUESTED) {
-                demo_log(ERROR,
-                         "Cancelling a diagnostic in progress is not supported");
-                return ANJAY_ERR_BAD_REQUEST;
-            }
-            reset_diagnostic(repr);
-            int result = anjay_get_string(ctx, repr->download_url,
-                                          sizeof(repr->download_url));
-            if (result < 0 || result == ANJAY_BUFFER_TOO_SHORT) {
-                reset_diagnostic(repr);
-                result = result < 0 ? result : ANJAY_ERR_BAD_REQUEST;
-            }
-            return result;
+    case DOWNLOAD_DIAG_URL: {
+        if (repr->state == DIAG_STATE_REQUESTED) {
+            demo_log(ERROR,
+                     "Cancelling a diagnostic in progress is not supported");
+            return ANJAY_ERR_BAD_REQUEST;
         }
+        reset_diagnostic(repr);
+        int result = anjay_get_string(ctx, repr->download_url,
+                                      sizeof(repr->download_url));
+        if (result < 0 || result == ANJAY_BUFFER_TOO_SHORT) {
+            reset_diagnostic(repr);
+            result = result < 0 ? result : ANJAY_ERR_BAD_REQUEST;
+        }
+        return result;
+    }
     default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -264,14 +263,13 @@ static int diag_resource_write(anjay_t *anjay,
 
 static const anjay_dm_object_def_t DOWNLOAD_DIAG = {
     .oid = DEMO_OID_DOWNLOAD_DIAG,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            DOWNLOAD_DIAG_STATE,
-            DOWNLOAD_DIAG_URL,
-            DOWNLOAD_DIAG_ROM_TIME_US,
-            DOWNLOAD_DIAG_BOM_TIME_US,
-            DOWNLOAD_DIAG_EOM_TIME_US,
-            DOWNLOAD_DIAG_TOTAL_BYTES,
-            DOWNLOAD_DIAG_RUN),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(DOWNLOAD_DIAG_STATE,
+                                              DOWNLOAD_DIAG_URL,
+                                              DOWNLOAD_DIAG_ROM_TIME_US,
+                                              DOWNLOAD_DIAG_BOM_TIME_US,
+                                              DOWNLOAD_DIAG_EOM_TIME_US,
+                                              DOWNLOAD_DIAG_TOTAL_BYTES,
+                                              DOWNLOAD_DIAG_RUN),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -287,8 +285,9 @@ static const anjay_dm_object_def_t DOWNLOAD_DIAG = {
 };
 
 const anjay_dm_object_def_t **download_diagnostics_object_create(void) {
-    download_diag_repr_t *repr = (download_diag_repr_t *)
-            avs_calloc(1, sizeof(download_diag_repr_t));
+    download_diag_repr_t *repr =
+            (download_diag_repr_t *) avs_calloc(1,
+                                                sizeof(download_diag_repr_t));
     if (!repr) {
         return NULL;
     }

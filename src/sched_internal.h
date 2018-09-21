@@ -20,7 +20,7 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #if !(defined(ANJAY_SCHED_C) || defined(ANJAY_TEST))
-#error "sched_internal.h is not meant to be included from outside sched.c"
+#    error "sched_internal.h is not meant to be included from outside sched.c"
 #endif
 
 typedef struct {
@@ -39,4 +39,3 @@ struct anjay_sched_struct {
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_SCHED_INTERNAL_H */
-

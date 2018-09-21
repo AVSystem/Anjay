@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 
 #include <assert.h>
 #include <inttypes.h>
 #include <string.h>
 
 typedef enum {
-    CS_SMS_TX_COUNTER       = 0,
-    CS_SMS_RX_COUNTER       = 1,
-    CS_TX_KB                = 2,
-    CS_RX_KB                = 3,
-    CS_MAX_MSG_SIZE         = 4,
-    CS_AVG_MSG_SIZE         = 5,
-    CS_START                = 6,
-    CS_STOP                 = 7,
-    CS_COLLECTION_PERIOD    = 8,
+    CS_SMS_TX_COUNTER = 0,
+    CS_SMS_RX_COUNTER = 1,
+    CS_TX_KB = 2,
+    CS_RX_KB = 3,
+    CS_MAX_MSG_SIZE = 4,
+    CS_AVG_MSG_SIZE = 5,
+    CS_START = 6,
+    CS_STOP = 7,
+    CS_COLLECTION_PERIOD = 8,
 } conn_stats_res_t;
 
 typedef struct {
@@ -70,18 +70,18 @@ static int ifname_for_first_socket(anjay_t *anjay,
     return avs_net_socket_interface_name(*first, if_name);
 }
 
-static const char* RX_STATS = "rx_bytes";
-static const char* TX_STATS = "tx_bytes";
+static const char *RX_STATS = "rx_bytes";
+static const char *TX_STATS = "tx_bytes";
 
 static int stats_getter(avs_net_socket_interface_name_t *if_name,
                         uint64_t *bytes,
-                        const char* stats) {
+                        const char *stats) {
     char file_name[128];
     sprintf(file_name, "/sys/class/net/%s/statistics/%s", *if_name, stats);
     return read_uint64_from_file(bytes, file_name);
 }
 
-static uint64_t first_socket_stats(anjay_t *anjay, const char* stats) {
+static uint64_t first_socket_stats(anjay_t *anjay, const char *stats) {
     avs_net_socket_interface_name_t if_name;
     memset(&if_name, 0, sizeof(if_name));
     if (ifname_for_first_socket(anjay, &if_name)) {
@@ -152,9 +152,9 @@ static int cs_resource_execute(anjay_t *anjay,
             return ANJAY_ERR_BAD_REQUEST;
         }
         repr->last_tx_bytes =
-            first_socket_stats(anjay, TX_STATS) - repr->last_tx_bytes;
+                first_socket_stats(anjay, TX_STATS) - repr->last_tx_bytes;
         repr->last_rx_bytes =
-            first_socket_stats(anjay, RX_STATS) - repr->last_rx_bytes;
+                first_socket_stats(anjay, RX_STATS) - repr->last_rx_bytes;
         repr->is_collecting = false;
         break;
     default:
@@ -198,17 +198,17 @@ static int cs_resource_write(anjay_t *anjay,
     conn_stats_repr_t *repr = get_cs(obj_ptr);
     switch (rid) {
     case CS_COLLECTION_PERIOD: {
-            int32_t val;
-            int result;
-            if ((result = anjay_get_i32(ctx, &val))) {
-                return result;
-            } else if (val < 0) {
-                return ANJAY_ERR_BAD_REQUEST;
-            }
-
-            repr->collection_period = (uint32_t) val;
-            return 0;
+        int32_t val;
+        int result;
+        if ((result = anjay_get_i32(ctx, &val))) {
+            return result;
+        } else if (val < 0) {
+            return ANJAY_ERR_BAD_REQUEST;
         }
+
+        repr->collection_period = (uint32_t) val;
+        return 0;
+    }
     case CS_MAX_MSG_SIZE:
     case CS_AVG_MSG_SIZE:
     case CS_SMS_TX_COUNTER:
@@ -224,16 +224,15 @@ static int cs_resource_write(anjay_t *anjay,
 
 static const anjay_dm_object_def_t CONN_STATISTICS = {
     .oid = DEMO_OID_CONN_STATISTICS,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            CS_SMS_TX_COUNTER,
-            CS_SMS_RX_COUNTER,
-            CS_TX_KB,
-            CS_RX_KB,
-            CS_MAX_MSG_SIZE,
-            CS_AVG_MSG_SIZE,
-            CS_START,
-            CS_STOP,
-            CS_COLLECTION_PERIOD),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(CS_SMS_TX_COUNTER,
+                                              CS_SMS_RX_COUNTER,
+                                              CS_TX_KB,
+                                              CS_RX_KB,
+                                              CS_MAX_MSG_SIZE,
+                                              CS_AVG_MSG_SIZE,
+                                              CS_START,
+                                              CS_STOP,
+                                              CS_COLLECTION_PERIOD),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -250,8 +249,8 @@ static const anjay_dm_object_def_t CONN_STATISTICS = {
 };
 
 const anjay_dm_object_def_t **cs_object_create(void) {
-    conn_stats_repr_t *repr = (conn_stats_repr_t *)
-            avs_calloc(1, sizeof(conn_stats_repr_t));
+    conn_stats_repr_t *repr =
+            (conn_stats_repr_t *) avs_calloc(1, sizeof(conn_stats_repr_t));
     if (!repr) {
         return NULL;
     }

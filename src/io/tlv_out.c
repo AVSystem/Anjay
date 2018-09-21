@@ -96,20 +96,18 @@ static int write_shortened_u32(avs_stream_abstract_t *stream, uint32_t value) {
 
 static size_t header_size(uint16_t id, size_t length) {
     assert(length == (uint32_t) length);
-    return 1 + (size_t) u32_length(id) +
-            ((length > 7) ? (size_t) u32_length((uint32_t) length) : 0);
+    return 1 + (size_t) u32_length(id)
+           + ((length > 7) ? (size_t) u32_length((uint32_t) length) : 0);
 }
 
-static int write_header(avs_stream_abstract_t *stream,
-                        const tlv_id_t *id,
-                        size_t length) {
+static int
+write_header(avs_stream_abstract_t *stream, const tlv_id_t *id, size_t length) {
     if (id->id != (uint16_t) id->id || length >> 24) {
         return -1;
     }
-    uint8_t typefield = (uint8_t) (
-            ((id->type & 3) << 6) |
-            ((id->id > UINT8_MAX) ? 0x20 : 0) |
-            typefield_length((uint32_t) length));
+    uint8_t typefield =
+            (uint8_t) (((id->type & 3) << 6) | ((id->id > UINT8_MAX) ? 0x20 : 0)
+                       | typefield_length((uint32_t) length));
     int retval = avs_stream_write(stream, &typefield, 1);
     if (!retval) {
         retval = write_shortened_u32(stream, (uint16_t) id->id);
@@ -123,8 +121,10 @@ static int write_header(avs_stream_abstract_t *stream,
 static inline int ensure_valid_for_value(tlv_out_t *ctx) {
     return (ctx->slave
             || !(ctx->next_id.type == TLV_ID_RIID
-                    || ctx->next_id.type == TLV_ID_RID)
-            || ctx->next_id.id < 0) ? -1 : 0;
+                 || ctx->next_id.type == TLV_ID_RID)
+            || ctx->next_id.id < 0)
+                   ? -1
+                   : 0;
 }
 
 static int write_entry(avs_stream_abstract_t *stream,
@@ -139,8 +139,8 @@ static int write_entry(avs_stream_abstract_t *stream,
 }
 
 static char *add_buffered_entry(tlv_out_t *ctx, size_t length) {
-    tlv_entry_t *new_entry = (tlv_entry_t *)
-            AVS_LIST_NEW_BUFFER(sizeof(tlv_entry_t) + length);
+    tlv_entry_t *new_entry =
+            (tlv_entry_t *) AVS_LIST_NEW_BUFFER(sizeof(tlv_entry_t) + length);
     if (!new_entry) {
         return NULL;
     }
@@ -222,7 +222,7 @@ static anjay_ret_bytes_ctx_t *add_entry(tlv_out_t *ctx, size_t length) {
         }
     } else if (ctx->parent) {
         if ((ctx->bytes_ctx.output.buffer_ptr =
-                add_buffered_entry(ctx, length))) {
+                     add_buffered_entry(ctx, length))) {
             ctx->bytes_ctx.vtable = &BUFFERED_BYTES_VTABLE;
             ctx->bytes_ctx.bytes_left = length;
             return (anjay_ret_bytes_ctx_t *) &ctx->bytes_ctx;
@@ -244,20 +244,21 @@ static int tlv_ret_string(anjay_output_ctx_t *ctx, const char *value) {
     return anjay_ret_bytes(ctx, value, strlen(value));
 }
 
-#define DEF_IRET(Half, Bits) \
-static int tlv_ret_i##Bits(anjay_output_ctx_t *ctx, int##Bits##_t value) { \
-    if (value == (int##Half##_t) value) { \
-        return tlv_ret_i##Half(ctx, (int##Half##_t) value); \
-    } \
-    uint##Bits##_t portable = avs_convert_be##Bits ((uint##Bits##_t) value); \
-    return anjay_ret_bytes(ctx, &portable, sizeof(portable)); \
-}
+#define DEF_IRET(Half, Bits)                                                   \
+    static int tlv_ret_i##Bits(anjay_output_ctx_t *ctx, int##Bits##_t value) { \
+        if (value == (int##Half##_t) value) {                                  \
+            return tlv_ret_i##Half(ctx, (int##Half##_t) value);                \
+        }                                                                      \
+        uint##Bits##_t portable =                                              \
+                avs_convert_be##Bits((uint##Bits##_t) value);                  \
+        return anjay_ret_bytes(ctx, &portable, sizeof(portable));              \
+    }
 
 static int tlv_ret_i8(anjay_output_ctx_t *ctx, int8_t value) {
     return anjay_ret_bytes(ctx, &value, 1);
 }
 
-DEF_IRET( 8, 16)
+DEF_IRET(8, 16)
 DEF_IRET(16, 32)
 DEF_IRET(32, 64)
 
@@ -279,8 +280,8 @@ static int tlv_ret_bool(anjay_output_ctx_t *ctx, bool value) {
     return tlv_ret_i8(ctx, value);
 }
 
-static int tlv_ret_objlnk(anjay_output_ctx_t *ctx,
-                          anjay_oid_t oid, anjay_iid_t iid) {
+static int
+tlv_ret_objlnk(anjay_output_ctx_t *ctx, anjay_oid_t oid, anjay_iid_t iid) {
     uint32_t portable =
             avs_convert_be32(((uint32_t) oid << 16) | (uint32_t) iid);
     return anjay_ret_bytes(ctx, &portable, sizeof(portable));
@@ -299,9 +300,9 @@ static int tlv_slave_finish(tlv_out_t *ctx, tlv_id_type_t next_id_type) {
     {
         tlv_entry_t *entry = NULL;
         AVS_LIST_FOREACH(entry, ctx->entries) {
-            data_size += header_size((uint16_t) entry->id.id,
-                                     entry->data_length) +
-                    entry->data_length;
+            data_size +=
+                    header_size((uint16_t) entry->id.id, entry->data_length)
+                    + entry->data_length;
         }
     }
     char *buffer = (char *) (data_size ? avs_malloc(data_size) : NULL);
@@ -328,8 +329,8 @@ static int tlv_slave_finish(tlv_out_t *ctx, tlv_id_type_t next_id_type) {
 }
 
 static anjay_output_ctx_t *tlv_ret_array_start(anjay_output_ctx_t *ctx) {
-    return tlv_slave_start((tlv_out_t *) ctx,
-                           TLV_ID_RID, TLV_ID_RID_ARRAY, TLV_ID_RIID);
+    return tlv_slave_start((tlv_out_t *) ctx, TLV_ID_RID, TLV_ID_RID_ARRAY,
+                           TLV_ID_RIID);
 }
 
 static int tlv_ret_array_finish(anjay_output_ctx_t *ctx_) {
@@ -341,8 +342,8 @@ static int tlv_ret_array_finish(anjay_output_ctx_t *ctx_) {
 }
 
 static anjay_output_ctx_t *tlv_ret_object_start(anjay_output_ctx_t *ctx) {
-    return tlv_slave_start((tlv_out_t *) ctx,
-                           TLV_ID_IID, TLV_ID_IID, TLV_ID_RID);
+    return tlv_slave_start((tlv_out_t *) ctx, TLV_ID_IID, TLV_ID_IID,
+                           TLV_ID_RID);
 }
 
 static int tlv_ret_object_finish(anjay_output_ctx_t *ctx_) {
@@ -353,8 +354,8 @@ static int tlv_ret_object_finish(anjay_output_ctx_t *ctx_) {
     return tlv_slave_finish(ctx, TLV_ID_IID);
 }
 
-static int tlv_set_id(anjay_output_ctx_t *ctx_,
-                      anjay_id_type_t type, uint16_t id) {
+static int
+tlv_set_id(anjay_output_ctx_t *ctx_, anjay_id_type_t type, uint16_t id) {
     tlv_out_t *ctx = (tlv_out_t *) ctx_;
     if (ctx->slave) {
         return -1;
@@ -390,21 +391,21 @@ static int tlv_output_close(anjay_output_ctx_t *ctx_) {
 }
 
 static const anjay_output_ctx_vtable_t TLV_OUT_VTABLE = {
-    tlv_errno_ptr,
-    tlv_ret_bytes,
-    tlv_ret_string,
-    tlv_ret_i32,
-    tlv_ret_i64,
-    tlv_ret_float,
-    tlv_ret_double,
-    tlv_ret_bool,
-    tlv_ret_objlnk,
-    tlv_ret_array_start,
-    tlv_ret_array_finish,
-    tlv_ret_object_start,
-    tlv_ret_object_finish,
-    tlv_set_id,
-    tlv_output_close
+    .errno_ptr = tlv_errno_ptr,
+    .bytes_begin = tlv_ret_bytes,
+    .string = tlv_ret_string,
+    .i32 = tlv_ret_i32,
+    .i64 = tlv_ret_i64,
+    .f32 = tlv_ret_float,
+    .f64 = tlv_ret_double,
+    .boolean = tlv_ret_bool,
+    .objlnk = tlv_ret_objlnk,
+    .array_start = tlv_ret_array_start,
+    .array_finish = tlv_ret_array_finish,
+    .object_start = tlv_ret_object_start,
+    .object_finish = tlv_ret_object_finish,
+    .set_id = tlv_set_id,
+    .close = tlv_output_close
 };
 
 static anjay_output_ctx_t *tlv_slave_start(tlv_out_t *ctx,
@@ -412,9 +413,7 @@ static anjay_output_ctx_t *tlv_slave_start(tlv_out_t *ctx,
                                            tlv_id_type_t new_type,
                                            tlv_id_type_t inner_type) {
     tlv_out_t *object = NULL;
-    if (ctx->slave
-            || ctx->next_id.type != expected_type
-            || ctx->next_id.id < 0
+    if (ctx->slave || ctx->next_id.type != expected_type || ctx->next_id.id < 0
             || !(object = (tlv_out_t *) avs_calloc(1, sizeof(tlv_out_t)))) {
         return NULL;
     }
@@ -447,9 +446,10 @@ _anjay_output_tlv_create(avs_stream_abstract_t *stream,
                          int *errno_ptr,
                          anjay_msg_details_t *inout_details) {
     anjay_output_ctx_t *ctx = _anjay_output_raw_tlv_create(stream);
-    if (ctx && ((*errno_ptr = _anjay_handle_requested_format(
-                    &inout_details->format, ANJAY_COAP_FORMAT_TLV))
-            || _anjay_coap_stream_setup_response(stream, inout_details))) {
+    if (ctx
+            && ((*errno_ptr = _anjay_handle_requested_format(
+                         &inout_details->format, ANJAY_COAP_FORMAT_TLV))
+                || _anjay_coap_stream_setup_response(stream, inout_details))) {
         avs_free(ctx);
         return NULL;
     }
@@ -457,5 +457,5 @@ _anjay_output_tlv_create(avs_stream_abstract_t *stream,
 }
 
 #ifdef ANJAY_TEST
-#include "test/tlv_out.c"
+#    include "test/tlv_out.c"
 #endif

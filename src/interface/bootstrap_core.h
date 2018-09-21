@@ -56,23 +56,23 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay);
 
 #else
 
-#define _anjay_bootstrap_notify_regular_connection_available(anjay) ((void) 0)
+#    define _anjay_bootstrap_notify_regular_connection_available(anjay) \
+        ((void) 0)
 
-#define _anjay_bootstrap_server_initiated_allowed(...) (false)
+#    define _anjay_bootstrap_server_initiated_allowed(...) (false)
 
-#define _anjay_bootstrap_perform_action(...) (-1)
+#    define _anjay_bootstrap_perform_action(...) (-1)
 
-#define _anjay_bootstrap_account_prepare(anjay) (-1)
+#    define _anjay_bootstrap_account_prepare(anjay) (-1)
 
-#define _anjay_bootstrap_update_reconnected(anjay) (-1)
+#    define _anjay_bootstrap_update_reconnected(anjay) (-1)
 
-#define _anjay_bootstrap_init(...) ((void) 0)
+#    define _anjay_bootstrap_init(...) ((void) 0)
 
-#define _anjay_bootstrap_cleanup(anjay) ((void) 0)
+#    define _anjay_bootstrap_cleanup(anjay) ((void) 0)
 
 #endif
 
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INTERFACE_BOOTSTRAP_H */
-

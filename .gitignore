@@ -61,6 +61,7 @@ compile_commands.json
 /doc/sphinx/build
 /doc/sphinx/html
 /doc/doxygen
+/doc/sphinx/source/.doctrees
 !/doc/sphinx/Makefile
 
 # built tutorials

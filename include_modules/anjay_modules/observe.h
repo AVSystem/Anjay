@@ -26,11 +26,10 @@ void _anjay_observe_gc(anjay_t *anjay);
 
 #else // WITH_OBSERVE
 
-#define _anjay_observe_gc(...) ((void) 0)
+#    define _anjay_observe_gc(...) ((void) 0)
 
 #endif // WITH_OBSERVE
 
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_OBSERVE_H */
-

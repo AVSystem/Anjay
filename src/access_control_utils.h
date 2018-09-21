@@ -32,11 +32,12 @@ typedef struct {
 #ifdef WITH_ACCESS_CONTROL
 
 bool _anjay_access_control_action_allowed(anjay_t *anjay,
-                                          const anjay_action_info_t* info);
+                                          const anjay_action_info_t *info);
 
 #else
 
-#define _anjay_access_control_action_allowed(anjay, info) ((void) (info), true)
+#    define _anjay_access_control_action_allowed(anjay, info) \
+        ((void) (info), true)
 
 #endif
 

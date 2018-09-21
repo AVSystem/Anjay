@@ -25,14 +25,14 @@
 
 #include <anjay_modules/time_defs.h>
 
-#include "register.h"
-#include "../dm_core.h"
 #include "../dm/query.h"
+#include "../dm_core.h"
 #include "../servers_utils.h"
 #include "../utils_core.h"
+#include "register.h"
 
-#include "../coap/content_format.h"
 #include "../coap/coap_stream.h"
+#include "../coap/content_format.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -46,12 +46,13 @@ static int get_endpoint_path(AVS_LIST(const anjay_string_t) *out_path,
 
     avs_coap_opt_iterator_t it = AVS_COAP_OPT_ITERATOR_EMPTY;
     while ((result = avs_coap_msg_get_option_string_it(
-                    msg, AVS_COAP_OPT_LOCATION_PATH, &it,
-                    &attr_size, buffer, sizeof(buffer) - 1)) == 0) {
+                    msg, AVS_COAP_OPT_LOCATION_PATH, &it, &attr_size, buffer,
+                    sizeof(buffer) - 1))
+           == 0) {
         buffer[attr_size] = '\0';
 
         AVS_LIST(anjay_string_t) segment =
-                (AVS_LIST(anjay_string_t))AVS_LIST_NEW_BUFFER(attr_size + 1);
+                (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(attr_size + 1);
         if (!segment) {
             anjay_log(ERROR, "out of memory");
             goto fail;
@@ -81,7 +82,7 @@ static const char *assemble_endpoint_path(char *buffer,
         if (result < 0) {
             return "<ERROR>";
         }
-        off += (size_t)result;
+        off += (size_t) result;
     }
 
     return buffer;
@@ -95,9 +96,9 @@ static int send_objects_list(avs_stream_abstract_t *stream,
     anjay_dm_cache_object_t *object;
     AVS_LIST_FOREACH(object, dm) {
         if (*object->version || !object->instances) {
-            int result = avs_stream_write_f(stream, "%s</%u>",
-                                            is_first_path ? "" : ",",
-                                            object->oid);
+            int result =
+                    avs_stream_write_f(stream, "%s</%u>",
+                                       is_first_path ? "" : ",", object->oid);
             if (result) {
                 return result;
             }
@@ -128,9 +129,8 @@ static int send_objects_list(avs_stream_abstract_t *stream,
     return 0;
 }
 
-static int get_server_lifetime(anjay_t *anjay,
-                               anjay_ssid_t ssid,
-                               int64_t *out_lifetime) {
+static int
+get_server_lifetime(anjay_t *anjay, anjay_ssid_t ssid, int64_t *out_lifetime) {
     anjay_iid_t server_iid;
     if (_anjay_find_server_iid(anjay, ssid, &server_iid)) {
         return -1;
@@ -168,8 +168,7 @@ static int send_register(anjay_t *anjay,
     if (_anjay_copy_string_list(&details.uri_path, server_uri->uri_path)
             || _anjay_copy_string_list(&details.uri_query,
                                        server_uri->uri_query)
-            || !AVS_LIST_APPEND(&details.uri_path,
-                                ANJAY_MAKE_STRING_LIST("rd"))
+            || !AVS_LIST_APPEND(&details.uri_path, ANJAY_MAKE_STRING_LIST("rd"))
             || !AVS_LIST_APPEND(&details.uri_query,
                                 _anjay_make_query_string_list(
                                         ANJAY_SUPPORTED_ENABLER_VERSION,
@@ -238,7 +237,8 @@ static int query_dm_instance(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_iid_t iid,
                              void *cache_instance_insert_ptr_) {
-    (void) anjay; (void) obj;
+    (void) anjay;
+    (void) obj;
     AVS_LIST(anjay_iid_t) **cache_instance_insert_ptr =
             (AVS_LIST(anjay_iid_t) **) cache_instance_insert_ptr_;
 
@@ -291,8 +291,9 @@ static int query_dm_object(anjay_t *anjay,
     new_object->oid = (*obj)->oid;
     if ((*obj)->version
             && avs_simple_snprintf(new_object->version,
-                                   sizeof(new_object->version),
-                                   "%s", (*obj)->version) < 0) {
+                                   sizeof(new_object->version), "%s",
+                                   (*obj)->version)
+                           < 0) {
         return -1;
     }
     AVS_LIST(anjay_iid_t) *instance_insert_ptr = &new_object->instances;
@@ -330,9 +331,7 @@ static int init_update_parameters(anjay_t *anjay,
                             &out_params->lifetime_s)) {
         goto error;
     }
-    if (_anjay_server_actual_binding_mode(&out_params->binding_mode, server)) {
-        goto error;
-    }
+    _anjay_server_actual_binding_mode(&out_params->binding_mode, server);
     return 0;
 error:
     _anjay_update_parameters_cleanup(out_params);
@@ -391,8 +390,8 @@ int _anjay_register(anjay_registration_update_ctx_t *ctx) {
     }
 
     _anjay_server_update_registration_info(
-            ctx->anjay->current_connection.server,
-            &endpoint_path, &ctx->new_params);
+            ctx->anjay->current_connection.server, &endpoint_path,
+            &ctx->new_params);
     assert(!endpoint_path);
 
 finish:
@@ -438,7 +437,8 @@ static int send_update(anjay_t *anjay,
 
     const char *binding_mode =
             (strcmp(old_params->binding_mode, new_params->binding_mode) == 0)
-                    ? NULL : new_params->binding_mode;
+                    ? NULL
+                    : new_params->binding_mode;
 
     bool dm_changed_since_last_update =
             !dm_caches_equal(old_params->dm, new_params->dm);
@@ -446,8 +446,8 @@ static int send_update(anjay_t *anjay,
         .msg_type = AVS_COAP_MSG_CONFIRMABLE,
         .msg_code = AVS_COAP_CODE_POST,
         .format = dm_changed_since_last_update
-                    ? ANJAY_COAP_FORMAT_APPLICATION_LINK
-                    : AVS_COAP_FORMAT_NONE,
+                          ? ANJAY_COAP_FORMAT_APPLICATION_LINK
+                          : AVS_COAP_FORMAT_NONE,
         .uri_path = endpoint_path,
         .uri_query = _anjay_make_query_string_list(NULL, NULL, lifetime_s_ptr,
                                                    binding_mode, NULL)
@@ -494,8 +494,7 @@ static int check_update_response(avs_stream_abstract_t *stream) {
          * In the first case, the correct response is to Register again.
          * Otherwise, we might as well do the same, as server is required to
          * replace client registration information in such case. */
-        anjay_log(DEBUG, "Update rejected: %s",
-                  AVS_COAP_CODE_STRING(code));
+        anjay_log(DEBUG, "Update rejected: %s", AVS_COAP_CODE_STRING(code));
         return ANJAY_REGISTRATION_UPDATE_REJECTED;
     } else {
         /* Any other response is either an 5.xx (server error), in which case
@@ -515,8 +514,8 @@ bool _anjay_needs_registration_update(anjay_registration_update_ctx_t *ctx) {
             _anjay_server_registration_info(ctx->server);
     const anjay_update_parameters_t *old_params = &info->last_update_params;
     return old_params->lifetime_s != ctx->new_params.lifetime_s
-            || strcmp(old_params->binding_mode, ctx->new_params.binding_mode)
-            || !dm_caches_equal(old_params->dm, ctx->new_params.dm);
+           || strcmp(old_params->binding_mode, ctx->new_params.binding_mode)
+           || !dm_caches_equal(old_params->dm, ctx->new_params.dm);
 }
 
 int _anjay_update_registration(anjay_registration_update_ctx_t *ctx) {
@@ -541,8 +540,8 @@ finish:
     return retval;
 }
 
-void
-_anjay_registration_update_ctx_release(anjay_registration_update_ctx_t *ctx) {
+void _anjay_registration_update_ctx_release(
+        anjay_registration_update_ctx_t *ctx) {
     _anjay_update_parameters_cleanup(&ctx->new_params);
 }
 

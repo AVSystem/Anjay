@@ -19,7 +19,7 @@ RUN yum install -y which git make cmake boost-python-devel mbedtls-devel openssl
 # required to compile pybind11
 RUN yum install -y python-tools
 RUN yum install -y python35u python35u-devel python35u-pip
-RUN python3.5 -m pip install cryptography requests
+RUN python3.5 -m pip install cryptography requests grequests
 RUN ln -s /usr/bin/python3.5 /usr/bin/python3
 COPY . /Anjay
 CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && make -j && cd test/integration && make integration_check

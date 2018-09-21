@@ -19,8 +19,8 @@
 
 #include <arpa/inet.h>
 
-#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include "common.hpp"
 #include "context.hpp"
@@ -128,10 +128,10 @@ void debug_mbedtls(void * /*ctx*/,
 Socket::Socket(std::shared_ptr<Context> context,
                py::object py_socket,
                SocketType type)
-        : context_(context)
-        , type_(type)
-        , py_socket_(py_socket)
-        , in_handshake_(false) {
+        : context_(context),
+          type_(type),
+          py_socket_(py_socket),
+          in_handshake_(false) {
     mbedtls_ssl_init(&mbedtls_context_);
     // Zeroize cookie context. This prevents issuse
     // https://github.com/ARMmbed/mbedtls/issues/843.
@@ -162,8 +162,7 @@ Socket::Socket(std::shared_ptr<Context> context,
     }
 
     // TODO
-    mbedtls_ssl_conf_min_version(&config_,
-                                 MBEDTLS_SSL_MAJOR_VERSION_3,
+    mbedtls_ssl_conf_min_version(&config_, MBEDTLS_SSL_MAJOR_VERSION_3,
                                  MBEDTLS_SSL_MINOR_VERSION_3);
     mbedtls_ssl_conf_rng(&config_, mbedtls_ctr_drbg_random, &rng_);
 
@@ -182,7 +181,8 @@ Socket::Socket(std::shared_ptr<Context> context,
     mbedtls_ssl_conf_session_cache(&config_, context_->session_cache(),
                                    mbedtls_ssl_cache_get,
                                    mbedtls_ssl_cache_set);
-    mbedtls_ssl_set_bio(&mbedtls_context_, this, &Socket::_send, NULL, &Socket::_recv);
+    mbedtls_ssl_set_bio(&mbedtls_context_, this, &Socket::_send, NULL,
+                        &Socket::_recv);
     mbedtls_ssl_set_timer_cb(&mbedtls_context_, &timer_,
                              mbedtls_timing_set_delay,
                              mbedtls_timing_get_delay);
@@ -204,8 +204,7 @@ void Socket::connect(py::tuple address_port, py::object handshake_timeouts_s_) {
         auto handshake_timeouts_s = py::cast<py::tuple>(handshake_timeouts_s_);
         auto min = py::cast<double>(handshake_timeouts_s[0]);
         auto max = py::cast<double>(handshake_timeouts_s[1]);
-        mbedtls_ssl_conf_handshake_timeout(&config_,
-                                           uint32_t(min * 1000.0),
+        mbedtls_ssl_conf_handshake_timeout(&config_, uint32_t(min * 1000.0),
                                            uint32_t(max * 1000.0));
     }
 
@@ -240,7 +239,7 @@ void Socket::send(const string &data) {
                                      data.size() - total_sent);
         if (sent < 0) {
             if (sent == MBEDTLS_ERR_SSL_WANT_READ
-                || sent == MBEDTLS_ERR_SSL_WANT_WRITE) {
+                    || sent == MBEDTLS_ERR_SSL_WANT_WRITE) {
                 continue;
             } else {
                 throw mbedtls_error("mbedtls_ssl_write failed", sent);
@@ -275,7 +274,7 @@ void Socket::settimeout(py::object timeout_s_or_none) {
     uint32_t timeout_ms = 0; // no timeout
 
     if (!timeout_s_or_none.is(py::none())) {
-        timeout_ms = (uint32_t)(py::cast<double>(timeout_s_or_none) * 1000.0);
+        timeout_ms = (uint32_t) (py::cast<double>(timeout_s_or_none) * 1000.0);
     }
 
     mbedtls_ssl_conf_read_timeout(&config_, timeout_ms);
@@ -329,8 +328,7 @@ void enable_reuse(const py::object &socket) {
 
 ServerSocket::ServerSocket(std::shared_ptr<Context> context,
                            py::object py_socket)
-        : context_(context),
-          py_socket_(py_socket) {
+        : context_(context), py_socket_(py_socket) {
     enable_reuse(py_socket_);
 }
 

@@ -19,18 +19,18 @@
 #include <avsystem/commons/unit/mocksock.h>
 #include <avsystem/commons/unit/test.h>
 
-#include <anjay_test/coap/stream.h>
 #include <anjay_test/coap/socket.h>
+#include <anjay_test/coap/stream.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
 #include <avsystem/commons/coap/ctx.h>
 
-#include "../content_format.h"
-#include "../coap_stream.h"
-#include "../stream/stream_internal.h"
 #include "../block/response.h"
 #include "../block/transfer_impl.h"
+#include "../coap_stream.h"
+#include "../content_format.h"
+#include "../stream/stream_internal.h"
 
 typedef struct test_ctx {
     avs_net_abstract_socket_t *mocksock;
@@ -38,8 +38,7 @@ typedef struct test_ctx {
     anjay_mock_coap_stream_ctx_t mock_stream;
 } test_ctx_t;
 
-static test_ctx_t setup(size_t in_buffer_size,
-                        size_t out_buffer_size) {
+static test_ctx_t setup(size_t in_buffer_size, size_t out_buffer_size) {
     test_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
 
@@ -80,7 +79,7 @@ static size_t block_size_for_buffer_size_and_mtu(size_t out_buffer_size,
 
     test_ctx_t test = setup(4096, out_buffer_size - MSG_LENGTH_SIZE);
 
-    avs_unit_mocksock_enable_inner_mtu_getopt(test.mocksock, (int)mtu);
+    avs_unit_mocksock_enable_inner_mtu_getopt(test.mocksock, (int) mtu);
     _anjay_coap_out_setup_mtu(&coap_stream(&test)->data.common.out,
                               coap_stream(&test)->data.common.socket);
 
@@ -101,17 +100,13 @@ static size_t block_size_for_buffer_size_and_mtu(size_t out_buffer_size,
 // block-wise transfer. Library should account for that, adjusting block
 // size so that any token size can be safely handled.
 #define EXPECTED_HEADER_BYTES \
-        (AVS_COAP_MAX_HEADER_SIZE \
-         + AVS_COAP_MAX_TOKEN_LENGTH \
-         + 0 + 1)
+    (AVS_COAP_MAX_HEADER_SIZE + AVS_COAP_MAX_TOKEN_LENGTH + 0 + 1)
 // header size + max possible BLOCK option size
 #define EXPECTED_HEADER_BYTES_WITH_BLOCK \
-        (EXPECTED_HEADER_BYTES + AVS_COAP_OPT_BLOCK_MAX_SIZE)
+    (EXPECTED_HEADER_BYTES + AVS_COAP_OPT_BLOCK_MAX_SIZE)
 
-
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_coap_out_setup_msg(&coap_stream(&test)->data.common.out,
-                                      &id, &details, NULL));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_out_setup_msg(
+            &coap_stream(&test)->data.common.out, &id, &details, NULL));
     static coap_id_source_t *FAKE_ID_SOURCE = (coap_id_source_t *) -1;
     coap_block_transfer_ctx_t *ctx =
             _anjay_coap_block_response_new(AVS_COAP_MSG_BLOCK_MAX_SIZE,
@@ -130,35 +125,31 @@ static size_t block_size_for_buffer_size_and_mtu(size_t out_buffer_size,
 
 AVS_UNIT_TEST(block_response, considers_mtu) {
     // block size: minimum possible
-    AVS_UNIT_ASSERT_EQUAL(
-            block_size_for_buffer_size_and_mtu(
-                4096,
-                EXPECTED_HEADER_BYTES_WITH_BLOCK
-                    + AVS_COAP_MSG_BLOCK_MIN_SIZE),
-            AVS_COAP_MSG_BLOCK_MIN_SIZE);
+    AVS_UNIT_ASSERT_EQUAL(block_size_for_buffer_size_and_mtu(
+                                  4096,
+                                  EXPECTED_HEADER_BYTES_WITH_BLOCK
+                                          + AVS_COAP_MSG_BLOCK_MIN_SIZE),
+                          AVS_COAP_MSG_BLOCK_MIN_SIZE);
 
     // not quite enough for bigger block size
-    AVS_UNIT_ASSERT_EQUAL(
-            block_size_for_buffer_size_and_mtu(
-                4096,
-                EXPECTED_HEADER_BYTES_WITH_BLOCK
-                    + AVS_COAP_MSG_BLOCK_MIN_SIZE * 2 - 1),
-            AVS_COAP_MSG_BLOCK_MIN_SIZE);
+    AVS_UNIT_ASSERT_EQUAL(block_size_for_buffer_size_and_mtu(
+                                  4096,
+                                  EXPECTED_HEADER_BYTES_WITH_BLOCK
+                                          + AVS_COAP_MSG_BLOCK_MIN_SIZE * 2
+                                          - 1),
+                          AVS_COAP_MSG_BLOCK_MIN_SIZE);
 
     // enough for bigger block size
-    AVS_UNIT_ASSERT_EQUAL(
-            block_size_for_buffer_size_and_mtu(
-                4096,
-                EXPECTED_HEADER_BYTES_WITH_BLOCK
-                    + AVS_COAP_MSG_BLOCK_MIN_SIZE * 2),
-            AVS_COAP_MSG_BLOCK_MIN_SIZE * 2);
+    AVS_UNIT_ASSERT_EQUAL(block_size_for_buffer_size_and_mtu(
+                                  4096,
+                                  EXPECTED_HEADER_BYTES_WITH_BLOCK
+                                          + AVS_COAP_MSG_BLOCK_MIN_SIZE * 2),
+                          AVS_COAP_MSG_BLOCK_MIN_SIZE * 2);
 
     // MTU too low - should fail
-    AVS_UNIT_ASSERT_EQUAL(
-            block_size_for_buffer_size_and_mtu(
-                4096,
-                AVS_COAP_MSG_BLOCK_MIN_SIZE - 1),
-            0);
+    AVS_UNIT_ASSERT_EQUAL(block_size_for_buffer_size_and_mtu(
+                                  4096, AVS_COAP_MSG_BLOCK_MIN_SIZE - 1),
+                          0);
 }
 
 AVS_UNIT_TEST(block_response, block_size_range) {
@@ -176,22 +167,15 @@ AVS_UNIT_TEST(block_response, considers_buffer_size) {
 
     // MTU > buffer size, 1 byte short from enough for 64B of payload
     AVS_UNIT_ASSERT_EQUAL(
-            block_size_for_buffer_size_and_mtu(
-                EXTRA_SPACE + 64 - 1,
-                4096),
-            32);
+            block_size_for_buffer_size_and_mtu(EXTRA_SPACE + 64 - 1, 4096), 32);
 
     // MTU > buffer size, enough for 64B of payload
     AVS_UNIT_ASSERT_EQUAL(
-            block_size_for_buffer_size_and_mtu(
-                EXTRA_SPACE + 64,
-                4096),
-            64);
+            block_size_for_buffer_size_and_mtu(EXTRA_SPACE + 64, 4096), 64);
 
     // output buffer too small - should fail
-    AVS_UNIT_ASSERT_EQUAL(
-            block_size_for_buffer_size_and_mtu(
-                EXTRA_SPACE + AVS_COAP_MSG_BLOCK_MIN_SIZE - 1,
-                4096),
-            0);
+    AVS_UNIT_ASSERT_EQUAL(block_size_for_buffer_size_and_mtu(
+                                  EXTRA_SPACE + AVS_COAP_MSG_BLOCK_MIN_SIZE - 1,
+                                  4096),
+                          0);
 }

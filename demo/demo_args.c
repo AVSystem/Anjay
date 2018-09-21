@@ -18,14 +18,15 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <getopt.h>
-#include <string.h>
 #include <inttypes.h>
+#include <string.h>
 
 #include <avsystem/commons/memory.h>
 
 #define DEFAULT_PSK_IDENTITY "sesame"
-#define DEFAULT_PSK_KEY      "password"
+#define DEFAULT_PSK_KEY "password"
 
 static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .endpoint_name = "urn:dev:os:0023C7-000001",
@@ -54,6 +55,10 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     },
     .attr_storage_file = NULL,
     .disable_server_initiated_bootstrap = false,
+    .tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
+    .dtls_hs_tx_params = ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS,
+    .fwu_tx_params_modified = false,
+    .fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -66,10 +71,12 @@ static int parse_security_mode(const char *mode_string,
         const char *name;
         anjay_udp_security_mode_t value;
     } MODES[] = {
+        // clang-format off
         { "psk",   ANJAY_UDP_SECURITY_PSK         },
         { "rpk",   ANJAY_UDP_SECURITY_RPK         },
         { "cert",  ANJAY_UDP_SECURITY_CERTIFICATE },
         { "nosec", ANJAY_UDP_SECURITY_NOSEC       },
+        // clang-format on
     };
 
     for (size_t i = 0; i < ARRAY_SIZE(MODES); ++i) {
@@ -82,17 +89,16 @@ static int parse_security_mode(const char *mode_string,
     char allowed_modes[64];
     size_t offset = 0;
     for (size_t i = 0; i < ARRAY_SIZE(MODES); ++i) {
-        ssize_t written = snprintf(allowed_modes + offset,
-                                   sizeof(allowed_modes) - offset,
-                                   " %s", MODES[i].name);
-        if (written < 0
-                || (size_t)written >= sizeof(allowed_modes) - offset) {
+        ssize_t written =
+                snprintf(allowed_modes + offset, sizeof(allowed_modes) - offset,
+                         " %s", MODES[i].name);
+        if (written < 0 || (size_t) written >= sizeof(allowed_modes) - offset) {
             demo_log(ERROR, "could not enumerate available security modes");
             allowed_modes[0] = '\0';
             break;
         }
 
-        offset += (size_t)written;
+        offset += (size_t) written;
     }
 
     demo_log(ERROR, "unrecognized security mode %s (expected one of:%s)",
@@ -121,6 +127,7 @@ static void print_option_help(const struct option *opt) {
         const char *default_value;
         const char *help;
     } HELP_INFO[] = {
+        // clang-format off
         { 'a', "OBJECT_ID SHORT_SERVER_ID", NULL,
           "allow Short Server ID to instantiate Object ID." },
         { 'b', "client-initiated-only", NULL,
@@ -193,6 +200,27 @@ static void print_option_help(const struct option *opt) {
         { 6, "PERSISTENCE_FILE", NULL,
           "File to load attribute storage data from at startup, and "
           "store it at shutdown" },
+        { 12, "ACK_RANDOM_FACTOR", "1.5",
+          "Configures ACK_RANDOM_FACTOR (defined in RFC7252)" },
+        { 13, "ACK_TIMEOUT", "2.0",
+          "Configures ACK_TIMEOUT (defined in RFC7252) in seconds" },
+        { 14, "MAX_RETRANSMIT", "4",
+          "Configures MAX_RETRANSMIT (defined in RFC7252)" },
+        { 15, "DTLS_HS_RETRY_WAIT_MIN", "1",
+          "Configures minimum period of time to wait before sending first "
+          "DTLS HS retransmission" },
+        { 16, "DTLS_HS_RETRY_WAIT_MAX", "60",
+          "Configures maximum period of time to wait (after last "
+          "retransmission) before giving up on handshake completely" },
+        { 17, "ACK_RANDOM_FACTOR", "1.5",
+          "Configures ACK_RANDOM_FACTOR (defined in RFC7252) for firmware "
+          "update" },
+        { 18, "ACK_TIMEOUT", "2.0",
+          "Configures ACK_TIMEOUT (defined in RFC7252) in seconds for firmware "
+          "update" },
+        { 19, "MAX_RETRANSMIT", "4",
+          "Configures MAX_RETRANSMIT (defined in RFC7252) for firmware update" },
+        // clang-format on
     };
 
     int description_offset = 25;
@@ -219,9 +247,8 @@ static void print_option_help(const struct option *opt) {
                 arg_suffix = "]";
             }
             padding -= (int) (strlen(arg_prefix) + strlen(args));
-            fprintf(stderr, "%s%s%*s - %s",
-                    arg_prefix, args, padding > 0 ? -padding : 0, arg_suffix,
-                    HELP_INFO[i].help);
+            fprintf(stderr, "%s%s%*s - %s", arg_prefix, args,
+                    padding > 0 ? -padding : 0, arg_suffix, HELP_INFO[i].help);
             if (HELP_INFO[i].default_value) {
                 fprintf(stderr, " (default: %s)", HELP_INFO[i].default_value);
             }
@@ -230,14 +257,13 @@ static void print_option_help(const struct option *opt) {
         }
     }
 
-    fprintf(stderr, "%*s - [NO DESCRIPTION]\n",
-            padding > 0 ? -padding : 0, help_arg_list(opt));
+    fprintf(stderr, "%*s - [NO DESCRIPTION]\n", padding > 0 ? -padding : 0,
+            help_arg_list(opt));
 }
 
 static int parse_i32(const char *str, int32_t *out_value) {
     long long_value;
-    if (demo_parse_long(str, &long_value)
-            || long_value < INT32_MIN
+    if (demo_parse_long(str, &long_value) || long_value < INT32_MIN
             || long_value > INT32_MAX) {
         demo_log(ERROR, "value out of range: %s", str);
         return -1;
@@ -249,14 +275,23 @@ static int parse_i32(const char *str, int32_t *out_value) {
 
 static int parse_u16(const char *str, uint16_t *out_value) {
     long long_value;
-    if (demo_parse_long(str, &long_value)
-            || long_value < 0
+    if (demo_parse_long(str, &long_value) || long_value < 0
             || long_value > UINT16_MAX) {
         demo_log(ERROR, "value out of range: %s", str);
         return -1;
     }
 
     *out_value = (uint16_t) long_value;
+    return 0;
+}
+
+static int parse_double(const char *str, double *out_value) {
+    errno = 0;
+    char *endptr = NULL;
+    *out_value = strtod(str, &endptr);
+    if (!*str || isspace((unsigned char) *str) || errno || !endptr || *endptr) {
+        return -1;
+    }
     return 0;
 }
 
@@ -301,13 +336,13 @@ static void build_getopt_string(const struct option *options,
     memset(buffer, 0, buffer_size);
 
     while (curr_opt->val != 0) {
-        assert(getopt_string_ptr - buffer < (ssize_t)buffer_size - 1);
-        *getopt_string_ptr++ = (char)curr_opt->val;
+        assert(getopt_string_ptr - buffer < (ssize_t) buffer_size - 1);
+        *getopt_string_ptr++ = (char) curr_opt->val;
 
         int colons = curr_opt->has_arg;
         assert(colons >= 0 && colons <= 2); // 2 colons signify optional arg
         while (colons-- > 0) {
-            assert(getopt_string_ptr - buffer < (ssize_t)buffer_size - 1);
+            assert(getopt_string_ptr - buffer < (ssize_t) buffer_size - 1);
             *getopt_string_ptr++ = ':';
         }
 
@@ -315,8 +350,10 @@ static void build_getopt_string(const struct option *options,
     }
 }
 
-static int clone_buffer(uint8_t **out, size_t *out_size,
-                        const void *src, size_t src_size) {
+static int clone_buffer(uint8_t **out,
+                        size_t *out_size,
+                        const void *src,
+                        size_t src_size) {
     *out = (uint8_t *) avs_malloc(src_size);
     if (!*out) {
         return -1;
@@ -326,8 +363,8 @@ static int clone_buffer(uint8_t **out, size_t *out_size,
     return 0;
 }
 
-static int load_buffer_from_file(uint8_t **out, size_t *out_size,
-                                 const char *filename) {
+static int
+load_buffer_from_file(uint8_t **out, size_t *out_size, const char *filename) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
         return -1;
@@ -338,8 +375,7 @@ static int load_buffer_from_file(uint8_t **out, size_t *out_size,
         goto finish;
     }
     size = ftell(f);
-    if (size < 0 || (unsigned long) size > SIZE_MAX
-            || fseek(f, 0, SEEK_SET)) {
+    if (size < 0 || (unsigned long) size > SIZE_MAX || fseek(f, 0, SEEK_SET)) {
         goto finish;
     }
     *out_size = (size_t) size;
@@ -367,6 +403,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     int num_servers = 0;
 
     const struct option options[] = {
+        // clang-format off
         { "access-entry",                  required_argument, 0, 'a' },
         { "bootstrap",                     optional_argument, 0, 'b' },
         { "bootstrap-holdoff",             required_argument, 0, 'H' },
@@ -397,17 +434,26 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "fw-psk-identity",               required_argument, 0, 4 },
         { "fw-psk-key",                    required_argument, 0, 5 },
         { "attribute-storage-persistence-file", required_argument, 0, 6 },
+        { "ack-random-factor",             required_argument, 0, 12 },
+        { "ack-timeout",                   required_argument, 0, 13 },
+        { "max-retransmit",                required_argument, 0, 14 },
+        { "dtls-hs-retry-wait-min",        required_argument, 0, 15 },
+        { "dtls-hs-retry-wait-max",        required_argument, 0, 16 },
+        { "fwu-ack-random-factor",         required_argument, 0, 17 },
+        { "fwu-ack-timeout",               required_argument, 0, 18 },
+        { "fwu-max-retransmit",            required_argument, 0, 19 },
         { 0, 0, 0, 0 }
+        // clang-format on
     };
 
     int retval = -1;
 
     *parsed_args = DEFAULT_CMDLINE_ARGS;
 
-    char *default_cert_path = (char *) avs_malloc(
-            arg0_prefix_length + sizeof(DEFAULT_CERT_FILE));
-    char *default_key_path = (char *) avs_malloc(
-            arg0_prefix_length + sizeof(DEFAULT_KEY_FILE));
+    char *default_cert_path =
+            (char *) avs_malloc(arg0_prefix_length + sizeof(DEFAULT_CERT_FILE));
+    char *default_key_path =
+            (char *) avs_malloc(arg0_prefix_length + sizeof(DEFAULT_KEY_FILE));
     const char *cert_path = default_cert_path;
     const char *key_path = default_key_path;
 
@@ -439,8 +485,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             /* optind is the index of the next argument to be processed, which
                means that argv[optind-1] is the current one. We shall fail if
                more than one free argument is provided */
-            if (*argv[optind-1] == '-'
-                    || optind == argc
+            if (*argv[optind - 1] == '-' || optind == argc
                     || *argv[optind] == '-'
                     || (optind + 1 < argc && *argv[optind + 1] != '-')) {
                 demo_log(ERROR, "invalid pair OID SSID");
@@ -448,14 +493,14 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
 
             AVS_LIST(access_entry_t) entry =
-                AVS_LIST_NEW_ELEMENT(access_entry_t);
+                    AVS_LIST_NEW_ELEMENT(access_entry_t);
             if (!entry) {
                 goto finish;
             }
 
             // We ignore the fact, that someone passes bad input, and silently
             // truncate it to zero.
-            long oid = strtol(argv[optind-1], NULL, 10);
+            long oid = strtol(argv[optind - 1], NULL, 10);
             long ssid = strtol(argv[optind], NULL, 10);
             entry->oid = (anjay_oid_t) oid;
             entry->ssid = (anjay_ssid_t) ssid;
@@ -505,36 +550,33 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'c':
             parsed_args->location_csv = optarg;
             break;
-        case 'f':
-            {
-                long freq;
-                if (demo_parse_long(optarg, &freq)
-                        || freq <= 0
-                        || freq > INT32_MAX) {
-                    demo_log(ERROR, "invalid location update frequency: %s",
-                             optarg);
-                    goto finish;
-                }
-
-                parsed_args->location_update_frequency_s = (time_t)freq;
+        case 'f': {
+            long freq;
+            if (demo_parse_long(optarg, &freq) || freq <= 0
+                    || freq > INT32_MAX) {
+                demo_log(ERROR, "invalid location update frequency: %s",
+                         optarg);
+                goto finish;
             }
-            break;
-        case 'p':
-            {
-                long port;
-                if (demo_parse_long(optarg, &port)
-                        || port <= 0
-                        || port > UINT16_MAX) {
-                    demo_log(ERROR, "invalid UDP port number: %s", optarg);
-                    goto finish;
-                }
 
-                parsed_args->udp_listen_port = (uint16_t)port;
-            }
+            parsed_args->location_update_frequency_s = (time_t) freq;
             break;
+        }
+        case 'p': {
+            long port;
+            if (demo_parse_long(optarg, &port) || port <= 0
+                    || port > UINT16_MAX) {
+                demo_log(ERROR, "invalid UDP port number: %s", optarg);
+                goto finish;
+            }
+
+            parsed_args->udp_listen_port = (uint16_t) port;
+            break;
+        }
         case 'i':
-            if (parse_hexstring(optarg, &parsed_args->connection_args
-                                                 .public_cert_or_psk_identity,
+            if (parse_hexstring(optarg,
+                                &parsed_args->connection_args
+                                         .public_cert_or_psk_identity,
                                 &parsed_args->connection_args
                                          .public_cert_or_psk_identity_size)) {
                 demo_log(ERROR, "Invalid identity");
@@ -567,38 +609,38 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         case 'D': {
-                int idx = num_servers == 0 ? 0 : num_servers - 1;
-                if (parse_u16(optarg,
-                              &parsed_args->connection_args.servers[idx]
-                                                           .security_iid)) {
-                    goto finish;
-                }
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (parse_u16(optarg,
+                          &parsed_args->connection_args.servers[idx]
+                                   .security_iid)) {
+                goto finish;
             }
             break;
+        }
         case 's':
             if (parse_security_mode(
-                    optarg, &parsed_args->connection_args.security_mode)) {
+                        optarg, &parsed_args->connection_args.security_mode)) {
                 goto finish;
             }
             break;
         case 'd': {
-                int idx = num_servers == 0 ? 0 : num_servers - 1;
-                if (parse_u16(optarg,
-                              &parsed_args->connection_args.servers[idx]
-                                                           .server_iid)) {
-                    goto finish;
-                }
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (parse_u16(optarg,
+                          &parsed_args->connection_args.servers[idx]
+                                   .server_iid)) {
+                goto finish;
             }
             break;
+        }
         case 'u': {
-                AVS_ASSERT(num_servers < MAX_SERVERS, "Too many servers");
-                server_entry_t *entry =
-                        &parsed_args->connection_args.servers[num_servers++];
-                entry->uri = optarg;
-                entry->security_iid = ANJAY_IID_INVALID;
-                entry->server_iid = ANJAY_IID_INVALID;
-            }
+            AVS_ASSERT(num_servers < MAX_SERVERS, "Too many servers");
+            server_entry_t *entry =
+                    &parsed_args->connection_args.servers[num_servers++];
+            entry->uri = optarg;
+            entry->security_iid = ANJAY_IID_INVALID;
+            entry->server_iid = ANJAY_IID_INVALID;
             break;
+        }
         case 'I':
             if (parse_i32(optarg, &parsed_args->inbuf_size)
                     || parsed_args->inbuf_size <= 0) {
@@ -626,46 +668,47 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     || max_icmp_failures < 0) {
                 goto finish;
             }
-            parsed_args->max_icmp_failures = (uint32_t)max_icmp_failures;
+            parsed_args->max_icmp_failures = (uint32_t) max_icmp_failures;
             break;
         }
         case 1:
             parsed_args->fw_updated_marker_path = optarg;
             break;
-        case 2:
+        case 2: {
             if (parsed_args->fw_security_info.mode
                     != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
                 goto finish;
             }
+
+            const avs_net_certificate_info_t cert_info = {
+                .server_cert_validation = true,
+                .trusted_certs = avs_net_trusted_cert_info_from_file(optarg)
+            };
             parsed_args->fw_security_info =
-                    avs_net_security_info_from_certificates(
-                            (avs_net_certificate_info_t) {
-                                .server_cert_validation = true,
-                                .trusted_certs =
-                                        avs_net_trusted_cert_info_from_file(optarg)
-                            });
+                    avs_net_security_info_from_certificates(cert_info);
             break;
-        case 3:
+        }
+        case 3: {
             if (parsed_args->fw_security_info.mode
                     != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
                 goto finish;
             }
+            const avs_net_certificate_info_t cert_info = {
+                .server_cert_validation = true,
+                .trusted_certs = avs_net_trusted_cert_info_from_path(optarg)
+            };
             parsed_args->fw_security_info =
-                    avs_net_security_info_from_certificates(
-                            (avs_net_certificate_info_t) {
-                                .server_cert_validation = true,
-                                .trusted_certs =
-                                        avs_net_trusted_cert_info_from_path(optarg)
-                            });
+                    avs_net_security_info_from_certificates(cert_info);
             break;
+        }
         case 4:
             if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.mode
-                            != (avs_net_security_mode_t) -1) {
+                                   != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
                 goto finish;
@@ -675,20 +718,20 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 demo_log(ERROR, "--fw-psk-identity specified more than once");
                 goto finish;
             }
-            if (parse_hexstring(
-                    optarg,
-                    (uint8_t **) (intptr_t)
-                            &parsed_args->fw_security_info.data.psk.identity,
-                    &parsed_args->fw_security_info.data.psk.identity_size)) {
+            if (parse_hexstring(optarg,
+                                (uint8_t **) (intptr_t) &parsed_args
+                                        ->fw_security_info.data.psk.identity,
+                                &parsed_args->fw_security_info.data.psk
+                                         .identity_size)) {
                 demo_log(ERROR, "Invalid PSK identity for firmware upgrade");
                 goto finish;
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
-        case 5:
+        case 5: {
             if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.mode
-                            != (avs_net_security_mode_t) -1) {
+                                   != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
                                 "specified for firmware upgrade");
                 goto finish;
@@ -698,19 +741,103 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 demo_log(ERROR, "--fw-psk-key specified more than once");
                 goto finish;
             }
+
+            uint8_t **psk_ptr = (uint8_t **) (intptr_t) &parsed_args
+                                        ->fw_security_info.data.psk.psk;
             if (parse_hexstring(
-                    optarg,
-                    (uint8_t **) (intptr_t)
-                            &parsed_args->fw_security_info.data.psk.psk,
-                    &parsed_args->fw_security_info.data.psk.psk_size)) {
+                        optarg, psk_ptr,
+                        &parsed_args->fw_security_info.data.psk.psk_size)) {
                 demo_log(ERROR, "Invalid pre-shared key for firmware upgrade");
                 goto finish;
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
+        }
         case 6:
             parsed_args->attr_storage_file = optarg;
             break;
+        case 12:
+            if (parse_double(optarg,
+                             &parsed_args->tx_params.ack_random_factor)) {
+                demo_log(ERROR, "Expected ACK_RANDOM_FACTOR to be a floating "
+                                "point number");
+                goto finish;
+            }
+            break;
+        case 13: {
+            double ack_timeout_s;
+            if (parse_double(optarg, &ack_timeout_s)) {
+                demo_log(ERROR,
+                         "Expected ACK_TIMEOUT to be a floating point number");
+                goto finish;
+            }
+            parsed_args->tx_params.ack_timeout =
+                    avs_time_duration_from_fscalar(ack_timeout_s, AVS_TIME_S);
+            break;
+        }
+        case 14: {
+            int32_t max_retransmit;
+            if (parse_i32(optarg, &max_retransmit) || max_retransmit < 0) {
+                demo_log(ERROR, "Expected MAX_RETRANSMIT to be an unsigned "
+                                "integer");
+                goto finish;
+            }
+            parsed_args->tx_params.max_retransmit = (unsigned) max_retransmit;
+            break;
+        }
+        case 15: {
+            double min_wait_s;
+            if (parse_double(optarg, &min_wait_s) || min_wait_s <= 0) {
+                demo_log(ERROR, "Expected DTLS_HS_RETRY_WAIT_MIN > 0");
+                goto finish;
+            }
+            parsed_args->dtls_hs_tx_params.min =
+                    avs_time_duration_from_fscalar(min_wait_s, AVS_TIME_S);
+            break;
+        }
+        case 16: {
+            double max_wait_s;
+            if (parse_double(optarg, &max_wait_s) || max_wait_s <= 0) {
+                demo_log(ERROR, "Expected DTLS_HS_RETRY_WAIT_MAX > 0");
+                goto finish;
+            }
+            parsed_args->dtls_hs_tx_params.max =
+                    avs_time_duration_from_fscalar(max_wait_s, AVS_TIME_S);
+            break;
+        }
+        case 17:
+            if (parse_double(optarg,
+                             &parsed_args->fwu_tx_params.ack_random_factor)) {
+                demo_log(ERROR, "Expected ACK_RANDOM_FACTOR to be a floating "
+                                "point number");
+                goto finish;
+            }
+            parsed_args->fwu_tx_params_modified = true;
+            break;
+        case 18: {
+            double ack_timeout_s;
+            if (parse_double(optarg, &ack_timeout_s)) {
+                demo_log(ERROR,
+                         "Expected ACK_TIMEOUT to be a floating point number");
+                goto finish;
+            }
+            parsed_args->fwu_tx_params.ack_timeout =
+                    avs_time_duration_from_fscalar(ack_timeout_s, AVS_TIME_S);
+            parsed_args->fwu_tx_params_modified = true;
+            break;
+        }
+        case 19: {
+            int32_t max_retransmit;
+            if (parse_i32(optarg, &max_retransmit) || max_retransmit < 0) {
+                demo_log(ERROR, "Expected MAX_RETRANSMIT to be an unsigned "
+                                "integer");
+                goto finish;
+            }
+            parsed_args->fwu_tx_params.max_retransmit =
+                    (unsigned) max_retransmit;
+            parsed_args->fwu_tx_params_modified = true;
+            break;
+        }
         case 0:
             goto process;
         }
@@ -737,52 +864,52 @@ process:
     }
     if (parsed_args->connection_args.security_mode == ANJAY_UDP_SECURITY_PSK) {
         if (!identity_set
-            && clone_buffer(&parsed_args->connection_args
-                                     .public_cert_or_psk_identity,
-                            &parsed_args->connection_args
-                                     .public_cert_or_psk_identity_size,
-                            DEFAULT_PSK_IDENTITY,
-                            sizeof(DEFAULT_PSK_IDENTITY) - 1)) {
+                && clone_buffer(&parsed_args->connection_args
+                                         .public_cert_or_psk_identity,
+                                &parsed_args->connection_args
+                                         .public_cert_or_psk_identity_size,
+                                DEFAULT_PSK_IDENTITY,
+                                sizeof(DEFAULT_PSK_IDENTITY) - 1)) {
             goto finish;
         }
         if (!key_set
-            && clone_buffer(
-                       &parsed_args->connection_args.private_cert_or_psk_key,
-                       &parsed_args->connection_args
-                                .private_cert_or_psk_key_size,
-                       DEFAULT_PSK_KEY, sizeof(DEFAULT_PSK_KEY) - 1)) {
+                && clone_buffer(&parsed_args->connection_args
+                                         .private_cert_or_psk_key,
+                                &parsed_args->connection_args
+                                         .private_cert_or_psk_key_size,
+                                DEFAULT_PSK_KEY, sizeof(DEFAULT_PSK_KEY) - 1)) {
             goto finish;
         }
     } else if (parsed_args->connection_args.security_mode
-            == ANJAY_UDP_SECURITY_CERTIFICATE) {
+               == ANJAY_UDP_SECURITY_CERTIFICATE) {
         if (identity_set ^ key_set) {
             demo_log(ERROR, "Setting public cert but not private cert (and "
                             "other way around) makes little sense");
             goto finish;
         } else if (!identity_set) {
-            if (load_buffer_from_file(&parsed_args->connection_args
-                                              .public_cert_or_psk_identity,
-                                      &parsed_args->connection_args
-                                              .public_cert_or_psk_identity_size,
-                                      cert_path)) {
+            if (load_buffer_from_file(
+                        &parsed_args->connection_args
+                                 .public_cert_or_psk_identity,
+                        &parsed_args->connection_args
+                                 .public_cert_or_psk_identity_size,
+                        cert_path)) {
                 demo_log(ERROR, "Could not load certificate from %s",
                          cert_path);
                 goto finish;
             }
-            if (load_buffer_from_file(&parsed_args->connection_args
-                                              .private_cert_or_psk_key,
-                                      &parsed_args->connection_args
-                                              .private_cert_or_psk_key_size,
-                                      key_path)) {
-                demo_log(ERROR, "Could not load private key from %s",
-                         key_path);
+            if (load_buffer_from_file(
+                        &parsed_args->connection_args.private_cert_or_psk_key,
+                        &parsed_args->connection_args
+                                 .private_cert_or_psk_key_size,
+                        key_path)) {
+                demo_log(ERROR, "Could not load private key from %s", key_path);
                 goto finish;
             }
         }
     }
     if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
             && (!parsed_args->fw_security_info.data.psk.identity
-                    || !parsed_args->fw_security_info.data.psk.psk)) {
+                || !parsed_args->fw_security_info.data.psk.psk)) {
         demo_log(ERROR, "Both identity and key must be provided when using PSK "
                         "for firmware upgrade security");
         goto finish;

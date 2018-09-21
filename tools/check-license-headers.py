@@ -50,7 +50,9 @@ IGNORE_PATTERNS = list(map(re.compile, [
     '^README\.md$',
     '^README\.Windows\.md$',
     '^valgrind_test\.supp$',
-    '\.png$'
+    '^\.clang-format$',
+    '\.png$',
+    '\.svg$'
 ]))
 
 

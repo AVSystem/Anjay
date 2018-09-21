@@ -29,10 +29,8 @@ get_access_control(anjay_t *anjay) {
     return _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL);
 }
 
-static int read_u32(anjay_t *anjay,
-                    anjay_iid_t iid,
-                    anjay_rid_t rid,
-                    uint32_t *out) {
+static int
+read_u32(anjay_t *anjay, anjay_iid_t iid, anjay_rid_t rid, uint32_t *out) {
     int64_t ret;
     const anjay_uri_path_t uri =
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, iid, rid);
@@ -62,11 +60,11 @@ static int read_resources(anjay_t *anjay,
     uint32_t owner, oid, oiid;
     int ret;
     if ((ret = read_u32(anjay, access_control_iid,
-            ANJAY_DM_RID_ACCESS_CONTROL_OID, &oid))
-        || (ret = read_u32(anjay, access_control_iid,
-            ANJAY_DM_RID_ACCESS_CONTROL_OIID, &oiid))
-        || (ret = read_u32(anjay, access_control_iid,
-            ANJAY_DM_RID_ACCESS_CONTROL_OWNER, &owner))) {
+                        ANJAY_DM_RID_ACCESS_CONTROL_OID, &oid))
+            || (ret = read_u32(anjay, access_control_iid,
+                               ANJAY_DM_RID_ACCESS_CONTROL_OIID, &oiid))
+            || (ret = read_u32(anjay, access_control_iid,
+                               ANJAY_DM_RID_ACCESS_CONTROL_OWNER, &owner))) {
         return ret;
     }
     *out_oid = (anjay_oid_t) oid;
@@ -90,7 +88,7 @@ static int get_mask_from_ctx(anjay_input_ctx_t *ctx,
     int32_t current_mask;
     *out_mask = ANJAY_ACCESS_MASK_NONE;
     while (!(result = anjay_get_array_index(array_ctx, &current_ssid))
-            && !(result = anjay_get_i32(array_ctx, &current_mask))) {
+           && !(result = anjay_get_i32(array_ctx, &current_mask))) {
         if (current_ssid == ssid_lookup || current_ssid == 0) {
             // Found an entry for the given ssid or the default ACL entry
             *inout_ssid = current_ssid;
@@ -164,8 +162,7 @@ static int get_mask(anjay_t *anjay,
 }
 
 static anjay_access_mask_t
-access_control_mask(anjay_t *anjay,
-                    const anjay_action_info_t *info) {
+access_control_mask(anjay_t *anjay, const anjay_action_info_t *info) {
     get_mask_data_t data = {
         .oid = info->oid,
         .oiid = info->iid,
@@ -181,8 +178,7 @@ access_control_mask(anjay_t *anjay,
     return data.result;
 }
 
-static bool can_instantiate(anjay_t *anjay,
-                            const anjay_action_info_t *info) {
+static bool can_instantiate(anjay_t *anjay, const anjay_action_info_t *info) {
     get_mask_data_t data = {
         .oid = info->oid,
         .oiid = ANJAY_IID_INVALID,
@@ -204,9 +200,8 @@ typedef struct {
     anjay_ssid_t owner;
 } get_owner_data_t;
 
-static int count_non_bootstrap_clb(anjay_t *anjay,
-                                   anjay_ssid_t ssid,
-                                   void *counter_ptr) {
+static int
+count_non_bootstrap_clb(anjay_t *anjay, anjay_ssid_t ssid, void *counter_ptr) {
     (void) anjay;
     if (ssid != ANJAY_SSID_BOOTSTRAP) {
         ++*((size_t *) counter_ptr);
@@ -227,7 +222,8 @@ bool _anjay_access_control_action_allowed(anjay_t *anjay,
                                           const anjay_action_info_t *info) {
     if (info->oid == ANJAY_DM_OID_SECURITY) {
         return false;
-    } else if (!get_access_control(anjay) || is_single_ssid_environment(anjay)) {
+    } else if (!get_access_control(anjay)
+               || is_single_ssid_environment(anjay)) {
         return true;
     }
 
@@ -235,7 +231,7 @@ bool _anjay_access_control_action_allowed(anjay_t *anjay,
         if (info->action == ANJAY_ACTION_READ) {
             return true;
         } else if (info->action == ANJAY_ACTION_CREATE
-                || info->action == ANJAY_ACTION_DELETE) {
+                   || info->action == ANJAY_ACTION_DELETE) {
             return false;
         }
         uint32_t owner;

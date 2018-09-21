@@ -30,8 +30,8 @@
 #define ANJAY_SCHED_C
 
 #include "anjay_core.h"
-#include "utils_core.h"
 #include "sched_internal.h"
+#include "utils_core.h"
 
 #define sched_log(...) _anjay_log(anjay_sched, __VA_ARGS__)
 
@@ -42,7 +42,8 @@ anjay_sched_t *_anjay_sched_get(anjay_t *anjay) {
 }
 
 anjay_sched_t *_anjay_sched_new(anjay_t *anjay) {
-    anjay_sched_t *sched = (anjay_sched_t *) avs_calloc(1, sizeof(anjay_sched_t));
+    anjay_sched_t *sched =
+            (anjay_sched_t *) avs_calloc(1, sizeof(anjay_sched_t));
     if (sched) {
         sched->anjay = anjay;
     }
@@ -59,10 +60,9 @@ static anjay_sched_entry_t *fetch_task(anjay_sched_t *sched,
     }
 }
 
-static anjay_sched_handle_t
-sched_delayed(anjay_sched_t *sched,
-              avs_time_duration_t delay,
-              AVS_LIST(anjay_sched_entry_t) entry);
+static anjay_sched_handle_t sched_delayed(anjay_sched_t *sched,
+                                          avs_time_duration_t delay,
+                                          AVS_LIST(anjay_sched_entry_t) entry);
 
 static void execute_task(anjay_sched_t *sched,
                          AVS_LIST(anjay_sched_entry_t) entry) {
@@ -97,10 +97,11 @@ ssize_t _anjay_sched_run(anjay_sched_t *sched) {
 
     avs_time_duration_t delay = AVS_TIME_DURATION_ZERO;
     _anjay_sched_time_to_next(sched, &delay);
-    sched_log(TRACE, "%lu scheduled tasks remain; next after "
-                     "%" PRId64 ".%09" PRId32,
-              (unsigned long)AVS_LIST_SIZE(sched->entries),
-              delay.seconds, delay.nanoseconds);
+    sched_log(TRACE,
+              "%lu scheduled tasks remain; next after "
+              "%" PRId64 ".%09" PRId32,
+              (unsigned long) AVS_LIST_SIZE(sched->entries), delay.seconds,
+              delay.nanoseconds);
     return tasks_executed;
 }
 
@@ -122,9 +123,8 @@ void _anjay_sched_delete(anjay_sched_t **sched_ptr) {
     *sched_ptr = NULL;
 }
 
-static anjay_sched_handle_t
-insert_entry(anjay_sched_t *sched,
-             AVS_LIST(anjay_sched_entry_t) entry) {
+static anjay_sched_handle_t insert_entry(anjay_sched_t *sched,
+                                         AVS_LIST(anjay_sched_entry_t) entry) {
     anjay_sched_entry_t **entry_ptr = NULL;
 
     if (!sched || sched->shut_down) {
@@ -139,18 +139,17 @@ insert_entry(anjay_sched_t *sched,
     }
 
     AVS_LIST_INSERT(entry_ptr, entry);
-    sched_log(TRACE, "%p inserted; %lu tasks scheduled",
-              (void*)entry, (unsigned long)AVS_LIST_SIZE(sched->entries));
+    sched_log(TRACE, "%p inserted; %lu tasks scheduled", (void *) entry,
+              (unsigned long) AVS_LIST_SIZE(sched->entries));
     return entry;
 }
 
-static AVS_LIST(anjay_sched_entry_t)
-create_entry(anjay_sched_clb_t clb,
-             const void *clb_data,
-             size_t clb_data_size) {
-    AVS_LIST(anjay_sched_entry_t) entry = (anjay_sched_entry_t *)
-            AVS_LIST_NEW_BUFFER(offsetof(anjay_sched_entry_t, clb_data)
-                                        + clb_data_size);
+static AVS_LIST(anjay_sched_entry_t) create_entry(anjay_sched_clb_t clb,
+                                                  const void *clb_data,
+                                                  size_t clb_data_size) {
+    AVS_LIST(anjay_sched_entry_t) entry =
+            (anjay_sched_entry_t *) AVS_LIST_NEW_BUFFER(
+                    offsetof(anjay_sched_entry_t, clb_data) + clb_data_size);
 
     if (!entry) {
         sched_log(ERROR, "Could not allocate scheduler task");
@@ -165,10 +164,9 @@ create_entry(anjay_sched_clb_t clb,
     return entry;
 }
 
-static anjay_sched_handle_t
-sched_delayed(anjay_sched_t *sched,
-              avs_time_duration_t delay,
-              AVS_LIST(anjay_sched_entry_t) entry) {
+static anjay_sched_handle_t sched_delayed(anjay_sched_t *sched,
+                                          avs_time_duration_t delay,
+                                          AVS_LIST(anjay_sched_entry_t) entry) {
     avs_time_monotonic_t sched_time = avs_time_monotonic_now();
     sched_log(TRACE, "current time %" PRId64 ".%09" PRId32,
               sched_time.since_monotonic_epoch.seconds,
@@ -178,11 +176,11 @@ sched_delayed(anjay_sched_t *sched,
         sched_time = avs_time_monotonic_add(sched_time, delay);
     }
     sched_log(TRACE,
-              "job scheduled at %" PRId64 ".%09" PRId32
-              " (+%" PRId64 ".%09" PRId32 ")",
+              "job scheduled at %" PRId64 ".%09" PRId32 " (+%" PRId64
+              ".%09" PRId32 ")",
               sched_time.since_monotonic_epoch.seconds,
-              sched_time.since_monotonic_epoch.nanoseconds,
-              delay.seconds, delay.nanoseconds);
+              sched_time.since_monotonic_epoch.nanoseconds, delay.seconds,
+              delay.nanoseconds);
 
     entry->when = sched_time;
     return insert_entry(sched, entry);
@@ -222,9 +220,8 @@ static anjay_sched_entry_t **find_task_entry_ptr(anjay_sched_t *sched,
                                                  anjay_sched_handle_t *handle) {
     // IAR compiler does not support typeof, so AVS_LIST_FIND_PTR
     // returns void**, which is not implicitly-convertible
-    return (AVS_LIST(anjay_sched_entry_t) *)
-            AVS_LIST_FIND_PTR(&sched->entries,
-                              *((anjay_sched_entry_t **) handle));
+    return (AVS_LIST(anjay_sched_entry_t) *) AVS_LIST_FIND_PTR(
+            &sched->entries, *((anjay_sched_entry_t **) handle));
 }
 
 int _anjay_sched_del(anjay_sched_t *sched, anjay_sched_handle_t *handle) {
@@ -269,5 +266,5 @@ int _anjay_sched_time_to_next(anjay_sched_t *sched,
 }
 
 #ifdef ANJAY_TEST
-#include "test/sched.c"
+#    include "test/sched.c"
 #endif // ANJAY_TEST

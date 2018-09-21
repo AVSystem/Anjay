@@ -23,8 +23,8 @@
 #include <avsystem/commons/stream/stream_net.h>
 #include <avsystem/commons/stream_v_table.h>
 
-#include "../content_format.h"
 #include "../coap_log.h"
+#include "../content_format.h"
 
 #include "../id_source/auto.h"
 
@@ -122,7 +122,7 @@ static int get_or_receive_msg(coap_stream_t *stream,
 
 static int setup_response(avs_stream_abstract_t *stream_,
                           const anjay_msg_details_t *details) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
 
     if (stream->state != STREAM_STATE_SERVER) {
         coap_log(ERROR, "no request to respond to");
@@ -143,14 +143,14 @@ static const anjay_coap_stream_ext_t COAP_STREAM_EXT_VTABLE = {
 
 static int coap_getsock(avs_stream_abstract_t *stream_,
                         avs_net_abstract_socket_t **out_sock) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     *out_sock = stream->data.common.socket;
     return *out_sock == NULL ? -1 : 0;
 }
 
 static int coap_setsock(avs_stream_abstract_t *stream_,
                         avs_net_abstract_socket_t *sock) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     if (!is_reset(stream)) {
         return -1;
     }
@@ -165,8 +165,7 @@ static int coap_setsock(avs_stream_abstract_t *stream_,
 }
 
 static const avs_stream_v_table_extension_net_t NET_EXT_VTABLE = {
-    coap_getsock,
-    coap_setsock
+    coap_getsock, coap_setsock
 };
 
 static const avs_stream_v_table_extension_t COAP_STREAM_EXT[] = {
@@ -178,12 +177,12 @@ static const avs_stream_v_table_extension_t COAP_STREAM_EXT[] = {
 static int coap_write(avs_stream_abstract_t *stream_,
                       const void *data,
                       size_t *data_length) {
-    coap_stream_t *stream = (coap_stream_t *)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
 
     switch (stream->state) {
     case STREAM_STATE_CLIENT:
-        return _anjay_coap_client_write(get_client(stream),
-                                        stream->id_source, data, *data_length);
+        return _anjay_coap_client_write(get_client(stream), stream->id_source,
+                                        data, *data_length);
     case STREAM_STATE_SERVER:
         return _anjay_coap_server_write(get_server(stream), data, *data_length);
     default:
@@ -193,11 +192,11 @@ static int coap_write(avs_stream_abstract_t *stream_,
 }
 
 static int coap_finish_message(avs_stream_abstract_t *stream_) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
 
     switch (stream->state) {
     case STREAM_STATE_CLIENT:
-         return _anjay_coap_client_finish_request(get_client(stream));
+        return _anjay_coap_client_finish_request(get_client(stream));
 
     case STREAM_STATE_SERVER:
         return _anjay_coap_server_finish_response(get_server(stream));
@@ -213,7 +212,7 @@ static int coap_read(avs_stream_abstract_t *stream_,
                      char *out_message_finished,
                      void *buffer,
                      size_t buffer_length) {
-    coap_stream_t *stream = (coap_stream_t *)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->data.common.in.buffer);
 
     const avs_coap_msg_t *msg;
@@ -228,13 +227,13 @@ static int coap_read(avs_stream_abstract_t *stream_,
         break;
     case STREAM_STATE_SERVER:
         result = _anjay_coap_server_read(get_server(stream), out_bytes_read,
-                                         out_message_finished,
-                                         buffer, buffer_length);
+                                         out_message_finished, buffer,
+                                         buffer_length);
         break;
     case STREAM_STATE_CLIENT:
         result = _anjay_coap_client_read(get_client(stream), out_bytes_read,
-                                         out_message_finished,
-                                         buffer, buffer_length);
+                                         out_message_finished, buffer,
+                                         buffer_length);
         break;
     }
 
@@ -246,12 +245,12 @@ static int coap_read(avs_stream_abstract_t *stream_,
 }
 
 static int coap_reset(avs_stream_abstract_t *stream_) {
-    reset((coap_stream_t *)stream_);
+    reset((coap_stream_t *) stream_);
     return 0;
 }
 
 static int coap_close(avs_stream_abstract_t *stream_) {
-    coap_stream_t *stream = (coap_stream_t *)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
 
     reset(stream);
 
@@ -292,7 +291,8 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
                               size_t in_buffer_size,
                               uint8_t *out_buffer,
                               size_t out_buffer_size) {
-    coap_stream_t *stream = (coap_stream_t *)avs_calloc(1, sizeof(coap_stream_t));
+    coap_stream_t *stream =
+            (coap_stream_t *) avs_calloc(1, sizeof(coap_stream_t));
     if (!stream) {
         coap_log(ERROR, "Out of memory");
         return -1;
@@ -314,8 +314,7 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
             (anjay_rand_seed_t) avs_time_real_now().since_real_epoch.seconds,
             8);
 
-    if (!stream->data.common.in.buffer
-            || !stream->data.common.out.buffer
+    if (!stream->data.common.in.buffer || !stream->data.common.out.buffer
             || !stream->id_source) {
         coap_log(ERROR, "Out of memory");
         coap_close((avs_stream_abstract_t *) stream);
@@ -324,23 +323,21 @@ int _anjay_coap_stream_create(avs_stream_abstract_t **stream_,
     }
     reset(stream);
 
-    *stream_ = (avs_stream_abstract_t *)stream;
+    *stream_ = (avs_stream_abstract_t *) stream;
     return 0;
 }
 
-int _anjay_coap_stream_get_tx_params(
-        avs_stream_abstract_t *stream_,
-        avs_coap_tx_params_t *out_tx_params) {
-    coap_stream_t *stream = (coap_stream_t*) stream_;
+int _anjay_coap_stream_get_tx_params(avs_stream_abstract_t *stream_,
+                                     avs_coap_tx_params_t *out_tx_params) {
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
     *out_tx_params = avs_coap_ctx_get_tx_params(stream->data.common.coap_ctx);
     return 0;
 }
 
-int _anjay_coap_stream_set_tx_params(
-        avs_stream_abstract_t *stream_,
-        const avs_coap_tx_params_t *tx_params) {
-    coap_stream_t *stream = (coap_stream_t*) stream_;
+int _anjay_coap_stream_set_tx_params(avs_stream_abstract_t *stream_,
+                                     const avs_coap_tx_params_t *tx_params) {
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
     assert(avs_coap_tx_params_valid(tx_params, NULL));
     avs_coap_ctx_set_tx_params(stream->data.common.coap_ctx, tx_params);
@@ -349,9 +346,9 @@ int _anjay_coap_stream_set_tx_params(
 
 int _anjay_coap_stream_setup_response(avs_stream_abstract_t *stream,
                                       const anjay_msg_details_t *details) {
-    const anjay_coap_stream_ext_t *coap = (const anjay_coap_stream_ext_t *)
-            avs_stream_v_table_find_extension(stream,
-                                              ANJAY_COAP_STREAM_EXTENSION);
+    const anjay_coap_stream_ext_t *coap =
+            (const anjay_coap_stream_ext_t *) avs_stream_v_table_find_extension(
+                    stream, ANJAY_COAP_STREAM_EXTENSION);
     if (coap) {
         return coap->setup_response(stream, details);
     }
@@ -359,11 +356,10 @@ int _anjay_coap_stream_setup_response(avs_stream_abstract_t *stream,
     return -1;
 }
 
-int _anjay_coap_stream_setup_request(
-        avs_stream_abstract_t *stream_,
-        const anjay_msg_details_t *details,
-        const avs_coap_token_t *token) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+int _anjay_coap_stream_setup_request(avs_stream_abstract_t *stream_,
+                                     const anjay_msg_details_t *details,
+                                     const avs_coap_token_t *token) {
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
     switch (stream->state) {
     case STREAM_STATE_SERVER:
@@ -388,16 +384,15 @@ int _anjay_coap_stream_setup_request(
     }
 
     int result;
-    if ((result = _anjay_coap_client_setup_request(get_client(stream),
-                                                   details, &identity))) {
+    if ((result = _anjay_coap_client_setup_request(get_client(stream), details,
+                                                   &identity))) {
         reset(stream);
     }
     return result;
 }
 
-int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream_,
-                                 uint8_t code) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream_, uint8_t code) {
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
     if (stream->state != STREAM_STATE_SERVER) {
@@ -411,7 +406,7 @@ int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream_,
 
 int _anjay_coap_stream_get_incoming_msg(avs_stream_abstract_t *stream_,
                                         const avs_coap_msg_t **out_msg) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
     int result = get_or_receive_msg(stream, out_msg);
@@ -425,7 +420,7 @@ int _anjay_coap_stream_get_incoming_msg(avs_stream_abstract_t *stream_,
 
 int _anjay_coap_stream_get_request_identity(avs_stream_abstract_t *stream_,
                                             avs_coap_msg_identity_t *out_id) {
-    coap_stream_t *stream = (coap_stream_t*)stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
     const avs_coap_msg_identity_t *id = NULL;
 
@@ -450,7 +445,7 @@ void _anjay_coap_stream_set_block_request_validator(
         avs_stream_abstract_t *stream_,
         anjay_coap_block_request_validator_t *validator,
         void *validator_arg) {
-    coap_stream_t *stream = (coap_stream_t*) stream_;
+    coap_stream_t *stream = (coap_stream_t *) stream_;
     assert(stream->vtable == &COAP_STREAM_VTABLE);
 
     _anjay_coap_server_set_block_request_relation_validator(

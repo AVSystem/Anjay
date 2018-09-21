@@ -28,9 +28,8 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static inline server_instance_t *
-find_instance(server_repr_t *repr,
-              anjay_iid_t iid) {
+static inline server_instance_t *find_instance(server_repr_t *repr,
+                                               anjay_iid_t iid) {
     if (!repr) {
         return NULL;
     }
@@ -100,8 +99,9 @@ static int add_instance(server_repr_t *repr,
     if (instance->binding) {
         if (!anjay_binding_mode_valid(instance->binding)
                 || avs_simple_snprintf(new_instance->binding_buf,
-                                       sizeof(new_instance->binding_buf),
-                                       "%s", instance->binding) < 0) {
+                                       sizeof(new_instance->binding_buf), "%s",
+                                       instance->binding)
+                               < 0) {
             server_log(ERROR, "Unsupported binding mode: %s",
                        instance->binding);
             return -1;
@@ -116,8 +116,8 @@ static int add_instance(server_repr_t *repr,
         AVS_LIST_CLEAR(&new_instance);
         return -1;
     }
-    server_log(INFO, "Added instance %u (SSID: %u)",
-               *inout_iid, instance->ssid);
+    server_log(INFO, "Added instance %u (SSID: %u)", *inout_iid,
+               instance->ssid);
     return 0;
 }
 
@@ -179,7 +179,8 @@ static int serv_instance_create(anjay_t *anjay,
                                 const anjay_dm_object_def_t *const *obj_ptr,
                                 anjay_iid_t *inout_iid,
                                 anjay_ssid_t ssid) {
-    (void) anjay; (void) ssid;
+    (void) anjay;
+    (void) ssid;
     server_repr_t *repr = _anjay_serv_get(obj_ptr);
     if (*inout_iid == ANJAY_IID_INVALID && assign_iid(repr, inout_iid)) {
         server_log(ERROR, "Cannot assign new Instance id");
@@ -376,22 +377,23 @@ static int serv_execute(anjay_t *anjay,
                         anjay_iid_t iid,
                         anjay_rid_t rid,
                         anjay_execute_ctx_t *ctx) {
-    (void) anjay; (void) obj_ptr; (void) ctx;
+    (void) anjay;
+    (void) obj_ptr;
+    (void) ctx;
     server_instance_t *inst = find_instance(_anjay_serv_get(obj_ptr), iid);
     assert(inst);
 
-    switch ((server_rid_t)rid) {
-    case SERV_RES_DISABLE:
-        {
-            avs_time_duration_t disable_timeout =
-                    inst->data.disable_timeout < 0
+    switch ((server_rid_t) rid) {
+    case SERV_RES_DISABLE: {
+        avs_time_duration_t disable_timeout =
+                inst->data.disable_timeout < 0
                         ? AVS_TIME_DURATION_INVALID
                         : avs_time_duration_from_scalar(
-                                inst->data.disable_timeout, AVS_TIME_S);
+                                  inst->data.disable_timeout, AVS_TIME_S);
 
-            return anjay_disable_server_with_timeout(anjay, inst->data.ssid,
-                                                     disable_timeout);
-        }
+        return anjay_disable_server_with_timeout(anjay, inst->data.ssid,
+                                                 disable_timeout);
+    }
     case SERV_RES_REGISTRATION_UPDATE_TRIGGER:
         return anjay_schedule_registration_update(anjay, inst->data.ssid);
 
@@ -473,10 +475,9 @@ server_repr_t *_anjay_serv_get(const anjay_dm_object_def_t *const *obj_ptr) {
     return AVS_CONTAINER_OF(obj_ptr, server_repr_t, def);
 }
 
-int anjay_server_object_add_instance(
-        anjay_t *anjay,
-        const anjay_server_instance_t *instance,
-        anjay_iid_t *inout_iid) {
+int anjay_server_object_add_instance(anjay_t *anjay,
+                                     const anjay_server_instance_t *instance,
+                                     anjay_iid_t *inout_iid) {
     assert(anjay);
 
     const anjay_dm_object_def_t *const *obj_ptr =
@@ -512,7 +513,7 @@ static void server_purge(server_repr_t *repr) {
 
 static void server_delete(anjay_t *anjay, void *repr) {
     (void) anjay;
-    server_purge((server_repr_t*) repr);
+    server_purge((server_repr_t *) repr);
     avs_free(repr);
 }
 
@@ -545,7 +546,8 @@ static const anjay_dm_module_t SERVER_MODULE = {
 int anjay_server_object_install(anjay_t *anjay) {
     assert(anjay);
 
-    server_repr_t *repr = (server_repr_t *) avs_calloc(1, sizeof(server_repr_t));
+    server_repr_t *repr =
+            (server_repr_t *) avs_calloc(1, sizeof(server_repr_t));
     if (!repr) {
         server_log(ERROR, "Out of memory");
         return -1;
@@ -570,5 +572,5 @@ int anjay_server_object_install(anjay_t *anjay) {
 }
 
 #ifdef ANJAY_TEST
-#include "test/api.c"
+#    include "test/api.c"
 #endif

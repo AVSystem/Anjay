@@ -41,12 +41,11 @@ int _anjay_ssid_from_security_iid(anjay_t *anjay,
 bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
                                            anjay_iid_t security_iid);
 #else
-#define _anjay_is_bootstrap_security_instance(...) (false)
+#    define _anjay_is_bootstrap_security_instance(...) (false)
 #endif
 
 avs_time_duration_t
-_anjay_disable_timeout_from_server_iid(anjay_t *anjay,
-                                       anjay_iid_t server_iid);
+_anjay_disable_timeout_from_server_iid(anjay_t *anjay, anjay_iid_t server_iid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -53,15 +53,13 @@ typedef AVS_LIST(anjay_notify_queue_object_entry_t) anjay_notify_queue_t;
  * Object require knowing which server (if any) performed the changes.
  * @ref _anjay_dm_current_ssid will be called to determine it.
  */
-int _anjay_notify_perform(anjay_t *anjay,
-                          anjay_notify_queue_t queue);
+int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue);
 
 /**
  * Calls @ref _anjay_notify_perform and @ref _anjay_notify_clear_queue
  * afterwards (regardless of success or failure).
  */
-int _anjay_notify_flush(anjay_t *anjay,
-                        anjay_notify_queue_t *queue_ptr);
+int _anjay_notify_flush(anjay_t *anjay, anjay_notify_queue_t *queue_ptr);
 
 int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
                                          anjay_oid_t oid,
@@ -72,8 +70,7 @@ int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
                                          anjay_iid_t iid);
 
 int _anjay_notify_queue_instance_set_unknown_change(
-        anjay_notify_queue_t *out_queue,
-        anjay_oid_t oid);
+        anjay_notify_queue_t *out_queue, anjay_oid_t oid);
 
 /**
  * Adds a notification about the change of value of the data model resource
@@ -90,9 +87,8 @@ int _anjay_notify_instance_created(anjay_t *anjay,
                                    anjay_oid_t oid,
                                    anjay_iid_t iid);
 
-typedef int anjay_notify_callback_t(anjay_t *anjay,
-                                    anjay_notify_queue_t queue,
-                                    void *data);
+typedef int
+anjay_notify_callback_t(anjay_t *anjay, anjay_notify_queue_t queue, void *data);
 
 VISIBILITY_PRIVATE_HEADER_END
 

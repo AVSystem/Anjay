@@ -18,13 +18,13 @@
 #define ANJAY_DOWNLOADER_H
 
 #include <anjay/download.h>
-#include <avsystem/commons/stream.h>
 #include <avsystem/commons/net.h>
+#include <avsystem/commons/stream.h>
 
 #include <anjay_modules/downloader.h>
 
-#include "utils_core.h"
 #include "coap/id_source/id_source.h"
+#include "utils_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -112,4 +112,3 @@ int _anjay_downloader_sched_reconnect_all(anjay_downloader_t *dl);
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_DOWNLOADER_H */
-

@@ -69,9 +69,8 @@ typedef struct {
     anjay_server_info_t *out;
 } find_active_args_t;
 
-static int find_active_clb(anjay_t *anjay,
-                           anjay_server_info_t *server,
-                           void *args_) {
+static int
+find_active_clb(anjay_t *anjay, anjay_server_info_t *server, void *args_) {
     (void) anjay;
     find_active_args_t *args = (find_active_args_t *) args_;
     if (_anjay_server_ssid(server) == args->ssid) {
@@ -103,15 +102,16 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server) {
     // the direction of this comparison is chosen so that it causes the
     // registration to be considered expired
     if (!avs_time_duration_less(AVS_TIME_DURATION_ZERO, remaining)) {
-        anjay_log(DEBUG, "Registration Lifetime expired for SSID = %u, "
-                  "forcing re-register", _anjay_server_ssid(server));
+        anjay_log(DEBUG,
+                  "Registration Lifetime expired for SSID = %u, "
+                  "forcing re-register",
+                  _anjay_server_ssid(server));
         return true;
     }
     return false;
 }
 
-int _anjay_schedule_socket_update(anjay_t *anjay,
-                                  anjay_iid_t security_iid) {
+int _anjay_schedule_socket_update(anjay_t *anjay, anjay_iid_t security_iid) {
     anjay_ssid_t ssid;
     anjay_server_info_t *server;
     if (!_anjay_ssid_from_security_iid(anjay, security_iid, &ssid)
@@ -138,21 +138,15 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
     return &anjay_get_socket_entries(anjay)->socket;
 }
 
+static const char CONN_TYPE_LETTERS[] = {
+    [ANJAY_CONNECTION_UDP] = 'U'
+};
+
 anjay_server_connection_mode_t
 _anjay_get_connection_mode(const char *binding_mode,
                            anjay_connection_type_t conn_type) {
-    char type_letter;
-    switch (conn_type) {
-    case ANJAY_CONNECTION_UDP:
-        type_letter = 'U';
-        break;
-    case ANJAY_CONNECTION_SMS:
-        type_letter = 'S';
-        break;
-    default:
-        return ANJAY_CONNECTION_DISABLED;
-    }
-    const char *type_letter_ptr = strchr(binding_mode, type_letter);
+    const char *type_letter_ptr =
+            strchr(binding_mode, CONN_TYPE_LETTERS[conn_type]);
     if (!type_letter_ptr) {
         return ANJAY_CONNECTION_DISABLED;
     }
@@ -163,71 +157,25 @@ _anjay_get_connection_mode(const char *binding_mode,
     }
 }
 
-static inline int append_str(char **ptr, const char *endptr, const char *str) {
-    int result = avs_simple_snprintf(*ptr, (size_t) (endptr - *ptr), "%s", str);
-    if (result >= 0) {
-        *ptr += result;
-        return 0;
-    }
-    return result;
-}
+void _anjay_server_actual_binding_mode(anjay_binding_mode_t *out_binding_mode,
+                                       anjay_server_info_t *server) {
+    AVS_STATIC_ASSERT(sizeof(*out_binding_mode)
+                              > (sizeof("xQ") - 1) * ANJAY_CONNECTION_LIMIT_,
+                      anjay_binding_mode_t_size);
 
-static int
-binding_mode_from_connection_modes(anjay_binding_mode_t *out_binding_mode,
-                                   anjay_server_connection_mode_t udp_mode,
-                                   anjay_server_connection_mode_t sms_mode) {
-    memset(*out_binding_mode, 0, sizeof(*out_binding_mode));
     char *ptr = *out_binding_mode;
-    const char *endptr = ptr + sizeof(*out_binding_mode);
-    switch (udp_mode) {
-    case ANJAY_CONNECTION_ONLINE:
-        if (append_str(&ptr, endptr, "U")) {
-            return -1;
+    anjay_connection_ref_t ref = {
+        .server = server
+    };
+    ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
+        anjay_server_connection_mode_t mode =
+                _anjay_connection_current_mode(ref);
+        if (mode != ANJAY_CONNECTION_DISABLED) {
+            *ptr++ = CONN_TYPE_LETTERS[ref.conn_type];
+            if (mode == ANJAY_CONNECTION_QUEUE) {
+                *ptr++ = 'Q';
+            }
         }
-        break;
-    case ANJAY_CONNECTION_QUEUE:
-        if (append_str(&ptr, endptr, "UQ")) {
-            return -1;
-        }
-        break;
-    case ANJAY_CONNECTION_DISABLED:
-    default:
-        break;
     }
-    switch (sms_mode) {
-    case ANJAY_CONNECTION_ONLINE:
-        if (append_str(&ptr, endptr, "S")) {
-            return -1;
-        }
-        break;
-    case ANJAY_CONNECTION_QUEUE:
-        if (append_str(&ptr, endptr, "SQ")) {
-            return -1;
-        }
-        break;
-    case ANJAY_CONNECTION_DISABLED:
-    default:
-        break;
-    }
-    return anjay_binding_mode_valid(*out_binding_mode) ? 0 : -1;
-}
-
-int
-_anjay_server_actual_binding_mode(anjay_binding_mode_t *out_binding_mode,
-                                  anjay_server_info_t *server) {
-    if (!server) {
-        return -1;
-    }
-    anjay_server_connection_mode_t udp_mode =
-            _anjay_connection_current_mode((anjay_connection_ref_t) {
-                                               .server = server,
-                                               .conn_type = ANJAY_CONNECTION_UDP
-                                           });
-    anjay_server_connection_mode_t sms_mode =
-            _anjay_connection_current_mode((anjay_connection_ref_t) {
-                                               .server = server,
-                                               .conn_type = ANJAY_CONNECTION_SMS
-                                           });
-    return binding_mode_from_connection_modes(out_binding_mode,
-                                              udp_mode, sms_mode);
+    *ptr = '\0';
 }

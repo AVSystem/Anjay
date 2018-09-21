@@ -17,12 +17,12 @@
 #ifndef DEMO_H
 #define DEMO_H
 
-#include "objects.h"
 #include "firmware_update.h"
+#include "objects.h"
 
 #include <anjay/access_control.h>
-#include <anjay/attr_storage.h>
 #include <anjay/anjay.h>
+#include <anjay/attr_storage.h>
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/stream/stream_file.h>

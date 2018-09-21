@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 2.8.12)
 
 project(anjay C)
-set(ANJAY_VERSION "1.11.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.12.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -75,9 +75,6 @@ endif()
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/PosixFeatures.cmake)
 
 option(WITH_LIBRARY_SHARED "Compile Anjay as shared library" "${UNIX}")
-cmake_dependent_option(WITH_STATIC_DEPS_LINKED
-                       "Directly link shared library with its static dependencies such as avs_commons (e.g. for interpreted language bindings)"
-                       OFF WITH_LIBRARY_SHARED OFF)
 
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
 option(WITH_ATTR_STORAGE "Enable Attribute storage module" ON)
@@ -93,7 +90,7 @@ if(WITH_OBSERVE)
 endif()
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
-option(WITH_JSON "Enable support for JSON content format (output only)" OFF)
+option(WITH_JSON "Enable support for JSON content format (output only)" ON)
 option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
 
 
@@ -187,11 +184,12 @@ set(CORE_SOURCES
     src/raw_buffer.c
     src/sched.c
     src/servers/activate.c
-    src/servers/connection_info.c
+    src/servers/connections.c
     src/servers/connection_udp.c
     src/servers/offline.c
     src/servers/register_internal.c
     src/servers/reload.c
+    src/servers/server_connections.c
     src/servers/servers_internal.c
     src/servers_utils.c
     src/utils_core.c)
@@ -227,7 +225,7 @@ if(WITH_OBSERVE)
         src/observe/observe_core.c
         src/observe/observe_io.c)
 endif()
-if(WITH_JSON)
+if(WITH_JSON OR WITH_SENML_JSON)
     set(CORE_SOURCES ${CORE_SOURCES}
         src/io/json_out.c)
 endif()
@@ -268,10 +266,11 @@ set(CORE_PRIVATE_HEADERS
     src/sched_internal.h
     src/servers.h
     src/servers/activate.h
-    src/servers/connection_info.h
+    src/servers/connections.h
     src/servers/connections_internal.h
     src/servers/register_internal.h
     src/servers/reload.h
+    src/servers/server_connections.h
     src/servers/servers_internal.h
     src/servers_utils.h
     src/utils_core.h)
@@ -441,8 +440,6 @@ else()
     add_subdirectory(avs_commons/git)
 endif()
 
-set(DEPS_INCLUDE_DIRS ${DEPS_INCLUDE_DIRS} ${avs_commons_INCLUDE_DIRS})
-
 if(WITH_AVS_LOG)
     set(DEPS_LIBRARIES_WEAK ${DEPS_LIBRARIES_WEAK} avs_log)
 endif()
@@ -452,7 +449,6 @@ endif()
 set(PUBLIC_INCLUDE_DIRS ${PUBLIC_INCLUDE_DIRS} "${CMAKE_CURRENT_SOURCE_DIR}/include_public")
 set(MODULES_INCLUDE_DIRS ${MODULES_INCLUDE_DIRS} "${CMAKE_CURRENT_SOURCE_DIR}/include_modules")
 
-include_directories(SYSTEM ${DEPS_INCLUDE_DIRS})
 include_directories(${PUBLIC_INCLUDE_DIRS}
                     ${MODULES_INCLUDE_DIRS})
 
@@ -505,16 +501,11 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/config")
 
 if(WITH_LIBRARY_SHARED)
     add_library(${PROJECT_NAME} SHARED ${ABSOLUTE_SOURCES})
-    if(WITH_STATIC_DEPS_LINKED)
-        target_link_libraries(${PROJECT_NAME} ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
-    else()
-        target_link_libraries(${PROJECT_NAME} ${DEPS_LIBRARIES})
-        target_link_libraries(${PROJECT_NAME} LINK_INTERFACE_LIBRARIES ${DEPS_LIBRARIES_WEAK})
-        anjay_emit_deps(${PROJECT_NAME} ${DEPS_LIBRARIES_WEAK})
-    endif()
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${DEPS_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${DEPS_LIBRARIES_WEAK})
     set_target_properties(${PROJECT_NAME} PROPERTIES
                           VERSION ${ANJAY_BINARY_VERSION})
-    if(HAVE_VISIBILITY AND NOT WITH_STATIC_DEPS_LINKED)
+    if(HAVE_VISIBILITY)
         get_property(LINK_FLAGS TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS)
         set_property(TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,--exclude-libs,ALL")
     endif()
@@ -659,7 +650,7 @@ if(WITH_TEST)
     # Symbol validation
     add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
 
-    if(WITH_LIBRARY_SHARED AND NOT WITH_STATIC_DEPS_LINKED)
+    if(WITH_LIBRARY_SHARED)
         add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}> anjay_ ANJAY_)
         add_dependencies(symbols_check ${PROJECT_NAME})
     endif()

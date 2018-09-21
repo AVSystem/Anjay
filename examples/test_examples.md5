@@ -14,9 +14,9 @@ b043782e2aa5444e713b0e15e618133c	examples/tutorial/custom-object/notifications/s
 6a1027758af849100e7af177140a5c30	examples/tutorial/custom-object/read-only/src/main.c
 962be6487df5009e2d30d959b5c3fb9d	examples/tutorial/custom-object/writable-multiple-fixed-transactional/src/main.c
 4e0c4110e9a82f9f0093944bc3d67bb6	examples/tutorial/custom-object/writable-multiple-fixed/src/main.c
-7d3f4d2e29a0ab544b44b63bc3f1d458	include_public/anjay/dm.h
-fe5935f76a8ad616a504c7ffc7236dc3	include_public/anjay/io.h
+913716c3e53f2b01f8616e0314d6ad71	include_public/anjay/dm.h
+7f9ac7902906576933cea4296cc999cb	include_public/anjay/io.h
 abf21d7ece894fa3ea0b3497431b4d03	modules/access_control/include_public/anjay/access_control.h
 8cc6b3ca19fb67d9a2501107c4f404b1	modules/attr_storage/include_public/anjay/attr_storage.h
-91353a41f4fefae8fd3fea07a8589534	modules/security/include_public/anjay/security.h
-b1193049de993beaca2c0125a902d1df	modules/server/include_public/anjay/server.h
+c497f239f7ad86941952af82f71323c4	modules/security/include_public/anjay/security.h
+c78ab3c174f175d9692df6290a52bfd1	modules/server/include_public/anjay/server.h

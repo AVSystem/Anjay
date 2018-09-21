@@ -15,41 +15,40 @@
  */
 
 #if !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
-#define _POSIX_C_SOURCE 200809L
+#    define _POSIX_C_SOURCE 200809L
 #endif
 
 #include <anjay_config.h>
 
 #ifdef ANJAY_TEST
 
-#include "servers.h"
+#    include "servers.h"
 
-#include <errno.h>
-#include <poll.h>
-#include <signal.h>
-#include <stdio.h>
-#include <signal.h>
+#    include <errno.h>
+#    include <poll.h>
+#    include <signal.h>
+#    include <stdio.h>
 
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/types.h>
+#    include <arpa/inet.h>
+#    include <netinet/in.h>
+#    include <sys/socket.h>
+#    include <sys/types.h>
+#    include <unistd.h>
 
-#if __linux__
-#include <sys/prctl.h>
-#endif
+#    if __linux__
+#        include <sys/prctl.h>
+#    endif
 
-#include <avsystem/commons/list.h>
-#include <avsystem/commons/unit/test.h>
-#include <avsystem/commons/utils.h>
+#    include <avsystem/commons/list.h>
+#    include <avsystem/commons/unit/test.h>
+#    include <avsystem/commons/utils.h>
 
-#include <anjay_test/mock_clock.h>
+#    include <anjay_test/mock_clock.h>
 
-#include "../../utils_core.h"
+#    include "../../utils_core.h"
 
-#include <avsystem/commons/coap/msg.h>
-#include "../coap_log.h"
+#    include "../coap_log.h"
+#    include <avsystem/commons/coap/msg.h>
 
 typedef struct response_state {
     bool has_more_responses;
@@ -92,11 +91,10 @@ static void wait_for_child(void) {
     sigset_t set;
     AVS_UNIT_ASSERT_SUCCESS(sigemptyset(&set));
     AVS_UNIT_ASSERT_SUCCESS(sigaddset(&set, SIGUSR1));
-    sigwait(&set, &(int){ -1 });
+    sigwait(&set, &(int) { -1 });
 }
 
-static void udp_serve(uint16_t port,
-                      make_response_func_t *make_response) {
+static void udp_serve(uint16_t port, make_response_func_t *make_response) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -104,9 +102,9 @@ static void udp_serve(uint16_t port,
     addr.sin_port = htons(port);
 
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    if (bind(sock, (struct sockaddr*)&addr, sizeof(addr))) {
-        coap_log(ERROR, "UDP server (127.0.0.1:%u) bind failed: %s",
-                 port, strerror(errno));
+    if (bind(sock, (struct sockaddr *) &addr, sizeof(addr))) {
+        coap_log(ERROR, "UDP server (127.0.0.1:%u) bind failed: %s", port,
+                 strerror(errno));
         goto cleanup;
     }
 
@@ -125,8 +123,8 @@ static void udp_serve(uint16_t port,
 
     while (true) {
         if (poll(&sock_pollfd, 1, -1) < 0) {
-            coap_log(ERROR, "UDP server (127.0.0.1:%u) poll failed: %s",
-                     port, strerror(errno));
+            coap_log(ERROR, "UDP server (127.0.0.1:%u) poll failed: %s", port,
+                     strerror(errno));
             goto cleanup;
         }
 
@@ -134,9 +132,9 @@ static void udp_serve(uint16_t port,
         memset(&remote_addr, 0, sizeof(remote_addr));
         socklen_t remote_addr_len = sizeof(remote_addr);
 
-        ssize_t bytes_recv = recvfrom(sock, in_buffer, sizeof(in_buffer), 0,
-                                      (struct sockaddr*)&remote_addr,
-                                      &remote_addr_len);
+        ssize_t bytes_recv =
+                recvfrom(sock, in_buffer, sizeof(in_buffer), 0,
+                         (struct sockaddr *) &remote_addr, &remote_addr_len);
         if (bytes_recv < 0) {
             coap_log(ERROR, "UDP server (127.0.0.1:%u) recvfrom failed: %s",
                      port, strerror(errno));
@@ -146,17 +144,19 @@ static void udp_serve(uint16_t port,
 
         do {
             state.has_more_responses = false;
-            ssize_t bytes_to_send = make_response(&state,
-                                                  in_buffer, (size_t)bytes_recv,
-                                                  out_buffer, sizeof(out_buffer));
+            ssize_t bytes_to_send =
+                    make_response(&state, in_buffer, (size_t) bytes_recv,
+                                  out_buffer, sizeof(out_buffer));
             if (bytes_to_send < 0) {
-                coap_log(ERROR, "UDP server (127.0.0.1:%u) make_response failed",
+                coap_log(ERROR,
+                         "UDP server (127.0.0.1:%u) make_response failed",
                          port);
                 goto cleanup;
             }
 
-            if (sendto(sock, out_buffer, (size_t)bytes_to_send, 0,
-                       (struct sockaddr*)&remote_addr, remote_addr_len) != bytes_to_send) {
+            if (sendto(sock, out_buffer, (size_t) bytes_to_send, 0,
+                       (struct sockaddr *) &remote_addr, remote_addr_len)
+                    != bytes_to_send) {
                 coap_log(ERROR, "UDP server (127.0.0.1:%u) sendto failed: %s",
                          port, strerror(errno));
                 goto cleanup;
@@ -189,16 +189,16 @@ static void spawn_udp_server(uint16_t port,
     int pid = -1;
     switch (pid = fork()) {
     case 0:
-#if __linux__
+#    if __linux__
         if (prctl(PR_SET_PDEATHSIG, SIGHUP)) {
             coap_log(WARNING, "prctl failed: %s", strerror(errno));
         }
-#endif // __linux__
+#    endif // __linux__
         udp_serve(port, make_response);
         // fall-through
     case -1:
-        coap_log(ERROR, "could not start UDP server on port %u: %s",
-                 port, strerror(errno));
+        coap_log(ERROR, "could not start UDP server on port %u: %s", port,
+                 strerror(errno));
         abort();
     default:
         break;
@@ -236,7 +236,8 @@ setup_socket(uint16_t port, make_response_func_t *make_response) {
     // this doesn't actually do anything,
     // but ensures that bind() and connect() can be used together
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_bind(socket, NULL, NULL));
-    AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "localhost", port_str));
+    AVS_UNIT_ASSERT_SUCCESS(
+            avs_net_socket_connect(socket, "localhost", port_str));
 
     return socket;
 }
@@ -246,18 +247,19 @@ static ssize_t echo(response_state_t *state,
                     size_t in_size,
                     char *out,
                     size_t out_size) {
-    (void)state;
+    (void) state;
 
     if (in_size > out_size) {
         return -1;
     }
 
     memcpy(out, in, in_size);
-    return (ssize_t)in_size;
+    return (ssize_t) in_size;
 }
 
-#define VTTL(version, type, token_length) \
-    (uint8_t)((((version) & 0x03) << 6) | (((type) & 0x03) << 4) | ((token_length) & 0x0f))
+#    define VTTL(version, type, token_length)                      \
+        (uint8_t)((((version) &0x03) << 6) | (((type) &0x03) << 4) \
+                  | ((token_length) &0x0f))
 
 static ssize_t fill_header_with_token_and_id(avs_coap_msg_type_t type,
                                              const char *in,
@@ -268,22 +270,21 @@ static ssize_t fill_header_with_token_and_id(avs_coap_msg_type_t type,
         return -1;
     }
 
-    uint8_t token_length = *(const uint8_t*)in & 0x0F;
+    uint8_t token_length = *(const uint8_t *) in & 0x0F;
     if (token_length > AVS_COAP_MAX_TOKEN_LENGTH
             || in_size < AVS_COAP_MSG_MIN_SIZE + token_length
             || out_size < AVS_COAP_MSG_MIN_SIZE + token_length) {
         return -1;
     }
 
-    out[0] = (char)VTTL(1, type, token_length);
-    out[1] = (char)AVS_COAP_CODE_CONTENT,
-    out[2] = (char)in[2];
-    out[3] = (char)in[3];
+    out[0] = (char) VTTL(1, type, token_length);
+    out[1] = (char) AVS_COAP_CODE_CONTENT, out[2] = (char) in[2];
+    out[3] = (char) in[3];
 
-    memcpy(out + AVS_COAP_MSG_MIN_SIZE,
-           in + AVS_COAP_MSG_MIN_SIZE, token_length);
+    memcpy(out + AVS_COAP_MSG_MIN_SIZE, in + AVS_COAP_MSG_MIN_SIZE,
+           token_length);
 
-    return (ssize_t)(AVS_COAP_MSG_MIN_SIZE + token_length);
+    return (ssize_t) (AVS_COAP_MSG_MIN_SIZE + token_length);
 }
 
 static ssize_t ack_echo(response_state_t *state,
@@ -291,18 +292,19 @@ static ssize_t ack_echo(response_state_t *state,
                         size_t in_size,
                         char *out,
                         size_t out_size) {
-    (void)state;
+    (void) state;
 
     if (out_size < in_size) {
         return -1;
     }
 
     memcpy(out, in, in_size);
-    if (fill_header_with_token_and_id(AVS_COAP_MSG_ACKNOWLEDGEMENT,
-                                      in, in_size, out, out_size) < 0) {
+    if (fill_header_with_token_and_id(AVS_COAP_MSG_ACKNOWLEDGEMENT, in, in_size,
+                                      out, out_size)
+            < 0) {
         return -1;
     }
-    return (ssize_t)in_size;
+    return (ssize_t) in_size;
 }
 
 static ssize_t reset(response_state_t *state,
@@ -310,9 +312,9 @@ static ssize_t reset(response_state_t *state,
                      size_t in_size,
                      char *out,
                      size_t out_size) {
-    (void)state;
-    return fill_header_with_token_and_id(AVS_COAP_MSG_RESET, in, in_size,
-                                         out, out_size);
+    (void) state;
+    return fill_header_with_token_and_id(AVS_COAP_MSG_RESET, in, in_size, out,
+                                         out_size);
 }
 
 static ssize_t mismatched_ack_then_reset(response_state_t *state,
@@ -330,8 +332,8 @@ static ssize_t mismatched_ack_then_reset(response_state_t *state,
             out[3] = (char) ~out[3];
         }
     } else {
-        retval = fill_header_with_token_and_id(AVS_COAP_MSG_RESET,
-                                               in, in_size, out, out_size);
+        retval = fill_header_with_token_and_id(AVS_COAP_MSG_RESET, in, in_size,
+                                               out, out_size);
     }
 
     return retval;
@@ -346,8 +348,8 @@ static ssize_t mismatched_reset_then_ack(response_state_t *state,
 
     ssize_t retval;
     if (mismatched) {
-        retval = fill_header_with_token_and_id(AVS_COAP_MSG_RESET,
-                                               in, in_size, out, out_size);
+        retval = fill_header_with_token_and_id(AVS_COAP_MSG_RESET, in, in_size,
+                                               out, out_size);
         if (retval >= 4) {
             out[2] = (char) ~out[2];
             out[3] = (char) ~out[3];
@@ -359,11 +361,10 @@ static ssize_t mismatched_reset_then_ack(response_state_t *state,
     return retval;
 }
 
-static ssize_t fill_garbage(char *out,
-                            size_t out_size) {
-    ssize_t msg_size = AVS_MIN(1024, (ssize_t)out_size);
+static ssize_t fill_garbage(char *out, size_t out_size) {
+    ssize_t msg_size = AVS_MIN(1024, (ssize_t) out_size);
     for (ssize_t i = 0; i < msg_size; ++i) {
-        out[i] = (char)rand();
+        out[i] = (char) rand();
     }
     return msg_size;
 }
@@ -388,9 +389,9 @@ static ssize_t garbage(response_state_t *state,
                        size_t in_size,
                        char *out,
                        size_t out_size) {
-    (void)state;
-    (void)in;
-    (void)in_size;
+    (void) state;
+    (void) in;
+    (void) in_size;
     return fill_garbage(out, out_size);
 }
 
@@ -417,7 +418,7 @@ static ssize_t long_separate(response_state_t *state,
                              char *out,
                              size_t out_size) {
     static char SAVED_DATA[2048] = { 0 };
-    static avs_coap_msg_t *SAVED_MSG = (avs_coap_msg_t *)SAVED_DATA;
+    static avs_coap_msg_t *SAVED_MSG = (avs_coap_msg_t *) SAVED_DATA;
     assert(in_size < sizeof(SAVED_DATA));
     assert(in_size >= 4);
     assert(out_size >= 4);
@@ -427,7 +428,7 @@ static ssize_t long_separate(response_state_t *state,
     switch (state->response_counter % 3) {
     case 0:
         // empty ACK
-        SAVED_MSG->length = (uint32_t)in_size;
+        SAVED_MSG->length = (uint32_t) in_size;
         memcpy(SAVED_MSG->content, in, in_size);
         state->has_more_responses = true;
         return ack(NULL, in, in_size, out, out_size);
@@ -467,7 +468,8 @@ avs_net_abstract_socket_t *_anjay_test_setup_udp_echo_socket(uint16_t port) {
     return setup_socket(port, echo);
 }
 
-avs_net_abstract_socket_t *_anjay_test_setup_udp_ack_echo_socket(uint16_t port) {
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_ack_echo_socket(uint16_t port) {
     return setup_socket(port, ack_echo);
 }
 
@@ -475,7 +477,8 @@ avs_net_abstract_socket_t *_anjay_test_setup_udp_reset_socket(uint16_t port) {
     return setup_socket(port, reset);
 }
 
-avs_net_abstract_socket_t *_anjay_test_setup_udp_mismatched_ack_then_reset_socket(uint16_t port) {
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_mismatched_ack_then_reset_socket(uint16_t port) {
     return setup_socket(port, mismatched_ack_then_reset);
 }
 
@@ -483,15 +486,18 @@ avs_net_abstract_socket_t *_anjay_test_setup_udp_garbage_socket(uint16_t port) {
     return setup_socket(port, garbage);
 }
 
-avs_net_abstract_socket_t *_anjay_test_setup_udp_mismatched_reset_then_ack_socket(uint16_t port) {
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_mismatched_reset_then_ack_socket(uint16_t port) {
     return setup_socket(port, mismatched_reset_then_ack);
 }
 
-avs_net_abstract_socket_t *_anjay_test_setup_udp_garbage_then_ack_socket(uint16_t port) {
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_garbage_then_ack_socket(uint16_t port) {
     return setup_socket(port, garbage_then_ack);
 }
 
-avs_net_abstract_socket_t *_anjay_test_setup_udp_long_separate_socket(uint16_t port) {
+avs_net_abstract_socket_t *
+_anjay_test_setup_udp_long_separate_socket(uint16_t port) {
     return setup_socket(port, long_separate);
 }
 

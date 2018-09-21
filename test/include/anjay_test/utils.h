@@ -19,7 +19,6 @@
 
 #include <math.h>
 
-#define SCOPED_PTR(Type, Deleter) \
-    __attribute__((__cleanup__(Deleter))) Type *
+#define SCOPED_PTR(Type, Deleter) __attribute__((__cleanup__(Deleter))) Type *
 
 #endif /* ANJAY_TEST_UTILS_H */

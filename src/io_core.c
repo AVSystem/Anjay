@@ -27,8 +27,8 @@
 
 #include "coap/content_format.h"
 
-#include "io_core.h"
 #include "io/vtable.h"
+#include "io_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -109,8 +109,7 @@ uint16_t _anjay_translate_legacy_content_format(uint16_t format) {
 
 #endif // WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 
-int _anjay_handle_requested_format(uint16_t *out_ptr,
-                                   uint16_t new_value) {
+int _anjay_handle_requested_format(uint16_t *out_ptr, uint16_t new_value) {
     if (*out_ptr == AVS_COAP_FORMAT_NONE) {
         *out_ptr = new_value;
     } else if (_anjay_translate_legacy_content_format(*out_ptr) != new_value) {
@@ -208,7 +207,8 @@ int anjay_ret_bool(anjay_output_ctx_t *ctx, bool value) {
 }
 
 int anjay_ret_objlnk(anjay_output_ctx_t *ctx,
-                     anjay_oid_t oid, anjay_iid_t iid) {
+                     anjay_oid_t oid,
+                     anjay_iid_t iid) {
     if (!ctx->vtable->objlnk) {
         set_errno_not_implemented(ctx);
         return -1;
@@ -236,7 +236,7 @@ int anjay_ret_array_finish(anjay_output_ctx_t *array_ctx) {
     return array_ctx->vtable->array_finish(array_ctx);
 }
 
-anjay_output_ctx_t * _anjay_output_object_start(anjay_output_ctx_t *ctx) {
+anjay_output_ctx_t *_anjay_output_object_start(anjay_output_ctx_t *ctx) {
     if (!ctx->vtable->object_start) {
         set_errno_not_implemented(ctx);
         return NULL;
@@ -253,7 +253,8 @@ int _anjay_output_object_finish(anjay_output_ctx_t *ctx) {
 }
 
 int _anjay_output_set_id(anjay_output_ctx_t *ctx,
-                         anjay_id_type_t type, uint16_t id) {
+                         anjay_id_type_t type,
+                         uint16_t id) {
     if (!ctx->vtable->set_id) {
         set_errno_not_implemented(ctx);
         return -1;
@@ -311,7 +312,7 @@ int anjay_get_bytes(anjay_input_ctx_t *ctx,
 }
 
 typedef struct {
-    const avs_stream_v_table_t * const vtable;
+    const avs_stream_v_table_t *const vtable;
     anjay_input_ctx_t *backend;
 } bytes_stream_t;
 
@@ -327,9 +328,8 @@ static int bytes_stream_read(avs_stream_abstract_t *stream,
     anjay_input_ctx_t **backend_ptr = &((bytes_stream_t *) stream)->backend;
     if (*backend_ptr) {
         bool message_finished;
-        int retval = anjay_get_bytes(*backend_ptr,
-                                     out_bytes_read, &message_finished,
-                                     buffer, buffer_length);
+        int retval = anjay_get_bytes(*backend_ptr, out_bytes_read,
+                                     &message_finished, buffer, buffer_length);
         if (!retval && (*out_message_finished = message_finished)) {
             *backend_ptr = NULL;
         }
@@ -345,8 +345,10 @@ static int bytes_stream_close(avs_stream_abstract_t *stream) {
     char buf[256];
     size_t bytes_read;
     char message_finished = 0;
-    while (!bytes_stream_read(stream, &bytes_read, &message_finished,
-                              buf, sizeof(buf)) && !message_finished);
+    while (!bytes_stream_read(stream, &bytes_read, &message_finished, buf,
+                              sizeof(buf))
+           && !message_finished)
+        ;
     return 0;
 }
 
@@ -412,7 +414,8 @@ int anjay_get_bool(anjay_input_ctx_t *ctx, bool *out) {
 }
 
 int anjay_get_objlnk(anjay_input_ctx_t *ctx,
-                     anjay_oid_t *out_oid, anjay_iid_t *out_iid) {
+                     anjay_oid_t *out_oid,
+                     anjay_iid_t *out_iid) {
     if (!ctx->vtable->objlnk) {
         return -1;
     }
@@ -449,7 +452,8 @@ anjay_input_ctx_t *anjay_get_array(anjay_input_ctx_t *ctx) {
 }
 
 int _anjay_input_get_id(anjay_input_ctx_t *ctx,
-                        anjay_id_type_t *out_type, uint16_t *out_id) {
+                        anjay_id_type_t *out_type,
+                        uint16_t *out_id) {
     if (!ctx->vtable->get_id) {
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -487,5 +491,5 @@ int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr) {
 }
 
 #ifdef ANJAY_TEST
-#include "test/io.c"
+#    include "test/io.c"
 #endif

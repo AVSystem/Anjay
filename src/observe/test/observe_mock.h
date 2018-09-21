@@ -20,7 +20,8 @@
 #include <avsystem/commons/unit/mock_helpers.h>
 
 AVS_UNIT_MOCK_CREATE(_anjay_dm_find_object_by_oid)
-#define _anjay_dm_find_object_by_oid(...) AVS_UNIT_MOCK_WRAPPER(_anjay_dm_find_object_by_oid)(__VA_ARGS__)
+#define _anjay_dm_find_object_by_oid(...) \
+    AVS_UNIT_MOCK_WRAPPER(_anjay_dm_find_object_by_oid)(__VA_ARGS__)
 
 AVS_UNIT_MOCK_CREATE(notify_entry)
 #define notify_entry(...) AVS_UNIT_MOCK_WRAPPER(notify_entry)(__VA_ARGS__)

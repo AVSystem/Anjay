@@ -37,64 +37,61 @@ PYBIND11_MODULE(pymbedtls, m) {
     using namespace ssl;
 
     py::class_<SecurityInfo, shared_ptr<SecurityInfo>>(m, "SecurityInfo")
-        .def("name", &SecurityInfo::name)
-    ;
+            .def("name", &SecurityInfo::name);
 
-    py::class_<PskSecurity, SecurityInfo, shared_ptr<PskSecurity>>(m, "PskSecurity")
-        .def(py::init<const string &, const string &>(),
-             py::arg("key"),
-             py::arg("identity"))
-    ;
+    py::class_<PskSecurity, SecurityInfo, shared_ptr<PskSecurity>>(
+            m, "PskSecurity")
+            .def(py::init<const string &, const string &>(),
+                 py::arg("key"),
+                 py::arg("identity"));
 
-    py::class_<CertSecurity, SecurityInfo, shared_ptr<CertSecurity>>(m, "CertSecurity")
-        .def(py::init<const char *, const char *, const char *, const char *>(),
-             py::arg("ca_path"),
-             py::arg("ca_file"),
-             py::arg("crt_file"),
-             py::arg("key_file"))
-    ;
+    py::class_<CertSecurity, SecurityInfo, shared_ptr<CertSecurity>>(
+            m, "CertSecurity")
+            .def(py::init<const char *, const char *, const char *,
+                          const char *>(),
+                 py::arg("ca_path"),
+                 py::arg("ca_file"),
+                 py::arg("crt_file"),
+                 py::arg("key_file"));
 
     py::class_<Context, shared_ptr<Context>>(m, "Context")
-        .def(py::init<shared_ptr<SecurityInfo>, bool>(),
-             py::arg("security"),
-             py::arg("debug") = false)
-    ;
+            .def(py::init<shared_ptr<SecurityInfo>, bool>(),
+                 py::arg("security"),
+                 py::arg("debug") = false);
 
     py::class_<ServerSocket>(m, "ServerSocket")
-        .def(py::init<shared_ptr<Context>, py::object>(),
-             py::arg("context"),
-             py::arg("socket"))
-        .def("accept", &ServerSocket::accept,
-             py::arg("handshake_timeouts_s") = py::none())
-        .def("__getattr__", &ServerSocket::__getattr__)
-        .def("__setattr__", &ServerSocket::__setattr__)
-    ;
+            .def(py::init<shared_ptr<Context>, py::object>(),
+                 py::arg("context"),
+                 py::arg("socket"))
+            .def("accept", &ServerSocket::accept,
+                 py::arg("handshake_timeouts_s") = py::none())
+            .def("__getattr__", &ServerSocket::__getattr__)
+            .def("__setattr__", &ServerSocket::__setattr__);
 
-    auto socket_scope = py::class_<Socket>(m, "Socket")
-        .def(py::init<shared_ptr<Context>, py::object, SocketType>(),
-             py::arg("context"),
-             py::arg("socket"),
-             py::arg("socket_type"))
-        .def("connect", &Socket::connect,
-             py::arg("address_port"),
-             py::arg("handshake_timeouts_s") = py::none())
-        .def("send", &Socket::send)
-        .def("sendall", &Socket::send)
-        .def("sendto", &method_unimplemented<string, py::object>)
-        .def("recv", &Socket::recv)
-        .def("recv_into", &method_unimplemented<py::object>)
-        .def("recvfrom", &method_unimplemented<int>)
-        .def("recvfrom_into", &method_unimplemented<py::object>)
-        .def("settimeout", &Socket::settimeout)
-        .def("__getattr__", &Socket::__getattr__)
-        .def("__setattr__", &Socket::__setattr__)
-    ;
+    auto socket_scope =
+            py::class_<Socket>(m, "Socket")
+                    .def(py::init<shared_ptr<Context>, py::object,
+                                  SocketType>(),
+                         py::arg("context"),
+                         py::arg("socket"),
+                         py::arg("socket_type"))
+                    .def("connect", &Socket::connect, py::arg("address_port"),
+                         py::arg("handshake_timeouts_s") = py::none())
+                    .def("send", &Socket::send)
+                    .def("sendall", &Socket::send)
+                    .def("sendto", &method_unimplemented<string, py::object>)
+                    .def("recv", &Socket::recv)
+                    .def("recv_into", &method_unimplemented<py::object>)
+                    .def("recvfrom", &method_unimplemented<int>)
+                    .def("recvfrom_into", &method_unimplemented<py::object>)
+                    .def("settimeout", &Socket::settimeout)
+                    .def("__getattr__", &Socket::__getattr__)
+                    .def("__setattr__", &Socket::__setattr__);
 
     py::enum_<SocketType>(socket_scope, "Type")
-        .value("Client", SocketType::Client)
-        .value("Server", SocketType::Server)
-        .export_values()
-    ;
+            .value("Client", SocketType::Client)
+            .value("Server", SocketType::Server)
+            .export_values();
     // most verbose logs available
     mbedtls_debug_set_threshold(4);
 }

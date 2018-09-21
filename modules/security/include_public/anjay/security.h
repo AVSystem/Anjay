@@ -81,10 +81,10 @@ typedef struct {
  * @return 0 on success, negative value in case of an error or if the instance
  * of specified id already exists.
  */
-int anjay_security_object_add_instance(anjay_t *anjay,
-                                       const anjay_security_instance_t *instance,
-                                       anjay_iid_t *inout_iid);
-
+int anjay_security_object_add_instance(
+        anjay_t *anjay,
+        const anjay_security_instance_t *instance,
+        anjay_iid_t *inout_iid);
 
 /**
  * Purges instances of Security Object leaving it in an empty state.

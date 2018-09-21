@@ -39,8 +39,7 @@ int _anjay_copy_string_list(AVS_LIST(const anjay_string_t) *outptr,
                             AVS_LIST(const anjay_string_t) input);
 
 AVS_LIST(const anjay_string_t)
-_anjay_make_string_list(const char *string,
-                        ... /* strings */) AVS_F_SENTINEL;
+_anjay_make_string_list(const char *string, ... /* strings */) AVS_F_SENTINEL;
 
 // Const pointer cast is to ensure, that passed NULL will have the proper type,
 // regardless of toolchain used
@@ -78,12 +77,12 @@ int _anjay_bind_and_connect_socket(avs_net_abstract_socket_t *socket,
                                    const char *remote_host,
                                    const char *remote_port);
 
-int
-_anjay_create_connected_udp_socket(avs_net_abstract_socket_t **out,
-                                   avs_net_socket_type_t type,
-                                   const void *socket_config,
-                                   const anjay_socket_bind_config_t *bind_conf,
-                                   const anjay_url_t *uri);
+int _anjay_create_connected_udp_socket(
+        avs_net_abstract_socket_t **out,
+        avs_net_socket_type_t type,
+        const void *socket_config,
+        const anjay_socket_bind_config_t *bind_conf,
+        const anjay_url_t *uri);
 
 static inline size_t _anjay_max_power_of_2_not_greater_than(size_t bound) {
     int exponent = -1;

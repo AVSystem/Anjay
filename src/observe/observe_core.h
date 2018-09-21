@@ -88,13 +88,11 @@ int _anjay_observe_put_entry(anjay_t *anjay,
 void _anjay_observe_remove_entry(anjay_t *anjay,
                                  const anjay_observe_key_t *key);
 
-void _anjay_observe_remove_by_msg_id(anjay_t *anjay,
-                                     uint16_t notify_id);
+void _anjay_observe_remove_by_msg_id(anjay_t *anjay, uint16_t notify_id);
 
 int _anjay_observe_sched_flush_current_connection(anjay_t *anjay);
 
-int _anjay_observe_sched_flush(anjay_t *anjay,
-                               anjay_connection_key_t key);
+int _anjay_observe_sched_flush(anjay_t *anjay, anjay_connection_key_t key);
 
 int _anjay_observe_notify(anjay_t *anjay,
                           const anjay_observe_key_t *origin_key,
@@ -106,16 +104,15 @@ anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
 
 #else // WITH_OBSERVE
 
-#define _anjay_observe_init(...) 0
-#define _anjay_observe_cleanup(...) ((void) 0)
-#define _anjay_observe_sched_flush_current_connection(...) 0
-#define _anjay_observe_sched_flush(...) 0
-#define _anjay_observe_persist(...) 0
-#define _anjay_observe_restore(...) 0
+#    define _anjay_observe_init(...) 0
+#    define _anjay_observe_cleanup(...) ((void) 0)
+#    define _anjay_observe_sched_flush_current_connection(...) 0
+#    define _anjay_observe_sched_flush(...) 0
+#    define _anjay_observe_persist(...) 0
+#    define _anjay_observe_restore(...) 0
 
 #endif // WITH_OBSERVE
 
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_OBSERVE_CORE_H */
-

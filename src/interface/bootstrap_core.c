@@ -18,20 +18,20 @@
 
 #include <inttypes.h>
 
-#include <anjay_modules/notify.h>
 #include <anjay_modules/interface/bootstrap.h>
+#include <anjay_modules/notify.h>
 #include <anjay_modules/time_defs.h>
 
-#include "bootstrap_core.h"
-#include "../servers_utils.h"
-#include "../coap/content_format.h"
 #include "../anjay_core.h"
-#include "../io_core.h"
+#include "../coap/content_format.h"
 #include "../dm/discover.h"
 #include "../dm/query.h"
+#include "../io_core.h"
+#include "../servers_utils.h"
+#include "bootstrap_core.h"
 
 #ifdef ANJAY_TEST
-#include "test/bootstrap_mock.h"
+#    include "test/bootstrap_mock.h"
 #endif // ANJAY_TEST
 
 VISIBILITY_SOURCE_BEGIN
@@ -44,7 +44,8 @@ static void cancel_client_initiated_bootstrap(anjay_t *anjay) {
 static int suspend_nonbootstrap_server(anjay_t *anjay,
                                        anjay_server_info_t *server,
                                        void *data) {
-    (void) anjay; (void) data;
+    (void) anjay;
+    (void) data;
     if (_anjay_server_ssid(server) != ANJAY_SSID_BOOTSTRAP) {
         anjay_connection_ref_t ref = {
             .server = server,
@@ -119,20 +120,26 @@ static void bootstrap_remove_notify_changed(anjay_t *anjay,
 
 static uint8_t make_success_response_code(anjay_request_action_t action) {
     switch (action) {
-    case ANJAY_ACTION_WRITE:            return AVS_COAP_CODE_CHANGED;
-    case ANJAY_ACTION_DELETE:           return AVS_COAP_CODE_DELETED;
-    case ANJAY_ACTION_DISCOVER:         return AVS_COAP_CODE_CONTENT;
-    case ANJAY_ACTION_BOOTSTRAP_FINISH: return AVS_COAP_CODE_CHANGED;
-    default:                            break;
+    case ANJAY_ACTION_WRITE:
+        return AVS_COAP_CODE_CHANGED;
+    case ANJAY_ACTION_DELETE:
+        return AVS_COAP_CODE_DELETED;
+    case ANJAY_ACTION_DISCOVER:
+        return AVS_COAP_CODE_CONTENT;
+    case ANJAY_ACTION_BOOTSTRAP_FINISH:
+        return AVS_COAP_CODE_CHANGED;
+    default:
+        break;
     }
-    return (uint8_t)(-ANJAY_ERR_INTERNAL);
+    return (uint8_t) (-ANJAY_ERR_INTERNAL);
 }
 
-typedef int with_instance_on_demand_cb_t(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj,
-                                         anjay_iid_t iid,
-                                         anjay_input_ctx_t *in_ctx,
-                                         void *arg);
+typedef int
+with_instance_on_demand_cb_t(anjay_t *anjay,
+                             const anjay_dm_object_def_t *const *obj,
+                             anjay_iid_t iid,
+                             anjay_input_ctx_t *in_ctx,
+                             void *arg);
 
 static int write_resource(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj,
@@ -166,15 +173,15 @@ static int write_instance_inner(anjay_t *anjay,
         }
         retval = write_resource(anjay, obj, iid, in_ctx,
                                 (void *) (uintptr_t) id);
-        if (!retval
-                || retval == ANJAY_ERR_NOT_FOUND
+        if (!retval || retval == ANJAY_ERR_NOT_FOUND
                 || retval == ANJAY_ERR_NOT_IMPLEMENTED) {
             // LwM2M spec, 5.2.7.1 BOOTSTRAP WRITE:
             // "When the 'Write' operation targets an Object or an Object
             // Instance, the LwM2M Client MUST ignore optional resources it does
             // not support in the payload." - so, continue on these errors.
             if (retval) {
-                anjay_log(WARNING, "Ignoring error during BOOTSTRAP WRITE to "
+                anjay_log(WARNING,
+                          "Ignoring error during BOOTSTRAP WRITE to "
                           "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 ": %d",
                           (*obj)->oid, iid, id, retval);
             }
@@ -202,13 +209,15 @@ static int with_instance_on_demand(anjay_t *anjay,
         result = _anjay_dm_instance_create(anjay, obj, &new_iid,
                                            ANJAY_SSID_BOOTSTRAP, NULL);
         if (result) {
-            anjay_log(DEBUG, "Instance Create handler for object %" PRIu16
-                             " failed", (*obj)->oid);
+            anjay_log(DEBUG,
+                      "Instance Create handler for object %" PRIu16 " failed",
+                      (*obj)->oid);
             return result;
         } else if (iid != new_iid) {
-            anjay_log(DEBUG, "Instance Create handler for object %" PRIu16
-                             " returned Instance %" PRIu16 " while %" PRIu16
-                             " was expected;",
+            anjay_log(DEBUG,
+                      "Instance Create handler for object %" PRIu16
+                      " returned Instance %" PRIu16 " while %" PRIu16
+                      " was expected;",
                       (*obj)->oid, new_iid, iid);
             result = ANJAY_ERR_INTERNAL;
         }
@@ -255,10 +264,11 @@ static int write_object(anjay_t *anjay,
     return (retval == ANJAY_GET_INDEX_END) ? 0 : retval;
 }
 
-static int security_object_valid_handler(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj,
-                                         anjay_iid_t iid,
-                                         void *bootstrap_instances) {
+static int
+security_object_valid_handler(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj,
+                              anjay_iid_t iid,
+                              void *bootstrap_instances) {
     (void) obj;
     if (!_anjay_is_bootstrap_security_instance(anjay, iid)) {
         return 0;
@@ -327,7 +337,8 @@ static int append_iid(anjay_t *anjay,
                       const anjay_dm_object_def_t *const *obj,
                       anjay_iid_t iid,
                       void *iids_append_ptr_) {
-    (void) anjay; (void) obj;
+    (void) anjay;
+    (void) obj;
     AVS_LIST(anjay_iid_t) **iids_append_ptr =
             (AVS_LIST(anjay_iid_t) **) iids_append_ptr_;
     AVS_LIST(anjay_iid_t) new_element = AVS_LIST_NEW_ELEMENT(anjay_iid_t);
@@ -392,8 +403,7 @@ static int delete_object(anjay_t *anjay,
     return 0;
 }
 
-static int bootstrap_delete(anjay_t *anjay,
-                            const anjay_request_t *request) {
+static int bootstrap_delete(anjay_t *anjay, const anjay_request_t *request) {
     anjay_log(DEBUG, "Bootstrap Delete %s",
               ANJAY_DEBUG_MAKE_PATH(&request->uri));
     cancel_client_initiated_bootstrap(anjay);
@@ -435,8 +445,7 @@ static int bootstrap_delete(anjay_t *anjay,
 }
 
 #ifdef WITH_DISCOVER
-static int bootstrap_discover(anjay_t *anjay,
-                              const anjay_request_t *request) {
+static int bootstrap_discover(anjay_t *anjay, const anjay_request_t *request) {
     if (_anjay_uri_path_has_iid(&request->uri)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -452,10 +461,10 @@ static int bootstrap_discover(anjay_t *anjay,
     return _anjay_bootstrap_discover(anjay);
 }
 #else // WITH_DISCOVER
-#define bootstrap_discover(anjay, details) \
+#    define bootstrap_discover(anjay, details)                    \
         (anjay_log(ERROR, "Not supported: Bootstrap Discover %s", \
-                   ANJAY_DEBUG_MAKE_PATH(&details->uri)), \
-                   ANJAY_ERR_NOT_IMPLEMENTED)
+                   ANJAY_DEBUG_MAKE_PATH(&details->uri)),         \
+         ANJAY_ERR_NOT_IMPLEMENTED)
 #endif // WITH_DISCOVER
 
 static void purge_bootstrap(anjay_t *anjay, const void *dummy) {
@@ -473,7 +482,7 @@ static void purge_bootstrap(anjay_t *anjay, const void *dummy) {
         anjay_notify_queue_t notification = NULL;
         (void) ((retval = _anjay_dm_instance_remove(anjay, obj, iid, NULL))
                 || (retval = _anjay_notify_queue_instance_removed(
-                        &notification, (*obj)->oid, iid))
+                            &notification, (*obj)->oid, iid))
                 || (retval = _anjay_notify_flush(anjay, &notification)));
         retval = _anjay_dm_transaction_finish(anjay, retval);
     }
@@ -501,12 +510,15 @@ static int schedule_bootstrap_timeout(anjay_t *anjay) {
         /* This function is called on each Bootstrap Finish -- i.e. we might
          * have already scheduled a purge. For this reason, we need to release
          * the purge job handle first. */
-        _anjay_sched_del(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle);
+        _anjay_sched_del(anjay->sched,
+                         &anjay->bootstrap.purge_bootstrap_handle);
         if (_anjay_sched(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle,
                          avs_time_duration_from_scalar(timeout, AVS_TIME_S),
                          purge_bootstrap, NULL, 0)) {
-            anjay_log(ERROR, "Could not schedule purge of "
-                             "Bootstrap Server Account %" PRIu16, iid);
+            anjay_log(ERROR,
+                      "Could not schedule purge of "
+                      "Bootstrap Server Account %" PRIu16,
+                      iid);
             return -1;
         }
     }
@@ -583,8 +595,7 @@ int _anjay_bootstrap_object_write(anjay_t *anjay,
     return bootstrap_write(anjay, &uri, in_ctx);
 }
 
-static int invoke_action(anjay_t *anjay,
-                         const anjay_request_t *request) {
+static int invoke_action(anjay_t *anjay, const anjay_request_t *request) {
     anjay_input_ctx_t *in_ctx = NULL;
     const uint16_t format =
             _anjay_translate_legacy_content_format(request->content_format);
@@ -597,7 +608,8 @@ static int invoke_action(anjay_t *anjay,
             return result;
         }
 
-        if (format == ANJAY_COAP_FORMAT_TLV && _anjay_uri_path_has_rid(&request->uri)) {
+        if (format == ANJAY_COAP_FORMAT_TLV
+                && _anjay_uri_path_has_rid(&request->uri)) {
             result = _anjay_dm_check_if_tlv_rid_matches_uri_rid(
                     in_ctx, request->uri.rid);
         }
@@ -631,8 +643,8 @@ int _anjay_bootstrap_perform_action(anjay_t *anjay,
                           : AVS_COAP_FORMAT_NONE
     };
 
-    int result = _anjay_coap_stream_setup_response(anjay->comm_stream,
-                                                   &msg_details);
+    int result =
+            _anjay_coap_stream_setup_response(anjay->comm_stream, &msg_details);
     if (result) {
         return result;
     }
@@ -671,12 +683,11 @@ static int send_request_bootstrap(anjay_t *anjay) {
     if (_anjay_copy_string_list(&details.uri_path, server_uri->uri_path)
             || _anjay_copy_string_list(&details.uri_query,
                                        server_uri->uri_query)
-            || !AVS_LIST_APPEND(&details.uri_path,
-                                ANJAY_MAKE_STRING_LIST("bs"))
-            || !AVS_LIST_APPEND(&details.uri_query,
-                                _anjay_make_query_string_list(
-                                        NULL, anjay->endpoint_name, NULL, NULL,
-                                        NULL))) {
+            || !AVS_LIST_APPEND(&details.uri_path, ANJAY_MAKE_STRING_LIST("bs"))
+            || !AVS_LIST_APPEND(
+                       &details.uri_query,
+                       _anjay_make_query_string_list(NULL, anjay->endpoint_name,
+                                                     NULL, NULL, NULL))) {
         anjay_log(ERROR, "could not initialize request headers");
         goto cleanup;
     }
@@ -684,8 +695,8 @@ static int send_request_bootstrap(anjay_t *anjay) {
     if ((result = _anjay_coap_stream_setup_request(anjay->comm_stream, &details,
                                                    NULL))
             || (result = avs_stream_finish_message(anjay->comm_stream))
-            || (result = check_request_bootstrap_response(
-                    anjay->comm_stream))) {
+            || (result =
+                        check_request_bootstrap_response(anjay->comm_stream))) {
         anjay_log(ERROR, "could not request bootstrap");
     } else {
         anjay_log(INFO, "Request Bootstrap sent");
@@ -703,11 +714,11 @@ static void request_bootstrap(anjay_t *anjay, const void *dummy);
 static int schedule_request_bootstrap(anjay_t *anjay) {
     avs_time_monotonic_t now = avs_time_monotonic_now();
     if (!avs_time_monotonic_valid(
-            anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
+                anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
         anjay->bootstrap.client_initiated_bootstrap_last_attempt = now;
     }
     if (!avs_time_duration_valid(
-            anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
+                anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
         anjay->bootstrap.client_initiated_bootstrap_holdoff =
                 AVS_TIME_DURATION_ZERO;
     }
@@ -732,10 +743,12 @@ static int schedule_request_bootstrap(anjay_t *anjay) {
     anjay->bootstrap.client_initiated_bootstrap_holdoff = avs_time_duration_mul(
             anjay->bootstrap.client_initiated_bootstrap_holdoff, 2);
     if (avs_time_duration_less(
-            anjay->bootstrap.client_initiated_bootstrap_holdoff, MIN_HOLDOFF)) {
+                anjay->bootstrap.client_initiated_bootstrap_holdoff,
+                MIN_HOLDOFF)) {
         anjay->bootstrap.client_initiated_bootstrap_holdoff = MIN_HOLDOFF;
     } else if (avs_time_duration_less(
-            MAX_HOLDOFF, anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
+                       MAX_HOLDOFF,
+                       anjay->bootstrap.client_initiated_bootstrap_holdoff)) {
         anjay->bootstrap.client_initiated_bootstrap_holdoff = MAX_HOLDOFF;
     }
     return 0;
@@ -751,9 +764,7 @@ static int find_connected_non_bootstrap(anjay_t *anjay,
     anjay_connection_ref_t ref = {
         .server = server
     };
-    for (ref.conn_type = ANJAY_CONNECTION_FIRST_VALID_;
-            ref.conn_type < ANJAY_CONNECTION_LIMIT_;
-            ref.conn_type = (anjay_connection_type_t) (ref.conn_type + 1)) {
+    ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
         if (_anjay_connection_get_online_socket(ref)) {
             *(bool *) flag_ptr = true;
             return ANJAY_FOREACH_BREAK;
@@ -787,13 +798,15 @@ static void request_bootstrap(anjay_t *anjay, const void *dummy) {
     anjay_server_info_t *server =
             _anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP);
     anjay_connection_ref_t connection;
-    if (!server || _anjay_server_setup_primary_connection(server)) {
+    if (!server) {
         goto finish;
     }
     connection.server = server;
     connection.conn_type = _anjay_server_primary_conn_type(server);
-    if (!connection.server
-            || _anjay_bind_server_stream(anjay, connection)) {
+    if (connection.conn_type == ANJAY_CONNECTION_UNSET) {
+        goto finish;
+    }
+    if (_anjay_bind_server_stream(anjay, connection)) {
         anjay_log(ERROR, "could not get stream for bootstrap server");
         goto finish;
     }
@@ -842,7 +855,7 @@ int _anjay_bootstrap_account_prepare(anjay_t *anjay) {
     }
 
     if (!avs_time_monotonic_valid(
-            anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
+                anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
         int64_t holdoff_s = client_hold_off_time_s(anjay);
         if (holdoff_s < 0) {
             anjay_log(INFO, "Client Hold Off Time not set or invalid, "
@@ -882,5 +895,5 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay) {
 }
 
 #ifdef ANJAY_TEST
-#include "test/bootstrap.c"
+#    include "test/bootstrap.c"
 #endif // ANJAY_TEST

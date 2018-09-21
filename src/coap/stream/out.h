@@ -17,29 +17,29 @@
 #ifndef SRC_COAP_STREAM_OUT_H
 #define SRC_COAP_STREAM_OUT_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include <avsystem/commons/coap/block_utils.h>
+#include <avsystem/commons/coap/ctx.h>
 #include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/coap/msg_builder.h>
-#include <avsystem/commons/coap/ctx.h>
 
 #include "../coap_stream.h"
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
-#error "Headers from coap/stream are not meant to be included from outside"
+#    error "Headers from coap/stream are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef enum msg_state {
-    MSG_STATE_RESET        = 0,
-    MSG_STATE_HAS_DETAILS  = (1 << 0),
-    MSG_STATE_HAS_ID       = (1 << 1),
-    MSG_STATE_HAS_TOKEN    = (1 << 2),
+    MSG_STATE_RESET = 0,
+    MSG_STATE_HAS_DETAILS = (1 << 0),
+    MSG_STATE_HAS_ID = (1 << 1),
+    MSG_STATE_HAS_TOKEN = (1 << 2),
     MSG_STATE_HAS_IDENTITY = MSG_STATE_HAS_ID | MSG_STATE_HAS_TOKEN,
-    MSG_STATE_FINISHED     = (1 << 3),
+    MSG_STATE_FINISHED = (1 << 3),
 
     _MSG_STATE_MASK = (1 << 4) - 1
 } msg_state_t;

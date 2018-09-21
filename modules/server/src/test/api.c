@@ -30,8 +30,7 @@ typedef struct {
     SCOPED_PTR(server_test_env_t, server_test_env_destroy) \
     Name = server_test_env_create();
 
-static server_test_env_t *
-server_test_env_create(void) {
+static server_test_env_t *server_test_env_create(void) {
     server_test_env_t *env = (__typeof__(env)) avs_calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
     env->anjay = anjay_new(&CONFIG);

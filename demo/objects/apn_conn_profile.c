@@ -14,35 +14,35 @@
  * limitations under the License.
  */
 
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
 
-#define APNCP_RES_PROFILE_NAME 0                            // string
-#define APNCP_RES_APN 1                                     // string
-#define APNCP_RES_AUTO_SELECT_APN_BY_DEVICE 2               // bool
-#define APNCP_RES_ENABLE_STATUS 3                           // bool
-#define APNCP_RES_AUTHENTICATION_TYPE 4                     // int
-#define APNCP_RES_USER_NAME 5                               // string
-#define APNCP_RES_SECRET 6                                  // string
-#define APNCP_RES_RECONNECT_SCHEDULE 7                      // string
-#define APNCP_RES_VALIDITY 8                                // string
-#define APNCP_RES_CONNECTION_ESTABLISHMENT_TIME 9           // time
-#define APNCP_RES_CONNECTION_ESTABLISHMENT_RESULT 10        // int
-#define APNCP_RES_CONNECTION_ESTABLISHMENT_REJECT_CAUSE 11  // int[0:111]
-#define APNCP_RES_CONNECTION_END_TIME 12                    // time
-#define APNCP_RES_TOTAL_BYTES_SENT 13                       // int
-#define APNCP_RES_TOTAL_BYTES_RECEIVED 14                   // int
-#define APNCP_RES_IP_ADDRESS 15                             // string
-#define APNCP_RES_PREFIX_LENGTH 16                          // string
-#define APNCP_RES_SUBNET_MASK 17                            // string
-#define APNCP_RES_GATEWAY 18                                // string
-#define APNCP_RES_PRIMARY_DNS_ADDRESS 19                    // string
-#define APNCP_RES_SECONDARY_DNS_ADDRESS 20                  // string
-#define APNCP_RES_QCI 21                                    // int[1:9]
-#define APNCP_RES_VENDOR_SPECIFIC_EXTENSIONS 22             // objlnk
+#define APNCP_RES_PROFILE_NAME 0                           // string
+#define APNCP_RES_APN 1                                    // string
+#define APNCP_RES_AUTO_SELECT_APN_BY_DEVICE 2              // bool
+#define APNCP_RES_ENABLE_STATUS 3                          // bool
+#define APNCP_RES_AUTHENTICATION_TYPE 4                    // int
+#define APNCP_RES_USER_NAME 5                              // string
+#define APNCP_RES_SECRET 6                                 // string
+#define APNCP_RES_RECONNECT_SCHEDULE 7                     // string
+#define APNCP_RES_VALIDITY 8                               // string
+#define APNCP_RES_CONNECTION_ESTABLISHMENT_TIME 9          // time
+#define APNCP_RES_CONNECTION_ESTABLISHMENT_RESULT 10       // int
+#define APNCP_RES_CONNECTION_ESTABLISHMENT_REJECT_CAUSE 11 // int[0:111]
+#define APNCP_RES_CONNECTION_END_TIME 12                   // time
+#define APNCP_RES_TOTAL_BYTES_SENT 13                      // int
+#define APNCP_RES_TOTAL_BYTES_RECEIVED 14                  // int
+#define APNCP_RES_IP_ADDRESS 15                            // string
+#define APNCP_RES_PREFIX_LENGTH 16                         // string
+#define APNCP_RES_SUBNET_MASK 17                           // string
+#define APNCP_RES_GATEWAY 18                               // string
+#define APNCP_RES_PRIMARY_DNS_ADDRESS 19                   // string
+#define APNCP_RES_SECONDARY_DNS_ADDRESS 20                 // string
+#define APNCP_RES_QCI 21                                   // int[1:9]
+#define APNCP_RES_VENDOR_SPECIFIC_EXTENSIONS 22            // objlnk
 
 typedef enum {
     AUTH_PAP = 0,
@@ -91,9 +91,9 @@ static int apncp_instance_it(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr,
                              anjay_iid_t *out,
                              void **cookie) {
-    (void)anjay;
+    (void) anjay;
 
-    AVS_LIST(apn_conn_profile_t) inst = (AVS_LIST(apn_conn_profile_t))*cookie;
+    AVS_LIST(apn_conn_profile_t) inst = (AVS_LIST(apn_conn_profile_t)) *cookie;
 
     if (!inst) {
         inst = get_apncp(obj_ptr)->instances;
@@ -109,7 +109,7 @@ static int apncp_instance_it(anjay_t *anjay,
 static int apncp_instance_present(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_iid_t iid) {
-    (void)anjay;
+    (void) anjay;
     return find_instance(get_apncp(obj_ptr), iid) != NULL;
 }
 
@@ -132,7 +132,7 @@ static int apncp_instance_create(anjay_t *anjay,
                                  anjay_ssid_t ssid) {
     (void) anjay;
     (void) ssid;
-    apn_conn_profile_repr_t* repr = get_apncp(obj_ptr);
+    apn_conn_profile_repr_t *repr = get_apncp(obj_ptr);
 
     AVS_LIST(apn_conn_profile_t) created =
             AVS_LIST_NEW_ELEMENT(apn_conn_profile_t);
@@ -164,8 +164,8 @@ static int apncp_instance_create(anjay_t *anjay,
 static int apncp_instance_remove(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
                                  anjay_iid_t iid) {
-    (void)anjay;
-    apn_conn_profile_repr_t *repr  = get_apncp(obj_ptr);
+    (void) anjay;
+    apn_conn_profile_repr_t *repr = get_apncp(obj_ptr);
 
     AVS_LIST(apn_conn_profile_t) *it;
     AVS_LIST_FOREACH_PTR(it, &repr->instances) {
@@ -184,7 +184,9 @@ static int apncp_resource_read(anjay_t *anjay,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
                                anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) obj_ptr; (void) iid;
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
 
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
     assert(inst);
@@ -206,44 +208,44 @@ static int apncp_resource_write(anjay_t *anjay,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
                                 anjay_input_ctx_t *ctx) {
-    (void) anjay; (void) obj_ptr; (void) iid;
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
 
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
     assert(inst);
 
     switch (rid) {
-    case APNCP_RES_PROFILE_NAME:
-        {
-            char buf[sizeof(inst->profile_name)];
-            if (anjay_get_string(ctx, buf, sizeof(buf)) < 0) {
-                return ANJAY_ERR_INTERNAL;
-            }
-
-            ssize_t result = snprintf(inst->profile_name,
-                                      sizeof(inst->profile_name), "%s", buf);
-            if (result < 0 || result >= (ssize_t)sizeof(inst->profile_name)) {
-                return ANJAY_ERR_INTERNAL;
-            }
-            inst->has_profile_name = true;
-            return 0;
+    case APNCP_RES_PROFILE_NAME: {
+        char buf[sizeof(inst->profile_name)];
+        if (anjay_get_string(ctx, buf, sizeof(buf)) < 0) {
+            return ANJAY_ERR_INTERNAL;
         }
+
+        ssize_t result = snprintf(inst->profile_name,
+                                  sizeof(inst->profile_name), "%s", buf);
+        if (result < 0 || result >= (ssize_t) sizeof(inst->profile_name)) {
+            return ANJAY_ERR_INTERNAL;
+        }
+        inst->has_profile_name = true;
+        return 0;
+    }
     case APNCP_RES_ENABLE_STATUS:
         return anjay_get_bool(ctx, &inst->enabled);
-    case APNCP_RES_AUTHENTICATION_TYPE:
-        {
-            int new_val = 0;
-            if (anjay_get_i32(ctx, &new_val)) {
-                return ANJAY_ERR_INTERNAL;
-            }
-
-            if (new_val < 0 || new_val >= AUTH_END_) {
-                return ANJAY_ERR_BAD_REQUEST;
-            }
-
-            inst->auth_type = (apn_auth_type_t)new_val;
-            inst->has_auth_type = true;
-            return 0;
+    case APNCP_RES_AUTHENTICATION_TYPE: {
+        int new_val = 0;
+        if (anjay_get_i32(ctx, &new_val)) {
+            return ANJAY_ERR_INTERNAL;
         }
+
+        if (new_val < 0 || new_val >= AUTH_END_) {
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+
+        inst->auth_type = (apn_auth_type_t) new_val;
+        inst->has_auth_type = true;
+        return 0;
+    }
     default:
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -297,10 +299,9 @@ apncp_transaction_rollback(anjay_t *anjay,
     return 0;
 }
 
-static int
-apncp_instance_reset(anjay_t *anjay,
-                     const anjay_dm_object_def_t *const *obj_ptr,
-                     anjay_iid_t iid) {
+static int apncp_instance_reset(anjay_t *anjay,
+                                const anjay_dm_object_def_t *const *obj_ptr,
+                                anjay_iid_t iid) {
     (void) anjay;
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
     AVS_ASSERT(inst, "could not find instance");
@@ -312,10 +313,9 @@ apncp_instance_reset(anjay_t *anjay,
 
 static const anjay_dm_object_def_t apn_conn_profile = {
     .oid = DEMO_OID_APN_CONN_PROFILE,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            APNCP_RES_PROFILE_NAME,
-            APNCP_RES_ENABLE_STATUS,
-            APNCP_RES_AUTHENTICATION_TYPE),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(APNCP_RES_PROFILE_NAME,
+                                              APNCP_RES_ENABLE_STATUS,
+                                              APNCP_RES_AUTHENTICATION_TYPE),
     .handlers = {
         .instance_it = apncp_instance_it,
         .instance_present = apncp_instance_present,
@@ -333,8 +333,8 @@ static const anjay_dm_object_def_t apn_conn_profile = {
 };
 
 const anjay_dm_object_def_t **apn_conn_profile_object_create(void) {
-    apn_conn_profile_repr_t *repr = (apn_conn_profile_repr_t *)
-            avs_calloc(1, sizeof(apn_conn_profile_repr_t));
+    apn_conn_profile_repr_t *repr = (apn_conn_profile_repr_t *) avs_calloc(
+            1, sizeof(apn_conn_profile_repr_t));
     if (!repr) {
         return NULL;
     }

@@ -67,7 +67,8 @@ static int text_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
 
     int retval = -1;
     if (!ctx->finished
-            && !(retval = avs_stream_write(ctx->stream, value, strlen(value)))) {
+            && !(retval =
+                         avs_stream_write(ctx->stream, value, strlen(value)))) {
         ctx->finished = true;
     }
     return retval;
@@ -101,8 +102,8 @@ static int text_ret_i64(anjay_output_ctx_t *ctx_, int64_t value) {
     return retval;
 }
 
-static inline int text_ret_floating_point(text_out_t *ctx, double value,
-                                          int precision) {
+static inline int
+text_ret_floating_point(text_out_t *ctx, double value, int precision) {
     if (ctx->bytes) {
         return -1;
     }
@@ -112,8 +113,8 @@ static inline int text_ret_floating_point(text_out_t *ctx, double value,
     // As printing floating-point numbers in C as pure decimal with sane
     // precision is tricky, let's take the spec a bit loosely for now.
     if (!ctx->finished
-            && !(retval = avs_stream_write_f(ctx->stream, "%.*g",
-                                             precision, value))) {
+            && !(retval = avs_stream_write_f(ctx->stream, "%.*g", precision,
+                                             value))) {
         ctx->finished = true;
     }
     return retval;
@@ -131,17 +132,16 @@ static int text_ret_bool(anjay_output_ctx_t *ctx, bool value) {
     return text_ret_i32(ctx, value);
 }
 
-static int text_ret_objlnk(anjay_output_ctx_t *ctx_,
-                           anjay_oid_t oid, anjay_iid_t iid) {
+static int
+text_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
         return -1;
     }
     int retval = -1;
     if (!ctx->finished
-            && !(retval = avs_stream_write_f(ctx->stream,
-                                             "%" PRIu16 ":%" PRIu16,
-                                             oid, iid))) {
+            && !(retval = avs_stream_write_f(
+                         ctx->stream, "%" PRIu16 ":%" PRIu16, oid, iid))) {
         ctx->finished = true;
     }
     return retval;
@@ -175,9 +175,10 @@ _anjay_output_text_create(avs_stream_abstract_t *stream,
                           int *errno_ptr,
                           anjay_msg_details_t *inout_details) {
     text_out_t *ctx = (text_out_t *) avs_calloc(1, sizeof(text_out_t));
-    if (ctx && ((*errno_ptr = _anjay_handle_requested_format(
-                    &inout_details->format, ANJAY_COAP_FORMAT_PLAINTEXT))
-            || _anjay_coap_stream_setup_response(stream, inout_details))) {
+    if (ctx
+            && ((*errno_ptr = _anjay_handle_requested_format(
+                         &inout_details->format, ANJAY_COAP_FORMAT_PLAINTEXT))
+                || _anjay_coap_stream_setup_response(stream, inout_details))) {
         avs_free(ctx);
         return NULL;
     }
@@ -203,11 +204,10 @@ typedef struct {
     char msg_finished;
 } text_in_t;
 
-static int has_valid_padding(const char *buffer,
-                             size_t size,
-                             bool msg_finished) {
+static int
+has_valid_padding(const char *buffer, size_t size, bool msg_finished) {
     const char *last = buffer + size;
-    /* Note: buffer is size+1 in length. Last byte is a NULL terminator though. */
+    // Note: buffer is size+1 in length. Last byte is a NULL terminator though.
     assert(!*last);
     return last - 1 >= buffer && *(last - 1) == '=' && !msg_finished ? -1 : 0;
 }
@@ -242,8 +242,9 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
     char stream_msg_finished = 0;
 
     while (buf_size > 0) {
-        if (avs_stream_read(ctx->stream, &stream_bytes_read, &stream_msg_finished,
-                            encoded, sizeof(encoded) - 1)) {
+        if (avs_stream_read(ctx->stream, &stream_bytes_read,
+                            &stream_msg_finished, encoded,
+                            sizeof(encoded) - 1)) {
             return -1;
         }
         encoded[stream_bytes_read] = '\0';
@@ -273,9 +274,8 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
     return 0;
 }
 
-static int text_get_string(anjay_input_ctx_t *ctx,
-                           char *out_buf,
-                           size_t buf_size) {
+static int
+text_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
     if (!buf_size || ((text_in_t *) ctx)->bytes_mode) {
         return -1;
     }
@@ -284,8 +284,8 @@ static int text_get_string(anjay_input_ctx_t *ctx,
     char *endptr = out_buf + (buf_size - 1);
     do {
         size_t bytes_read = 0;
-        int retval = avs_stream_read(((text_in_t *) ctx)->stream,
-                                     &bytes_read, &message_finished, ptr,
+        int retval = avs_stream_read(((text_in_t *) ctx)->stream, &bytes_read,
+                                     &message_finished, ptr,
                                      (size_t) (endptr - ptr));
         if (retval) {
             return retval;
@@ -345,10 +345,9 @@ static int text_get_i64(anjay_input_ctx_t *ctx, int64_t *value) {
     long long ll;
     if (_anjay_safe_strtoll(buf, &ll)
 #if LLONG_MAX != INT64_MAX
-            || ll < INT64_MIN
-            || ll > INT64_MAX
+            || ll < INT64_MIN || ll > INT64_MAX
 #endif
-            ) {
+    ) {
         return ANJAY_ERR_BAD_REQUEST;
     }
     *value = (int64_t) ll;
@@ -424,10 +423,8 @@ static int text_get_objlnk(anjay_input_ctx_t *ctx,
     *colon = '\0';
     long long oid;
     long long iid;
-    if (_anjay_safe_strtoll(buf, &oid)
-            || _anjay_safe_strtoll(colon + 1, &iid)
-            || oid < 0 || oid > UINT16_MAX
-            || iid < 0 || iid > UINT16_MAX) {
+    if (_anjay_safe_strtoll(buf, &oid) || _anjay_safe_strtoll(colon + 1, &iid)
+            || oid < 0 || oid > UINT16_MAX || iid < 0 || iid > UINT16_MAX) {
         return ANJAY_ERR_BAD_REQUEST;
     }
     *out_oid = (anjay_oid_t) oid;
@@ -474,5 +471,5 @@ int _anjay_input_text_create(anjay_input_ctx_t **out,
 }
 
 #ifdef ANJAY_TEST
-#include "test/text.c"
+#    include "test/text.c"
 #endif

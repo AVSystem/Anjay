@@ -17,9 +17,9 @@
 #ifndef ANJAY_COAP_STREAM_H
 #define ANJAY_COAP_STREAM_H
 
-#include <avsystem/commons/stream.h>
 #include <avsystem/commons/coap/ctx.h>
 #include <avsystem/commons/coap/msg_builder.h>
+#include <avsystem/commons/stream.h>
 
 #include "../utils_core.h"
 
@@ -45,9 +45,11 @@ typedef struct anjay_msg_details {
     uint8_t msg_code;
     uint16_t format;
     bool observe_serial;
-    AVS_LIST(const anjay_string_t) uri_path; // target URI path
+    /* target URI path */
+    AVS_LIST(const anjay_string_t) uri_path;
     AVS_LIST(const anjay_string_t) uri_query;
-    AVS_LIST(const anjay_string_t) location_path; // path of the resource created using Create RPC
+    /* path of the resource created using Create RPC */
+    AVS_LIST(const anjay_string_t) location_path;
 } anjay_msg_details_t;
 
 typedef int
@@ -64,20 +66,17 @@ typedef struct anjay_coap_stream_ext {
 int _anjay_coap_stream_get_tx_params(avs_stream_abstract_t *stream,
                                      avs_coap_tx_params_t *out_tx_params);
 
-int _anjay_coap_stream_set_tx_params(
-        avs_stream_abstract_t *stream,
-        const avs_coap_tx_params_t *tx_params);
+int _anjay_coap_stream_set_tx_params(avs_stream_abstract_t *stream,
+                                     const avs_coap_tx_params_t *tx_params);
 
 int _anjay_coap_stream_setup_response(avs_stream_abstract_t *stream,
                                       const anjay_msg_details_t *details);
 
-int _anjay_coap_stream_setup_request(
-        avs_stream_abstract_t *stream,
-        const anjay_msg_details_t *details,
-        const avs_coap_token_t *token);
+int _anjay_coap_stream_setup_request(avs_stream_abstract_t *stream,
+                                     const anjay_msg_details_t *details,
+                                     const avs_coap_token_t *token);
 
-int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream,
-                                 uint8_t code);
+int _anjay_coap_stream_set_error(avs_stream_abstract_t *stream, uint8_t code);
 
 /** NOTE: Pointer acquired with this function is only valid until receiving next
  * CoAP packet. Note that this might mean invalidation during the same stream
@@ -86,8 +85,7 @@ int _anjay_coap_stream_get_incoming_msg(avs_stream_abstract_t *stream,
                                         const avs_coap_msg_t **out_msg);
 
 int _anjay_coap_stream_get_request_identity(
-        avs_stream_abstract_t *stream,
-        avs_coap_msg_identity_t *out_identity);
+        avs_stream_abstract_t *stream, avs_coap_msg_identity_t *out_identity);
 
 void _anjay_coap_stream_set_block_request_validator(
         avs_stream_abstract_t *stream,

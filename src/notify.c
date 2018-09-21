@@ -22,14 +22,13 @@
 #include "coap/content_format.h"
 
 #include "anjay_core.h"
-#include "servers_utils.h"
 #include "observe/observe_core.h"
+#include "servers_utils.h"
 
 VISIBILITY_SOURCE_BEGIN
 
 #ifdef WITH_OBSERVE
-static int observe_notify(anjay_t *anjay,
-                          anjay_notify_queue_t queue) {
+static int observe_notify(anjay_t *anjay, anjay_notify_queue_t queue) {
     anjay_observe_key_t observe_key = {
         .connection = {
             .ssid = _anjay_dm_current_ssid(anjay),
@@ -51,20 +50,20 @@ static int observe_notify(anjay_t *anjay,
             AVS_LIST_FOREACH(it2, it->resources_changed) {
                 observe_key.iid = it2->iid;
                 observe_key.rid = it2->rid;
-                _anjay_update_ret(&ret,
-                                  _anjay_observe_notify(anjay, &observe_key,
-                                                        true));
+                _anjay_update_ret(
+                        &ret, _anjay_observe_notify(anjay, &observe_key, true));
             }
         }
     }
     return ret;
 }
 #else // WITH_OBSERVE
-#define observe_notify(anjay, queue) (0)
+#    define observe_notify(anjay, queue) (0)
 #endif // WITH_OBSERVE
 
-static int security_modified_notify(
-        anjay_t *anjay, anjay_notify_queue_object_entry_t *security) {
+static int
+security_modified_notify(anjay_t *anjay,
+                         anjay_notify_queue_object_entry_t *security) {
     if (anjay_is_offline(anjay)) {
         return 0;
     }
@@ -97,8 +96,8 @@ static int server_modified_notify(anjay_t *anjay,
                 MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, it->iid,
                                    ANJAY_DM_RID_SERVER_SSID);
         int64_t ssid;
-        if (_anjay_dm_res_read_i64(anjay, &path, &ssid)
-                || ssid <= 0 || ssid >= UINT16_MAX) {
+        if (_anjay_dm_res_read_i64(anjay, &path, &ssid) || ssid <= 0
+                || ssid >= UINT16_MAX) {
             _anjay_update_ret(&ret, -1);
         } else if (_anjay_servers_find_active(anjay, (anjay_ssid_t) ssid)) {
             _anjay_update_ret(&ret,
@@ -109,8 +108,7 @@ static int server_modified_notify(anjay_t *anjay,
     return ret;
 }
 
-int _anjay_notify_perform(anjay_t *anjay,
-                          anjay_notify_queue_t queue) {
+int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue) {
     if (!queue) {
         return 0;
     }
@@ -137,16 +135,14 @@ int _anjay_notify_perform(anjay_t *anjay,
     return ret;
 }
 
-int _anjay_notify_flush(anjay_t *anjay,
-                        anjay_notify_queue_t *queue_ptr) {
+int _anjay_notify_flush(anjay_t *anjay, anjay_notify_queue_t *queue_ptr) {
     int result = _anjay_notify_perform(anjay, *queue_ptr);
     _anjay_notify_clear_queue(queue_ptr);
     return result;
 }
 
 static AVS_LIST(anjay_notify_queue_object_entry_t) *
-find_or_create_object_entry(anjay_notify_queue_t *out_queue,
-                            anjay_oid_t oid) {
+find_or_create_object_entry(anjay_notify_queue_t *out_queue, anjay_oid_t oid) {
     AVS_LIST(anjay_notify_queue_object_entry_t) *it;
     AVS_LIST_FOREACH_PTR(it, out_queue) {
         if ((*it)->oid == oid) {
@@ -217,7 +213,7 @@ int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
         return -1;
     }
     if (add_entry_to_iid_set(
-            &(*entry_ptr)->instance_set_changes.known_added_iids, iid)) {
+                &(*entry_ptr)->instance_set_changes.known_added_iids, iid)) {
         anjay_log(ERROR, "Out of memory");
         delete_notify_queue_object_entry_if_empty(entry_ptr);
         return -1;
@@ -238,7 +234,7 @@ int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
         return -1;
     }
     if (add_entry_to_iid_set(
-            &(*entry_ptr)->instance_set_changes.known_removed_iids, iid)) {
+                &(*entry_ptr)->instance_set_changes.known_removed_iids, iid)) {
         anjay_log(ERROR, "Out of memory");
         delete_notify_queue_object_entry_if_empty(entry_ptr);
         return -1;
@@ -250,8 +246,7 @@ int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
 }
 
 int _anjay_notify_queue_instance_set_unknown_change(
-        anjay_notify_queue_t *out_queue,
-        anjay_oid_t oid) {
+        anjay_notify_queue_t *out_queue, anjay_oid_t oid) {
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!entry_ptr) {
@@ -262,9 +257,9 @@ int _anjay_notify_queue_instance_set_unknown_change(
     return 0;
 }
 
-static int compare_resource_entries(
-        const anjay_notify_queue_resource_entry_t *left,
-        const anjay_notify_queue_resource_entry_t *right) {
+static int
+compare_resource_entries(const anjay_notify_queue_resource_entry_t *left,
+                         const anjay_notify_queue_resource_entry_t *right) {
     int result = left->iid - right->iid;
     if (!result) {
         result = left->rid - right->rid;
@@ -295,7 +290,8 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
             break;
         }
     }
-    if (!AVS_LIST_INSERT_NEW(anjay_notify_queue_resource_entry_t, res_entry_ptr)) {
+    if (!AVS_LIST_INSERT_NEW(anjay_notify_queue_resource_entry_t,
+                             res_entry_ptr)) {
         anjay_log(ERROR, "Out of memory");
         if (!(*obj_entry_ptr)->instance_set_changes.instance_set_changed
                 && !(*obj_entry_ptr)->resources_changed) {
@@ -333,7 +329,7 @@ int _anjay_notify_instance_created(anjay_t *anjay,
                                    anjay_iid_t iid) {
     int retval;
     (void) ((retval = _anjay_notify_queue_instance_created(
-                    &anjay->scheduled_notify.queue, oid, iid))
+                     &anjay->scheduled_notify.queue, oid, iid))
             || (retval = reschedule_notify(anjay)));
     return retval;
 }
@@ -344,7 +340,7 @@ int anjay_notify_changed(anjay_t *anjay,
                          anjay_rid_t rid) {
     int retval;
     (void) ((retval = _anjay_notify_queue_resource_change(
-                    &anjay->scheduled_notify.queue, oid, iid, rid))
+                     &anjay->scheduled_notify.queue, oid, iid, rid))
             || (retval = reschedule_notify(anjay)));
     return retval;
 }
@@ -352,7 +348,7 @@ int anjay_notify_changed(anjay_t *anjay,
 int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid) {
     int retval;
     (void) ((retval = _anjay_notify_queue_instance_set_unknown_change(
-                    &anjay->scheduled_notify.queue, oid))
+                     &anjay->scheduled_notify.queue, oid))
             || (retval = reschedule_notify(anjay)));
     return retval;
 }

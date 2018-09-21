@@ -24,12 +24,14 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef enum {
-    ANJAY_CONNECTION_UNSET = 0,
-    ANJAY_CONNECTION_FIRST_VALID_,
-    ANJAY_CONNECTION_UDP = ANJAY_CONNECTION_FIRST_VALID_,
-    ANJAY_CONNECTION_SMS,
+    ANJAY_CONNECTION_UNSET = -1,
+    ANJAY_CONNECTION_UDP = 0,
     ANJAY_CONNECTION_LIMIT_
 } anjay_connection_type_t;
+
+#define ANJAY_CONNECTION_TYPE_FOREACH(Var)                                     \
+    for ((Var) = (anjay_connection_type_t) 0; (Var) < ANJAY_CONNECTION_LIMIT_; \
+         (Var) = (anjay_connection_type_t) ((Var) + 1))
 
 typedef struct {
     char pk_or_identity[ANJAY_MAX_PK_OR_IDENTITY_SIZE];

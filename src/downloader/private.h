@@ -21,7 +21,7 @@
 #include "../downloader.h"
 
 #ifndef ANJAY_DOWNLOADER_INTERNALS
-#error "downloader/private.h is not meant to be included from outside"
+#    error "downloader/private.h is not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -56,8 +56,7 @@ static inline anjay_t *_anjay_downloader_get_anjay(anjay_downloader_t *dl) {
 }
 
 AVS_LIST(anjay_download_ctx_t) *
-_anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl,
-                                     uintptr_t id);
+_anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl, uintptr_t id);
 
 void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
                                       AVS_LIST(anjay_download_ctx_t) *ctx,

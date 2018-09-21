@@ -17,16 +17,16 @@
 #ifndef SRC_COAP_STREAM_IN_H
 #define SRC_COAP_STREAM_IN_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "../../utils_core.h"
 
-#include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/coap/ctx.h>
+#include <avsystem/commons/coap/msg.h>
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
-#error "Headers from coap/stream are not meant to be included from outside"
+#    error "Headers from coap/stream are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -51,7 +51,7 @@ static inline bool _anjay_coap_in_is_reset(const coap_input_buffer_t *in) {
 
 static inline const avs_coap_msg_t *
 _anjay_coap_in_get_message(const coap_input_buffer_t *in) {
-    return (const avs_coap_msg_t *)in->buffer;
+    return (const avs_coap_msg_t *) in->buffer;
 }
 
 static inline size_t
@@ -62,8 +62,7 @@ _anjay_coap_in_get_bytes_available(const coap_input_buffer_t *in) {
 
 static inline size_t
 _anjay_coap_in_get_payload_size(const coap_input_buffer_t *in) {
-    return avs_coap_msg_payload_length(
-            _anjay_coap_in_get_message(in));
+    return avs_coap_msg_payload_length(_anjay_coap_in_get_message(in));
 }
 
 /**

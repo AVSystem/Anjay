@@ -18,6 +18,7 @@
 #define FIRMWARE_UPDATE_H
 
 #include <stddef.h>
+#include <stdio.h>
 
 #include <anjay/fw_update.h>
 
@@ -41,7 +42,8 @@ typedef struct {
 int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
-                            const avs_net_security_info_t *security_info);
+                            const avs_net_security_info_t *security_info,
+                            const avs_coap_tx_params_t *tx_params);
 
 void firmware_update_destroy(fw_update_logic_t *fw_update);
 
@@ -49,4 +51,3 @@ void firmware_update_set_package_path(fw_update_logic_t *fw_update,
                                       const char *path);
 
 #endif /* FIRMWARE_UPDATE_H */
-

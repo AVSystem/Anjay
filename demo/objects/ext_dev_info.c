@@ -14,37 +14,38 @@
  * limitations under the License.
  */
 
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 
 #include <assert.h>
 #include <time.h>
 
 #include <anjay/stats.h>
 
-#define EXT_DEV_RES_OBU_ID 0             // string
-#define EXT_DEV_RES_PLATE_NUMBER 1       // string
-#define EXT_DEV_RES_IMEI 2               // string
-#define EXT_DEV_RES_IMSI 3               // string
-#define EXT_DEV_RES_ICCID 4              // string
-#define EXT_DEV_RES_GPRS_RSSI 5          // int
-#define EXT_DEV_RES_GPRS_PLMN 6          // int
-#define EXT_DEV_RES_GPRS_ULMODULATION 7  // string
-#define EXT_DEV_RES_GPRS_DLMODULATION 8  // string
-#define EXT_DEV_RES_GPRS_ULFREQUENCY 9   // int
-#define EXT_DEV_RES_GPRS_DLFREQUENCY 10  // int
-#define EXT_DEV_RES_RX_BYTES 11          // uint64
-#define EXT_DEV_RES_TX_BYTES 12          // uint64
+#define EXT_DEV_RES_OBU_ID 0                        // string
+#define EXT_DEV_RES_PLATE_NUMBER 1                  // string
+#define EXT_DEV_RES_IMEI 2                          // string
+#define EXT_DEV_RES_IMSI 3                          // string
+#define EXT_DEV_RES_ICCID 4                         // string
+#define EXT_DEV_RES_GPRS_RSSI 5                     // int
+#define EXT_DEV_RES_GPRS_PLMN 6                     // int
+#define EXT_DEV_RES_GPRS_ULMODULATION 7             // string
+#define EXT_DEV_RES_GPRS_DLMODULATION 8             // string
+#define EXT_DEV_RES_GPRS_ULFREQUENCY 9              // int
+#define EXT_DEV_RES_GPRS_DLFREQUENCY 10             // int
+#define EXT_DEV_RES_RX_BYTES 11                     // uint64
+#define EXT_DEV_RES_TX_BYTES 12                     // uint64
 #define EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS 13 // uint64
 #define EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS 14 // uint64
-#define EXT_DEV_RES_UPTIME 15            // double
+#define EXT_DEV_RES_UPTIME 15                       // double
 
 typedef struct {
     const anjay_dm_object_def_t *def;
     avs_time_monotonic_t init_time;
 } extdev_repr_t;
 
-static inline extdev_repr_t *get_extdev(const anjay_dm_object_def_t *const *obj_ptr) {
+static inline extdev_repr_t *
+get_extdev(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
     return container_of(obj_ptr, extdev_repr_t, def);
 }
@@ -58,7 +59,8 @@ static int dev_read(anjay_t *anjay,
                     anjay_iid_t iid,
                     anjay_rid_t rid,
                     anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
 
     switch (rid) {
     case EXT_DEV_RES_OBU_ID:
@@ -94,8 +96,9 @@ static int dev_read(anjay_t *anjay,
         return anjay_ret_i64(
                 ctx, (int64_t) anjay_get_num_outgoing_retransmissions(anjay));
     case EXT_DEV_RES_UPTIME: {
-        avs_time_duration_t diff = avs_time_monotonic_diff(
-                avs_time_monotonic_now(), get_extdev(obj_ptr)->init_time);
+        avs_time_duration_t diff =
+                avs_time_monotonic_diff(avs_time_monotonic_now(),
+                                        get_extdev(obj_ptr)->init_time);
 
         return anjay_ret_double(ctx, (double) diff.seconds
                                              + (double) diff.nanoseconds / 1e9);
@@ -107,23 +110,23 @@ static int dev_read(anjay_t *anjay,
 
 static const anjay_dm_object_def_t EXT_DEV_INFO = {
     .oid = DEMO_OID_EXT_DEV_INFO,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            EXT_DEV_RES_OBU_ID,
-            EXT_DEV_RES_PLATE_NUMBER,
-            EXT_DEV_RES_IMEI,
-            EXT_DEV_RES_IMSI,
-            EXT_DEV_RES_ICCID,
-            EXT_DEV_RES_GPRS_RSSI,
-            EXT_DEV_RES_GPRS_PLMN,
-            EXT_DEV_RES_GPRS_ULMODULATION,
-            EXT_DEV_RES_GPRS_DLMODULATION,
-            EXT_DEV_RES_GPRS_ULFREQUENCY,
-            EXT_DEV_RES_GPRS_DLFREQUENCY,
-            EXT_DEV_RES_RX_BYTES,
-            EXT_DEV_RES_TX_BYTES,
-            EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS,
-            EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS,
-            EXT_DEV_RES_UPTIME),
+    .supported_rids =
+            ANJAY_DM_SUPPORTED_RIDS(EXT_DEV_RES_OBU_ID,
+                                    EXT_DEV_RES_PLATE_NUMBER,
+                                    EXT_DEV_RES_IMEI,
+                                    EXT_DEV_RES_IMSI,
+                                    EXT_DEV_RES_ICCID,
+                                    EXT_DEV_RES_GPRS_RSSI,
+                                    EXT_DEV_RES_GPRS_PLMN,
+                                    EXT_DEV_RES_GPRS_ULMODULATION,
+                                    EXT_DEV_RES_GPRS_DLMODULATION,
+                                    EXT_DEV_RES_GPRS_ULFREQUENCY,
+                                    EXT_DEV_RES_GPRS_DLFREQUENCY,
+                                    EXT_DEV_RES_RX_BYTES,
+                                    EXT_DEV_RES_TX_BYTES,
+                                    EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS,
+                                    EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS,
+                                    EXT_DEV_RES_UPTIME),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -133,7 +136,8 @@ static const anjay_dm_object_def_t EXT_DEV_INFO = {
 };
 
 const anjay_dm_object_def_t **ext_dev_info_object_create(void) {
-    extdev_repr_t *repr = (extdev_repr_t *) avs_calloc(1, sizeof(extdev_repr_t));
+    extdev_repr_t *repr =
+            (extdev_repr_t *) avs_calloc(1, sizeof(extdev_repr_t));
     if (!repr) {
         return NULL;
     }

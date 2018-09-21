@@ -23,10 +23,10 @@
 
 #include <anjay_modules/time_defs.h>
 
-#include "../servers_utils.h"
-#include "../coap/content_format.h"
 #include "../anjay_core.h"
+#include "../coap/content_format.h"
 #include "../dm/query.h"
+#include "../servers_utils.h"
 
 #include "observe_internal.h"
 
@@ -82,9 +82,8 @@ int _anjay_observe_entry_cmp(const void *left, const void *right) {
 
 int _anjay_observe_init(anjay_observe_state_t *observe,
                         bool confirmable_notifications) {
-    if (!(observe->connection_entries =
-            AVS_RBTREE_NEW(anjay_observe_connection_entry_t,
-                           connection_state_cmp))) {
+    if (!(observe->connection_entries = AVS_RBTREE_NEW(
+                  anjay_observe_connection_entry_t, connection_state_cmp))) {
         anjay_log(ERROR, "Could not initialize Observe structures");
         return -1;
     }
@@ -133,7 +132,9 @@ const anjay_observe_stream_t *_anjay_observe_stream_initializer__(void) {
 
     static avs_stream_v_table_t vtable;
     static const anjay_observe_stream_t initializer = {
-        .outbuf = { .vtable = &vtable }
+        .outbuf = {
+            .vtable = &vtable
+        }
     };
     static const anjay_coap_stream_ext_t coap_ext = {
         .setup_response = observe_setup_for_sending
@@ -177,9 +178,9 @@ static void clear_entry(anjay_t *anjay,
     }
 }
 
-static void delete_connection(
-        anjay_t *anjay,
-        AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) *conn_ptr) {
+static void
+delete_connection(anjay_t *anjay,
+                  AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) *conn_ptr) {
     _anjay_observe_cleanup_connection(anjay->sched, *conn_ptr);
     AVS_RBTREE_DELETE_ELEM(anjay->observe.connection_entries, conn_ptr);
 }
@@ -206,9 +207,8 @@ newest_value(const anjay_observe_entry_t *entry) {
     }
 }
 
-static int schedule_trigger(anjay_t *anjay,
-                            anjay_observe_entry_t *entry,
-                            int32_t period) {
+static int
+schedule_trigger(anjay_t *anjay, anjay_observe_entry_t *entry, int32_t period) {
     if (period < 0) {
         return 0;
     }
@@ -222,13 +222,14 @@ static int schedule_trigger(anjay_t *anjay,
         delay = AVS_TIME_DURATION_ZERO;
     }
 
-    anjay_log(TRACE, "Notify %s (format %" PRIu16 ", SSID %" PRIu16 ", "
+    anjay_log(TRACE,
+              "Notify %s (format %" PRIu16 ", SSID %" PRIu16 ", "
               "connection type %d) scheduled: +%ld.%09lds",
               ANJAY_DEBUG_MAKE_PATH(&MAKE_INSTANCE_OR_RESOURCE_PATH(
                       entry->key.oid, entry->key.iid, entry->key.rid)),
               entry->key.format, entry->key.connection.ssid,
-              (int) entry->key.connection.type,
-              (long) delay.seconds, (long) delay.nanoseconds);
+              (int) entry->key.connection.type, (long) delay.seconds,
+              (long) delay.nanoseconds);
 
     _anjay_sched_del(anjay->sched, &entry->notify_task);
     return _anjay_sched(anjay->sched, &entry->notify_task, delay,
@@ -240,7 +241,8 @@ create_resource_value(const anjay_msg_details_t *details,
                       anjay_observe_entry_t *ref,
                       const avs_coap_msg_identity_t *identity,
                       double numeric,
-                      const void *data, size_t size) {
+                      const void *data,
+                      size_t size) {
     AVS_LIST(anjay_observe_resource_value_t) result =
             (anjay_observe_resource_value_t *) AVS_LIST_NEW_BUFFER(
                     offsetof(anjay_observe_resource_value_t, value) + size);
@@ -271,8 +273,8 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
                             const void *data,
                             size_t size) {
     AVS_LIST(anjay_observe_resource_value_t) res_value =
-            create_resource_value(details, entry, identity,
-                                  numeric, data, size);
+            create_resource_value(details, entry, identity, numeric, data,
+                                  size);
     if (!res_value) {
         return -1;
     }
@@ -296,8 +298,8 @@ static int insert_error(anjay_t *anjay,
         .msg_code = _anjay_make_error_response_code(outer_result),
         .format = AVS_COAP_FORMAT_NONE
     };
-    return insert_new_value(conn_state, entry, &details, identity,
-                            NAN, NULL, 0);
+    return insert_new_value(conn_state, entry, &details, identity, NAN, NULL,
+                            0);
 }
 
 static int get_effective_attrs(anjay_t *anjay,
@@ -324,7 +326,7 @@ static int get_effective_attrs(anjay_t *anjay,
     }
     if (details.iid != ANJAY_IID_INVALID
             && _anjay_dm_map_present_result(_anjay_dm_instance_present(
-                    anjay, obj, details.iid, NULL))) {
+                       anjay, obj, details.iid, NULL))) {
         // instance is no longer present, use invalid instead
         details.iid = ANJAY_IID_INVALID;
     }
@@ -334,9 +336,9 @@ static int get_effective_attrs(anjay_t *anjay,
     }
     if (details.rid >= 0
             && _anjay_dm_map_present_result(
-                    _anjay_dm_resource_supported_and_present(
-                            anjay, obj, key->iid, (anjay_rid_t) details.rid,
-                            NULL))) {
+                       _anjay_dm_resource_supported_and_present(
+                               anjay, obj, key->iid, (anjay_rid_t) details.rid,
+                               NULL))) {
         // if resource is no longer present, use invalid instead
         details.rid = -1;
     }
@@ -356,22 +358,21 @@ int _anjay_observe_schedule_trigger(anjay_t *anjay,
     anjay_dm_internal_res_attrs_t attrs;
     int result;
 
-    (void)((result = get_attrs(anjay, &attrs, &entry->key))
+    (void) ((result = get_attrs(anjay, &attrs, &entry->key))
             || (result = schedule_trigger(anjay, entry,
                                           attrs.standard.common.max_period)));
 
     return result;
 }
 
-static int insert_initial_value(
-        anjay_t *anjay,
-        anjay_observe_connection_entry_t *conn_state,
-        anjay_observe_entry_t *entry,
-        const anjay_msg_details_t *details,
-        const avs_coap_msg_identity_t *identity,
-        double numeric,
-        const void *data,
-        size_t size) {
+static int insert_initial_value(anjay_t *anjay,
+                                anjay_observe_connection_entry_t *conn_state,
+                                anjay_observe_entry_t *entry,
+                                const anjay_msg_details_t *details,
+                                const avs_coap_msg_identity_t *identity,
+                                double numeric,
+                                const void *data,
+                                size_t size) {
     assert(!entry->last_sent);
     assert(!entry->last_unsent);
 
@@ -418,8 +419,10 @@ find_or_create_connection_state(anjay_t *anjay,
                             connection_query(key));
     if (!conn) {
         conn = AVS_RBTREE_ELEM_NEW(anjay_observe_connection_entry_t);
-        if (!conn || !(conn->entries = AVS_RBTREE_NEW(anjay_observe_entry_t,
-                                                      _anjay_observe_entry_cmp))) {
+        if (!conn
+                || !(conn->entries =
+                             AVS_RBTREE_NEW(anjay_observe_entry_t,
+                                            _anjay_observe_entry_cmp))) {
             anjay_log(ERROR, "Out of memory");
             AVS_RBTREE_ELEM_DELETE_DETACHED(&conn);
             return NULL;
@@ -487,8 +490,7 @@ void _anjay_observe_remove_entry(anjay_t *anjay,
     }
 }
 
-void _anjay_observe_remove_by_msg_id(anjay_t *anjay,
-                                     uint16_t notify_id) {
+void _anjay_observe_remove_by_msg_id(anjay_t *anjay, uint16_t notify_id) {
     AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) conn;
     AVS_RBTREE_FOREACH(conn, anjay->observe.connection_entries) {
         AVS_RBTREE_ELEM(anjay_observe_entry_t) entry;
@@ -502,9 +504,8 @@ void _anjay_observe_remove_by_msg_id(anjay_t *anjay,
     }
 }
 
-static int observe_gc_ssid_iterate(anjay_t *anjay,
-                                   anjay_ssid_t ssid,
-                                   void *conn_ptr_) {
+static int
+observe_gc_ssid_iterate(anjay_t *anjay, anjay_ssid_t ssid, void *conn_ptr_) {
     AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) *conn_ptr =
             (AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) *) conn_ptr_;
     while (*conn_ptr && (*conn_ptr)->key.ssid < ssid) {
@@ -532,23 +533,23 @@ void _anjay_observe_gc(anjay_t *anjay) {
 static bool has_pmax_expired(const anjay_observe_resource_value_t *value,
                              const anjay_dm_attributes_t *attrs) {
     return attrs->max_period >= 0
-            && avs_time_real_diff(avs_time_real_now(), value->timestamp).seconds
-                    >= attrs->max_period;
+           && avs_time_real_diff(avs_time_real_now(), value->timestamp).seconds
+                      >= attrs->max_period;
 }
 
 static bool process_step(const anjay_observe_resource_value_t *previous,
                          const anjay_dm_resource_attributes_t *attrs,
                          double value) {
     return !isnan(attrs->step)
-            && fabs(value - previous->numeric) >= attrs->step;
+           && fabs(value - previous->numeric) >= attrs->step;
 }
 
 static bool process_ltgt(const anjay_observe_resource_value_t *previous,
                          double threshold,
                          double value) {
     return !isnan(threshold)
-            && ((previous->numeric <= threshold && value > threshold)
-                    || (previous->numeric >= threshold && value < threshold));
+           && ((previous->numeric <= threshold && value > threshold)
+               || (previous->numeric >= threshold && value < threshold));
 }
 
 static bool should_update(const anjay_observe_resource_value_t *previous,
@@ -565,15 +566,15 @@ static bool should_update(const anjay_observe_resource_value_t *previous,
 
     if (isnan(numeric) || isnan(previous->numeric)
             || (isnan(attrs->greater_than) && isnan(attrs->less_than)
-                    && isnan(attrs->step))) {
+                && isnan(attrs->step))) {
         // either previous or current value is not numeric, or none of lt/gt/st
         // attributes are set - notifying each value change
         return true;
     }
 
     return process_step(previous, attrs, numeric)
-            || process_ltgt(previous, attrs->less_than, numeric)
-            || process_ltgt(previous, attrs->greater_than, numeric);
+           || process_ltgt(previous, attrs->less_than, numeric)
+           || process_ltgt(previous, attrs->greater_than, numeric);
 }
 
 static inline ssize_t read_new_value(anjay_t *anjay,
@@ -601,7 +602,8 @@ static inline ssize_t read_new_value(anjay_t *anjay,
                 },
                 .requested_format = entry->key.format,
                 .observe_serial = true
-            }, out_details, out_numeric, buffer, size);
+            },
+            out_details, out_numeric, buffer, size);
 }
 
 static int get_conn_ref(anjay_t *anjay,
@@ -616,27 +618,44 @@ static int get_conn_ref(anjay_t *anjay,
 }
 
 static int ensure_conn_online(anjay_t *anjay, anjay_connection_ref_t ref) {
-    if (_anjay_connection_current_mode(ref) == ANJAY_CONNECTION_QUEUE
-            && !_anjay_connection_get_online_socket(ref)) {
-        bool session_resumed;
-        if (_anjay_connection_bring_online(anjay, ref, &session_resumed)) {
-            anjay_log(ERROR, "broken socket for server %" PRIu16,
+    if (_anjay_connection_current_mode(ref) != ANJAY_CONNECTION_QUEUE
+            || _anjay_connection_get_online_socket(ref)) {
+        return 0;
+    }
+
+    // We're checking the *primary* connection session timestamp, even though
+    // the notification might not be on a primary connection at all. However, we
+    // only care about whether we need to re-register, and this only concerns
+    // the primary connection. If the notification to be sent is not on the
+    // primary connection, the primary session timestamp is guaranteed not to
+    // change during _anjay_connection_bring_online().
+    anjay_conn_session_token_t previous_session_token =
+            _anjay_server_primary_session_token(ref.server);
+    if (_anjay_connection_bring_online(anjay, ref)) {
+        anjay_log(ERROR, "broken socket for server %" PRIu16,
+                  _anjay_server_ssid(ref.server));
+        if (_anjay_schedule_server_reconnect(anjay, ref.server)) {
+            anjay_log(ERROR,
+                      "could not schedule reconnect for server %" PRIu16,
                       _anjay_server_ssid(ref.server));
-            if (_anjay_schedule_server_reconnect(anjay, ref.server)) {
-                anjay_log(ERROR,
-                          "could not schedule reconnect for server %" PRIu16,
-                          _anjay_server_ssid(ref.server));
-            }
-            return -1;
         }
-        if (!session_resumed) {
-            if (_anjay_schedule_reregister(anjay, ref.server)) {
-                anjay_log(ERROR,
-                          "could not schedule reregister for server %" PRIu16,
-                          _anjay_server_ssid(ref.server));
-           }
-            return AVS_COAP_CTX_ERR_NETWORK;
+        return -1;
+    }
+    if (!_anjay_conn_session_tokens_equal(_anjay_server_primary_session_token(
+                                                  ref.server),
+                                          previous_session_token)) {
+        if (_anjay_schedule_reregister(anjay, ref.server)) {
+            anjay_log(ERROR,
+                      "could not schedule reregister for server %" PRIu16,
+                      _anjay_server_ssid(ref.server));
         }
+        // THIS IS A HACK: We have successfully connected, but we cannot send a
+        // notification, because Register needs to be sent first. That's why
+        // AVS_COAP_CTX_ERR_NETWORK is passed down the call stack to break the
+        // sending procedure. Notifications will be sent through
+        // _anjay_observe_sched_flush() called from
+        // perform_registration_action().
+        return AVS_COAP_CTX_ERR_NETWORK;
     }
     return 0;
 }
@@ -680,8 +699,8 @@ static int send_entry(anjay_t *anjay,
                       anjay_observe_connection_entry_t *conn_state) {
     int result;
     anjay_connection_ref_t ref;
-    if ((result = get_conn_ref(anjay, &ref,
-                               conn_state->key.ssid, conn_state->key.type))
+    if ((result = get_conn_ref(anjay, &ref, conn_state->key.ssid,
+                               conn_state->key.type))
             || (result = ensure_conn_online(anjay, ref))
             || (result = _anjay_bind_server_stream(anjay, ref))) {
         return result;
@@ -699,13 +718,13 @@ static int send_entry(anjay_t *anjay,
         details.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     }
 
-    (void) ((result = _anjay_coap_stream_setup_request(
-                    anjay->comm_stream, &details, &id->token))
+    (void) ((result = _anjay_coap_stream_setup_request(anjay->comm_stream,
+                                                       &details, &id->token))
             || (result = avs_stream_write(anjay->comm_stream,
                                           conn_state->unsent->value,
                                           conn_state->unsent->value_length))
             || (result = _anjay_coap_stream_get_request_identity(
-                    anjay->comm_stream, &notify_id))
+                        anjay->comm_stream, &notify_id))
             || (result = avs_stream_finish_message(anjay->comm_stream)));
 
     _anjay_release_server_stream(anjay);
@@ -717,7 +736,7 @@ static int send_entry(anjay_t *anjay,
         value_sent(conn_state);
         entry->last_sent->identity.msg_id = notify_id.msg_id;
     } else if (result == AVS_COAP_CTX_ERR_NETWORK
-            || result == AVS_COAP_CTX_ERR_TIMEOUT) {
+               || result == AVS_COAP_CTX_ERR_TIMEOUT) {
         anjay_log(ERROR, "network communication error while sending Observe");
         _anjay_schedule_server_reconnect(anjay, server);
     }
@@ -768,9 +787,10 @@ static observe_server_state_t server_state(anjay_t *anjay, anjay_ssid_t ssid) {
         }
     }
 
-    anjay_log(TRACE, "observe state for SSID %u: active %d, notification "
-              "storing %d", ssid, result.server_active,
-              result.notification_storing_enabled);
+    anjay_log(TRACE,
+              "observe state for SSID %u: active %d, notification "
+              "storing %d",
+              ssid, result.server_active, result.notification_storing_enabled);
     return result;
 }
 
@@ -804,8 +824,7 @@ static int handle_send_queue_entry(anjay_t *anjay,
             remove_all_unsent_values(conn_state);
         }
     }
-    if (is_error
-            && result != AVS_COAP_CTX_ERR_NETWORK
+    if (is_error && result != AVS_COAP_CTX_ERR_NETWORK
             && (result == 0 || !observe_state.notification_storing_enabled)) {
         result = 1;
     }
@@ -847,8 +866,8 @@ static void flush_send_queue(anjay_t *anjay,
                 break;
             }
         }
-        if ((result = handle_send_queue_entry(anjay, conn,
-                                              *observe_state)) > 0) {
+        if ((result = handle_send_queue_entry(anjay, conn, *observe_state))
+                > 0) {
             _anjay_observe_remove_entry(anjay, &key);
             // the above might've deleted the connection entry,
             // so we "re-find" it to check if it's still valid
@@ -862,9 +881,8 @@ static void flush_send_queue(anjay_t *anjay,
 }
 
 static void flush_send_queue_job(anjay_t *anjay, const void *conn_ptr) {
-    flush_send_queue(anjay,
-                     *(anjay_observe_connection_entry_t *const *) conn_ptr,
-                     NULL);
+    flush_send_queue(
+            anjay, *(anjay_observe_connection_entry_t *const *) conn_ptr, NULL);
 }
 
 static int sched_flush_send_queue(anjay_t *anjay,
@@ -875,8 +893,8 @@ static int sched_flush_send_queue(anjay_t *anjay,
                         : "flush task already scheduled");
         return 0;
     }
-    if (_anjay_sched_now(anjay->sched, &conn->flush_task,
-                         flush_send_queue_job, &conn, sizeof(conn))) {
+    if (_anjay_sched_now(anjay->sched, &conn->flush_task, flush_send_queue_job,
+                         &conn, sizeof(conn))) {
         anjay_log(WARNING, "Could not schedule notification flush");
         return -1;
     }
@@ -891,10 +909,11 @@ int _anjay_observe_sched_flush_current_connection(anjay_t *anjay) {
     return _anjay_observe_sched_flush(anjay, query_key);
 }
 
-int _anjay_observe_sched_flush(anjay_t *anjay,
-                               anjay_connection_key_t key) {
-    anjay_log(TRACE, "scheduling notifications flush for server SSID %u, "
-              "connection type %d", key.ssid, key.type);
+int _anjay_observe_sched_flush(anjay_t *anjay, anjay_connection_key_t key) {
+    anjay_log(TRACE,
+              "scheduling notifications flush for server SSID %u, "
+              "connection type %d",
+              key.ssid, key.type);
     anjay_observe_connection_entry_t *conn =
             AVS_RBTREE_FIND(anjay->observe.connection_entries,
                             connection_query(&key));
@@ -921,8 +940,8 @@ update_notification_value(anjay_t *anjay,
         return result;
     }
 
-    bool pmax_expired = has_pmax_expired(newest_value(entry),
-                                         &attrs.standard.common);
+    bool pmax_expired =
+            has_pmax_expired(newest_value(entry), &attrs.standard.common);
     char buf[ANJAY_MAX_OBSERVABLE_RESOURCE_SIZE];
     anjay_msg_details_t observe_details;
     double numeric = NAN;
@@ -934,20 +953,22 @@ update_notification_value(anjay_t *anjay,
 #ifdef WITH_CON_ATTR
     if (attrs.custom.data.con >= 0) {
         observe_details.msg_type = (attrs.custom.data.con > 0)
-                ? AVS_COAP_MSG_CONFIRMABLE : AVS_COAP_MSG_NON_CONFIRMABLE;
+                                           ? AVS_COAP_MSG_CONFIRMABLE
+                                           : AVS_COAP_MSG_NON_CONFIRMABLE;
     } else
 #endif // WITH_CON_ATTR
     {
         observe_details.msg_type = anjay->observe.confirmable_notifications
-                ? AVS_COAP_MSG_CONFIRMABLE : AVS_COAP_MSG_NON_CONFIRMABLE;
+                                           ? AVS_COAP_MSG_CONFIRMABLE
+                                           : AVS_COAP_MSG_NON_CONFIRMABLE;
     }
 
-    if (pmax_expired || should_update(newest_value(entry), &attrs.standard,
-                                      &observe_details, numeric,
-                                      buf, (size_t) size)) {
+    if (pmax_expired
+            || should_update(newest_value(entry), &attrs.standard,
+                             &observe_details, numeric, buf, (size_t) size)) {
         result = insert_new_value(conn_state, entry, &observe_details,
-                                  &newest_value(entry)->identity, numeric,
-                                  buf, (size_t) size);
+                                  &newest_value(entry)->identity, numeric, buf,
+                                  (size_t) size);
     }
 
     if (schedule_trigger(anjay, entry, attrs.standard.common.max_period)) {
@@ -994,7 +1015,7 @@ static inline int notify_entry(anjay_t *anjay,
 }
 
 #ifdef ANJAY_TEST
-#include "test/observe_mock.h"
+#    include "test/observe_mock.h"
 #endif // ANJAY_TEST
 
 static int observe_notify_bound(anjay_t *anjay,
@@ -1035,8 +1056,8 @@ observe_notify_wildcard_impl(anjay_t *anjay,
     }
     lower_bound.rid = -1;
     upper_bound.rid = -1;
-    return observe_notify_bound(anjay, connection,
-                                &lower_bound, &upper_bound, obj);
+    return observe_notify_bound(anjay, connection, &lower_bound, &upper_bound,
+                                obj);
 }
 
 static inline int
@@ -1044,8 +1065,8 @@ observe_notify_iid_wildcard(anjay_t *anjay,
                             anjay_observe_connection_entry_t *connection,
                             const anjay_observe_key_t *specimen_key,
                             const anjay_dm_object_def_t *const *obj) {
-    return observe_notify_wildcard_impl(anjay, connection,
-                                        specimen_key, obj, true);
+    return observe_notify_wildcard_impl(anjay, connection, specimen_key, obj,
+                                        true);
 }
 
 static inline int
@@ -1053,8 +1074,8 @@ observe_notify_rid_wildcard(anjay_t *anjay,
                             anjay_observe_connection_entry_t *connection,
                             const anjay_observe_key_t *specimen_key,
                             const anjay_dm_object_def_t *const *obj) {
-    return observe_notify_wildcard_impl(anjay, connection,
-                                        specimen_key, obj, false);
+    return observe_notify_wildcard_impl(anjay, connection, specimen_key, obj,
+                                        false);
 }
 
 /**
@@ -1157,11 +1178,11 @@ static int observe_notify(anjay_t *anjay,
         }
     } else {
         _anjay_update_ret(&retval,
-                          observe_notify_rid_wildcard(anjay, connection,
-                                                      key, obj));
+                          observe_notify_rid_wildcard(anjay, connection, key,
+                                                      obj));
         _anjay_update_ret(&retval,
-                          observe_notify_iid_wildcard(anjay, connection,
-                                                      key, obj));
+                          observe_notify_iid_wildcard(anjay, connection, key,
+                                                      obj));
     }
 
     _anjay_update_ret(&retval,
@@ -1184,7 +1205,7 @@ int _anjay_observe_notify(anjay_t *anjay,
     AVS_RBTREE_FOREACH(connection, anjay->observe.connection_entries) {
         /* Some compilers complain about promotion of comparison result, so
          * we're casting it to bool explicitly */
-        if ((bool)(connection->key.ssid == key->connection.ssid)
+        if ((bool) (connection->key.ssid == key->connection.ssid)
                 == invert_server_match) {
             continue;
         }
@@ -1196,5 +1217,5 @@ int _anjay_observe_notify(anjay_t *anjay,
 }
 
 #ifdef ANJAY_TEST
-#include "test/observe.c"
+#    include "test/observe.c"
 #endif // ANJAY_TEST

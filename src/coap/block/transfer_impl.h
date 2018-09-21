@@ -34,7 +34,7 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-#define BLOCK_TRANSFER_RESULT_OK    0
+#define BLOCK_TRANSFER_RESULT_OK 0
 #define BLOCK_TRANSFER_RESULT_RETRY 1
 
 /**
@@ -61,7 +61,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *             continuation,
  *         @li BLOCK_TRANSFER_RESULT_RETRY after receiving retransmission of the
  *             last correct message,
-*          @li a negative value in case of error.
+ *         @li a negative value in case of error.
  *         NOTE: returning a negative value from this handler is NOT equivalent
  *         to aborting the transfer. For that, use @p out_wait_for_next .
  */

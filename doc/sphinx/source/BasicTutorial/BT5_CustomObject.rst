@@ -28,9 +28,14 @@ which holds:
 
     /** A struct containing pointers to Object handlers. */
     typedef struct {
-        /** Get default Object attributes, @ref anjay_dm_object_read_default_attrs_t */
+        /**
+         * Get default Object attributes, @ref anjay_dm_object_read_default_attrs_t
+         */
         anjay_dm_object_read_default_attrs_t *object_read_default_attrs;
-        /** Set default Object attributes, @ref anjay_dm_object_write_default_attrs_t */
+        /**
+         * Set default Object attributes,
+         * @ref anjay_dm_object_write_default_attrs_t
+         */
         anjay_dm_object_write_default_attrs_t *object_write_default_attrs;
 
         /** Enumerate available Object Instances, @ref anjay_dm_instance_it_t */
@@ -45,24 +50,40 @@ which holds:
         /** Delete an Object Instance, @ref anjay_dm_instance_remove_t */
         anjay_dm_instance_remove_t *instance_remove;
 
-        /** Get default Object Instance attributes, @ref anjay_dm_instance_read_default_attrs_t */
+        /**
+         * Get default Object Instance attributes,
+         * @ref anjay_dm_instance_read_default_attrs_t
+         */
         anjay_dm_instance_read_default_attrs_t *instance_read_default_attrs;
-        /** Set default Object Instance attributes, @ref anjay_dm_instance_write_default_attrs_t */
+        /**
+         * Set default Object Instance attributes,
+         * @ref anjay_dm_instance_write_default_attrs_t
+         */
         anjay_dm_instance_write_default_attrs_t *instance_write_default_attrs;
 
-        /** Check if a Resource is present in given Object Instance, @ref anjay_dm_resource_present_t */
+        /**
+         * Check if a Resource is present in given Object Instance,
+         * @ref anjay_dm_resource_present_t
+         */
         anjay_dm_resource_present_t *resource_present;
-        /** Returns a mask of supported operations on a given Resource, @ref anjay_dm_resource_operations_t */
+        /**
+         * Returns a mask of supported operations on a given Resource,
+         * @ref anjay_dm_resource_operations_t
+         */
         anjay_dm_resource_operations_t *resource_operations;
 
         /** Get Resource value, @ref anjay_dm_resource_read_t */
         anjay_dm_resource_read_t *resource_read;
         /** Set Resource value, @ref anjay_dm_resource_write_t */
         anjay_dm_resource_write_t *resource_write;
-        /** Perform Execute action on a Resource, @ref anjay_dm_resource_execute_t */
+        /**
+         * Perform Execute action on a Resource, @ref anjay_dm_resource_execute_t
+         */
         anjay_dm_resource_execute_t *resource_execute;
 
-        /** Get number of Multiple Resource instances, @ref anjay_dm_resource_dim_t */
+        /**
+         * Get number of Multiple Resource instances, @ref anjay_dm_resource_dim_t
+         */
         anjay_dm_resource_dim_t *resource_dim;
         /** Get Resource attributes, @ref anjay_dm_resource_read_attrs_t */
         anjay_dm_resource_read_attrs_t *resource_read_attrs;
@@ -71,11 +92,19 @@ which holds:
 
         /** Begin a transaction on this Object, @ref anjay_dm_transaction_begin_t */
         anjay_dm_transaction_begin_t *transaction_begin;
-        /** Validate whether a transaction on this Object can be cleanly committed. See @ref anjay_dm_transaction_validate_t */
+        /**
+         * Validate whether a transaction on this Object can be cleanly committed.
+         * See @ref anjay_dm_transaction_validate_t
+         */
         anjay_dm_transaction_validate_t *transaction_validate;
-        /** Commit changes made in a transaction, @ref anjay_dm_transaction_commit_t */
+        /**
+         * Commit changes made in a transaction, @ref anjay_dm_transaction_commit_t
+         */
         anjay_dm_transaction_commit_t *transaction_commit;
-        /** Rollback changes made in a transaction, @ref anjay_dm_transaction_rollback_t */
+        /**
+         * Rollback changes made in a transaction,
+         * @ref anjay_dm_transaction_rollback_t
+         */
         anjay_dm_transaction_rollback_t *transaction_rollback;
     } anjay_dm_handlers_t;
 
@@ -83,10 +112,12 @@ which holds:
     typedef struct {
         /** Number of element in the array */
         size_t count;
-        /** Pointer to an array of Resource IDs supported by the object. A Resource
+        /**
+         * Pointer to an array of Resource IDs supported by the object. A Resource
          * is considered SUPPORTED if it may ever be present within the Object. The
          * array MUST be exactly <c>count</c> elements long and sorted in strictly
-         * ascending order. */
+         * ascending order.
+         */
         const uint16_t *rids;
     } anjay_dm_supported_rids_t;
 
@@ -100,7 +131,7 @@ which holds:
      * <c>supported_rids</c> field of @ref anjay_dm_object_def_t. The <c>count</c>
      * field will be automatically calculated.
      */
-    #define ANJAY_DM_SUPPORTED_RIDS(...) \
+    #    define ANJAY_DM_SUPPORTED_RIDS(...)                                   \
             // ...
 
     /** A struct defining an LwM2M Object. */
@@ -108,15 +139,19 @@ which holds:
         /** Object ID */
         anjay_oid_t oid;
 
-        /** Object version: a string with static lifetime, containing two digits
+        /**
+         * Object version: a string with static lifetime, containing two digits
          * separated by a dot (for example: "1.1").
          * If left NULL, client will not include the "ver=" attribute in Register
-         * and Discover messages, which implies version 1.0. */
+         * and Discover messages, which implies version 1.0.
+         */
         const char *version;
 
-        /** List of Resource IDs supported by the object. The
+        /**
+         * List of Resource IDs supported by the object. The
          * @ref ANJAY_DM_SUPPORTED_RIDS macro is the preferred way of initializing
-         * it. */
+         * it.
+         */
         anjay_dm_supported_rids_t supported_rids;
 
         /** Handler callbacks for this object. */

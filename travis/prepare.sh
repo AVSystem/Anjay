@@ -15,7 +15,7 @@
 case "$TRAVIS_OS_NAME" in
 osx)
     HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake mbedtls python3
-    python3 -m pip install cryptography sphinx sphinx_rtd_theme requests
+    python3 -m pip install cryptography sphinx sphinx_rtd_theme requests grequests
 
     # Travis sets CC=gcc for some reason, revert to OSX's default (clang)
     unset CC

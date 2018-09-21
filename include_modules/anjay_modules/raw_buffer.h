@@ -33,18 +33,18 @@ typedef struct {
     size_t capacity;
 } anjay_raw_buffer_t;
 
-#define ANJAY_RAW_BUFFER_ON_STACK(Capacity) \
-    (anjay_raw_buffer_t) { \
-        .data = &(uint8_t[Capacity]){0}[0], \
-        .size = 0, \
-        .capacity = Capacity \
+#define ANJAY_RAW_BUFFER_ON_STACK(Capacity)   \
+    (anjay_raw_buffer_t) {                    \
+        .data = &(uint8_t[Capacity]){ 0 }[0], \
+        .size = 0,                            \
+        .capacity = Capacity                  \
     }
 
 #define ANJAY_RAW_BUFFER_EMPTY \
-    (anjay_raw_buffer_t) { \
-        .data = NULL, \
-        .size = 0, \
-        .capacity = 0 \
+    (anjay_raw_buffer_t) {     \
+        .data = NULL,          \
+        .size = 0,             \
+        .capacity = 0          \
     }
 
 /**
@@ -76,4 +76,3 @@ int _anjay_raw_buffer_from_data(anjay_raw_buffer_t *dst,
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_RAW_BUFFER_H */
-

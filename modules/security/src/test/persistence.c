@@ -52,8 +52,10 @@ security_persistence_test_env_create(void) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_install(env->anjay_restored));
     env->stream = avs_stream_membuf_create();
     AVS_UNIT_ASSERT_NOT_NULL(env->stream);
-    env->stored = _anjay_dm_find_object_by_oid(env->anjay_stored, ANJAY_DM_OID_SECURITY);
-    env->restored = _anjay_dm_find_object_by_oid(env->anjay_restored, ANJAY_DM_OID_SECURITY);
+    env->stored = _anjay_dm_find_object_by_oid(env->anjay_stored,
+                                               ANJAY_DM_OID_SECURITY);
+    env->restored = _anjay_dm_find_object_by_oid(env->anjay_restored,
+                                                 ANJAY_DM_OID_SECURITY);
     env->stored_repr = _anjay_sec_get(env->stored);
     env->restored_repr = _anjay_sec_get(env->restored);
     return env;
@@ -70,8 +72,10 @@ security_persistence_test_env_destroy(security_persistence_test_env_t **env) {
 AVS_UNIT_TEST(security_persistence, empty_store_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
     AVS_UNIT_ASSERT_EQUAL(0, AVS_LIST_SIZE(env->stored_repr->instances));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_persist(env->anjay_stored, env->stream));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_restore(env->anjay_restored, env->stream));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_security_object_persist(env->anjay_stored, env->stream));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_security_object_restore(env->anjay_restored, env->stream));
     AVS_UNIT_ASSERT_EQUAL(0, AVS_LIST_SIZE(env->restored_repr->instances));
 }
 
@@ -113,14 +117,11 @@ static void assert_instances_equal(const sec_instance_t *a,
                              &b->public_cert_or_psk_identity);
     assert_raw_buffers_equal(&a->private_cert_or_psk_key,
                              &b->private_cert_or_psk_key);
-    assert_raw_buffers_equal(&a->server_public_key,
-                             &b->server_public_key);
+    assert_raw_buffers_equal(&a->server_public_key, &b->server_public_key);
     AVS_UNIT_ASSERT_EQUAL((uint32_t) a->sms_security_mode,
                           (uint32_t) b->sms_security_mode);
-    assert_raw_buffers_equal(&a->sms_key_params,
-                             &b->sms_key_params);
-    assert_raw_buffers_equal(&a->sms_secret_key,
-                             &b->sms_secret_key);
+    assert_raw_buffers_equal(&a->sms_key_params, &b->sms_key_params);
+    assert_raw_buffers_equal(&a->sms_secret_key, &b->sms_secret_key);
     AVS_UNIT_ASSERT_EQUAL_STRING(a->sms_number, b->sms_number);
     AVS_UNIT_ASSERT_EQUAL(a->ssid, b->ssid);
     AVS_UNIT_ASSERT_EQUAL(a->holdoff_s, b->holdoff_s);
@@ -134,11 +135,11 @@ static void assert_instances_equal(const sec_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
 }
 
-static void assert_objects_equal(const sec_repr_t *a,
-                                 const sec_repr_t *b) {
+static void assert_objects_equal(const sec_repr_t *a, const sec_repr_t *b) {
     AVS_LIST(sec_instance_t) a_it = a->instances;
     AVS_LIST(sec_instance_t) b_it = b->instances;
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(a->instances), AVS_LIST_SIZE(b->instances));
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(a->instances),
+                          AVS_LIST_SIZE(b->instances));
     while (a_it && b_it) {
         assert_instances_equal(a_it, b_it);
         a_it = AVS_LIST_NEXT(a_it);
@@ -151,9 +152,8 @@ static void assert_objects_equal(const sec_repr_t *a,
 AVS_UNIT_TEST(security_persistence, basic_store_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
     anjay_iid_t iid = ANJAY_IID_INVALID;
-    AVS_UNIT_ASSERT_SUCCESS(
-            anjay_security_object_add_instance(env->anjay_stored,
-                                               &BOOTSTRAP_INSTANCE, &iid));
+    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
+            env->anjay_stored, &BOOTSTRAP_INSTANCE, &iid));
     AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_security_object_persist(env->anjay_stored, env->stream));
@@ -184,10 +184,12 @@ AVS_UNIT_TEST(security_persistence, invalid_object_to_restore) {
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_security_object_persist(env->anjay_stored, env->stream));
 
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_restored));
+    AVS_UNIT_ASSERT_FALSE(
+            anjay_security_object_is_modified(env->anjay_restored));
     AVS_UNIT_ASSERT_FAILED(
             anjay_security_object_restore(env->anjay_restored, env->stream));
-    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_restored));
+    AVS_UNIT_ASSERT_FALSE(
+            anjay_security_object_is_modified(env->anjay_restored));
 
     /* Restored Object remains untouched */
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(env->restored_repr->instances),
@@ -205,15 +207,13 @@ AVS_UNIT_TEST(security_persistence, modification_flag_add_instance) {
     const anjay_security_instance_t invalid_instance = {
         .server_uri = ""
     };
-    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->anjay_stored,
-                                                              &invalid_instance,
-                                                              &iid));
+    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(
+            env->anjay_stored, &invalid_instance, &iid));
     AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
     /* Same thing applies if the flag already was set to true */
     _anjay_sec_mark_modified(_anjay_sec_get(env->stored));
-    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(env->anjay_stored,
-                                                              &invalid_instance,
-                                                              &iid));
+    AVS_UNIT_ASSERT_FAILED(anjay_security_object_add_instance(
+            env->anjay_stored, &invalid_instance, &iid));
     AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
     _anjay_sec_clear_modified(_anjay_sec_get(env->stored));
 

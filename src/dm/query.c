@@ -20,8 +20,8 @@
 
 #include "query.h"
 
-#include "../dm_core.h"
 #include "../anjay_core.h"
+#include "../dm_core.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -35,7 +35,7 @@ static int find_server_iid_handler(anjay_t *anjay,
                                    anjay_iid_t iid,
                                    void *args_) {
     (void) obj;
-    find_iid_args_t *args = (find_iid_args_t*)args_;
+    find_iid_args_t *args = (find_iid_args_t *) args_;
     int64_t ssid;
     const anjay_uri_path_t ssid_path =
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, iid,
@@ -61,10 +61,9 @@ int _anjay_find_server_iid(anjay_t *anjay,
 
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
-    if (ssid == ANJAY_SSID_ANY
-            || ssid == ANJAY_SSID_BOOTSTRAP
-            || _anjay_dm_foreach_instance(anjay, obj,
-                                          find_server_iid_handler, &args)
+    if (ssid == ANJAY_SSID_ANY || ssid == ANJAY_SSID_BOOTSTRAP
+            || _anjay_dm_foreach_instance(anjay, obj, find_server_iid_handler,
+                                          &args)
             || args.out_iid == ANJAY_IID_INVALID) {
         return -1;
     }
@@ -138,13 +137,13 @@ int _anjay_ssid_from_security_iid(anjay_t *anjay,
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
                                ANJAY_DM_RID_SECURITY_SSID);
 
-    if (_anjay_dm_res_read_i64(anjay, &path, &_ssid)
-            || _ssid <= 0 || _ssid > UINT16_MAX) {
+    if (_anjay_dm_res_read_i64(anjay, &path, &_ssid) || _ssid <= 0
+            || _ssid > UINT16_MAX) {
         anjay_log(ERROR, "could not get Short Server ID");
         return -1;
     }
 
-    *out_ssid = (uint16_t)_ssid;
+    *out_ssid = (uint16_t) _ssid;
     return 0;
 }
 
@@ -165,8 +164,7 @@ bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
 #endif
 
 avs_time_duration_t
-_anjay_disable_timeout_from_server_iid(anjay_t *anjay,
-                                       anjay_iid_t server_iid) {
+_anjay_disable_timeout_from_server_iid(anjay_t *anjay, anjay_iid_t server_iid) {
     static const int32_t DEFAULT_DISABLE_TIMEOUT_S = NUM_SECONDS_IN_A_DAY;
 
     int64_t timeout_s;

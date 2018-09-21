@@ -21,26 +21,29 @@
 
 #include "../coap_log.h"
 
-#include "transfer_impl.h"
-#include "response.h"
-#include "../stream/common.h"
 #include "../id_source/static.h"
+#include "../stream/common.h"
+#include "response.h"
+#include "transfer_impl.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-static int handle_block_size_renegotiation(coap_block_transfer_ctx_t *ctx,
-                                           const avs_coap_block_info_t *block2) {
+static int
+handle_block_size_renegotiation(coap_block_transfer_ctx_t *ctx,
+                                const avs_coap_block_info_t *block2) {
     assert(block2->size >= AVS_COAP_MSG_BLOCK_MIN_SIZE
-            && block2->size <= AVS_COAP_MSG_BLOCK_MAX_SIZE);
+           && block2->size <= AVS_COAP_MSG_BLOCK_MAX_SIZE);
 
     if (block2->size > ctx->block.size) {
-        coap_log(WARNING, "client attempted to increase block size from %u to "
-                 "%u B", ctx->block.size, block2->size);
+        coap_log(WARNING,
+                 "client attempted to increase block size from %u to "
+                 "%u B",
+                 ctx->block.size, block2->size);
         return -1;
     } else if (block2->size < ctx->block.size) {
         if (block2->seq_num != 0 || ctx->num_sent_blocks != 0) {
             coap_log(ERROR, "client changed block size in the middle of block "
-                     "transfer");
+                            "transfer");
             return -1;
         } else {
             coap_log(TRACE, "lowering block size to %u B on client request",
@@ -59,15 +62,14 @@ static int block_recv_handler(void *validator_ctx_,
                               bool *out_wait_for_next,
                               uint8_t *out_error_code) {
     anjay_coap_block_request_validator_ctx_t *validator_ctx =
-            (anjay_coap_block_request_validator_ctx_t *)validator_ctx_;
+            (anjay_coap_block_request_validator_ctx_t *) validator_ctx_;
 
     (void) last_response;
 
     *out_wait_for_next = false;
 
     avs_coap_msg_identity_t id = avs_coap_msg_get_identity(msg);
-    avs_coap_msg_identity_t prev_id =
-            avs_coap_msg_get_identity(last_response);
+    avs_coap_msg_identity_t prev_id = avs_coap_msg_get_identity(last_response);
 
     // Message identity matches last response, it means it must be a duplicate
     // of the previous request.
@@ -97,9 +99,9 @@ static int block_recv_handler(void *validator_ctx_,
         *out_error_code = -ANJAY_ERR_BAD_REQUEST;
         return -1;
     } else if (!block2.valid // no BLOCK2 option - must be an unrelated request
-            || (validator_ctx && validator_ctx->validator
-                    && validator_ctx->validator(
-                            msg, validator_ctx->validator_arg))) {
+               || (validator_ctx && validator_ctx->validator
+                   && validator_ctx->validator(msg,
+                                               validator_ctx->validator_arg))) {
         *out_wait_for_next = true;
         *out_error_code = -ANJAY_ERR_SERVICE_UNAVAILABLE;
         return -1;
@@ -125,8 +127,7 @@ static int block_recv_handler(void *validator_ctx_,
     return BLOCK_TRANSFER_RESULT_OK;
 }
 
-coap_block_transfer_ctx_t *
-_anjay_coap_block_response_new(
+coap_block_transfer_ctx_t *_anjay_coap_block_response_new(
         uint16_t max_block_size,
         coap_stream_common_t *stream_data,
         coap_id_source_t *id_source,

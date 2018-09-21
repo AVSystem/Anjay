@@ -18,30 +18,30 @@
 #include "../demo_utils.h"
 #include "../objects.h"
 
-#include <string.h>
 #include <assert.h>
+#include <string.h>
 
 #include <avsystem/commons/memory.h>
 #include <avsystem/commons/vector.h>
 
-#define TEST_RES_TIMESTAMP            0
-#define TEST_RES_COUNTER              1
-#define TEST_RES_INCREMENT_COUNTER    2
-#define TEST_RES_INT_ARRAY            3
+#define TEST_RES_TIMESTAMP 0
+#define TEST_RES_COUNTER 1
+#define TEST_RES_INCREMENT_COUNTER 2
+#define TEST_RES_INT_ARRAY 3
 #define TEST_RES_LAST_EXEC_ARGS_ARRAY 4
-#define TEST_RES_BYTES                5
-#define TEST_RES_BYTES_SIZE           6
-#define TEST_RES_BYTES_BURST          7
-#define TEST_RES_EMPTY                8
-#define TEST_RES_INIT_INT_ARRAY       9
-#define TEST_RES_RAW_BYTES            10
-#define TEST_RES_OPAQUE_ARRAY         11
-#define TEST_RES_INT                  12
-#define TEST_RES_BOOL                 13
-#define TEST_RES_FLOAT                14
-#define TEST_RES_STRING               15
-#define TEST_RES_OBJLNK               16
-#define TEST_RES_BYTES_ZERO_BEGIN     17
+#define TEST_RES_BYTES 5
+#define TEST_RES_BYTES_SIZE 6
+#define TEST_RES_BYTES_BURST 7
+#define TEST_RES_EMPTY 8
+#define TEST_RES_INIT_INT_ARRAY 9
+#define TEST_RES_RAW_BYTES 10
+#define TEST_RES_OPAQUE_ARRAY 11
+#define TEST_RES_INT 12
+#define TEST_RES_BOOL 13
+#define TEST_RES_FLOAT 14
+#define TEST_RES_STRING 15
+#define TEST_RES_OBJLNK 16
+#define TEST_RES_BYTES_ZERO_BEGIN 17
 
 typedef struct test_array_entry_struct {
     anjay_riid_t index;
@@ -101,7 +101,7 @@ static test_instance_t *find_instance(const test_repr_t *repr,
 static int test_instance_present(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
                                  anjay_iid_t iid) {
-    (void)anjay;
+    (void) anjay;
     return find_instance(get_test(obj_ptr), iid) != NULL;
 }
 
@@ -109,10 +109,10 @@ static int test_instance_it(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,
                             anjay_iid_t *out,
                             void **cookie) {
-    (void)anjay;
+    (void) anjay;
 
-    test_repr_t* test = get_test(obj_ptr);
-    AVS_LIST(test_instance_t) curr = (AVS_LIST(test_instance_t))*cookie;
+    test_repr_t *test = get_test(obj_ptr);
+    AVS_LIST(test_instance_t) curr = (AVS_LIST(test_instance_t)) *cookie;
 
     if (!curr) {
         curr = test->instances;
@@ -142,8 +142,9 @@ static int test_instance_create(anjay_t *anjay,
                                 const anjay_dm_object_def_t *const *obj_ptr,
                                 anjay_iid_t *inout_iid,
                                 anjay_ssid_t ssid) {
-    (void) anjay; (void) ssid;
-    test_repr_t* test = get_test(obj_ptr);
+    (void) anjay;
+    (void) ssid;
+    test_repr_t *test = get_test(obj_ptr);
 
     AVS_LIST(test_instance_t) created = AVS_LIST_NEW_ELEMENT(test_instance_t);
     if (!created) {
@@ -187,8 +188,8 @@ static void release_instance(test_instance_t *inst) {
 static int test_instance_remove(anjay_t *anjay,
                                 const anjay_dm_object_def_t *const *obj_ptr,
                                 anjay_iid_t iid) {
-    (void)anjay;
-    test_repr_t* test = get_test(obj_ptr);
+    (void) anjay;
+    test_repr_t *test = get_test(obj_ptr);
 
     AVS_LIST(test_instance_t) *it;
     AVS_LIST_FOREACH_PTR(it, &test->instances) {
@@ -219,9 +220,9 @@ static int test_resource_read(anjay_t *anjay,
                               anjay_iid_t iid,
                               anjay_rid_t rid,
                               anjay_output_ctx_t *ctx) {
-    (void)anjay;
+    (void) anjay;
 
-    test_repr_t* test = get_test(obj_ptr);
+    test_repr_t *test = get_test(obj_ptr);
     test_instance_t *inst = find_instance(test, iid);
     assert(inst);
 
@@ -240,7 +241,7 @@ static int test_resource_read(anjay_t *anjay,
             test_array_entry_t *it;
             AVS_LIST_FOREACH(it, inst->array) {
                 if (anjay_ret_array_index(array, it->index)
-                    || anjay_ret_i32(array, it->value)) {
+                        || anjay_ret_i32(array, it->value)) {
                     return ANJAY_ERR_INTERNAL;
                 }
             }
@@ -256,8 +257,9 @@ static int test_resource_read(anjay_t *anjay,
         if (inst->last_exec_args) {
             test_exec_arg_t *it;
             AVS_LIST_FOREACH(it, inst->last_exec_args) {
-                if (anjay_ret_array_index(array, (anjay_riid_t)it->number)
-                    || anjay_ret_string(array, it->value ? it->value : "")) {
+                if (anjay_ret_array_index(array, (anjay_riid_t) it->number)
+                        || anjay_ret_string(array,
+                                            it->value ? it->value : "")) {
                     return ANJAY_ERR_INTERNAL;
                 }
             }
@@ -281,9 +283,8 @@ static int test_resource_read(anjay_t *anjay,
                 return -1;
             }
             int32_t counter = 0;
-            for (int32_t offset = 0;
-                    offset < inst->bytes_size;
-                    offset += inst->bytes_burst) {
+            for (int32_t offset = 0; offset < inst->bytes_size;
+                 offset += inst->bytes_burst) {
                 int32_t bytes_to_write = inst->bytes_size - offset;
                 if (bytes_to_write > inst->bytes_burst) {
                     bytes_to_write = inst->bytes_burst;
@@ -331,7 +332,7 @@ static int test_resource_read(anjay_t *anjay,
             AVS_LIST_FOREACH(it, inst->array) {
                 const uint32_t value = htonl((uint32_t) it->value);
                 if (anjay_ret_array_index(array, it->index)
-                    || anjay_ret_bytes(array, &value, sizeof(value))) {
+                        || anjay_ret_bytes(array, &value, sizeof(value))) {
                     return ANJAY_ERR_INTERNAL;
                 }
             }
@@ -359,8 +360,9 @@ static int test_resource_read(anjay_t *anjay,
     }
 }
 
-static int test_resource_write_to_array(AVS_LIST(test_array_entry_t) *inst_array,
-                                        anjay_input_ctx_t *input_array) {
+static int
+test_resource_write_to_array(AVS_LIST(test_array_entry_t) *inst_array,
+                             anjay_input_ctx_t *input_array) {
     assert(inst_array);
     assert(input_array);
     int result;
@@ -385,7 +387,7 @@ static int test_resource_write_to_array(AVS_LIST(test_array_entry_t) *inst_array
 
         if (!value_updated) {
             AVS_LIST(test_array_entry_t) list_entry =
-                AVS_LIST_NEW_ELEMENT(test_array_entry_t);
+                    AVS_LIST_NEW_ELEMENT(test_array_entry_t);
             if (!list_entry) {
                 demo_log(ERROR, "out of memory");
                 return ANJAY_ERR_INTERNAL;
@@ -406,9 +408,9 @@ static int test_resource_write(anjay_t *anjay,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
                                anjay_input_ctx_t *ctx) {
-    (void)anjay;
+    (void) anjay;
 
-    test_repr_t* test = get_test(obj_ptr);
+    test_repr_t *test = get_test(obj_ptr);
     test_instance_t *inst = find_instance(test, iid);
     assert(inst);
 
@@ -487,7 +489,7 @@ static int read_exec_arg_value(anjay_execute_ctx_t *arg_ctx,
     while (true) {
         size_t new_value_size = bytes_read + VALUE_CHUNK_SIZE;
 
-        char *new_string = (char*)avs_realloc(*out_string, new_value_size);
+        char *new_string = (char *) avs_realloc(*out_string, new_value_size);
         if (!new_string) {
             demo_log(ERROR, "out of memory");
             result = ANJAY_ERR_INTERNAL;
@@ -497,18 +499,18 @@ static int read_exec_arg_value(anjay_execute_ctx_t *arg_ctx,
         *out_string = new_string;
 
         result = anjay_execute_get_arg_value(arg_ctx, new_string + bytes_read,
-                                             (ssize_t)VALUE_CHUNK_SIZE);
+                                             (ssize_t) VALUE_CHUNK_SIZE);
 
         if (result < 0) {
-            demo_log(ERROR, "could not read arg value: %d", (int)result);
+            demo_log(ERROR, "could not read arg value: %d", (int) result);
             goto fail;
-        } else if ((size_t)result != VALUE_CHUNK_SIZE - 1) {
+        } else if ((size_t) result != VALUE_CHUNK_SIZE - 1) {
             // nothing more to read, we're done
             break;
         }
 
         // incomplete read; bigger buffer required
-        bytes_read += (size_t)result;
+        bytes_read += (size_t) result;
     }
 
     return 0;
@@ -516,7 +518,7 @@ static int read_exec_arg_value(anjay_execute_ctx_t *arg_ctx,
 fail:
     avs_free(*out_string);
     *out_string = NULL;
-    return (int)result;
+    return (int) result;
 }
 
 static int read_exec_arg(anjay_execute_ctx_t *arg_ctx,
@@ -579,28 +581,28 @@ static int init_int_array_read_element(test_array_entry_t *out_entry,
     int arg_number;
     bool has_value;
 
-    ssize_t result = anjay_execute_get_next_arg(arg_ctx, &arg_number, &has_value);
+    ssize_t result =
+            anjay_execute_get_next_arg(arg_ctx, &arg_number, &has_value);
     if (result) {
-        return (int)result;
+        return (int) result;
     }
 
     char value_buf[16];
     result = anjay_execute_get_arg_value(arg_ctx, value_buf, sizeof(value_buf));
     if (result < 0) {
-        return (int)result;
+        return (int) result;
     }
 
     long value;
-    if (demo_parse_long(value_buf, &value)
-            || value < INT32_MIN
+    if (demo_parse_long(value_buf, &value) || value < INT32_MIN
             || value > INT32_MAX) {
         demo_log(WARNING, "invalid resource %d value", arg_number);
         return ANJAY_ERR_BAD_REQUEST;
     }
 
     assert(0 <= arg_number && arg_number <= UINT16_MAX);
-    out_entry->index = (anjay_riid_t)arg_number;
-    out_entry->value = (int32_t)value;
+    out_entry->index = (anjay_riid_t) arg_number;
+    out_entry->value = (int32_t) value;
     return 0;
 }
 
@@ -642,9 +644,9 @@ static int test_resource_execute(anjay_t *anjay,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
                                  anjay_execute_ctx_t *arg_ctx) {
-    (void)arg_ctx;
+    (void) arg_ctx;
 
-    test_repr_t* test = get_test(obj_ptr);
+    test_repr_t *test = get_test(obj_ptr);
     test_instance_t *inst = find_instance(test, iid);
     assert(inst);
 
@@ -652,34 +654,30 @@ static int test_resource_execute(anjay_t *anjay,
     case TEST_RES_TIMESTAMP:
     case TEST_RES_COUNTER:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
-    case TEST_RES_INCREMENT_COUNTER:
-        {
-            int result = read_exec_args(arg_ctx, &inst->last_exec_args);
-            if (result) {
-                demo_log(ERROR, "could not save Execute arguments");
-                return result;
-            }
-
-            ++inst->execute_counter;
-            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
-                                 TEST_RES_COUNTER);
-            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
-                                 TEST_RES_LAST_EXEC_ARGS_ARRAY);
-            return 0;
+    case TEST_RES_INCREMENT_COUNTER: {
+        int result = read_exec_args(arg_ctx, &inst->last_exec_args);
+        if (result) {
+            demo_log(ERROR, "could not save Execute arguments");
+            return result;
         }
-    case TEST_RES_INIT_INT_ARRAY:
-        {
-            int result = init_int_array(&inst->array, arg_ctx);
-            if (result) {
-                return result;
-            }
 
-            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
-                                 TEST_RES_INT_ARRAY);
-            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
-                                 TEST_RES_OPAQUE_ARRAY);
-            return 0;
+        ++inst->execute_counter;
+        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, TEST_RES_COUNTER);
+        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                             TEST_RES_LAST_EXEC_ARGS_ARRAY);
+        return 0;
+    }
+    case TEST_RES_INIT_INT_ARRAY: {
+        int result = init_int_array(&inst->array, arg_ctx);
+        if (result) {
+            return result;
         }
+
+        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, TEST_RES_INT_ARRAY);
+        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                             TEST_RES_OPAQUE_ARRAY);
+        return 0;
+    }
     default:
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -707,25 +705,24 @@ static int test_resource_dim(anjay_t *anjay,
 
 const anjay_dm_object_def_t TEST_OBJECT = {
     .oid = DEMO_OID_TEST,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            TEST_RES_TIMESTAMP,
-            TEST_RES_COUNTER,
-            TEST_RES_INCREMENT_COUNTER,
-            TEST_RES_INT_ARRAY,
-            TEST_RES_LAST_EXEC_ARGS_ARRAY,
-            TEST_RES_BYTES,
-            TEST_RES_BYTES_SIZE,
-            TEST_RES_BYTES_BURST,
-            TEST_RES_EMPTY,
-            TEST_RES_INIT_INT_ARRAY,
-            TEST_RES_RAW_BYTES,
-            TEST_RES_OPAQUE_ARRAY,
-            TEST_RES_INT,
-            TEST_RES_BOOL,
-            TEST_RES_FLOAT,
-            TEST_RES_STRING,
-            TEST_RES_OBJLNK,
-            TEST_RES_BYTES_ZERO_BEGIN),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(TEST_RES_TIMESTAMP,
+                                              TEST_RES_COUNTER,
+                                              TEST_RES_INCREMENT_COUNTER,
+                                              TEST_RES_INT_ARRAY,
+                                              TEST_RES_LAST_EXEC_ARGS_ARRAY,
+                                              TEST_RES_BYTES,
+                                              TEST_RES_BYTES_SIZE,
+                                              TEST_RES_BYTES_BURST,
+                                              TEST_RES_EMPTY,
+                                              TEST_RES_INIT_INT_ARRAY,
+                                              TEST_RES_RAW_BYTES,
+                                              TEST_RES_OPAQUE_ARRAY,
+                                              TEST_RES_INT,
+                                              TEST_RES_BOOL,
+                                              TEST_RES_FLOAT,
+                                              TEST_RES_STRING,
+                                              TEST_RES_OBJLNK,
+                                              TEST_RES_BYTES_ZERO_BEGIN),
     .handlers = {
         .instance_it = test_instance_it,
         .instance_present = test_instance_present,
@@ -745,7 +742,7 @@ const anjay_dm_object_def_t TEST_OBJECT = {
 };
 
 const anjay_dm_object_def_t **test_object_create(void) {
-    test_repr_t *repr = (test_repr_t*)avs_calloc(1, sizeof(test_repr_t));
+    test_repr_t *repr = (test_repr_t *) avs_calloc(1, sizeof(test_repr_t));
     if (!repr) {
         return NULL;
     }

@@ -28,15 +28,15 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
-#define STATIC_ASSERT(condition, message) \
-    struct message { \
+#define STATIC_ASSERT(condition, message)   \
+    struct message {                        \
         char message[(condition) ? 1 : -1]; \
     }
 
 #define demo_log(level, ...) avs_log(demo, level, __VA_ARGS__)
 
 #define container_of(Ptr, Type, Member) \
-    ((Type*)(intptr_t)((const char*)(Ptr) - offsetof(Type, Member)))
+    ((Type *) (intptr_t) ((const char *) (Ptr) -offsetof(Type, Member)))
 
 extern char **saved_argv;
 
@@ -76,8 +76,7 @@ static inline bool velocity_bearing_deg_cw_n_valid(double value) {
 
 double geo_distance_m(double lat1, double lon1, double lat2, double lon2);
 
-int demo_parse_long(const char *str,
-                    long *out_value);
+int demo_parse_long(const char *str, long *out_value);
 
 int fetch_bytes(anjay_input_ctx_t *ctx, void **buffer, size_t *out_size);
 

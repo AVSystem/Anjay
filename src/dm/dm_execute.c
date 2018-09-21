@@ -15,17 +15,18 @@
  */
 
 #include <anjay_config.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <ctype.h>
 #include <assert.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "dm_execute.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-static anjay_execute_state_t state_read_value(anjay_execute_ctx_t* ctx, int ch);
-static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t* ctx, int ch);
+static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx, int ch);
+static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t *ctx,
+                                                 int ch);
 
 static int next_char(anjay_execute_ctx_t *ctx) {
     if (ctx->end_of_message) {
@@ -39,7 +40,7 @@ static int next_char(anjay_execute_ctx_t *ctx) {
     } else if (result == 0) {
         ctx->end_of_message = true;
     }
-    return (int)(uint8_t)buf[0];
+    return (int) (uint8_t) buf[0];
 }
 
 static bool is_arg_separator(int byte) {
@@ -52,10 +53,12 @@ static bool is_value_delimiter(int byte) {
 
 static bool is_value(int byte) {
     /* See OMA Specification Execute section, for more details. */
+    // clang-format off
     return byte == '!'
         || (byte >= 0x23 && byte <= 0x26)
         || (byte >= 0x28 && byte <= 0x5b)
         || (byte >= 0x5d && byte <= 0x7e);
+    // clang-format on
 }
 
 static bool is_value_assignment(int byte) {
@@ -128,12 +131,12 @@ ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
     }
 
     ssize_t read_bytes = 0;
-    while ((size_t) read_bytes < buf_size-1) {
+    while ((size_t) read_bytes < buf_size - 1) {
         int ch = next_char(ctx);
         ctx->state = state_read_value(ctx, ch);
 
         if (ctx->state == STATE_READ_VALUE) {
-            out_buf[read_bytes++] = (char)ch;
+            out_buf[read_bytes++] = (char) ch;
         } else {
             break;
         }
@@ -166,7 +169,7 @@ void _anjay_execute_ctx_destroy(anjay_execute_ctx_t **ctx) {
 
 static anjay_execute_state_t expect_separator_or_eof(anjay_execute_ctx_t *ctx,
                                                      int ch) {
-    (void)ctx;
+    (void) ctx;
     if (is_arg_separator(ch)) {
         return STATE_FINISHED_READING_ARGUMENT;
     } else if (ch == EOF) {
@@ -186,7 +189,7 @@ static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx,
 }
 
 static anjay_execute_state_t expect_value(anjay_execute_ctx_t *ctx, int ch) {
-    (void)ctx;
+    (void) ctx;
     if (is_value_delimiter(ch)) {
         return STATE_READ_VALUE;
     } else {

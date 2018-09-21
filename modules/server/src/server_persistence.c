@@ -17,15 +17,15 @@
 #include <anjay_config.h>
 
 #ifdef WITH_AVS_PERSISTENCE
-#include <avsystem/commons/persistence.h>
+#    include <avsystem/commons/persistence.h>
 #endif // WITH_AVS_PERSISTENCE
 #include <avsystem/commons/utils.h>
 
 #include <anjay_modules/dm_utils.h>
 #include <anjay_modules/utils_core.h>
 
-#include <string.h>
 #include <inttypes.h>
+#include <string.h>
 
 #include "mod_server.h"
 #include "server_transaction.h"
@@ -40,8 +40,7 @@ VISIBILITY_SOURCE_BEGIN
 
 static const char MAGIC[] = { 'S', 'R', 'V', '\0' };
 
-static int handle_sized_fields(avs_persistence_context_t *ctx,
-                               void *element_) {
+static int handle_sized_fields(avs_persistence_context_t *ctx, void *element_) {
     server_instance_t *element = (server_instance_t *) element_;
     bool has_binding;
     int retval = 0;
@@ -150,8 +149,9 @@ static int restore_instance(avs_persistence_context_t *ctx,
         }
         if (!retval
                 && avs_simple_snprintf(element->binding_buf,
-                                       sizeof(element->binding_buf),
-                                       "%s", binding_str) < 0) {
+                                       sizeof(element->binding_buf), "%s",
+                                       binding_str)
+                               < 0) {
             persistence_log(ERROR, "Could not restore binding: %s",
                             binding_str);
             retval = -1;
@@ -181,8 +181,8 @@ int anjay_server_object_persist(anjay_t *anjay,
         return -1;
     }
     retval = avs_persistence_list(ctx, (AVS_LIST(void) *) &repr->instances,
-                                  sizeof(server_instance_t),
-                                  persist_instance, NULL, NULL);
+                                  sizeof(server_instance_t), persist_instance,
+                                  NULL, NULL);
     avs_persistence_context_delete(ctx);
     if (!retval) {
         _anjay_serv_clear_modified(repr);
@@ -224,8 +224,8 @@ int anjay_server_object_restore(anjay_t *anjay,
     repr->instances = NULL;
     retval = avs_persistence_list(restore_ctx,
                                   (AVS_LIST(void) *) &repr->instances,
-                                  sizeof(server_instance_t),
-                                  restore_instance, NULL, NULL);
+                                  sizeof(server_instance_t), restore_instance,
+                                  NULL, NULL);
     if (retval || (retval = _anjay_serv_object_validate(repr))) {
         _anjay_serv_destroy_instances(&repr->instances);
         repr->instances = backup.instances;
@@ -240,22 +240,24 @@ int anjay_server_object_restore(anjay_t *anjay,
     return retval;
 }
 
-#ifdef ANJAY_TEST
-#include "test/persistence.c"
-#endif
+#    ifdef ANJAY_TEST
+#        include "test/persistence.c"
+#    endif
 
 #else // WITH_AVS_PERSISTENCE
 
 int anjay_server_object_persist(anjay_t *anjay,
                                 avs_stream_abstract_t *out_stream) {
-    (void) anjay; (void) out_stream;
+    (void) anjay;
+    (void) out_stream;
     persistence_log(ERROR, "Persistence not compiled in");
     return -1;
 }
 
 int anjay_server_object_restore(anjay_t *anjay,
                                 avs_stream_abstract_t *in_stream) {
-    (void) anjay; (void) in_stream;
+    (void) anjay;
+    (void) in_stream;
     persistence_log(ERROR, "Persistence not compiled in");
     return -1;
 }

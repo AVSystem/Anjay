@@ -21,15 +21,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/coap/ctx.h>
+#include <avsystem/commons/coap/msg.h>
 
 #include "transfer.h"
 
+#include "../id_source/id_source.h"
 #include "../stream/common.h"
 #include "../stream/in.h"
 #include "../stream/out.h"
-#include "../id_source/id_source.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -56,8 +56,7 @@ typedef struct {
  *
  * @returns Created block_response object on success, NULL on failure.
  */
-coap_block_transfer_ctx_t *
-_anjay_coap_block_response_new(
+coap_block_transfer_ctx_t *_anjay_coap_block_response_new(
         uint16_t max_block_size,
         coap_stream_common_t *stream_data,
         coap_id_source_t *id_source,
@@ -68,9 +67,11 @@ _anjay_coap_block_response_last_request_id(coap_block_transfer_ctx_t *ctx);
 
 #else
 
-#define _anjay_coap_block_response_last_request_id(...) \
-        (AVS_UNREACHABLE("should never happen"), \
-         (avs_coap_msg_identity_t) { .msg_id = 0 })
+#    define _anjay_coap_block_response_last_request_id(...) \
+        (AVS_UNREACHABLE("should never happen"),            \
+         (avs_coap_msg_identity_t) {                        \
+             .msg_id = 0                                    \
+         })
 
 #endif
 

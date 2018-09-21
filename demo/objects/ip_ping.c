@@ -15,7 +15,7 @@
  */
 
 #if !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
-#define _POSIX_C_SOURCE 200809L
+#    define _POSIX_C_SOURCE 200809L
 #endif
 
 #include "../demo.h"
@@ -29,18 +29,18 @@
 
 #include <avsystem/commons/utils.h>
 
-#define IP_PING_HOSTNAME       0
-#define IP_PING_REPETITIONS    1
-#define IP_PING_TIMEOUT_MS     2
-#define IP_PING_BLOCK_SIZE     3
-#define IP_PING_DSCP           4
-#define IP_PING_RUN            5
-#define IP_PING_STATE          6
-#define IP_PING_SUCCESS_COUNT  7
-#define IP_PING_ERROR_COUNT    8
-#define IP_PING_AVG_TIME_MS    9
-#define IP_PING_MIN_TIME_MS   10
-#define IP_PING_MAX_TIME_MS   11
+#define IP_PING_HOSTNAME 0
+#define IP_PING_REPETITIONS 1
+#define IP_PING_TIMEOUT_MS 2
+#define IP_PING_BLOCK_SIZE 3
+#define IP_PING_DSCP 4
+#define IP_PING_RUN 5
+#define IP_PING_STATE 6
+#define IP_PING_SUCCESS_COUNT 7
+#define IP_PING_ERROR_COUNT 8
+#define IP_PING_AVG_TIME_MS 9
+#define IP_PING_MIN_TIME_MS 10
+#define IP_PING_MAX_TIME_MS 11
 #define IP_PING_TIME_STDEV_US 12
 
 typedef enum {
@@ -105,7 +105,8 @@ static int ip_ping_resource_read(anjay_t *anjay,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
                                  anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
     ip_ping_t *ping = get_ip_ping(obj_ptr);
 
     switch (rid) {
@@ -151,20 +152,20 @@ static int ip_ping_reset_diagnostic_state(anjay_t *anjay, ip_ping_t *ipping) {
     return 0;
 }
 
-#define DECLARE_GET_NUM(Type, Base) \
-static int get_##Type (anjay_input_ctx_t *ctx, Type##_t *out, \
-                       Type##_t min, Type##_t max) {\
-    int##Base##_t base; \
-    int result = anjay_get_i##Base (ctx, &base); \
-    if (result) { \
-        return result; \
-    } \
-    if (base < (int##Base##_t) min || base > (int##Base##_t) max) { \
-        return ANJAY_ERR_BAD_REQUEST; \
-    } \
-    *out = (Type##_t) base; \
-    return 0; \
-}
+#define DECLARE_GET_NUM(Type, Base)                                            \
+    static int get_##Type(anjay_input_ctx_t *ctx, Type##_t *out, Type##_t min, \
+                          Type##_t max) {                                      \
+        int##Base##_t base;                                                    \
+        int result = anjay_get_i##Base(ctx, &base);                            \
+        if (result) {                                                          \
+            return result;                                                     \
+        }                                                                      \
+        if (base < (int##Base##_t) min || base > (int##Base##_t) max) {        \
+            return ANJAY_ERR_BAD_REQUEST;                                      \
+        }                                                                      \
+        *out = (Type##_t) base;                                                \
+        return 0;                                                              \
+    }
 
 DECLARE_GET_NUM(uint8, 32)
 DECLARE_GET_NUM(uint16, 32)
@@ -175,15 +176,17 @@ static int ip_ping_resource_write(anjay_t *anjay,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_input_ctx_t *ctx) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
     ip_ping_t *ping = get_ip_ping(obj_ptr);
     int result;
 
     switch (rid) {
     case IP_PING_HOSTNAME:
         (void) ((result = ip_ping_reset_diagnostic_state(anjay, ping))
-                || (result = anjay_get_string(ctx, ping->configuration.hostname,
-                                              sizeof(ping->configuration.hostname))));
+                || (result = anjay_get_string(
+                            ctx, ping->configuration.hostname,
+                            sizeof(ping->configuration.hostname))));
         return result;
     case IP_PING_REPETITIONS:
         (void) ((result = ip_ping_reset_diagnostic_state(anjay, ping))
@@ -192,13 +195,13 @@ static int ip_ping_resource_write(anjay_t *anjay,
         return result;
     case IP_PING_TIMEOUT_MS:
         (void) ((result = ip_ping_reset_diagnostic_state(anjay, ping))
-                || (result = get_uint32(ctx, &ping->configuration.ms_timeout,
-                                        1, UINT32_MAX)));
+                || (result = get_uint32(ctx, &ping->configuration.ms_timeout, 1,
+                                        UINT32_MAX)));
         return result;
     case IP_PING_BLOCK_SIZE:
         (void) ((result = ip_ping_reset_diagnostic_state(anjay, ping))
-                || (result = get_uint16(ctx, &ping->configuration.block_size,
-                                        1, UINT16_MAX)));
+                || (result = get_uint16(ctx, &ping->configuration.block_size, 1,
+                                        UINT16_MAX)));
         return result;
     case IP_PING_DSCP:
         (void) ((result = ip_ping_reset_diagnostic_state(anjay, ping))
@@ -210,7 +213,9 @@ static int ip_ping_resource_write(anjay_t *anjay,
 }
 
 static void update_response_times(ip_ping_t *ping,
-                                  unsigned min, unsigned max, unsigned avg,
+                                  unsigned min,
+                                  unsigned max,
+                                  unsigned avg,
                                   unsigned mdev_us) {
     ping->stats.min_response_time = min;
     anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
@@ -262,8 +267,7 @@ static void ip_ping_handler(short revents, void *ping_) {
     case IP_PING_HANDLER_SKIP2:
     default:
         return;
-    case IP_PING_HANDLER_COUNTS:
-    {
+    case IP_PING_HANDLER_COUNTS: {
         unsigned total, success;
         if (sscanf(line, "%u %*s %*s %u", &total, &success) != 2) {
             goto finish;
@@ -281,8 +285,7 @@ static void ip_ping_handler(short revents, void *ping_) {
         }
         return;
     }
-    case IP_PING_HANDLER_RTT:
-    {
+    case IP_PING_HANDLER_RTT: {
         const char *ptr = strstr(line, "=");
         if (!ptr) {
             demo_log(ERROR, "Invalid output format of ping.");
@@ -307,14 +310,12 @@ finish:
     if (ping->stats.state == IP_PING_STATE_IN_PROGRESS) {
         ping->stats.state = IP_PING_STATE_ERROR_INTERNAL;
     }
-    anjay_notify_changed(ping->command_state.anjay,
-                         ping->def->oid, 0, IP_PING_STATE);
+    anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
+                         IP_PING_STATE);
 }
 
-static ip_ping_state_t start_ip_ping(anjay_t *anjay,
-                                     ip_ping_t *ping) {
-    if (!ping->configuration.repetitions
-            || !ping->configuration.ms_timeout
+static ip_ping_state_t start_ip_ping(anjay_t *anjay, ip_ping_t *ping) {
+    if (!ping->configuration.repetitions || !ping->configuration.ms_timeout
             || !ping->configuration.block_size
             || !ping->configuration.hostname[0]) {
         return IP_PING_STATE_ERROR_OTHER;
@@ -332,7 +333,7 @@ static ip_ping_state_t start_ip_ping(anjay_t *anjay,
                             ping->configuration.dscp << 2, timeout_s,
                             ping->configuration.block_size,
                             ping->configuration.hostname)
-        < 0) {
+            < 0) {
         demo_log(ERROR, "Cannot prepare ping command");
         return IP_PING_STATE_ERROR_INTERNAL;
     }
@@ -399,20 +400,19 @@ ip_ping_transaction_rollback(anjay_t *anjay,
 
 static const anjay_dm_object_def_t IP_PING = {
     .oid = DEMO_OID_IP_PING,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            IP_PING_HOSTNAME,
-            IP_PING_REPETITIONS,
-            IP_PING_TIMEOUT_MS,
-            IP_PING_BLOCK_SIZE,
-            IP_PING_DSCP,
-            IP_PING_RUN,
-            IP_PING_STATE,
-            IP_PING_SUCCESS_COUNT,
-            IP_PING_ERROR_COUNT,
-            IP_PING_AVG_TIME_MS,
-            IP_PING_MIN_TIME_MS,
-            IP_PING_MAX_TIME_MS,
-            IP_PING_TIME_STDEV_US),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(IP_PING_HOSTNAME,
+                                              IP_PING_REPETITIONS,
+                                              IP_PING_TIMEOUT_MS,
+                                              IP_PING_BLOCK_SIZE,
+                                              IP_PING_DSCP,
+                                              IP_PING_RUN,
+                                              IP_PING_STATE,
+                                              IP_PING_SUCCESS_COUNT,
+                                              IP_PING_ERROR_COUNT,
+                                              IP_PING_AVG_TIME_MS,
+                                              IP_PING_MIN_TIME_MS,
+                                              IP_PING_MAX_TIME_MS,
+                                              IP_PING_TIME_STDEV_US),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,

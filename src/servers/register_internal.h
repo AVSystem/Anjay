@@ -20,13 +20,12 @@
 #include "../anjay_core.h"
 
 #ifndef ANJAY_SERVERS_INTERNALS
-#error "Headers from servers/ are not meant to be included from outside"
+#    error "Headers from servers/ are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-bool
-_anjay_server_primary_connection_valid(anjay_server_info_t *server);
+bool _anjay_server_primary_connection_valid(anjay_server_info_t *server);
 
 typedef enum {
     ANJAY_UPDATE_SUCCESS = 0,
@@ -67,8 +66,7 @@ _anjay_server_ensure_valid_registration(anjay_t *anjay,
 int _anjay_server_reschedule_update_job(anjay_t *anjay,
                                         anjay_server_info_t *server);
 
-int _anjay_server_deregister(anjay_t *anjay,
-                             anjay_server_info_t *server);
+int _anjay_server_deregister(anjay_t *anjay, anjay_server_info_t *server);
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -21,33 +21,32 @@
 
 #include <anjay/core.h>
 
-#define TEST_ENV(Data) \
-    avs_stream_abstract_t *stream = NULL; \
-    AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, sizeof(Data))); \
+#define TEST_ENV(Data)                                                         \
+    avs_stream_abstract_t *stream = NULL;                                      \
+    AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, sizeof(Data)));  \
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, Data, sizeof(Data) - 1)); \
-    anjay_input_ctx_t *ctx; \
+    anjay_input_ctx_t *ctx;                                                    \
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_tlv_create(&ctx, &stream, true));
 
-#define TEST_TEARDOWN \
-    _anjay_input_ctx_destroy(&ctx)
+#define TEST_TEARDOWN _anjay_input_ctx_destroy(&ctx)
 
 AVS_UNIT_TEST(input_array, example) {
-    TEST_ENV( // example from spec 6.3.3.2
+    TEST_ENV(              // example from spec 6.3.3.2
             "\x08\x00\x11" // Object Instance 0
             "\xC1\x00\x03" // Resource 0 - Object ID == 3
             "\xC1\x01\x01" // Resource 1 - Instance ID == 1
-            "\x86\x02" // Resource 2 - ACL array
+            "\x86\x02"     // Resource 2 - ACL array
             "\x41\x01\xE0" // [1] -> -32
             "\x41\x02\x80" // [2] -> -128
             "\xC1\x03\x01" // Resource 3 - ACL owner == 1
             "\x08\x01\x11" // Object Instance 1
             "\xC1\x00\x04" // Resource 0 - Object ID == 4
             "\xC1\x01\x02" // Resource 1 - Instance ID == 2
-            "\x86\x02" // Resource 2 - ACL array
+            "\x86\x02"     // Resource 2 - ACL array
             "\x41\x01\x80" // [1] -> -128
             "\x41\x02\x80" // [2] -> -128
             "\xC1\x03\x01" // Resource 3 - ACL owner == 1
-            );
+    );
 
     anjay_id_type_t type;
     uint16_t id;

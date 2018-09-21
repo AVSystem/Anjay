@@ -36,8 +36,7 @@ struct coap_id_source {
     const coap_id_source_vt_t *const vtable;
 };
 
-static inline void
-_anjay_coap_id_source_release(coap_id_source_t **src) {
+static inline void _anjay_coap_id_source_release(coap_id_source_t **src) {
     if (src && *src) {
         avs_free(*src);
         *src = NULL;

@@ -19,20 +19,24 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <avsystem/commons/socket_v_table.h>
 #include <avsystem/commons/coap/ctx.h>
+#include <avsystem/commons/socket_v_table.h>
 #include <avsystem/commons/stream/stream_net.h>
 
 #include "../../../src/coap/coap_stream.h"
 
-static int success() { return 0; }
-static int fail() { return -1; }
+static int success() {
+    return 0;
+}
+static int fail() {
+    return -1;
+}
 
 static int stdin_recv(avs_net_abstract_socket_t *socket,
                       size_t *out_bytes_received,
                       void *buffer,
                       size_t buffer_length) {
-    (void)socket;
+    (void) socket;
 
     size_t bytes_read = fread(buffer, 1, buffer_length, stdin);
     if (bytes_read == 0 || bytes_read >= buffer_length) {
@@ -46,8 +50,8 @@ static int stdin_recv(avs_net_abstract_socket_t *socket,
 static int stdin_get_opt(avs_net_abstract_socket_t *socket,
                          avs_net_socket_opt_key_t opt,
                          avs_net_socket_opt_value_t *value) {
-    (void)socket;
-    (void)opt;
+    (void) socket;
+    (void) opt;
     if (opt == AVS_NET_SOCKET_OPT_RECV_TIMEOUT) {
         value->recv_timeout = avs_time_duration_from_scalar(1, AVS_TIME_S);
     } else {
@@ -59,39 +63,37 @@ static int stdin_get_opt(avs_net_abstract_socket_t *socket,
 static const avs_net_socket_v_table_t STDIN_SOCKET_VTABLE = {
     .receive = stdin_recv,
 
-    .connect = (avs_net_socket_connect_t)success,
-    .bind = (avs_net_socket_bind_t)success,
-    .close = (avs_net_socket_close_t)success,
-    .cleanup = (avs_net_socket_cleanup_t)success,
+    .connect = (avs_net_socket_connect_t) success,
+    .bind = (avs_net_socket_bind_t) success,
+    .close = (avs_net_socket_close_t) success,
+    .cleanup = (avs_net_socket_cleanup_t) success,
 
-    .decorate = (avs_net_socket_decorate_t)fail,
-    .send = (avs_net_socket_send_t)fail,
-    .send_to = (avs_net_socket_send_to_t)fail,
-    .receive_from = (avs_net_socket_receive_from_t)fail,
-    .accept = (avs_net_socket_accept_t)fail,
-    .shutdown = (avs_net_socket_shutdown_t)fail,
-    .get_system_socket = (avs_net_socket_get_system_t)fail,
-    .get_interface_name = (avs_net_socket_get_interface_t)fail,
-    .get_remote_host = (avs_net_socket_get_remote_host_t)fail,
-    .get_remote_port = (avs_net_socket_get_remote_port_t)fail,
-    .get_local_port = (avs_net_socket_get_local_port_t)fail,
+    .decorate = (avs_net_socket_decorate_t) fail,
+    .send = (avs_net_socket_send_t) fail,
+    .send_to = (avs_net_socket_send_to_t) fail,
+    .receive_from = (avs_net_socket_receive_from_t) fail,
+    .accept = (avs_net_socket_accept_t) fail,
+    .shutdown = (avs_net_socket_shutdown_t) fail,
+    .get_system_socket = (avs_net_socket_get_system_t) fail,
+    .get_interface_name = (avs_net_socket_get_interface_t) fail,
+    .get_remote_host = (avs_net_socket_get_remote_host_t) fail,
+    .get_remote_port = (avs_net_socket_get_remote_port_t) fail,
+    .get_local_port = (avs_net_socket_get_local_port_t) fail,
     .get_opt = stdin_get_opt,
-    .set_opt = (avs_net_socket_set_opt_t)success,
-    .get_errno = (avs_net_socket_errno_t)success,
+    .set_opt = (avs_net_socket_set_opt_t) success,
+    .get_errno = (avs_net_socket_errno_t) success,
 };
 
 struct stdin_socket {
     const avs_net_socket_v_table_t *const vtable;
-} stdin_socket_struct = {
-    &STDIN_SOCKET_VTABLE
-};
+} stdin_socket_struct = { &STDIN_SOCKET_VTABLE };
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    (void) argc;
+    (void) argv;
 
     avs_net_abstract_socket_t *stdin_socket =
-            (avs_net_abstract_socket_t*)&stdin_socket_struct;
+            (avs_net_abstract_socket_t *) &stdin_socket_struct;
     avs_coap_ctx_t *coap = NULL;
     avs_stream_abstract_t *stream = NULL;
 
@@ -105,12 +107,12 @@ int main(int argc, char **argv) {
     char message_finished = 0;
 
     if (avs_coap_ctx_create(&coap, 0)
-            || _anjay_coap_stream_create(&stream, coap,
-                                         in_buffer, sizeof(in_buffer),
-                                         out_buffer, sizeof(out_buffer))
+            || _anjay_coap_stream_create(&stream, coap, in_buffer,
+                                         sizeof(in_buffer), out_buffer,
+                                         sizeof(out_buffer))
             || avs_stream_net_setsock(stream, stdin_socket)
-            || avs_stream_read(stream, &bytes_read, &message_finished,
-                               buffer, sizeof(buffer))) {
+            || avs_stream_read(stream, &bytes_read, &message_finished, buffer,
+                               sizeof(buffer))) {
         retval = -1;
     }
 

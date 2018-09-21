@@ -25,7 +25,7 @@
 #include <anjay_test/utils.h>
 
 #include "../coap/test/utils.h"
-#include "../servers/servers_internal.h"
+#include "../servers/server_connections.h"
 
 AVS_UNIT_GLOBAL_INIT(verbose) {
 #ifdef WITH_AVS_LOG
@@ -35,24 +35,24 @@ AVS_UNIT_GLOBAL_INIT(verbose) {
 #endif
 }
 
-#define TEST_NULLABLE_STRING_EQUAL(Actual, Expected) \
-    do { \
-        if (Expected != NULL) { \
-            AVS_UNIT_ASSERT_NOT_NULL((Actual)); \
+#define TEST_NULLABLE_STRING_EQUAL(Actual, Expected)            \
+    do {                                                        \
+        if (Expected != NULL) {                                 \
+            AVS_UNIT_ASSERT_NOT_NULL((Actual));                 \
             AVS_UNIT_ASSERT_EQUAL_STRING((Actual), (Expected)); \
-        } else { \
-            AVS_UNIT_ASSERT_NULL((Actual)); \
-        } \
+        } else {                                                \
+            AVS_UNIT_ASSERT_NULL((Actual));                     \
+        }                                                       \
     } while (0)
 
 #define TEST_SPLIT_QUERY_STRING(QueryString, ExpectedKey, ExpectedValue) \
-    do { \
-        char buf[] = QueryString; \
-        const char *key; \
-        const char *value; \
-        split_query_string(buf, &key, &value); \
-        TEST_NULLABLE_STRING_EQUAL(key, ExpectedKey); \
-        TEST_NULLABLE_STRING_EQUAL(value, ExpectedValue); \
+    do {                                                                 \
+        char buf[] = QueryString;                                        \
+        const char *key;                                                 \
+        const char *value;                                               \
+        split_query_string(buf, &key, &value);                           \
+        TEST_NULLABLE_STRING_EQUAL(key, ExpectedKey);                    \
+        TEST_NULLABLE_STRING_EQUAL(value, ExpectedValue);                \
     } while (0)
 
 AVS_UNIT_TEST(parse_headers, split_query_string) {
@@ -66,25 +66,25 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
 #undef TEST_SPLIT_QUERY_STRING
 #undef TEST_NULLABLE_STRING_EQUAL
 
-#define TEST_PARSE_ATTRIBUTE_SUCCESS(Key, Value, ExpectedField, \
-                                     ExpectedHasField, ExpectedValue) \
-    do { \
-        anjay_request_attributes_t attrs; \
-        memset(&attrs, 0, sizeof(attrs)); \
-        AVS_UNIT_ASSERT_SUCCESS(parse_attribute(&attrs, (Key), (Value))); \
-        AVS_UNIT_ASSERT_EQUAL(attrs.values.ExpectedField, (ExpectedValue)); \
-        anjay_request_attributes_t expected; \
-        memset(&expected, 0, sizeof(expected)); \
-        expected.ExpectedHasField = true; \
-        expected.values.ExpectedField = (ExpectedValue); \
-        AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &expected, \
+#define TEST_PARSE_ATTRIBUTE_SUCCESS(Key, Value, ExpectedField,                \
+                                     ExpectedHasField, ExpectedValue)          \
+    do {                                                                       \
+        anjay_request_attributes_t attrs;                                      \
+        memset(&attrs, 0, sizeof(attrs));                                      \
+        AVS_UNIT_ASSERT_SUCCESS(parse_attribute(&attrs, (Key), (Value)));      \
+        AVS_UNIT_ASSERT_EQUAL(attrs.values.ExpectedField, (ExpectedValue));    \
+        anjay_request_attributes_t expected;                                   \
+        memset(&expected, 0, sizeof(expected));                                \
+        expected.ExpectedHasField = true;                                      \
+        expected.values.ExpectedField = (ExpectedValue);                       \
+        AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &expected,                   \
                                           sizeof(anjay_request_attributes_t)); \
     } while (0)
 
-#define TEST_PARSE_ATTRIBUTE_FAIL(Key, Value) \
-    do { \
-        anjay_request_attributes_t attrs; \
-        memset(&attrs, 0, sizeof(attrs)); \
+#define TEST_PARSE_ATTRIBUTE_FAIL(Key, Value)                            \
+    do {                                                                 \
+        anjay_request_attributes_t attrs;                                \
+        memset(&attrs, 0, sizeof(attrs));                                \
         AVS_UNIT_ASSERT_FAILED(parse_attribute(&attrs, (Key), (Value))); \
     } while (0);
 
@@ -114,18 +114,18 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
     TEST_PARSE_ATTRIBUTE_FAIL("gt", "tweet");
     TEST_PARSE_ATTRIBUTE_FAIL("gt", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456",
-                                 standard.less_than, has_less_than, 456.0);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456.7",
-                                 standard.less_than, has_less_than, 456.7);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", NULL, standard.less_than,
-                                 has_less_than, NAN);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456", standard.less_than, has_less_than,
+                                 456.0);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456.7", standard.less_than,
+                                 has_less_than, 456.7);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", NULL, standard.less_than, has_less_than,
+                                 NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("lt", "squeak");
     TEST_PARSE_ATTRIBUTE_FAIL("lt", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567",   standard.step, has_step, 567.0);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567", standard.step, has_step, 567.0);
     TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567.8", standard.step, has_step, 567.8);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", NULL,    standard.step, has_step, NAN);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", NULL, standard.step, has_step, NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("st", "moo");
     TEST_PARSE_ATTRIBUTE_FAIL("st", "");
 
@@ -138,43 +138,43 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
 #undef TEST_PARSE_ATTRIBUTE_FAILED
 
 #ifdef WITH_CUSTOM_ATTRIBUTES
-#define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
-    AVS_UNIT_ASSERT_EQUAL(actual.custom.data.con, expected.custom.data.con)
+#    define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
+        AVS_UNIT_ASSERT_EQUAL(actual.custom.data.con, expected.custom.data.con)
 #else // WITH_CUSTOM_ATTRIBUTES
-#define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
+#    define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
 #endif // WITH_CUSTOM_ATTRIBUTES
 
-#define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
-    do { \
-        ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected); \
-        AVS_UNIT_ASSERT_EQUAL(actual.standard.common.min_period, \
-                              expected.standard.common.min_period); \
-        AVS_UNIT_ASSERT_EQUAL(actual.standard.common.max_period, \
-                              expected.standard.common.max_period); \
-        AVS_UNIT_ASSERT_EQUAL(actual.standard.greater_than, \
-                              expected.standard.greater_than); \
-        AVS_UNIT_ASSERT_EQUAL(actual.standard.less_than, \
-                              expected.standard.less_than); \
+#define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected)                      \
+    do {                                                                     \
+        ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected);              \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.common.min_period,             \
+                              expected.standard.common.min_period);          \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.common.max_period,             \
+                              expected.standard.common.max_period);          \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.greater_than,                  \
+                              expected.standard.greater_than);               \
+        AVS_UNIT_ASSERT_EQUAL(actual.standard.less_than,                     \
+                              expected.standard.less_than);                  \
         AVS_UNIT_ASSERT_EQUAL(actual.standard.step, expected.standard.step); \
     } while (0)
 
 #ifdef WITH_CUSTOM_ATTRIBUTES
-#define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) \
-    AVS_UNIT_ASSERT_EQUAL(actual.custom.has_con, expected.custom.has_con)
+#    define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) \
+        AVS_UNIT_ASSERT_EQUAL(actual.custom.has_con, expected.custom.has_con)
 #else // WITH_CUSTOM_ATTRIBUTES
-#define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
+#    define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
 #endif // WITH_CUSTOM_ATTRIBUTES
 
-#define ASSERT_ATTRIBUTES_EQUAL(actual, expected) \
-    do { \
+#define ASSERT_ATTRIBUTES_EQUAL(actual, expected)                              \
+    do {                                                                       \
         AVS_UNIT_ASSERT_EQUAL(actual.has_min_period, expected.has_min_period); \
         AVS_UNIT_ASSERT_EQUAL(actual.has_max_period, expected.has_max_period); \
-        AVS_UNIT_ASSERT_EQUAL(actual.has_greater_than, \
-                              expected.has_greater_than); \
-        AVS_UNIT_ASSERT_EQUAL(actual.has_less_than, expected.has_less_than); \
-        AVS_UNIT_ASSERT_EQUAL(actual.has_step, expected.has_step); \
-        ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected); \
-        ASSERT_ATTRIBUTE_VALUES_EQUAL(actual.values, expected.values); \
+        AVS_UNIT_ASSERT_EQUAL(actual.has_greater_than,                         \
+                              expected.has_greater_than);                      \
+        AVS_UNIT_ASSERT_EQUAL(actual.has_less_than, expected.has_less_than);   \
+        AVS_UNIT_ASSERT_EQUAL(actual.has_step, expected.has_step);             \
+        ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected);                 \
+        ASSERT_ATTRIBUTE_VALUES_EQUAL(actual.values, expected.values);         \
     } while (0)
 
 AVS_UNIT_TEST(parse_headers, parse_attributes) {
@@ -185,8 +185,8 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
     anjay_request_attributes_t expected_attrs;
 
     // no query-strings
-    AVS_UNIT_ASSERT_SUCCESS(parse_attributes(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &attrs));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_attributes(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &attrs));
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&attrs, &empty_attrs, sizeof(attrs));
 
     // single query-string
@@ -221,28 +221,27 @@ AVS_UNIT_TEST(parse_headers, parse_attributes) {
 
     // unrecognized query-string first
     AVS_UNIT_ASSERT_FAILED(parse_attributes(
-            COAP_MSG(CON, GET, ID(0), QUERY("WhyDidTheyBuildThe=Stonehenge",
-                                            "pmax=20")),
+            COAP_MSG(CON, GET, ID(0),
+                     QUERY("WhyDidTheyBuildThe=Stonehenge", "pmax=20")),
             &attrs));
 
     // unrecognized query-string last
     AVS_UNIT_ASSERT_FAILED(parse_attributes(
-            COAP_MSG(CON, GET, ID(0), QUERY("gt=30.5",
-                                            "AllICanThinkOfIsStonehenge")),
+            COAP_MSG(CON, GET, ID(0),
+                     QUERY("gt=30.5", "AllICanThinkOfIsStonehenge")),
             &attrs));
 
     // multiple unrecognized query-strings
     AVS_UNIT_ASSERT_FAILED(parse_attributes(
-            COAP_MSG(CON, GET, ID(0), QUERY("Stonehenge", "Stonehenge",
-                                            "LotsOfStonesInARow")),
+            COAP_MSG(CON, GET, ID(0),
+                     QUERY("Stonehenge", "Stonehenge", "LotsOfStonesInARow")),
             &attrs));
 
     // single query-string among multiple unrecognized ones
     AVS_UNIT_ASSERT_FAILED(parse_attributes(
-            COAP_MSG(CON, GET, ID(0), QUERY("TheyWere=25Tons",
-                                            "EachStoneMyFriend", "lt=40.5",
-                                            "ButAmazinglyThey",
-                                            "GotThemAllDownInTheSand")),
+            COAP_MSG(CON, GET, ID(0),
+                     QUERY("TheyWere=25Tons", "EachStoneMyFriend", "lt=40.5",
+                           "ButAmazinglyThey", "GotThemAllDownInTheSand")),
             &attrs));
 
     // invalid query-string value
@@ -267,70 +266,59 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("1")), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
+    AVS_UNIT_ASSERT_EQUAL(uri.type, ANJAY_PATH_OBJECT);
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 1);
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_iid(&uri));
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
 
     // OID+IID
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("2", "3")), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
+    AVS_UNIT_ASSERT_EQUAL(uri.type, ANJAY_PATH_INSTANCE);
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 2);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_iid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.iid, 3);
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
 
     // OID+IID+RID
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("4", "5", "6")), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
+    AVS_UNIT_ASSERT_EQUAL(uri.type, ANJAY_PATH_RESOURCE);
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 4);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_iid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.iid, 5);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_rid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.rid, 6);
 
     // max valid OID/IID/RID
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
-            COAP_MSG(CON, GET, ID(0), PATH("65535", "65534", "65535")),
-            &is_bs, &uri));
+            COAP_MSG(CON, GET, ID(0), PATH("65535", "65534", "65535")), &is_bs,
+            &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_oid(&uri));
+    AVS_UNIT_ASSERT_EQUAL(uri.type, ANJAY_PATH_RESOURCE);
     AVS_UNIT_ASSERT_EQUAL(uri.oid, 65535);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_iid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.iid, 65534);
-    AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_has_rid(&uri));
     AVS_UNIT_ASSERT_EQUAL(uri.rid, 65535);
 
     // Bootstrap URI
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), PATH("bs")), &is_bs, &uri));
     AVS_UNIT_ASSERT_TRUE(is_bs);
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_oid(&uri));
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_iid(&uri));
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
+    AVS_UNIT_ASSERT_EQUAL(uri.type, ANJAY_PATH_ROOT);
 
     // no Request-Uri
     AVS_UNIT_ASSERT_SUCCESS(parse_request_uri(
             COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &is_bs, &uri));
     AVS_UNIT_ASSERT_FALSE(is_bs);
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_oid(&uri));
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_iid(&uri));
-    AVS_UNIT_ASSERT_FALSE(_anjay_uri_path_has_rid(&uri));
+    AVS_UNIT_ASSERT_EQUAL(uri.type, ANJAY_PATH_ROOT);
 
     // prefix
-    AVS_UNIT_ASSERT_FAILED(parse_request_uri(
-            COAP_MSG(CON, GET, ID(0), PATH("they're taking the hobbits",
-                                           "to isengard", "7", "8", "9")),
-            &is_bs, &uri));
+    AVS_UNIT_ASSERT_FAILED(
+            parse_request_uri(COAP_MSG(CON, GET, ID(0),
+                                       PATH("they're taking the hobbits",
+                                            "to isengard", "7", "8", "9")),
+                              &is_bs, &uri));
 
     // prefix that looks like OID + OID+IID+RID
     AVS_UNIT_ASSERT_FAILED(parse_request_uri(
-            COAP_MSG(CON, GET, ID(0), PATH("100", "10", "11", "12")),
-            &is_bs, &uri));
+            COAP_MSG(CON, GET, ID(0), PATH("100", "10", "11", "12")), &is_bs,
+            &uri));
 
     // prefix that looks like OID/IID/RID + string + OID only
     AVS_UNIT_ASSERT_FAILED(parse_request_uri(
@@ -340,8 +328,8 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
 
     // trailing non-numeric segment
     AVS_UNIT_ASSERT_FAILED(parse_request_uri(
-            COAP_MSG(CON, GET, ID(0), PATH("14", "NopeChuckTesta")),
-            &is_bs, &uri));
+            COAP_MSG(CON, GET, ID(0), PATH("14", "NopeChuckTesta")), &is_bs,
+            &uri));
 
     // invalid OID
     AVS_UNIT_ASSERT_FAILED(parse_request_uri(
@@ -353,8 +341,8 @@ AVS_UNIT_TEST(parse_headers, parse_uri) {
 
     // invalid RID
     AVS_UNIT_ASSERT_FAILED(parse_request_uri(
-            COAP_MSG(CON, GET, ID(0), PATH("16", "17", "65536")),
-            &is_bs, &uri));
+            COAP_MSG(CON, GET, ID(0), PATH("16", "17", "65536")), &is_bs,
+            &uri));
 
     // BS and something more
     AVS_UNIT_ASSERT_FAILED(parse_request_uri(
@@ -368,8 +356,8 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_GET;
-    AVS_UNIT_ASSERT_SUCCESS(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_READ);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
@@ -383,50 +371,50 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_POST;
     request.uri.type = ANJAY_PATH_RESOURCE;
-    AVS_UNIT_ASSERT_SUCCESS(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_EXECUTE);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_POST;
     request.uri.type = ANJAY_PATH_OBJECT;
     request.content_format = ANJAY_COAP_FORMAT_PLAINTEXT;
-    AVS_UNIT_ASSERT_SUCCESS(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_CREATE);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_POST;
     request.uri.type = ANJAY_PATH_INSTANCE;
     request.content_format = ANJAY_COAP_FORMAT_TLV;
-    AVS_UNIT_ASSERT_SUCCESS(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_WRITE_UPDATE);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_PUT;
     request.content_format = AVS_COAP_FORMAT_NONE;
-    AVS_UNIT_ASSERT_SUCCESS(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_WRITE_ATTRIBUTES);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_PUT;
     request.content_format = ANJAY_COAP_FORMAT_PLAINTEXT;
-    AVS_UNIT_ASSERT_SUCCESS(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_WRITE);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_DELETE;
-    AVS_UNIT_ASSERT_SUCCESS(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
     AVS_UNIT_ASSERT_EQUAL(request.action, ANJAY_ACTION_DELETE);
 
     request.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     request.request_code = AVS_COAP_CODE_NOT_FOUND;
-    AVS_UNIT_ASSERT_FAILED(parse_action(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
+    AVS_UNIT_ASSERT_FAILED(
+            parse_action(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &request));
 }
 
 AVS_UNIT_TEST(parse_headers, parse_observe) {
@@ -443,8 +431,8 @@ AVS_UNIT_TEST(parse_headers, parse_observe) {
     AVS_UNIT_ASSERT_FAILED(parse_observe(
             COAP_MSG(CON, GET, ID(0), OBSERVE(514), NO_PAYLOAD), &observe));
 
-    AVS_UNIT_ASSERT_SUCCESS(parse_observe(
-            COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &observe));
+    AVS_UNIT_ASSERT_SUCCESS(
+            parse_observe(COAP_MSG(CON, GET, ID(0), NO_PAYLOAD), &observe));
     AVS_UNIT_ASSERT_EQUAL(observe, ANJAY_COAP_OBSERVE_NONE);
 }
 
@@ -452,166 +440,22 @@ static time_t sched_time_to_next_s(anjay_sched_t *sched) {
     avs_time_duration_t sched_delay;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_sched_time_to_next(sched, &sched_delay));
     if (!avs_time_duration_less(
-            sched_delay,
-            avs_time_duration_from_scalar(500, AVS_TIME_MS))) { // rounding
+                sched_delay,
+                avs_time_duration_from_scalar(500, AVS_TIME_MS))) { // rounding
         return sched_delay.seconds + 1;
     } else {
         return sched_delay.seconds;
     }
 }
 
-AVS_UNIT_TEST(queue_mode, behaviour) {
-    static const anjay_dm_internal_res_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 0,
-                .max_period = 9001
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
-    };
-
-    ////// INIT //////
-    DM_TEST_INIT_WITH_SSIDS(42);
-    anjay->servers->servers->data_active.udp_connection.mode =
-            ANJAY_CONNECTION_QUEUE;
-    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFA3E), OBSERVE(0),
-                    PATH("42", "69", "4"));
-    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
-    _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
-                                        ANJAY_MOCK_DM_INT(0, 514));
-    DM_TEST_EXPECT_READ_NULL_ATTRS(42, 69, 4);
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFA3E),
-                            OBSERVE(0XF40000),
-                            CONTENT_FORMAT(PLAINTEXT),
-                            PAYLOAD("514"));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
-
-    // observe::flush_send_queue()
-    AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 0);
-    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
-    _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
-                                              &ATTRS);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
-    avs_unit_mocksock_assert_expects_met(mocksocks[0]);
-
-    ////// QUEUE MODE - EMPTY PASS //////
-    AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
-    _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-
-    AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
-    AVS_UNIT_ASSERT_NULL(anjay_get_socket_entries(anjay));
-    AVS_UNIT_ASSERT_NULL(
-            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
-
-    ////// NOTIFY - TRIGGER QUEUE MODE //////
-    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
-    _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
-                                              &ATTRS);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
-    avs_unit_mocksock_assert_expects_met(mocksocks[0]);
-
-    ////// NOTIFICATION //////
-    _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, -1, 0);
-    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
-    _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 42, 0,
-                                              &ATTRS);
-    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
-    _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
-                                        ANJAY_MOCK_DM_STRING(0, "Hello"));
-    const avs_coap_msg_t *notify_response = COAP_MSG(NON, CONTENT, ID(0x69ED),
-                                                     OBSERVE(0x228000),
-                                                     CONTENT_FORMAT(PLAINTEXT),
-                                                     PAYLOAD("Hello"));
-    avs_unit_mocksock_assert_expects_met(mocksocks[0]);
-    avs_unit_mocksock_expect_remote_hostname(mocksocks[0],
-                                             "server.example.org");
-    avs_unit_mocksock_expect_remote_port(mocksocks[0], "8378");
-    avs_unit_mocksock_expect_connect(mocksocks[0],
-                                     "server.example.org", "8378");
-    avs_unit_mocksock_expect_local_port(mocksocks[0], "65432");
-    avs_unit_mocksock_expect_get_opt(mocksocks[0],
-                                     AVS_NET_SOCKET_OPT_SESSION_RESUMED,
-                                     (avs_net_socket_opt_value_t) {
-                                         .flag = true
-                                     });
-    avs_unit_mocksock_expect_output(mocksocks[0], notify_response->content,
-                                    notify_response->length);
-
-    ////// EXECUTE SCHEDULER //////
-    while (sched_time_to_next_s(anjay->sched) <= 0) {
-        AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    }
-
-    ////// QUEUED RPC //////
-    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFB3E), PATH("42", "3", "1"));
-    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 3, 1);
-    _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 3, 1, 1);
-    _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 3, 1, 0,
-                                        ANJAY_MOCK_DM_STRING(0, "Hi!"));
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFB3E),
-                            CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Hi!"));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
-
-    ////// NEXT QUEUED RPC - CANCEL NOTIFICATION //////
-    DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFC3E), OBSERVE(0x01),
-                    PATH("42", "69", "4"));
-    _anjay_mock_dm_expect_instance_present(anjay, &OBJ, 69, 1);
-    _anjay_mock_dm_expect_resource_present(anjay, &OBJ, 69, 4, 1);
-    _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, 0,
-                                        ANJAY_MOCK_DM_STRING(0, "Meh"));
-    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFC3E),
-                            CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Meh"));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
-
-    ////// EXECUTE SCHEDULER //////
-    while (sched_time_to_next_s(anjay->sched) <= 0) {
-        AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-    }
-
-    ////// ASSERT QUEUE MODE //////
-    AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
-    {
-        AVS_LIST(avs_net_abstract_socket_t *const) sockets =
-                anjay_get_sockets(anjay);
-        AVS_UNIT_ASSERT_NOT_NULL(sockets);
-        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(sockets), 1);
-        avs_net_abstract_socket_t *socket = *sockets;
-
-        AVS_LIST(const anjay_socket_entry_t) entries =
-                anjay_get_socket_entries(anjay);
-        AVS_UNIT_ASSERT_NOT_NULL(entries);
-        AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(entries), 1);
-        AVS_UNIT_ASSERT_TRUE(entries->socket == socket);
-        AVS_UNIT_ASSERT_EQUAL(entries->transport, ANJAY_SOCKET_TRANSPORT_UDP);
-        AVS_UNIT_ASSERT_EQUAL(entries->ssid, 42);
-        AVS_UNIT_ASSERT_TRUE(entries->queue_mode);
-    }
-    AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
-    _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
-
-    AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
-    AVS_UNIT_ASSERT_NULL(anjay_get_socket_entries(anjay));
-    AVS_UNIT_ASSERT_NULL(
-            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
-
-    DM_TEST_FINISH;
-}
-
 AVS_UNIT_TEST(queue_mode, change) {
     DM_TEST_INIT_WITH_OBJECTS(&OBJ, &FAKE_SECURITY2, &FAKE_SERVER);
+    anjay_server_connection_t *connection =
+            _anjay_get_server_connection((const anjay_connection_ref_t) {
+                .server = anjay->servers->servers,
+                .conn_type = ANJAY_CONNECTION_UDP
+            });
+    AVS_UNIT_ASSERT_NOT_NULL(connection);
     ////// WRITE NEW BINDING //////
     // Write to Binding - dummy data to assert it is actually queried via Read
     DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("1", "1", "7"),
@@ -645,8 +489,7 @@ AVS_UNIT_TEST(queue_mode, change) {
         AVS_UNIT_ASSERT_EQUAL(entries->ssid, 1);
         AVS_UNIT_ASSERT_FALSE(entries->queue_mode);
     }
-    AVS_UNIT_ASSERT_NULL(
-            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
+    AVS_UNIT_ASSERT_NULL(connection->queue_mode_close_socket_clb_handle);
 
     ////// REFRESH BINDING MODE //////
     // query SSID in Security
@@ -691,28 +534,25 @@ AVS_UNIT_TEST(queue_mode, change) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
                                         ANJAY_DM_RID_SERVER_LIFETIME, 0,
                                         ANJAY_MOCK_DM_INT(0, 9001));
-    const avs_coap_msg_t *update = COAP_MSG(CON, POST, ID(0x69ED),
-                                            CONTENT_FORMAT(APPLICATION_LINK),
-                                            QUERY("lt=9001", "b=UQ"),
-                                            PAYLOAD("</1>,</42>"));
+    const avs_coap_msg_t *update =
+            COAP_MSG(CON, POST, ID(0x69ED), CONTENT_FORMAT(APPLICATION_LINK),
+                     QUERY("lt=9001", "b=UQ"), PAYLOAD("</1>,</42>"));
     avs_unit_mocksock_expect_output(mocksocks[0], update->content,
                                     update->length);
-    const avs_coap_msg_t *update_response = COAP_MSG(ACK, CHANGED, ID(0x69ED),
-                                                     NO_PAYLOAD);
+    const avs_coap_msg_t *update_response =
+            COAP_MSG(ACK, CHANGED, ID(0x69ED), NO_PAYLOAD);
     avs_unit_mocksock_input(mocksocks[0], update_response->content,
                             update_response->length);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    AVS_UNIT_ASSERT_NOT_NULL(
-            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
+    AVS_UNIT_ASSERT_NOT_NULL(connection->queue_mode_close_socket_clb_handle);
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(anjay_get_socket_entries(anjay));
-    AVS_UNIT_ASSERT_NULL(
-            anjay->servers->servers->data_active.udp_connection.queue_mode_close_socket_clb_handle);
+    AVS_UNIT_ASSERT_NULL(connection->queue_mode_close_socket_clb_handle);
 
     DM_TEST_FINISH;
 }

@@ -105,9 +105,8 @@ typedef enum anjay_download_result {
  * @param user_data Value of @ref anjay_download_config_t#user_data passed
  *                  to @ref anjay_download .
  */
-typedef void anjay_download_finished_handler_t(anjay_t *anjay,
-                                               int result,
-                                               void *user_data);
+typedef void
+anjay_download_finished_handler_t(anjay_t *anjay, int result, void *user_data);
 
 typedef struct anjay_download_config {
     /** Required. coap:// or coaps:// URL */
@@ -140,6 +139,12 @@ typedef struct anjay_download_config {
      * ignored for coap:// transfers.
      */
     avs_net_security_info_t security_info;
+
+    /**
+     * Pointer to CoAP transmission parameters object. If NULL, downloader will
+     * inherit parameters from Anjay.
+     */
+    avs_coap_tx_params_t *coap_tx_params;
 } anjay_download_config_t;
 
 typedef void *anjay_download_handle_t;
@@ -177,8 +182,7 @@ anjay_download_handle_t anjay_download(anjay_t *anjay,
  * @param dl_handle Download handle previously returned by
  *                  @ref anjay_download.
  */
-void anjay_download_abort(anjay_t *anjay,
-                          anjay_download_handle_t dl_handle);
+void anjay_download_abort(anjay_t *anjay, anjay_download_handle_t dl_handle);
 
 #ifdef __cplusplus
 } /* extern "C" */

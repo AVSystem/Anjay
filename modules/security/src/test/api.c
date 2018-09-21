@@ -26,12 +26,11 @@ typedef struct {
     anjay_t *anjay;
 } security_test_env_t;
 
-#define SCOPED_SERVER_TEST_ENV(Name)                       \
+#define SCOPED_SERVER_TEST_ENV(Name)                           \
     SCOPED_PTR(security_test_env_t, security_test_env_destroy) \
     Name = security_test_env_create();
 
-static security_test_env_t *
-security_test_env_create(void) {
+static security_test_env_t *security_test_env_create(void) {
     security_test_env_t *env = (__typeof__(env)) avs_calloc(1, sizeof(*env));
     AVS_UNIT_ASSERT_NOT_NULL(env);
     env->anjay = anjay_new(&CONFIG);

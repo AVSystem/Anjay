@@ -83,9 +83,10 @@ _anjay_output_opaque_create(avs_stream_abstract_t *stream,
                             int *errno_ptr,
                             anjay_msg_details_t *inout_details) {
     opaque_out_t *ctx = (opaque_out_t *) avs_calloc(1, sizeof(opaque_out_t));
-    if (ctx && ((*errno_ptr = _anjay_handle_requested_format(
-                    &inout_details->format, ANJAY_COAP_FORMAT_OPAQUE))
-            || _anjay_coap_stream_setup_response(stream, inout_details))) {
+    if (ctx
+            && ((*errno_ptr = _anjay_handle_requested_format(
+                         &inout_details->format, ANJAY_COAP_FORMAT_OPAQUE))
+                || _anjay_coap_stream_setup_response(stream, inout_details))) {
         avs_free(ctx);
         return NULL;
     }

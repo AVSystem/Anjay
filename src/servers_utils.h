@@ -39,8 +39,7 @@ anjay_server_info_t *_anjay_servers_find_active(anjay_t *anjay,
 
 bool _anjay_server_registration_expired(anjay_server_info_t *server);
 
-int _anjay_schedule_socket_update(anjay_t *anjay,
-                                  anjay_iid_t security_iid);
+int _anjay_schedule_socket_update(anjay_t *anjay, anjay_iid_t security_iid);
 
 /**
  * Determines the connection mode (offline, online or queue-mode) for a specific
@@ -58,9 +57,8 @@ _anjay_get_connection_mode(const char *binding_mode,
  * be US, but the UDP connection failed and is not available - "S"
  * is returned.
  */
-int
-_anjay_server_actual_binding_mode(anjay_binding_mode_t *out_binding_mode,
-                                  anjay_server_info_t *server);
+void _anjay_server_actual_binding_mode(anjay_binding_mode_t *out_binding_mode,
+                                       anjay_server_info_t *server);
 
 VISIBILITY_PRIVATE_HEADER_END
 

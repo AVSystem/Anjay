@@ -48,18 +48,19 @@ static int *dynamic_errno_ptr(anjay_output_ctx_t *ctx) {
 }
 
 static anjay_output_ctx_t *spawn_opaque(dynamic_out_t *ctx) {
-    return _anjay_output_opaque_create(
-            ctx->stream, ctx->errno_ptr, &ctx->details);
+    return _anjay_output_opaque_create(ctx->stream, ctx->errno_ptr,
+                                       &ctx->details);
 }
 
 static anjay_output_ctx_t *spawn_text(dynamic_out_t *ctx) {
-    return _anjay_output_text_create(
-            ctx->stream, ctx->errno_ptr, &ctx->details);
+    return _anjay_output_text_create(ctx->stream, ctx->errno_ptr,
+                                     &ctx->details);
 }
 
 static anjay_output_ctx_t *spawn_tlv(dynamic_out_t *ctx) {
-    anjay_output_ctx_t *result = _anjay_output_tlv_create(
-            ctx->stream, ctx->errno_ptr, &ctx->details);
+    anjay_output_ctx_t *result =
+            _anjay_output_tlv_create(ctx->stream, ctx->errno_ptr,
+                                     &ctx->details);
     if (result && ctx->id >= 0
             && _anjay_output_set_id(result, ctx->id_type, (uint16_t) ctx->id)) {
         _anjay_output_ctx_destroy(&result);
@@ -67,11 +68,11 @@ static anjay_output_ctx_t *spawn_tlv(dynamic_out_t *ctx) {
     return result;
 }
 
-#ifdef WITH_JSON
-static anjay_output_ctx_t *spawn_json(dynamic_out_t *ctx) {
+#if defined(WITH_JSON) || defined(WITH_SENML_JSON)
+static anjay_output_ctx_t *spawn_json(dynamic_out_t *ctx, uint16_t format) {
     anjay_output_ctx_t *result =
             _anjay_output_json_create(ctx->stream, ctx->errno_ptr,
-                                      &ctx->details, &ctx->uri);
+                                      &ctx->details, &ctx->uri, format);
     if (result && ctx->id >= 0
             && _anjay_output_set_id(result, ctx->id_type, (uint16_t) ctx->id)) {
         _anjay_output_ctx_destroy(&result);
@@ -90,7 +91,7 @@ static anjay_output_ctx_t *spawn_backend(dynamic_out_t *ctx, uint16_t format) {
         return spawn_tlv(ctx);
 #ifdef WITH_JSON
     case ANJAY_COAP_FORMAT_JSON:
-        return spawn_json(ctx);
+        return spawn_json(ctx, ANJAY_COAP_FORMAT_JSON);
 #endif
     default:
         anjay_log(ERROR, "Unsupported output format: %" PRIu16, format);
@@ -99,8 +100,7 @@ static anjay_output_ctx_t *spawn_backend(dynamic_out_t *ctx, uint16_t format) {
     }
 }
 
-static anjay_output_ctx_t *ensure_backend(dynamic_out_t *ctx,
-                                          uint16_t format) {
+static anjay_output_ctx_t *ensure_backend(dynamic_out_t *ctx, uint16_t format) {
     if (!ctx->backend) {
         ctx->backend = spawn_backend(ctx, format);
     }
@@ -129,8 +129,8 @@ static void adjust_errno(dynamic_out_t *ctx, const char *function) {
     ctx->past_first_call = true;
 }
 
-static inline int process_errno(dynamic_out_t *ctx, const char *function,
-                                int result) {
+static inline int
+process_errno(dynamic_out_t *ctx, const char *function, int result) {
     adjust_errno(ctx, function);
     return result;
 }
@@ -201,8 +201,8 @@ static int dynamic_ret_bool(anjay_output_ctx_t *ctx_, bool value) {
     return -1;
 }
 
-static int dynamic_ret_objlnk(anjay_output_ctx_t *ctx_,
-                              anjay_oid_t oid, anjay_iid_t iid) {
+static int
+dynamic_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
     dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
     if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
         return process_errno(ctx, "ret_objlnk",
@@ -231,8 +231,8 @@ static anjay_output_ctx_t *dynamic_ret_object_start(anjay_output_ctx_t *ctx_) {
     return NULL;
 }
 
-static int dynamic_set_id(anjay_output_ctx_t *ctx_,
-                          anjay_id_type_t type, uint16_t id) {
+static int
+dynamic_set_id(anjay_output_ctx_t *ctx_, anjay_id_type_t type, uint16_t id) {
     dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
     if (ctx->backend) {
         int result = _anjay_output_set_id(ctx->backend, type, id);
@@ -326,5 +326,5 @@ int _anjay_input_dynamic_create(anjay_input_ctx_t **out,
 }
 
 #ifdef ANJAY_TEST
-#include "test/dynamic.c"
+#    include "test/dynamic.c"
 #endif

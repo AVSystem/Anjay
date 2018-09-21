@@ -18,8 +18,8 @@
 #define ANJAY_DM_DISCOVER_H
 
 #include <anjay/dm.h>
-#include <avsystem/commons/stream_v_table.h>
 #include <avsystem/commons/stream.h>
+#include <avsystem/commons/stream_v_table.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -67,7 +67,7 @@ int _anjay_discover_resource(anjay_t *anjay,
                              anjay_iid_t iid,
                              anjay_rid_t rid);
 
-#ifdef WITH_BOOTSTRAP
+#    ifdef WITH_BOOTSTRAP
 /**
  * Performs LwM2M Bootstrap Discover operation on the specified Object @p obj.
  *
@@ -84,7 +84,7 @@ int _anjay_bootstrap_discover_object(anjay_t *anjay,
  * @retrurn 0 on success, negative value in case of an error.
  */
 int _anjay_bootstrap_discover(anjay_t *anjay);
-#endif // WITH_BOOTSTRAP
+#    endif // WITH_BOOTSTRAP
 
 #endif // WITH_DISCOVER
 

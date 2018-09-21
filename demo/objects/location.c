@@ -15,11 +15,11 @@
  */
 
 #if !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
-#define _POSIX_C_SOURCE 200809L
+#    define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "../objects.h"
 #include "../demo_utils.h"
+#include "../objects.h"
 
 #include <assert.h>
 #include <math.h>
@@ -28,13 +28,13 @@
 
 #include <avsystem/commons/utils.h>
 
-#define LOCATION_LATITUDE    0
-#define LOCATION_LONGITUDE   1
-#define LOCATION_ALTITUDE    2
-#define LOCATION_RADIUS      3
-#define LOCATION_VELOCITY    4
-#define LOCATION_TIMESTAMP   5
-#define LOCATION_SPEED       6
+#define LOCATION_LATITUDE 0
+#define LOCATION_LONGITUDE 1
+#define LOCATION_ALTITUDE 2
+#define LOCATION_RADIUS 3
+#define LOCATION_VELOCITY 4
+#define LOCATION_TIMESTAMP 5
+#define LOCATION_SPEED 6
 
 typedef struct {
     double value_mps;
@@ -87,7 +87,9 @@ static int location_resource_read(anjay_t *anjay,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) obj_ptr; (void) iid;
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
     location_t *location = get_location(obj_ptr);
 
     switch (rid) {
@@ -149,15 +151,11 @@ static void get_meters_per_degree(double *out_m_per_deg_lat,
     // The formulas come from
     // https://en.wikipedia.org/wiki/Geographic_coordinate_system#Expressing_latitude_and_longitude_as_linear_units
     // (retrieved 2016-01-12)
-    *out_m_per_deg_lat =
-            111132.92
-            - 559.82 * cos(2.0 * lat_rad)
-            + 1.175 * cos(4.0 * lat_rad)
-            - 0.0023 * cos(6.0 * lat_rad);
-    *out_m_per_deg_lon =
-            111412.84 * cos(lat_rad)
-            - 93.5 * cos(3.0 * lat_rad)
-            - 0.118 * cos(5.0 * lat_rad);
+    *out_m_per_deg_lat = 111132.92 - 559.82 * cos(2.0 * lat_rad)
+                         + 1.175 * cos(4.0 * lat_rad)
+                         - 0.0023 * cos(6.0 * lat_rad);
+    *out_m_per_deg_lon = 111412.84 * cos(lat_rad) - 93.5 * cos(3.0 * lat_rad)
+                         - 0.118 * cos(5.0 * lat_rad);
 }
 
 static double rand_double(unsigned *seed, double min, double max) {
@@ -165,8 +163,10 @@ static double rand_double(unsigned *seed, double min, double max) {
 }
 
 static void calculate_velocity(velocity_t *out,
-                               double lat1, double lon1,
-                               double lat2, double lon2,
+                               double lat1,
+                               double lon1,
+                               double lat2,
+                               double lon2,
                                double time_change_s) {
     out->value_mps = geo_distance_m(lat1, lon1, lat2, lon2) / time_change_s;
 
@@ -187,10 +187,10 @@ static int update_location_random(location_t *location) {
     get_meters_per_degree(&m_per_deg_lat, &m_per_deg_lon, location->latitude);
 
     // random movement of at most 1 m in each direction
-    double lat_change = rand_double(&location->rand_seed,
-                                    -1.0/m_per_deg_lat, 1.0/m_per_deg_lat);
-    double lon_change = rand_double(&location->rand_seed,
-                                    -1.0/m_per_deg_lon, 1.0/m_per_deg_lon);
+    double lat_change = rand_double(&location->rand_seed, -1.0 / m_per_deg_lat,
+                                    1.0 / m_per_deg_lat);
+    double lon_change = rand_double(&location->rand_seed, -1.0 / m_per_deg_lon,
+                                    1.0 / m_per_deg_lon);
 
     double old_lat = location->latitude;
     double old_lon = location->longitude;
@@ -203,9 +203,8 @@ static int update_location_random(location_t *location) {
     return 1;
 }
 
-static int try_parse_location_line(location_t *location,
-                                   char *line,
-                                   size_t line_length) {
+static int
+try_parse_location_line(location_t *location, char *line, size_t line_length) {
     if (line_length > 1 && line[line_length - 1] == '\n') {
         line[--line_length] = '\0';
     }
@@ -213,20 +212,18 @@ static int try_parse_location_line(location_t *location,
     double latitude = 0.0, longitude = 0.0;
     double vel_mps = 0.0, vel_bearing_deg_cw_n = 0.0;
     int chars_read = 0;
-    int scanf_result = sscanf(line, " %lf , %lf %n",
-                              &latitude, &longitude, &chars_read);
-    if (scanf_result < 2
-            || !latitude_valid(latitude) || !longitude_valid(longitude)) {
+    int scanf_result =
+            sscanf(line, " %lf , %lf %n", &latitude, &longitude, &chars_read);
+    if (scanf_result < 2 || !latitude_valid(latitude)
+            || !longitude_valid(longitude)) {
         goto invalid;
     }
 
     if ((size_t) chars_read < line_length) {
         int more_chars_read;
-        scanf_result = sscanf(line + chars_read, ", %lf , %lf %n",
-                              &vel_mps, &vel_bearing_deg_cw_n,
-                              &more_chars_read);
-        if (scanf_result < 2
-                || !velocity_mps_valid(vel_mps)
+        scanf_result = sscanf(line + chars_read, ", %lf , %lf %n", &vel_mps,
+                              &vel_bearing_deg_cw_n, &more_chars_read);
+        if (scanf_result < 2 || !velocity_mps_valid(vel_mps)
                 || !velocity_bearing_deg_cw_n_valid(vel_bearing_deg_cw_n)
                 || (size_t) (chars_read + more_chars_read) != line_length) {
             goto invalid;
@@ -234,9 +231,8 @@ static int try_parse_location_line(location_t *location,
         location->velocity.value_mps = vel_mps;
         location->velocity.bearing_deg_cw_n = vel_bearing_deg_cw_n;
     } else {
-        calculate_velocity(&location->velocity,
-                           location->latitude, location->longitude,
-                           latitude, longitude,
+        calculate_velocity(&location->velocity, location->latitude,
+                           location->longitude, latitude, longitude,
                            (double) location->csv_frequency);
     }
     location->latitude = latitude;
@@ -287,13 +283,12 @@ static bool update_location(location_t *location) {
 
 static const anjay_dm_object_def_t LOCATION = {
     .oid = DEMO_OID_LOCATION,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            LOCATION_LATITUDE,
-            LOCATION_LONGITUDE,
-            LOCATION_ALTITUDE,
-            LOCATION_RADIUS,
-            LOCATION_VELOCITY,
-            LOCATION_TIMESTAMP),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(LOCATION_LATITUDE,
+                                              LOCATION_LONGITUDE,
+                                              LOCATION_ALTITUDE,
+                                              LOCATION_RADIUS,
+                                              LOCATION_VELOCITY,
+                                              LOCATION_TIMESTAMP),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -344,14 +339,16 @@ void location_notify_time_dependent(anjay_t *anjay,
 }
 
 void location_get(const anjay_dm_object_def_t **def,
-                  double *out_latitude, double *out_longitude) {
+                  double *out_latitude,
+                  double *out_longitude) {
     location_t *repr = get_location(def);
     *out_latitude = repr->latitude;
     *out_longitude = repr->longitude;
 }
 
 int location_open_csv(const anjay_dm_object_def_t **def,
-                      const char *file_name, time_t frequency_s) {
+                      const char *file_name,
+                      time_t frequency_s) {
     location_t *location = get_location(def);
     if (frequency_s <= 0) {
         demo_log(ERROR, "Invalid CSV time frequency: %ld", (long) frequency_s);
@@ -367,6 +364,7 @@ int location_open_csv(const anjay_dm_object_def_t **def,
     }
     location->csv = csv;
     location->csv_frequency = frequency_s;
-    demo_log(INFO, "CSV loaded: %s (frequency_s = %ld)", file_name, frequency_s);
+    demo_log(INFO, "CSV loaded: %s (frequency_s = %ld)", file_name,
+             frequency_s);
     return 0;
 }

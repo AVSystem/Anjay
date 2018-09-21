@@ -81,18 +81,20 @@ typedef struct {
 
 static AVS_LIST(anjay_mock_dm_expected_command_t) EXPECTED_COMMANDS;
 
-#define DM_ACTION_COMMON(UName) do { \
-    AVS_UNIT_ASSERT_NOT_NULL(EXPECTED_COMMANDS); \
-    AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->command == MOCK_DM_##UName); \
-    AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->anjay == anjay); \
-    AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->obj_ptr == obj_ptr); \
-} while (0)
+#define DM_ACTION_COMMON(UName)                                              \
+    do {                                                                     \
+        AVS_UNIT_ASSERT_NOT_NULL(EXPECTED_COMMANDS);                         \
+        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->command == MOCK_DM_##UName); \
+        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->anjay == anjay);             \
+        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->obj_ptr == obj_ptr);         \
+    } while (0)
 
-#define DM_ACTION_RETURN do { \
-    int retval = EXPECTED_COMMANDS->retval; \
-    AVS_LIST_DELETE(&EXPECTED_COMMANDS); \
-    return retval; \
-} while (0)
+#define DM_ACTION_RETURN                        \
+    do {                                        \
+        int retval = EXPECTED_COMMANDS->retval; \
+        AVS_LIST_DELETE(&EXPECTED_COMMANDS);    \
+        return retval;                          \
+    } while (0)
 
 void _anjay_mock_dm_assert_common_attributes_equal(
         const anjay_dm_internal_attrs_t *a,
@@ -115,10 +117,11 @@ void _anjay_mock_dm_assert_attributes_equal(
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.step);
 }
 
-int _anjay_mock_dm_object_read_default_attrs(anjay_t *anjay,
-                                             const anjay_dm_object_def_t *const *obj_ptr,
-                                             anjay_ssid_t ssid,
-                                             anjay_dm_attributes_t *out) {
+int _anjay_mock_dm_object_read_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        anjay_dm_attributes_t *out) {
     DM_ACTION_COMMON(OBJECT_READ_DEFAULT_ATTRS);
     EXPECTED_COMMANDS->input.ssid = ssid;
     *_anjay_dm_get_internal_attrs(out) =
@@ -126,10 +129,11 @@ int _anjay_mock_dm_object_read_default_attrs(anjay_t *anjay,
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_object_write_default_attrs(anjay_t *anjay,
-                                              const anjay_dm_object_def_t *const *obj_ptr,
-                                              anjay_ssid_t ssid,
-                                              const anjay_dm_attributes_t *attrs) {
+int _anjay_mock_dm_object_write_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        const anjay_dm_attributes_t *attrs) {
     DM_ACTION_COMMON(OBJECT_WRITE_DEFAULT_ATTRS);
     EXPECTED_COMMANDS->input.ssid = ssid;
     _anjay_mock_dm_assert_common_attributes_equal(
@@ -151,19 +155,20 @@ int _anjay_mock_dm_instance_it(anjay_t *anjay,
                                anjay_iid_t *out,
                                void **cookie) {
     DM_ACTION_COMMON(INSTANCE_IT);
-    AVS_UNIT_ASSERT_EQUAL((*(uintptr_t *) cookie)++, EXPECTED_COMMANDS->input.iteration);
+    AVS_UNIT_ASSERT_EQUAL((*(uintptr_t *) cookie)++,
+                          EXPECTED_COMMANDS->input.iteration);
     *out = EXPECTED_COMMANDS->value.output_iid;
     DM_ACTION_RETURN;
 }
 
-#define INSTANCE_ACTION(LName, UName) \
-int _anjay_mock_dm_instance_##LName (anjay_t *anjay, \
-                                     const anjay_dm_object_def_t *const *obj_ptr, \
-                                     anjay_iid_t iid) { \
-    DM_ACTION_COMMON(INSTANCE_##UName); \
-    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid); \
-    DM_ACTION_RETURN; \
-}
+#define INSTANCE_ACTION(LName, UName)                                    \
+    int _anjay_mock_dm_instance_##LName(                                 \
+            anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr, \
+            anjay_iid_t iid) {                                           \
+        DM_ACTION_COMMON(INSTANCE_##UName);                              \
+        AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid);        \
+        DM_ACTION_RETURN;                                                \
+    }
 
 INSTANCE_ACTION(present, PRESENT)
 INSTANCE_ACTION(remove, REMOVE)
@@ -173,17 +178,19 @@ int _anjay_mock_dm_instance_create(anjay_t *anjay,
                                    anjay_iid_t *inout_iid,
                                    anjay_ssid_t ssid) {
     DM_ACTION_COMMON(INSTANCE_CREATE);
-    AVS_UNIT_ASSERT_EQUAL(*inout_iid, EXPECTED_COMMANDS->input.ssid_and_iid.iid);
+    AVS_UNIT_ASSERT_EQUAL(*inout_iid,
+                          EXPECTED_COMMANDS->input.ssid_and_iid.iid);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_and_iid.ssid);
     *inout_iid = EXPECTED_COMMANDS->value.output_iid;
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_instance_read_default_attrs(anjay_t *anjay,
-                                               const anjay_dm_object_def_t *const *obj_ptr,
-                                               anjay_iid_t iid,
-                                               anjay_ssid_t ssid,
-                                               anjay_dm_attributes_t *out) {
+int _anjay_mock_dm_instance_read_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        anjay_dm_attributes_t *out) {
     DM_ACTION_COMMON(INSTANCE_READ_DEFAULT_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_and_iid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_and_iid.iid);
@@ -192,11 +199,12 @@ int _anjay_mock_dm_instance_read_default_attrs(anjay_t *anjay,
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_instance_write_default_attrs(anjay_t *anjay,
-                                                const anjay_dm_object_def_t *const *obj_ptr,
-                                                anjay_iid_t iid,
-                                                anjay_ssid_t ssid,
-                                                const anjay_dm_attributes_t *attrs) {
+int _anjay_mock_dm_instance_write_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        const anjay_dm_attributes_t *attrs) {
     DM_ACTION_COMMON(INSTANCE_WRITE_DEFAULT_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_and_iid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_and_iid.iid);
@@ -216,10 +224,11 @@ int _anjay_mock_dm_resource_present(anjay_t *anjay,
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_resource_operations(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       anjay_rid_t rid,
-                                       anjay_dm_resource_op_mask_t *out) {
+int _anjay_mock_dm_resource_operations(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_rid_t rid,
+        anjay_dm_resource_op_mask_t *out) {
     DM_ACTION_COMMON(RESOURCE_OPERATIONS);
     AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.rid);
     *out = EXPECTED_COMMANDS->value.mask;
@@ -276,7 +285,8 @@ static int output_array(anjay_output_ctx_t *ctx,
         return -1;
     }
     for (const anjay_mock_dm_data_array_t *const *entry = array;
-            entry && *entry; ++entry) {
+         entry && *entry;
+         ++entry) {
         int retval = anjay_ret_array_index(array_ctx, (*entry)->index);
         if (retval) {
             return retval;
@@ -311,23 +321,21 @@ static void perform_input(anjay_input_ctx_t *ctx,
     switch (input->type) {
     case MOCK_DATA_NONE:
         return;
-    case MOCK_DATA_BYTES:
-    {
+    case MOCK_DATA_BYTES: {
         size_t bytes_read;
         bool message_finished;
         char buf[input->data.bytes.length];
-        retval = anjay_get_bytes(ctx, &bytes_read, &message_finished,
-                                 buf, sizeof (buf));
+        retval = anjay_get_bytes(ctx, &bytes_read, &message_finished, buf,
+                                 sizeof(buf));
         if (!retval) {
-            AVS_UNIT_ASSERT_EQUAL(bytes_read, sizeof (buf));
+            AVS_UNIT_ASSERT_EQUAL(bytes_read, sizeof(buf));
             AVS_UNIT_ASSERT_TRUE(message_finished);
             AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(buf, input->data.bytes.data,
                                               input->data.bytes.length);
         }
         break;
     }
-    case MOCK_DATA_STRING:
-    {
+    case MOCK_DATA_STRING: {
         char buf[strlen(input->data.str) + 1];
         retval = anjay_get_string(ctx, buf, sizeof(buf));
         if (!retval) {
@@ -335,8 +343,7 @@ static void perform_input(anjay_input_ctx_t *ctx,
         }
         break;
     }
-    case MOCK_DATA_INT:
-    {
+    case MOCK_DATA_INT: {
         int64_t value;
         retval = anjay_get_i64(ctx, &value);
         if (!retval) {
@@ -344,8 +351,7 @@ static void perform_input(anjay_input_ctx_t *ctx,
         }
         break;
     }
-    case MOCK_DATA_FLOAT:
-    {
+    case MOCK_DATA_FLOAT: {
         double value;
         retval = anjay_get_double(ctx, &value);
         if (!retval) {
@@ -353,8 +359,7 @@ static void perform_input(anjay_input_ctx_t *ctx,
         }
         break;
     }
-    case MOCK_DATA_BOOL:
-    {
+    case MOCK_DATA_BOOL: {
         bool value;
         retval = anjay_get_bool(ctx, &value);
         if (!retval) {
@@ -362,8 +367,7 @@ static void perform_input(anjay_input_ctx_t *ctx,
         }
         break;
     }
-    case MOCK_DATA_OBJLNK:
-    {
+    case MOCK_DATA_OBJLNK: {
         anjay_oid_t oid;
         anjay_iid_t iid;
         retval = anjay_get_objlnk(ctx, &oid, &iid);
@@ -389,7 +393,8 @@ static int input_array(anjay_input_ctx_t *ctx,
         return -1;
     }
     for (const anjay_mock_dm_data_array_t *const *entry = array;
-            entry && *entry; ++entry) {
+         entry && *entry;
+         ++entry) {
         perform_input(array_ctx, &(*entry)->value);
     }
     return 0;
@@ -429,12 +434,13 @@ int _anjay_mock_dm_resource_dim(anjay_t *anjay,
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_resource_read_attrs(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       anjay_iid_t iid,
-                                       anjay_rid_t rid,
-                                       anjay_ssid_t ssid,
-                                       anjay_dm_resource_attributes_t *out) {
+int _anjay_mock_dm_resource_read_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_ssid_t ssid,
+        anjay_dm_resource_attributes_t *out) {
     DM_ACTION_COMMON(RESOURCE_READ_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_iid_rid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_iid_rid.iid);
@@ -444,12 +450,13 @@ int _anjay_mock_dm_resource_read_attrs(anjay_t *anjay,
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_resource_write_attrs(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                        anjay_iid_t iid,
-                                        anjay_rid_t rid,
-                                        anjay_ssid_t ssid,
-                                        const anjay_dm_resource_attributes_t *attrs) {
+int _anjay_mock_dm_resource_write_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_ssid_t ssid,
+        const anjay_dm_resource_attributes_t *attrs) {
     DM_ACTION_COMMON(RESOURCE_WRITE_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_iid_rid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_iid_rid.iid);
@@ -468,11 +475,12 @@ static anjay_mock_dm_expected_command_t *new_expected_command(void) {
     return new_command;
 }
 
-void _anjay_mock_dm_expect_object_read_default_attrs(anjay_t *anjay,
-                                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                                     anjay_ssid_t ssid,
-                                                     int retval,
-                                                     const anjay_dm_internal_attrs_t *attrs) {
+void _anjay_mock_dm_expect_object_read_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        int retval,
+        const anjay_dm_internal_attrs_t *attrs) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_OBJECT_READ_DEFAULT_ATTRS;
     command->anjay = anjay;
@@ -486,11 +494,12 @@ void _anjay_mock_dm_expect_object_read_default_attrs(anjay_t *anjay,
     }
 }
 
-void _anjay_mock_dm_expect_object_write_default_attrs(anjay_t *anjay,
-                                                      const anjay_dm_object_def_t *const *obj_ptr,
-                                                      anjay_ssid_t ssid,
-                                                      const anjay_dm_internal_attrs_t *attrs,
-                                                      int retval) {
+void _anjay_mock_dm_expect_object_write_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_attrs_t *attrs,
+        int retval) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_OBJECT_WRITE_DEFAULT_ATTRS;
     command->anjay = anjay;
@@ -500,10 +509,11 @@ void _anjay_mock_dm_expect_object_write_default_attrs(anjay_t *anjay,
     command->value.common_attributes = *attrs;
 }
 
-void _anjay_mock_dm_expect_instance_reset(anjay_t *anjay,
-                                          const anjay_dm_object_def_t *const *obj_ptr,
-                                          anjay_iid_t iid,
-                                          int retval) {
+void _anjay_mock_dm_expect_instance_reset(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        int retval) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_INSTANCE_RESET;
     command->anjay = anjay;
@@ -512,11 +522,12 @@ void _anjay_mock_dm_expect_instance_reset(anjay_t *anjay,
     command->retval = retval;
 }
 
-void _anjay_mock_dm_expect_instance_it(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       uintptr_t iteration,
-                                       int retval,
-                                       anjay_iid_t out) {
+void _anjay_mock_dm_expect_instance_it(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        uintptr_t iteration,
+        int retval,
+        anjay_iid_t out) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_INSTANCE_IT;
     command->anjay = anjay;
@@ -526,28 +537,28 @@ void _anjay_mock_dm_expect_instance_it(anjay_t *anjay,
     command->retval = retval;
 }
 
-#define EXPECT_INSTANCE_ACTION(LName, UName) \
-void _anjay_mock_dm_expect_instance_##LName (anjay_t *anjay, \
-                                             const anjay_dm_object_def_t *const *obj_ptr, \
-                                             anjay_iid_t iid, \
-                                             int retval) { \
-    anjay_mock_dm_expected_command_t *command = new_expected_command(); \
-    command->command = MOCK_DM_INSTANCE_##UName; \
-    command->anjay = anjay; \
-    command->obj_ptr = obj_ptr; \
-    command->input.iid = iid; \
-    command->retval = retval; \
-}
+#define EXPECT_INSTANCE_ACTION(LName, UName)                                \
+    void _anjay_mock_dm_expect_instance_##LName(                            \
+            anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr,    \
+            anjay_iid_t iid, int retval) {                                  \
+        anjay_mock_dm_expected_command_t *command = new_expected_command(); \
+        command->command = MOCK_DM_INSTANCE_##UName;                        \
+        command->anjay = anjay;                                             \
+        command->obj_ptr = obj_ptr;                                         \
+        command->input.iid = iid;                                           \
+        command->retval = retval;                                           \
+    }
 
 EXPECT_INSTANCE_ACTION(present, PRESENT)
 EXPECT_INSTANCE_ACTION(remove, REMOVE)
 
-void _anjay_mock_dm_expect_instance_create(anjay_t *anjay,
-                                           const anjay_dm_object_def_t *const *obj_ptr,
-                                           anjay_iid_t iid,
-                                           anjay_ssid_t ssid,
-                                           int retval,
-                                           anjay_iid_t out_iid) {
+void _anjay_mock_dm_expect_instance_create(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        int retval,
+        anjay_iid_t out_iid) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_INSTANCE_CREATE;
     command->anjay = anjay;
@@ -558,12 +569,13 @@ void _anjay_mock_dm_expect_instance_create(anjay_t *anjay,
     command->value.output_iid = out_iid;
 }
 
-void _anjay_mock_dm_expect_instance_read_default_attrs(anjay_t *anjay,
-                                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                                       anjay_iid_t iid,
-                                                       anjay_ssid_t ssid,
-                                                       int retval,
-                                                       const anjay_dm_internal_attrs_t *attrs) {
+void _anjay_mock_dm_expect_instance_read_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        int retval,
+        const anjay_dm_internal_attrs_t *attrs) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_INSTANCE_READ_DEFAULT_ATTRS;
     command->anjay = anjay;
@@ -578,12 +590,13 @@ void _anjay_mock_dm_expect_instance_read_default_attrs(anjay_t *anjay,
     }
 }
 
-void _anjay_mock_dm_expect_instance_write_default_attrs(anjay_t *anjay,
-                                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                                        anjay_iid_t iid,
-                                                        anjay_ssid_t ssid,
-                                                        const anjay_dm_internal_attrs_t *attrs,
-                                                        int retval) {
+void _anjay_mock_dm_expect_instance_write_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_attrs_t *attrs,
+        int retval) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_INSTANCE_WRITE_DEFAULT_ATTRS;
     command->anjay = anjay;
@@ -594,28 +607,30 @@ void _anjay_mock_dm_expect_instance_write_default_attrs(anjay_t *anjay,
     command->value.common_attributes = *attrs;
 }
 
-#define EXPECT_RESOURCE_ACTION_COMMON(UName) \
+#define EXPECT_RESOURCE_ACTION_COMMON(UName)                            \
     anjay_mock_dm_expected_command_t *command = new_expected_command(); \
-    command->command = MOCK_DM_RESOURCE_##UName; \
-    command->anjay = anjay; \
-    command->obj_ptr = obj_ptr; \
-    command->input.iid_and_rid.iid = iid; \
-    command->input.iid_and_rid.rid = rid; \
+    command->command = MOCK_DM_RESOURCE_##UName;                        \
+    command->anjay = anjay;                                             \
+    command->obj_ptr = obj_ptr;                                         \
+    command->input.iid_and_rid.iid = iid;                               \
+    command->input.iid_and_rid.rid = rid;                               \
     command->retval = retval;
 
-void _anjay_mock_dm_expect_resource_present(anjay_t *anjay,
-                                            const anjay_dm_object_def_t *const *obj_ptr,
-                                            anjay_iid_t iid,
-                                            anjay_rid_t rid,
-                                            int retval) {
+void _anjay_mock_dm_expect_resource_present(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        int retval) {
     EXPECT_RESOURCE_ACTION_COMMON(PRESENT);
 }
 
-void _anjay_mock_dm_expect_resource_operations(anjay_t *anjay,
-                                               const anjay_dm_object_def_t *const *obj_ptr,
-                                               anjay_rid_t rid,
-                                               anjay_dm_resource_op_mask_t mask,
-                                               int retval) {
+void _anjay_mock_dm_expect_resource_operations(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_rid_t rid,
+        anjay_dm_resource_op_mask_t mask,
+        int retval) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_RESOURCE_OPERATIONS;
     command->anjay = anjay;
@@ -625,51 +640,56 @@ void _anjay_mock_dm_expect_resource_operations(anjay_t *anjay,
     command->value.mask = mask;
 }
 
-void _anjay_mock_dm_expect_resource_read(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj_ptr,
-                                         anjay_iid_t iid,
-                                         anjay_rid_t rid,
-                                         int retval,
-                                         const anjay_mock_dm_data_t *data) {
+void _anjay_mock_dm_expect_resource_read(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        int retval,
+        const anjay_mock_dm_data_t *data) {
     EXPECT_RESOURCE_ACTION_COMMON(READ);
     command->value.data = *data;
 }
 
-void _anjay_mock_dm_expect_resource_write(anjay_t *anjay,
-                                          const anjay_dm_object_def_t *const *obj_ptr,
-                                          anjay_iid_t iid,
-                                          anjay_rid_t rid,
-                                          const anjay_mock_dm_data_t *data,
-                                          int retval) {
+void _anjay_mock_dm_expect_resource_write(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        const anjay_mock_dm_data_t *data,
+        int retval) {
     EXPECT_RESOURCE_ACTION_COMMON(WRITE);
     command->value.data = *data;
 }
 
-void _anjay_mock_dm_expect_resource_execute(anjay_t *anjay,
-                                            const anjay_dm_object_def_t *const *obj_ptr,
-                                            anjay_iid_t iid,
-                                            anjay_rid_t rid,
-                                            const anjay_mock_dm_data_t *data,
-                                            int retval) {
+void _anjay_mock_dm_expect_resource_execute(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        const anjay_mock_dm_data_t *data,
+        int retval) {
     EXPECT_RESOURCE_ACTION_COMMON(EXECUTE);
     command->value.data = *data;
 }
 
-void _anjay_mock_dm_expect_resource_dim(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                        anjay_iid_t iid,
-                                        anjay_rid_t rid,
-                                        int retval) {
+void _anjay_mock_dm_expect_resource_dim(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        int retval) {
     EXPECT_RESOURCE_ACTION_COMMON(DIM);
 }
 
-void _anjay_mock_dm_expect_resource_read_attrs(anjay_t *anjay,
-                                               const anjay_dm_object_def_t *const *obj_ptr,
-                                               anjay_iid_t iid,
-                                               anjay_rid_t rid,
-                                               anjay_ssid_t ssid,
-                                               int retval,
-                                               const anjay_dm_internal_res_attrs_t *attrs) {
+void _anjay_mock_dm_expect_resource_read_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_ssid_t ssid,
+        int retval,
+        const anjay_dm_internal_res_attrs_t *attrs) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_RESOURCE_READ_ATTRS;
     command->anjay = anjay;
@@ -685,13 +705,14 @@ void _anjay_mock_dm_expect_resource_read_attrs(anjay_t *anjay,
     }
 }
 
-void _anjay_mock_dm_expect_resource_write_attrs(anjay_t *anjay,
-                                                const anjay_dm_object_def_t *const *obj_ptr,
-                                                anjay_iid_t iid,
-                                                anjay_rid_t rid,
-                                                anjay_ssid_t ssid,
-                                                const anjay_dm_internal_res_attrs_t *attrs,
-                                                int retval) {
+void _anjay_mock_dm_expect_resource_write_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_res_attrs_t *attrs,
+        int retval) {
     anjay_mock_dm_expected_command_t *command = new_expected_command();
     command->command = MOCK_DM_RESOURCE_WRITE_ATTRS;
     command->anjay = anjay;

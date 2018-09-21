@@ -17,7 +17,6 @@
 #ifndef ANJAY_INCLUDE_ANJAY_IO_H
 #define ANJAY_INCLUDE_ANJAY_IO_H
 
-
 #include <anjay/core.h>
 
 #ifdef __cplusplus
@@ -353,9 +352,9 @@ int anjay_get_bytes(anjay_input_ctx_t *ctx,
  * @param[out] out_buf              Buffer to read data into.
  * @param      buf_size             Number of bytes available in @p out_buf .
  *
- * @returns 0 on success, a negative value in case of error, ANJAY_BUFFER_TOO_SHORT
- *          if the buffer is not big enough to contain whole message content +
- *          terminating nullbyte.
+ * @returns 0 on success, a negative value in case of error,
+ *          ANJAY_BUFFER_TOO_SHORT if the buffer is not big enough to contain
+ *          whole message content + terminating nullbyte.
  */
 int anjay_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size);
 
@@ -428,7 +427,8 @@ int anjay_get_bool(anjay_input_ctx_t *ctx, bool *out);
  * untouched.
  */
 int anjay_get_objlnk(anjay_input_ctx_t *ctx,
-                     anjay_oid_t *out_oid, anjay_iid_t *out_iid);
+                     anjay_oid_t *out_oid,
+                     anjay_iid_t *out_iid);
 
 /**
  * Begins reading an array of values (also known as Multiple Resource Instances)

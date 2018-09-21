@@ -19,12 +19,12 @@
 
 #include "../servers.h"
 
-#include "connection_info.h"
+#include "connections.h"
 
-#if !defined(ANJAY_TEST) \
+#if !defined(ANJAY_TEST)                      \
         && (!defined(ANJAY_SERVERS_INTERNALS) \
-                || !defined(ANJAY_SERVERS_CONNECTION_SOURCE))
-#error "connections_internal.h shall only be included from connection_*.c files"
+            || !defined(ANJAY_SERVERS_CONNECTION_SOURCE))
+#    error "connections_internal.h shall only be included from connection_*.c files"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -37,21 +37,22 @@ typedef struct {
 typedef struct {
     anjay_iid_t security_iid;
     const anjay_url_t *uri;
-    anjay_binding_mode_t binding_mode;
+    const char *binding_mode;
     anjay_udp_connection_info_t udp;
 } anjay_connection_info_t;
 
-typedef int anjay_connection_get_info_t(
-        anjay_t *anjay,
-        anjay_connection_info_t *inout_info,
-        anjay_server_dtls_keys_t *out_dtls_keys);
+typedef int
+anjay_connection_get_info_t(anjay_t *anjay,
+                            anjay_connection_info_t *inout_info,
+                            anjay_server_dtls_keys_t *out_dtls_keys);
 
 typedef int anjay_connection_get_net_security_info_t(
         avs_net_security_info_t *out_net_info,
         const anjay_connection_info_t *info,
         const anjay_server_dtls_keys_t *dtls_keys);
 
-typedef int anjay_connection_create_connected_socket_t(anjay_t *anjay,
+typedef int anjay_connection_create_connected_socket_t(
+        anjay_t *anjay,
         anjay_server_connection_t *out_connection,
         avs_net_ssl_configuration_t *inout_socket_config,
         const anjay_connection_info_t *info);
@@ -74,4 +75,3 @@ avs_net_af_t _anjay_socket_af_from_preferred_endpoint(
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_SERVERS_CONNECTIONS_INTERNAL_H */
-

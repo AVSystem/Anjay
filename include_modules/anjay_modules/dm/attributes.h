@@ -22,7 +22,7 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #if defined(WITH_CON_ATTR) // || defined(...)
-#define WITH_CUSTOM_ATTRIBUTES
+#    define WITH_CUSTOM_ATTRIBUTES
 #endif
 
 typedef enum {
@@ -33,15 +33,15 @@ typedef enum {
 
 #ifdef WITH_CUSTOM_ATTRIBUTES
 typedef struct {
-#ifdef WITH_CON_ATTR
+#    ifdef WITH_CON_ATTR
     anjay_dm_con_attr_t con;
-#endif
+#    endif
 } anjay_dm_custom_attrs_t;
 
 typedef struct {
-#ifdef WITH_CON_ATTR
+#    ifdef WITH_CON_ATTR
     bool has_con;
-#endif
+#    endif
 } anjay_dm_custom_request_attribute_flags_t;
 
 /*
@@ -129,13 +129,15 @@ typedef struct {
  */
 typedef union {
     anjay_dm_custom_attrs_t data;
-    char padding[offsetof(struct {
+    char padding[offsetof(
+            struct {
                 anjay_dm_custom_attrs_t custom;
                 union {
                     anjay_dm_attributes_t common;
                     anjay_dm_resource_attributes_t res;
                 } standard;
-            }, standard)];
+            },
+            standard)];
 } anjay_dm_custom_attrs_storage_t;
 #endif // WITH_CUSTOM_ATTRIBUTES
 
@@ -178,51 +180,49 @@ _anjay_dm_get_internal_res_attrs(anjay_dm_resource_attributes_t *attrs) {
 static inline const anjay_dm_internal_res_attrs_t *
 _anjay_dm_get_internal_res_attrs_const(
         const anjay_dm_resource_attributes_t *attrs) {
-    return AVS_CONTAINER_OF(attrs,
-                            const anjay_dm_internal_res_attrs_t, standard);
+    return AVS_CONTAINER_OF(attrs, const anjay_dm_internal_res_attrs_t,
+                            standard);
 }
 
 #ifdef WITH_CUSTOM_ATTRIBUTES
 
-#ifdef WITH_CON_ATTR
-#define _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER \
-    .con = ANJAY_DM_CON_ATTR_DEFAULT,
-#else // WITH_CON_ATTR
-#define _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER
-#endif // WITH_CON_ATTR
+#    ifdef WITH_CON_ATTR
+#        define _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER \
+            .con = ANJAY_DM_CON_ATTR_DEFAULT,
+#    else // WITH_CON_ATTR
+#        define _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER
+#    endif // WITH_CON_ATTR
 
-#define _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER \
-    .custom = { \
-        .data = { \
-            _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER \
-        } \
-    },
+#    define _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER                \
+        .custom = {                                           \
+            .data = { _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER } \
+        },
 
 #else // WITH_CUSTOM_ATTRIBUTES
-#define _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
+#    define _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
 #endif // WITH_CUSTOM_ATTRIBUTES
 
-#define _ANJAY_DM_ATTRIBS_EMPTY { \
+#define _ANJAY_DM_ATTRIBS_EMPTY                 \
+    {                                           \
         .min_period = ANJAY_ATTRIB_PERIOD_NONE, \
-        .max_period = ANJAY_ATTRIB_PERIOD_NONE \
+        .max_period = ANJAY_ATTRIB_PERIOD_NONE  \
     }
 
-#define _ANJAY_DM_INTERNAL_ATTRS_EMPTY { \
-        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER \
-        .standard = _ANJAY_DM_ATTRIBS_EMPTY \
-    }
+#define _ANJAY_DM_INTERNAL_ATTRS_EMPTY \
+    { _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER.standard = _ANJAY_DM_ATTRIBS_EMPTY }
 
-#define _ANJAY_RES_ATTRIBS_EMPTY { \
-        .common = _ANJAY_DM_ATTRIBS_EMPTY, \
+// clang-format off
+#define _ANJAY_RES_ATTRIBS_EMPTY                 \
+    {                                            \
+        .common = _ANJAY_DM_ATTRIBS_EMPTY,       \
         .greater_than = ANJAY_ATTRIB_VALUE_NONE, \
-        .less_than = ANJAY_ATTRIB_VALUE_NONE, \
-        .step = ANJAY_ATTRIB_VALUE_NONE \
+        .less_than = ANJAY_ATTRIB_VALUE_NONE,    \
+        .step = ANJAY_ATTRIB_VALUE_NONE          \
     }
+// clang-format on
 
-#define _ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY { \
-        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER \
-        .standard = _ANJAY_RES_ATTRIBS_EMPTY \
-    }
+#define _ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY \
+    { _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER.standard = _ANJAY_RES_ATTRIBS_EMPTY }
 
 extern const anjay_dm_internal_attrs_t ANJAY_DM_INTERNAL_ATTRS_EMPTY;
 extern const anjay_dm_internal_res_attrs_t ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;

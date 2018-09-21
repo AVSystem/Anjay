@@ -110,8 +110,13 @@ class AccessControl:
                                               accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
                 self.assertEqual(expected_tlv, read_tlv.content)
 
-        def setUp(self, servers=2, **kwargs):
-            extra_args = sum((['--access-entry', '1337', str(ssid)] for ssid in range(2, servers + 1)), [])
+        def setUp(self, servers=2, extra_cmdline_args=[], **kwargs):
+            if isinstance(servers, int):
+                servers_count = servers
+            else:
+                servers_count = len(servers)
+            extra_args = sum((['--access-entry', '1337', str(ssid)] for ssid in range(2, servers_count + 1)),
+                             extra_cmdline_args)
             self.setup_demo_with_servers(servers=servers,
                                          extra_cmdline_args=extra_args,
                                          **kwargs)

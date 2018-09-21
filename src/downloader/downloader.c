@@ -120,8 +120,8 @@ static int get_ctx_socket(anjay_downloader_t *dl,
     assert(dl);
     assert(ctx);
     assert(ctx->common.vtable);
-    int result = ctx->common.vtable->get_socket(dl, ctx,
-                                                out_socket, out_transport);
+    int result =
+            ctx->common.vtable->get_socket(dl, ctx, out_socket, out_transport);
     if (!result) {
         assert(*out_socket);
     }
@@ -136,8 +136,7 @@ find_ctx_ptr_by_socket(anjay_downloader_t *dl,
         avs_net_abstract_socket_t *ctx_socket = NULL;
         if (!get_ctx_socket(dl, *ctx, &ctx_socket,
                             &(anjay_socket_transport_t) {
-                                (anjay_socket_transport_t) 0
-                            })
+                                    (anjay_socket_transport_t) 0 })
                 && ctx_socket == socket) {
             return ctx;
         }
@@ -175,8 +174,7 @@ int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
 }
 
 AVS_LIST(anjay_download_ctx_t) *
-_anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl,
-                                     uintptr_t id) {
+_anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl, uintptr_t id) {
     AVS_LIST(anjay_download_ctx_t) *ctx;
     AVS_LIST_FOREACH_PTR(ctx, &dl->downloads) {
         if ((*ctx)->common.id == id) {
@@ -191,8 +189,7 @@ int _anjay_downloader_handle_packet(anjay_downloader_t *dl,
                                     avs_net_abstract_socket_t *socket) {
     assert(&_anjay_downloader_get_anjay(dl)->downloader == dl);
 
-    AVS_LIST(anjay_download_ctx_t) *ctx =
-            find_ctx_ptr_by_socket(dl, socket);
+    AVS_LIST(anjay_download_ctx_t) *ctx = find_ctx_ptr_by_socket(dl, socket);
     if (!ctx) {
         // unknown socket
         return -1;
@@ -217,7 +214,7 @@ static uintptr_t find_free_id(anjay_downloader_t *dl) {
     do {
         id = dl->next_id++;
     } while (id == INVALID_DOWNLOAD_ID
-            || _anjay_downloader_find_ctx_ptr_by_id(dl, id) != NULL);
+             || _anjay_downloader_find_ctx_ptr_by_id(dl, id) != NULL);
 
     return id;
 }
@@ -260,14 +257,14 @@ int _anjay_downloader_download(anjay_downloader_t *dl,
     int result = -EPROTONOSUPPORT;
 #ifdef WITH_BLOCK_DOWNLOAD
     if (starts_with(config->url, "coap")) {
-        result = _anjay_downloader_coap_ctx_new(dl, &dl_ctx,
-                                                config, find_free_id(dl));
+        result = _anjay_downloader_coap_ctx_new(dl, &dl_ctx, config,
+                                                find_free_id(dl));
     } else
 #endif // WITH_BLOCK_DOWNLOAD
 #ifdef WITH_HTTP_DOWNLOAD
-    if (starts_with(config->url, "http")) {
-        result = _anjay_downloader_http_ctx_new(dl, &dl_ctx,
-                                                config, find_free_id(dl));
+            if (starts_with(config->url, "http")) {
+        result = _anjay_downloader_http_ctx_new(dl, &dl_ctx, config,
+                                                find_free_id(dl));
     } else
 #endif // WITH_HTTP_DOWNLOAD
     {
@@ -287,15 +284,15 @@ int _anjay_downloader_download(anjay_downloader_t *dl,
 
 void _anjay_downloader_abort(anjay_downloader_t *dl,
                              anjay_download_handle_t handle) {
-    uintptr_t id = (uintptr_t)handle;
+    uintptr_t id = (uintptr_t) handle;
 
     AVS_LIST(anjay_download_ctx_t) *ctx =
             _anjay_downloader_find_ctx_ptr_by_id(dl, id);
     if (!ctx) {
         dl_log(DEBUG, "download id = %" PRIuPTR " not found (expired?)", id);
     } else {
-        _anjay_downloader_abort_transfer(dl, ctx,
-                                         ANJAY_DOWNLOAD_ERR_ABORTED, EINTR);
+        _anjay_downloader_abort_transfer(dl, ctx, ANJAY_DOWNLOAD_ERR_ABORTED,
+                                         EINTR);
     }
 }
 
@@ -315,6 +312,6 @@ int _anjay_downloader_sched_reconnect_all(anjay_downloader_t *dl) {
         return 0;
     }
     return _anjay_sched_now(_anjay_downloader_get_anjay(dl)->sched,
-                            &dl->reconnect_job_handle,
-                            reconnect_all_job, NULL, 0);
+                            &dl->reconnect_job_handle, reconnect_all_job, NULL,
+                            0);
 }

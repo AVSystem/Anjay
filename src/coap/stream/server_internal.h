@@ -17,18 +17,18 @@
 #ifndef ANJAY_COAP_STREAM_SERVER_H
 #define ANJAY_COAP_STREAM_SERVER_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
-#include "../coap_stream.h"
 #include "../block/response.h"
+#include "../coap_stream.h"
 #include "../id_source/id_source.h"
 #include "common.h"
 #include "in.h"
 #include "out.h"
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
-#error "Headers from coap/stream are not meant to be included from outside"
+#    error "Headers from coap/stream are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -89,8 +89,8 @@ void _anjay_coap_server_set_block_request_relation_validator(
         anjay_coap_block_request_validator_t *validator,
         void *validator_arg);
 #else // WITH_BLOCK_SEND
-#define _anjay_coap_server_set_block_request_relation_validator( \
-                Server, Validator, Arg) \
+#    define _anjay_coap_server_set_block_request_relation_validator( \
+            Server, Validator, Arg)                                  \
         ((void) (Server), (void) (Validator), (void) (Arg))
 #endif // WITH_BLOCK_SEND
 

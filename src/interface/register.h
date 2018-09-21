@@ -51,8 +51,8 @@ bool _anjay_needs_registration_update(anjay_registration_update_ctx_t *ctx);
  */
 int _anjay_update_registration(anjay_registration_update_ctx_t *ctx);
 
-void
-_anjay_registration_update_ctx_release(anjay_registration_update_ctx_t *ctx);
+void _anjay_registration_update_ctx_release(
+        anjay_registration_update_ctx_t *ctx);
 
 int _anjay_deregister(anjay_t *anjay,
                       AVS_LIST(const anjay_string_t) endpoint_path);

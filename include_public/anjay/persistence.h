@@ -24,19 +24,21 @@ extern "C" {
 #endif
 
 #ifdef __GNUC__
-#warning "<anjay/persistence.h> is deprecated. Please use <avsystem/commons/persistence.h> instead."
+#    warning "<anjay/persistence.h> is deprecated. Please use " \
+             "<avsystem/commons/persistence.h> instead."
 #endif
 
 typedef avs_persistence_context_t anjay_persistence_context_t;
 
 typedef avs_persistence_handler_collection_element_t
-anjay_persistence_handler_collection_element_t;
+        anjay_persistence_handler_collection_element_t;
 
 typedef avs_persistence_cleanup_collection_element_t
-anjay_persistence_cleanup_collection_element_t;
+        anjay_persistence_cleanup_collection_element_t;
 
 #define anjay_persistence_store_context_new avs_persistence_store_context_new
-#define anjay_persistence_restore_context_new avs_persistence_restore_context_new
+#define anjay_persistence_restore_context_new \
+    avs_persistence_restore_context_new
 #define anjay_persistence_ignore_context_new avs_persistence_ignore_context_new
 #define anjay_persistence_context_delete avs_persistence_context_delete
 

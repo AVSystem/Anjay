@@ -27,12 +27,12 @@ using namespace std;
 namespace ssl {
 
 void PskSecurity::configure(Socket &socket) {
-    mbedtls_ssl_conf_psk(
-            &socket.config_,
-            reinterpret_cast<const unsigned char *>(key_.data()),
-            key_.size(),
-            reinterpret_cast<const unsigned char *>(identity_.data()),
-            identity_.size());
+    mbedtls_ssl_conf_psk(&socket.config_,
+                         reinterpret_cast<const unsigned char *>(key_.data()),
+                         key_.size(),
+                         reinterpret_cast<const unsigned char *>(
+                                 identity_.data()),
+                         identity_.size());
 
     static int psk_ciphersuites[2] = { MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8, 0 };
     mbedtls_ssl_conf_ciphersuites(&socket.config_, psk_ciphersuites);
@@ -54,19 +54,20 @@ CertSecurity::CertSecurity(const char *ca_path,
 
     int result;
     if (ca_path
-        && (result = mbedtls_x509_crt_parse_path(&ca_certs_, ca_path))) {
+            && (result = mbedtls_x509_crt_parse_path(&ca_certs_, ca_path))) {
         throw mbedtls_error(string("Could not load certificates from CA-path ")
                                     + ca_path,
                             result);
     }
     if (ca_file
-        && (result = mbedtls_x509_crt_parse_file(&ca_certs_, ca_file))) {
+            && (result = mbedtls_x509_crt_parse_file(&ca_certs_, ca_file))) {
         throw mbedtls_error(string("Could not load certificate from CA-file ")
                                     + ca_file,
                             result);
     }
     if (key_file
-        && (result = mbedtls_pk_parse_keyfile(&pk_ctx_, key_file, nullptr))) {
+            && (result = mbedtls_pk_parse_keyfile(
+                        &pk_ctx_, key_file, nullptr))) {
         throw mbedtls_error(
                 string("Could not parse private-key file ") + key_file, result);
     }

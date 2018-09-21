@@ -122,8 +122,7 @@ remove_instance_if_empty(AVS_LIST(fas_instance_entry_t) *entry_ptr) {
     }
 }
 
-static void
-remove_object_if_empty(AVS_LIST(fas_object_entry_t) *entry_ptr) {
+static void remove_object_if_empty(AVS_LIST(fas_object_entry_t) *entry_ptr) {
     if (!(*entry_ptr)->default_attrs && !(*entry_ptr)->instances) {
         AVS_LIST_DELETE(entry_ptr);
     }
@@ -154,7 +153,8 @@ static bool resource_attrs_empty(const void *attrs) {
             (const anjay_dm_internal_res_attrs_t *) attrs);
 }
 
-int _anjay_attr_storage_compare_u16ids(const void *a, const void *b,
+int _anjay_attr_storage_compare_u16ids(const void *a,
+                                       const void *b,
                                        size_t element_size);
 
 int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,

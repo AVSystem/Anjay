@@ -146,7 +146,7 @@ find_instance(const {{ obj_repr_type }} *obj,
 static int instance_present(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,
                             anjay_iid_t iid) {
-    (void)anjay;
+    (void) anjay;
     return find_instance(get_obj(obj_ptr), iid) != NULL;
 }
 
@@ -154,7 +154,7 @@ static int instance_it(anjay_t *anjay,
                        const anjay_dm_object_def_t *const *obj_ptr,
                        anjay_iid_t *out,
                        void **cookie) {
-    (void)anjay;
+    (void) anjay;
 
     AVS_LIST({{ obj_inst_type }}) curr = (AVS_LIST({{ obj_inst_type }}))*cookie;
     if (!curr) {
@@ -235,7 +235,7 @@ static int instance_create(anjay_t *anjay,
 static int instance_remove(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
                            anjay_iid_t iid) {
-    (void)anjay;
+    (void) anjay;
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
     assert(obj);
 
@@ -281,7 +281,7 @@ static int resource_read(anjay_t *anjay,
                          anjay_iid_t iid,
                          anjay_rid_t rid,
                          anjay_output_ctx_t *ctx) {
-    (void)anjay;
+    (void) anjay;
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
     assert(obj);
@@ -312,7 +312,7 @@ static int resource_write(anjay_t *anjay,
                           anjay_iid_t iid,
                           anjay_rid_t rid,
                           anjay_input_ctx_t *ctx) {
-    (void)anjay;
+    (void) anjay;
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
     assert(obj);
@@ -343,7 +343,7 @@ static int resource_execute(anjay_t *anjay,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
                             anjay_execute_ctx_t *arg_ctx) {
-    (void)arg_ctx;
+    (void) arg_ctx;
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
     assert(obj);

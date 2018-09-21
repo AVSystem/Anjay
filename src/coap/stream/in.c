@@ -20,13 +20,13 @@
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
-#include "in.h"
 #include "common.h"
+#include "in.h"
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdlib.h>
 #include <errno.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 #include "../coap_log.h"
 
@@ -50,7 +50,7 @@ int _anjay_coap_in_get_next_message(coap_input_buffer_t *in,
     const avs_coap_msg_t *msg = _anjay_coap_in_get_message(in);
 
     in->payload_off = 0;
-    in->payload = (const uint8_t *)avs_coap_msg_payload(msg);
+    in->payload = (const uint8_t *) avs_coap_msg_payload(msg);
     in->payload_size = avs_coap_msg_payload_length(msg);
 
     return 0;
@@ -69,4 +69,3 @@ void _anjay_coap_in_read(coap_input_buffer_t *in,
     *out_bytes_read = bytes_to_copy;
     *out_message_finished = (in->payload_off >= in->payload_size);
 }
-

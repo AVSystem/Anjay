@@ -22,8 +22,8 @@
 
 #include <avsystem/commons/coap/msg_opt.h>
 
-#include "common.h"
 #include "../coap_log.h"
+#include "common.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -46,11 +46,10 @@ uint32_t _anjay_coap_common_timestamp(void) {
     // 32.768 us, wrapping every 512 seconds.
     // Should satisfy the requirements given in OBSERVE 3.4 and 4.4
     return (uint32_t) ((now.since_monotonic_epoch.seconds & 0x1FF) << 15)
-            | (uint32_t) (now.since_monotonic_epoch.nanoseconds >> 15);
+           | (uint32_t) (now.since_monotonic_epoch.nanoseconds >> 15);
 }
 
-static int add_observe_option(avs_coap_msg_info_t *info,
-                              bool observe) {
+static int add_observe_option(avs_coap_msg_info_t *info, bool observe) {
     if (observe) {
         return avs_coap_msg_info_opt_u32(info, AVS_COAP_OPT_OBSERVE,
                                          _anjay_coap_common_timestamp());

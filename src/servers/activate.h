@@ -23,7 +23,7 @@
 #include "../utils_core.h"
 
 #ifndef ANJAY_SERVERS_INTERNALS
-#error "Headers from servers/ are not meant to be included from outside"
+#    error "Headers from servers/ are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN

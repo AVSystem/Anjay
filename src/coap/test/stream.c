@@ -22,15 +22,15 @@
 #include <avsystem/commons/unit/mocksock.h>
 #include <avsystem/commons/unit/test.h>
 
-#include <anjay_test/mock_clock.h>
-#include <anjay_test/coap/stream.h>
 #include <anjay_test/coap/socket.h>
+#include <anjay_test/coap/stream.h>
+#include <anjay_test/mock_clock.h>
 #include <anjay_test/utils.h>
 
 #include "servers.h"
 
-#include "../content_format.h"
 #include "../coap_stream.h"
+#include "../content_format.h"
 #include "utils.h"
 
 #define TEST_PORT_UDP_ECHO 4322
@@ -77,8 +77,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
 
     avs_coap_opt_iterator_t optit = AVS_COAP_OPT_ITERATOR_EMPTY;
     AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_get_option_string_it(
-            msg, AVS_COAP_OPT_URI_PATH, &optit, &bytes_read,
-            buffer, sizeof(buffer)));
+            msg, AVS_COAP_OPT_URI_PATH, &optit, &bytes_read, buffer,
+            sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_path, 0))->c_str) + 1);
@@ -86,8 +86,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_path, 0))->c_str);
 
     AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_get_option_string_it(
-            msg, AVS_COAP_OPT_URI_PATH, &optit, &bytes_read,
-            buffer, sizeof(buffer)));
+            msg, AVS_COAP_OPT_URI_PATH, &optit, &bytes_read, buffer,
+            sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_path, 1))->c_str) + 1);
@@ -95,8 +95,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_path, 1))->c_str);
 
     AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_get_option_string_it(
-            msg, AVS_COAP_OPT_URI_PATH, &optit, &bytes_read,
-            buffer, sizeof(buffer)));
+            msg, AVS_COAP_OPT_URI_PATH, &optit, &bytes_read, buffer,
+            sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_path, 2))->c_str) + 1);
@@ -110,8 +110,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
 
     memset(&optit, 0, sizeof(optit));
     AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_get_option_string_it(
-            msg, AVS_COAP_OPT_URI_QUERY, &optit, &bytes_read,
-            buffer, sizeof(buffer)));
+            msg, AVS_COAP_OPT_URI_QUERY, &optit, &bytes_read, buffer,
+            sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_query, 0))->c_str) + 1);
@@ -119,8 +119,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
             buffer, (*AVS_LIST_NTH_PTR(&details.uri_query, 0))->c_str);
 
     AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_get_option_string_it(
-            msg, AVS_COAP_OPT_URI_QUERY, &optit, &bytes_read,
-            buffer, sizeof(buffer)));
+            msg, AVS_COAP_OPT_URI_QUERY, &optit, &bytes_read, buffer,
+            sizeof(buffer)));
     AVS_UNIT_ASSERT_EQUAL(
             bytes_read,
             strlen((*AVS_LIST_NTH_PTR(&details.uri_query, 1))->c_str) + 1);
@@ -148,8 +148,10 @@ AVS_UNIT_TEST(coap_stream, no_payload) {
             _anjay_test_setup_udp_echo_socket(TEST_PORT_UDP_ECHO);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_GET,
-                                   .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_GET,
+        .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -185,9 +187,11 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, mocksock, 4096, 4096);
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE,
-                                   .format = AVS_COAP_FORMAT_NONE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE,
+        .format = AVS_COAP_FORMAT_NONE
+    };
 
     {
         AVS_UNIT_ASSERT_SUCCESS(
@@ -199,8 +203,8 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL(id.token.size, 0);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69ED);
 
-        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT, ID(0x69ED),
-                                                  NO_PAYLOAD);
+        const avs_coap_msg_t *response =
+                COAP_MSG(NON, CONTENT, ID(0x69ED), NO_PAYLOAD);
         avs_unit_mocksock_expect_output(mocksock, response->content,
                                         response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
@@ -225,8 +229,8 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL(id.token.size, 0);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69EE);
 
-        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT, ID(0x69EE),
-                                                  NO_PAYLOAD);
+        const avs_coap_msg_t *response =
+                COAP_MSG(NON, CONTENT, ID(0x69EE), NO_PAYLOAD);
         avs_unit_mocksock_expect_output(mocksock, response->content,
                                         response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
@@ -234,11 +238,13 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
     {
 #define TOKEN "AYY LMAO"
         static const uint8_t TOKEN_SIZE = sizeof(TOKEN) - 1;
-        avs_coap_token_t token = { .size = TOKEN_SIZE };
+        avs_coap_token_t token = {
+            .size = TOKEN_SIZE
+        };
         memcpy(token.bytes, TOKEN, TOKEN_SIZE);
 
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_setup_request(
-                stream, &details, &token));
+        AVS_UNIT_ASSERT_SUCCESS(
+                _anjay_coap_stream_setup_request(stream, &details, &token));
 
         avs_coap_msg_identity_t id;
         AVS_UNIT_ASSERT_SUCCESS(
@@ -247,9 +253,8 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL_BYTES(&id.token.bytes, TOKEN);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69EF);
 
-        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT,
-                                                  ID(0x69EF, TOKEN),
-                                                  NO_PAYLOAD);
+        const avs_coap_msg_t *response =
+                COAP_MSG(NON, CONTENT, ID(0x69EF, TOKEN), NO_PAYLOAD);
         avs_unit_mocksock_expect_output(mocksock, response->content,
                                         response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
@@ -265,8 +270,8 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL(id.token.size, 0);
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69F0);
 
-        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT, ID(0x69F0),
-                                                  NO_PAYLOAD);
+        const avs_coap_msg_t *response =
+                COAP_MSG(NON, CONTENT, ID(0x69F0), NO_PAYLOAD);
         avs_unit_mocksock_expect_output(mocksock, response->content,
                                         response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
@@ -280,8 +285,10 @@ AVS_UNIT_TEST(coap_stream, read_some) {
             _anjay_test_setup_udp_ack_echo_socket(TEST_PORT_UDP_ACK);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -320,8 +327,10 @@ AVS_UNIT_TEST(coap_stream, confirmable) {
             _anjay_test_setup_udp_ack_echo_socket(TEST_PORT_UDP_ACK);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -356,8 +365,10 @@ AVS_UNIT_TEST(coap_stream, reset_when_sending) {
             _anjay_test_setup_udp_reset_socket(TEST_PORT_UDP_RESET);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -375,8 +386,10 @@ AVS_UNIT_TEST(coap_stream, mismatched_reset) {
                     TEST_PORT_UDP_MISMATCHED_RESET);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -394,8 +407,10 @@ AVS_UNIT_TEST(coap_stream, garbage_response_when_waiting_for_ack) {
                     TEST_PORT_UDP_GARBAGE_ACK);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -413,8 +428,10 @@ AVS_UNIT_TEST(coap_stream, ack_with_mismatched_id) {
                     TEST_PORT_UDP_MISMATCHED);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -432,8 +449,10 @@ AVS_UNIT_TEST(coap_stream, long_separate) {
                     TEST_PORT_UDP_LONG_SEPARATE);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_CONFIRMABLE
+    };
 
     char out_data[] = "follow the white rabbit";
 
@@ -465,8 +484,10 @@ AVS_UNIT_TEST(coap_stream, receive_garbage) {
                     TEST_PORT_UDP_GARBAGE);
     avs_stream_abstract_t *stream = NULL;
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE
+    };
 
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, socket, 4096, 4096);
@@ -496,18 +517,20 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
     SCOPED_MOCK_COAP_STREAM(ctx) =
             _anjay_mock_coap_stream_create(&stream, mocksock, 4096, 4096);
 
-    anjay_msg_details_t details = {.msg_code = AVS_COAP_CODE_CONTENT,
-                                   .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE,
-                                   .format = AVS_COAP_FORMAT_NONE };
+    anjay_msg_details_t details = {
+        .msg_code = AVS_COAP_CODE_CONTENT,
+        .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE,
+        .format = AVS_COAP_FORMAT_NONE
+    };
 
     {
         details.observe_serial = true;
         _anjay_mock_clock_start((avs_time_monotonic_t) { { 514, 777 << 15 } });
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL));
-        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT,
-                                                  ID(0x69ED), OBSERVE(0x010309),
-                                                  NO_PAYLOAD);
+        const avs_coap_msg_t *response =
+                COAP_MSG(NON, CONTENT, ID(0x69ED), OBSERVE(0x010309),
+                         NO_PAYLOAD);
         avs_unit_mocksock_expect_output(mocksock, response->content,
                                         response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
@@ -518,9 +541,9 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
         _anjay_mock_clock_start((avs_time_monotonic_t) { { 777, 514 << 15 } });
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_coap_stream_setup_request(stream, &details, NULL));
-        const avs_coap_msg_t *response = COAP_MSG(NON, CONTENT,
-                                                  ID(0x69EE), OBSERVE(0x848202),
-                                                  NO_PAYLOAD);
+        const avs_coap_msg_t *response =
+                COAP_MSG(NON, CONTENT, ID(0x69EE), OBSERVE(0x848202),
+                         NO_PAYLOAD);
         avs_unit_mocksock_expect_output(mocksock, response->content,
                                         response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
@@ -537,8 +560,10 @@ typedef struct test_data {
 } test_data_t;
 
 static test_data_t setup_test(void) {
-    test_data_t data = {.mock_socket = NULL,
-                        .stream = NULL };
+    test_data_t data = {
+        .mock_socket = NULL,
+        .stream = NULL
+    };
 
     _anjay_mocksock_create(&data.mock_socket, 1252, 1252);
     avs_unit_mocksock_expect_connect(data.mock_socket, "", "");
@@ -565,8 +590,8 @@ static void mock_receive_request(test_data_t *test,
     avs_unit_mocksock_input(test->mock_socket, request, request_size);
 
     const avs_coap_msg_t *msg;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_coap_stream_get_incoming_msg(test->stream,
-                                                                &msg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_coap_stream_get_incoming_msg(test->stream, &msg));
 }
 
 AVS_UNIT_TEST(coap_stream, response_empty) {
@@ -575,15 +600,16 @@ AVS_UNIT_TEST(coap_stream, response_empty) {
     const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
     mock_receive_request(&test, request->content, request->length);
 
-    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001),
-                                              NO_PAYLOAD);
+    const avs_coap_msg_t *response =
+            COAP_MSG(ACK, CHANGED, ID(0x0001), NO_PAYLOAD);
     avs_unit_mocksock_expect_output(test.mock_socket, response->content,
                                     response->length);
 
-    const anjay_msg_details_t details = {.msg_type =
-                                                 AVS_COAP_MSG_ACKNOWLEDGEMENT,
-                                         .msg_code = AVS_COAP_CODE_CHANGED,
-                                         .format = AVS_COAP_FORMAT_NONE };
+    const anjay_msg_details_t details = {
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_code = AVS_COAP_CODE_CHANGED,
+        .format = AVS_COAP_FORMAT_NONE
+    };
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(test.stream));
@@ -599,16 +625,17 @@ AVS_UNIT_TEST(coap_stream, response_token) {
     const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001, TOKEN));
     mock_receive_request(&test, request->content, request->length);
 
-    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001, TOKEN),
-                                              NO_PAYLOAD);
+    const avs_coap_msg_t *response =
+            COAP_MSG(ACK, CHANGED, ID(0x0001, TOKEN), NO_PAYLOAD);
     avs_unit_mocksock_expect_output(test.mock_socket, response->content,
                                     response->length);
 #undef TOKEN
 
-    const anjay_msg_details_t details = {.msg_type =
-                                                 AVS_COAP_MSG_ACKNOWLEDGEMENT,
-                                         .msg_code = AVS_COAP_CODE_CHANGED,
-                                         .format = AVS_COAP_FORMAT_NONE };
+    const anjay_msg_details_t details = {
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_code = AVS_COAP_CODE_CHANGED,
+        .format = AVS_COAP_FORMAT_NONE
+    };
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(test.stream));
@@ -625,15 +652,16 @@ AVS_UNIT_TEST(coap_stream, response_content) {
     const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
     mock_receive_request(&test, request->content, request->length);
 
-    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001),
-                                              PAYLOAD(CONTENT));
+    const avs_coap_msg_t *response =
+            COAP_MSG(ACK, CHANGED, ID(0x0001), PAYLOAD(CONTENT));
     avs_unit_mocksock_expect_output(test.mock_socket, response->content,
                                     response->length);
 
-    const anjay_msg_details_t details = {.msg_type =
-                                                 AVS_COAP_MSG_ACKNOWLEDGEMENT,
-                                         .msg_code = AVS_COAP_CODE_CHANGED,
-                                         .format = AVS_COAP_FORMAT_NONE };
+    const anjay_msg_details_t details = {
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_code = AVS_COAP_CODE_CHANGED,
+        .format = AVS_COAP_FORMAT_NONE
+    };
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_coap_stream_setup_response(test.stream, &details));
     AVS_UNIT_ASSERT_SUCCESS(
@@ -651,12 +679,10 @@ AVS_UNIT_TEST(coap_stream, response_options) {
     const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
     mock_receive_request(&test, request->content, request->length);
 
-    const avs_coap_msg_t *response = COAP_MSG(ACK, CHANGED, ID(0x0001),
-                                              LOCATION_PATH("slychac", "trzask",
-                                                            "bylo", "zalozyc",
-                                                            "kask"),
-                                              PATH("w", "ryj", "z", "kopa"),
-                                              QUERY("albo=lepiej", "w=jadra"));
+    const avs_coap_msg_t *response = COAP_MSG(
+            ACK, CHANGED, ID(0x0001),
+            LOCATION_PATH("slychac", "trzask", "bylo", "zalozyc", "kask"),
+            PATH("w", "ryj", "z", "kopa"), QUERY("albo=lepiej", "w=jadra"));
     avs_unit_mocksock_expect_output(test.mock_socket, response->content,
                                     response->length);
 
@@ -675,17 +701,19 @@ AVS_UNIT_TEST(coap_stream, response_options) {
 
     AVS_LIST_CLEAR((AVS_LIST(anjay_string_t) *) (intptr_t) &details.uri_path);
     AVS_LIST_CLEAR((AVS_LIST(anjay_string_t) *) (intptr_t) &details.uri_query);
-    AVS_LIST_CLEAR((AVS_LIST(anjay_string_t) *) (intptr_t) &details.location_path);
+    AVS_LIST_CLEAR(
+            (AVS_LIST(anjay_string_t) *) (intptr_t) &details.location_path);
     teardown_test(&test);
 }
 
 AVS_UNIT_TEST(coap_stream, response_no_request) {
     test_data_t test = setup_test();
 
-    const anjay_msg_details_t details = {.msg_type =
-                                                 AVS_COAP_MSG_ACKNOWLEDGEMENT,
-                                         .msg_code = AVS_COAP_CODE_CHANGED,
-                                         .format = AVS_COAP_FORMAT_NONE };
+    const anjay_msg_details_t details = {
+        .msg_type = AVS_COAP_MSG_ACKNOWLEDGEMENT,
+        .msg_code = AVS_COAP_CODE_CHANGED,
+        .format = AVS_COAP_FORMAT_NONE
+    };
     AVS_UNIT_ASSERT_FAILED(
             _anjay_coap_stream_setup_response(test.stream, &details));
 
@@ -707,8 +735,8 @@ AVS_UNIT_TEST(coap_stream, fuzz_1_invalid_block_size) {
             "\xd1\x0e" // delta = 13 + 14, length = 1
             "\x07";    // seq_num = 0, has_more = 0, block_size = 2048
 
-    const avs_coap_msg_t *bad_option_res = COAP_MSG(ACK, BAD_REQUEST,
-                                                    ID(0x0001));
+    const avs_coap_msg_t *bad_option_res =
+            COAP_MSG(ACK, BAD_REQUEST, ID(0x0001));
 
     avs_net_abstract_socket_t *mocksock = NULL;
     _anjay_mocksock_create(&mocksock, 1252, 1252);

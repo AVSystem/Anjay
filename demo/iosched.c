@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#include "iosched.h"
 #include "demo.h"
 #include "demo_utils.h"
-#include "iosched.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/memory.h>
@@ -71,8 +71,7 @@ void iosched_release(iosched_t *sched) {
     }
 }
 
-static void insert_entry(iosched_t *sched,
-                         AVS_LIST(iosched_entry_t) entry) {
+static void insert_entry(iosched_t *sched, AVS_LIST(iosched_entry_t) entry) {
     AVS_LIST(iosched_entry_t) *it;
     AVS_LIST_FOREACH_PTR(it, &sched->entries) {
         if ((*it)->type >= entry->type) {
@@ -126,8 +125,7 @@ const iosched_entry_t *iosched_instant_entry_new(iosched_t *sched,
     return entry;
 }
 
-void iosched_entry_remove(iosched_t *sched,
-                          const iosched_entry_t *entry) {
+void iosched_entry_remove(iosched_t *sched, const iosched_entry_t *entry) {
     AVS_LIST(iosched_entry_t) *entry_ptr =
             AVS_LIST_FIND_PTR(&sched->entries, entry);
 
@@ -155,9 +153,8 @@ static void handle_instant_entries(iosched_t *sched) {
     }
 }
 
-static nfds_t get_poll_fds(iosched_t *sched,
-                           struct pollfd *poll_fds,
-                           size_t max_poll_fds) {
+static nfds_t
+get_poll_fds(iosched_t *sched, struct pollfd *poll_fds, size_t max_poll_fds) {
     iosched_entry_t *entry;
     nfds_t count = 0;
 
@@ -175,8 +172,7 @@ static nfds_t get_poll_fds(iosched_t *sched,
     return count;
 }
 
-static int handle_poll_entries(iosched_t *sched,
-                               int poll_timeout_ms) {
+static int handle_poll_entries(iosched_t *sched, int poll_timeout_ms) {
     size_t num_entries = AVS_LIST_SIZE(sched->entries);
     struct pollfd *poll_fds =
             (struct pollfd *) avs_malloc(sizeof(struct pollfd) * num_entries);
@@ -195,8 +191,7 @@ static int handle_poll_entries(iosched_t *sched,
     AVS_LIST(iosched_entry_t) helper;
 
     AVS_LIST_DELETABLE_FOREACH_PTR(entry, helper, &sched->entries) {
-        while (i < poll_fds_count
-               && poll_fds[i].fd != (*entry)->data.poll.fd) {
+        while (i < poll_fds_count && poll_fds[i].fd != (*entry)->data.poll.fd) {
             ++i;
         }
 

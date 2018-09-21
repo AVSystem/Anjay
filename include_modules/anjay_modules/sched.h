@@ -84,11 +84,10 @@ static inline int _anjay_sched_now(anjay_sched_t *sched,
                                    anjay_sched_clb_t clb,
                                    const void *clb_data,
                                    size_t clb_data_size) {
-    return _anjay_sched(sched, out_handle, AVS_TIME_DURATION_ZERO,
-                        clb, clb_data, clb_data_size);
+    return _anjay_sched(sched, out_handle, AVS_TIME_DURATION_ZERO, clb,
+                        clb_data, clb_data_size);
 }
 
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_SCHED_H */
-

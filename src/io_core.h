@@ -22,8 +22,8 @@
 
 #include <anjay/core.h>
 
-#include <anjay_modules/io_utils.h>
 #include <anjay_modules/dm_utils.h>
+#include <anjay_modules/io_utils.h>
 
 #include <avsystem/commons/coap/msg_opt.h>
 
@@ -45,17 +45,17 @@ anjay_input_ctx_constructor_t _anjay_input_text_create;
 #ifdef WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 uint16_t _anjay_translate_legacy_content_format(uint16_t format);
 #else
-#define _anjay_translate_legacy_content_format(fmt) (fmt)
+#    define _anjay_translate_legacy_content_format(fmt) (fmt)
 #endif
 
 int _anjay_handle_requested_format(uint16_t *out_ptr,
                                    uint16_t requested_format);
 
-#define ANJAY_OUTCTXERR_FORMAT_MISMATCH        (-0xCE0)
+#define ANJAY_OUTCTXERR_FORMAT_MISMATCH (-0xCE0)
 #define ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED (-0xCE1)
 /* returned from _anjay_output_ctx_destroy if no anjay_ret_* function was
  * called, making it impossible to determine actual resource format */
-#define ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED   (-0xCE2)
+#define ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED (-0xCE2)
 
 anjay_output_ctx_t *
 _anjay_output_dynamic_create(avs_stream_abstract_t *stream,
@@ -73,35 +73,36 @@ _anjay_output_text_create(avs_stream_abstract_t *stream,
                           int *errno_ptr,
                           anjay_msg_details_t *inout_details);
 
-anjay_output_ctx_t *
-_anjay_output_raw_tlv_create(avs_stream_abstract_t *stream);
+anjay_output_ctx_t *_anjay_output_raw_tlv_create(avs_stream_abstract_t *stream);
 
 anjay_output_ctx_t *
 _anjay_output_tlv_create(avs_stream_abstract_t *stream,
                          int *errno_ptr,
                          anjay_msg_details_t *inout_details);
 
-#ifdef WITH_JSON
+#if defined(WITH_JSON) || defined(WITH_SENML_JSON)
 anjay_output_ctx_t *
 _anjay_output_json_create(avs_stream_abstract_t *stream,
                           int *errno_ptr,
                           anjay_msg_details_t *inout_details,
-                          const anjay_uri_path_t *uri);
+                          const anjay_uri_path_t *uri,
+                          uint16_t format);
 #endif
 
 int *_anjay_output_ctx_errno_ptr(anjay_output_ctx_t *ctx);
-anjay_output_ctx_t * _anjay_output_object_start(anjay_output_ctx_t *ctx);
+anjay_output_ctx_t *_anjay_output_object_start(anjay_output_ctx_t *ctx);
 int _anjay_output_object_finish(anjay_output_ctx_t *ctx);
 int _anjay_output_set_id(anjay_output_ctx_t *ctx,
-                         anjay_id_type_t type, uint16_t id);
+                         anjay_id_type_t type,
+                         uint16_t id);
 int _anjay_output_ctx_destroy(anjay_output_ctx_t **ctx_ptr);
 
 avs_stream_abstract_t *_anjay_input_bytes_stream(anjay_input_ctx_t *ctx);
-int _anjay_input_attach_child(anjay_input_ctx_t *ctx,
-                              anjay_input_ctx_t *child);
+int _anjay_input_attach_child(anjay_input_ctx_t *ctx, anjay_input_ctx_t *child);
 anjay_input_ctx_t *_anjay_input_nested_ctx(anjay_input_ctx_t *ctx);
 int _anjay_input_get_id(anjay_input_ctx_t *ctx,
-                        anjay_id_type_t *out_type, uint16_t *out_id);
+                        anjay_id_type_t *out_type,
+                        uint16_t *out_id);
 int _anjay_input_next_entry(anjay_input_ctx_t *ctx);
 
 typedef struct anjay_output_buf_ctx {

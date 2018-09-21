@@ -17,7 +17,7 @@
 #include <anjay_config.h>
 
 #ifdef WITH_AVS_PERSISTENCE
-#include <avsystem/commons/persistence.h>
+#    include <avsystem/commons/persistence.h>
 #endif // WITH_AVS_PERSISTENCE
 
 #include <anjay/access_control.h>
@@ -37,7 +37,7 @@ static int handle_acl_entry(avs_persistence_context_t *ctx,
     acl_entry_t *element = (acl_entry_t *) element_;
     int retval;
     (void) ((retval = avs_persistence_u16(ctx, &element->mask))
-                || (retval = avs_persistence_u16(ctx, &element->ssid)));
+            || (retval = avs_persistence_u16(ctx, &element->ssid)));
     return retval;
 }
 
@@ -68,16 +68,16 @@ static int persist_instance(avs_persistence_context_t *ctx,
     }
     int retval;
     (void) ((retval = avs_persistence_u16(ctx, &element->target.oid))
-                || (retval = avs_persistence_u16(ctx, &element->iid))
-                || (retval = avs_persistence_u16(ctx, &target_iid))
-                || (retval = avs_persistence_u16(ctx, &element->owner))
-                || (retval = handle_acl(ctx, element)));
+            || (retval = avs_persistence_u16(ctx, &element->iid))
+            || (retval = avs_persistence_u16(ctx, &target_iid))
+            || (retval = avs_persistence_u16(ctx, &element->owner))
+            || (retval = handle_acl(ctx, element)));
     return retval;
 }
 
 static bool is_object_registered(anjay_t *anjay, anjay_oid_t oid) {
     return oid != ANJAY_DM_OID_SECURITY
-            && _anjay_dm_find_object_by_oid(anjay, oid) != NULL;
+           && _anjay_dm_find_object_by_oid(anjay, oid) != NULL;
 }
 
 static int restore_instance(access_control_instance_t *out_instance,
@@ -134,9 +134,8 @@ static int restore_instances(anjay_t *anjay,
     return 0;
 }
 
-static int restore(anjay_t *anjay,
-                   access_control_t *ac,
-                   avs_stream_abstract_t *in) {
+static int
+restore(anjay_t *anjay, access_control_t *ac, avs_stream_abstract_t *in) {
     avs_persistence_context_t *restore_ctx =
             avs_persistence_restore_context_new(in);
     avs_persistence_context_t *ignore_ctx =
@@ -147,8 +146,8 @@ static int restore(anjay_t *anjay,
         goto finish;
     }
 
-    if ((retval = restore_instances(anjay, &state.instances,
-                                    restore_ctx, ignore_ctx))) {
+    if ((retval = restore_instances(anjay, &state.instances, restore_ctx,
+                                    ignore_ctx))) {
         _anjay_access_control_clear_state(&state);
         goto finish;
     }
@@ -162,8 +161,7 @@ finish:
 
 static const char MAGIC[] = { 'A', 'C', 'O', '\1' };
 
-int anjay_access_control_persist(anjay_t *anjay,
-                                 avs_stream_abstract_t *out) {
+int anjay_access_control_persist(anjay_t *anjay, avs_stream_abstract_t *out) {
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
         ac_log(ERROR, "Access Control not installed in this Anjay object");
@@ -179,10 +177,10 @@ int anjay_access_control_persist(anjay_t *anjay,
         ac_log(ERROR, "Out of memory");
         return -1;
     }
-    retval = avs_persistence_list(ctx,
-                                  (AVS_LIST(void) *) &ac->current.instances,
-                                  sizeof(*ac->current.instances),
-                                  persist_instance, NULL, NULL);
+    retval =
+            avs_persistence_list(ctx, (AVS_LIST(void) *) &ac->current.instances,
+                                 sizeof(*ac->current.instances),
+                                 persist_instance, NULL, NULL);
     if (!retval) {
         ac_log(INFO, "Access Control state persisted");
         _anjay_access_control_clear_modified(ac);
@@ -199,8 +197,8 @@ int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
     }
 
     char magic_header[sizeof(MAGIC)];
-    int retval = avs_stream_read_reliably(in,
-                                          magic_header, sizeof(magic_header));
+    int retval =
+            avs_stream_read_reliably(in, magic_header, sizeof(magic_header));
     if (retval) {
         ac_log(ERROR, "magic constant not found");
         return retval;
@@ -217,21 +215,22 @@ int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
     return retval;
 }
 
-#ifdef ANJAY_TEST
-#include "test/persistence.c"
-#endif // ANJAY_TEST
+#    ifdef ANJAY_TEST
+#        include "test/persistence.c"
+#    endif // ANJAY_TEST
 
 #else // WITH_AVS_PERSISTENCE
 
-int anjay_access_control_persist(anjay_t *anjay,
-                                 avs_stream_abstract_t *out) {
-    (void) anjay; (void) out;
+int anjay_access_control_persist(anjay_t *anjay, avs_stream_abstract_t *out) {
+    (void) anjay;
+    (void) out;
     ac_log(ERROR, "Persistence not compiled in");
     return -1;
 }
 
 int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
-    (void) anjay; (void) in;
+    (void) anjay;
+    (void) in;
     ac_log(ERROR, "Persistence not compiled in");
     return -1;
 }

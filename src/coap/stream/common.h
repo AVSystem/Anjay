@@ -24,7 +24,7 @@
 #include "out.h"
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
-#error "Headers from coap/stream are not meant to be included from outside"
+#    error "Headers from coap/stream are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -54,8 +54,9 @@ int _anjay_coap_common_fill_msg_info(avs_coap_msg_info_t *info,
  *                               true (default), the handler will be called
  *                               again with next message
  * @param[out] out_error_code    Allows to specify custom error code that will
- *                               be send instead of RESET. Not setting it (or setting
- *                               to 0) will result in usual RESET message.
+ *                               be send instead of RESET. Not setting it (or
+ *                               setting to 0) will result in usual RESET
+ *                               message.
  *
  * @return If @p out_wait_for_next is not set to true, the return value of this
  *         function will be propagated up by the

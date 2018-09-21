@@ -53,19 +53,24 @@ static inline bool _anjay_uri_path_has_oid(const anjay_uri_path_t *path) {
 
 static inline bool _anjay_uri_path_equal(const anjay_uri_path_t *left,
                                          const anjay_uri_path_t *right) {
-    return (_anjay_uri_path_has_oid(left)
-                    ? (_anjay_uri_path_has_oid(right) && left->oid == right->oid)
-                    : !_anjay_uri_path_has_oid(right))
-            && (_anjay_uri_path_has_iid(left)
-                    ? (_anjay_uri_path_has_iid(right) && left->iid == right->iid)
-                    : !_anjay_uri_path_has_iid(right))
-            && (_anjay_uri_path_has_rid(left)
-                    ? (_anjay_uri_path_has_rid(right) && left->rid == right->rid)
-                    : !_anjay_uri_path_has_rid(right));
+    if (left->type == right->type) {
+        switch (left->type) {
+        case ANJAY_PATH_ROOT:
+            return true;
+        case ANJAY_PATH_OBJECT:
+            return left->oid == right->oid;
+        case ANJAY_PATH_INSTANCE:
+            return left->oid == right->oid && left->iid == right->iid;
+        case ANJAY_PATH_RESOURCE:
+            return left->oid == right->oid && left->iid == right->iid
+                   && left->rid == right->rid;
+        }
+        AVS_UNREACHABLE("switch above is supposed to be exhaustive");
+    }
+    return false;
 }
 
-#define ASSERT_RESOURCE_PATH(uri) \
-    assert((uri).type == ANJAY_PATH_RESOURCE)
+#define ASSERT_RESOURCE_PATH(uri) assert((uri).type == ANJAY_PATH_RESOURCE)
 
 #define MAKE_OBJECT_PATH(Oid)     \
     (anjay_uri_path_t) {          \
@@ -73,21 +78,20 @@ static inline bool _anjay_uri_path_equal(const anjay_uri_path_t *left,
         .type = ANJAY_PATH_OBJECT \
     }
 
-#define MAKE_INSTANCE_PATH(Oid, Iid)      \
-    (anjay_uri_path_t) {                  \
-        .oid = (Oid),                     \
-        .iid = (Iid),                     \
-        .type = ANJAY_PATH_INSTANCE       \
+#define MAKE_INSTANCE_PATH(Oid, Iid) \
+    (anjay_uri_path_t) {             \
+        .oid = (Oid),                \
+        .iid = (Iid),                \
+        .type = ANJAY_PATH_INSTANCE  \
     }
 
-#define MAKE_INSTANCE_OR_RESOURCE_PATH(Oid, Iid, Rid) \
-    (anjay_uri_path_t) {                              \
-        .oid = (Oid),                                 \
-        .iid = (Iid),                                 \
-        .rid = (anjay_rid_t)(Rid),                    \
-        .type = (0 <= (Rid) && (Rid) < UINT16_MAX)    \
-                ? ANJAY_PATH_RESOURCE                 \
-                : ANJAY_PATH_INSTANCE                 \
+#define MAKE_INSTANCE_OR_RESOURCE_PATH(Oid, Iid, Rid)                    \
+    (anjay_uri_path_t) {                                                 \
+        .oid = (Oid),                                                    \
+        .iid = (Iid),                                                    \
+        .rid = (anjay_rid_t) (Rid),                                      \
+        .type = (0 <= (Rid) && (Rid) < UINT16_MAX) ? ANJAY_PATH_RESOURCE \
+                                                   : ANJAY_PATH_INSTANCE \
     }
 
 #define MAKE_RESOURCE_PATH(Oid, Iid, Rid) \
@@ -157,10 +161,8 @@ static inline int _anjay_dm_res_read_bool(anjay_t *anjay,
 
 typedef struct anjay_dm anjay_dm_t;
 
-typedef int
-anjay_dm_foreach_object_handler_t(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj,
-                                  void *data);
+typedef int anjay_dm_foreach_object_handler_t(
+        anjay_t *anjay, const anjay_dm_object_def_t *const *obj, void *data);
 
 int _anjay_dm_foreach_object(anjay_t *anjay,
                              anjay_dm_foreach_object_handler_t *handler,
@@ -213,16 +215,18 @@ bool _anjay_dm_handler_implemented(anjay_t *anjay,
                                    const anjay_dm_module_t *current_module,
                                    size_t handler_offset);
 
-int _anjay_dm_object_read_default_attrs(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                        anjay_ssid_t ssid,
-                                        anjay_dm_internal_attrs_t *out,
-                                        const anjay_dm_module_t *current_module);
-int _anjay_dm_object_write_default_attrs(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj_ptr,
-                                         anjay_ssid_t ssid,
-                                         const anjay_dm_internal_attrs_t *attrs,
-                                         const anjay_dm_module_t *current_module);
+int _anjay_dm_object_read_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        anjay_dm_internal_attrs_t *out,
+        const anjay_dm_module_t *current_module);
+int _anjay_dm_object_write_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_module_t *current_module);
 int _anjay_dm_instance_it(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t *out,
@@ -245,18 +249,20 @@ int _anjay_dm_instance_remove(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid,
                               const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_read_default_attrs(anjay_t *anjay,
-                                          const anjay_dm_object_def_t *const *obj_ptr,
-                                          anjay_iid_t iid,
-                                          anjay_ssid_t ssid,
-                                          anjay_dm_internal_attrs_t *out,
-                                          const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_write_default_attrs(anjay_t *anjay,
-                                           const anjay_dm_object_def_t *const *obj_ptr,
-                                           anjay_iid_t iid,
-                                           anjay_ssid_t ssid,
-                                           const anjay_dm_internal_attrs_t *attrs,
-                                           const anjay_dm_module_t *current_module);
+int _anjay_dm_instance_read_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        anjay_dm_internal_attrs_t *out,
+        const anjay_dm_module_t *current_module);
+int _anjay_dm_instance_write_default_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_module_t *current_module);
 int _anjay_dm_resource_present(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
@@ -265,12 +271,12 @@ int _anjay_dm_resource_present(anjay_t *anjay,
 
 bool _anjay_dm_resource_supported(const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_rid_t rid);
-int
-_anjay_dm_resource_supported_and_present(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj_ptr,
-                                         anjay_iid_t iid,
-                                         anjay_rid_t rid,
-                                         const anjay_dm_module_t *current_module);
+int _anjay_dm_resource_supported_and_present(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        const anjay_dm_module_t *current_module);
 
 int _anjay_dm_resource_operations(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
@@ -316,18 +322,22 @@ int _anjay_dm_resource_write_attrs(anjay_t *anjay,
                                    const anjay_dm_internal_res_attrs_t *attrs,
                                    const anjay_dm_module_t *current_module);
 
-int _anjay_dm_delegate_transaction_begin(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj_ptr,
-                                         const anjay_dm_module_t *current_module);
-int _anjay_dm_delegate_transaction_validate(anjay_t *anjay,
-                                            const anjay_dm_object_def_t *const *obj_ptr,
-                                            const anjay_dm_module_t *current_module);
-int _anjay_dm_delegate_transaction_commit(anjay_t *anjay,
-                                          const anjay_dm_object_def_t *const *obj_ptr,
-                                          const anjay_dm_module_t *current_module);
-int _anjay_dm_delegate_transaction_rollback(anjay_t *anjay,
-                                            const anjay_dm_object_def_t *const *obj_ptr,
-                                            const anjay_dm_module_t *current_module);
+int _anjay_dm_delegate_transaction_begin(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        const anjay_dm_module_t *current_module);
+int _anjay_dm_delegate_transaction_validate(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        const anjay_dm_module_t *current_module);
+int _anjay_dm_delegate_transaction_commit(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        const anjay_dm_module_t *current_module);
+int _anjay_dm_delegate_transaction_rollback(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        const anjay_dm_module_t *current_module);
 
 /**
  * Starts a transaction on the data model. If a transaction is already in
@@ -430,4 +440,3 @@ anjay_ssid_t _anjay_dm_current_ssid(anjay_t *anjay);
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_DM_H */
-

@@ -53,7 +53,7 @@ static int ac_instance_it(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
     AVS_LIST(access_control_instance_t) curr =
-        (AVS_LIST(access_control_instance_t)) *cookie;
+            (AVS_LIST(access_control_instance_t)) *cookie;
 
     if (!curr) {
         curr = access_control->current.instances;
@@ -66,17 +66,15 @@ static int ac_instance_it(anjay_t *anjay,
     return 0;
 }
 
-static int ac_instance_present(anjay_t *anjay,
-                               obj_ptr_t obj_ptr,
-                               anjay_iid_t iid) {
+static int
+ac_instance_present(anjay_t *anjay, obj_ptr_t obj_ptr, anjay_iid_t iid) {
     (void) anjay;
-    return find_instance(_anjay_access_control_from_obj_ptr(obj_ptr),
-                         iid) != NULL;
+    return find_instance(_anjay_access_control_from_obj_ptr(obj_ptr), iid)
+           != NULL;
 }
 
-static int ac_instance_reset(anjay_t *anjay,
-                             obj_ptr_t obj_ptr,
-                             anjay_iid_t iid) {
+static int
+ac_instance_reset(anjay_t *anjay, obj_ptr_t obj_ptr, anjay_iid_t iid) {
     (void) anjay;
     access_control_t *access_control =
             _anjay_access_control_from_obj_ptr(obj_ptr);
@@ -111,9 +109,9 @@ static int ac_instance_create(anjay_t *anjay,
             .oid = 0,
             .iid = -1
         },
-        .owner   = ssid,
+        .owner = ssid,
         .has_acl = false,
-        .acl     = NULL
+        .acl = NULL
     };
     int retval = _anjay_access_control_add_instance(access_control,
                                                     new_instance, NULL);
@@ -209,21 +207,20 @@ static int ac_resource_read(anjay_t *anjay,
         return anjay_ret_i32(ctx, (int32_t) inst->target.oid);
     case ANJAY_DM_RID_ACCESS_CONTROL_OIID:
         return anjay_ret_i32(ctx, (int32_t) inst->target.iid);
-    case ANJAY_DM_RID_ACCESS_CONTROL_ACL:
-        {
-            anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-            if (!array) {
+    case ANJAY_DM_RID_ACCESS_CONTROL_ACL: {
+        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
+        if (!array) {
+            return ANJAY_ERR_INTERNAL;
+        }
+        acl_entry_t *it;
+        AVS_LIST_FOREACH(it, inst->acl) {
+            if (anjay_ret_array_index(array, it->ssid)
+                    || anjay_ret_i32(array, it->mask)) {
                 return ANJAY_ERR_INTERNAL;
             }
-            acl_entry_t *it;
-            AVS_LIST_FOREACH(it, inst->acl) {
-                if (anjay_ret_array_index(array, it->ssid)
-                    || anjay_ret_i32(array, it->mask)) {
-                    return ANJAY_ERR_INTERNAL;
-                }
-            }
-            return anjay_ret_array_finish(array);
         }
+        return anjay_ret_array_finish(array);
+    }
     case ANJAY_DM_RID_ACCESS_CONTROL_OWNER:
         return anjay_ret_i32(ctx, (int32_t) inst->owner);
     default:
@@ -250,8 +247,7 @@ static int write_to_acl_array(AVS_LIST(acl_entry_t) *acl,
         }
 
         if (!*it) {
-            AVS_LIST(acl_entry_t) new_entry =
-                AVS_LIST_NEW_ELEMENT(acl_entry_t);
+            AVS_LIST(acl_entry_t) new_entry = AVS_LIST_NEW_ELEMENT(acl_entry_t);
             if (!new_entry) {
                 return ANJAY_ERR_INTERNAL;
             }
@@ -356,14 +352,14 @@ static void what_changed(anjay_ssid_t origin_ssid,
         if (!it->instance_set_changes.instance_set_changed) {
             continue;
         }
-        if (it->oid == ANJAY_DM_OID_SECURITY
-                || it->oid == ANJAY_DM_OID_SERVER
+        if (it->oid == ANJAY_DM_OID_SECURITY || it->oid == ANJAY_DM_OID_SERVER
                 || it->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
             *out_might_caused_orphaned_ac_instances = true;
         }
         // NOTE: This makes it possible for BOOTSTRAP DELETE to leave
         // "lingering" Access Control instances without valid targets;
-        // Relevant: https://github.com/OpenMobileAlliance/OMA_LwM2M_for_Developers/issues/192
+        // Relevant:
+        // https://github.com/OpenMobileAlliance/OMA_LwM2M_for_Developers/issues/192
         //
         // Quoting Thierry's response:
         // > Regarding the orphan AC Object Instances, [...] it could be let
@@ -377,7 +373,7 @@ static void what_changed(anjay_ssid_t origin_ssid,
         if (origin_ssid != ANJAY_SSID_BOOTSTRAP
                 && it->oid != ANJAY_DM_OID_ACCESS_CONTROL
                 && (it->instance_set_changes.known_removed_iids
-                        || it->instance_set_changes.known_added_iids)) {
+                    || it->instance_set_changes.known_added_iids)) {
             *out_have_adds_or_removes = true;
         }
         if (*out_might_caused_orphaned_ac_instances
@@ -401,8 +397,8 @@ static int remove_ac_instance_by_target(anjay_t *anjay,
                 && (*it)->target.iid == target_iid) {
             if (_anjay_dm_transaction_include_object(anjay, &ac->obj_def)
                     || _anjay_notify_queue_instance_removed(
-                            notify_queue,
-                            ANJAY_DM_OID_ACCESS_CONTROL, (*it)->iid)) {
+                               notify_queue, ANJAY_DM_OID_ACCESS_CONTROL,
+                               (*it)->iid)) {
                 return -1;
             }
             AVS_LIST_CLEAR(&(*it)->acl);
@@ -417,13 +413,13 @@ static int perform_adds_and_removes(anjay_t *anjay,
                                     anjay_notify_queue_t incoming_queue,
                                     anjay_notify_queue_t *local_queue_ptr) {
     assert(_anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL)
-            == &ac->obj_def);
+           == &ac->obj_def);
 
     const anjay_ssid_t origin_ssid = _anjay_dm_current_ssid(anjay);
 
     AVS_LIST(access_control_instance_t) acs_to_insert = NULL;
-    AVS_LIST(access_control_instance_t) *acs_to_insert_append_ptr
-            = &acs_to_insert;
+    AVS_LIST(access_control_instance_t) *acs_to_insert_append_ptr =
+            &acs_to_insert;
 
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, incoming_queue) {
@@ -459,8 +455,9 @@ static int perform_adds_and_removes(anjay_t *anjay,
             AVS_LIST_ADVANCE_PTR(&acs_to_insert_append_ptr);
         }
     }
-    int result = _anjay_access_control_add_instances_without_iids(
-            ac, &acs_to_insert, local_queue_ptr);
+    int result =
+            _anjay_access_control_add_instances_without_iids(ac, &acs_to_insert,
+                                                             local_queue_ptr);
     AVS_LIST_CLEAR(&acs_to_insert) {
         AVS_LIST_CLEAR(&acs_to_insert->acl);
     }
@@ -492,8 +489,8 @@ static int sync_on_notify(anjay_t *anjay,
                                                                  &local_queue);
     }
     if (!result && have_adds_or_removes) {
-        result = perform_adds_and_removes(anjay, ac,
-                                          incoming_queue, &local_queue);
+        result = perform_adds_and_removes(anjay, ac, incoming_queue,
+                                          &local_queue);
     }
     if (!result) {
         result = _anjay_notify_flush(anjay, &local_queue);
@@ -528,19 +525,21 @@ static int acl_target_cmp(const void *left_, const void *right_) {
 static int validate_inst_ref(anjay_t *anjay,
                              AVS_RBTREE(acl_target_t) encountered_refs,
                              const acl_target_t *target) {
-    ac_log(TRACE, "Validating: /%" PRIu16 "/%" PRId32,
-           target->oid, target->iid);
+    ac_log(TRACE, "Validating: /%" PRIu16 "/%" PRId32, target->oid,
+           target->iid);
     if (!_anjay_access_control_target_oid_valid(target->oid)
             || !_anjay_access_control_target_iid_valid(target->iid)) {
-        ac_log(ERROR, "Validation failed: invalid target: "
-               "/%" PRIu16 "/%" PRId32 ": invalid IDs",
+        ac_log(ERROR,
+               "Validation failed: invalid target: /%" PRIu16 "/%" PRId32
+               ": invalid IDs",
                target->oid, target->iid);
         return -1;
     }
     obj_ptr_t obj = _anjay_dm_find_object_by_oid(anjay, target->oid);
     if (!obj) {
-        ac_log(ERROR, "Validation failed: invalid target: "
-               "/%" PRIu16 "/%" PRId32 ": no such object",
+        ac_log(ERROR,
+               "Validation failed: invalid target: /%" PRIu16 "/%" PRId32
+               ": no such object",
                target->oid, target->iid);
         return -1;
     }
@@ -553,16 +552,18 @@ static int validate_inst_ref(anjay_t *anjay,
     if (AVS_RBTREE_INSERT(encountered_refs, ref) != ref) {
         // duplicate
         AVS_RBTREE_ELEM_DELETE_DETACHED(&ref);
-        ac_log(ERROR, "Validation failed: duplicate target: "
-               "/%" PRIu16 "/%" PRId32, target->oid, target->iid);
+        ac_log(ERROR,
+               "Validation failed: duplicate target: /%" PRIu16 "/%" PRId32,
+               target->oid, target->iid);
         return -1;
     }
     if (target->iid != ANJAY_IID_INVALID // ACL targeting object are always OK
-            && _anjay_dm_instance_present(anjay, obj,
-                                          (anjay_iid_t) target->iid,
-                                          NULL) <= 0) {
-        ac_log(ERROR, "Validation failed: invalid target: "
-               "/%" PRIu16 "/%" PRId32 ": no such instance",
+            && _anjay_dm_instance_present(anjay, obj, (anjay_iid_t) target->iid,
+                                          NULL)
+                           <= 0) {
+        ac_log(ERROR,
+               "Validation failed: invalid target: /%" PRIu16 "/%" PRId32
+               ": no such instance",
                target->oid, target->iid);
         return -1;
     }
@@ -596,13 +597,12 @@ static int add_ssid(AVS_RBTREE(anjay_ssid_t) ssids_list, anjay_ssid_t ssid) {
  */
 int _anjay_access_control_validate_ssid(anjay_t *anjay, anjay_ssid_t ssid) {
     return (ssid != ANJAY_SSID_BOOTSTRAP
-                    && (ssid == ANJAY_SSID_ANY
-                            || _anjay_dm_ssid_exists(anjay, ssid)))
-            ? 0 : -1;
+            && (ssid == ANJAY_SSID_ANY || _anjay_dm_ssid_exists(anjay, ssid)))
+                   ? 0
+                   : -1;
 }
 
-static int
-ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
+static int ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
     access_control_t *access_control =
             _anjay_access_control_from_obj_ptr(obj_ptr);
     int result = 0;
@@ -610,8 +610,8 @@ ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
     AVS_RBTREE(anjay_ssid_t) ssids_used = NULL;
     if (access_control->needs_validation) {
         if (!(encountered_refs = AVS_RBTREE_NEW(acl_target_t, acl_target_cmp))
-                || !(ssids_used = AVS_RBTREE_NEW(anjay_ssid_t,
-                                                 anjay_ssid_cmp))) {
+                || !(ssids_used =
+                             AVS_RBTREE_NEW(anjay_ssid_t, anjay_ssid_cmp))) {
             ac_log(ERROR, "Out of memory");
             goto finish;
         }
@@ -620,7 +620,7 @@ ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
         AVS_LIST_FOREACH(inst, access_control->current.instances) {
             if (validate_inst_ref(anjay, encountered_refs, &inst->target)
                     || (inst->owner != ANJAY_SSID_BOOTSTRAP
-                            && add_ssid(ssids_used, inst->owner))) {
+                        && add_ssid(ssids_used, inst->owner))) {
                 goto finish;
             }
             acl_entry_t *acl;
@@ -666,8 +666,7 @@ static int ac_transaction_rollback(anjay_t *anjay, obj_ptr_t obj_ptr) {
 
 static void ac_delete(anjay_t *anjay, void *access_control_) {
     (void) anjay;
-    access_control_t *access_control =
-            (access_control_t *) access_control_;
+    access_control_t *access_control = (access_control_t *) access_control_;
     _anjay_access_control_clear_state(&access_control->current);
     _anjay_access_control_clear_state(&access_control->saved_state);
     avs_free(access_control);
@@ -680,8 +679,8 @@ void anjay_access_control_purge(anjay_t *anjay) {
     _anjay_access_control_mark_modified(ac);
     ac->needs_validation = false;
     if (anjay_notify_instances_changed(anjay, ANJAY_DM_OID_ACCESS_CONTROL)) {
-        ac_log(WARNING, "Could not schedule access control instance "
-                        "changes notifications");
+        ac_log(WARNING, "Could not schedule access control instance changes "
+                        "notifications");
     }
 }
 
@@ -697,11 +696,11 @@ static const anjay_dm_module_t ACCESS_CONTROL_MODULE = {
 
 static const anjay_dm_object_def_t ACCESS_CONTROL = {
     .oid = ANJAY_DM_OID_ACCESS_CONTROL,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            ANJAY_DM_RID_ACCESS_CONTROL_OID,
-            ANJAY_DM_RID_ACCESS_CONTROL_OIID,
-            ANJAY_DM_RID_ACCESS_CONTROL_ACL,
-            ANJAY_DM_RID_ACCESS_CONTROL_OWNER),
+    .supported_rids =
+            ANJAY_DM_SUPPORTED_RIDS(ANJAY_DM_RID_ACCESS_CONTROL_OID,
+                                    ANJAY_DM_RID_ACCESS_CONTROL_OIID,
+                                    ANJAY_DM_RID_ACCESS_CONTROL_ACL,
+                                    ANJAY_DM_RID_ACCESS_CONTROL_OWNER),
     .handlers = {
         .instance_it = ac_instance_it,
         .instance_present = ac_instance_present,
@@ -725,7 +724,7 @@ int anjay_access_control_install(anjay_t *anjay) {
         return -1;
     }
     access_control_t *access_control =
-        (access_control_t *) avs_calloc(1, sizeof(access_control_t));
+            (access_control_t *) avs_calloc(1, sizeof(access_control_t));
     if (!access_control) {
         return -1;
     }
@@ -746,6 +745,6 @@ int anjay_access_control_install(anjay_t *anjay) {
 }
 
 access_control_t *_anjay_access_control_get(anjay_t *anjay) {
-    return (access_control_t *)
-            _anjay_dm_module_get_arg(anjay, &ACCESS_CONTROL_MODULE);
+    return (access_control_t *) _anjay_dm_module_get_arg(
+            anjay, &ACCESS_CONTROL_MODULE);
 }

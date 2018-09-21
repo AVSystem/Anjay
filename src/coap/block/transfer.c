@@ -16,15 +16,15 @@
 
 #include <anjay_config.h>
 
-#include <string.h>
 #include <inttypes.h>
+#include <string.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
 #include "../coap_log.h"
 
-#include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/coap/block_builder.h>
+#include <avsystem/commons/coap/msg.h>
 
 #include "../stream/common.h"
 #include "../stream/out.h"
@@ -36,11 +36,10 @@ VISIBILITY_SOURCE_BEGIN
 
 static size_t mtu_enforced_payload_capacity(const coap_output_buffer_t *out) {
     size_t headers_overhead =
-           avs_coap_msg_info_get_storage_size(&out->info)
-           - offsetof(avs_coap_msg_t, content)
-           /* assume the header does not contain the BLOCK option */
-           + AVS_COAP_OPT_BLOCK_MAX_SIZE
-           + sizeof(AVS_COAP_PAYLOAD_MARKER);
+            avs_coap_msg_info_get_storage_size(&out->info)
+            - offsetof(avs_coap_msg_t, content)
+            /* assume the header does not contain the BLOCK option */
+            + AVS_COAP_OPT_BLOCK_MAX_SIZE + sizeof(AVS_COAP_PAYLOAD_MARKER);
 
     if (headers_overhead < out->dgram_layer_mtu) {
         return out->dgram_layer_mtu - headers_overhead;
@@ -51,24 +50,24 @@ static size_t mtu_enforced_payload_capacity(const coap_output_buffer_t *out) {
 
 static size_t
 buffer_size_enforced_payload_capacity(const coap_output_buffer_t *out) {
-   /* The flow assumes that the last block is only sent from finish_response.
-    * Because of that, we MUST NOT flush the last block of a transfer even if
-    * it's ready - we must wait for either finish_response call or another byte
-    * (that would make current block not-the-last-one).
-    * The max_block_size < payload_capacity condition causes that -1. */
+    /* The flow assumes that the last block is only sent from finish_response.
+     * Because of that, we MUST NOT flush the last block of a transfer even if
+     * it's ready - we must wait for either finish_response call or another byte
+     * (that would make current block not-the-last-one).
+     * The max_block_size < payload_capacity condition causes that -1. */
     return out->buffer_capacity < 1 ? 0 : out->buffer_capacity - 1;
 }
 
 static uint16_t calculate_proposed_block_size(uint16_t original_block_size,
                                               const coap_output_buffer_t *out) {
-    size_t payload_capacity_considering_mtu = AVS_MIN(
-            mtu_enforced_payload_capacity(out),
-            buffer_size_enforced_payload_capacity(out));
+    size_t payload_capacity_considering_mtu =
+            AVS_MIN(mtu_enforced_payload_capacity(out),
+                    buffer_size_enforced_payload_capacity(out));
 
     size_t max_block_size = (payload_capacity_considering_mtu > 0)
-            ? _anjay_max_power_of_2_not_greater_than(
-                    payload_capacity_considering_mtu)
-            : 0;
+                                    ? _anjay_max_power_of_2_not_greater_than(
+                                              payload_capacity_considering_mtu)
+                                    : 0;
 
     if (max_block_size < AVS_COAP_MSG_BLOCK_MIN_SIZE) {
         coap_log(ERROR, "MTU is too low to send block response");
@@ -77,8 +76,9 @@ static uint16_t calculate_proposed_block_size(uint16_t original_block_size,
 
     if (max_block_size < original_block_size) {
         assert(max_block_size <= AVS_COAP_MSG_BLOCK_MAX_SIZE);
-        coap_log(INFO, "Lowering proposed block size to %u due to buffer size "
-                       "or MTU constraints",
+        coap_log(INFO,
+                 "Lowering proposed block size to %u due to buffer size "
+                 "or MTU constraints",
                  (unsigned) max_block_size);
         return (uint16_t) max_block_size;
     }
@@ -103,14 +103,14 @@ _anjay_coap_block_transfer_new(uint16_t max_block_size,
         return NULL;
     }
 
-    coap_block_transfer_ctx_t *ctx = (coap_block_transfer_ctx_t *)
-            avs_calloc(1, sizeof(coap_block_transfer_ctx_t));
+    coap_block_transfer_ctx_t *ctx = (coap_block_transfer_ctx_t *) avs_calloc(
+            1, sizeof(coap_block_transfer_ctx_t));
 
     if (!ctx) {
         return NULL;
     }
 
-    *ctx = (coap_block_transfer_ctx_t){
+    *ctx = (coap_block_transfer_ctx_t) {
         .timed_out = false,
         .num_sent_blocks = 0,
         .coap_ctx = stream_data->coap_ctx,
@@ -150,20 +150,23 @@ static int block_recv(const avs_coap_msg_t *msg,
                       void *data_,
                       bool *out_wait_for_next,
                       uint8_t *out_error_code) {
-    block_recv_data_t *data = (block_recv_data_t *)data_;
-    return data->ctx->block_recv_handler(data->ctx->block_recv_handler_arg,
-                                         msg, data->sent_msg, data->ctx,
+    block_recv_data_t *data = (block_recv_data_t *) data_;
+    return data->ctx->block_recv_handler(data->ctx->block_recv_handler_arg, msg,
+                                         data->sent_msg, data->ctx,
                                          out_wait_for_next, out_error_code);
 }
 
-
 static bool should_wait_for_response(coap_block_transfer_ctx_t *ctx) {
-    /* for intermediate blocks, transfer direction does not matter - we need
-     * to wait until we receive a response*/
+    /*
+     * For intermediate blocks, transfer direction does not matter - we need
+     * to wait until we receive a response
+     */
     return ctx->block.has_more
-        /* For the last response block, we do not expect more requests.
-         * In case of requests, we still need to receive an actual response. */
-        || ctx->block.type == AVS_COAP_BLOCK1;
+           /*
+            * For the last response block, we do not expect more requests.
+            * In case of requests, we still need to receive an actual response.
+            */
+           || ctx->block.type == AVS_COAP_BLOCK1;
 }
 
 static int accept_response_with_timeout(coap_block_transfer_ctx_t *ctx,
@@ -181,8 +184,8 @@ static int accept_response_with_timeout(coap_block_transfer_ctx_t *ctx,
 
     int handler_retval;
     int result = _anjay_coap_common_recv_msg_with_timeout(
-            ctx->coap_ctx, ctx->socket, ctx->in, &recv_timeout,
-            block_recv, &block_recv_data, &handler_retval);
+            ctx->coap_ctx, ctx->socket, ctx->in, &recv_timeout, block_recv,
+            &block_recv_data, &handler_retval);
 
     if (result == AVS_COAP_CTX_ERR_TIMEOUT) {
         ctx->timed_out = true;
@@ -193,9 +196,11 @@ static int accept_response_with_timeout(coap_block_transfer_ctx_t *ctx,
 
 static int send_block_msg(coap_block_transfer_ctx_t *ctx,
                           const avs_coap_msg_t *msg) {
-    coap_log(TRACE, "sending block %" PRIu32 " (size %" PRIu16 ", payload size "
-             "%lu), has_more=%d\n", ctx->block.seq_num, ctx->block.size,
-             (unsigned long)avs_coap_msg_payload_length(msg),
+    coap_log(TRACE,
+             "sending block %" PRIu32 " (size %" PRIu16 ", payload size "
+             "%lu), has_more=%d\n",
+             ctx->block.seq_num, ctx->block.size,
+             (unsigned long) avs_coap_msg_payload_length(msg),
              ctx->block.has_more);
 
     avs_coap_tx_params_t tx_params = avs_coap_ctx_get_tx_params(ctx->coap_ctx);
@@ -255,9 +260,9 @@ static int prepare_block(coap_block_transfer_ctx_t *ctx,
         return result;
     }
 
-    *out_msg = avs_coap_block_builder_build(&ctx->block_builder, &ctx->info,
-                                               ctx->block.size,
-                                               buffer, buffer_size);
+    *out_msg =
+            avs_coap_block_builder_build(&ctx->block_builder, &ctx->info,
+                                         ctx->block.size, buffer, buffer_size);
     return 0;
 }
 
@@ -337,8 +342,8 @@ static int get_block_packet_total_size(avs_coap_msg_info_t *info,
 static int flush_blocks(coap_block_transfer_ctx_t *ctx,
                         final_block_action_t final_block_action) {
     size_t storage_size;
-    int result = get_block_packet_total_size(&ctx->info, &ctx->block,
-                                             &storage_size);
+    int result =
+            get_block_packet_total_size(&ctx->info, &ctx->block, &storage_size);
     if (result) {
         return result;
     }
@@ -348,9 +353,9 @@ static int flush_blocks(coap_block_transfer_ctx_t *ctx,
         coap_log(ERROR, "out of memory");
         return -1;
     }
-    result = flush_blocks_with_buffer(
-            ctx, avs_coap_ensure_aligned_buffer(storage),
-            storage_size, final_block_action);
+    result = flush_blocks_with_buffer(ctx,
+                                      avs_coap_ensure_aligned_buffer(storage),
+                                      storage_size, final_block_action);
     avs_free(storage);
     return result;
 }
@@ -363,7 +368,7 @@ int _anjay_coap_block_transfer_write(coap_block_transfer_ctx_t *ctx,
     while (!ctx->timed_out) {
         bytes_written += avs_coap_block_builder_append_payload(
                 &ctx->block_builder,
-                (const uint8_t*)data + bytes_written,
+                (const uint8_t *) data + bytes_written,
                 data_length - bytes_written);
 
         if (bytes_written >= data_length) {

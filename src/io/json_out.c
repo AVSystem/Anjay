@@ -17,9 +17,8 @@
 #include <anjay_config.h>
 
 #include <assert.h>
-#include <string.h>
 #include <inttypes.h>
-
+#include <string.h>
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/stream.h>
@@ -32,6 +31,11 @@
 #include "vtable.h"
 
 #define json_log(level, ...) _anjay_log(json, level, __VA_ARGS__)
+
+#define FORMAT_ERROR_MSG "unsupported JSON format"
+
+#    define ASSERT_FORMAT_SUPPORTED(format) \
+        AVS_ASSERT((format) == ANJAY_COAP_FORMAT_JSON, FORMAT_ERROR_MSG)
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -47,36 +51,31 @@ typedef enum {
     JSON_DATA_I32,
     JSON_DATA_I64,
     JSON_DATA_BOOL,
+    JSON_DATA_OPAQUE,
     JSON_DATA_OBJLNK,
     JSON_DATA_STRING
 } json_data_type_t;
 
-static const char *data_type_to_string(json_data_type_t type) {
-    switch(type) {
+static const char *data_type_to_string(json_data_type_t type, uint16_t format) {
+    ASSERT_FORMAT_SUPPORTED(format);
+    switch (type) {
     case JSON_DATA_F32:
     case JSON_DATA_F64:
     case JSON_DATA_I32:
     case JSON_DATA_I64:
         return "v";
     case JSON_DATA_BOOL:
-        return "bv";
+        return format == ANJAY_COAP_FORMAT_JSON ? "bv" : "vb";
+    case JSON_DATA_OPAQUE:
+        return format == ANJAY_COAP_FORMAT_JSON ? "sv" : "vd";
     case JSON_DATA_OBJLNK:
-        return "ov";
+        return format == ANJAY_COAP_FORMAT_JSON ? "ov" : "vlo";
     default:
-        return "sv";
+        return format == ANJAY_COAP_FORMAT_JSON ? "sv" : "vs";
     }
 }
 
-typedef struct {
-    json_id_t id;
-    json_data_type_t type;
-    const void *value;
-} json_entry_t;
-
-typedef enum {
-    EXPECT_INDEX,
-    EXPECT_VALUE
-} json_expected_write_t;
+typedef enum { EXPECT_INDEX, EXPECT_VALUE } json_expected_write_t;
 
 typedef struct {
     json_expected_write_t expected_write;
@@ -102,6 +101,7 @@ typedef struct json_out_struct {
     bool returning_array;
     anjay_ret_bytes_ctx_t *bytes;
     json_id_t next_id;
+    uint16_t format;
 } json_out_t;
 
 static json_id_t *last_path_elem(json_out_t *ctx) {
@@ -111,8 +111,7 @@ static json_id_t *last_path_elem(json_out_t *ctx) {
     return &ctx->path[ctx->num_path_elems - 1];
 }
 
-static void
-push_path_elem(json_out_t *ctx, anjay_id_type_t type, uint16_t id) {
+static void push_path_elem(json_out_t *ctx, anjay_id_type_t type, uint16_t id) {
     const size_t max_num_elems = sizeof(ctx->path) / sizeof(*ctx->path);
 
     if (ctx->num_path_elems >= max_num_elems) {
@@ -161,30 +160,20 @@ update_node_path(json_out_t *ctx, anjay_id_type_t type, uint16_t id) {
     }
 }
 
-#define MAX_CHILD_PATH_LEN sizeof("/65535/65535/65535")
+#define MAX_PATH_LEN sizeof("/65535/65535/65535/65535")
 
-static size_t
-count_child_path_elems(json_out_t *ctx) {
-    return ctx->num_path_elems - ctx->num_base_path_elems;
-}
-
-static ssize_t child_path_to_string(json_out_t *ctx, char *dest, size_t size) {
-    switch (count_child_path_elems(ctx)) {
-    case 1:
-        return avs_simple_snprintf(dest, size, "/%"PRId32,
-                                   ctx->path[ctx->num_base_path_elems].id);
-    case 2:
-        return avs_simple_snprintf(dest, size, "/%"PRId32"/%"PRId32,
-                                   ctx->path[ctx->num_base_path_elems].id,
-                                   ctx->path[ctx->num_base_path_elems + 1].id);
-    case 3:
-        return avs_simple_snprintf(dest, size, "/%"PRId32"/%"PRId32"/%"PRId32,
-                                   ctx->path[ctx->num_base_path_elems].id,
-                                   ctx->path[ctx->num_base_path_elems + 1].id,
-                                   ctx->path[ctx->num_base_path_elems + 2].id);
-    default:
-        return -1;
+static int
+path_to_string(json_out_t *ctx, size_t start_index, char *dest, size_t size) {
+    for (size_t i = start_index; i < ctx->num_path_elems; i++) {
+        int written_chars =
+                avs_simple_snprintf(dest, size, "/%" PRId32, ctx->path[i].id);
+        if (written_chars < 0) {
+            return -1;
+        }
+        dest += written_chars;
+        size -= (size_t) written_chars;
     }
+    return 0;
 }
 
 typedef struct {
@@ -227,10 +216,9 @@ static int write_quoted_string(avs_stream_abstract_t *stream,
         } else if (value[i] == '\t') {
             retval = avs_stream_write(stream, "\\t", 2);
         } else if ((uint8_t) value[i] < 0x20) {
-            const int nibble0 = ((uint8_t)value[i] >> 4) & 0xF;
-            const int nibble1 = ((uint8_t)value[i]) & 0xF;
-            retval =
-                    avs_stream_write_f(stream, "\\u00%x%x", nibble0, nibble1);
+            const int nibble0 = ((uint8_t) value[i] >> 4) & 0xF;
+            const int nibble1 = ((uint8_t) value[i]) & 0xF;
+            retval = avs_stream_write_f(stream, "\\u00%x%x", nibble0, nibble1);
         } else {
             retval = avs_stream_write(stream, &value[i], 1);
         }
@@ -243,9 +231,10 @@ static int write_quoted_string(avs_stream_abstract_t *stream,
 
 static int write_variable(avs_stream_abstract_t *stream,
                           json_data_type_t type,
+                          uint16_t json_format,
                           const void *value) {
-    int retval =
-            avs_stream_write_f(stream, "\"%s\":", data_type_to_string(type));
+    int retval = avs_stream_write_f(
+            stream, "\"%s\":", data_type_to_string(type, json_format));
     if (retval) {
         return retval;
     }
@@ -262,12 +251,11 @@ static int write_variable(avs_stream_abstract_t *stream,
     case JSON_DATA_BOOL:
         return avs_stream_write_f(stream, "%s",
                                   (*(const bool *) value) ? "true" : "false");
-    case JSON_DATA_OBJLNK:
-        {
-            const packed_objlnk_t objlnk = *(const packed_objlnk_t *) value;
-            return avs_stream_write_f(stream, "\"%" PRIu16 ":%" PRIu16 "\"",
-                                      objlnk.oid, objlnk.iid);
-        }
+    case JSON_DATA_OBJLNK: {
+        const packed_objlnk_t objlnk = *(const packed_objlnk_t *) value;
+        return avs_stream_write_f(stream, "\"%" PRIu16 ":%" PRIu16 "\"",
+                                  objlnk.oid, objlnk.iid);
+    }
     case JSON_DATA_STRING:
         return write_quoted_string(stream, (const char *) value);
     default:
@@ -279,20 +267,24 @@ static int write_variable(avs_stream_abstract_t *stream,
 static int write_uri(avs_stream_abstract_t *stream,
                      const anjay_uri_path_t *path) {
     int retval = avs_stream_write_f(stream, "/%d", path->oid);
-    if (!retval &&  _anjay_uri_path_has_iid(path)) {
+    if (!retval && _anjay_uri_path_has_iid(path)) {
         retval = avs_stream_write_f(stream, "/%d", path->iid);
     }
-    if (!retval &&  _anjay_uri_path_has_rid(path)) {
+    if (!retval && _anjay_uri_path_has_rid(path)) {
         retval = avs_stream_write_f(stream, "/%d", path->rid);
     }
     return retval;
 }
 
 static int write_element_name(json_out_t *ctx) {
+    ASSERT_FORMAT_SUPPORTED(ctx->format);
     const char *name = NULL;
-    char buf[MAX_CHILD_PATH_LEN];
-    if (count_child_path_elems(ctx)) {
-        if (child_path_to_string(ctx, buf, sizeof(buf)) < 0) {
+    char buf[MAX_PATH_LEN];
+    if (ctx->num_path_elems - ctx->num_base_path_elems) {
+        size_t start_index = ctx->format == ANJAY_COAP_FORMAT_JSON
+                                     ? ctx->num_base_path_elems
+                                     : 0;
+        if (path_to_string(ctx, start_index, buf, sizeof(buf))) {
             return -1;
         }
         name = buf;
@@ -312,14 +304,13 @@ static int write_response_element(json_out_t *ctx,
                                   const void *value) {
     int retval;
     (void) ((retval = write_element_name(ctx))
-            || (retval = write_variable(ctx->stream, type, value))
+            || (retval = write_variable(ctx->stream, type, ctx->format, value))
             || (retval = avs_stream_write(ctx->stream, "}", 1)));
     return retval;
 }
 
-static int process_array_value(json_out_t *ctx,
-                               json_data_type_t type,
-                               const void *value) {
+static int
+process_array_value(json_out_t *ctx, json_data_type_t type, const void *value) {
     if (ctx->array_ctx.expected_write != EXPECT_VALUE) {
         json_log(ERROR, "expected array index, but got a value instead");
         return -1;
@@ -352,8 +343,7 @@ static int finish_ret_bytes(json_out_t *ctx) {
 }
 
 static int maybe_write_separator(json_out_t *ctx) {
-    if (ctx->needs_separator
-            && avs_stream_write(ctx->stream, ",", 1)) {
+    if (ctx->needs_separator && avs_stream_write(ctx->stream, ",", 1)) {
         return -1;
     }
     ctx->needs_separator = true;
@@ -389,9 +379,9 @@ static anjay_ret_bytes_ctx_t *json_ret_bytes(anjay_output_ctx_t *ctx_,
     int retval;
     (void) ((retval = maybe_write_separator(ctx))
             || (retval = write_element_name(ctx))
-            || (retval = avs_stream_write_f(ctx->stream, "\"%s\":\"",
-                                            data_type_to_string(
-                                                    JSON_DATA_STRING))));
+            || (retval = avs_stream_write_f(
+                        ctx->stream, "\"%s\":\"",
+                        data_type_to_string(JSON_DATA_OPAQUE, ctx->format))));
     if (retval) {
         return NULL;
     }
@@ -498,9 +488,8 @@ static int json_ret_object_finish(anjay_output_ctx_t *ctx) {
     return 0;
 }
 
-static int json_set_id(anjay_output_ctx_t *ctx_,
-                       anjay_id_type_t type,
-                       uint16_t id) {
+static int
+json_set_id(anjay_output_ctx_t *ctx_, anjay_id_type_t type, uint16_t id) {
     if (type == ANJAY_ID_RIID) {
         return json_ret_array_index(ctx_, id);
     }
@@ -519,8 +508,15 @@ static int json_set_id(anjay_output_ctx_t *ctx_,
     return 0;
 }
 
-static int write_response_finish(avs_stream_abstract_t *stream) {
-    return avs_stream_write(stream, "]}", 2);
+static int write_response_finish(avs_stream_abstract_t *stream,
+                                 uint16_t json_format) {
+    switch (json_format) {
+    case ANJAY_COAP_FORMAT_JSON:
+        return avs_stream_write(stream, "]}", 2);
+    default:
+        AVS_UNREACHABLE(FORMAT_ERROR_MSG);
+        return -1;
+    }
 }
 
 static int json_output_close(anjay_output_ctx_t *ctx_) {
@@ -531,33 +527,41 @@ static int json_output_close(anjay_output_ctx_t *ctx_) {
             return result;
         }
     }
-    return write_response_finish(ctx->stream);
+    return write_response_finish(ctx->stream, ctx->format);
 }
 
 static const anjay_output_ctx_vtable_t JSON_OUT_VTABLE = {
-    json_errno_ptr,
-    json_ret_bytes,
-    json_ret_string,
-    json_ret_i32,
-    json_ret_i64,
-    json_ret_float,
-    json_ret_double,
-    json_ret_bool,
-    json_ret_objlnk,
-    json_ret_array_start,
-    json_ret_array_finish,
-    json_ret_object_start,
-    json_ret_object_finish,
-    json_set_id,
-    json_output_close
+    .errno_ptr = json_errno_ptr,
+    .bytes_begin = json_ret_bytes,
+    .string = json_ret_string,
+    .i32 = json_ret_i32,
+    .i64 = json_ret_i64,
+    .f32 = json_ret_float,
+    .f64 = json_ret_double,
+    .boolean = json_ret_bool,
+    .objlnk = json_ret_objlnk,
+    .array_start = json_ret_array_start,
+    .array_finish = json_ret_array_finish,
+    .object_start = json_ret_object_start,
+    .object_finish = json_ret_object_finish,
+    .set_id = json_set_id,
+    .close = json_output_close
 };
 
 static int write_response_preamble(avs_stream_abstract_t *stream,
+                                   uint16_t json_format,
                                    const anjay_uri_path_t *base) {
     int retval;
-    (void) ((retval = avs_stream_write_f(stream, "%s", "{\"bn\":\""))
-            || (retval = write_uri(stream, base))
-            || (retval = avs_stream_write_f(stream, "%s", "\",\"e\":[")));
+    switch (json_format) {
+    case ANJAY_COAP_FORMAT_JSON:
+        (void) ((retval = avs_stream_write_f(stream, "%s", "{\"bn\":\""))
+                || (retval = write_uri(stream, base))
+                || (retval = avs_stream_write_f(stream, "%s", "\",\"e\":[")));
+        break;
+    default:
+        AVS_UNREACHABLE(FORMAT_ERROR_MSG);
+        retval = -1;
+    }
     return retval;
 }
 
@@ -565,12 +569,15 @@ anjay_output_ctx_t *
 _anjay_output_json_create(avs_stream_abstract_t *stream,
                           int *errno_ptr,
                           anjay_msg_details_t *inout_details,
-                          const anjay_uri_path_t *uri) {
+                          const anjay_uri_path_t *uri,
+                          uint16_t format) {
+    ASSERT_FORMAT_SUPPORTED(format);
     json_out_t *ctx = (json_out_t *) avs_calloc(1, sizeof(json_out_t));
     if (ctx) {
         ctx->vtable = &JSON_OUT_VTABLE;
         ctx->errno_ptr = errno_ptr;
         ctx->stream = stream;
+        ctx->format = format;
         if (_anjay_uri_path_has_oid(uri)) {
             update_node_path(ctx, ANJAY_ID_OID, uri->oid);
             ++ctx->num_base_path_elems;
@@ -584,12 +591,12 @@ _anjay_output_json_create(avs_stream_abstract_t *stream,
             ++ctx->num_base_path_elems;
         }
 
-        if ((*errno_ptr = _anjay_handle_requested_format(
-                     &inout_details->format, ANJAY_COAP_FORMAT_JSON))
-            || _anjay_coap_stream_setup_response(stream, inout_details)) {
+        if ((*errno_ptr = _anjay_handle_requested_format(&inout_details->format,
+                                                         format))
+                || _anjay_coap_stream_setup_response(stream, inout_details)) {
             goto error;
         }
-        if (write_response_preamble(stream, uri)) {
+        if (write_response_preamble(stream, format, uri)) {
             json_log(ERROR, "cannot write response preamble");
             goto error;
         }

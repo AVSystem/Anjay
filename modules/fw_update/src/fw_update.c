@@ -36,15 +36,15 @@ VISIBILITY_SOURCE_BEGIN
 
 #define FW_OID 5
 
-#define FW_RES_PACKAGE                  0
-#define FW_RES_PACKAGE_URI              1
-#define FW_RES_UPDATE                   2
-#define FW_RES_STATE                    3
-#define FW_RES_UPDATE_RESULT            5
-#define FW_RES_PKG_NAME                 6
-#define FW_RES_PKG_VERSION              7
-#define FW_RES_UPDATE_PROTOCOL_SUPPORT  8
-#define FW_RES_UPDATE_DELIVERY_METHOD   9
+#define FW_RES_PACKAGE 0
+#define FW_RES_PACKAGE_URI 1
+#define FW_RES_UPDATE 2
+#define FW_RES_STATE 3
+#define FW_RES_UPDATE_RESULT 5
+#define FW_RES_PKG_NAME 6
+#define FW_RES_PKG_VERSION 7
+#define FW_RES_UPDATE_PROTOCOL_SUPPORT 8
+#define FW_RES_UPDATE_DELIVERY_METHOD 9
 
 typedef enum {
     UPDATE_STATE_IDLE = 0,
@@ -98,8 +98,8 @@ user_state_ensure_stream_open(fw_user_state_t *user,
         return 0;
     }
     assert(user->state == UPDATE_STATE_IDLE);
-    int result = user->handlers->stream_open(user->arg,
-                                             package_uri, package_etag);
+    int result =
+            user->handlers->stream_open(user->arg, package_uri, package_etag);
     if (!result) {
         user->state = UPDATE_STATE_DOWNLOADING;
     }
@@ -107,14 +107,14 @@ user_state_ensure_stream_open(fw_user_state_t *user,
 }
 
 static int user_state_stream_write(fw_user_state_t *user,
-                                   const void *data, size_t length) {
+                                   const void *data,
+                                   size_t length) {
     assert(user->state == UPDATE_STATE_DOWNLOADING);
     return user->handlers->stream_write(user->arg, data, length);
 }
 
 static const char *user_state_get_name(fw_user_state_t *user) {
-    if (!user->handlers->get_name
-            || user->state != UPDATE_STATE_DOWNLOADED) {
+    if (!user->handlers->get_name || user->state != UPDATE_STATE_DOWNLOADED) {
         return NULL;
     }
     return user->handlers->get_name(user->arg);
@@ -167,12 +167,23 @@ static int get_security_info(anjay_t *anjay,
     } else {
         assert(!fw->security_from_dm);
         if (!(fw->security_from_dm = anjay_fw_update_load_security_from_dm(
-                anjay, fw->package_uri))) {
+                      anjay, fw->package_uri))) {
             return -1;
         }
         *out_security_info = *fw->security_from_dm;
         return 0;
     }
+}
+
+static int get_coap_tx_params(fw_repr_t *fw,
+                              avs_coap_tx_params_t *out_tx_params) {
+    if (fw->user_state.handlers->get_coap_tx_params) {
+        *out_tx_params =
+                fw->user_state.handlers->get_coap_tx_params(fw->user_state.arg,
+                                                            fw->package_uri);
+        return 0;
+    }
+    return -1;
 }
 
 static void set_update_result(anjay_t *anjay,
@@ -184,9 +195,8 @@ static void set_update_result(anjay_t *anjay,
     }
 }
 
-static void set_state(anjay_t *anjay,
-                      fw_repr_t *fw,
-                      fw_update_state_t new_state) {
+static void
+set_state(anjay_t *anjay, fw_repr_t *fw, fw_update_state_t new_state) {
     if (fw->state != new_state) {
         fw->state = new_state;
         anjay_notify_changed(anjay, FW_OID, 0, FW_RES_STATE);
@@ -224,7 +234,8 @@ static int fw_res_present(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t iid,
                           anjay_rid_t rid) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
     fw_repr_t *fw = get_fw(obj_ptr);
     switch (rid) {
     case FW_RES_PKG_NAME:
@@ -241,7 +252,8 @@ static int fw_read(anjay_t *anjay,
                    anjay_iid_t iid,
                    anjay_rid_t rid,
                    anjay_output_ctx_t *ctx) {
-    (void) anjay; (void) iid;
+    (void) anjay;
+    (void) iid;
     fw_repr_t *fw = get_fw(obj_ptr);
     switch (rid) {
     case FW_RES_PACKAGE_URI:
@@ -275,11 +287,11 @@ static int fw_read(anjay_t *anjay,
 #ifdef WITH_BLOCK_DOWNLOAD
             0, /* CoAP */
             1, /* CoAPS */
-#endif // WITH_BLOCK_DOWNLOAD
+#endif         // WITH_BLOCK_DOWNLOAD
 #ifdef WITH_HTTP_DOWNLOAD
             2, /* HTTP 1.1 */
             3, /* HTTPS 1.1 */
-#endif // WITH_HTTP_DOWNLOAD
+#endif         // WITH_HTTP_DOWNLOAD
             -1
         };
         size_t index = 0;
@@ -295,18 +307,18 @@ static int fw_read(anjay_t *anjay,
     }
     case FW_RES_UPDATE_DELIVERY_METHOD:
 #ifdef WITH_BLOCK_RECEIVE
-#ifdef WITH_DOWNLOADER
+#    ifdef WITH_DOWNLOADER
         // 2 -> pull && push
         return anjay_ret_i32(ctx, 2);
-#else // WITH_DOWNLOADER
-        // 1 -> push only
+#    else                      // WITH_DOWNLOADER
+                               // 1 -> push only
         return anjay_ret_i32(ctx, 1);
-#endif // WITH_DOWNLOADER
+#    endif                     // WITH_DOWNLOADER
 #elif defined(WITH_DOWNLOADER) // WITH_BLOCK_RECEIVE
         // 0 -> pull only
         return anjay_ret_i32(ctx, 0);
-#else // WITH_DOWNLOADER
-#error "Firmware Update requires at least WITH_DOWNLOADER or WITH_BLOCK_RECEIVE"
+#else                          // WITH_DOWNLOADER
+#    error "Firmware Update requires at least WITH_DOWNLOADER or WITH_BLOCK_RECEIVE"
 #endif // WITH_DOWNLOADER
     case FW_RES_PACKAGE:
     case FW_RES_UPDATE:
@@ -337,8 +349,8 @@ static int download_write_block(anjay_t *anjay,
     (void) etag;
 
     fw_repr_t *fw = (fw_repr_t *) fw_;
-    int result = user_state_ensure_stream_open(&fw->user_state,
-                                               fw->package_uri, etag);
+    int result = user_state_ensure_stream_open(&fw->user_state, fw->package_uri,
+                                               etag);
     if (!result && data_size > 0) {
         result = user_state_stream_write(&fw->user_state, data, data_size);
     }
@@ -357,9 +369,7 @@ static int schedule_background_anjay_download(anjay_t *anjay,
                                               size_t start_offset,
                                               const anjay_etag_t *etag);
 
-static void download_finished(anjay_t *anjay,
-                              int result,
-                              void *fw_) {
+static void download_finished(anjay_t *anjay, int result, void *fw_) {
     (void) anjay;
 
     fw_repr_t *fw = (fw_repr_t *) fw_;
@@ -380,8 +390,10 @@ static void download_finished(anjay_t *anjay,
         reset_user_state(fw);
         if (fw->retry_download_on_expired
                 && result == ANJAY_DOWNLOAD_ERR_EXPIRED) {
-            fw_log(INFO, "Could not resume firmware download (result = %d), "
-                         "retrying from the beginning", result);
+            fw_log(INFO,
+                   "Could not resume firmware download (result = %d), "
+                   "retrying from the beginning",
+                   result);
             if (schedule_background_anjay_download(anjay, fw, 0, NULL)) {
                 fw_log(WARNING, "Could not retry firmware download");
                 set_state(anjay, fw, UPDATE_STATE_IDLE);
@@ -393,7 +405,7 @@ static void download_finished(anjay_t *anjay,
         }
     } else if ((result = user_state_ensure_stream_open(&fw->user_state,
                                                        fw->package_uri, NULL))
-            || (result = finish_user_stream(fw))) {
+               || (result = finish_user_stream(fw))) {
         handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
                           UPDATE_RESULT_NOT_ENOUGH_SPACE);
     } else {
@@ -423,6 +435,11 @@ static int schedule_background_anjay_download(anjay_t *anjay,
                               UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
             return -1;
         }
+    }
+
+    avs_coap_tx_params_t tx_params;
+    if (!get_coap_tx_params(fw, &tx_params)) {
+        cfg.coap_tx_params = &tx_params;
     }
 
     anjay_download_handle_t handle = anjay_download(anjay, &cfg);
@@ -464,7 +481,7 @@ static int write_firmware_to_stream(anjay_t *anjay,
         size_t bytes_read;
         char buffer[1024];
         if ((result = anjay_get_bytes(ctx, &bytes_read, &finished, buffer,
-                            sizeof(buffer)))) {
+                                      sizeof(buffer)))) {
             fw_log(ERROR, "anjay_get_bytes() failed");
 
             set_state(anjay, fw, UPDATE_STATE_IDLE);
@@ -476,8 +493,8 @@ static int write_firmware_to_stream(anjay_t *anjay,
             if (first_byte == EOF) {
                 first_byte = (unsigned char) buffer[0];
             }
-            result = user_state_stream_write(&fw->user_state,
-                                             buffer, bytes_read);
+            result = user_state_stream_write(&fw->user_state, buffer,
+                                             bytes_read);
         }
         if (result) {
             handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
@@ -549,71 +566,70 @@ static int fw_write(anjay_t *anjay,
 
     fw_repr_t *fw = get_fw(obj_ptr);
     switch (rid) {
-    case FW_RES_PACKAGE:
-        {
-            int result = 0;
-            if (fw->state == UPDATE_STATE_DOWNLOADED) {
-                result = expect_single_nullbyte(ctx);
-                if (!result) {
-                    reset(anjay, fw);
-                }
-            } else {
-                bool is_reset_request = false;
-                result = write_firmware(anjay, fw, ctx, &is_reset_request);
-                if (!result && is_reset_request) {
-                    reset(anjay, fw);
-                }
+    case FW_RES_PACKAGE: {
+        int result = 0;
+        if (fw->state == UPDATE_STATE_DOWNLOADED) {
+            result = expect_single_nullbyte(ctx);
+            if (!result) {
+                reset(anjay, fw);
             }
-            return result;
+        } else {
+            bool is_reset_request = false;
+            result = write_firmware(anjay, fw, ctx, &is_reset_request);
+            if (!result && is_reset_request) {
+                reset(anjay, fw);
+            }
         }
+        return result;
+    }
     case FW_RES_PACKAGE_URI:
 #ifdef WITH_DOWNLOADER
-        {
-            if (fw->state == UPDATE_STATE_DOWNLOADING) {
-                fw_log(ERROR,
-                       "cannot set Package Uri resource while downloading");
-                return ANJAY_ERR_METHOD_NOT_ALLOWED;
-            }
-
-            char *new_uri = NULL;
-            int result = _anjay_io_fetch_string(ctx, &new_uri);
-            size_t len = (new_uri ? strlen(new_uri) : 0);
-
-            if (!result && len > 0 && fw->state != UPDATE_STATE_IDLE) {
-                result = ANJAY_ERR_BAD_REQUEST;
-            }
-
-            if (!result && len > 0 && classify_protocol(new_uri)
-                    == ANJAY_DOWNLOADER_PROTO_UNSUPPORTED) {
-                fw_log(ERROR,
-                       "unsupported download protocol required for uri %s",
-                       new_uri);
-                set_update_result(anjay, fw,
-                                  UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
-                result = ANJAY_ERR_BAD_REQUEST;
-            }
-
-            if (!result) {
-                avs_free((void *) (intptr_t) fw->package_uri);
-                fw->package_uri = new_uri;
-
-                if (len == 0) {
-                    reset(anjay, fw);
-                } else {
-                    int dl_res = schedule_background_anjay_download(anjay, fw,
-                                                                    0, NULL);
-                    if (dl_res) {
-                        fw_log(WARNING, "schedule_download_in_background "
-                               "failed: %d", dl_res);
-                    }
-                    // write itself succeeded; do not propagate error
-                }
-            } else {
-                avs_free(new_uri);
-            }
-
-            return result;
+    {
+        if (fw->state == UPDATE_STATE_DOWNLOADING) {
+            fw_log(ERROR, "cannot set Package Uri resource while downloading");
+            return ANJAY_ERR_METHOD_NOT_ALLOWED;
         }
+
+        char *new_uri = NULL;
+        int result = _anjay_io_fetch_string(ctx, &new_uri);
+        size_t len = (new_uri ? strlen(new_uri) : 0);
+
+        if (!result && len > 0 && fw->state != UPDATE_STATE_IDLE) {
+            result = ANJAY_ERR_BAD_REQUEST;
+        }
+
+        if (!result && len > 0
+                && classify_protocol(new_uri)
+                               == ANJAY_DOWNLOADER_PROTO_UNSUPPORTED) {
+            fw_log(ERROR,
+                   "unsupported download protocol required for uri %s",
+                   new_uri);
+            set_update_result(anjay, fw, UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
+            result = ANJAY_ERR_BAD_REQUEST;
+        }
+
+        if (!result) {
+            avs_free((void *) (intptr_t) fw->package_uri);
+            fw->package_uri = new_uri;
+
+            if (len == 0) {
+                reset(anjay, fw);
+            } else {
+                int dl_res =
+                        schedule_background_anjay_download(anjay, fw, 0, NULL);
+                if (dl_res) {
+                    fw_log(WARNING,
+                           "schedule_download_in_background failed: %d",
+                           dl_res);
+                }
+                // write itself succeeded; do not propagate error
+            }
+        } else {
+            avs_free(new_uri);
+        }
+
+        return result;
+    }
 #endif // WITH_DOWNLOADER
     default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -636,23 +652,25 @@ static int fw_execute(anjay_t *anjay,
                       anjay_iid_t iid,
                       anjay_rid_t rid,
                       anjay_execute_ctx_t *ctx) {
-    (void) iid; (void) ctx;
+    (void) iid;
+    (void) ctx;
 
     fw_repr_t *fw = get_fw(obj_ptr);
     switch (rid) {
-    case FW_RES_UPDATE:
-        {
-            if (fw->state != UPDATE_STATE_DOWNLOADED) {
-                fw_log(WARNING, "Firmware Update requested, but firmware not "
-                       "yet downloaded (state = %d)", fw->state);
-                return ANJAY_ERR_METHOD_NOT_ALLOWED;
-            }
-
-            set_state(anjay, fw, UPDATE_STATE_UPDATING);
-            set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
-            // update process will be continued in fw_on_notify
-            return 0;
+    case FW_RES_UPDATE: {
+        if (fw->state != UPDATE_STATE_DOWNLOADED) {
+            fw_log(WARNING,
+                   "Firmware Update requested, but firmware not yet downloaded "
+                   "(state = %d)",
+                   fw->state);
+            return ANJAY_ERR_METHOD_NOT_ALLOWED;
         }
+
+        set_state(anjay, fw, UPDATE_STATE_UPDATING);
+        set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
+        // update process will be continued in fw_on_notify
+        return 0;
+    }
     default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -660,16 +678,15 @@ static int fw_execute(anjay_t *anjay,
 
 static const anjay_dm_object_def_t FIRMWARE_UPDATE = {
     .oid = FW_OID,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-            FW_RES_PACKAGE,
-            FW_RES_PACKAGE_URI,
-            FW_RES_UPDATE,
-            FW_RES_STATE,
-            FW_RES_UPDATE_RESULT,
-            FW_RES_PKG_NAME,
-            FW_RES_PKG_VERSION,
-            FW_RES_UPDATE_PROTOCOL_SUPPORT,
-            FW_RES_UPDATE_DELIVERY_METHOD),
+    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(FW_RES_PACKAGE,
+                                              FW_RES_PACKAGE_URI,
+                                              FW_RES_UPDATE,
+                                              FW_RES_STATE,
+                                              FW_RES_UPDATE_RESULT,
+                                              FW_RES_PKG_NAME,
+                                              FW_RES_PKG_VERSION,
+                                              FW_RES_UPDATE_PROTOCOL_SUPPORT,
+                                              FW_RES_UPDATE_DELIVERY_METHOD),
     .handlers = {
         .instance_it = anjay_dm_instance_it_SINGLE,
         .instance_present = anjay_dm_instance_present_SINGLE,
@@ -684,13 +701,11 @@ static const anjay_dm_object_def_t FIRMWARE_UPDATE = {
     }
 };
 
-static int fw_on_notify(anjay_t *anjay,
-                        anjay_notify_queue_t incoming_queue,
-                        void *fw_) {
+static int
+fw_on_notify(anjay_t *anjay, anjay_notify_queue_t incoming_queue, void *fw_) {
     fw_repr_t *fw = (fw_repr_t *) fw_;
     (void) incoming_queue;
-    if (!fw->update_job
-            && fw->state == UPDATE_STATE_UPDATING
+    if (!fw->update_job && fw->state == UPDATE_STATE_UPDATING
             && _anjay_sched_now(_anjay_sched_get(anjay), &fw->update_job,
                                 perform_upgrade, &fw, sizeof(fw))) {
         // we don't need to reschedule notifying,
@@ -726,7 +741,7 @@ initialize_fw_repr(anjay_t *anjay,
     case ANJAY_FW_UPDATE_INITIAL_DOWNLOADED:
         if (initial_state->persisted_uri
                 && !(repr->package_uri =
-                        avs_strdup(initial_state->persisted_uri))) {
+                             avs_strdup(initial_state->persisted_uri))) {
             fw_log(WARNING, "Could not copy the persisted Package URI");
         }
         repr->user_state.state = UPDATE_STATE_DOWNLOADED;
@@ -743,22 +758,23 @@ initialize_fw_repr(anjay_t *anjay,
         }
         if (!initial_state->persisted_uri
                 || !(repr->package_uri =
-                        avs_strdup(initial_state->persisted_uri))) {
-            fw_log(WARNING, "Could not copy the persisted Package URI, "
-                            "not resuming firmware download");
+                             avs_strdup(initial_state->persisted_uri))) {
+            fw_log(WARNING, "Could not copy the persisted Package URI, not "
+                            "resuming firmware download");
             reset_user_state(repr);
         } else if (schedule_background_anjay_download(
-                anjay, repr, resume_offset, initial_state->resume_etag)) {
+                           anjay, repr, resume_offset,
+                           initial_state->resume_etag)) {
             fw_log(WARNING, "Could not resume firmware download");
             reset_user_state(repr);
             if (repr->result == UPDATE_RESULT_CONNECTION_LOST
                     && initial_state->resume_etag
-                    && schedule_background_anjay_download(anjay, repr,
-                                                          0, NULL)) {
+                    && schedule_background_anjay_download(anjay, repr, 0,
+                                                          NULL)) {
                 fw_log(WARNING, "Could not retry firmware download");
             }
         }
-#else // WITH_DOWNLOADER
+#else  // WITH_DOWNLOADER
         fw_log(WARNING,
                "Unable to resume download: PULL download not supported");
 #endif // WITH_DOWNLOADER
@@ -776,11 +792,11 @@ initialize_fw_repr(anjay_t *anjay,
     }
 }
 
-int
-anjay_fw_update_install(anjay_t *anjay,
-                        const anjay_fw_update_handlers_t *handlers,
-                        void *user_arg,
-                        const anjay_fw_update_initial_state_t *initial_state) {
+int anjay_fw_update_install(
+        anjay_t *anjay,
+        const anjay_fw_update_handlers_t *handlers,
+        void *user_arg,
+        const anjay_fw_update_initial_state_t *initial_state) {
     assert(anjay);
 
     fw_repr_t *repr = (fw_repr_t *) avs_calloc(1, sizeof(fw_repr_t));

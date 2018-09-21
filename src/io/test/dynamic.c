@@ -21,8 +21,8 @@
 #include <avsystem/commons/unit/mocksock.h>
 #include <avsystem/commons/unit/test.h>
 
-#include <anjay_test/coap/stream.h>
 #include <anjay_test/coap/socket.h>
+#include <anjay_test/coap/stream.h>
 
 #include <anjay/core.h>
 
@@ -42,7 +42,6 @@ static const anjay_coap_stream_ext_t COAPIZATION = {
     .setup_response = test_setup_for_sending,
 };
 
-
 static const avs_stream_v_table_extension_t COAPIZED_VTABLE_EXT[] = {
     { ANJAY_COAP_STREAM_EXTENSION, &COAPIZATION },
     AVS_STREAM_V_TABLE_EXTENSION_NULL
@@ -58,34 +57,36 @@ AVS_UNIT_SUITE_INIT(dynamic_out, verbose) {
     COAPIZED_VTABLE.extension_list = COAPIZED_VTABLE_EXT;
 }
 
-#define DETAILS_TEMPLATE(Format) { \
-    .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE, \
-    .format = Format \
-}
+#define DETAILS_TEMPLATE(Format)                  \
+    {                                             \
+        .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE, \
+        .format = Format                          \
+    }
 
-static const avs_stream_outbuf_t COAPIZED_OUTBUF
-        = {&COAPIZED_VTABLE, NULL, 0, 0, 0};
+static const avs_stream_outbuf_t COAPIZED_OUTBUF = { &COAPIZED_VTABLE, NULL, 0,
+                                                     0, 0 };
 
-#define TEST_ENV_WITH_FORMAT(Size, Format) \
-    char buf[Size]; \
-    anjay_msg_details_t details = DETAILS_TEMPLATE(Format); \
-    avs_stream_outbuf_t outbuf = COAPIZED_OUTBUF; \
-    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf)); \
-    COAP_FORMAT = -1; \
-    int outctx_errno = 0; \
-    anjay_uri_path_t no_uri; \
-    memset(&no_uri, 0, sizeof(no_uri)); \
-    anjay_output_ctx_t *out = \
+#define TEST_ENV_WITH_FORMAT(Size, Format)                                  \
+    char buf[Size];                                                         \
+    anjay_msg_details_t details = DETAILS_TEMPLATE(Format);                 \
+    avs_stream_outbuf_t outbuf = COAPIZED_OUTBUF;                           \
+    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf));                \
+    COAP_FORMAT = -1;                                                       \
+    int outctx_errno = 0;                                                   \
+    anjay_uri_path_t no_uri;                                                \
+    memset(&no_uri, 0, sizeof(no_uri));                                     \
+    anjay_output_ctx_t *out =                                               \
             _anjay_output_dynamic_create((avs_stream_abstract_t *) &outbuf, \
                                          &outctx_errno, &details, &no_uri)
 
 #define TEST_ENV(Size) TEST_ENV_WITH_FORMAT(Size, AVS_COAP_FORMAT_NONE)
 
-#define VERIFY_BYTES(Data) do { \
-    AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&outbuf), \
-                          sizeof(Data) - 1); \
-    AVS_UNIT_ASSERT_EQUAL_BYTES(buf, Data); \
-} while (0)
+#define VERIFY_BYTES(Data)                                       \
+    do {                                                         \
+        AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&outbuf), \
+                              sizeof(Data) - 1);                 \
+        AVS_UNIT_ASSERT_EQUAL_BYTES(buf, Data);                  \
+    } while (0)
 
 AVS_UNIT_TEST(dynamic_out, bytes) {
     TEST_ENV(512);
@@ -196,11 +197,11 @@ AVS_UNIT_TEST(dynamic_out, array) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_ret_array_finish(array));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
 
-    VERIFY_BYTES(
-            "\x88\x2A\x13" // array
-            "\x41\x05\x2A" // first entry
-            "\x48\x45\x0D" "Hello, world!" //second entry
-            );
+    VERIFY_BYTES("\x88\x2A\x13" // array
+                 "\x41\x05\x2A" // first entry
+                 "\x48\x45\x0D"
+                 "Hello, world!" // second entry
+    );
     AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_TLV);
 }
 
@@ -215,10 +216,9 @@ AVS_UNIT_TEST(dynamic_out, object) {
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_object_finish(obj));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
 
-    VERIFY_BYTES(
-            "\x04\x2A" // object
-            "\xC2\x45\x02\x02" // entry
-            );
+    VERIFY_BYTES("\x04\x2A"         // object
+                 "\xC2\x45\x02\x02" // entry
+    );
     AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_TLV);
 }
 
@@ -254,32 +254,32 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
 
 /////////////////////////////////////////////////////////////////////// DECODING
 
-#define TEST_ENV_COMMON(Data) \
-    avs_net_abstract_socket_t *mocksock; \
-    _anjay_mocksock_create(&mocksock, 1252, 1252); \
-    avs_unit_mocksock_expect_connect(mocksock, "", ""); \
+#define TEST_ENV_COMMON(Data)                                          \
+    avs_net_abstract_socket_t *mocksock;                               \
+    _anjay_mocksock_create(&mocksock, 1252, 1252);                     \
+    avs_unit_mocksock_expect_connect(mocksock, "", "");                \
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", "")); \
-    avs_stream_abstract_t *coap = NULL; \
-    SCOPED_MOCK_COAP_STREAM(mock_coap_stream_ctx) = \
+    avs_stream_abstract_t *coap = NULL;                                \
+    SCOPED_MOCK_COAP_STREAM(mock_coap_stream_ctx) =                    \
             _anjay_mock_coap_stream_create(&coap, mocksock, 256, 256); \
     avs_unit_mocksock_input(mocksock, Data, sizeof(Data) - 1)
 
-#define TEST_ENV(Data) \
-    TEST_ENV_COMMON(Data); \
-    anjay_input_ctx_t *ctx; \
+#define TEST_ENV(Data)                                                       \
+    TEST_ENV_COMMON(Data);                                                   \
+    anjay_input_ctx_t *ctx;                                                  \
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_dynamic_create(&ctx, &coap, true)); \
     AVS_UNIT_ASSERT_NOT_NULL(ctx)
 
 #define TEST_TEARDOWN _anjay_input_ctx_destroy(&ctx)
 
 #define COAP_HEADER(ContentFormatFirstOpt) \
-        "\x50\x01\x00\x00" ContentFormatFirstOpt "\xFF"
+    "\x50\x01\x00\x00" ContentFormatFirstOpt "\xFF"
 
 #define LITERAL_COAP_FORMAT_FIRSTOPT_PLAINTEXT "\xC0"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_TLV       "\xC2\x2d\x16"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_JSON      "\xC2\x2d\x17"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_OPAQUE    "\xC1\x2A"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_UNKNOWN   "\xC2\x69\x69"
+#define LITERAL_COAP_FORMAT_FIRSTOPT_TLV "\xC2\x2d\x16"
+#define LITERAL_COAP_FORMAT_FIRSTOPT_JSON "\xC2\x2d\x17"
+#define LITERAL_COAP_FORMAT_FIRSTOPT_OPAQUE "\xC1\x2A"
+#define LITERAL_COAP_FORMAT_FIRSTOPT_UNKNOWN "\xC2\x69\x69"
 
 AVS_UNIT_TEST(dynamic_in, plain) {
     TEST_ENV(COAP_HEADER(LITERAL_COAP_FORMAT_FIRSTOPT_PLAINTEXT) "NDI=");
@@ -302,7 +302,8 @@ AVS_UNIT_TEST(dynamic_in, plain) {
 }
 
 AVS_UNIT_TEST(dynamic_in, no_content_format) {
-    TEST_ENV_COMMON("\x50\x01\x00\x00\xFF" "514");
+    TEST_ENV_COMMON("\x50\x01\x00\x00\xFF"
+                    "514");
     anjay_input_ctx_t *ctx;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_dynamic_create(&ctx, &coap, true));
     _anjay_input_ctx_destroy(&ctx);

@@ -20,12 +20,14 @@ from framework.test_utils import *
 
 from . import plaintext_base64 as pb64
 
+IID = 1
+
 class JsonEncodingTest:
     class Test(test_suite.Lwm2mSingleServerTest,
                test_suite.Lwm2mDmOperations):
         def setUp(self):
             super().setUp()
-            self.create_instance(self.serv, oid=OID.Test, iid=1)
+            self.create_instance(self.serv, oid=OID.Test, iid=IID)
 
 
 def as_json(pkt):
@@ -34,14 +36,14 @@ def as_json(pkt):
 
 class JsonEncodingBnResource(JsonEncodingTest.Test):
     def runTest(self):
-        res = as_json(self.read_resource(self.serv, oid=OID.Test, iid=1, rid=0,
+        res = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID, rid=0,
                                          accept=coap.ContentFormat.APPLICATION_LWM2M_JSON))
         self.assertEqual('/%d/1/0' % OID.Test, res['bn'])
 
 
 class JsonEncodingBnInstance(JsonEncodingTest.Test):
     def runTest(self):
-        res = as_json(self.read_instance(self.serv, oid=OID.Test, iid=1,
+        res = as_json(self.read_instance(self.serv, oid=OID.Test, iid=IID,
                                          accept=coap.ContentFormat.APPLICATION_LWM2M_JSON))
         self.assertEqual('/%d/1' % OID.Test, res['bn'])
 
@@ -58,7 +60,7 @@ class JsonEncodingAllNamesAreSlashPrefixed(JsonEncodingTest.Test):
         responses = [
               as_json(self.read_object(self.serv, oid=OID.Test,
                                        accept=coap.ContentFormat.APPLICATION_LWM2M_JSON)),
-              as_json(self.read_instance(self.serv, oid=OID.Test, iid=1,
+              as_json(self.read_instance(self.serv, oid=OID.Test, iid=IID,
                                          accept=coap.ContentFormat.APPLICATION_LWM2M_JSON)) ]
         for response in responses:
             self.assertTrue(len(response['e']) > 0)
@@ -66,7 +68,7 @@ class JsonEncodingAllNamesAreSlashPrefixed(JsonEncodingTest.Test):
             for resource in response['e']:
                 self.assertEqual('/', resource['n'][0])
 
-        resource = as_json(self.read_resource(self.serv, oid=OID.Test, iid=1, rid=0,
+        resource = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID, rid=0,
                                               accept=coap.ContentFormat.APPLICATION_LWM2M_JSON))
         # Resource path is in 'bn', therefore no 'n' parameter is specified by the client
         self.assertFalse('n' in resource['e'])
@@ -77,9 +79,9 @@ class JsonEncodingBytesInBase64(JsonEncodingTest.Test):
         some_bytes = pb64.test_object_bytes_generator(51)
         some_bytes_b64 = base64.encodebytes(some_bytes).replace(b'\n', b'')
 
-        self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResRawBytes, content=some_bytes_b64)
+        self.write_resource(self.serv, oid=OID.Test, iid=IID, rid=RID.Test.ResRawBytes, content=some_bytes_b64)
 
-        result = as_json(self.read_resource(self.serv, oid=OID.Test, iid=1,
+        result = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID,
                                             rid=RID.Test.ResRawBytes,
                                             accept=coap.ContentFormat.APPLICATION_LWM2M_JSON))
 
@@ -94,10 +96,10 @@ class JsonEncodingArrayOfOpaqueValues(JsonEncodingTest.Test):
             values[i] = random.randint(0, 2**31)
 
         execute_args = ','.join("%d='%d'" % (k, v) for k, v in values.items())
-        self.execute_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResInitIntArray,
+        self.execute_resource(self.serv, oid=OID.Test, iid=IID, rid=RID.Test.ResInitIntArray,
                               content=bytes(execute_args, encoding='utf-8'))
 
-        result = as_json(self.read_resource(self.serv, oid=OID.Test, iid=1,
+        result = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID,
                                             rid=RID.Test.ResOpaqueArray,
                                             accept=coap.ContentFormat.APPLICATION_LWM2M_JSON))
 

@@ -16,18 +16,18 @@
 
 #include <anjay_config.h>
 
-#include <inttypes.h>
 #include <avsystem/commons/errno.h>
+#include <inttypes.h>
 
 #include "../dm/query.h"
 #include "../servers_utils.h"
 
 #define ANJAY_SERVERS_INTERNALS
 
-#include "servers_internal.h"
 #include "activate.h"
-#include "connection_info.h"
 #include "register_internal.h"
+#include "server_connections.h"
+#include "servers_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -89,7 +89,7 @@ initialize_active_server(anjay_t *anjay, anjay_server_info_t *server) {
     int refresh_result;
     if (_anjay_find_security_iid(anjay, server->ssid, &security_iid)) {
         anjay_log(ERROR, "could not find server Security IID");
-    } else if (!read_server_uri(anjay, security_iid, &server->data_active.uri)) {
+    } else if (!read_server_uri(anjay, security_iid, &server->uri)) {
         if ((refresh_result = _anjay_active_server_refresh(anjay, server))) {
             anjay_log(TRACE, "could not initialize sockets for SSID %u",
                       server->ssid);
@@ -129,9 +129,9 @@ initialize_active_server(anjay_t *anjay, anjay_server_info_t *server) {
     }
 
     if (result == IAS_SUCCESS) {
-        server->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
-        server->data_inactive.reactivate_failed = false;
-        server->data_inactive.num_icmp_failures = 0;
+        server->reactivate_time = AVS_TIME_REAL_INVALID;
+        server->reactivate_failed = false;
+        server->num_icmp_failures = 0;
     }
     return result;
 }
@@ -142,9 +142,8 @@ bool _anjay_can_retry_with_normal_server(anjay_t *anjay) {
         if (_anjay_server_active(it) || it->ssid == ANJAY_SSID_BOOTSTRAP) {
             continue;
         }
-        if (!it->data_inactive.reactivate_failed
-                || it->data_inactive.num_icmp_failures
-                        < anjay->max_icmp_failures) {
+        if (!it->reactivate_failed
+                || it->num_icmp_failures < anjay->max_icmp_failures) {
             // there is hope for a successful non-bootstrap connection
             return true;
         }
@@ -169,8 +168,8 @@ bool _anjay_should_retry_bootstrap(anjay_t *anjay) {
         }
     }
     return bootstrap_server_exists
-            && !_anjay_can_retry_with_normal_server(anjay);
-#else // WITH_BOOTSTRAP
+           && !_anjay_can_retry_with_normal_server(anjay);
+#else  // WITH_BOOTSTRAP
     (void) anjay;
     return false;
 #endif // WITH_BOOTSTRAP
@@ -188,8 +187,7 @@ bool anjay_all_connections_failed(anjay_t *anjay) {
     AVS_LIST(anjay_server_info_t) it;
     AVS_LIST_FOREACH(it, anjay->servers->servers) {
         if (_anjay_server_active(it)
-                || it->data_inactive.num_icmp_failures
-                        < anjay->max_icmp_failures) {
+                || it->num_icmp_failures < anjay->max_icmp_failures) {
             return false;
         }
     }
@@ -214,22 +212,20 @@ static void activate_server_job(anjay_t *anjay, const void *ssid_ptr) {
     }
 
     _anjay_server_clean_active_data(anjay, *server_ptr);
-    (*server_ptr)->data_inactive.reactivate_failed = true;
-    uint32_t *num_icmp_failures =
-            &(*server_ptr)->data_inactive.num_icmp_failures;
+    (*server_ptr)->reactivate_failed = true;
 
     if (registration_result == IAS_CONNECTION_REFUSED) {
-        ++*num_icmp_failures;
+        ++(*server_ptr)->num_icmp_failures;
     } else if (registration_result == IAS_FORBIDDEN
-            || registration_result == IAS_CONNECTION_ERROR) {
-        *num_icmp_failures = anjay->max_icmp_failures;
+               || registration_result == IAS_CONNECTION_ERROR) {
+        (*server_ptr)->num_icmp_failures = anjay->max_icmp_failures;
     }
 
-    if (*num_icmp_failures < anjay->max_icmp_failures) {
+    if ((*server_ptr)->num_icmp_failures < anjay->max_icmp_failures) {
         // We had a failure with either a bootstrap or a non-bootstrap server,
         // retry till it's possible.
-        if (_anjay_servers_schedule_next_retryable(
-                anjay->sched, *server_ptr, activate_server_job, ssid)) {
+        if (_anjay_servers_schedule_next_retryable(anjay->sched, *server_ptr,
+                                                   activate_server_job, ssid)) {
             anjay_log(ERROR,
                       "could not reschedule reactivate job for server SSID %u",
                       ssid);
@@ -254,7 +250,7 @@ static void activate_server_job(anjay_t *anjay, const void *ssid_ptr) {
                   ssid);
     }
     // kill this job.
-    (*server_ptr)->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
+    (*server_ptr)->reactivate_time = AVS_TIME_REAL_INVALID;
 }
 
 int _anjay_server_sched_activate(anjay_t *anjay,
@@ -262,14 +258,14 @@ int _anjay_server_sched_activate(anjay_t *anjay,
                                  avs_time_duration_t reactivate_delay) {
     // start the backoff procedure from the beginning
     assert(!_anjay_server_active(server));
-    server->data_inactive.reactivate_time =
+    server->reactivate_time =
             avs_time_real_add(avs_time_real_now(), reactivate_delay);
-    server->data_inactive.reactivate_failed = false;
-    server->data_inactive.num_icmp_failures = 0;
+    server->reactivate_failed = false;
+    server->num_icmp_failures = 0;
     _anjay_sched_del(anjay->sched, &server->next_action_handle);
     if (_anjay_servers_schedule_first_retryable(
-            anjay->sched, server, reactivate_delay,
-            activate_server_job, server->ssid)) {
+                anjay->sched, server, reactivate_delay, activate_server_job,
+                server->ssid)) {
         anjay_log(TRACE, "could not schedule reactivate job for server SSID %u",
                   server->ssid);
         return -1;
@@ -282,14 +278,12 @@ int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay) {
 
     AVS_LIST(anjay_server_info_t) it;
     AVS_LIST_FOREACH(it, anjay->servers->servers) {
-        if (_anjay_server_active(it)
-                || !it->data_inactive.reactivate_failed
-                || it->data_inactive.num_icmp_failures
-                        < anjay->max_icmp_failures) {
+        if (_anjay_server_active(it) || !it->reactivate_failed
+                || it->num_icmp_failures < anjay->max_icmp_failures) {
             continue;
         }
-        int partial = _anjay_server_sched_activate(anjay, it,
-                                                   AVS_TIME_DURATION_ZERO);
+        int partial =
+                _anjay_server_sched_activate(anjay, it, AVS_TIME_DURATION_ZERO);
         if (!result) {
             result = partial;
         }
@@ -330,9 +324,7 @@ int _anjay_server_deactivate(anjay_t *anjay,
         _anjay_server_deregister(anjay, *server_ptr);
     }
     _anjay_server_clean_active_data(anjay, *server_ptr);
-    // we don't do the following in _anjay_server_cleanup() so that conn_type
-    // can be reused after restoring from persistence in activate_server_job()
-    (*server_ptr)->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
+    (*server_ptr)->registration_info.expire_time = AVS_TIME_REAL_INVALID;
     if (avs_time_duration_valid(reactivate_delay)
             && _anjay_server_sched_activate(anjay, *server_ptr,
                                             reactivate_delay)) {
@@ -354,7 +346,6 @@ _anjay_servers_create_inactive(anjay_ssid_t ssid) {
     }
 
     new_server->ssid = ssid;
-    new_server->data_active.primary_conn_type = ANJAY_CONNECTION_UNSET;
-    new_server->data_inactive.reactivate_time = AVS_TIME_REAL_INVALID;
+    new_server->reactivate_time = AVS_TIME_REAL_INVALID;
     return new_server;
 }

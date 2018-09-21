@@ -23,7 +23,8 @@
 extern "C" {
 #endif
 
-/** @{
+/** @name Firmware update result codes
+ * @{
  * The following result codes may be returned from
  * @ref anjay_fw_update_stream_write_t, @ref anjay_fw_update_stream_finish_t or
  * @ref anjay_fw_update_perform_upgrade_t to control the value of the Update
@@ -33,9 +34,9 @@ extern "C" {
  * attempting to use other negated value will be checked and cause a fall-back
  * to a value default for a given handler.
  */
-#define ANJAY_FW_UPDATE_ERR_NOT_ENOUGH_SPACE         (-2)
-#define ANJAY_FW_UPDATE_ERR_OUT_OF_MEMORY            (-3)
-#define ANJAY_FW_UPDATE_ERR_INTEGRITY_FAILURE        (-5)
+#define ANJAY_FW_UPDATE_ERR_NOT_ENOUGH_SPACE (-2)
+#define ANJAY_FW_UPDATE_ERR_OUT_OF_MEMORY (-3)
+#define ANJAY_FW_UPDATE_ERR_INTEGRITY_FAILURE (-5)
 #define ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE (-6)
 /** @} */
 
@@ -209,9 +210,8 @@ anjay_fw_update_stream_open_t(void *user_ptr,
  *          returned, an equivalent value will be set in the Update Result
  *          Resource.
  */
-typedef int anjay_fw_update_stream_write_t(void *user_ptr,
-                                           const void *data,
-                                           size_t length);
+typedef int
+anjay_fw_update_stream_write_t(void *user_ptr, const void *data, size_t length);
 
 /**
  * Closes the download stream and prepares the firmware package to be flashed.
@@ -384,6 +384,22 @@ anjay_fw_update_get_security_info_t(void *user_ptr,
                                     const char *download_uri);
 
 /**
+ * Returns tx_params used to override default ones.
+ *
+ * If this handler is not implemented at all (with the corresponding field set
+ * to <c>NULL</c>), <c>udp_tx_params</c> from <c>anjay_t</c> object are used.
+ *
+ * @param user_ptr      Opaque pointer to user data, as passed to
+ *                      @ref anjay_fw_update_install .
+ *
+ * @param download_uri  Target firmware URI.
+ *
+ * @returns Object with CoAP transmission parameters.
+ */
+typedef avs_coap_tx_params_t
+anjay_fw_update_get_coap_tx_params_t(void *user_ptr, const char *download_uri);
+
+/**
  * Handler callbacks that shall implement the platform-specific part of firmware
  * update process.
  *
@@ -456,6 +472,10 @@ typedef struct {
     /** Queries security information that shall be used for an encrypted
      * connection; @ref anjay_fw_update_get_security_info_t */
     anjay_fw_update_get_security_info_t *get_security_info;
+
+    /** Queries CoAP transmission parameters to be used during firmware
+     * update. */
+    anjay_fw_update_get_coap_tx_params_t *get_coap_tx_params;
 } anjay_fw_update_handlers_t;
 
 /**
@@ -485,11 +505,11 @@ typedef struct {
  *
  * @returns 0 on success, or a negative value in case of error.
  */
-int
-anjay_fw_update_install(anjay_t *anjay,
-                        const anjay_fw_update_handlers_t *handlers,
-                        void *user_arg,
-                        const anjay_fw_update_initial_state_t *initial_state);
+int anjay_fw_update_install(
+        anjay_t *anjay,
+        const anjay_fw_update_handlers_t *handlers,
+        void *user_arg,
+        const anjay_fw_update_initial_state_t *initial_state);
 
 /**
  * Helper function that is used as a default implementation of security
@@ -517,8 +537,8 @@ anjay_fw_update_install(anjay_t *anjay,
  *          heap-allocated; to release all memory allocated for it, it is enough
  *          to call <c>avs_free()</c> on the returned pointer.
  */
-avs_net_security_info_t *
-anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *uri);
+avs_net_security_info_t *anjay_fw_update_load_security_from_dm(anjay_t *anjay,
+                                                               const char *uri);
 
 #ifdef __cplusplus
 }

@@ -83,9 +83,8 @@ void _anjay_access_control_clear_state(access_control_state_t *state);
 int _anjay_access_control_clone_state(access_control_state_t *dest,
                                       const access_control_state_t *src);
 
-int
-_anjay_access_control_remove_instance(access_control_t *access_control,
-                                      anjay_iid_t iid);
+int _anjay_access_control_remove_instance(access_control_t *access_control,
+                                          anjay_iid_t iid);
 
 int _anjay_access_control_remove_orphaned_instances(
         anjay_t *anjay,

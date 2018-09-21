@@ -17,13 +17,13 @@
 #include <anjay_config.h>
 
 #ifdef WITH_AVS_PERSISTENCE
-#include <avsystem/commons/persistence.h>
+#    include <avsystem/commons/persistence.h>
 #endif // WITH_AVS_PERSISTENCE
 
 #include <anjay_modules/dm_utils.h>
 
-#include <string.h>
 #include <inttypes.h>
+#include <string.h>
 
 #include "mod_security.h"
 #include "security_transaction.h"
@@ -52,17 +52,17 @@ static int handle_sized_v0_fields(avs_persistence_context_t *ctx,
             || (retval = avs_persistence_u32(ctx,
                                              (uint32_t *) &element->holdoff_s))
             || (retval = avs_persistence_u32(
-                    ctx, (uint32_t *) &element->bs_timeout_s)));
+                        ctx, (uint32_t *) &element->bs_timeout_s)));
     return retval;
 }
 
 static int handle_sized_v1_fields(avs_persistence_context_t *ctx,
                                   sec_instance_t *element) {
     int retval;
-    (void) ((retval = avs_persistence_bool(ctx,
-                                           &element->has_sms_security_mode))
-            || (retval = avs_persistence_bool(ctx,
-                                              &element->has_sms_key_params))
+    (void) ((retval =
+                     avs_persistence_bool(ctx, &element->has_sms_security_mode))
+            || (retval =
+                        avs_persistence_bool(ctx, &element->has_sms_key_params))
             || (retval = avs_persistence_bool(ctx,
                                               &element->has_sms_secret_key)));
     return retval;
@@ -70,8 +70,8 @@ static int handle_sized_v1_fields(avs_persistence_context_t *ctx,
 
 static int handle_raw_buffer(avs_persistence_context_t *ctx,
                              anjay_raw_buffer_t *buffer) {
-    int retval = avs_persistence_sized_buffer(ctx,
-                                              &buffer->data, &buffer->size);
+    int retval =
+            avs_persistence_sized_buffer(ctx, &buffer->data, &buffer->size);
     if (!buffer->capacity) {
         buffer->capacity = buffer->size;
     }
@@ -89,7 +89,7 @@ static int handle_instance(avs_persistence_context_t *ctx,
             || (retval = avs_persistence_u16(ctx, &udp_security_mode))
             || (retval = avs_persistence_string(ctx, &element->server_uri))
             || (retval = handle_raw_buffer(
-                    ctx, &element->public_cert_or_psk_identity))
+                        ctx, &element->public_cert_or_psk_identity))
             || (retval = handle_raw_buffer(ctx,
                                            &element->private_cert_or_psk_key))
             || (retval = handle_raw_buffer(ctx, &element->server_public_key))) {
@@ -133,8 +133,8 @@ int anjay_security_object_persist(anjay_t *anjay,
         return -1;
     }
     retval = avs_persistence_list(ctx, (AVS_LIST(void) *) &repr->instances,
-                                  sizeof(sec_instance_t),
-                                  handle_instance, (void *) (intptr_t) 1, NULL);
+                                  sizeof(sec_instance_t), handle_instance,
+                                  (void *) (intptr_t) 1, NULL);
     avs_persistence_context_delete(ctx);
     if (!retval) {
         _anjay_sec_clear_modified(repr);
@@ -198,22 +198,24 @@ int anjay_security_object_restore(anjay_t *anjay,
     return retval;
 }
 
-#ifdef ANJAY_TEST
-#include "test/persistence.c"
-#endif
+#    ifdef ANJAY_TEST
+#        include "test/persistence.c"
+#    endif
 
 #else // WITH_AVS_PERSISTENCE
 
 int anjay_security_object_persist(anjay_t *anjay,
                                   avs_stream_abstract_t *out_stream) {
-    (void) anjay; (void) out_stream;
+    (void) anjay;
+    (void) out_stream;
     persistence_log(ERROR, "Persistence not compiled in");
     return -1;
 }
 
 int anjay_security_object_restore(anjay_t *anjay,
                                   avs_stream_abstract_t *in_stream) {
-    (void) anjay; (void) in_stream;
+    (void) anjay;
+    (void) in_stream;
     persistence_log(ERROR, "Persistence not compiled in");
     return -1;
 }

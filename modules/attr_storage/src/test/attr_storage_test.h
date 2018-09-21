@@ -47,7 +47,8 @@ static fas_resource_attrs_t *test_resource_attrs(anjay_ssid_t ssid,
 }
 
 /* Using anjay_rid_t instead of int / unsigned in va_start is UB */
-static fas_resource_entry_t *test_resource_entry(unsigned /*anjay_rid_t*/ rid, ...) {
+static fas_resource_entry_t *test_resource_entry(unsigned /*anjay_rid_t*/ rid,
+                                                 ...) {
     assert(rid <= UINT16_MAX);
     fas_resource_entry_t *resource = AVS_LIST_NEW_ELEMENT(fas_resource_entry_t);
     AVS_UNIT_ASSERT_NOT_NULL(resource);
@@ -90,10 +91,8 @@ test_default_attrlist(fas_default_attrs_t *entry, ...) {
     return attrlist;
 }
 
-static fas_instance_entry_t *
-test_instance_entry(anjay_iid_t iid,
-                    AVS_LIST(fas_default_attrs_t) default_attrs,
-                    ...) {
+static fas_instance_entry_t *test_instance_entry(
+        anjay_iid_t iid, AVS_LIST(fas_default_attrs_t) default_attrs, ...) {
     fas_instance_entry_t *instance = AVS_LIST_NEW_ELEMENT(fas_instance_entry_t);
     AVS_UNIT_ASSERT_NOT_NULL(instance);
     instance->iid = iid;
@@ -108,10 +107,8 @@ test_instance_entry(anjay_iid_t iid,
     return instance;
 }
 
-static fas_object_entry_t *
-test_object_entry(anjay_oid_t oid,
-                  AVS_LIST(fas_default_attrs_t) default_attrs,
-                  ...) {
+static fas_object_entry_t *test_object_entry(
+        anjay_oid_t oid, AVS_LIST(fas_default_attrs_t) default_attrs, ...) {
     fas_object_entry_t *object = AVS_LIST_NEW_ELEMENT(fas_object_entry_t);
     AVS_UNIT_ASSERT_NOT_NULL(object);
     object->oid = oid;
@@ -231,4 +228,3 @@ static void assert_object_equal(fas_object_entry_t *actual,
 }
 
 #endif /* ATTR_STORAGE_TEST_H */
-

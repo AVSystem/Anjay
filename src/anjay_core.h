@@ -18,16 +18,16 @@
 #define ANJAY_CORE_H
 
 #include <avsystem/commons/list.h>
-#include <avsystem/commons/stream.h>
 #include <avsystem/commons/net.h>
+#include <avsystem/commons/stream.h>
 
 #include "dm_core.h"
 #include "observe/observe_core.h"
 
-#include "servers.h"
-#include "utils_core.h"
 #include "downloader.h"
 #include "interface/bootstrap_core.h"
+#include "servers.h"
+#include "utils_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -57,6 +57,7 @@ struct anjay_struct {
     anjay_bootstrap_t bootstrap;
 #endif
     avs_coap_tx_params_t udp_tx_params;
+    avs_net_dtls_handshake_timeouts_t udp_dtls_hs_tx_params;
     avs_coap_ctx_t *coap_ctx;
     avs_stream_abstract_t *comm_stream;
     anjay_connection_ref_t current_connection;
@@ -78,9 +79,9 @@ struct anjay_struct {
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1
 
-#define _anjay_sms_router(Anjay) NULL
-#define _anjay_local_msisdn(Anjay) NULL
-#define _anjay_sms_poll_socket(Anjay) NULL
+#    define _anjay_sms_router(Anjay) NULL
+#    define _anjay_local_msisdn(Anjay) NULL
+#    define _anjay_sms_poll_socket(Anjay) NULL
 
 uint8_t _anjay_make_error_response_code(int handler_result);
 
@@ -105,4 +106,3 @@ anjay_sched_t *_anjay_sched_new(anjay_t *anjay);
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_CORE_H */
-

@@ -20,10 +20,10 @@
 #include <avsystem/commons/list.h>
 
 #ifdef WITH_AVS_LOG
-#include <avsystem/commons/log.h>
-#define _anjay_log(...) avs_log(__VA_ARGS__)
+#    include <avsystem/commons/log.h>
+#    define _anjay_log(...) avs_log(__VA_ARGS__)
 #else
-#define _anjay_log(...) ((void) 0)
+#    define _anjay_log(...) ((void) 0)
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -33,7 +33,10 @@ typedef struct anjay_string {
 } anjay_string_t;
 
 #define ANJAY_MAX_URL_RAW_LENGTH 256
-#define ANJAY_MAX_URL_HOSTNAME_SIZE (ANJAY_MAX_URL_RAW_LENGTH - sizeof("coaps://" ":0"))
+#define ANJAY_MAX_URL_HOSTNAME_SIZE \
+    (ANJAY_MAX_URL_RAW_LENGTH       \
+     - sizeof("coaps://"            \
+              ":0"))
 #define ANJAY_MAX_URL_PORT_SIZE sizeof("65535")
 
 typedef enum {
@@ -49,9 +52,10 @@ typedef struct anjay_url {
     AVS_LIST(const anjay_string_t) uri_query;
 } anjay_url_t;
 
-#define ANJAY_URL_EMPTY                     \
-    (anjay_url_t) {                         \
-        .uri_path = NULL, .uri_query = NULL \
+#define ANJAY_URL_EMPTY   \
+    (anjay_url_t) {       \
+        .uri_path = NULL, \
+        .uri_query = NULL \
     }
 
 #define ANJAY_FOREACH_BREAK INT_MIN

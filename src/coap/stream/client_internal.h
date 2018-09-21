@@ -30,7 +30,7 @@
 #include "out.h"
 
 #ifndef ANJAY_COAP_STREAM_INTERNALS
-#error "Headers from coap/stream are not meant to be included from outside"
+#    error "Headers from coap/stream are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -85,10 +85,9 @@ _anjay_coap_client_get_request_identity(const coap_client_t *client);
  * - a negative value in case of error (e.g. if the @p client is not reset or
  *   the token is invalid).
  */
-int
-_anjay_coap_client_setup_request(coap_client_t *client,
-                                 const anjay_msg_details_t *details,
-                                 const avs_coap_msg_identity_t *identity);
+int _anjay_coap_client_setup_request(coap_client_t *client,
+                                     const anjay_msg_details_t *details,
+                                     const avs_coap_msg_identity_t *identity);
 
 #define COAP_CLIENT_RECEIVE_RESET 1
 

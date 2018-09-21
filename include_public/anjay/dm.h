@@ -23,9 +23,9 @@
 #include <anjay/io.h>
 
 #ifdef __cplusplus
-#if __cplusplus >= 201103L
-#include <tuple> // for ANJAY_DM_SUPPORTED_RIDS
-#endif
+#    if __cplusplus >= 201103L
+#        include <tuple> // for ANJAY_DM_SUPPORTED_RIDS
+#    endif
 
 extern "C" {
 #endif
@@ -40,10 +40,14 @@ typedef struct {
 
 /** Resource attributes. */
 typedef struct {
-    anjay_dm_attributes_t common; //< Attributes shared with Objects/Object Instances
-    double greater_than; //< Greater Than attribute as defined by LwM2M spec
-    double less_than;    //< Less Than attribute as defined by LwM2M spec
-    double step;         //< Step attribute as defined by LwM2M spec
+    /** Attributes shared with Objects/Object Instances */
+    anjay_dm_attributes_t common;
+    /** Greater Than attribute as defined by LwM2M spec */
+    double greater_than;
+    /** Less Than attribute as defined by LwM2M spec */
+    double less_than;
+    /** Step attribute as defined by LwM2M spec */
+    double step;
 } anjay_dm_resource_attributes_t;
 
 /** A value indicating that the Min/Max Period attribute is not set */
@@ -77,10 +81,11 @@ extern const anjay_dm_resource_attributes_t ANJAY_RES_ATTRIBS_EMPTY;
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_object_read_default_attrs_t(anjay_t *anjay,
-                                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                                 anjay_ssid_t ssid,
-                                                 anjay_dm_attributes_t *out);
+typedef int anjay_dm_object_read_default_attrs_t(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        anjay_dm_attributes_t *out);
 
 /**
  * A handler that sets default attribute values for the Object.
@@ -98,10 +103,11 @@ typedef int anjay_dm_object_read_default_attrs_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_object_write_default_attrs_t(anjay_t *anjay,
-                                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                                  anjay_ssid_t ssid,
-                                                  const anjay_dm_attributes_t *attrs);
+typedef int anjay_dm_object_write_default_attrs_t(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_ssid_t ssid,
+        const anjay_dm_attributes_t *attrs);
 
 /**
  * A handler that enumerates all Object Instances for the Object.
@@ -186,9 +192,10 @@ int anjay_dm_instance_it_SINGLE(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_instance_present_t(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                        anjay_iid_t iid);
+typedef int
+anjay_dm_instance_present_t(anjay_t *anjay,
+                            const anjay_dm_object_def_t *const *obj_ptr,
+                            anjay_iid_t iid);
 
 /**
  * Convenience function to use as the instance_present handler in Single
@@ -196,9 +203,10 @@ typedef int anjay_dm_instance_present_t(anjay_t *anjay,
  *
  * @returns 1 (true) if <c>iid == 0</c>, 0 (false) otherwise.
  */
-int anjay_dm_instance_present_SINGLE(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_iid_t iid);
+int anjay_dm_instance_present_SINGLE(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid);
 
 /**
  * A handler that shall reset Object Instance to its default (after creational)
@@ -219,9 +227,10 @@ int anjay_dm_instance_present_SINGLE(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_instance_reset_t(anjay_t *anjay,
-                                      const anjay_dm_object_def_t *const *obj_ptr,
-                                      anjay_iid_t iid);
+typedef int
+anjay_dm_instance_reset_t(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid);
 
 /**
  * A handler that removes an Object Instance with given Instance ID.
@@ -242,9 +251,10 @@ typedef int anjay_dm_instance_reset_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_instance_remove_t(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       anjay_iid_t iid);
+typedef int
+anjay_dm_instance_remove_t(anjay_t *anjay,
+                           const anjay_dm_object_def_t *const *obj_ptr,
+                           anjay_iid_t iid);
 
 /**
  * A handler that creates an Object Instance.
@@ -271,10 +281,11 @@ typedef int anjay_dm_instance_remove_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_instance_create_t(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       anjay_iid_t *inout_iid,
-                                       anjay_ssid_t ssid);
+typedef int
+anjay_dm_instance_create_t(anjay_t *anjay,
+                           const anjay_dm_object_def_t *const *obj_ptr,
+                           anjay_iid_t *inout_iid,
+                           anjay_ssid_t ssid);
 
 /**
  * A handler that returns default attributes set for the Object Instance.
@@ -293,11 +304,12 @@ typedef int anjay_dm_instance_create_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_instance_read_default_attrs_t(anjay_t *anjay,
-                                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                                   anjay_iid_t iid,
-                                                   anjay_ssid_t ssid,
-                                                   anjay_dm_attributes_t *out);
+typedef int anjay_dm_instance_read_default_attrs_t(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        anjay_dm_attributes_t *out);
 
 /**
  * A handler that sets default attributes for the Object Instance.
@@ -316,11 +328,12 @@ typedef int anjay_dm_instance_read_default_attrs_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_instance_write_default_attrs_t(anjay_t *anjay,
-                                                    const anjay_dm_object_def_t *const *obj_ptr,
-                                                    anjay_iid_t iid,
-                                                    anjay_ssid_t ssid,
-                                                    const anjay_dm_attributes_t *attrs);
+typedef int anjay_dm_instance_write_default_attrs_t(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_ssid_t ssid,
+        const anjay_dm_attributes_t *attrs);
 
 /**
  * A handler that checks if a Resource has been instantiated in Object Instance,
@@ -340,10 +353,11 @@ typedef int anjay_dm_instance_write_default_attrs_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_resource_present_t(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                        anjay_iid_t iid,
-                                        anjay_rid_t rid);
+typedef int
+anjay_dm_resource_present_t(anjay_t *anjay,
+                            const anjay_dm_object_def_t *const *obj_ptr,
+                            anjay_iid_t iid,
+                            anjay_rid_t rid);
 
 /**
  * Convenience function to use as the resource_present handler in objects that
@@ -420,11 +434,12 @@ anjay_dm_resource_operations_t(anjay_t *anjay,
  *   ANJAY_ERR_ constant, the normal fallback response is
  *   5.00 Internal Server Error.
  */
-typedef int anjay_dm_resource_read_t(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_iid_t iid,
-                                     anjay_rid_t rid,
-                                     anjay_output_ctx_t *ctx);
+typedef int
+anjay_dm_resource_read_t(anjay_t *anjay,
+                         const anjay_dm_object_def_t *const *obj_ptr,
+                         anjay_iid_t iid,
+                         anjay_rid_t rid,
+                         anjay_output_ctx_t *ctx);
 
 /**
  * A handler that writes the Resource value.
@@ -444,11 +459,12 @@ typedef int anjay_dm_resource_read_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_resource_write_t(anjay_t *anjay,
-                                      const anjay_dm_object_def_t *const *obj_ptr,
-                                      anjay_iid_t iid,
-                                      anjay_rid_t rid,
-                                      anjay_input_ctx_t *ctx);
+typedef int
+anjay_dm_resource_write_t(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid,
+                          anjay_rid_t rid,
+                          anjay_input_ctx_t *ctx);
 
 /**
  * A handler that performs the Execute action on given Resource.
@@ -458,8 +474,8 @@ typedef int anjay_dm_resource_write_t(anjay_t *anjay,
  *                @ref anjay_register_object .
  * @param iid     Object Instance ID.
  * @param rid     Resource ID.
- * @param ctx     Execute context to read the execution arguments from, using the
- *                anjay_execute_get_* function family.
+ * @param ctx     Execute context to read the execution arguments from, using
+ * the anjay_execute_get_* function family.
  *
  * @returns This handler should return:
  * - 0 on success,
@@ -468,11 +484,12 @@ typedef int anjay_dm_resource_write_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_resource_execute_t(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                        anjay_iid_t iid,
-                                        anjay_rid_t rid,
-                                        anjay_execute_ctx_t *ctx);
+typedef int
+anjay_dm_resource_execute_t(anjay_t *anjay,
+                            const anjay_dm_object_def_t *const *obj_ptr,
+                            anjay_iid_t iid,
+                            anjay_rid_t rid,
+                            anjay_execute_ctx_t *ctx);
 
 #define ANJAY_DM_DIM_INVALID ANJAY_ERR_NOT_IMPLEMENTED
 
@@ -518,12 +535,13 @@ typedef int anjay_dm_resource_dim_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_resource_read_attrs_t(anjay_t *anjay,
-                                           const anjay_dm_object_def_t *const *obj_ptr,
-                                           anjay_iid_t iid,
-                                           anjay_rid_t rid,
-                                           anjay_ssid_t ssid,
-                                           anjay_dm_resource_attributes_t *out);
+typedef int
+anjay_dm_resource_read_attrs_t(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid,
+                               anjay_rid_t rid,
+                               anjay_ssid_t ssid,
+                               anjay_dm_resource_attributes_t *out);
 
 /**
  * A handler that sets attributes for given Resource.
@@ -543,12 +561,13 @@ typedef int anjay_dm_resource_read_attrs_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_resource_write_attrs_t(anjay_t *anjay,
-                                            const anjay_dm_object_def_t *const *obj_ptr,
-                                            anjay_iid_t iid,
-                                            anjay_rid_t rid,
-                                            anjay_ssid_t ssid,
-                                            const anjay_dm_resource_attributes_t *attrs);
+typedef int
+anjay_dm_resource_write_attrs_t(anjay_t *anjay,
+                                const anjay_dm_object_def_t *const *obj_ptr,
+                                anjay_iid_t iid,
+                                anjay_rid_t rid,
+                                anjay_ssid_t ssid,
+                                const anjay_dm_resource_attributes_t *attrs);
 
 /**
  * A handler that is called when there is a request that might modify an Object
@@ -577,8 +596,9 @@ typedef int anjay_dm_resource_write_attrs_t(anjay_t *anjay,
  * - 0 on success
  * - a negative value in case of error
  */
-typedef int anjay_dm_transaction_begin_t(anjay_t *anjay,
-                                         const anjay_dm_object_def_t *const *obj_ptr);
+typedef int
+anjay_dm_transaction_begin_t(anjay_t *anjay,
+                             const anjay_dm_object_def_t *const *obj_ptr);
 
 /**
  * A handler that is called after transaction is finished, but before
@@ -606,8 +626,9 @@ typedef int anjay_dm_transaction_begin_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_transaction_validate_t(anjay_t *anjay,
-                                            const anjay_dm_object_def_t *const *obj_ptr);
+typedef int
+anjay_dm_transaction_validate_t(anjay_t *anjay,
+                                const anjay_dm_object_def_t *const *obj_ptr);
 
 /**
  * A handler that is called after transaction is finished. If it fails then
@@ -630,8 +651,9 @@ typedef int anjay_dm_transaction_validate_t(anjay_t *anjay,
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_transaction_commit_t(anjay_t *anjay,
-                                          const anjay_dm_object_def_t *const *obj_ptr);
+typedef int
+anjay_dm_transaction_commit_t(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr);
 
 /**
  * Stub handler that can be substituted for any transaction operation. Does
@@ -653,14 +675,20 @@ int anjay_dm_transaction_NOOP(anjay_t *anjay,
  * - 0 on success
  * - a negative value in case of error.
  */
-typedef int anjay_dm_transaction_rollback_t(anjay_t *anjay,
-                                            const anjay_dm_object_def_t *const *obj_ptr);
+typedef int
+anjay_dm_transaction_rollback_t(anjay_t *anjay,
+                                const anjay_dm_object_def_t *const *obj_ptr);
 
 /** A struct containing pointers to Object handlers. */
 typedef struct {
-    /** Get default Object attributes, @ref anjay_dm_object_read_default_attrs_t */
+    /**
+     * Get default Object attributes, @ref anjay_dm_object_read_default_attrs_t
+     */
     anjay_dm_object_read_default_attrs_t *object_read_default_attrs;
-    /** Set default Object attributes, @ref anjay_dm_object_write_default_attrs_t */
+    /**
+     * Set default Object attributes,
+     * @ref anjay_dm_object_write_default_attrs_t
+     */
     anjay_dm_object_write_default_attrs_t *object_write_default_attrs;
 
     /** Enumerate available Object Instances, @ref anjay_dm_instance_it_t */
@@ -675,24 +703,40 @@ typedef struct {
     /** Delete an Object Instance, @ref anjay_dm_instance_remove_t */
     anjay_dm_instance_remove_t *instance_remove;
 
-    /** Get default Object Instance attributes, @ref anjay_dm_instance_read_default_attrs_t */
+    /**
+     * Get default Object Instance attributes,
+     * @ref anjay_dm_instance_read_default_attrs_t
+     */
     anjay_dm_instance_read_default_attrs_t *instance_read_default_attrs;
-    /** Set default Object Instance attributes, @ref anjay_dm_instance_write_default_attrs_t */
+    /**
+     * Set default Object Instance attributes,
+     * @ref anjay_dm_instance_write_default_attrs_t
+     */
     anjay_dm_instance_write_default_attrs_t *instance_write_default_attrs;
 
-    /** Check if a Resource is present in given Object Instance, @ref anjay_dm_resource_present_t */
+    /**
+     * Check if a Resource is present in given Object Instance,
+     * @ref anjay_dm_resource_present_t
+     */
     anjay_dm_resource_present_t *resource_present;
-    /** Returns a mask of supported operations on a given Resource, @ref anjay_dm_resource_operations_t */
+    /**
+     * Returns a mask of supported operations on a given Resource,
+     * @ref anjay_dm_resource_operations_t
+     */
     anjay_dm_resource_operations_t *resource_operations;
 
     /** Get Resource value, @ref anjay_dm_resource_read_t */
     anjay_dm_resource_read_t *resource_read;
     /** Set Resource value, @ref anjay_dm_resource_write_t */
     anjay_dm_resource_write_t *resource_write;
-    /** Perform Execute action on a Resource, @ref anjay_dm_resource_execute_t */
+    /**
+     * Perform Execute action on a Resource, @ref anjay_dm_resource_execute_t
+     */
     anjay_dm_resource_execute_t *resource_execute;
 
-    /** Get number of Multiple Resource instances, @ref anjay_dm_resource_dim_t */
+    /**
+     * Get number of Multiple Resource instances, @ref anjay_dm_resource_dim_t
+     */
     anjay_dm_resource_dim_t *resource_dim;
     /** Get Resource attributes, @ref anjay_dm_resource_read_attrs_t */
     anjay_dm_resource_read_attrs_t *resource_read_attrs;
@@ -701,11 +745,19 @@ typedef struct {
 
     /** Begin a transaction on this Object, @ref anjay_dm_transaction_begin_t */
     anjay_dm_transaction_begin_t *transaction_begin;
-    /** Validate whether a transaction on this Object can be cleanly committed. See @ref anjay_dm_transaction_validate_t */
+    /**
+     * Validate whether a transaction on this Object can be cleanly committed.
+     * See @ref anjay_dm_transaction_validate_t
+     */
     anjay_dm_transaction_validate_t *transaction_validate;
-    /** Commit changes made in a transaction, @ref anjay_dm_transaction_commit_t */
+    /**
+     * Commit changes made in a transaction, @ref anjay_dm_transaction_commit_t
+     */
     anjay_dm_transaction_commit_t *transaction_commit;
-    /** Rollback changes made in a transaction, @ref anjay_dm_transaction_rollback_t */
+    /**
+     * Rollback changes made in a transaction,
+     * @ref anjay_dm_transaction_rollback_t
+     */
     anjay_dm_transaction_rollback_t *transaction_rollback;
 } anjay_dm_handlers_t;
 
@@ -713,22 +765,25 @@ typedef struct {
 typedef struct {
     /** Number of element in the array */
     size_t count;
-    /** Pointer to an array of Resource IDs supported by the object. A Resource
+    /**
+     * Pointer to an array of Resource IDs supported by the object. A Resource
      * is considered SUPPORTED if it may ever be present within the Object. The
      * array MUST be exactly <c>count</c> elements long and sorted in strictly
-     * ascending order. */
+     * ascending order.
+     */
     const uint16_t *rids;
 } anjay_dm_supported_rids_t;
 
 #if defined(__cplusplus) && __cplusplus >= 201103L
-#define ANJAY_DM_SUPPORTED_RIDS(...) \
-         { \
-            ::std::tuple_size<decltype(::std::make_tuple(__VA_ARGS__))>::value,\
-            []() -> const uint16_t * { \
-                static const uint16_t rids[] = { __VA_ARGS__ }; \
-                return rids; \
-            }() \
-         }
+#    define ANJAY_DM_SUPPORTED_RIDS(...)                                \
+        {                                                               \
+            ::std::tuple_size<decltype(                                 \
+                    ::std::make_tuple(__VA_ARGS__))>::value,            \
+                    []() -> const uint16_t * {                          \
+                        static const uint16_t rids[] = { __VA_ARGS__ }; \
+                        return rids;                                    \
+                    }()                                                 \
+        }
 #else // __cplusplus
 /**
  * Convenience macro for initializing @ref anjay_dm_supported_rids_t objects.
@@ -739,10 +794,12 @@ typedef struct {
  * <c>supported_rids</c> field of @ref anjay_dm_object_def_t. The <c>count</c>
  * field will be automatically calculated.
  */
-#define ANJAY_DM_SUPPORTED_RIDS(...) \
-        { \
+#    define ANJAY_DM_SUPPORTED_RIDS(...)                                   \
+        {                                                                  \
             sizeof((const uint16_t[]) { __VA_ARGS__ }) / sizeof(uint16_t), \
-            (const uint16_t[]) { __VA_ARGS__ } \
+                    (const uint16_t[]) {                                   \
+                __VA_ARGS__                                                \
+            }                                                              \
         }
 #endif // __cplusplus
 
@@ -751,15 +808,19 @@ struct anjay_dm_object_def_struct {
     /** Object ID */
     anjay_oid_t oid;
 
-    /** Object version: a string with static lifetime, containing two digits
+    /**
+     * Object version: a string with static lifetime, containing two digits
      * separated by a dot (for example: "1.1").
      * If left NULL, client will not include the "ver=" attribute in Register
-     * and Discover messages, which implies version 1.0. */
+     * and Discover messages, which implies version 1.0.
+     */
     const char *version;
 
-    /** List of Resource IDs supported by the object. The
+    /**
+     * List of Resource IDs supported by the object. The
      * @ref ANJAY_DM_SUPPORTED_RIDS macro is the preferred way of initializing
-     * it. */
+     * it.
+     */
     anjay_dm_supported_rids_t supported_rids;
 
     /** Handler callbacks for this object. */
@@ -859,10 +920,10 @@ bool anjay_binding_mode_valid(const char *binding_mode);
  * Object definition.
  */
 typedef enum {
-    ANJAY_UDP_SECURITY_PSK = 0, //< Pre-Shared Key mode
-    ANJAY_UDP_SECURITY_RPK = 1, //< Raw Public Key mode
+    ANJAY_UDP_SECURITY_PSK = 0,         //< Pre-Shared Key mode
+    ANJAY_UDP_SECURITY_RPK = 1,         //< Raw Public Key mode
     ANJAY_UDP_SECURITY_CERTIFICATE = 2, //< Certificate mode
-    ANJAY_UDP_SECURITY_NOSEC = 3 //< NoSec mode
+    ANJAY_UDP_SECURITY_NOSEC = 3        //< NoSec mode
 } anjay_udp_security_mode_t;
 
 /**
@@ -870,22 +931,25 @@ typedef enum {
  * Security Object definition.
  */
 typedef enum {
-    ANJAY_SMS_SECURITY_DTLS_PSK = 1, //< DTLS in PSK mode
+    ANJAY_SMS_SECURITY_DTLS_PSK = 1,      //< DTLS in PSK mode
     ANJAY_SMS_SECURITY_SECURE_PACKET = 2, //< Secure Packet Structure
-    ANJAY_SMS_SECURITY_NOSEC = 3 //< NoSec mode
+    ANJAY_SMS_SECURITY_NOSEC = 3          //< NoSec mode
 } anjay_sms_security_mode_t;
 
-#define ANJAY_ACCESS_MASK_READ            (1U << 0)
-#define ANJAY_ACCESS_MASK_WRITE           (1U << 1)
-#define ANJAY_ACCESS_MASK_EXECUTE         (1U << 2)
-#define ANJAY_ACCESS_MASK_DELETE          (1U << 3)
-#define ANJAY_ACCESS_MASK_CREATE          (1U << 4)
-#define ANJAY_ACCESS_MASK_FULL            (ANJAY_ACCESS_MASK_READ    |  \
-                                           ANJAY_ACCESS_MASK_WRITE   |  \
-                                           ANJAY_ACCESS_MASK_DELETE  |  \
-                                           ANJAY_ACCESS_MASK_EXECUTE |  \
-                                           ANJAY_ACCESS_MASK_CREATE)
-#define ANJAY_ACCESS_MASK_NONE            0
+#define ANJAY_ACCESS_MASK_READ (1U << 0)
+#define ANJAY_ACCESS_MASK_WRITE (1U << 1)
+#define ANJAY_ACCESS_MASK_EXECUTE (1U << 2)
+#define ANJAY_ACCESS_MASK_DELETE (1U << 3)
+#define ANJAY_ACCESS_MASK_CREATE (1U << 4)
+// clang-format off
+#define ANJAY_ACCESS_MASK_FULL   \
+    (ANJAY_ACCESS_MASK_READ      \
+     | ANJAY_ACCESS_MASK_WRITE   \
+     | ANJAY_ACCESS_MASK_DELETE  \
+     | ANJAY_ACCESS_MASK_EXECUTE \
+     | ANJAY_ACCESS_MASK_CREATE)
+// clang-format on
+#define ANJAY_ACCESS_MASK_NONE 0
 #define ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP UINT16_MAX
 
 typedef uint16_t anjay_access_mask_t;

@@ -24,8 +24,8 @@
 #include "out.h"
 
 #include <stdbool.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "../coap_log.h"
 
@@ -33,7 +33,7 @@ VISIBILITY_SOURCE_BEGIN
 
 coap_output_buffer_t _anjay_coap_out_init(uint8_t *buffer,
                                           size_t buffer_capacity) {
-    return (coap_output_buffer_t){
+    return (coap_output_buffer_t) {
         .buffer = buffer,
         .buffer_capacity = buffer_capacity,
         .dgram_layer_mtu = buffer_capacity,
@@ -101,8 +101,7 @@ int _anjay_coap_out_setup_msg(coap_output_buffer_t *out,
                                   details->location_path)
             || add_string_options(&out->info, AVS_COAP_OPT_URI_PATH,
                                   details->uri_path)
-            || avs_coap_msg_info_opt_content_format(&out->info,
-                                                       details->format)
+            || avs_coap_msg_info_opt_content_format(&out->info, details->format)
             || add_string_options(&out->info, AVS_COAP_OPT_URI_QUERY,
                                   details->uri_query)
             || (block && avs_coap_msg_info_opt_block(&out->info, block))) {

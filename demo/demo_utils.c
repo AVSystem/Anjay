@@ -15,28 +15,30 @@
  */
 
 #if !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
-#define _POSIX_C_SOURCE 200809L
+#    define _POSIX_C_SOURCE 200809L
 #endif
 
-#include <math.h>
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include "demo_utils.h"
 
-static double geo_distance_m_with_radians(double lat1, double lon1,
-                                          double lat2, double lon2) {
+static double geo_distance_m_with_radians(double lat1,
+                                          double lon1,
+                                          double lat2,
+                                          double lon2) {
     static const double MEAN_EARTH_PERIMETER_M = 12742017.6;
     // Haversine formula
     // code heavily inspired from http://stackoverflow.com/a/21623206
     double a = 0.5 - 0.5 * cos(lat2 - lat1)
-            + cos(lat1) * cos(lat2) * 0.5 * (1.0 - cos(lon2 - lon1));
+               + cos(lat1) * cos(lat2) * 0.5 * (1.0 - cos(lon2 - lon1));
     return MEAN_EARTH_PERIMETER_M * asin(sqrt(a));
 }
 
@@ -45,8 +47,7 @@ double geo_distance_m(double lat1, double lon1, double lat2, double lon2) {
                                        deg2rad(lat2), deg2rad(lon2));
 }
 
-int demo_parse_long(const char *str,
-                    long *out_value) {
+int demo_parse_long(const char *str, long *out_value) {
     if (!str) {
         return -1;
     }
@@ -56,11 +57,8 @@ int demo_parse_long(const char *str,
     errno = 0;
     long value = strtol(str, &endptr, 10);
 
-    if ((errno == ERANGE
-                && (value == LONG_MAX || value == LONG_MIN))
-            || (errno != 0 && value == 0)
-            || endptr == str
-            || !endptr
+    if ((errno == ERANGE && (value == LONG_MAX || value == LONG_MIN))
+            || (errno != 0 && value == 0) || endptr == str || !endptr
             || *endptr != '\0') {
         demo_log(ERROR, "could not parse number: %s", str);
         return -1;
@@ -105,8 +103,8 @@ error:
 }
 
 int open_temporary_file(char *path) {
-    mode_t old_umask = (mode_t) umask(
-            S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+    mode_t old_umask = (mode_t) umask(S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH
+                                      | S_IWOTH | S_IXOTH);
     int fd = mkstemp(path);
     umask(old_umask);
     return fd;

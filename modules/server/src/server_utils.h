@@ -40,7 +40,7 @@ int _anjay_serv_fetch_binding(anjay_input_ctx_t *ctx,
 
 AVS_LIST(server_instance_t)
 _anjay_serv_clone_instances(const server_repr_t *repr);
-void _anjay_serv_destroy_instances(AVS_LIST(server_instance_t) * instances);
+void _anjay_serv_destroy_instances(AVS_LIST(server_instance_t) *instances);
 
 VISIBILITY_PRIVATE_HEADER_END
 

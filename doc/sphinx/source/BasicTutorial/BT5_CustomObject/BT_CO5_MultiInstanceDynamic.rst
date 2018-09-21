@@ -301,10 +301,11 @@ Let's have a look on ``anjay_dm_instance_create_t`` handler type signature:
 
 .. snippet-source:: include_public/anjay/dm.h
 
-    typedef int anjay_dm_instance_create_t(anjay_t *anjay,
-                                           const anjay_dm_object_def_t *const *obj_ptr,
-                                           anjay_iid_t *inout_iid,
-                                           anjay_ssid_t ssid);
+    typedef int
+    anjay_dm_instance_create_t(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t *inout_iid,
+                               anjay_ssid_t ssid);
 
 The ``inout_iid`` parameter is the most important for us at the moment, as
 if the instantiation succeeds we MUST tell the library the id of the newly

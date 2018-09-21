@@ -19,29 +19,30 @@
 
 #ifdef _WIN32
 
-# if defined(_WINDOWS_) || defined(_WIN32_WINNT)
-#  error "iosched.h needs to be included before windows.h or _mingw.h"
-# endif
+#    if defined(_WINDOWS_) || defined(_WIN32_WINNT)
+#        error "iosched.h needs to be included before windows.h or _mingw.h"
+#    endif
 
-# define WIN32_LEAN_AND_MEAN
-# define _WIN32_WINNT 0x600 // minimum requirement: Windows NT 6.0 a.k.a. Vista
-# include <winsock2.h>
+#    define WIN32_LEAN_AND_MEAN
+#    define _WIN32_WINNT \
+        0x600 // minimum requirement: Windows NT 6.0 a.k.a. Vista
+#    include <winsock2.h>
 
-# ifdef ERROR
+#    ifdef ERROR
 // Windows headers are REALLY weird. winsock2.h includes windows.h, which
 // includes wingdi.h, even with WIN32_LEAN_AND_MEAN. And wingdi.h defines
 // a macro called ERROR, which conflicts with avs_log() usage.
-#  undef ERROR
-# endif
-# define poll WSAPoll
+#        undef ERROR
+#    endif
+#    define poll WSAPoll
 typedef UINT nfds_t;
 typedef SOCKET demo_fd_t;
 
 #else // _WIN32
 
-# include <poll.h>
-# include <arpa/inet.h>
-# include <netinet/in.h>
+#    include <arpa/inet.h>
+#    include <netinet/in.h>
+#    include <poll.h>
 
 typedef int demo_fd_t;
 
@@ -95,8 +96,7 @@ const iosched_entry_t *iosched_instant_entry_new(iosched_t *sched,
  * Cancels a job represented by the @p entry and releases its arg using the
  * free_arg handler. If called with an invalid @p entry, does nothing.
  */
-void iosched_entry_remove(iosched_t *sched,
-                          const iosched_entry_t *entry);
+void iosched_entry_remove(iosched_t *sched, const iosched_entry_t *entry);
 
 int iosched_run(iosched_t *sched, int timeout_ms);
 

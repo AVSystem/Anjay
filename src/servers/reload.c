@@ -16,22 +16,23 @@
 
 #include <anjay_config.h>
 
-#include "../servers_utils.h"
 #include "../dm/query.h"
+#include "../servers_utils.h"
 
 #define ANJAY_SERVERS_INTERNALS
 
-#include "connection_info.h"
-#include "servers_internal.h"
 #include "activate.h"
 #include "register_internal.h"
 #include "reload.h"
+#include "server_connections.h"
+#include "servers_internal.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-static int reload_active_server(anjay_t *anjay,
-                                anjay_server_info_t *server) {
+static int reload_active_server(anjay_t *anjay, anjay_server_info_t *server) {
     assert(_anjay_server_active(server));
+    anjay_conn_session_token_t previous_session_token =
+            _anjay_server_primary_session_token(server);
     if (server->ssid != ANJAY_SSID_BOOTSTRAP
             && _anjay_server_registration_expired(server)) {
         // Registration expired - we need to re-register, but we only call
@@ -44,22 +45,21 @@ static int reload_active_server(anjay_t *anjay,
     }
 
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
-        if (!_anjay_server_primary_connection_valid(server)) {
+        if (!_anjay_conn_session_tokens_equal(
+                    previous_session_token,
+                    _anjay_server_primary_session_token(server))) {
             return _anjay_bootstrap_update_reconnected(anjay);
         }
     } else {
-        if (!_anjay_server_primary_connection_valid(server)) {
-            // invalidate registration lifetime, so that retries of the call
-            // to this function will actually retry registering even if
-            // reconnection succeeds
-            server->data_active.registration_info.expire_time =
-                    AVS_TIME_REAL_INVALID;
+        if (_anjay_server_registration_expired(server)
+                || !_anjay_server_primary_connection_valid(server)) {
             goto deactivate;
         }
-        _anjay_observe_sched_flush(anjay, (anjay_connection_key_t) {
-            .ssid = server->ssid,
-            .type = server->data_active.primary_conn_type
-        });
+        _anjay_observe_sched_flush(
+                anjay, (anjay_connection_key_t) {
+                           .ssid = server->ssid,
+                           .type = _anjay_server_primary_conn_type(server)
+                       });
     }
     return 0;
 deactivate:
@@ -73,10 +73,9 @@ static void reload_server_by_ssid_job(anjay_t *anjay, const void *ssid_ptr) {
 
     AVS_LIST(anjay_server_info_t) server =
             _anjay_servers_find_active(anjay, ssid);
-    if (server
-            && reload_active_server(anjay, server)
+    if (server && reload_active_server(anjay, server)
             && _anjay_servers_schedule_next_retryable(
-                    anjay->sched, server, reload_server_by_ssid_job, ssid)) {
+                       anjay->sched, server, reload_server_by_ssid_job, ssid)) {
         anjay_log(ERROR, "could not reschedule reload_server_by_ssid_job");
     }
 }
@@ -95,11 +94,11 @@ static int reload_server_by_ssid(anjay_t *anjay,
             anjay_log(TRACE, "reloading active server SSID %u", ssid);
             return reload_active_server(anjay, server);
         } else if (!server->next_action_handle
-                && avs_time_real_valid(server->data_inactive.reactivate_time)) {
+                   && avs_time_real_valid(server->reactivate_time)) {
             return _anjay_server_sched_activate(
-                    anjay, server, avs_time_real_diff(
-                            server->data_inactive.reactivate_time,
-                            avs_time_real_now()));
+                    anjay, server,
+                    avs_time_real_diff(server->reactivate_time,
+                                       avs_time_real_now()));
         } else {
             return 0;
         }
@@ -150,7 +149,7 @@ reload_server_by_security_iid(anjay_t *anjay,
 }
 
 static void reload_servers_sched_job(anjay_t *anjay, const void *unused) {
-    (void)unused;
+    (void) unused;
     anjay_log(TRACE, "reloading servers");
 
     anjay_servers_t old_servers = *anjay->servers;
@@ -163,9 +162,8 @@ static void reload_servers_sched_job(anjay_t *anjay, const void *unused) {
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (obj
-            && _anjay_dm_foreach_instance(anjay, obj,
-                                          reload_server_by_security_iid,
-                                          &reload_state)
+            && _anjay_dm_foreach_instance(
+                       anjay, obj, reload_server_by_security_iid, &reload_state)
             && !reload_state.retval) {
         reload_state.retval = -1;
     }
@@ -174,15 +172,15 @@ static void reload_servers_sched_job(anjay_t *anjay, const void *unused) {
     // scheduled for activation - schedule that. It's necessary to perform
     // Client-Initiated Bootstrap if Server-Initiated Bootstrap is disabled in
     // configuration.
-    if (!reload_state.retval
-            && anjay->servers->servers
+    if (!reload_state.retval && anjay->servers->servers
             && !AVS_LIST_NEXT(anjay->servers->servers)
             && anjay->servers->servers->ssid == ANJAY_SSID_BOOTSTRAP
             && !_anjay_server_active(anjay->servers->servers)
             && !anjay->servers->servers->next_action_handle
-            && !anjay->servers->servers->data_inactive.reactivate_failed) {
-        reload_state.retval = _anjay_server_sched_activate(
-                anjay, anjay->servers->servers, AVS_TIME_DURATION_ZERO);
+            && !anjay->servers->servers->reactivate_failed) {
+        reload_state.retval =
+                _anjay_server_sched_activate(anjay, anjay->servers->servers,
+                                             AVS_TIME_DURATION_ZERO);
     }
 
     if (reload_state.retval) {
@@ -192,8 +190,7 @@ static void reload_servers_sched_job(anjay_t *anjay, const void *unused) {
         AVS_LIST_DELETABLE_FOREACH_PTR(server_ptr, helper,
                                        &old_servers.servers) {
             if (_anjay_server_active(*server_ptr)) {
-                _anjay_servers_add(anjay->servers,
-                                   AVS_LIST_DETACH(server_ptr));
+                _anjay_servers_add(anjay->servers, AVS_LIST_DETACH(server_ptr));
             }
         }
         anjay_log(ERROR, "reloading servers failed, re-scheduling job");
@@ -211,7 +208,7 @@ static void reload_servers_sched_job(anjay_t *anjay, const void *unused) {
     _anjay_servers_internal_deregister(anjay, &old_servers);
     _anjay_servers_internal_cleanup(anjay, &old_servers);
     anjay_log(TRACE, "%lu servers reloaded",
-              (unsigned long)AVS_LIST_SIZE(anjay->servers->servers));
+              (unsigned long) AVS_LIST_SIZE(anjay->servers->servers));
 }
 
 static int schedule_reload_servers(anjay_t *anjay, bool delayed) {
@@ -239,8 +236,8 @@ int _anjay_schedule_reload_server(anjay_t *anjay, anjay_server_info_t *server) {
     assert(_anjay_server_active(server));
     _anjay_sched_del(anjay->sched, &server->next_action_handle);
     if (_anjay_servers_schedule_first_retryable(
-            anjay->sched, server, AVS_TIME_DURATION_ZERO,
-            reload_server_by_ssid_job, server->ssid)) {
+                anjay->sched, server, AVS_TIME_DURATION_ZERO,
+                reload_server_by_ssid_job, server->ssid)) {
         anjay_log(ERROR, "could not schedule reload_server_by_ssid_job");
         return -1;
     }

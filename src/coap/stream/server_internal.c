@@ -36,9 +36,9 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifdef WITH_BLOCK_SEND
-#define has_block_ctx(server) ((server)->block_ctx)
+#    define has_block_ctx(server) ((server)->block_ctx)
 #else
-#define has_block_ctx(server) (false)
+#    define has_block_ctx(server) (false)
 #endif
 
 static inline bool has_error(coap_server_t *server) {
@@ -85,7 +85,7 @@ _anjay_coap_server_get_request_identity(const coap_server_t *server) {
 
 static bool is_block1_transfer(coap_server_t *server) {
     return server->state == COAP_SERVER_STATE_HAS_BLOCK1_REQUEST
-        || server->state == COAP_SERVER_STATE_NEEDS_NEXT_BLOCK;
+           || server->state == COAP_SERVER_STATE_NEEDS_NEXT_BLOCK;
 }
 
 static bool is_success_response(uint8_t msg_code) {
@@ -99,8 +99,7 @@ int _anjay_coap_server_setup_response(coap_server_t *server,
         return -1;
     }
 
-    AVS_ASSERT(!has_error(server),
-               "setup_response called with unsent error");
+    AVS_ASSERT(!has_error(server), "setup_response called with unsent error");
     clear_error(server);
 
     if (!_anjay_coap_out_is_reset(&server->common.out)) {
@@ -109,8 +108,7 @@ int _anjay_coap_server_setup_response(coap_server_t *server,
     }
 
     const avs_coap_block_info_t *block = NULL;
-    if (is_block1_transfer(server)
-            && is_success_response(details->msg_code)) {
+    if (is_block1_transfer(server) && is_success_response(details->msg_code)) {
         block = &server->curr_block;
     }
 
@@ -144,7 +142,7 @@ static void setup_error_response(coap_server_t *server) {
     int result = _anjay_coap_server_setup_response(server, &details);
     assert(result == 0);
 
-    (void)result;
+    (void) result;
 }
 
 int _anjay_coap_server_finish_response(coap_server_t *server) {
@@ -163,9 +161,9 @@ int _anjay_coap_server_finish_response(coap_server_t *server) {
 
     int result = 0;
     if (is_block1_transfer(server)) {
-        result = _anjay_coap_out_update_msg_header(
-                &server->common.out,
-                &server->request_identity, &server->curr_block);
+        result = _anjay_coap_out_update_msg_header(&server->common.out,
+                                                   &server->request_identity,
+                                                   &server->curr_block);
     }
 
     if (!result) {
@@ -188,7 +186,8 @@ static int block_store_critical_options(AVS_LIST(coap_block_optbuf_t) *out,
     assert(!*outptr);
 
     for (avs_coap_opt_iterator_t optit = avs_coap_opt_begin(msg);
-            !avs_coap_opt_end(&optit); avs_coap_opt_next(&optit)) {
+         !avs_coap_opt_end(&optit);
+         avs_coap_opt_next(&optit)) {
         uint32_t optnum = avs_coap_opt_number(&optit);
         if (optnum == optnum_to_ignore || !is_opt_critical(optnum)) {
             continue;
@@ -201,8 +200,7 @@ static int block_store_critical_options(AVS_LIST(coap_block_optbuf_t) *out,
         }
         (*outptr)->optnum = optnum;
         (*outptr)->length = length;
-        memcpy((*outptr)->content, avs_coap_opt_value(optit.curr_opt),
-                length);
+        memcpy((*outptr)->content, avs_coap_opt_value(optit.curr_opt), length);
         AVS_LIST_ADVANCE_PTR(&outptr);
     }
     return 0;
@@ -250,7 +248,8 @@ static process_result_t process_initial_request(coap_server_t *server,
     }
     /**
      * CoAP supports bidirectional block communication, but LwM2M does not have
-     * any operation for which it would be useful. Therefore it's not implemented.
+     * any operation for which it would be useful. Therefore it's not
+     * implemented.
      */
     if (block1.valid && block2.valid) {
         _anjay_coap_server_set_error(server, -ANJAY_ERR_BAD_OPTION);
@@ -291,9 +290,8 @@ static process_result_t process_initial_request(coap_server_t *server,
 }
 
 static int receive_request(coap_server_t *server) {
-    int result = _anjay_coap_in_get_next_message(&server->common.in,
-                                                 server->common.coap_ctx,
-                                                 server->common.socket);
+    int result = _anjay_coap_in_get_next_message(
+            &server->common.in, server->common.coap_ctx, server->common.socket);
     if (result == AVS_COAP_CTX_ERR_MSG_TOO_LONG) {
         const avs_coap_msg_t *partial_msg =
                 (avs_coap_msg_t *) server->common.in.buffer;
@@ -322,8 +320,8 @@ static int receive_request(coap_server_t *server) {
             }
         } else {
             avs_coap_ctx_send_error(server->common.coap_ctx,
-                                    server->common.socket,
-                                    msg, server->last_error_code);
+                                    server->common.socket, msg,
+                                    server->last_error_code);
         }
         return -1;
     case PROCESS_INITIAL_OK:
@@ -355,19 +353,20 @@ static bool blocks_equal(const avs_coap_block_info_t *a,
     assert(a->valid);
     assert(b->valid);
 
-    return a->size == b->size
-        && a->has_more == b->has_more
-        && a->seq_num == b->seq_num;
+    return a->size == b->size && a->has_more == b->has_more
+           && a->seq_num == b->seq_num;
 }
 
 static int block_validate_critical_options(AVS_LIST(coap_block_optbuf_t) opts,
                                            const avs_coap_msg_t *msg,
                                            uint32_t optnum_to_ignore) {
-#define BVCO_LOG_MSG "critical options mismatch when receiving BLOCK request; "
-#define BVCO_LOG_OPT "%" PRIu32 " length %" PRIu32
+#    define BVCO_LOG_MSG \
+        "critical options mismatch when receiving BLOCK request; "
+#    define BVCO_LOG_OPT "%" PRIu32 " length %" PRIu32
     AVS_LIST(coap_block_optbuf_t) optbuf = opts;
     for (avs_coap_opt_iterator_t optit = avs_coap_opt_begin(msg);
-            !avs_coap_opt_end(&optit); avs_coap_opt_next(&optit)) {
+         !avs_coap_opt_end(&optit);
+         avs_coap_opt_next(&optit)) {
         uint32_t optnum = avs_coap_opt_number(&optit);
         if (optnum == optnum_to_ignore || !is_opt_critical(optnum)) {
             continue;
@@ -378,12 +377,13 @@ static int block_validate_critical_options(AVS_LIST(coap_block_optbuf_t) opts,
                       optnum, length);
             return -1;
         }
-        if (optnum != optbuf->optnum
-                || length != optbuf->length
-                || memcmp(avs_coap_opt_value(optit.curr_opt),
-                          optbuf->content, optbuf->length) != 0) {
-            anjay_log(DEBUG, BVCO_LOG_MSG
-                             "expected " BVCO_LOG_OPT "; got " BVCO_LOG_OPT,
+        if (optnum != optbuf->optnum || length != optbuf->length
+                || memcmp(avs_coap_opt_value(optit.curr_opt), optbuf->content,
+                          optbuf->length)
+                               != 0) {
+            anjay_log(DEBUG,
+                      BVCO_LOG_MSG "expected " BVCO_LOG_OPT
+                                   "; got " BVCO_LOG_OPT,
                       optbuf->optnum, optbuf->length, optnum, length);
             return -1;
         }
@@ -395,8 +395,8 @@ static int block_validate_critical_options(AVS_LIST(coap_block_optbuf_t) opts,
         return -1;
     }
     return 0;
-#undef BVCO_LOG_OPT
-#undef BVCO_LOG_MSG
+#    undef BVCO_LOG_OPT
+#    undef BVCO_LOG_MSG
 }
 
 typedef enum process_block_result {
@@ -514,8 +514,7 @@ static int send_continue(coap_server_t *server,
     }
 
     msg = avs_coap_msg_build_without_payload(
-            avs_coap_ensure_aligned_buffer(storage),
-            storage_size, &info);
+            avs_coap_ensure_aligned_buffer(storage), storage_size, &info);
     if (msg) {
         result = avs_coap_ctx_send(server->common.coap_ctx,
                                    server->common.socket, msg);
@@ -533,13 +532,13 @@ static int receive_next_block(const avs_coap_msg_t *msg,
                               uint8_t *out_error_code) {
     assert(msg);
 
-    coap_server_t *server = (coap_server_t *)server_;
+    coap_server_t *server = (coap_server_t *) server_;
 
     assert(server->state == COAP_SERVER_STATE_NEEDS_NEXT_BLOCK);
     assert(server->curr_block.valid);
 
-    process_block_result_t result = process_next_block(server, msg,
-                                                       out_error_code);
+    process_block_result_t result =
+            process_next_block(server, msg, out_error_code);
 
     switch (result) {
     case PROCESS_BLOCK_REJECT_CONTINUE:
@@ -553,7 +552,7 @@ static int receive_next_block(const avs_coap_msg_t *msg,
         break;
     }
 
-    return (int)result;
+    return (int) result;
 }
 
 static int receive_next_block_with_timeout(coap_server_t *server) {
@@ -594,8 +593,9 @@ static int receive_next_block_with_timeout(coap_server_t *server) {
             return recv_result;
         }
     }
-    coap_log(DEBUG, "timeout reached while waiting for block (offset = %"
-             PRIu32 ")", get_block_offset(&server->curr_block));
+    coap_log(DEBUG,
+             "timeout reached while waiting for block (offset = %" PRIu32 ")",
+             get_block_offset(&server->curr_block));
     return -1;
 }
 #endif // WITH_BLOCK_RECEIVE
@@ -655,13 +655,12 @@ int _anjay_coap_server_read(coap_server_t *server,
 }
 
 #ifdef WITH_BLOCK_SEND
-static int block_write(coap_server_t *server,
-                       const void *data,
-                       size_t data_length) {
+static int
+block_write(coap_server_t *server, const void *data, size_t data_length) {
     if (!server->block_ctx) {
         uint16_t block_size = server->curr_block.valid
-                ? server->curr_block.size
-                : AVS_COAP_MSG_BLOCK_MAX_SIZE;
+                                      ? server->curr_block.size
+                                      : AVS_COAP_MSG_BLOCK_MAX_SIZE;
 
         server->static_id_source = _anjay_coap_id_source_new_static(
                 _anjay_coap_server_get_request_identity(server));
@@ -676,7 +675,6 @@ static int block_write(coap_server_t *server,
             _anjay_coap_id_source_release(&server->static_id_source);
             return -1;
         }
-
     }
     int result = _anjay_coap_block_transfer_write(server->block_ctx, data,
                                                   data_length);
@@ -689,13 +687,13 @@ static int block_write(coap_server_t *server,
     return result;
 }
 #else
-#define block_write(...) \
+#    define block_write(...) \
         (coap_log(ERROR, "sending blockwise responses not supported"), -1)
 #endif
 
 static bool block_response_requested(coap_server_t *server) {
     return server->curr_block.valid
-               && server->curr_block.type == AVS_COAP_BLOCK2;
+           && server->curr_block.type == AVS_COAP_BLOCK2;
 }
 
 int _anjay_coap_server_write(coap_server_t *server,
@@ -703,16 +701,16 @@ int _anjay_coap_server_write(coap_server_t *server,
                              size_t data_length) {
     size_t bytes_written = 0;
     if (!has_block_ctx(server) && !block_response_requested(server)) {
-        bytes_written = _anjay_coap_out_write(&server->common.out,
-                                              data, data_length);
+        bytes_written =
+                _anjay_coap_out_write(&server->common.out, data, data_length);
         if (bytes_written == data_length) {
             return 0;
         } else {
             coap_log(TRACE, "response payload does not fit in the buffer "
-                     "- initiating block-wise transfer");
+                            "- initiating block-wise transfer");
         }
     }
 
-    return block_write(server, (const uint8_t*) data + bytes_written,
+    return block_write(server, (const uint8_t *) data + bytes_written,
                        data_length - bytes_written);
 }

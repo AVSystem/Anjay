@@ -32,7 +32,7 @@ typedef struct coap_default_id_src {
 } coap_default_id_src_t;
 
 static avs_coap_msg_identity_t id_src_seq_get(coap_id_source_t *self_) {
-    coap_default_id_src_t *self = (coap_default_id_src_t *)self_;
+    coap_default_id_src_t *self = (coap_default_id_src_t *) self_;
 
     avs_coap_msg_identity_t id = {
         .msg_id = self->next_msg_id,
@@ -49,20 +49,20 @@ static avs_coap_msg_identity_t id_src_seq_get(coap_id_source_t *self_) {
 }
 
 static const coap_id_source_vt_t *const ID_SRC_SEQ_VTABLE =
-    &(coap_id_source_vt_t){
-        .get = id_src_seq_get
-    };
+        &(coap_id_source_vt_t) {
+            .get = id_src_seq_get
+        };
 
 coap_id_source_t *_anjay_coap_id_source_auto_new(anjay_rand_seed_t rand_seed,
                                                  size_t token_size) {
     assert(token_size <= AVS_COAP_MAX_TOKEN_LENGTH);
-    coap_default_id_src_t *src = (coap_default_id_src_t *)
-            avs_malloc(sizeof(coap_default_id_src_t));
+    coap_default_id_src_t *src =
+            (coap_default_id_src_t *) avs_malloc(sizeof(coap_default_id_src_t));
     if (!src) {
         return NULL;
     }
 
-    memcpy((void*)(intptr_t)&src->base.vtable, &ID_SRC_SEQ_VTABLE,
+    memcpy((void *) (intptr_t) &src->base.vtable, &ID_SRC_SEQ_VTABLE,
            sizeof(ID_SRC_SEQ_VTABLE));
     src->rand_seed = rand_seed;
     src->next_msg_id = (uint16_t) _anjay_rand32(&src->rand_seed);

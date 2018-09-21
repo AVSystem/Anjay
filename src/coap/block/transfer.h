@@ -37,9 +37,9 @@ int _anjay_coap_block_transfer_finish(coap_block_transfer_ctx_t *ctx);
 
 #else
 
-#define _anjay_coap_block_transfer_delete(ctx) ((void) 0)
+#    define _anjay_coap_block_transfer_delete(ctx) ((void) 0)
 
-#define _anjay_coap_block_transfer_finish(ctx) \
+#    define _anjay_coap_block_transfer_finish(ctx) \
         (AVS_UNREACHABLE("should never happen"), -1)
 
 #endif

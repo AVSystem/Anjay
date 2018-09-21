@@ -17,17 +17,17 @@
 #include "demo.h"
 #include "demo_args.h"
 #include "demo_cmds.h"
+#include "demo_utils.h"
 #include "firmware_update.h"
 #include "iosched.h"
 #include "objects.h"
-#include "demo_utils.h"
 
-#include <sys/time.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
 
 #include <unistd.h>
 
@@ -64,10 +64,13 @@ static int security_object_reload(anjay_demo_t *demo) {
          * anjay_security_object_add_instance will make a deep copy by itself.
          */
         instance.server_uri = server->uri;
-        instance.public_cert_or_psk_identity = args->public_cert_or_psk_identity;
-        instance.public_cert_or_psk_identity_size = args->public_cert_or_psk_identity_size;
+        instance.public_cert_or_psk_identity =
+                args->public_cert_or_psk_identity;
+        instance.public_cert_or_psk_identity_size =
+                args->public_cert_or_psk_identity_size;
         instance.private_cert_or_psk_key = args->private_cert_or_psk_key;
-        instance.private_cert_or_psk_key_size = args->private_cert_or_psk_key_size;
+        instance.private_cert_or_psk_key_size =
+                args->private_cert_or_psk_key_size;
         instance.server_public_key = args->server_public_key;
         instance.server_public_key_size = args->server_public_key_size;
 
@@ -118,8 +121,7 @@ const anjay_dm_object_def_t **demo_find_object(anjay_demo_t *demo,
 }
 
 void demo_reload_servers(anjay_demo_t *demo) {
-    if (security_object_reload(demo)
-        || server_object_reload(demo)) {
+    if (security_object_reload(demo) || server_object_reload(demo)) {
         demo_log(ERROR, "Error while adding new server objects");
         exit(-1);
     }
@@ -196,17 +198,18 @@ static int add_default_access_entries(anjay_demo_t *demo) {
         }
         void *cookie = NULL;
         anjay_iid_t iid;
-        while (!(result = (*object->obj_ptr)->handlers.instance_it(
-                        demo->anjay, object->obj_ptr, &iid, &cookie))
-                && iid != ANJAY_IID_INVALID) {
+        while (!(result = (*object->obj_ptr)
+                                  ->handlers.instance_it(demo->anjay,
+                                                         object->obj_ptr, &iid,
+                                                         &cookie))
+               && iid != ANJAY_IID_INVALID) {
             if (anjay_access_control_set_acl(
-                    demo->anjay,
-                    (*object->obj_ptr)->oid,
-                    iid,
-                    ANJAY_SSID_ANY,
-                    ANJAY_ACCESS_MASK_READ
-                            | ANJAY_ACCESS_MASK_WRITE
-                            | ANJAY_ACCESS_MASK_EXECUTE)) {
+                        demo->anjay,
+                        (*object->obj_ptr)->oid,
+                        iid,
+                        ANJAY_SSID_ANY,
+                        ANJAY_ACCESS_MASK_READ | ANJAY_ACCESS_MASK_WRITE
+                                | ANJAY_ACCESS_MASK_EXECUTE)) {
                 return -1;
             }
         }
@@ -219,8 +222,8 @@ static int add_access_entries(anjay_demo_t *demo,
                               const cmdline_args_t *cmdline_args) {
     const AVS_LIST(access_entry_t) it;
     AVS_LIST_FOREACH(it, cmdline_args->access_entries) {
-        if (anjay_access_control_set_acl(demo->anjay,
-                                         it->oid, ANJAY_IID_INVALID, it->ssid,
+        if (anjay_access_control_set_acl(demo->anjay, it->oid,
+                                         ANJAY_IID_INVALID, it->ssid,
                                          ANJAY_ACCESS_MASK_CREATE)) {
             return -1;
         }
@@ -259,8 +262,7 @@ install_object(anjay_demo_t *demo,
 }
 
 
-static int demo_init(anjay_demo_t *demo,
-                     cmdline_args_t *cmdline_args) {
+static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 
     anjay_configuration_t config = {
         .endpoint_name = cmdline_args->endpoint_name,
@@ -278,6 +280,8 @@ static int demo_init(anjay_demo_t *demo,
         .max_icmp_failures = &cmdline_args->max_icmp_failures,
         .disable_server_initiated_bootstrap =
                 cmdline_args->disable_server_initiated_bootstrap,
+        .udp_tx_params = &cmdline_args->tx_params,
+        .udp_dtls_hs_tx_params = &cmdline_args->dtls_hs_tx_params
     };
 
     const avs_net_security_info_t *fw_security_info_ptr = NULL;
@@ -291,21 +295,23 @@ static int demo_init(anjay_demo_t *demo,
         demo->anjay = anjay_new(&config);
     }
     demo->iosched = iosched_create();
-    if (!demo->anjay
-            || !demo->iosched
+    if (!demo->anjay || !demo->iosched
             || anjay_attr_storage_install(demo->anjay)
             || anjay_access_control_install(demo->anjay)
             || firmware_update_install(demo->anjay, &demo->fw_update,
                                        cmdline_args->fw_updated_marker_path,
-                                       fw_security_info_ptr)
+                                       fw_security_info_ptr,
+                                       cmdline_args->fwu_tx_params_modified
+                                               ? &cmdline_args->fwu_tx_params
+                                               : NULL)
 #ifndef _WIN32
             || !iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
-                                       POLLIN | POLLHUP,
-                                       demo_command_dispatch, demo, NULL)
+                                       POLLIN | POLLHUP, demo_command_dispatch,
+                                       demo, NULL)
 #else // _WIN32
-#warning "TODO: Support stdin somehow on Windows"
+#    warning "TODO: Support stdin somehow on Windows"
 #endif // _WIN32
-            ) {
+    ) {
         return -1;
     }
 
@@ -321,8 +327,8 @@ static int demo_init(anjay_demo_t *demo,
             || install_object(demo, cm_object_create(),
                               cm_notify_time_dependent, cm_object_release)
             || install_object(demo, cs_object_create(), NULL, cs_object_release)
-            || install_object(demo, download_diagnostics_object_create(),
-                              NULL, download_diagnostics_object_release)
+            || install_object(demo, download_diagnostics_object_create(), NULL,
+                              download_diagnostics_object_release)
             || install_object(demo,
                               device_object_create(demo->iosched,
                                                    cmdline_args->endpoint_name),
@@ -338,10 +344,9 @@ static int demo_init(anjay_demo_t *demo,
                               ip_ping_object_release)
 #endif // _WIN32
             || install_object(demo, test_object_create(),
-                              test_notify_time_dependent,
-                              test_object_release)
-            || install_object(demo, portfolio_object_create(),
-                              NULL, portfolio_object_release)) {
+                              test_notify_time_dependent, test_object_release)
+            || install_object(demo, portfolio_object_create(), NULL,
+                              portfolio_object_release)) {
         return -1;
     }
 
@@ -375,7 +380,7 @@ static int demo_init(anjay_demo_t *demo,
 }
 
 static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
-    anjay_demo_t *demo = (anjay_demo_t*) avs_calloc(1, sizeof(anjay_demo_t));
+    anjay_demo_t *demo = (anjay_demo_t *) avs_calloc(1, sizeof(anjay_demo_t));
     if (!demo) {
         return NULL;
     }
@@ -423,9 +428,9 @@ static socket_entry_t *create_socket_entry(anjay_demo_t *demo,
             *(const demo_fd_t *) avs_net_socket_get_system(socket);
     entry->demo = demo;
     entry->socket = socket;
-    entry->iosched_entry = iosched_poll_entry_new(demo->iosched, sys_socket,
-                                                  POLLIN, socket_dispatch,
-                                                  entry, NULL);
+    entry->iosched_entry =
+            iosched_poll_entry_new(demo->iosched, sys_socket, POLLIN,
+                                   socket_dispatch, entry, NULL);
     if (!entry->iosched_entry) {
         demo_log(ERROR, "cannot add iosched entry");
         AVS_LIST_DELETE(&entry);
@@ -484,7 +489,7 @@ static void serve(anjay_demo_t *demo) {
         int waitms = anjay_sched_calculate_wait_time_ms(
                 demo->anjay,
                 (int) ((1000500000 - current_time.since_real_epoch.nanoseconds)
-                               / 1000000));
+                       / 1000000));
         demo_log(TRACE, "wait time: %d ms", waitms);
 
         // +1 to prevent annoying annoying looping in case of
@@ -501,11 +506,10 @@ static void serve(anjay_demo_t *demo) {
     }
 }
 
-static void log_handler(avs_log_level_t level,
-                        const char *module,
-                        const char *message) {
-    (void)level;
-    (void)module;
+static void
+log_handler(avs_log_level_t level, const char *module, const char *message) {
+    (void) level;
+    (void) module;
 
     char timebuf[128];
     struct timeval now;
@@ -516,8 +520,7 @@ static void log_handler(avs_log_level_t level,
     assert(now_tm);
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", now_tm);
 
-    fprintf(stderr, "%s.%06d %s\n",
-            timebuf, (int)now.tv_usec, message);
+    fprintf(stderr, "%s.%06d %s\n", timebuf, (int) now.tv_usec, message);
 }
 
 static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {
@@ -529,9 +532,22 @@ static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {
 
 int main(int argc, char *argv[]) {
 #ifndef _WIN32
-    // 0 ~ stdin, 1 ~ stdout, 2 ~ stderr; close everything else
-    for (int fd = 3, maxfd = (int) sysconf(_SC_OPEN_MAX);
-            fd < maxfd; ++fd) {
+    /*
+     * The demo application implements mock firmware update with execv() call
+     * on the new LwM2M client application. As a direct consequence, all file
+     * descriptors from the original process are inherited, even though we will
+     * never use most of them. To free resources associated with these
+     * descriptors and avoid weird behavior caused by multiple sockets bound to
+     * the same local port (*), we close all unknown descriptors before
+     * continuing. Only 0 (stdin), 1 (stdout) and 2 (stderr) are left open.
+     *
+     * (*) For example, Linux does load-balancing between UDP sockets that
+     * reuse the same local address and port. See `man 7 socket` or
+     * http://man7.org/linux/man-pages/man7/socket.7.html .
+     * https://stackoverflow.com/a/14388707/2339636 contains more detailed
+     * info on SO_REUSEADDR/SO_REUSEPORT behavior on various systems.
+     */
+    for (int fd = 3, maxfd = (int) sysconf(_SC_OPEN_MAX); fd < maxfd; ++fd) {
         close(fd);
     }
 #endif // WIN32

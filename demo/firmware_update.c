@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
+#include "firmware_update.h"
 #include "demo.h"
 #include "demo_utils.h"
-#include "firmware_update.h"
 
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include <avsystem/commons/persistence.h>
 
+#include <avsystem/commons/memory.h>
 #include <avsystem/commons/stream/stream_file.h>
 #include <avsystem/commons/utils.h>
-#include <avsystem/commons/memory.h>
 
 #define FORCE_ERROR_OUT_OF_MEMORY 1
 #define FORCE_ERROR_FAILED_UPDATE 2
@@ -99,8 +99,7 @@ static void fix_fw_meta_endianness(fw_metadata_t *meta) {
     meta->crc = ntohl(meta->crc);
 }
 
-static int read_fw_meta_from_file(FILE *f,
-                                  fw_metadata_t *out_metadata) {
+static int read_fw_meta_from_file(FILE *f, fw_metadata_t *out_metadata) {
     fw_metadata_t m;
     memset(&m, 0, sizeof(m));
 
@@ -117,8 +116,7 @@ static int read_fw_meta_from_file(FILE *f,
     return 0;
 }
 
-static int copy_file_contents(FILE *dst,
-                              FILE *src) {
+static int copy_file_contents(FILE *dst, FILE *src) {
     while (!feof(src)) {
         char buf[4096];
 
@@ -160,8 +158,8 @@ static int unpack_fw_to_file(const char *fw_pkg_path,
     }
     result = copy_file_contents(tmp, fw);
     if (result) {
-        demo_log(ERROR, "could not copy firmware from %s to %s",
-                 fw_pkg_path, target_path);
+        demo_log(ERROR, "could not copy firmware from %s to %s", fw_pkg_path,
+                 target_path);
         goto cleanup;
     }
 
@@ -183,15 +181,15 @@ static int unpack_firmware_in_place(fw_update_logic_t *fw) {
         return -1;
     }
 
-    int result = unpack_fw_to_file(fw->next_target_path, tmp_path,
-                                   &fw->metadata);
+    int result =
+            unpack_fw_to_file(fw->next_target_path, tmp_path, &fw->metadata);
     if (result) {
         goto cleanup;
     }
 
     if ((result = rename(tmp_path, fw->next_target_path)) == -1) {
-        demo_log(ERROR, "could not rename %s to %s: %s",
-                 tmp_path, fw->next_target_path, strerror(errno));
+        demo_log(ERROR, "could not rename %s to %s: %s", tmp_path,
+                 fw->next_target_path, strerror(errno));
         goto cleanup;
     }
     if ((result = chmod(fw->next_target_path, 0700)) == -1) {
@@ -243,12 +241,11 @@ static void crc32(uint32_t *inout_crc, const uint8_t *data, size_t size) {
 
     for (size_t i = 0; i < size; ++i) {
         *inout_crc = LOOKUP_TABLE[data[i] ^ (uint8_t) *inout_crc]
-                ^ (*inout_crc >> 8);
+                     ^ (*inout_crc >> 8);
     }
 }
 
-static int get_file_crc32(const char *filename,
-                          uint32_t *out_crc) {
+static int get_file_crc32(const char *filename, uint32_t *out_crc) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
         demo_log(ERROR, "could not open %s", filename);
@@ -262,8 +259,8 @@ static int get_file_crc32(const char *filename,
     while (!feof(f)) {
         size_t bytes_read = fread(buf, 1, sizeof(buf), f);
         if (bytes_read == 0 && ferror(f)) {
-            demo_log(ERROR, "could not read from %s: %s",
-                     filename, strerror(errno));
+            demo_log(ERROR, "could not read from %s: %s", filename,
+                     strerror(errno));
             goto cleanup;
         }
 
@@ -307,10 +304,10 @@ static int validate_firmware(fw_update_logic_t *fw) {
     }
 
     switch (fw->metadata.force_error_case) {
-        case FORCE_ERROR_OUT_OF_MEMORY:
-            return ANJAY_FW_UPDATE_ERR_OUT_OF_MEMORY;
-        default:
-            break;
+    case FORCE_ERROR_OUT_OF_MEMORY:
+        return ANJAY_FW_UPDATE_ERR_OUT_OF_MEMORY;
+    default:
+        break;
     }
 
     return 0;
@@ -334,8 +331,8 @@ static int store_etag(avs_persistence_context_t *ctx,
     uint16_t size16 = (etag ? etag->size : UINT16_MAX);
     int result = avs_persistence_u16(ctx, &size16);
     if (!result && etag) {
-        result = avs_persistence_bytes(
-                ctx, (uint8_t *) (intptr_t) etag->value, etag->size);
+        result = avs_persistence_bytes(ctx, (uint8_t *) (intptr_t) etag->value,
+                                       etag->size);
     }
     return result;
 }
@@ -391,7 +388,8 @@ static void fw_reset(void *fw_) {
 static int fw_stream_open(void *fw_,
                           const char *package_uri,
                           const struct anjay_etag *package_etag) {
-    (void) package_uri; (void) package_etag;
+    (void) package_uri;
+    (void) package_etag;
     fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
 
     assert(!fw->stream);
@@ -415,11 +413,10 @@ static int fw_stream_open(void *fw_,
 
     avs_free(fw->package_uri);
     fw->package_uri = uri;
-    if (write_persistence_file(fw->persistence_file,
-                               ANJAY_FW_UPDATE_INITIAL_DOWNLOADING, package_uri,
-                               fw->next_target_path,
-                               !!fw->administratively_set_target_path,
-                               package_etag)) {
+    if (write_persistence_file(
+                fw->persistence_file, ANJAY_FW_UPDATE_INITIAL_DOWNLOADING,
+                package_uri, fw->next_target_path,
+                !!fw->administratively_set_target_path, package_etag)) {
         fw_reset(fw_);
         return -1;
     }
@@ -433,11 +430,12 @@ static int fw_stream_write(void *fw_, const void *data, size_t length) {
         demo_log(ERROR, "stream not open");
         return -1;
     }
-    if (length && (fwrite(data, length, 1, fw->stream) != 1
-                   // Firmware update integration tests measure download
-                   // progress by checking file size, so avoiding buffering
-                   // is required.
-                   || fflush(fw->stream) != 0)) {
+    if (length
+            && (fwrite(data, length, 1, fw->stream) != 1
+                // Firmware update integration tests measure download
+                // progress by checking file size, so avoiding buffering
+                // is required.
+                || fflush(fw->stream) != 0)) {
         demo_log(ERROR, "fwrite or fflush failed: %s", strerror(errno));
         return ANJAY_FW_UPDATE_ERR_NOT_ENOUGH_SPACE;
     }
@@ -457,9 +455,10 @@ static int fw_stream_finish(void *fw_) {
     int result;
     if ((result = preprocess_firmware(fw))
             || (result = write_persistence_file(
-                    fw->persistence_file, ANJAY_FW_UPDATE_INITIAL_DOWNLOADED,
-                    fw->package_uri, fw->next_target_path,
-                    !!fw->administratively_set_target_path, NULL))) {
+                        fw->persistence_file,
+                        ANJAY_FW_UPDATE_INITIAL_DOWNLOADED, fw->package_uri,
+                        fw->next_target_path,
+                        !!fw->administratively_set_target_path, NULL))) {
         fw_reset(fw);
     }
     return result;
@@ -508,6 +507,15 @@ static int fw_get_security_info(void *fw_,
     return 0;
 }
 
+static avs_coap_tx_params_t g_tx_params;
+
+static avs_coap_tx_params_t fw_get_coap_tx_params(void *user_ptr,
+                                                  const char *download_uri) {
+    (void) user_ptr;
+    (void) download_uri;
+    return g_tx_params;
+}
+
 static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .stream_open = fw_stream_open,
     .stream_write = fw_stream_write,
@@ -515,11 +523,11 @@ static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .reset = fw_reset,
     .get_name = fw_get_name,
     .get_version = fw_get_version,
-    .perform_upgrade = fw_perform_upgrade
+    .perform_upgrade = fw_perform_upgrade,
+    .get_coap_tx_params = fw_get_coap_tx_params
 };
 
-static int restore_etag(avs_persistence_context_t *ctx,
-                        anjay_etag_t **etag) {
+static int restore_etag(avs_persistence_context_t *ctx, anjay_etag_t **etag) {
     assert(etag && !*etag);
     uint16_t size16;
     int result = avs_persistence_u16(ctx, &size16);
@@ -570,8 +578,7 @@ static persistence_file_data_t read_persistence_file(const char *path) {
         // invalid or empty but existing file still signifies success
         result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_SUCCESS;
     }
-    if (!stream
-            || !(ctx = avs_persistence_restore_context_new(stream))
+    if (!stream || !(ctx = avs_persistence_restore_context_new(stream))
             || avs_persistence_bytes(ctx, (uint8_t *) &result8, 1)
             || !is_valid_result(result8)
             || avs_persistence_string(ctx, &data.uri)
@@ -597,13 +604,21 @@ static persistence_file_data_t read_persistence_file(const char *path) {
 int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
-                            const avs_net_security_info_t *security_info) {
+                            const avs_net_security_info_t *security_info,
+                            const avs_coap_tx_params_t *tx_params) {
     fw->persistence_file = persistence_file;
     if (security_info) {
         memcpy(&fw->security_info, security_info, sizeof(fw->security_info));
         FW_UPDATE_HANDLERS.get_security_info = fw_get_security_info;
     } else {
         FW_UPDATE_HANDLERS.get_security_info = NULL;
+    }
+
+    if (tx_params) {
+        g_tx_params = *tx_params;
+        FW_UPDATE_HANDLERS.get_coap_tx_params = fw_get_coap_tx_params;
+    } else {
+        FW_UPDATE_HANDLERS.get_coap_tx_params = NULL;
     }
 
     persistence_file_data_t data = read_persistence_file(persistence_file);
@@ -613,7 +628,7 @@ int firmware_update_install(anjay_t *anjay,
     if ((fw->next_target_path = data.download_file)
             && data.filename_administratively_set
             && !(fw->administratively_set_target_path =
-                    avs_strdup(data.download_file))) {
+                         avs_strdup(data.download_file))) {
         demo_log(WARNING, "Could not administratively set firmware path");
     }
     anjay_fw_update_initial_state_t state = {
@@ -643,8 +658,8 @@ int firmware_update_install(anjay_t *anjay,
         maybe_delete_firmware_file(fw);
     }
 
-    int result = anjay_fw_update_install(anjay, &FW_UPDATE_HANDLERS, fw,
-                                         &state);
+    int result =
+            anjay_fw_update_install(anjay, &FW_UPDATE_HANDLERS, fw, &state);
     avs_free(data.uri);
     avs_free(data.etag);
     if (result) {

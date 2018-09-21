@@ -22,8 +22,10 @@
 #include <anjay_modules/sched.h>
 #include <anjay_modules/servers.h>
 
-#include "utils_core.h"
+#include <avsystem/commons/time.h>
+
 #include "coap/coap_stream.h"
+#include "utils_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -64,13 +66,13 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 // copied from avs_commons/git/http/src/headers.h
 // see description there for rationale; TODO: move this to public Commons API?
 // note that this _includes_ the terminating null byte
-#define ANJAY_UINT_STR_BUF_SIZE(type) ((12*sizeof(type))/5 + 2)
+#define ANJAY_UINT_STR_BUF_SIZE(type) ((12 * sizeof(type)) / 5 + 2)
 
 // 6.2.2 Object Version format:
 // "The Object Version of an Object is composed of 2 digits separated by a dot"
 // However, we're a bit lenient to support proper numbers and not just digits.
 #define ANJAY_DM_OBJECT_VERSION_BUF_LENGTH \
-        (2 * ANJAY_UINT_STR_BUF_SIZE(unsigned))
+    (2 * ANJAY_UINT_STR_BUF_SIZE(unsigned))
 
 typedef struct {
     anjay_oid_t oid;
@@ -113,6 +115,29 @@ typedef struct {
     anjay_server_info_t *server;
     anjay_connection_type_t conn_type;
 } anjay_connection_ref_t;
+
+/**
+ * Token that changes to a new unique value every time the CoAP endpoint
+ * association (i.e., DTLS session or raw UDP socket) every time it has been
+ * established anew.
+ *
+ * It is currently implemented as a monotonic timestamp because it's trivial to
+ * generate such unique value that way as long as it is never persisted.
+ */
+typedef struct {
+    avs_time_monotonic_t value;
+} anjay_conn_session_token_t;
+
+static inline void
+_anjay_conn_session_token_reset(anjay_conn_session_token_t *out) {
+    out->value = avs_time_monotonic_now();
+}
+
+static inline bool
+_anjay_conn_session_tokens_equal(anjay_conn_session_token_t left,
+                                 anjay_conn_session_token_t right) {
+    return avs_time_monotonic_equal(left.value, right.value);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON THE WHOLE SERVERS SUBSYSTEM //////////////////////////////////////
@@ -378,6 +403,11 @@ const anjay_url_t *_anjay_server_uri(anjay_server_info_t *server);
  * yet be established, or SMS for US or UQS if there is connectivity on the SMS
  * channel, but no connectivity on the UDP channel.
  *
+ * Note that this function automatically recalculates the primary connection
+ * type if it's not set. Basically the lowest-numbered anjay_connection_type_t
+ * value that has a valid connected socket associated with it is assigned to
+ * primary_conn_type.
+ *
  * Called from bootstrap_core.c :: request_bootstrap() and
  * register.c :: bind_server_stream(), to determine which connection to use for
  * sending the aforementioned messages.
@@ -386,15 +416,14 @@ anjay_connection_type_t
 _anjay_server_primary_conn_type(anjay_server_info_t *server);
 
 /**
- * Recalculates the "primary" connection type. Basically the lowest-numbered
- * anjay_connection_type_t value that has a valid connected socket associated
- * with it is assigned to primary_conn_type.
+ * Gets the token uniquely identifying the CoAP endpoint association (i.e., DTLS
+ * session or raw UDP socket) of the server's primary connection.
  *
- * This is called from request_bootstrap() and
- * ensure_valid_registration_with_ctx(), to determine on which connection to
- * send either Request Bootstrap or Register.
+ * It is used to determine whether reconnect operation re-used the previous
+ * association or created a new one.
  */
-int _anjay_server_setup_primary_connection(anjay_server_info_t *server);
+anjay_conn_session_token_t
+_anjay_server_primary_session_token(anjay_server_info_t *server);
 
 /**
  * Gets the information about current registration status of the server. These
@@ -471,9 +500,8 @@ _anjay_connection_current_mode(anjay_connection_ref_t ref);
  * connection is in queue mode, it schedules closing of the socket (suspending
  * the connection) after MAX_TRANSMIT_WAIT passes.
  */
-void
-_anjay_connection_schedule_queue_mode_close(anjay_t *anjay,
-                                            anjay_connection_ref_t ref);
+void _anjay_connection_schedule_queue_mode_close(anjay_t *anjay,
+                                                 anjay_connection_ref_t ref);
 
 /**
  * Returns the socket associated with a given connection, if it exists and is in
@@ -494,9 +522,7 @@ _anjay_connection_get_online_socket(anjay_connection_ref_t ref);
  *
  * It is called from observe_core.c :: ensure_conn_online().
  */
-int _anjay_connection_bring_online(anjay_t *anjay,
-                                   anjay_connection_ref_t ref,
-                                   bool *out_session_resumed);
+int _anjay_connection_bring_online(anjay_t *anjay, anjay_connection_ref_t ref);
 
 /**
  * Suspends the specified connection (or all connections in the server if

@@ -64,6 +64,7 @@ typedef struct {
      */
     anjay_sched_handle_t sched_job;
     avs_coap_retry_state_t retry_state;
+    avs_coap_tx_params_t tx_params;
 } anjay_coap_download_ctx_t;
 
 static void cleanup_coap_transfer(anjay_downloader_t *dl,
@@ -100,8 +101,8 @@ static int fill_coap_request_info(avs_coap_msg_info_t *req_info,
     avs_coap_block_info_t block2 = {
         .type = AVS_COAP_BLOCK2,
         .valid = true,
-        .seq_num = (uint32_t)(ctx->bytes_downloaded / ctx->block_size),
-        .size = (uint16_t)ctx->block_size,
+        .seq_num = (uint32_t) (ctx->bytes_downloaded / ctx->block_size),
+        .size = (uint16_t) ctx->block_size,
         .has_more = false
     };
     if (avs_coap_msg_info_opt_block(req_info, &block2)) {
@@ -113,12 +114,11 @@ static int fill_coap_request_info(avs_coap_msg_info_t *req_info,
 
 static void request_coap_block_job(anjay_t *anjay, const void *id_ptr);
 
-static int
-schedule_coap_retransmission(anjay_downloader_t *dl,
-                             anjay_coap_download_ctx_t *ctx) {
+static int schedule_coap_retransmission(anjay_downloader_t *dl,
+                                        anjay_coap_download_ctx_t *ctx) {
     anjay_t *anjay = _anjay_downloader_get_anjay(dl);
 
-    avs_coap_update_retry_state(&ctx->retry_state, &anjay->udp_tx_params,
+    avs_coap_update_retry_state(&ctx->retry_state, &ctx->tx_params,
                                 &dl->rand_seed);
     _anjay_sched_del(anjay->sched, &ctx->sched_job);
     return _anjay_sched(anjay->sched, &ctx->sched_job,
@@ -140,15 +140,16 @@ static int request_coap_block(anjay_downloader_t *dl,
 
     required_storage_size = avs_coap_msg_info_get_packet_storage_size(&info, 0);
     if (required_storage_size > anjay->out_buffer_size) {
-        dl_log(ERROR, "CoAP output buffer too small to hold download request "
-                      "(at least %lu bytes is needed)",
+        dl_log(ERROR,
+               "CoAP output buffer too small to hold download request "
+               "(at least %lu bytes is needed)",
                (unsigned long) required_storage_size);
         goto finish;
     }
     avs_coap_msg_builder_t builder;
-    avs_coap_msg_builder_init(
-            &builder,avs_coap_ensure_aligned_buffer(anjay->out_buffer),
-            anjay->out_buffer_size, &info);
+    avs_coap_msg_builder_init(&builder,
+                              avs_coap_ensure_aligned_buffer(anjay->out_buffer),
+                              anjay->out_buffer_size, &info);
 
     msg = avs_coap_msg_builder_get_msg(&builder);
 
@@ -174,16 +175,20 @@ static void request_coap_block_job(anjay_t *anjay, const void *id_ptr) {
     }
 
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
-    if (ctx->retry_state.retry_count > anjay->udp_tx_params.max_retransmit) {
-        dl_log(ERROR, "Limit of retransmissions reached, aborting download "
-                      "id = %" PRIuPTR, id);
+    if (ctx->retry_state.retry_count > ctx->tx_params.max_retransmit) {
+        dl_log(ERROR,
+               "Limit of retransmissions reached, aborting download "
+               "id = %" PRIuPTR,
+               id);
         _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
                                          ANJAY_DOWNLOAD_ERR_FAILED, ETIMEDOUT);
     } else {
         request_coap_block(&anjay->downloader, ctx);
         if (schedule_coap_retransmission(&anjay->downloader, ctx)) {
-            dl_log(WARNING, "could not schedule retransmission for download "
-                   "id = %" PRIuPTR, ctx->common.id);
+            dl_log(WARNING,
+                   "could not schedule retransmission for download "
+                   "id = %" PRIuPTR,
+                   ctx->common.id);
             _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
                                              ANJAY_DOWNLOAD_ERR_FAILED, ENOMEM);
         }
@@ -210,8 +215,9 @@ static int request_next_coap_block(anjay_downloader_t *dl,
     int result;
     if ((result = request_coap_block(dl, ctx))
             || (result = schedule_coap_retransmission(dl, ctx))) {
-        dl_log(WARNING, "could not request block starting at %lu "
-                        "for download id = %" PRIuPTR,
+        dl_log(WARNING,
+               "could not request block starting at %lu "
+               "for download id = %" PRIuPTR,
                (unsigned long) ctx->bytes_downloaded, ctx->common.id);
         _anjay_downloader_abort_transfer(dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED,
                                          map_coap_ctx_err_to_errno(result));
@@ -232,9 +238,8 @@ static void request_next_coap_block_job(anjay_t *anjay, const void *id_ptr) {
     }
 }
 
-static inline const char *etag_to_string(char *buf,
-                                         size_t buf_size,
-                                         const anjay_coap_etag_t *etag) {
+static inline const char *
+etag_to_string(char *buf, size_t buf_size, const anjay_coap_etag_t *etag) {
     AVS_ASSERT(buf_size >= sizeof(etag->value) * 3 + 1,
                "buffer too small to hold ETag");
 
@@ -245,13 +250,12 @@ static inline const char *etag_to_string(char *buf,
     return buf;
 }
 
-#define ETAG_STR(EtagPtr) etag_to_string(&(char[32]){0}[0], 32, (EtagPtr))
+#define ETAG_STR(EtagPtr) etag_to_string(&(char[32]){ 0 }[0], 32, (EtagPtr))
 
-static int read_etag(const avs_coap_msg_t *msg,
-                     anjay_coap_etag_t *out_etag) {
+static int read_etag(const avs_coap_msg_t *msg, anjay_coap_etag_t *out_etag) {
     const avs_coap_opt_t *etag_opt = NULL;
-    int result = avs_coap_msg_find_unique_opt(msg, AVS_COAP_OPT_ETAG,
-                                              &etag_opt);
+    int result =
+            avs_coap_msg_find_unique_opt(msg, AVS_COAP_OPT_ETAG, &etag_opt);
     if (!etag_opt) {
         dl_log(TRACE, "no ETag option");
         out_etag->size = 0;
@@ -269,7 +273,7 @@ static int read_etag(const avs_coap_msg_t *msg,
         return -1;
     }
 
-    out_etag->size = (uint8_t)etag_size;
+    out_etag->size = (uint8_t) etag_size;
     memcpy(out_etag->value, avs_coap_opt_value(etag_opt), out_etag->size);
 
     dl_log(TRACE, "ETag: %s", ETAG_STR(out_etag));
@@ -303,10 +307,9 @@ static int parse_coap_response(const avs_coap_msg_t *msg,
     if (out_block2->has_more
             && out_block2->size != avs_coap_msg_payload_length(msg)) {
         dl_log(DEBUG, "malformed response: mismatched size of intermediate "
-               "packet");
+                      "packet");
         return -1;
     }
-
 
     const size_t requested_seq_num = ctx->bytes_downloaded / ctx->block_size;
     const size_t expected_offset = requested_seq_num * ctx->block_size;
@@ -353,8 +356,8 @@ static void handle_coap_response(const avs_coap_msg_t *msg,
     avs_coap_block_info_t block2;
     anjay_coap_etag_t etag;
     if (parse_coap_response(msg, ctx, &block2, &etag)) {
-        _anjay_downloader_abort_transfer(dl, ctx_ptr,
-                                         ANJAY_DOWNLOAD_ERR_FAILED, EINVAL);
+        _anjay_downloader_abort_transfer(dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED,
+                                         EINVAL);
         return;
     }
 
@@ -362,9 +365,8 @@ static void handle_coap_response(const avs_coap_msg_t *msg,
         ctx->etag = etag;
     } else if (!etag_matches(&etag, &ctx->etag)) {
         dl_log(DEBUG, "remote resource expired, aborting download");
-        _anjay_downloader_abort_transfer(dl, ctx_ptr,
-                                         ANJAY_DOWNLOAD_ERR_EXPIRED,
-                                         ECONNABORTED);
+        _anjay_downloader_abort_transfer(
+                dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_EXPIRED, ECONNABORTED);
         return;
     }
 
@@ -382,8 +384,8 @@ static void handle_coap_response(const avs_coap_msg_t *msg,
                                   (const uint8_t *) payload, payload_size,
                                   (const anjay_etag_t *) &etag,
                                   ctx->common.user_data)) {
-        _anjay_downloader_abort_transfer(dl, ctx_ptr,
-                                         ANJAY_DOWNLOAD_ERR_FAILED, errno);
+        _anjay_downloader_abort_transfer(dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED,
+                                         errno);
         return;
     }
 
@@ -403,8 +405,8 @@ static void abort_transfer_job(anjay_t *anjay, const void *ctx_) {
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             // IAR compiler does not support typeof, so AVS_LIST_FIND_PTR
             // returns void**, which is not implicitly-convertible
-            (AVS_LIST(anjay_download_ctx_t) *)
-            AVS_LIST_FIND_PTR(&anjay->downloader.downloads, ctx);
+            (AVS_LIST(anjay_download_ctx_t) *) AVS_LIST_FIND_PTR(
+                    &anjay->downloader.downloads, ctx);
 
     if (!ctx_ptr) {
         anjay_log(WARNING, "transfer already aborted");
@@ -421,11 +423,11 @@ static void handle_coap_message(anjay_downloader_t *dl,
     assert(ctx_ptr);
     assert(*ctx_ptr);
 
-    avs_coap_msg_t *msg = (avs_coap_msg_t *) avs_coap_ensure_aligned_buffer(
-            anjay->in_buffer);
+    avs_coap_msg_t *msg =
+            (avs_coap_msg_t *) avs_coap_ensure_aligned_buffer(anjay->in_buffer);
 
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
-    avs_coap_ctx_set_tx_params(anjay->coap_ctx, &anjay->udp_tx_params);
+
     int result = avs_coap_ctx_recv(anjay->coap_ctx, ctx->socket, msg,
                                    anjay->in_buffer_size);
 
@@ -444,7 +446,7 @@ static void handle_coap_message(anjay_downloader_t *dl,
         msg_id_must_match = false; // Separate Response
         break;
     case AVS_COAP_MSG_NON_CONFIRMABLE:
-        dl_log(DEBUG, "unexpected msg type: %d, ignoring", (int)type);
+        dl_log(DEBUG, "unexpected msg type: %d, ignoring", (int) type);
         return;
     }
 
@@ -460,16 +462,16 @@ static void handle_coap_message(anjay_downloader_t *dl,
             return;
         } else if (type == AVS_COAP_MSG_RESET) {
             dl_log(DEBUG, "Reset response, aborting transfer");
-            _anjay_downloader_abort_transfer(dl, ctx_ptr,
-                                             ANJAY_DOWNLOAD_ERR_FAILED,
-                                             ECONNREFUSED);
+            _anjay_downloader_abort_transfer(
+                    dl, ctx_ptr, ANJAY_DOWNLOAD_ERR_FAILED, ECONNREFUSED);
             return;
         } else if (type == AVS_COAP_MSG_ACKNOWLEDGEMENT
                    && avs_coap_msg_get_code(msg) == AVS_COAP_CODE_EMPTY) {
-            avs_time_duration_t abort_delay = avs_coap_exchange_lifetime(
-                    &anjay->udp_tx_params);
-            dl_log(DEBUG, "Separate ACK received, waiting "
-                          "%" PRId64 ".%09" PRId32 " for response",
+            avs_time_duration_t abort_delay =
+                    avs_coap_exchange_lifetime(&ctx->tx_params);
+            dl_log(DEBUG,
+                   "Separate ACK received, waiting "
+                   "%" PRId64 ".%09" PRId32 " for response",
                    abort_delay.seconds, abort_delay.nanoseconds);
 
             _anjay_sched_del(anjay->sched, &ctx->sched_job);
@@ -501,10 +503,8 @@ static int get_coap_socket(anjay_downloader_t *dl,
 
 static size_t get_max_acceptable_block_size(size_t in_buffer_size) {
     size_t estimated_response_header_size =
-            AVS_COAP_MAX_HEADER_SIZE
-            + AVS_COAP_MAX_TOKEN_LENGTH
-            + AVS_COAP_OPT_ETAG_MAX_SIZE
-            + AVS_COAP_OPT_BLOCK_MAX_SIZE
+            AVS_COAP_MAX_HEADER_SIZE + AVS_COAP_MAX_TOKEN_LENGTH
+            + AVS_COAP_OPT_ETAG_MAX_SIZE + AVS_COAP_OPT_BLOCK_MAX_SIZE
             + 1; // payload marker
     size_t payload_capacity = in_buffer_size - estimated_response_header_size;
     size_t block_size =
@@ -524,22 +524,26 @@ static int reconnect_coap_transfer(anjay_downloader_t *dl,
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
     char hostname[ANJAY_MAX_URL_HOSTNAME_SIZE];
     char port[ANJAY_MAX_URL_PORT_SIZE];
-    if (avs_net_socket_get_remote_hostname(ctx->socket,
-                                           hostname, sizeof(hostname))
+    if (avs_net_socket_get_remote_hostname(ctx->socket, hostname,
+                                           sizeof(hostname))
             || avs_net_socket_get_remote_port(ctx->socket, port, sizeof(port))
             || avs_net_socket_close(ctx->socket)
             || avs_net_socket_connect(ctx->socket, hostname, port)) {
-        dl_log(WARNING, "could not reconnect socket for download "
-               "id = %" PRIuPTR, ctx->common.id);
+        dl_log(WARNING,
+               "could not reconnect socket for download "
+               "id = %" PRIuPTR,
+               ctx->common.id);
         return -avs_net_socket_errno(ctx->socket);
     } else {
         anjay_t *anjay = _anjay_downloader_get_anjay(dl);
         _anjay_sched_del(anjay->sched, &ctx->sched_job);
         if (_anjay_sched_now(anjay->sched, &ctx->sched_job,
-                             request_next_coap_block_job,
-                             &ctx->common.id, sizeof(ctx->common.id))) {
-            dl_log(WARNING, "could not schedule resumption for download "
-                   "id = %" PRIuPTR, ctx->common.id);
+                             request_next_coap_block_job, &ctx->common.id,
+                             sizeof(ctx->common.id))) {
+            dl_log(WARNING,
+                   "could not schedule resumption for download "
+                   "id = %" PRIuPTR,
+                   ctx->common.id);
             return -ENOMEM;
         }
     }
@@ -547,7 +551,7 @@ static int reconnect_coap_transfer(anjay_downloader_t *dl,
 }
 
 #ifdef ANJAY_TEST
-#include "test/downloader_mock.h"
+#    include "test/downloader_mock.h"
 #endif // ANJAY_TEST
 
 int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
@@ -644,9 +648,23 @@ int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         memcpy(ctx->etag.value, cfg->etag->value, ctx->etag.size);
     }
 
-    if (_anjay_sched_now(anjay->sched, &ctx->sched_job,
+    if (!cfg->coap_tx_params) {
+        ctx->tx_params = anjay->udp_tx_params;
+    } else {
+        const char *error_string = NULL;
+        if (avs_coap_tx_params_valid(cfg->coap_tx_params, &error_string)) {
+            ctx->tx_params = *cfg->coap_tx_params;
+        } else {
+            dl_log(ERROR, "invalid tx_params: %s", error_string);
+            goto error;
+        }
+    }
+
+    if (_anjay_sched_now(anjay->sched,
+                         &ctx->sched_job,
                          request_next_coap_block_job,
-                         &ctx->common.id, sizeof(ctx->common.id))) {
+                         &ctx->common.id,
+                         sizeof(ctx->common.id))) {
         dl_log(ERROR, "could not schedule download job");
         result = -ENOMEM;
         goto error;
@@ -660,5 +678,5 @@ error:
 }
 
 #ifdef ANJAY_TEST
-#include "test/downloader.c"
+#    include "test/downloader.c"
 #endif // ANJAY_TEST

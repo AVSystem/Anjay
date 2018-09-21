@@ -29,4 +29,3 @@ typedef enum {
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_IO_TLV_H */
-

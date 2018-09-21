@@ -15,8 +15,8 @@
  */
 
 #include <anjay_config.h>
-#include <avsystem/commons/stream.h>
 #include <avsystem/commons/base64.h>
+#include <avsystem/commons/stream.h>
 
 #include <anjay/core.h>
 
@@ -61,7 +61,7 @@ static int base64_ret_bytes_flush(base64_ret_bytes_ctx_t *ctx,
         memcpy(chunk, ctx->bytes_cached, ctx->num_bytes_cached);
         size_t new_bytes_written =
                 AVS_MIN(TEXT_CHUNK_SIZE - ctx->num_bytes_cached,
-                          bytes_to_write);
+                        bytes_to_write);
         assert(new_bytes_written <= TEXT_CHUNK_SIZE);
         memcpy(&chunk[ctx->num_bytes_cached], *dataptr, new_bytes_written);
         *dataptr += new_bytes_written;
@@ -98,8 +98,7 @@ static int base64_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
     if (retval) {
         return retval;
     }
-    assert(ctx->num_bytes_cached + bytes_to_store
-               <= sizeof(ctx->bytes_cached));
+    assert(ctx->num_bytes_cached + bytes_to_store <= sizeof(ctx->bytes_cached));
     memcpy(&ctx->bytes_cached[ctx->num_bytes_cached], dataptr, bytes_to_store);
     ctx->num_bytes_cached += bytes_to_store;
     ctx->num_bytes_left -= bytes_to_store;
@@ -111,11 +110,9 @@ static const anjay_ret_bytes_ctx_vtable_t BASE64_OUT_BYTES_VTABLE = {
 };
 
 anjay_ret_bytes_ctx_t *
-_anjay_base64_ret_bytes_ctx_new(avs_stream_abstract_t *stream,
-                                size_t length) {
-    base64_ret_bytes_ctx_t *ctx =
-            (base64_ret_bytes_ctx_t *) avs_calloc(1,
-                                              sizeof(base64_ret_bytes_ctx_t));
+_anjay_base64_ret_bytes_ctx_new(avs_stream_abstract_t *stream, size_t length) {
+    base64_ret_bytes_ctx_t *ctx = (base64_ret_bytes_ctx_t *) avs_calloc(
+            1, sizeof(base64_ret_bytes_ctx_t));
     if (ctx) {
         ctx->vtable = &BASE64_OUT_BYTES_VTABLE;
         ctx->stream = stream;
@@ -134,8 +131,7 @@ int _anjay_base64_ret_bytes_ctx_close(anjay_ret_bytes_ctx_t *ctx_) {
                                        ctx->num_bytes_cached);
 }
 
-void
-_anjay_base64_ret_bytes_ctx_delete(anjay_ret_bytes_ctx_t **ctx_) {
+void _anjay_base64_ret_bytes_ctx_delete(anjay_ret_bytes_ctx_t **ctx_) {
     if (!ctx_ || !*ctx_) {
         return;
     }

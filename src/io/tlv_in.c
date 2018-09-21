@@ -26,7 +26,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 typedef struct {
-    const avs_stream_v_table_t * vtable;
+    const avs_stream_v_table_t *vtable;
     avs_stream_abstract_t *backend;
     char finished;
 } tlv_single_msg_stream_wrapper_t;
@@ -65,8 +65,8 @@ static int tlv_get_some_bytes(anjay_input_ctx_t *ctx_,
     *out_bytes_read = 0;
     buf_size = AVS_MIN(buf_size, ctx->length - ctx->bytes_read);
     int retval = avs_stream_read((avs_stream_abstract_t *) &ctx->stream,
-                                 out_bytes_read, &stream_finished,
-                                 out_buf, buf_size);
+                                 out_bytes_read, &stream_finished, out_buf,
+                                 buf_size);
     ctx->bytes_read += *out_bytes_read;
     if (retval) {
         return retval;
@@ -109,9 +109,8 @@ static int tlv_read_whole_entry(anjay_input_ctx_t *ctx_,
     return tlv_read_to_end(ctx_, out_bytes_read, out_buf, buf_size);
 }
 
-static int tlv_get_string(anjay_input_ctx_t *ctx,
-                          char *out_buf,
-                          size_t buf_size) {
+static int
+tlv_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
     if (!buf_size) {
         return -1;
     }
@@ -121,48 +120,49 @@ static int tlv_get_string(anjay_input_ctx_t *ctx,
     return retval;
 }
 
-#define DEF_GETI(Bits) \
-static int tlv_get_i##Bits (anjay_input_ctx_t *ctx, int##Bits##_t *value) { \
-    uint8_t bytes[Bits / 8]; \
-    size_t bytes_read = 0; \
-    int retval; \
-    if ((retval = tlv_read_whole_entry(ctx, &bytes_read, bytes, sizeof(bytes))) \
-            || !avs_is_power_of_2(bytes_read)) { \
-        return retval ? retval : ANJAY_ERR_BAD_REQUEST; \
-    } \
-    *value = (bytes_read > 0 && ((int8_t) bytes[0]) < 0) ? -1 : 0; \
-    for (size_t i = 0; i < bytes_read; ++i) { \
-        *(uint##Bits##_t *) value <<= 8; \
-        *value += bytes[i]; \
-    } \
-    return 0; \
-}
+#define DEF_GETI(Bits)                                                         \
+    static int tlv_get_i##Bits(anjay_input_ctx_t *ctx, int##Bits##_t *value) { \
+        uint8_t bytes[Bits / 8];                                               \
+        size_t bytes_read = 0;                                                 \
+        int retval;                                                            \
+        if ((retval = tlv_read_whole_entry(ctx, &bytes_read, bytes,            \
+                                           sizeof(bytes)))                     \
+                || !avs_is_power_of_2(bytes_read)) {                           \
+            return retval ? retval : ANJAY_ERR_BAD_REQUEST;                    \
+        }                                                                      \
+        *value = (bytes_read > 0 && ((int8_t) bytes[0]) < 0) ? -1 : 0;         \
+        for (size_t i = 0; i < bytes_read; ++i) {                              \
+            *(uint##Bits##_t *) value <<= 8;                                   \
+            *value += bytes[i];                                                \
+        }                                                                      \
+        return 0;                                                              \
+    }
 
 DEF_GETI(32)
 DEF_GETI(64)
 
-#define DEF_GETF(Type) \
-static int tlv_get_##Type (anjay_input_ctx_t *ctx, Type *value) { \
-    union { \
-        uint32_t f32; \
-        uint64_t f64; \
-    } data; \
-    size_t bytes_read = 0; \
-    int retval = tlv_read_whole_entry(ctx, &bytes_read, &data, 8); \
-    if (retval) { \
-        return retval; \
-    } \
-    switch (bytes_read) { \
-    case 4: \
-        *value = (Type) _anjay_ntohf(data.f32); \
-        return 0; \
-    case 8: \
-        *value = (Type) _anjay_ntohd(data.f64); \
-        return 0; \
-    default: \
-        return ANJAY_ERR_BAD_REQUEST; \
-    } \
-}
+#define DEF_GETF(Type)                                                 \
+    static int tlv_get_##Type(anjay_input_ctx_t *ctx, Type *value) {   \
+        union {                                                        \
+            uint32_t f32;                                              \
+            uint64_t f64;                                              \
+        } data;                                                        \
+        size_t bytes_read = 0;                                         \
+        int retval = tlv_read_whole_entry(ctx, &bytes_read, &data, 8); \
+        if (retval) {                                                  \
+            return retval;                                             \
+        }                                                              \
+        switch (bytes_read) {                                          \
+        case 4:                                                        \
+            *value = (Type) _anjay_ntohf(data.f32);                    \
+            return 0;                                                  \
+        case 8:                                                        \
+            *value = (Type) _anjay_ntohd(data.f64);                    \
+            return 0;                                                  \
+        default:                                                       \
+            return ANJAY_ERR_BAD_REQUEST;                              \
+        }                                                              \
+    }
 
 DEF_GETF(float)
 DEF_GETF(double)
@@ -190,7 +190,8 @@ static int tlv_get_bool(anjay_input_ctx_t *ctx, bool *value) {
 }
 
 static int tlv_get_objlnk(anjay_input_ctx_t *ctx,
-                          anjay_oid_t *out_oid, anjay_iid_t *out_iid) {
+                          anjay_oid_t *out_oid,
+                          anjay_iid_t *out_iid) {
     AVS_STATIC_ASSERT(sizeof(uint16_t[2]) == 4, uint16_t_array_size);
     uint16_t raw[2];
     size_t bytes_read = 0;
@@ -204,21 +205,20 @@ static int tlv_get_objlnk(anjay_input_ctx_t *ctx,
     return 0;
 }
 
-#define DEF_READ_SHORTENED(Type) \
-static int read_shortened_##Type (avs_stream_abstract_t *stream, \
-                                  size_t length, \
-                                  Type *out) { \
-    uint8_t bytes[sizeof(Type)]; \
-    int retval = avs_stream_read_reliably(stream, bytes, length); \
-    if (retval) { \
-        return retval; \
-    } \
-    *out = 0; \
-    for (size_t i = 0; i < length; ++i) { \
-        *out = (Type) ((*out << 8) + bytes[i]); \
-    } \
-    return 0; \
-}
+#define DEF_READ_SHORTENED(Type)                                      \
+    static int read_shortened_##Type(avs_stream_abstract_t *stream,   \
+                                     size_t length, Type *out) {      \
+        uint8_t bytes[sizeof(Type)];                                  \
+        int retval = avs_stream_read_reliably(stream, bytes, length); \
+        if (retval) {                                                 \
+            return retval;                                            \
+        }                                                             \
+        *out = 0;                                                     \
+        for (size_t i = 0; i < length; ++i) {                         \
+            *out = (Type) ((*out << 8) + bytes[i]);                   \
+        }                                                             \
+        return 0;                                                     \
+    }
 
 DEF_READ_SHORTENED(uint16_t)
 DEF_READ_SHORTENED(size_t)
@@ -250,7 +250,8 @@ static anjay_id_type_t convert_id_type(uint8_t typefield) {
 }
 
 static int tlv_get_id(anjay_input_ctx_t *ctx_,
-                      anjay_id_type_t *out_type, uint16_t *out_id) {
+                      anjay_id_type_t *out_type,
+                      uint16_t *out_id) {
     tlv_in_t *ctx = (tlv_in_t *) ctx_;
     if (ctx->id >= 0) {
         *out_type = ctx->id_type;
@@ -273,16 +274,16 @@ static int tlv_get_id(anjay_input_ctx_t *ctx_,
     }
     *out_type = convert_id_type(typefield);
     if ((retval =
-            read_shortened_uint16_t((avs_stream_abstract_t *) &ctx->stream,
-                                    (typefield & 0x20) ? 2 : 1, out_id))) {
+                 read_shortened_uint16_t((avs_stream_abstract_t *) &ctx->stream,
+                                         (typefield & 0x20) ? 2 : 1, out_id))) {
         return retval;
     }
     size_t length_length = ((typefield >> 3) & 3);
     if (!length_length) {
         ctx->length = (typefield & 7);
-    } else if ((retval =
-            read_shortened_size_t((avs_stream_abstract_t *) &ctx->stream,
-                                  length_length, &ctx->length))) {
+    } else if ((retval = read_shortened_size_t(
+                        (avs_stream_abstract_t *) &ctx->stream, length_length,
+                        &ctx->length))) {
         return retval;
     }
     ctx->bytes_read = 0;
@@ -301,9 +302,9 @@ static int tlv_next_entry(anjay_input_ctx_t *ctx_) {
     size_t ignore_bytes_read;
     bool message_finished = false;
     while (!message_finished) {
-        int retval = tlv_get_some_bytes(ctx_, &ignore_bytes_read,
-                                        &message_finished,
-                                        ignore, sizeof(ignore));
+        int retval =
+                tlv_get_some_bytes(ctx_, &ignore_bytes_read, &message_finished,
+                                   ignore, sizeof(ignore));
         if (retval) {
             return retval;
         }
@@ -323,18 +324,18 @@ static int tlv_in_close(anjay_input_ctx_t *ctx_) {
 }
 
 static const anjay_input_ctx_vtable_t TLV_IN_VTABLE = {
-    tlv_get_some_bytes,
-    tlv_get_string,
-    tlv_get_i32,
-    tlv_get_i64,
-    tlv_get_float,
-    tlv_get_double,
-    tlv_get_bool,
-    tlv_get_objlnk,
-    tlv_in_attach_child,
-    tlv_get_id,
-    tlv_next_entry,
-    tlv_in_close
+    .some_bytes = tlv_get_some_bytes,
+    .string = tlv_get_string,
+    .i32 = tlv_get_i32,
+    .i64 = tlv_get_i64,
+    .f32 = tlv_get_float,
+    .f64 = tlv_get_double,
+    .boolean = tlv_get_bool,
+    .objlnk = tlv_get_objlnk,
+    .attach_child = tlv_in_attach_child,
+    .get_id = tlv_get_id,
+    .next_entry = tlv_next_entry,
+    .close = tlv_in_close
 };
 
 static int tlv_safe_read(avs_stream_abstract_t *stream_,
@@ -380,5 +381,5 @@ int _anjay_input_tlv_create(anjay_input_ctx_t **out,
 }
 
 #ifdef ANJAY_TEST
-#include "test/tlv_in.c"
+#    include "test/tlv_in.c"
 #endif

@@ -21,10 +21,10 @@
 
 #include "../servers.h"
 
-#include "connection_info.h"
+#include "connections.h"
 
 #if !defined(ANJAY_SERVERS_INTERNALS) && !defined(ANJAY_TEST)
-#error "Headers from servers/ are not meant to be included from outside"
+#    error "Headers from servers/ are not meant to be included from outside"
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -107,86 +107,70 @@ struct anjay_server_info_struct {
     avs_time_duration_t next_retry_delay;
 
     /**
-     * The fields in data_active substruct are valid only for active servers...
-     * except they are not. They are also used for determining whether the
-     * server is active or not (as sockets are stored within
-     * anjay_server_connection_t objects, see the main docstring for
+     * Cached URI of the given server - this is exactly the value returned by
+     * _anjay_server_uri().
+     */
+    anjay_url_t uri;
+
+    /**
+     * State of all connections to remote servers possible for a given server.
+     * The anjay_connections_t type wraps the actual server connections,
+     * information about which is currently the "primary" one, and manages the
+     * connection state flow.
+     *
+     * This object is also used for determining whether the server is active or
+     * not (as sockets are stored inside, see the main docstring for
      * anjay_server_info_t for details), and also holds non-transient data that
      * is of no use when the server is inactive, but is preserved between
      * activation attempts (so that session resumption works across
      * activations).
      */
-    struct {
-        /**
-         * Cached URI of the given server - this is exactly the value returned
-         * by _anjay_server_uri().
-         */
-        anjay_url_t uri;
-
-        /**
-         * Connection (socket, binding) entries - see docs to
-         * anjay_server_connection_t in connection_info.h for details.
-         */
-        anjay_server_connection_t udp_connection;
-
-        /**
-         * Information about which connection is currently the "primary" one.
-         * The "primary" connection is the one on which the autonomous outgoing
-         * messages (i.e. Register/Update or Bootstrap Request) are sent. See
-         * the docs in server.h for details (Ctrl+F the word "primary").
-         */
-        anjay_connection_type_t primary_conn_type;
-
-        /**
-         * Information about current registration status of the server. See the
-         * docs for _anjay_server_registration_info() and
-         * _anjay_server_update_registration_info() for details.
-         */
-        anjay_registration_info_t registration_info;
-    } data_active;
+    anjay_connections_t connections;
 
     /**
-     * The fields in data_inactive substruct are valid only for inactive servers
+     * Information about current registration status of the server. See the
+     * docs for _anjay_server_registration_info() and
+     * _anjay_server_update_registration_info() for details.
      */
-    struct {
-        /**
-         * When a reactivate job is scheduled (and its handle stored in
-         * next_action_handle), this field is filled with the time for which the
-         * reactivate job is (initially) scheduled. If Anjay enters offline
-         * mode, we delete all such jobs (because we don't want servers to be
-         * activated during offline mode) - but thanks to this value, we can
-         * reschedule activation at appropriate time after exiting offline mode.
-         *
-         * This logic has been first introduced in internal diff D7056, which
-         * limited the number of places in code where Registers and Updates may
-         * happen, to deliver more consistent behaviour of those. Previously,
-         * enter_offline_job() did not completely deactivate the servers, but
-         * just suspended (closed) their sockets, and
-         * _anjay_server_ensure_valid_registration() was called directly from
-         * reload_active_server() (as the servers exiting from offline modes
-         * were considered active). This yielded inconsistent behaviour of
-         * Update error handling - Updates generated in this way were not
-         * degenerating to Registers immediately.
-         */
-        avs_time_real_t reactivate_time;
+    anjay_registration_info_t registration_info;
 
-        /**
-         * True if, and only if, the last activation attempt was unsuccessful,
-         * for whatever reason - not necessarily those included in
-         * num_icmp_failures logic.
-         */
-        bool reactivate_failed;
+    /**
+     * When a reactivate job is scheduled (and its handle stored in
+     * next_action_handle), this field is filled with the time for which the
+     * reactivate job is (initially) scheduled. If Anjay enters offline mode, we
+     * delete all such jobs (because we don't want servers to be activated
+     * during offline mode) - but thanks to this value, we can reschedule
+     * activation at appropriate time after exiting offline mode.
+     *
+     * This logic has been first introduced in internal diff D7056, which
+     * limited the number of places in code where Registers and Updates may
+     * happen, to deliver more consistent behaviour of those. Previously,
+     * enter_offline_job() did not completely deactivate the servers, but just
+     * suspended (closed) their sockets, and
+     * _anjay_server_ensure_valid_registration() was called directly from
+     * reload_active_server() (as the servers exiting from offline modes were
+     * considered active). This yielded inconsistent behaviour of Update error
+     * handling - Updates generated in this way were not degenerating to
+     * Registers immediately.
+     */
+    avs_time_real_t reactivate_time;
 
-        /**
-         * Counter that is increased in case of some kind of ICMP Unreachable
-         * message received while trying to communicate with the server.
-         *
-         * Its value also skips to anjay->max_icmp_failures in case of a 4.03
-         * Forbidden CoAP response to Register, a network timeout, or a DTLS
-         * handshake error.
-         */
-        uint32_t num_icmp_failures;
-    } data_inactive;
+    /**
+     * True if, and only if, the last activation attempt was unsuccessful, for
+     * whatever reason - not necessarily those included in num_icmp_failures
+     * logic.
+     */
+    bool reactivate_failed;
+
+    /**
+     * Counter that is increased in case of some kind of ICMP Unreachable
+     * message received while trying to communicate with the server.
+     *
+     * Its value also skips to anjay->max_icmp_failures in case of a 4.03
+     * Forbidden CoAP response to Register, a network timeout, or a DTLS
+     * handshake error.
+     */
+    uint32_t num_icmp_failures;
 };
 
 /**
@@ -222,8 +206,7 @@ int _anjay_servers_schedule_next_retryable(anjay_sched_t *sched,
 void _anjay_servers_internal_deregister(anjay_t *anjay,
                                         anjay_servers_t *servers);
 
-void _anjay_servers_internal_cleanup(anjay_t *anjay,
-                                     anjay_servers_t *servers);
+void _anjay_servers_internal_cleanup(anjay_t *anjay, anjay_servers_t *servers);
 
 void _anjay_server_clean_active_data(const anjay_t *anjay,
                                      anjay_server_info_t *server);
@@ -238,8 +221,8 @@ bool _anjay_server_active(anjay_server_info_t *server);
 AVS_LIST(anjay_server_info_t) *
 _anjay_servers_find_insert_ptr(anjay_servers_t *servers, anjay_ssid_t ssid);
 
-AVS_LIST(anjay_server_info_t) *
-_anjay_servers_find_ptr(anjay_servers_t *servers, anjay_ssid_t ssid);
+AVS_LIST(anjay_server_info_t) *_anjay_servers_find_ptr(anjay_servers_t *servers,
+                                                       anjay_ssid_t ssid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

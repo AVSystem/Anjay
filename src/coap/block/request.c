@@ -16,18 +16,18 @@
 
 #include <anjay_config.h>
 
-#include <string.h>
 #include <inttypes.h>
+#include <string.h>
 
 #define ANJAY_COAP_STREAM_INTERNALS
 
 #include "../coap_log.h"
+#include "../id_source/auto.h"
 #include "../stream/common.h"
 #include "../stream/out.h"
-#include "../id_source/auto.h"
 
-#include "transfer_impl.h"
 #include "request.h"
+#include "transfer_impl.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -36,8 +36,8 @@ static bool is_separate_ack(const avs_coap_msg_t *msg,
     avs_coap_msg_type_t type = avs_coap_msg_get_type(msg);
 
     return type == AVS_COAP_MSG_ACKNOWLEDGEMENT
-            && avs_coap_msg_get_code(msg) == AVS_COAP_CODE_EMPTY
-            && avs_coap_msg_get_id(request) == avs_coap_msg_get_id(msg);
+           && avs_coap_msg_get_code(msg) == AVS_COAP_CODE_EMPTY
+           && avs_coap_msg_get_id(request) == avs_coap_msg_get_id(msg);
 }
 
 static bool response_token_matches(const avs_coap_msg_t *request,
@@ -73,8 +73,9 @@ static bool is_matching_response(const avs_coap_msg_t *msg,
     return true;
 }
 
-static int block_request_update_block_option(coap_block_transfer_ctx_t *ctx,
-                                             const avs_coap_block_info_t *block) {
+static int
+block_request_update_block_option(coap_block_transfer_ctx_t *ctx,
+                                  const avs_coap_block_info_t *block) {
     if (block->size == ctx->block.size) {
         ++ctx->block.seq_num;
         return 0;
@@ -84,13 +85,15 @@ static int block_request_update_block_option(coap_block_transfer_ctx_t *ctx,
 
     if (block->seq_num != 0) {
         coap_log(WARNING, "server requested block size change in the middle of "
-                 "a transfer");
+                          "a transfer");
         return -1;
     }
 
     if (block->size > ctx->block.size) {
-        coap_log(WARNING, "server requested block size bigger than original"
-                 "(%u, was %u)", block->size, ctx->block.size);
+        coap_log(WARNING,
+                 "server requested block size bigger than original"
+                 "(%u, was %u)",
+                 block->size, ctx->block.size);
         return -1;
     }
 
@@ -106,20 +109,21 @@ static int handle_block_options(const avs_coap_msg_t *msg,
     if (avs_coap_get_block_info(msg, AVS_COAP_BLOCK1, &block1)
             || !block1.valid) {
         coap_log(DEBUG, "BLOCK1 missing or invalid in response to block-wise "
-                 "request");
+                        "request");
         return -1;
     }
     avs_coap_block_info_t block2;
     if (avs_coap_get_block_info(msg, AVS_COAP_BLOCK2, &block2)
             || block2.valid) {
         coap_log(DEBUG, "block-wise responses to block-wise requests are not "
-                 "supported");
+                        "supported");
         return -1;
     }
 
     if (block1.seq_num != ctx->block.seq_num) {
-        coap_log(DEBUG, "mismatched block number: got %" PRIu32 ", expected %"
-                 PRIu32, block1.seq_num, ctx->block.seq_num);
+        coap_log(DEBUG,
+                 "mismatched block number: got %" PRIu32 ", expected %" PRIu32,
+                 block1.seq_num, ctx->block.seq_num);
         return -1;
     }
 

@@ -32,8 +32,8 @@ static int ssid_cmp(const void *a, const void *b, size_t element_size) {
 
 static bool uri_protocol_matching(anjay_udp_security_mode_t security_mode,
                                   const char *uri) {
-    const char *expected_prefix = (security_mode == ANJAY_UDP_SECURITY_NOSEC)
-            ? "coap:" : "coaps:";
+    const char *expected_prefix =
+            (security_mode == ANJAY_UDP_SECURITY_NOSEC) ? "coap:" : "coaps:";
     return strncmp(uri, expected_prefix, strlen(expected_prefix)) == 0;
 }
 
@@ -73,7 +73,7 @@ static int validate_instance(sec_instance_t *it) {
         return -1;
     }
     if (_anjay_sec_validate_udp_security_mode(
-            (int32_t) it->udp_security_mode)) {
+                (int32_t) it->udp_security_mode)) {
         LOG_VALIDATION_FAILED(it, "UDP Security mode %d not supported",
                               (int) it->udp_security_mode);
         return -1;
@@ -98,14 +98,14 @@ static int validate_instance(sec_instance_t *it) {
     }
     if (it->has_sms_security_mode) {
         if (_anjay_sec_validate_sms_security_mode(
-                (int32_t) it->sms_security_mode)) {
+                    (int32_t) it->sms_security_mode)) {
             LOG_VALIDATION_FAILED(it, "SMS Security mode %d not supported",
                                   (int) it->sms_security_mode);
             return -1;
         }
         if ((it->sms_security_mode == ANJAY_SMS_SECURITY_DTLS_PSK
-                || it->sms_security_mode == ANJAY_SMS_SECURITY_SECURE_PACKET)
-            && (!it->sms_key_params.data || !it->sms_secret_key.data)) {
+             || it->sms_security_mode == ANJAY_SMS_SECURITY_SECURE_PACKET)
+                && (!it->sms_key_params.data || !it->sms_secret_key.data)) {
             LOG_VALIDATION_FAILED(
                     it, "SMS security credentials not fully configured");
             return -1;

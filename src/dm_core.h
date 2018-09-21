@@ -26,8 +26,8 @@
 #include <anjay_modules/dm_utils.h>
 
 #include "coap/coap_stream.h"
-#include "observe/observe_core.h"
 #include "dm/dm_attributes.h"
+#include "observe/observe_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -64,38 +64,38 @@ _anjay_request_attributes_equal(const anjay_request_attributes_t *left,
                                 const anjay_request_attributes_t *right) {
     return (left->has_min_period
                     ? (right->has_min_period
-                            && left->values.standard.common.min_period
-                                    == right->values.standard.common.min_period)
+                       && left->values.standard.common.min_period
+                                  == right->values.standard.common.min_period)
                     : !right->has_min_period)
-            && (left->has_max_period
-                    ? (right->has_max_period
-                            && left->values.standard.common.max_period
-                                    == right->values.standard.common.max_period)
-                    : !right->has_max_period)
-            && (left->has_greater_than
-                    ? (right->has_greater_than
-                            && _anjay_double_attr_equal(
-                                    left->values.standard.greater_than,
-                                    right->values.standard.greater_than))
-                    : !right->has_greater_than)
-            && (left->has_less_than
-                    ? (right->has_less_than
-                            && _anjay_double_attr_equal(
-                                    left->values.standard.less_than,
-                                    right->values.standard.less_than))
-                    : !right->has_less_than)
-            && (left->has_step
-                    ? (right->has_step
-                            && _anjay_double_attr_equal(
-                                    left->values.standard.step,
-                                    right->values.standard.step))
-                    : !right->has_step)
+           && (left->has_max_period
+                       ? (right->has_max_period
+                          && left->values.standard.common.max_period
+                                     == right->values.standard.common
+                                                .max_period)
+                       : !right->has_max_period)
+           && (left->has_greater_than
+                       ? (right->has_greater_than
+                          && _anjay_double_attr_equal(
+                                     left->values.standard.greater_than,
+                                     right->values.standard.greater_than))
+                       : !right->has_greater_than)
+           && (left->has_less_than
+                       ? (right->has_less_than
+                          && _anjay_double_attr_equal(
+                                     left->values.standard.less_than,
+                                     right->values.standard.less_than))
+                       : !right->has_less_than)
+           && (left->has_step ? (right->has_step
+                                 && _anjay_double_attr_equal(
+                                            left->values.standard.step,
+                                            right->values.standard.step))
+                              : !right->has_step)
 #ifdef WITH_CON_ATTR
-            && (left->custom.has_con
-                    ? (right->custom.has_con
-                            && left->values.custom.data.con
-                                    == right->values.custom.data.con)
-                    : !right->custom.has_con)
+           && (left->custom.has_con
+                       ? (right->custom.has_con
+                          && left->values.custom.data.con
+                                     == right->values.custom.data.con)
+                       : !right->custom.has_con)
 #endif // WITH_CON_ATTR
             ;
 }
@@ -119,15 +119,15 @@ typedef struct {
 static inline bool _anjay_request_equal(const anjay_request_t *left,
                                         const anjay_request_t *right) {
     return left->msg_type == right->msg_type
-            && left->request_code == right->request_code
-            && left->is_bs_uri == right->is_bs_uri
-            && _anjay_uri_path_equal(&left->uri, &right->uri)
-            && left->action == right->action
-            && left->content_format == right->content_format
-            && left->requested_format == right->requested_format
-            && left->observe == right->observe
-            && _anjay_request_attributes_equal(&left->attributes,
-                                               &right->attributes);
+           && left->request_code == right->request_code
+           && left->is_bs_uri == right->is_bs_uri
+           && _anjay_uri_path_equal(&left->uri, &right->uri)
+           && left->action == right->action
+           && left->content_format == right->content_format
+           && left->requested_format == right->requested_format
+           && left->observe == right->observe
+           && _anjay_request_attributes_equal(&left->attributes,
+                                              &right->attributes);
 }
 
 typedef struct {
@@ -140,22 +140,21 @@ typedef struct {
     bool observe_serial;
 } anjay_dm_read_args_t;
 
-#define REQUEST_TO_DM_READ_ARGS(Anjay, Request) \
-        (const anjay_dm_read_args_t) { \
-            .ssid = _anjay_dm_current_ssid(Anjay), \
-            .uri = (Request)->uri, \
-            .requested_format = (Request)->requested_format, \
-            .observe_serial = \
-                    ((Request)->observe == ANJAY_COAP_OBSERVE_REGISTER) \
-        }
+#define REQUEST_TO_DM_READ_ARGS(Anjay, Request)                               \
+    (const anjay_dm_read_args_t) {                                            \
+        .ssid = _anjay_dm_current_ssid(Anjay),                                \
+        .uri = (Request)->uri,                                                \
+        .requested_format = (Request)->requested_format,                      \
+        .observe_serial = ((Request)->observe == ANJAY_COAP_OBSERVE_REGISTER) \
+    }
 
 #define REQUEST_TO_ACTION_INFO(Anjay, Request) \
-        (const anjay_action_info_t) { \
-            .oid = (Request)->uri.oid, \
-            .iid = (Request)->uri.iid, \
-            .ssid = _anjay_dm_current_ssid(Anjay), \
-            .action = (Request)->action \
-        }
+    (const anjay_action_info_t) {              \
+        .oid = (Request)->uri.oid,             \
+        .iid = (Request)->uri.iid,             \
+        .ssid = _anjay_dm_current_ssid(Anjay), \
+        .action = (Request)->action            \
+    }
 
 int _anjay_dm_transaction_validate(anjay_t *anjay);
 int _anjay_dm_transaction_finish_without_validation(anjay_t *anjay, int result);
@@ -187,7 +186,7 @@ const char *_anjay_debug_make_path__(char *buffer,
                                      const anjay_uri_path_t *uri);
 
 #define ANJAY_DEBUG_MAKE_PATH(path) \
-    (_anjay_debug_make_path__(&(char[32]){0}[0], 32, (path)))
+    (_anjay_debug_make_path__(&(char[32]){ 0 }[0], 32, (path)))
 
 static inline int _anjay_dm_map_present_result(int result) {
     if (!result) {

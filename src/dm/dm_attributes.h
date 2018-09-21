@@ -41,7 +41,10 @@ typedef struct {
     int32_t rid;
     /** Server, for which Attributes shall be obtained. */
     anjay_ssid_t ssid;
-    /** true if no matter what we are interested in inherited Server level attributes. */
+    /**
+     * true if no matter what we are interested in inherited Server level
+     * attributes.
+     */
     bool with_server_level_attrs;
 } anjay_dm_attrs_query_details_t;
 
@@ -53,18 +56,22 @@ typedef struct {
  * Resource and/or Instance is present - caller must ensure that it is indeed
  * the case.
  *
- * Attribute inheritance logic (assuming Resource and Instance ids are provided):
+ * Attribute inheritance logic (assuming Resource and Instance ids are
+ * provided):
+ *
  *  0. Set *out to ANJAY_DM_ATTRIBS_EMPTY.
  *  1. Read Resource attributes and combine them with *out attributes.
  *  2. Read Instance attributes and combine them with *out attributes.
  *  3. Read Object attributes and combine them with *out attributes.
- *  4. (If with_server_level_attrs is set) Read Server attributes and combine them
- *     with *out attributes.
+ *  4. (If with_server_level_attrs is set) Read Server attributes and combine
+ *     them with *out attributes.
  *
  * Additional information:
- * If any step from above fails, then the function returns negative value.
- * If @p query->rid is negative, then attributes of the Resource are not queried.
- * If @p query->iid is ANJAY_IID_INVALID, then attributes of the Instance are not queried.
+ * - If any step from above fails, then the function returns negative value.
+ * - If @p query->rid is negative, then attributes of the Resource are not
+ *   queried.
+ * - If @p query->iid is ANJAY_IID_INVALID, then attributes of the Instance
+ *   are not queried.
  *
  * @param anjay     ANJAY object to operate on.
  * @param query     Query details.

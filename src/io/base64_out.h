@@ -24,13 +24,10 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 anjay_ret_bytes_ctx_t *
-_anjay_base64_ret_bytes_ctx_new(avs_stream_abstract_t *stream,
-                                size_t length);
-int
-_anjay_base64_ret_bytes_ctx_close(anjay_ret_bytes_ctx_t *ctx);
+_anjay_base64_ret_bytes_ctx_new(avs_stream_abstract_t *stream, size_t length);
+int _anjay_base64_ret_bytes_ctx_close(anjay_ret_bytes_ctx_t *ctx);
 
-void
-_anjay_base64_ret_bytes_ctx_delete(anjay_ret_bytes_ctx_t **ctx);
+void _anjay_base64_ret_bytes_ctx_delete(anjay_ret_bytes_ctx_t **ctx);
 
 VISIBILITY_PRIVATE_HEADER_END
 

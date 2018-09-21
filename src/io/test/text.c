@@ -30,33 +30,29 @@ static void text_out_destroy(anjay_ret_bytes_ctx_t ***ctx) {
     }
 }
 
-#define TEST_ENV(Size) \
-    char buf[Size]; \
+#define TEST_ENV(Size)                                                 \
+    char buf[Size];                                                    \
     avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER; \
-    int outctx_errno; \
-    text_out_t out = { \
-        &TEXT_OUT_VTABLE, \
-        NULL, \
-        &outctx_errno, \
-        (avs_stream_abstract_t *) &outbuf, \
-        false \
-    }; \
-    SCOPED_PTR(anjay_ret_bytes_ctx_t *, text_out_destroy) _ret_bytes = &out.bytes; \
-    (void) _ret_bytes; \
-    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf)) \
+    int outctx_errno;                                                  \
+    text_out_t out = { &TEXT_OUT_VTABLE, NULL, &outctx_errno,          \
+                       (avs_stream_abstract_t *) &outbuf, false };     \
+    SCOPED_PTR(anjay_ret_bytes_ctx_t *, text_out_destroy)              \
+    _ret_bytes = &out.bytes;                                           \
+    (void) _ret_bytes;                                                 \
+    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf))
 
 static void stringify_buf(avs_stream_outbuf_t *outbuf) {
     outbuf->message_finished = 0;
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write((avs_stream_abstract_t *) outbuf,
-                                             "", 1));
+    AVS_UNIT_ASSERT_SUCCESS(
+            avs_stream_write((avs_stream_abstract_t *) outbuf, "", 1));
 }
 
 AVS_UNIT_TEST(text_out, string) {
     TEST_ENV(512);
     static const char TEST_STRING[] = "Hello, world!";
 
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string((anjay_output_ctx_t *) &out,
-                                             TEST_STRING));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_ret_string((anjay_output_ctx_t *) &out, TEST_STRING));
     stringify_buf(&outbuf);
     AVS_UNIT_ASSERT_EQUAL_STRING(buf, TEST_STRING);
 }
@@ -65,16 +61,18 @@ AVS_UNIT_TEST(text_out, string_err) {
     TEST_ENV(8);
     static const char TEST_STRING[] = "Hello, world!";
 
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_string((anjay_output_ctx_t *) &out,
-                                            TEST_STRING));
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_ret_string((anjay_output_ctx_t *) &out, TEST_STRING));
 }
 
-#define TEST_i32(Val) do { \
-    TEST_ENV(512); \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32((anjay_output_ctx_t *) &out, Val)); \
-    stringify_buf(&outbuf); \
-    AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val); \
-} while (false)
+#define TEST_i32(Val)                                             \
+    do {                                                          \
+        TEST_ENV(512);                                            \
+        AVS_UNIT_ASSERT_SUCCESS(                                  \
+                anjay_ret_i32((anjay_output_ctx_t *) &out, Val)); \
+        stringify_buf(&outbuf);                                   \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val);                  \
+    } while (false)
 
 AVS_UNIT_TEST(text_out, i32) {
     TEST_i32(514);
@@ -86,13 +84,14 @@ AVS_UNIT_TEST(text_out, i32) {
 
 #undef TEST_i32
 
-#define TEST_i64(Val) do { \
-    TEST_ENV(512); \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i64((anjay_output_ctx_t *) &out, \
-                                          Val##LL)); \
-    stringify_buf(&outbuf); \
-    AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val); \
-} while (false)
+#define TEST_i64(Val)                                                 \
+    do {                                                              \
+        TEST_ENV(512);                                                \
+        AVS_UNIT_ASSERT_SUCCESS(                                      \
+                anjay_ret_i64((anjay_output_ctx_t *) &out, Val##LL)); \
+        stringify_buf(&outbuf);                                       \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val);                      \
+    } while (false)
 
 AVS_UNIT_TEST(text_out, i64) {
     TEST_i64(-1000000000000000000);
@@ -101,13 +100,14 @@ AVS_UNIT_TEST(text_out, i64) {
 
 #undef TEST_i64
 
-#define TEST_FLOAT(Val) do { \
-    TEST_ENV(512); \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_float((anjay_output_ctx_t *) &out, \
-                            (float) (Val))); \
-    stringify_buf(&outbuf); \
-    AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val); \
-} while (false)
+#define TEST_FLOAT(Val)                                                       \
+    do {                                                                      \
+        TEST_ENV(512);                                                        \
+        AVS_UNIT_ASSERT_SUCCESS(                                              \
+                anjay_ret_float((anjay_output_ctx_t *) &out, (float) (Val))); \
+        stringify_buf(&outbuf);                                               \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val);                              \
+    } while (false)
 
 AVS_UNIT_TEST(text_out, f32) {
     TEST_FLOAT(0);
@@ -119,12 +119,14 @@ AVS_UNIT_TEST(text_out, f32) {
 
 #undef TEST_FLOAT
 
-#define TEST_DOUBLE(Val) do { \
-    TEST_ENV(512); \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_double((anjay_output_ctx_t *) &out, Val)); \
-    stringify_buf(&outbuf); \
-    AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val); \
-} while (false)
+#define TEST_DOUBLE(Val)                                             \
+    do {                                                             \
+        TEST_ENV(512);                                               \
+        AVS_UNIT_ASSERT_SUCCESS(                                     \
+                anjay_ret_double((anjay_output_ctx_t *) &out, Val)); \
+        stringify_buf(&outbuf);                                      \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val);                     \
+    } while (false)
 
 AVS_UNIT_TEST(text_out, f64) {
     TEST_DOUBLE(0);
@@ -136,12 +138,14 @@ AVS_UNIT_TEST(text_out, f64) {
 
 #undef TEST_DOUBLE
 
-#define TEST_BOOL(Val) do { \
-    TEST_ENV(512); \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bool((anjay_output_ctx_t *) &out, Val)); \
-    stringify_buf(&outbuf); \
-    AVS_UNIT_ASSERT_EQUAL_STRING(buf, Val ? "1" : "0"); \
-} while (false)
+#define TEST_BOOL(Val)                                             \
+    do {                                                           \
+        TEST_ENV(512);                                             \
+        AVS_UNIT_ASSERT_SUCCESS(                                   \
+                anjay_ret_bool((anjay_output_ctx_t *) &out, Val)); \
+        stringify_buf(&outbuf);                                    \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, Val ? "1" : "0");        \
+    } while (false)
 
 AVS_UNIT_TEST(text_out, boolean) {
     TEST_BOOL(true);
@@ -153,13 +157,14 @@ AVS_UNIT_TEST(text_out, boolean) {
 
 #undef TEST_BOOL
 
-#define TEST_OBJLNK(Oid, Iid) do { \
-    TEST_ENV(512); \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_objlnk((anjay_output_ctx_t *) &out, \
-                            Oid, Iid)); \
-    stringify_buf(&outbuf); \
-    AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Oid ":" #Iid); \
-} while (false)
+#define TEST_OBJLNK(Oid, Iid)                                             \
+    do {                                                                  \
+        TEST_ENV(512);                                                    \
+        AVS_UNIT_ASSERT_SUCCESS(                                          \
+                anjay_ret_objlnk((anjay_output_ctx_t *) &out, Oid, Iid)); \
+        stringify_buf(&outbuf);                                           \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Oid ":" #Iid);                 \
+    } while (false)
 
 AVS_UNIT_TEST(text_out, objlnk) {
     TEST_OBJLNK(0, 0);
@@ -174,7 +179,8 @@ AVS_UNIT_TEST(text_out, objlnk) {
 
 AVS_UNIT_TEST(text_out, unimplemented) {
     TEST_ENV(512);
-    AVS_UNIT_ASSERT_NOT_NULL(anjay_ret_bytes_begin((anjay_output_ctx_t *) &out, 3));
+    AVS_UNIT_ASSERT_NOT_NULL(
+            anjay_ret_bytes_begin((anjay_output_ctx_t *) &out, 3));
     AVS_UNIT_ASSERT_NULL(anjay_ret_array_start((anjay_output_ctx_t *) &out));
     AVS_UNIT_ASSERT_FAILED(
             anjay_ret_array_index((anjay_output_ctx_t *) &out, 1));
@@ -185,23 +191,24 @@ AVS_UNIT_TEST(text_out, unimplemented) {
 
 /////////////////////////////////////////////////////////////////////// DECODING
 
-#define TEST_ENV(Size) \
-    avs_stream_abstract_t *stream = NULL; \
+#define TEST_ENV(Size)                                                \
+    avs_stream_abstract_t *stream = NULL;                             \
     AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, Size)); \
-    anjay_input_ctx_t *in; \
+    anjay_input_ctx_t *in;                                            \
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_text_create(&in, &stream, false));
 
-#define TEST_TEARDOWN do { \
-    _anjay_input_ctx_destroy(&in); \
-    avs_stream_cleanup(&stream); \
-} while (0)
+#define TEST_TEARDOWN                  \
+    do {                               \
+        _anjay_input_ctx_destroy(&in); \
+        avs_stream_cleanup(&stream);   \
+    } while (0)
 
 AVS_UNIT_TEST(text_in, string) {
     TEST_ENV(64);
 
     static const char TEST_STRING[] = "Hello, world!";
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream,
-                                             TEST_STRING, strlen(TEST_STRING)));
+    AVS_UNIT_ASSERT_SUCCESS(
+            avs_stream_write(stream, TEST_STRING, strlen(TEST_STRING)));
 
     char buf[64];
     AVS_UNIT_ASSERT_SUCCESS(anjay_get_string(in, buf, sizeof(buf)));
@@ -214,8 +221,8 @@ AVS_UNIT_TEST(text_in, string_too_long) {
     TEST_ENV(16);
 
     static const char TEST_STRING[] = "Hello, world!";
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream,
-                                             TEST_STRING, strlen(TEST_STRING)));
+    AVS_UNIT_ASSERT_SUCCESS(
+            avs_stream_write(stream, TEST_STRING, strlen(TEST_STRING)));
 
     char buf[8];
     AVS_UNIT_ASSERT_FAILED(anjay_get_string(in, buf, sizeof(buf)));
@@ -224,24 +231,26 @@ AVS_UNIT_TEST(text_in, string_too_long) {
     TEST_TEARDOWN;
 }
 
-#define TEST_NUM_COMMON(Val, ...) do { \
-    TEST_ENV(32); \
-    \
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, #Val, sizeof(#Val) - 1)); \
-    \
-    __VA_ARGS__; \
-    \
-    TEST_TEARDOWN; \
-} while (false)
+#define TEST_NUM_COMMON(Val, ...)                                  \
+    do {                                                           \
+        TEST_ENV(32);                                              \
+                                                                   \
+        AVS_UNIT_ASSERT_SUCCESS(                                   \
+                avs_stream_write(stream, #Val, sizeof(#Val) - 1)); \
+                                                                   \
+        __VA_ARGS__;                                               \
+                                                                   \
+        TEST_TEARDOWN;                                             \
+    } while (false)
 
-#define TEST_NUM_FAIL(Type, Getter, Val) TEST_NUM_COMMON(Val, \
-    Type result; \
-    AVS_UNIT_ASSERT_FAILED(anjay_get_##Getter (in, &result)))
+#define TEST_NUM_FAIL(Type, Getter, Val) \
+    TEST_NUM_COMMON(Val, Type result;    \
+                    AVS_UNIT_ASSERT_FAILED(anjay_get_##Getter(in, &result)))
 
-#define TEST_INT(Bits, Val) TEST_NUM_COMMON(Val, \
-    int##Bits##_t result; \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_get_i##Bits (in, &result)); \
-    AVS_UNIT_ASSERT_EQUAL(result, (int##Bits##_t) (Val##ULL)))
+#define TEST_INT(Bits, Val)                                                  \
+    TEST_NUM_COMMON(Val, int##Bits##_t result;                               \
+                    AVS_UNIT_ASSERT_SUCCESS(anjay_get_i##Bits(in, &result)); \
+                    AVS_UNIT_ASSERT_EQUAL(result, (int##Bits##_t)(Val##ULL)))
 
 #define TEST_INT_FAIL(Bits, Val) TEST_NUM_FAIL(int##Bits##_t, i##Bits, Val)
 
@@ -277,10 +286,10 @@ AVS_UNIT_TEST(text_in, i64) {
 #undef TEST_INT_FAIL
 #undef TEST_INT
 
-#define TEST_FLOAT(Type, Val) TEST_NUM_COMMON(Val, \
-    Type result; \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_get_##Type (in, &result)); \
-    AVS_UNIT_ASSERT_EQUAL(result, (Type) Val))
+#define TEST_FLOAT(Type, Val)                                               \
+    TEST_NUM_COMMON(Val, Type result;                                       \
+                    AVS_UNIT_ASSERT_SUCCESS(anjay_get_##Type(in, &result)); \
+                    AVS_UNIT_ASSERT_EQUAL(result, (Type) Val))
 
 #define TEST_FLOAT_FAIL(Type, Val) TEST_NUM_FAIL(Type, Type, Val)
 
@@ -314,18 +323,20 @@ AVS_UNIT_TEST(text_in, f64) {
 #undef TEST_FLOAT_FAIL
 #undef TEST_FLOAT
 
-#define TEST_BOOL(Val) TEST_NUM_COMMON(Val, \
-    bool result; \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_get_bool(in, &result)); \
-    AVS_UNIT_ASSERT_EQUAL(result, Val))
+#define TEST_BOOL(Val)                                                    \
+    TEST_NUM_COMMON(Val, bool result;                                     \
+                    AVS_UNIT_ASSERT_SUCCESS(anjay_get_bool(in, &result)); \
+                    AVS_UNIT_ASSERT_EQUAL(result, Val))
 
-#define TEST_BOOL_FAIL(Str) do { \
-    TEST_ENV(32); \
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, Str, sizeof(Str) - 1)); \
-    bool result; \
-    AVS_UNIT_ASSERT_FAILED(anjay_get_bool(in, &result)); \
-    TEST_TEARDOWN; \
-} while (false);
+#define TEST_BOOL_FAIL(Str)                                      \
+    do {                                                         \
+        TEST_ENV(32);                                            \
+        AVS_UNIT_ASSERT_SUCCESS(                                 \
+                avs_stream_write(stream, Str, sizeof(Str) - 1)); \
+        bool result;                                             \
+        AVS_UNIT_ASSERT_FAILED(anjay_get_bool(in, &result));     \
+        TEST_TEARDOWN;                                           \
+    } while (false);
 
 AVS_UNIT_TEST(text_in, boolean) {
     TEST_BOOL(0);
@@ -340,22 +351,26 @@ AVS_UNIT_TEST(text_in, boolean) {
 #undef TEST_NUM_FAIL
 #undef TEST_NUM_COMMON
 
-#define TEST_OBJLNK_COMMON(Str, ...) do { \
-    TEST_ENV(64); \
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, Str, sizeof(Str) - 1)); \
-    anjay_oid_t oid; \
-    anjay_iid_t iid; \
-    __VA_ARGS__; \
-    TEST_TEARDOWN; \
-} while (false)
+#define TEST_OBJLNK_COMMON(Str, ...)                             \
+    do {                                                         \
+        TEST_ENV(64);                                            \
+        AVS_UNIT_ASSERT_SUCCESS(                                 \
+                avs_stream_write(stream, Str, sizeof(Str) - 1)); \
+        anjay_oid_t oid;                                         \
+        anjay_iid_t iid;                                         \
+        __VA_ARGS__;                                             \
+        TEST_TEARDOWN;                                           \
+    } while (false)
 
-#define TEST_OBJLNK(Oid, Iid) TEST_OBJLNK_COMMON(#Oid ":" #Iid, \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_get_objlnk(in, &oid, &iid)); \
-    AVS_UNIT_ASSERT_EQUAL(oid, Oid); \
-    AVS_UNIT_ASSERT_EQUAL(iid, Iid))
+#define TEST_OBJLNK(Oid, Iid)                                          \
+    TEST_OBJLNK_COMMON(                                                \
+            #Oid ":" #Iid,                                             \
+            AVS_UNIT_ASSERT_SUCCESS(anjay_get_objlnk(in, &oid, &iid)); \
+            AVS_UNIT_ASSERT_EQUAL(oid, Oid); AVS_UNIT_ASSERT_EQUAL(iid, Iid))
 
-#define TEST_OBJLNK_FAIL(Str) TEST_OBJLNK_COMMON(Str, \
-    AVS_UNIT_ASSERT_FAILED(anjay_get_objlnk(in, &oid, &iid)))
+#define TEST_OBJLNK_FAIL(Str)                       \
+    TEST_OBJLNK_COMMON(Str, AVS_UNIT_ASSERT_FAILED( \
+                                    anjay_get_objlnk(in, &oid, &iid)))
 
 AVS_UNIT_TEST(text_in, objlnk) {
     TEST_OBJLNK(0, 0);

@@ -27,4 +27,3 @@ void _anjay_execute_ctx_destroy(anjay_execute_ctx_t **ctx);
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_DM_EXECUTE_H */
-

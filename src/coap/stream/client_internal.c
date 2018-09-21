@@ -22,11 +22,11 @@
 
 #include <anjay_modules/time_defs.h>
 
-#include <avsystem/commons/coap/tx_params.h>
 #include <avsystem/commons/coap/msg_identity.h>
+#include <avsystem/commons/coap/tx_params.h>
 
-#include "../coap_log.h"
 #include "../block/request.h"
+#include "../coap_log.h"
 #include "common.h"
 
 #include <inttypes.h>
@@ -34,9 +34,9 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifdef WITH_BLOCK_SEND
-#define has_block_ctx(client) ((client)->block_ctx)
+#    define has_block_ctx(client) ((client)->block_ctx)
 #else
-#define has_block_ctx(client) (false)
+#    define has_block_ctx(client) (false)
 #endif
 
 const avs_coap_msg_identity_t *
@@ -69,8 +69,8 @@ int _anjay_coap_client_setup_request(coap_client_t *client,
     assert(_anjay_coap_out_is_reset(&client->common.out));
     _anjay_coap_out_setup_mtu(&client->common.out, client->common.socket);
 
-    int result = _anjay_coap_out_setup_msg(&client->common.out,
-                                           identity, details, NULL);
+    int result = _anjay_coap_out_setup_msg(&client->common.out, identity,
+                                           details, NULL);
     if (result) {
         _anjay_coap_client_reset(client);
         _anjay_coap_out_reset(&client->common.out);
@@ -115,7 +115,7 @@ req_sent_process_response(coap_client_t *client,
             client->state = COAP_CLIENT_STATE_HAS_SEPARATE_ACK;
             return CHECK_OK;
         } else if (!avs_coap_msg_token_matches(
-                response, &client->last_request_identity)) {
+                           response, &client->last_request_identity)) {
             coap_log(DEBUG, "invalid response: token mismatch");
             return CHECK_INVALID_RESPONSE;
         }
@@ -133,7 +133,7 @@ static check_result_t
 process_separate_response(coap_client_t *client,
                           const avs_coap_msg_t *response) {
     assert(client->state == COAP_CLIENT_STATE_REQUEST_SENT
-            || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK);
+           || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK);
 
     avs_coap_msg_type_t type = avs_coap_msg_get_type(response);
 
@@ -157,19 +157,18 @@ process_separate_response(coap_client_t *client,
 static check_result_t check_response(coap_client_t *client,
                                      const avs_coap_msg_t *response) {
     assert(client->state == COAP_CLIENT_STATE_REQUEST_SENT
-            || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK);
+           || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK);
 
     switch (client->state) {
-    case COAP_CLIENT_STATE_REQUEST_SENT:
-        {
-            uint16_t msg_id = avs_coap_msg_get_id(response);
-            if (msg_id != client->last_request_identity.msg_id) {
-                // this may still be a Separate Response if Separate ACK
-                // got lost
-                return process_separate_response(client, response);
-            }
+    case COAP_CLIENT_STATE_REQUEST_SENT: {
+        uint16_t msg_id = avs_coap_msg_get_id(response);
+        if (msg_id != client->last_request_identity.msg_id) {
+            // this may still be a Separate Response if Separate ACK
+            // got lost
+            return process_separate_response(client, response);
         }
         return req_sent_process_response(client, response);
+    }
 
     case COAP_CLIENT_STATE_HAS_SEPARATE_ACK:
         return process_separate_response(client, response);
@@ -188,7 +187,7 @@ static int process_received(const avs_coap_msg_t *response,
     (void) out_error_code;
     assert(response);
 
-    coap_client_t *client = (coap_client_t *)client_;
+    coap_client_t *client = (coap_client_t *) client_;
     *out_wait_for_next = true;
 
     check_result_t result = check_response(client, response);
@@ -211,13 +210,13 @@ static int process_received(const avs_coap_msg_t *response,
         AVS_UNREACHABLE("invalid enum value");
     }
 
-    return (int)result;
+    return (int) result;
 }
 
 static int accept_response_with_timeout(coap_client_t *client,
                                         avs_time_duration_t timeout) {
     assert(client->state == COAP_CLIENT_STATE_REQUEST_SENT
-            || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK);
+           || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK);
 
     int recv_result = -1;
     int result = _anjay_coap_common_recv_msg_with_timeout(
@@ -228,26 +227,25 @@ static int accept_response_with_timeout(coap_client_t *client,
     }
 
     assert(client->state == COAP_CLIENT_STATE_REQUEST_SENT
-            || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK
-            || client->state == COAP_CLIENT_STATE_HAS_RESPONSE_CONTENT);
+           || client->state == COAP_CLIENT_STATE_HAS_SEPARATE_ACK
+           || client->state == COAP_CLIENT_STATE_HAS_RESPONSE_CONTENT);
     assert(recv_result >= _CHECK_FIRST && recv_result <= _CHECK_LAST);
 
     switch (recv_result) {
     case CHECK_RESET:
         return COAP_CLIENT_RECEIVE_RESET;
 
-    case CHECK_NEEDS_ACK:
-        {
-            coap_log(TRACE, "Separate response received; sending ACK");
+    case CHECK_NEEDS_ACK: {
+        coap_log(TRACE, "Separate response received; sending ACK");
 
-            const avs_coap_msg_t *msg =
-                    _anjay_coap_in_get_message(&client->common.in);
-            avs_coap_ctx_send_empty(client->common.coap_ctx,
-                                    client->common.socket,
-                                    AVS_COAP_MSG_ACKNOWLEDGEMENT,
-                                    avs_coap_msg_get_id(msg));
-        }
+        const avs_coap_msg_t *msg =
+                _anjay_coap_in_get_message(&client->common.in);
+        avs_coap_ctx_send_empty(client->common.coap_ctx,
+                                client->common.socket,
+                                AVS_COAP_MSG_ACKNOWLEDGEMENT,
+                                avs_coap_msg_get_id(msg));
         return 0;
+    }
 
     case CHECK_OK:
         return 0;
@@ -296,8 +294,9 @@ static int send_confirmable_with_retry(coap_client_t *client,
         coap_log(DEBUG, "timeout reached, next: %" PRId64 ".09%" PRId32 " s",
                  retry_state.recv_timeout.seconds,
                  retry_state.recv_timeout.nanoseconds);
-    } while (retry_state.retry_count <= avs_coap_ctx_get_tx_params(
-            client->common.coap_ctx).max_retransmit);
+    } while (retry_state.retry_count
+             <= avs_coap_ctx_get_tx_params(client->common.coap_ctx)
+                        .max_retransmit);
 
     assert(result <= 0 || result == COAP_CLIENT_RECEIVE_RESET);
     if (result != 0) {
@@ -382,8 +381,8 @@ static int block_write(coap_client_t *client,
                        size_t data_length) {
     if (!client->block_ctx) {
         client->block_ctx =
-            _anjay_coap_block_request_new(AVS_COAP_MSG_BLOCK_MAX_SIZE,
-                                          &client->common, id_source);
+                _anjay_coap_block_request_new(AVS_COAP_MSG_BLOCK_MAX_SIZE,
+                                              &client->common, id_source);
         if (!client->block_ctx) {
             return -1;
         }
@@ -396,7 +395,7 @@ static int block_write(coap_client_t *client,
     return result;
 }
 #else
-#define block_write(...) \
+#    define block_write(...) \
         (coap_log(ERROR, "sending blockwise requests not supported"), -1)
 #endif
 
@@ -404,20 +403,22 @@ int _anjay_coap_client_write(coap_client_t *client,
                              coap_id_source_t *id_source,
                              const void *data,
                              size_t data_length) {
-    (void) client; (void) id_source;
+    (void) client;
+    (void) id_source;
     size_t bytes_written = 0;
 
     if (!has_block_ctx(client)) {
-        bytes_written = _anjay_coap_out_write(&client->common.out,
-                                              data, data_length);
+        bytes_written =
+                _anjay_coap_out_write(&client->common.out, data, data_length);
         if (bytes_written == data_length) {
             return 0;
         } else {
             coap_log(TRACE, "response payload does not fit in the buffer "
-                     "- initiating block-wise transfer");
+                            "- initiating block-wise transfer");
         }
     }
 
-    return block_write(client, id_source, (const uint8_t*) data + bytes_written,
+    return block_write(client, id_source,
+                       (const uint8_t *) data + bytes_written,
                        data_length - bytes_written);
 }
