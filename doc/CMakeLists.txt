@@ -18,6 +18,7 @@ set(ANJAY_SPHINX_DOC_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sphinx/source")
 set(ANJAY_SPHINX_DOC_CONF_DIR "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx")
 
 cmake_dependent_option(WITH_DOC_CHECK "Enables/disables sphinx documentation validation" OFF WITH_TEST OFF)
+cmake_dependent_option(WITH_URL_CHECK "Enables/disables URL validation" OFF "WITH_TEST;WITH_DOC_CHECK" OFF)
 
 if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
     find_program(SPHINX_BUILD_EXECUTABLE sphinx-build
@@ -50,9 +51,11 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
                          ${ANJAY_SPHINX_DOC_ROOT_DIR}
                          ${ANJAY_SPHINX_DOC_CONF_DIR}/lint
                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sphinx)
-        add_test(NAME test_doc_url
-                 COMMAND ./runtest.py
-                 WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/test/doc)
+        if(WITH_URL_CHECK)
+            add_test(NAME test_doc_url
+                     COMMAND ./runtest.py
+                     WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/test/doc)
+        endif()
         set_property(TEST test_doc_snippet APPEND PROPERTY ENVIRONMENT
                      "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"
                      "ANJAY_SPHINX_DOC_ROOT_DIR=${ANJAY_SPHINX_DOC_ROOT_DIR}"

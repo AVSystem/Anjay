@@ -40,7 +40,6 @@ typedef struct cmdline_args {
     int32_t msg_cache_size;
     bool confirmable_notifications;
     const char *fw_updated_marker_path;
-    uint32_t max_icmp_failures;
     avs_net_security_info_t fw_security_info;
     const char *attr_storage_file;
     bool disable_server_initiated_bootstrap;

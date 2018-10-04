@@ -49,7 +49,6 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .outbuf_size = 4000,
     .msg_cache_size = 0,
     .fw_updated_marker_path = "/tmp/anjay-fw-updated",
-    .max_icmp_failures = 7,
     .fw_security_info = {
         .mode = (avs_net_security_mode_t) -1
     },
@@ -149,8 +148,8 @@ static void print_option_help(const struct option *opt) {
         { 'c', "CSV_FILE", NULL, "file to load location CSV from" },
         { 'f', "SECONDS", "1", "location update frequency in seconds" },
         { 'p', "PORT", NULL, "bind all sockets to the specified UDP port." },
-        { 'i', "PSK identity (psk mode) or Public Certificate (cert mode)", NULL,
-          "Both are specified as hexlified strings" },
+        { 'i', "PSK identity (psk mode) or Public Certificate (cert mode)",
+          NULL, "Both are specified as hexlified strings" },
         { 'C', "CLIENT_CERT_FILE", "$(dirname $0)/../certs/client.crt.der",
           "DER-formatted client certificate file to load. "
           "Mutually exclusive with -i" },
@@ -181,8 +180,6 @@ static void print_option_help(const struct option *opt) {
                             "it to 0 disables caching mechanism." },
         { 'N', NULL, NULL,
           "Send notifications as Confirmable messages by default" },
-        { 'U', "COUNT", "7", "Sets maximum number of ICMP Port/Host unreachable "
-               "errors before the Server is considered unreachable" },
         { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
         { 2, "CERT_FILE", NULL, "Require certificate validation against "
@@ -427,7 +424,6 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "outbuf-size",                   required_argument, 0, 'O' },
         { "cache-size",                    required_argument, 0, '$' },
         { "confirmable-notifications",     no_argument,       0, 'N' },
-        { "max-icmp-failures",             required_argument, 0, 'U' },
         { "fw-updated-marker-path",        required_argument, 0, 1 },
         { "fw-cert-file",                  required_argument, 0, 2 },
         { "fw-cert-path",                  required_argument, 0, 3 },
@@ -662,15 +658,6 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'N':
             parsed_args->confirmable_notifications = true;
             break;
-        case 'U': {
-            int32_t max_icmp_failures;
-            if (parse_i32(optarg, &max_icmp_failures)
-                    || max_icmp_failures < 0) {
-                goto finish;
-            }
-            parsed_args->max_icmp_failures = (uint32_t) max_icmp_failures;
-            break;
-        }
         case 1:
             parsed_args->fw_updated_marker_path = optarg;
             break;

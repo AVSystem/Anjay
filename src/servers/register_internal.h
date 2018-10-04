@@ -28,25 +28,9 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 bool _anjay_server_primary_connection_valid(anjay_server_info_t *server);
 
 typedef enum {
-    ANJAY_UPDATE_SUCCESS = 0,
-    ANJAY_UPDATE_NEEDS_REGISTRATION,
-    ANJAY_UPDATE_FAILED
-} anjay_update_result_t;
-
-/**
- * Sends the Update message.
- *
- * @param anjay  Anjay object to operate on.
- * @param server Active non-bootstrap server for which to manage the
- *               registration state.
- */
-anjay_update_result_t
-_anjay_server_registration_update(anjay_t *anjay, anjay_server_info_t *server);
-
-typedef enum {
     ANJAY_REGISTRATION_SUCCESS = 0,
-    ANJAY_REGISTRATION_FAILED,
-    ANJAY_REGISTRATION_FORBIDDEN
+    ANJAY_REGISTRATION_TIMEOUT,
+    ANJAY_REGISTRATION_ERROR
 } anjay_registration_result_t;
 
 /**

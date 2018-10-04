@@ -34,7 +34,7 @@
 
 #include "coap/content_format.h"
 
-#include "access_control_utils.h"
+#include "access_utils.h"
 #include "anjay_core.h"
 #include "dm/discover.h"
 #include "dm/dm_execute.h"
@@ -292,7 +292,7 @@ const char *_anjay_debug_make_path__(char *buffer,
                                      size_t buffer_size,
                                      const anjay_uri_path_t *uri) {
     assert(uri);
-    ssize_t result;
+    ssize_t result = -1;
     switch (uri->type) {
     case ANJAY_PATH_ROOT:
         result = avs_simple_snprintf(buffer, buffer_size, "/");
@@ -447,7 +447,7 @@ static int read_object(anjay_t *anjay,
            && !(result = _anjay_dm_instance_it(anjay, obj, &iid, &cookie, NULL))
            && iid != ANJAY_IID_INVALID) {
         info.iid = iid;
-        if (!_anjay_access_control_action_allowed(anjay, &info)) {
+        if (!_anjay_instance_action_allowed(anjay, &info)) {
             continue;
         }
         result = read_instance_wrapped(anjay, obj, iid, out_ctx);
@@ -497,16 +497,17 @@ static int dm_read(anjay_t *anjay,
     anjay_log(DEBUG, "Read %s", ANJAY_DEBUG_MAKE_PATH(&details->uri));
     assert(_anjay_uri_path_has_oid(&details->uri));
     int result = 0;
-    if (_anjay_uri_path_has_iid(&details->uri)) {
-        const anjay_action_info_t info = {
-            .iid = details->uri.iid,
-            .oid = details->uri.oid,
-            .ssid = details->ssid,
-            .action = ANJAY_ACTION_READ
-        };
 
+    if (_anjay_uri_path_has_iid(&details->uri)) {
         if (!(result = ensure_instance_present(anjay, obj, details->uri.iid))) {
-            if (!_anjay_access_control_action_allowed(anjay, &info)) {
+            const anjay_action_info_t action_info = {
+                .iid = details->uri.iid,
+                .oid = details->uri.oid,
+                .ssid = details->ssid,
+                .action = ANJAY_ACTION_READ
+            };
+
+            if (!_anjay_instance_action_allowed(anjay, &action_info)) {
                 result = ANJAY_ERR_UNAUTHORIZED;
             } else if (_anjay_uri_path_has_rid(&details->uri)) {
                 result = read_resource(anjay, obj, details->uri.iid,
@@ -541,8 +542,9 @@ static void build_observe_key(anjay_t *anjay,
     result->connection.ssid = _anjay_dm_current_ssid(anjay);
     result->connection.type = anjay->current_connection.conn_type;
     result->oid = request->uri.oid;
-    result->iid = _anjay_uri_path_has_iid(&request->uri) ? request->uri.iid
-                                                         : ANJAY_IID_INVALID;
+    result->iid = (anjay_iid_t) (_anjay_uri_path_has_iid(&request->uri)
+                                         ? request->uri.iid
+                                         : ANJAY_IID_INVALID);
     result->rid = _anjay_uri_path_has_rid(&request->uri) ? request->uri.rid
                                                          : ANJAY_RID_EMPTY;
     result->format = request->requested_format;
@@ -683,8 +685,6 @@ static int dm_discover(anjay_t *anjay,
                        const anjay_dm_object_def_t *const *obj,
                        const anjay_request_t *request) {
     anjay_log(DEBUG, "Discover %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
-    /* Access Control check is omitted here, because dm_discover is always
-     * allowed. */
     int result = _anjay_coap_stream_setup_response(
             anjay->comm_stream,
             &(anjay_msg_details_t) {
@@ -700,7 +700,10 @@ static int dm_discover(anjay_t *anjay,
 
     if (_anjay_uri_path_has_iid(&request->uri)) {
         if (!(result = ensure_instance_present(anjay, obj, request->uri.iid))) {
-            if (_anjay_uri_path_has_rid(&request->uri)) {
+            if (!_anjay_instance_action_allowed(
+                        anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
+                result = ANJAY_ERR_UNAUTHORIZED;
+            } else if (_anjay_uri_path_has_rid(&request->uri)) {
                 if (!(result = ensure_resource_supported_and_present(
                               anjay, obj, request->uri.iid,
                               request->uri.rid))) {
@@ -831,47 +834,42 @@ static int write_instance(anjay_t *anjay,
 
 static int dm_write(anjay_t *anjay,
                     const anjay_dm_object_def_t *const *obj,
-                    const anjay_uri_path_t *uri,
-                    anjay_input_ctx_t *in_ctx,
-                    anjay_request_action_t action,
-                    uint16_t content_format) {
-    anjay_log(DEBUG, "Write %s", ANJAY_DEBUG_MAKE_PATH(uri));
-    if (!_anjay_uri_path_has_iid(uri)) {
+                    const anjay_request_t *request,
+                    anjay_input_ctx_t *in_ctx) {
+    anjay_log(DEBUG, "Write %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    if (!_anjay_uri_path_has_iid(&request->uri)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
     anjay_notify_queue_t notify_queue = NULL;
-    int retval = ensure_instance_present(anjay, obj, uri->iid);
+    int retval = ensure_instance_present(anjay, obj, request->uri.iid);
     if (!retval) {
-        const anjay_action_info_t action_info = {
-            .oid = uri->oid,
-            .iid = uri->iid,
-            .ssid = _anjay_dm_current_ssid(anjay),
-            .action = action
-        };
-        if (!_anjay_access_control_action_allowed(anjay, &action_info)) {
+        if (!_anjay_instance_action_allowed(
+                    anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
             return ANJAY_ERR_UNAUTHORIZED;
         }
 
-        if (_anjay_uri_path_has_rid(uri)) {
-            const uint16_t format =
-                    _anjay_translate_legacy_content_format(content_format);
+        if (_anjay_uri_path_has_rid(&request->uri)) {
+            const uint16_t format = _anjay_translate_legacy_content_format(
+                    request->content_format);
 
             if (format == ANJAY_COAP_FORMAT_TLV) {
-                retval = _anjay_dm_check_if_tlv_rid_matches_uri_rid(in_ctx,
-                                                                    uri->rid);
+                retval = _anjay_dm_check_if_tlv_rid_matches_uri_rid(
+                        in_ctx, request->uri.rid);
             }
 
             if (!retval) {
-                retval = write_resource(anjay, obj, uri->iid, uri->rid, in_ctx,
-                                        &notify_queue);
+                retval =
+                        write_resource(anjay, obj, request->uri.iid,
+                                       request->uri.rid, in_ctx, &notify_queue);
             }
         } else {
-            if (action != ANJAY_ACTION_WRITE_UPDATE) {
-                retval = _anjay_dm_instance_reset(anjay, obj, uri->iid, NULL);
+            if (request->action != ANJAY_ACTION_WRITE_UPDATE) {
+                retval = _anjay_dm_instance_reset(anjay, obj, request->uri.iid,
+                                                  NULL);
             }
             if (!retval) {
-                retval = write_instance(anjay, obj, uri->iid, in_ctx,
+                retval = write_instance(anjay, obj, request->uri.iid, in_ctx,
                                         &notify_queue,
                                         WRITE_INSTANCE_FAIL_ON_UNSUPPORTED);
             }
@@ -1006,20 +1004,12 @@ static int dm_write_attributes(anjay_t *anjay,
             && !resource_specific_request_attrs_empty(&request->attributes)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
+
     int result;
     if (_anjay_uri_path_has_iid(&request->uri)) {
         if (!(result = ensure_instance_present(anjay, obj, request->uri.iid))) {
-
-            const anjay_action_info_t info = {
-                .iid = request->uri.iid,
-                .oid = request->uri.oid,
-                .ssid = _anjay_dm_current_ssid(anjay),
-                /* The attributes make sense for an Instance only if it is
-                   readable for a specified Server. */
-                .action = ANJAY_ACTION_READ
-            };
-
-            if (!_anjay_access_control_action_allowed(anjay, &info)) {
+            if (!_anjay_instance_action_allowed(
+                        anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
                 result = ANJAY_ERR_UNAUTHORIZED;
             } else if (_anjay_uri_path_has_rid(&request->uri)) {
                 result = dm_write_resource_attrs(anjay, obj, request->uri.iid,
@@ -1057,15 +1047,14 @@ static int dm_execute(anjay_t *anjay,
 
     int retval = ensure_instance_present(anjay, obj, request->uri.iid);
     if (!retval) {
+        if (!_anjay_instance_action_allowed(
+                    anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
+            return ANJAY_ERR_UNAUTHORIZED;
+        }
         retval = ensure_resource_supported_and_present(
                 anjay, obj, request->uri.iid, request->uri.rid);
     }
     if (!retval) {
-        if (!_anjay_access_control_action_allowed(
-                    anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
-            return ANJAY_ERR_UNAUTHORIZED;
-        }
-
         if (!has_resource_operation_bit(anjay, obj, request->uri.rid,
                                         ANJAY_DM_RESOURCE_OP_BIT_E)) {
             anjay_log(ERROR, "Execute %s is not supported",
@@ -1190,7 +1179,7 @@ static int dm_create(anjay_t *anjay,
     anjay_log(DEBUG, "Create %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     assert(request->uri.type == ANJAY_PATH_OBJECT);
 
-    if (!_anjay_access_control_action_allowed(
+    if (!_anjay_instance_action_allowed(
                 anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
         return ANJAY_ERR_UNAUTHORIZED;
     }
@@ -1232,10 +1221,11 @@ static int dm_delete(anjay_t *anjay,
 
     int retval = ensure_instance_present(anjay, obj, request->uri.iid);
     if (!retval) {
-        if (!_anjay_access_control_action_allowed(
+        if (!_anjay_instance_action_allowed(
                     anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
             return ANJAY_ERR_UNAUTHORIZED;
         }
+
         retval = _anjay_dm_instance_remove(anjay, obj, request->uri.iid, NULL);
     }
     if (!retval) {
@@ -1279,8 +1269,7 @@ static int invoke_transactional_action(anjay_t *anjay,
     case ANJAY_ACTION_WRITE:
     case ANJAY_ACTION_WRITE_UPDATE:
         assert(in_ctx);
-        retval = dm_write(anjay, obj, &request->uri, in_ctx, request->action,
-                          request->content_format);
+        retval = dm_write(anjay, obj, request, in_ctx);
         break;
     case ANJAY_ACTION_CREATE:
         assert(in_ctx);
@@ -1355,7 +1344,21 @@ int _anjay_dm_perform_action(anjay_t *anjay,
         return result;
     }
 
-    result = invoke_action(anjay, obj, request_identity, request, in_ctx);
+    if (_anjay_uri_path_has_oid(&request->uri)
+            && request->uri.oid == ANJAY_DM_OID_SECURITY) {
+        /**
+         * According to the LwM2M 1.0.2 specification:
+         * > The LwM2M Client MUST reject with an "Unauthorized" response code
+         * > any LwM2M Server operation on the Security Object (ID: 0).
+         *
+         * Note that other, per-instance security checks are performed via
+         * _anjay_instance_action_allowed().
+         */
+        result = ANJAY_ERR_UNAUTHORIZED;
+    }
+    if (!result) {
+        result = invoke_action(anjay, obj, request_identity, request, in_ctx);
+    }
     if (_anjay_input_ctx_destroy(&in_ctx)) {
         anjay_log(ERROR, "input ctx cleanup failed");
     }
@@ -1491,9 +1494,10 @@ anjay_input_ctx_t *_anjay_dm_read_as_input_ctx(anjay_t *anjay,
 }
 
 anjay_ssid_t _anjay_dm_current_ssid(anjay_t *anjay) {
-    return anjay->current_connection.server
-                   ? _anjay_server_ssid(anjay->current_connection.server)
-                   : ANJAY_SSID_BOOTSTRAP;
+    return (anjay_ssid_t) (anjay->current_connection.server
+                                   ? _anjay_server_ssid(
+                                             anjay->current_connection.server)
+                                   : ANJAY_SSID_BOOTSTRAP);
 }
 
 #ifdef ANJAY_TEST

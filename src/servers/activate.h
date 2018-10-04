@@ -19,6 +19,8 @@
 
 #include <anjay_modules/time_defs.h>
 
+#include "connections.h"
+
 #include "../anjay_core.h"
 #include "../utils_core.h"
 
@@ -27,6 +29,28 @@
 #endif
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
+
+/**
+ * This function is called as a "callback" whenever
+ * @ref _anjay_active_server_refresh finishes its operation.
+ *
+ * @param anjay  Anjay object for which it is called
+ * @param server Server object for which the refresh was performed
+ * @param state  State of the server's primary connection after refresh
+ *
+ * It performs any operations necessary after the refresh. In particular:
+ *
+ * - In case of error, refresh_failed flag is updated and retry of either server
+ *   refresh or Client-Initiated Bootstrap is scheduled as appropriate.
+ * - In case of success on a non-Bootstrap server, the valid registration state
+ *   is asserted - Register or Update messages are sent and handled as
+ *   necessary.
+ * - In case of success on the Bootstrap server, Client-Initiated Bootstrap is
+ *   scheduled to be performed if necessary.
+ */
+void _anjay_server_on_refreshed(anjay_t *anjay,
+                                anjay_server_info_t *server,
+                                anjay_server_connection_state_t state);
 
 /**
  * Schedules a @ref _anjay_server_activate execution after given @p delay.

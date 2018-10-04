@@ -50,10 +50,4 @@ class BootstrapFactoryTest(test_suite.Lwm2mTest, test_suite.SingleServerAccessor
         self.communicate('send-update')
         self.assertDemoUpdatesRegistration()
 
-        req = Lwm2mDiscover('/0')
-        self.serv.send(req)
-        res = self.serv.recv()
-        self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
-
-        self.assertIn(b'</0/1/', res.content)
-        self.assertIn(b'</0/2/', res.content)
+        self.assertEqual(2, self.get_socket_count())

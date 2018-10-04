@@ -306,8 +306,8 @@ AVS_UNIT_TEST(dynamic_in, no_content_format) {
                     "514");
     anjay_input_ctx_t *ctx;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_dynamic_create(&ctx, &coap, true));
-    _anjay_input_ctx_destroy(&ctx);
-    avs_stream_cleanup(&coap);
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_ctx_destroy(&ctx));
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&coap));
 }
 
 AVS_UNIT_TEST(dynamic_in, tlv) {
@@ -351,7 +351,7 @@ AVS_UNIT_TEST(dynamic_in, unrecognized) {
     anjay_input_ctx_t *ctx;
     AVS_UNIT_ASSERT_EQUAL(_anjay_input_dynamic_create(&ctx, &coap, true),
                           ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT);
-    avs_stream_cleanup(&coap);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&coap));
 }
 
 #undef COAP_HEADER

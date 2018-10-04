@@ -152,7 +152,7 @@ static int serv_instance_it(anjay_t *anjay,
         curr = AVS_LIST_NEXT(curr);
     }
 
-    *out = curr ? curr->iid : ANJAY_IID_INVALID;
+    *out = (anjay_iid_t) (curr ? curr->iid : ANJAY_IID_INVALID);
     *cookie = curr;
     return 0;
 }

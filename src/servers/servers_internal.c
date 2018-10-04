@@ -38,38 +38,6 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-int _anjay_servers_schedule_first_retryable(anjay_sched_t *sched,
-                                            anjay_server_info_t *server,
-                                            avs_time_duration_t delay,
-                                            anjay_sched_clb_t clb,
-                                            anjay_ssid_t ssid) {
-    assert(!server->next_action_handle);
-    server->next_retry_delay = avs_time_duration_from_scalar(1, AVS_TIME_S);
-    return _anjay_sched(sched, &server->next_action_handle, delay, clb, &ssid,
-                        sizeof(ssid));
-}
-
-int _anjay_servers_schedule_next_retryable(anjay_sched_t *sched,
-                                           anjay_server_info_t *server,
-                                           anjay_sched_clb_t clb,
-                                           anjay_ssid_t ssid) {
-    static const avs_time_duration_t MAX_BACKOFF = { 120, 0 };
-
-    assert(!server->next_action_handle);
-    int result =
-            _anjay_sched(sched, &server->next_action_handle,
-                         server->next_retry_delay, clb, &ssid, sizeof(ssid));
-    if (result) {
-        return result;
-    }
-    server->next_retry_delay =
-            avs_time_duration_mul(server->next_retry_delay, 2);
-    if (avs_time_duration_less(MAX_BACKOFF, server->next_retry_delay)) {
-        server->next_retry_delay = MAX_BACKOFF;
-    }
-    return 0;
-}
-
 void _anjay_server_clean_active_data(const anjay_t *anjay,
                                      anjay_server_info_t *server) {
     _anjay_sched_del(anjay->sched, &server->next_action_handle);
@@ -81,7 +49,6 @@ void _anjay_server_cleanup(const anjay_t *anjay, anjay_server_info_t *server) {
 
     _anjay_server_clean_active_data(anjay, server);
     _anjay_registration_info_cleanup(&server->registration_info);
-    _anjay_url_cleanup(&server->uri);
 }
 
 anjay_servers_t *_anjay_servers_create(void) {
@@ -92,8 +59,8 @@ void _anjay_servers_internal_deregister(anjay_t *anjay,
                                         anjay_servers_t *servers) {
     AVS_LIST(anjay_server_info_t) server;
     AVS_LIST_FOREACH(server, servers->servers) {
-        if (_anjay_server_active(server)
-                && server->ssid != ANJAY_SSID_BOOTSTRAP) {
+        if (_anjay_server_active(server) && server->ssid != ANJAY_SSID_BOOTSTRAP
+                && !_anjay_server_registration_expired(server)) {
             _anjay_server_deregister(anjay, server);
         }
     }
@@ -389,10 +356,6 @@ anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server) {
 anjay_connection_type_t
 _anjay_server_primary_conn_type(anjay_server_info_t *server) {
     return _anjay_connections_get_primary(&server->connections);
-}
-
-const anjay_url_t *_anjay_server_uri(anjay_server_info_t *server) {
-    return &server->uri;
 }
 
 int _anjay_servers_foreach_ssid(anjay_t *anjay,

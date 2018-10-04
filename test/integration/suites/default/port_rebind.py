@@ -55,6 +55,9 @@ class PredefinedPortRebind(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2
         self.assertNotEqual(self._demo_port, 0)
         super().setUp(extra_cmdline_args=['--port', '%s' % (self._demo_port,)])
 
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
     def runTest(self):
         self.assertEqual(self._demo_port, self.serv.get_remote_addr()[1])
 
@@ -74,5 +77,7 @@ class PredefinedPortRebind(test_suite.Lwm2mDtlsSingleServerTest, test_suite.Lwm2
             with self.assertRaises(socket.timeout):
                 self.serv.listen(timeout_s=5)
 
-        # with port free again, allow demo to reconnect so that we can then shutdown cleanly
-        self.serv.listen(timeout_s=15)
+        # inability to bind on predefined port is fatal, check that demo does not retry
+        with self.assertRaises(socket.timeout):
+            self.serv.listen(timeout_s=15)
+        self.assertEqual(self.get_socket_count(), 0)

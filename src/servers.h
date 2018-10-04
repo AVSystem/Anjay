@@ -63,6 +63,28 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 ///
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * Token that changes to a new unique value every time the CoAP endpoint
+ * association (i.e., DTLS session or raw UDP socket) has been established anew.
+ *
+ * It is currently implemented as a monotonic timestamp because it's trivial to
+ * generate such unique value that way as long as it is never persisted.
+ */
+typedef struct {
+    avs_time_monotonic_t value;
+} anjay_conn_session_token_t;
+
+static inline void
+_anjay_conn_session_token_reset(anjay_conn_session_token_t *out) {
+    out->value = avs_time_monotonic_now();
+}
+
+static inline bool
+_anjay_conn_session_tokens_equal(anjay_conn_session_token_t left,
+                                 anjay_conn_session_token_t right) {
+    return avs_time_monotonic_equal(left.value, right.value);
+}
+
 // copied from avs_commons/git/http/src/headers.h
 // see description there for rationale; TODO: move this to public Commons API?
 // note that this _includes_ the terminating null byte
@@ -87,8 +109,17 @@ typedef struct {
 } anjay_update_parameters_t;
 
 typedef struct {
+    anjay_conn_session_token_t session_token;
     AVS_LIST(const anjay_string_t) endpoint_path;
     avs_time_real_t expire_time;
+
+    /**
+     * This flag is set whenever the Update request is forced to be sent, either
+     * manually using anjay_schedule_registration_update(), or through a
+     * scheduler job that executes near lifetime expiration.
+     */
+    bool update_forced;
+
     anjay_update_parameters_t last_update_params;
 } anjay_registration_info_t;
 
@@ -115,29 +146,6 @@ typedef struct {
     anjay_server_info_t *server;
     anjay_connection_type_t conn_type;
 } anjay_connection_ref_t;
-
-/**
- * Token that changes to a new unique value every time the CoAP endpoint
- * association (i.e., DTLS session or raw UDP socket) every time it has been
- * established anew.
- *
- * It is currently implemented as a monotonic timestamp because it's trivial to
- * generate such unique value that way as long as it is never persisted.
- */
-typedef struct {
-    avs_time_monotonic_t value;
-} anjay_conn_session_token_t;
-
-static inline void
-_anjay_conn_session_token_reset(anjay_conn_session_token_t *out) {
-    out->value = avs_time_monotonic_now();
-}
-
-static inline bool
-_anjay_conn_session_tokens_equal(anjay_conn_session_token_t left,
-                                 anjay_conn_session_token_t right) {
-    return avs_time_monotonic_equal(left.value, right.value);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON THE WHOLE SERVERS SUBSYSTEM //////////////////////////////////////
@@ -386,15 +394,6 @@ bool _anjay_can_retry_with_normal_server(anjay_t *anjay);
 anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server);
 
 /**
- * Returns the CACHED URI of the given server - the one that was most recently
- * read in initialize_active_server().
- *
- * It is called from send_request_bootstrap() and send_register() to fill the
- * Uri-Path option in the outgoing messages.
- */
-const anjay_url_t *_anjay_server_uri(anjay_server_info_t *server);
-
-/**
  * Gets the type of the server's current "primary" connection. The "primary"
  * connection is the one on which the autonomous outgoing messages (i.e.
  * Register/Update or Bootstrap Request) are sent. It is normally the first
@@ -454,36 +453,34 @@ void _anjay_server_update_registration_info(
         anjay_update_parameters_t *move_params);
 
 /**
- * Schedules re-registration of the specified server.
- *
- * It resets the registration validity time so that Deregister will not be sent,
- * deactivates the server and schedules immediate reactivation.
- *
- * It is called from observe_core.c :: ensure_conn_online(), which actually
- * contains somewhat low-level reconnection logic.
+ * Handles a network communication error on the primary connection of the
+ * server. Effectively disables the server, and might schedule Client-Initiated
+ * Bootstrap if applicable.
  */
-int _anjay_schedule_reregister(anjay_t *anjay, anjay_server_info_t *server);
+void _anjay_server_on_server_communication_error(anjay_t *anjay,
+                                                 anjay_server_info_t *server);
 
 /**
- * Schedules reconnection of the specified server - all its sockets are
- * immediately closed (but not cleaned up - so the server is still considered
- * active), and reload_server_by_ssid_job() is scheduled (immediately, with
- * backoff controlled by _anjay_servers_schedule_{first,next}_retryable()). That
- * job basically calls reload_active_server() - see documentation of
- * _anjay_schedule_reload_servers() for details.
- *
- * It is called from ensure_conn_online(), request_bootstrap() and
- * observe_core.c :: send_entry() in case of some network communication problem.
- * It is intended for recovering from fatal network errors with a hope of
- * preserving the CoAP association (which is possible if we're using DTLS and
- * session resumption succeeds).
+ * Handles a network timeout during Registration (or Request Bootstrap) on the
+ * primary connection of the server - this retries connection if the connection
+ * was stable (i.e. not just freshly connected and not stateless), or calls
+ * @ref _anjay_server_on_server_communication_error otherwise.
  */
-int _anjay_schedule_server_reconnect(anjay_t *anjay,
-                                     anjay_server_info_t *server);
+void _anjay_server_on_registration_timeout(anjay_t *anjay,
+                                           anjay_server_info_t *server);
 
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON SERVER CONNECTIONS ///////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Returns the CACHED URI of the given connection - the one that was most
+ * recently read in initialize_active_server().
+ *
+ * It is called from send_request_bootstrap() and send_register() to fill the
+ * Uri-Path option in the outgoing messages.
+ */
+const anjay_url_t *_anjay_connection_uri(anjay_connection_ref_t ref);
 
 /**
  * Returns the mode (disabled, online or queue) of a specified connection.
@@ -522,7 +519,7 @@ _anjay_connection_get_online_socket(anjay_connection_ref_t ref);
  *
  * It is called from observe_core.c :: ensure_conn_online().
  */
-int _anjay_connection_bring_online(anjay_t *anjay, anjay_connection_ref_t ref);
+void _anjay_connection_bring_online(anjay_t *anjay, anjay_connection_ref_t ref);
 
 /**
  * Suspends the specified connection (or all connections in the server if

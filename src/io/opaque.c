@@ -120,7 +120,7 @@ static int opaque_get_some_bytes(anjay_input_ctx_t *ctx,
 static int opaque_in_close(anjay_input_ctx_t *ctx_) {
     opaque_in_t *ctx = (opaque_in_t *) ctx_;
     if (ctx->autoclose) {
-        avs_stream_cleanup(&ctx->stream);
+        return avs_stream_cleanup(&ctx->stream);
     }
     return 0;
 }

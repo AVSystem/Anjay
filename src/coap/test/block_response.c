@@ -51,7 +51,7 @@ static test_ctx_t setup(size_t in_buffer_size, size_t out_buffer_size) {
 }
 
 static void teardown(test_ctx_t *ctx) {
-    avs_stream_cleanup(&ctx->stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&ctx->stream));
     _anjay_mock_coap_stream_cleanup(&ctx->mock_stream);
     memset(ctx, 0, sizeof(*ctx));
 }

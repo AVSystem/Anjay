@@ -59,6 +59,40 @@ class ObserveAttributesTest(test_suite.Lwm2mSingleServerTest,
         self.assertEqual(pkt.content, counter_pkt.content)
 
 
+class ObserveResourceInvalidPmax(test_suite.Lwm2mSingleServerTest,
+                                 test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=1337, iid=1)
+
+        # Set invalid pmax (smaller than pmin)
+        self.write_attributes(
+            self.serv, oid=1337, iid=1, rid=1, query=['pmin=2', 'pmax=1'])
+
+        self.observe(self.serv, oid=1337, iid=1, rid=1)
+
+        # No notification should arrive
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=3))
+
+
+class ObserveResourceZeroPmax(test_suite.Lwm2mSingleServerTest,
+                              test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=1337, iid=1)
+
+        # Set invalid pmax (equal to 0)
+        self.write_attributes(
+            self.serv, oid=1337, iid=1, rid=1, query=['pmax=0'])
+
+        self.observe(self.serv, oid=1337, iid=1, rid=1)
+
+        # No notification should arrive
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=2))
+
+
 class ObserveResourceWithEmptyHandler(test_suite.Lwm2mSingleServerTest,
                                       test_suite.Lwm2mDmOperations):
     def runTest(self):

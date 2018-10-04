@@ -32,12 +32,54 @@ typedef struct {
     char last_local_port[ANJAY_MAX_URL_PORT_SIZE];
 } anjay_server_connection_nontransient_state_t;
 
+typedef enum {
+    /**
+     * _anjay_connections_refresh() has just been called, and the connection has
+     * not yet reached a usable state.
+     */
+    ANJAY_SERVER_CONNECTION_IN_PROGRESS,
+
+    /**
+     * If _anjay_server_on_refreshed() is called with server connection in this
+     * state, it means that the connection has just entered a usable state after
+     * completing the "connect" operation.
+     *
+     * As a consequence, it probably does not make sense to retry connecting if
+     * an error occurs.
+     */
+    ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED,
+
+    /**
+     * If _anjay_server_on_refreshed() is called with server connection in this
+     * state, it means that it is not the first time it is called for that
+     * connection since it entered a usable state.
+     *
+     * As a consequence, it might make sense to retry connecting if an error
+     * occurs and the connection is stateful.
+     */
+    ANJAY_SERVER_CONNECTION_STABLE,
+
+    /**
+     * Attempt to refresh the connection failed. Possible causes include:
+     * - failure to read connection configuration from the data model
+     * - error when creating the socket
+     * - error during the "connect" operation
+     */
+    ANJAY_SERVER_CONNECTION_ERROR
+} anjay_server_connection_state_t;
+
 /**
  * State of a specific connection to an LwM2M server. One server entry may have
  * multiple connections, if multiple binding is used (e.g. US binding mode,
  * signifying UDP+SMS).
  */
 typedef struct {
+    /**
+     * Cached URI of the given connection - this is exactly the value returned
+     * by _anjay_connection_uri().
+     */
+    anjay_url_t uri;
+
     /**
      * Socket used for communication with the given server. Aside from being
      * used for actual communication, the value of this field is also used as
@@ -98,6 +140,25 @@ typedef struct {
     anjay_conn_session_token_t session_token;
 
     /**
+     * True if the "connect" operation on the socket involves some actual
+     * network traffic. Used to determine whether it is meaningful to attempt
+     * reconnection as an error recovery step.
+     */
+    bool stateful;
+
+    /**
+     * State of the socket connection.
+     */
+    anjay_server_connection_state_t state;
+
+    /**
+     * Flag that is set to true whenever the attempt to bring the socket up from
+     * any other state is made. It signals that any outstanding notifications
+     * shall be scheduled to send after the connection refresh is finished.
+     */
+    bool needs_observe_flush;
+
+    /**
      * The part of active connection state that is intentionally NOT cleaned up
      * when deactivating the server. It contains:
      *
@@ -122,7 +183,7 @@ typedef struct {
      * Handle to scheduled queue_mode_close_socket() scheduler job. Scheduled
      * by _anjay_connection_schedule_queue_mode_close().
      */
-    anjay_sched_handle_t queue_mode_close_socket_clb_handle;
+    anjay_sched_handle_t queue_mode_close_socket_clb;
 } anjay_server_connection_t;
 
 typedef struct {
@@ -138,7 +199,7 @@ typedef struct {
      * (i.e. Register/Update or Bootstrap Request) are sent. See the docs in
      * server.h for details (Ctrl+F the word "primary").
      */
-    anjay_connection_type_t primary_conn_type;
+    anjay_connection_type_t primary_connection;
 } anjay_connections_t;
 
 static inline anjay_server_connection_t *
@@ -157,7 +218,7 @@ avs_net_abstract_socket_t *_anjay_connection_internal_get_socket(
         const anjay_server_connection_t *connection);
 
 void _anjay_connection_internal_clean_socket(
-        anjay_server_connection_t *connection);
+        const anjay_t *anjay, anjay_server_connection_t *connection);
 
 anjay_connection_type_t
 _anjay_connections_get_primary(anjay_connections_t *connections);
@@ -167,17 +228,18 @@ _anjay_connections_get_primary_session_token(anjay_connections_t *connections);
 
 bool _anjay_connection_is_online(anjay_server_connection_t *connection);
 
-int _anjay_connection_internal_bring_online(
-        anjay_t *anjay, anjay_server_connection_t *connection);
+void _anjay_connection_internal_bring_online(anjay_t *anjay,
+                                             anjay_connections_t *connections,
+                                             anjay_connection_type_t conn_type);
 
 void _anjay_connections_close(const anjay_t *anjay,
                               anjay_connections_t *connections);
 
-int _anjay_connections_refresh(anjay_t *anjay,
-                               anjay_connections_t *connections,
-                               anjay_iid_t security_iid,
-                               const anjay_url_t *uri,
-                               const char *binding_mode);
+void _anjay_connections_refresh(anjay_t *anjay,
+                                anjay_connections_t *connections,
+                                anjay_iid_t security_iid,
+                                const anjay_url_t *uri,
+                                const char *binding_mode);
 
 VISIBILITY_PRIVATE_HEADER_END
 

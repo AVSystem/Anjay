@@ -74,7 +74,6 @@ struct anjay_struct {
 #ifdef WITH_DOWNLOADER
     anjay_downloader_t downloader;
 #endif // WITH_DOWNLOADER
-    uint32_t max_icmp_failures;
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1

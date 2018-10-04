@@ -489,7 +489,7 @@ AVS_UNIT_TEST(queue_mode, change) {
         AVS_UNIT_ASSERT_EQUAL(entries->ssid, 1);
         AVS_UNIT_ASSERT_FALSE(entries->queue_mode);
     }
-    AVS_UNIT_ASSERT_NULL(connection->queue_mode_close_socket_clb_handle);
+    AVS_UNIT_ASSERT_NULL(connection->queue_mode_close_socket_clb);
 
     ////// REFRESH BINDING MODE //////
     // query SSID in Security
@@ -505,6 +505,12 @@ AVS_UNIT_TEST(queue_mode, change) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SECURITY2, 1,
                                         ANJAY_DM_RID_SECURITY_SSID, 0,
                                         ANJAY_MOCK_DM_INT(0, 1));
+    // get URI
+    _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SECURITY2, 1,
+                                           ANJAY_DM_RID_SECURITY_SERVER_URI, 1);
+    _anjay_mock_dm_expect_resource_read(
+            anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_SERVER_URI, 0,
+            ANJAY_MOCK_DM_STRING(0, "coap://127.0.0.1"));
     // query SSID in Server
     _anjay_mock_dm_expect_instance_it(anjay, &FAKE_SERVER, 0, 0, 1);
     _anjay_mock_dm_expect_resource_present(anjay, &FAKE_SERVER, 1,
@@ -545,14 +551,14 @@ AVS_UNIT_TEST(queue_mode, change) {
                             update_response->length);
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
-    AVS_UNIT_ASSERT_NOT_NULL(connection->queue_mode_close_socket_clb_handle);
+    AVS_UNIT_ASSERT_NOT_NULL(connection->queue_mode_close_socket_clb);
     AVS_UNIT_ASSERT_EQUAL(sched_time_to_next_s(anjay->sched), 93);
     _anjay_mock_clock_advance(avs_time_duration_from_scalar(93, AVS_TIME_S));
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     AVS_UNIT_ASSERT_NULL(anjay_get_sockets(anjay));
     AVS_UNIT_ASSERT_NULL(anjay_get_socket_entries(anjay));
-    AVS_UNIT_ASSERT_NULL(connection->queue_mode_close_socket_clb_handle);
+    AVS_UNIT_ASSERT_NULL(connection->queue_mode_close_socket_clb);
 
     DM_TEST_FINISH;
 }

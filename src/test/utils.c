@@ -36,7 +36,7 @@ AVS_UNIT_TEST(parse_url, invalid_protocol_terminator) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap:/acs.avsystem.com", &parsed_url));
+            _anjay_url_parse("coap:/acs.avsystem.com", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, square_bracket_enclosed_host_address_too_long) {
@@ -49,14 +49,14 @@ AVS_UNIT_TEST(parse_url, square_bracket_enclosed_host_address_too_long) {
            sizeof(url) - sizeof("coap://[") - 1);
     url[sizeof(url) - 2] = ']';
 
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(url, &parsed_url));
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse(url, &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, without_credentials_port_and_path) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coap://acs.avsystem.com", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com", &parsed_url));
     AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAP);
     AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.host, "acs.avsystem.com");
     AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.port, "");
@@ -65,7 +65,7 @@ AVS_UNIT_TEST(parse_url, without_credentials_port_and_path) {
 AVS_UNIT_TEST(parse_url, with_port_and_path) {
     AUTO_URL(parsed_url) = ANJAY_URL_EMPTY;
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url(
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse(
             "coap://acs.avsystem.com:123/path/to/resource", &parsed_url));
 }
 
@@ -73,41 +73,41 @@ AVS_UNIT_TEST(parse_url, without_password_with_user) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://user@acs.avsystem.com:123", &parsed_url));
+            _anjay_url_parse("coap://user@acs.avsystem.com:123", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, with_empty_user) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://@acs.avsystem.com:123", &parsed_url));
+            _anjay_url_parse("coap://@acs.avsystem.com:123", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, with_user_and_empty_password) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://user:@acs.avsystem.com:123", &parsed_url));
+            _anjay_url_parse("coap://user:@acs.avsystem.com:123", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, with_empty_user_and_empty_password) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://:@acs.avsystem.com:123", &parsed_url));
+            _anjay_url_parse("coap://:@acs.avsystem.com:123", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, with_user_and_password) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse(
             "coap://user:password@acs.avsystem.com:123", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, escaped_credentials) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse(
             "coap://user%25:p%40ssword@acs.avsystem.com", &parsed_url));
 }
 
@@ -117,20 +117,20 @@ AVS_UNIT_TEST(parse_url, coaps_url) {
     {
         parsed_url = ANJAY_URL_EMPTY;
         AVS_UNIT_ASSERT_SUCCESS(
-                _anjay_parse_url("coaps://[12::34]", &parsed_url));
+                _anjay_url_parse("coaps://[12::34]", &parsed_url));
         AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAPS);
         AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.host, "12::34");
     }
     {
         parsed_url = ANJAY_URL_EMPTY;
         AVS_UNIT_ASSERT_SUCCESS(
-                _anjay_parse_url("coaps://acs.avsystem.com", &parsed_url));
+                _anjay_url_parse("coaps://acs.avsystem.com", &parsed_url));
         AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAPS);
     }
     {
         parsed_url = ANJAY_URL_EMPTY;
         AVS_UNIT_ASSERT_SUCCESS(
-                _anjay_parse_url("coaps://acs.avsystem.com:123", &parsed_url));
+                _anjay_url_parse("coaps://acs.avsystem.com:123", &parsed_url));
         AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAPS);
     }
 }
@@ -138,9 +138,9 @@ AVS_UNIT_TEST(parse_url, coaps_url) {
 AVS_UNIT_TEST(parse_url, null_in_username_and_password) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse(
             "coap://user%00:password@acs.avsystem.com", &parsed_url));
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse(
             "coap://user:pas%00sword@acs.avsystem.com", &parsed_url));
 }
 
@@ -148,34 +148,34 @@ AVS_UNIT_TEST(parse_url, port_length) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coap://acs.avsystem.com:1234", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:1234", &parsed_url));
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coap://acs.avsystem.com:12345", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:12345", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://acs.avsystem.com:123456", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:123456", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://acs.avsystem.com:1234567", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:1234567", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://acs.avsystem.com:", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, port_invalid_characters) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coap://acs.avsystem.com:12345", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:12345", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://acs.avsystem.com:1_234", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:1_234", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://acs.avsystem.com:http", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:http", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://acs.avsystem.com:12345_", &parsed_url));
+            _anjay_url_parse("coap://acs.avsystem.com:12345_", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, ipv6_address) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url("coap://[12::34]", &parsed_url));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coap://[12::34]", &parsed_url));
     AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAP);
     AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.host, "12::34");
     AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.port, "");
@@ -185,13 +185,13 @@ AVS_UNIT_TEST(parse_url, ipv6_address_with_port_and_path) {
     AUTO_URL(parsed_url) = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coap://[12::34]:56/78", &parsed_url));
+            _anjay_url_parse("coap://[12::34]:56/78", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, ipv6_address_with_credentials) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse(
             "coap://user%25:p%40ssword@[12::34]:56/78", &parsed_url));
 }
 
@@ -199,21 +199,21 @@ AVS_UNIT_TEST(parse_url, invalid_ipv6_address) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coap://[12:ff:ff::34]", &parsed_url));
+            _anjay_url_parse("coap://[12:ff:ff::34]", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://12:ff:ff::34]", &parsed_url));
+            _anjay_url_parse("coap://12:ff:ff::34]", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://[12:ff:ff::34", &parsed_url));
+            _anjay_url_parse("coap://[12:ff:ff::34", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://[12:ff:ff::34]:", &parsed_url));
+            _anjay_url_parse("coap://[12:ff:ff::34]:", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, empty_host) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url("coap://host", &parsed_url));
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url("coap://", &parsed_url));
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url("coap://:123", &parsed_url));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coap://host", &parsed_url));
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse("coap://", &parsed_url));
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse("coap://:123", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, hostname_length) {
@@ -225,24 +225,24 @@ AVS_UNIT_TEST(parse_url, hostname_length) {
     memset(hostname, 'a', ANJAY_MAX_URL_HOSTNAME_SIZE - 1);
     hostname[ANJAY_MAX_URL_HOSTNAME_SIZE - 1] = '\0';
     sprintf(url, "coap://%s", hostname);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url(url, &parsed_url));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse(url, &parsed_url));
     AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.host, hostname);
 
     /* Test max length + 1 */
     memset(hostname, 'a', ANJAY_MAX_URL_HOSTNAME_SIZE);
     hostname[ANJAY_MAX_URL_HOSTNAME_SIZE] = '\0';
     sprintf(url, "coap://%s", hostname);
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url(url, &parsed_url));
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse(url, &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, empty_uri_path_and_query) {
     anjay_url_t url;
     memset(&url, 0, sizeof(url));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url("coaps://avsystem.com/", &url));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coaps://avsystem.com/", &url));
     AVS_UNIT_ASSERT_NULL(url.uri_path);
     AVS_UNIT_ASSERT_NULL(url.uri_query);
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url("coaps://avsystem.com", &url));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coaps://avsystem.com", &url));
     AVS_UNIT_ASSERT_NULL(url.uri_path);
     AVS_UNIT_ASSERT_NULL(url.uri_query);
 }
@@ -250,7 +250,7 @@ AVS_UNIT_TEST(parse_url, empty_uri_path_and_query) {
 AVS_UNIT_TEST(parse_url, basic_segments) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coaps://avsystem.com/0/1/2", &url));
+            _anjay_url_parse("coaps://avsystem.com/0/1/2", &url));
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 3);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 0);
@@ -261,7 +261,7 @@ AVS_UNIT_TEST(parse_url, basic_segments) {
 
 AVS_UNIT_TEST(parse_url, one_segment_empty) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url("coaps://avsystem.com//", &url));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coaps://avsystem.com//", &url));
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 1);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 0);
@@ -270,7 +270,7 @@ AVS_UNIT_TEST(parse_url, one_segment_empty) {
 
 AVS_UNIT_TEST(parse_url, two_segments_empty) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url("coaps://avsystem.com///", &url));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coaps://avsystem.com///", &url));
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 2);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 0);
@@ -281,7 +281,7 @@ AVS_UNIT_TEST(parse_url, two_segments_empty) {
 AVS_UNIT_TEST(parse_url, basic_query) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coaps://avsystem.com/t/o/p?k3k", &url));
+            _anjay_url_parse("coaps://avsystem.com/t/o/p?k3k", &url));
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 3);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 1);
     AVS_UNIT_ASSERT_EQUAL_STRING(AVS_LIST_NTH(url.uri_path, 0)->c_str, "t");
@@ -293,7 +293,7 @@ AVS_UNIT_TEST(parse_url, basic_query) {
 AVS_UNIT_TEST(parse_url, basic_query_invalid_chars) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coaps://avsystem.com/t/o/p?|<3|<", &url));
+            _anjay_url_parse("coaps://avsystem.com/t/o/p?|<3|<", &url));
     AVS_UNIT_ASSERT_NULL(url.uri_path);
     AVS_UNIT_ASSERT_NULL(url.uri_query);
 }
@@ -301,7 +301,7 @@ AVS_UNIT_TEST(parse_url, basic_query_invalid_chars) {
 AVS_UNIT_TEST(parse_url, only_query) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coaps://avsystem.com/?foo", &url));
+            _anjay_url_parse("coaps://avsystem.com/?foo", &url));
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 0);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 1);
     AVS_UNIT_ASSERT_EQUAL_STRING(url.uri_query->c_str, "foo");
@@ -310,7 +310,7 @@ AVS_UNIT_TEST(parse_url, only_query) {
 AVS_UNIT_TEST(parse_url, empty_query_strings) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coaps://avsystem.com/?&&&", &url));
+            _anjay_url_parse("coaps://avsystem.com/?&&&", &url));
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 0);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 4);
     for (size_t i = 0; i < 4; ++i) {
@@ -321,7 +321,7 @@ AVS_UNIT_TEST(parse_url, empty_query_strings) {
 AVS_UNIT_TEST(parse_url, escaped_uri_path) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_parse_url("coap://avsystem.com/foo%26bar", &url));
+            _anjay_url_parse("coap://avsystem.com/foo%26bar", &url));
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 1);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 0);
     AVS_UNIT_ASSERT_EQUAL_STRING(url.uri_path->c_str, "foo&bar");
@@ -329,7 +329,7 @@ AVS_UNIT_TEST(parse_url, escaped_uri_path) {
 
 AVS_UNIT_TEST(parse_url, weird_query) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_parse_url(
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse(
             "coap://avsystem.com/foo/bar?baz/weird/but/still/query", &url));
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_path), 2);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(url.uri_query), 1);
@@ -341,9 +341,9 @@ AVS_UNIT_TEST(parse_url, weird_query) {
 
 AVS_UNIT_TEST(parse_url, bad_percent_encoding) {
     AUTO_URL(url) = ANJAY_URL_EMPTY;
-    AVS_UNIT_ASSERT_FAILED(_anjay_parse_url("coap://avsystem.com/fo%xa", &url));
+    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse("coap://avsystem.com/fo%xa", &url));
     AVS_UNIT_ASSERT_FAILED(
-            _anjay_parse_url("coap://avsystem.com/foo?b%xar", &url));
+            _anjay_url_parse("coap://avsystem.com/foo?b%xar", &url));
     AVS_UNIT_ASSERT_NULL(url.uri_query);
     AVS_UNIT_ASSERT_NULL(url.uri_path);
 }

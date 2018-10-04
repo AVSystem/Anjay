@@ -96,8 +96,6 @@ class Test:
             # Respond to it with 4.00 Bad Request to simulate some kind of client account expiration on server side.
             self.serv.send(Lwm2mErrorResponse.matching(update_pkt)(code=coap.Code.RES_BAD_REQUEST))
             # This should cause client attempt to re-register.
-            if self.serv.security_mode() != 'nosec':
-                self.assertDtlsReconnect(self.serv)
             register_pkt = self.assertDemoRegisters(self.serv, respond=False)
             # To which we respond with 4.03 Forbidden, finishing off the communication.
             self.serv.send(Lwm2mErrorResponse.matching(register_pkt)(code=coap.Code.RES_FORBIDDEN))

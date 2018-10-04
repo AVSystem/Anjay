@@ -66,24 +66,6 @@ static inline void _anjay_update_ret(int *var, int new_retval) {
     }
 }
 
-typedef struct {
-    avs_net_af_t family;
-    char (*last_local_port_buffer)[ANJAY_MAX_URL_PORT_SIZE];
-    uint16_t static_port_preference;
-} anjay_socket_bind_config_t;
-
-int _anjay_bind_and_connect_socket(avs_net_abstract_socket_t *socket,
-                                   const anjay_socket_bind_config_t *bind_conf,
-                                   const char *remote_host,
-                                   const char *remote_port);
-
-int _anjay_create_connected_udp_socket(
-        avs_net_abstract_socket_t **out,
-        avs_net_socket_type_t type,
-        const void *socket_config,
-        const anjay_socket_bind_config_t *bind_conf,
-        const anjay_url_t *uri);
-
 static inline size_t _anjay_max_power_of_2_not_greater_than(size_t bound) {
     int exponent = -1;
     while (bound) {

@@ -22,13 +22,15 @@ from framework.lwm2m_test import *
 class BufferSizeTest:
     class Base(test_suite.Lwm2mSingleServerTest,
                test_suite.Lwm2mDmOperations):
-        def setUp(self, inbuf_size=4096, outbuf_size=4096, auto_register=True, endpoint=None):
-            extra_args = '-I %d -O %d' % (inbuf_size, outbuf_size)
+        def setUp(self, inbuf_size=4096, outbuf_size=4096, endpoint=None, **kwargs):
+            if 'extra_cmdline_args' not in kwargs:
+                kwargs['extra_cmdline_args'] = []
+
+            kwargs['extra_cmdline_args'] += ['-I', str(inbuf_size), '-O', str(outbuf_size)]
             if endpoint is not None:
-                extra_args += ' -e %s' % endpoint
-            self.setup_demo_with_servers(servers=1,
-                                         extra_cmdline_args=extra_args.split(),
-                                         auto_register=auto_register)
+                kwargs['extra_cmdline_args'] += ['-e', endpoint]
+
+            self.setup_demo_with_servers(**kwargs)
 
 
 class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
@@ -169,7 +171,7 @@ class InputBufferSizeTooSmallToHoldRegisterResponse(BufferSizeTest.Base):
     def setUp(self):
         # see calculation in ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize
         # the buffer is 1B too short to hold Register response
-        super().setUp(inbuf_size=14, auto_register=False)
+        super().setUp(inbuf_size=14, auto_register=False, bootstrap_server=True)
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)
@@ -181,13 +183,8 @@ class InputBufferSizeTooSmallToHoldRegisterResponse(BufferSizeTest.Base):
             req)
         self.serv.send(Lwm2mCreated.matching(req)(location='/rd'))
 
-        # client should not be able to read the whole packet, considering
+        # client should not be able to read the whole packet, falling back to Bootstrap
         # registration unsuccessful and retrying after reconnecting
-        self.serv.reset()
-        req = self.serv.recv(timeout_s=5)
-        self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400)),
-            req)
-        # send a response the client is able to hold inside its buffer
-        # to break synchronous wait and make demo terminate cleanly
-        self.serv.send(Lwm2mReset.matching(req)())
+        req = self.bootstrap_server.recv(timeout_s=5)
+        self.assertIsInstance(req, Lwm2mRequestBootstrap)
+        self.bootstrap_server.send(Lwm2mChanged.matching(req)())

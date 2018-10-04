@@ -46,7 +46,7 @@ static void enter_offline_job(anjay_t *anjay, const void *dummy) {
             };
             ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
                 _anjay_connection_internal_clean_socket(
-                        _anjay_get_server_connection(ref));
+                        anjay, _anjay_get_server_connection(ref));
             }
             server->reactivate_time = now;
         }

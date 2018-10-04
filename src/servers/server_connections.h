@@ -34,12 +34,14 @@ _anjay_get_server_connection(anjay_connection_ref_t ref) {
     return _anjay_connection_get(&ref.server->connections, ref.conn_type);
 }
 
-/**
- * @returns @li 0 on success,
- *          @li a positive errno value in case of a primary socket (UDP) error,
- *          @li a negative value in case of other error.
- */
-int _anjay_active_server_refresh(anjay_t *anjay, anjay_server_info_t *server);
+void _anjay_active_server_refresh(anjay_t *anjay, anjay_server_info_t *server);
+
+void _anjay_connections_on_refreshed(anjay_t *anjay,
+                                     anjay_connections_t *connections,
+                                     anjay_server_connection_state_t state);
+
+void _anjay_connections_flush_notifications(anjay_t *anjay,
+                                            anjay_connections_t *connections);
 
 VISIBILITY_PRIVATE_HEADER_END
 

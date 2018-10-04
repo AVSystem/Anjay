@@ -104,6 +104,11 @@ class BootstrapServerTest(BootstrapServer.Test):
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.bootstrap_server.recv())
 
+        # the client will now start Client Initiated bootstrap, because it has no regular server connection
+        pkt = self.bootstrap_server.recv()
+        self.assertIsInstance(pkt, Lwm2mRequestBootstrap)
+        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
+
         self.request_demo_shutdown()
 
         regular_serv.close()

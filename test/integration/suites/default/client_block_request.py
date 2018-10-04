@@ -135,6 +135,9 @@ class ClientBlockRequest:
                 self.expected_payload_size = len(complete_payload) + len(',</1337/%s>,</2/%s>' % (iid, iid))
                 self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
 
+            def tearDown(self, auto_deregister=False, **kwargs):
+                super().tearDown(auto_deregister=auto_deregister, **kwargs)
+
         return TestImpl
 
 
@@ -303,10 +306,10 @@ class IcmpErrorResponseAfterNoResponsesAtAll(ClientBlockRequest.Test(test_suite.
         with self.serv.fake_close():
             time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
-        # client should abort and retry update in a while, and more importantly, we should
-        # have our recv queues clean, so that this test doesn't fail
-        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
-        self.block_recv()
+        # client should abort
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
+        self.assertEqual(self.get_socket_count(), 0)
 
 
 class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
@@ -315,9 +318,10 @@ class IcmpErrorResponseToFirstRequestBlock(ClientBlockRequest.Test(test_suite.Lw
             self.communicate('send-update')
             time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
-        # client should abort and retry update in a while
-        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
-        self.block_recv()
+        # client should abort
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
+        self.assertEqual(self.get_socket_count(), 0)
 
 
 class IcmpErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
@@ -329,9 +333,10 @@ class IcmpErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test(test_s
         with self.serv.fake_close():
             time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
-        # client should abort and retry update in a while
-        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
-        self.block_recv()
+        # client should abort
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
+        self.assertEqual(self.get_socket_count(), 0)
 
 
 class IcmpErrorResponseToLastRequestBlock(ClientBlockRequest.Test(test_suite.Lwm2mDtlsSingleServerTest)):
@@ -343,12 +348,16 @@ class IcmpErrorResponseToLastRequestBlock(ClientBlockRequest.Test(test_suite.Lwm
         with self.serv.fake_close():
             time.sleep(ICMP_ERROR_RESPONSE_SLEEP_SECONDS)
 
-        # client should abort and retry update in a while
-        self.assertDtlsReconnect(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
-        self.block_recv()
+        # client should abort
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=(ICMP_ERROR_RESPONSE_SLEEP_SECONDS * 3))
+        self.assertEqual(self.get_socket_count(), 0)
 
 
 class NoResponseAfterFirstRequestBlock(ClientBlockRequest.Test()):
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
+
     def runTest(self):
         self.communicate('send-update')
 
@@ -360,6 +369,9 @@ class NoResponseAfterFirstRequestBlock(ClientBlockRequest.Test()):
 
 
 class NoResponseAfterIntermediateRequestBlock(ClientBlockRequest.Test()):
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
+
     def runTest(self):
         self.communicate('send-update')
 
@@ -374,6 +386,9 @@ class NoResponseAfterIntermediateRequestBlock(ClientBlockRequest.Test()):
 
 
 class NoResponseAfterLastRequestBlock(ClientBlockRequest.Test()):
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
+
     def runTest(self):
         self.communicate('send-update')
 
@@ -388,6 +403,9 @@ class NoResponseAfterLastRequestBlock(ClientBlockRequest.Test()):
 
 
 class BlockSizeRenegotiation(ClientBlockRequest.Test()):
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
+
     def runTest(self):
         # blocks 2+ should use reduced block size
         self.communicate('send-update')
@@ -430,12 +448,15 @@ class BlockSizeRenegotiationInTheMiddleOfTransfer(ClientBlockRequest.Test()):
                                        block_size=new_block_size)
         self.serv.send(Lwm2mContinue.matching(req)(options=[block_opt]))
 
-        # client should get confused and abort the transfer, retrying after a while
+        # client should get confused and abort the transfer
         time.sleep(1)
-        self.block_recv()
+        self.assertEqual(self.get_socket_count(), 0)
 
 
 class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test()):
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
+
     def runTest(self):
         self.communicate('send-update')
 
@@ -453,6 +474,9 @@ class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test()):
 
 
 class UnexpectedServerRequestWhileBlockRequestInProgress(ClientBlockRequest.Test()):
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
+
     def runTest(self):
         self.communicate('send-update')
 

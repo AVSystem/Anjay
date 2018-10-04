@@ -105,6 +105,8 @@ class BootstrapClientTest(BootstrapTest.Test):
         # should now register with the non-bootstrap server
         self.assertDemoRegisters(self.serv, lifetime=60)
 
+        self.assertEqual(2, self.get_socket_count())
+
         # no message for now
         with self.assertRaises(socket.timeout):
             print(self.serv.recv(timeout_s=1))
@@ -118,9 +120,7 @@ class BootstrapClientTest(BootstrapTest.Test):
             print(self.serv.recv(timeout_s=3))
 
         # now the Bootstrap Server Account should be purged...
-        discovered_security = self.discover(server=self.serv, oid=0).content
-        self.assertIn(b'</0/2/', discovered_security)
-        self.assertNotIn(b'</0/1/', discovered_security)
+        self.assertEqual(1, self.get_socket_count())
 
         # and we should get ICMP port unreachable on Bootstrap Finish...
         self.bootstrap_server.send(Lwm2mBootstrapFinish())
@@ -318,7 +318,6 @@ class BootstrapIncorrectData(BootstrapTest.Test):
         # Respond to it with 4.00 Bad Request to simulate some kind of client account expiration on server side.
         self.serv.send(Lwm2mErrorResponse.matching(update_pkt)(code=coap.Code.RES_BAD_REQUEST))
         # This should cause client attempt to re-register.
-        self.assertDtlsReconnect()
         register_pkt = self.assertDemoRegisters(self.serv, respond=False)
         # To which we respond with 4.03 Forbidden, finishing off the communication.
         self.serv.send(Lwm2mErrorResponse.matching(register_pkt)(code=coap.Code.RES_FORBIDDEN))
@@ -385,7 +384,6 @@ class ClientInitiatedBootstrapFallbackOnly(BootstrapTest.Test):
         # Respond to it with 4.00 Bad Request to simulate some kind of client account expiration on server side.
         self.serv.send(Lwm2mErrorResponse.matching(update_pkt)(code=coap.Code.RES_BAD_REQUEST))
         # This should cause client attempt to re-register.
-        self.assertDtlsReconnect()
         register_pkt = self.assertDemoRegisters(self.serv, respond=False)
         # To which we respond with 4.03 Forbidden, finishing off the communication.
         self.serv.send(Lwm2mErrorResponse.matching(register_pkt)(code=coap.Code.RES_FORBIDDEN))

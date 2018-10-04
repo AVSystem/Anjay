@@ -58,33 +58,13 @@ class UpdateServerDownReconnectTest(test_suite.PcapEnabledTest, test_suite.Lwm2m
             self.communicate('send-update')
             self.wait_until_icmp_unreachable_count(1, timeout_s=10)
 
-        # the Update failed, wait for retransmission to check if the stream was
-        # properly released, i.e. sending another message does not trigger
-        # assertion failure
-
-        # demo should still work at this point
-
-        # receive the re-Register packet and send valid reply
-        # otherwise demo will not finish until timeout
-
-        # Note: explicit timeout is added on purpose to avoid following scenario,
-        #       that happened few times during regular test runs:
-        #
-        # 1. Demo retrieves 'send-update' command.
-        # 2. Test waits for 1s to miss that update request.
-        # 3. Demo notices that it failed to deliver an update, therefore
-        #    re-Register is being rescheduled after 2s.
-        # 4. Time passes, demo sends Register, but Lwm2mServer hasn't started
-        #    just yet.
-        # 5. Demo reschedules Register again after about 4s of delay.
-        # 6. Lwm2mServer has finally started.
-        # 7. Test waited for 1 second for the Register (default assertDemoRegisters
-        #    timeout), which is too little (see 5.), and failed.
-        self.serv.reset()
-        self.assertDemoRegisters(timeout_s=5)
+        # client should abort
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=5)
+        self.assertEqual(self.get_socket_count(), 0)
 
     def tearDown(self):
-        super().tearDown()
+        super().tearDown(auto_deregister=False)
         self.assertEqual(self.count_icmp_unreachable_packets(), 1)
 
 
@@ -156,19 +136,18 @@ class UpdateFallbacksToRegisterAfterLifetimeExpiresTest(test_suite.Lwm2mSingleSe
 
     def setUp(self):
         super().setUp(auto_register=False,
-                      lifetime=self.LIFETIME)
+                      lifetime=self.LIFETIME,
+                      extra_cmdline_args=['--ack-random-factor', '1',
+                                          '--ack-timeout', '1',
+                                          '--max-retransmit', '1'])
         self.assertDemoRegisters(lifetime=self.LIFETIME)
 
     def runTest(self):
         self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1)
 
-        # make subsequent Updates fail to force re-Register
-        with self.serv.fake_close():
-            time.sleep(self.LIFETIME + 1)
-
-        # re-Register causes the client to change port
-        self.serv.reset()
-        self.assertDemoRegisters(lifetime=self.LIFETIME, timeout_s=5)
+        self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1, respond=False)
+        self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1, respond=False)
+        self.assertDemoRegisters(lifetime=self.LIFETIME, timeout_s=self.LIFETIME / 2 + 1)
 
 
 class UpdateFallbacksToRegisterAfterCoapClientErrorResponse(test_suite.Lwm2mSingleServerTest):
@@ -189,6 +168,9 @@ class UpdateFallbacksToRegisterAfterCoapClientErrorResponse(test_suite.Lwm2mSing
 
 
 class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
 
@@ -200,12 +182,17 @@ class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
         self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=1.0&ep=urn:dev:os:0023C7-000001&lt=86400'), pkt)
         self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_INTERNAL_SERVER_ERROR))
 
-        # make sure that client retries
-        self.serv.reset()
-        self.assertDemoRegisters(timeout_s=10)
+        # client should abort
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=10)
+        self.assertEqual(self.get_socket_count(), 0)
 
 
-class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTest):
+class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTest,
+                                              test_suite.Lwm2mDmOperations):
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
 
@@ -216,10 +203,10 @@ class ReconnectFailsWithConnectionRefusedTest(test_suite.Lwm2mDtlsSingleServerTe
             # give the process some time to fail
             time.sleep(1)
 
-        # make sure that client retries
-        self.assertDtlsReconnect(timeout_s=5)
-        # TODO: Update would be sufficient, but our server handling code is a pile of spaghetti for now...
-        self.assertDemoRegisters(timeout_s=5)
+        # client should abort
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=5)
+        self.assertEqual(self.get_socket_count(), 0)
 
 
 class ConcurrentRequestWhileWaitingForResponse(test_suite.Lwm2mSingleServerTest):

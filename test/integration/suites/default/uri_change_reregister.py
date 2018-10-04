@@ -38,13 +38,7 @@ class UriChangeReregisterTest(test_suite.Lwm2mTest):
             pkt)
         self.servers[0].send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
 
-        req = Lwm2mDiscover('/0')
-        self.servers[0].send(req)
-        res = self.servers[0].recv()
-        self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
-
-        self.assertIn(b'</0/1/', res.content)
-        self.assertIn(b'</0/2/', res.content)
+        self.assertEqual(2, self.get_socket_count())
 
         # modify the server URI
         demo_port = self.get_demo_port()

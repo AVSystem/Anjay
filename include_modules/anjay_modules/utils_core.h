@@ -68,7 +68,9 @@ typedef struct anjay_url {
  * NOTE: @p out_parsed_url MUST be initialized with ANJAY_URL_EMPTY or otherwise
  * the behavior is undefined.
  */
-int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url);
+int _anjay_url_parse(const char *raw_url, anjay_url_t *out_parsed_url);
+
+int _anjay_url_copy(anjay_url_t *out_copy, const anjay_url_t *source);
 
 /**
  * Frees any allocated memory by @ref _anjay_parse_url

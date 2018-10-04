@@ -111,9 +111,10 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
                           avs_coap_msg_builder_payload(&builder, args->payload,
                                                        args->payload_size));
 
-    AVS_LIST_CLEAR(&args->location_path);
-    AVS_LIST_CLEAR(&args->uri_path);
-    AVS_LIST_CLEAR(&args->uri_query);
+    AVS_LIST_CLEAR(
+            (AVS_LIST(anjay_string_t) *) (intptr_t) &args->location_path);
+    AVS_LIST_CLEAR((AVS_LIST(anjay_string_t) *) (intptr_t) &args->uri_path);
+    AVS_LIST_CLEAR((AVS_LIST(anjay_string_t) *) (intptr_t) &args->uri_query);
     avs_coap_msg_info_reset(&info);
     return avs_coap_msg_builder_get_msg(&builder);
 }
@@ -146,7 +147,7 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
  * @code
  * const avs_coap_msg_t *msg = COAP_MSG(CON, GET, ID(0), NO_PAYLOAD);
  * const avs_coap_msg_t *msg = COAP_MSG(ACK, CONTENT, ID(0),
- *                                        BLOCK2(0, 16, "full_payload"));
+ *                                      BLOCK2(0, 16, "full_payload"));
  * @endcode
  */
 #define COAP_MSG(Type, Code, Id, ... /* Payload, Opts... */)                  \
@@ -159,19 +160,20 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
                })
 
 /* Used in COAP_MSG() to define message identity. */
-#define ID(MsgId, ... /* Token */)                                   \
-    .id =                                                            \
-            (avs_coap_msg_identity_t) {                              \
-                (uint16_t) (MsgId),                                  \
-                (avs_coap_token_t) { sizeof(""__VA_ARGS__) - 1, "" } \
-            },                                                       \
-    .token_as_string__ = ""__VA_ARGS__
+#define ID_TOKEN(MsgId, Token)                                                \
+    .id = (avs_coap_msg_identity_t) { (uint16_t) (MsgId),                     \
+                                      (avs_coap_token_t) { sizeof(Token) - 1, \
+                                                           "" } },            \
+    .token_as_string__ = Token
+
+/* Used in COAP_MSG() to define message identity with empty token. */
+#define ID(MsgId) ID_TOKEN((MsgId), "")
 
 /* Used in COAP_MSG() to specify ETag option value. */
 #define ETAG(Tag)                                         \
     .etag = (const anjay_etag_t *) &(anjay_coap_etag_t) { \
         .size = sizeof(Tag) - 1,                          \
-        .value = (Tag)                                    \
+        .value = Tag                                      \
     }
 
 /* Used in COAP_MSG() to specify a list of Location-Path options. */
@@ -210,17 +212,17 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
 
 /* Used in COAP_MSG() to define a message with no payload or BLOCK options. */
 #define NO_PAYLOAD   \
-    .block1 = {},    \
-    .block2 = {},    \
+    .block1 = { 0 }, \
+    .block2 = { 0 }, \
     .payload = NULL, \
     .payload_size = 0
 
 /* Used in COAP_MSG() to define a non-block message payload from external
  * variable (not only string literal). */
 #define PAYLOAD_EXTERNAL(Payload, PayloadSize) \
-    .block1 = {},                              \
-    .block2 = {},                              \
-    .payload = (Payload),                      \
+    .block1 = { 0 },                           \
+    .block2 = { 0 },                           \
+    .payload = Payload,                        \
     .payload_size = PayloadSize,
 
 /* Used in COAP_MSG() to define a non-block message payload (string literal).
@@ -237,7 +239,7 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
  *              considered part of the payload.
  */
 #define BLOCK2(Seq, Size, ... /* Payload */)                               \
-    .block1 = {},                                                          \
+    .block1 = { 0 },                                                       \
     .block2 = {                                                            \
         .type = AVS_COAP_BLOCK2,                                           \
         .valid = true,                                                     \

@@ -109,7 +109,7 @@ static int copy_nullable_string(char *out, size_t out_size, const char *in) {
     }
 }
 
-int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url) {
+int _anjay_url_parse(const char *raw_url, anjay_url_t *out_parsed_url) {
     assert(!out_parsed_url->uri_path);
     assert(!out_parsed_url->uri_query);
     avs_url_t *avs_url = avs_url_parse(raw_url);
@@ -153,6 +153,18 @@ int _anjay_parse_url(const char *raw_url, anjay_url_t *out_parsed_url) {
     }
     avs_url_free(avs_url);
     return result;
+}
+
+int _anjay_url_copy(anjay_url_t *out_copy, const anjay_url_t *source) {
+    out_copy->protocol = source->protocol;
+    memcpy(out_copy->host, source->host, sizeof(out_copy->host));
+    memcpy(out_copy->port, source->port, sizeof(out_copy->port));
+    if (_anjay_copy_string_list(&out_copy->uri_path, source->uri_path)
+            || _anjay_copy_string_list(&out_copy->uri_query,
+                                       source->uri_query)) {
+        return -1;
+    }
+    return 0;
 }
 
 void _anjay_url_cleanup(anjay_url_t *url) {
@@ -307,116 +319,6 @@ _anjay_make_query_string_list(const char *version,
 fail:
     AVS_LIST_CLEAR(&list);
     return NULL;
-}
-
-static int bind_socket(avs_net_abstract_socket_t *socket,
-                       const anjay_socket_bind_config_t *bind_conf) {
-    const char *local_addr = NULL;
-    char static_preferred_port[ANJAY_MAX_URL_PORT_SIZE] = "";
-    if (bind_conf) {
-        if (bind_conf->family == AVS_NET_AF_INET4) {
-            local_addr = "0.0.0.0";
-        } else if (bind_conf->family == AVS_NET_AF_INET6) {
-            local_addr = "::";
-        }
-
-        if (bind_conf->static_port_preference) {
-            if (avs_simple_snprintf(static_preferred_port,
-                                    sizeof(static_preferred_port), "%" PRIu16,
-                                    bind_conf->static_port_preference)
-                    < 0) {
-                AVS_UNREACHABLE("Could not convert preferred port number");
-            }
-        } else if (bind_conf->last_local_port_buffer
-                   && **bind_conf->last_local_port_buffer) {
-            if (!avs_net_socket_bind(socket, local_addr,
-                                     *bind_conf->last_local_port_buffer)) {
-                return 0;
-            }
-            anjay_log(WARNING,
-                      "could not bind socket to last known address [%s]:%s",
-                      local_addr ? local_addr : "",
-                      *bind_conf->last_local_port_buffer);
-        }
-    }
-
-    if ((local_addr || *static_preferred_port)
-            && avs_net_socket_bind(socket, local_addr, static_preferred_port)) {
-        anjay_log(ERROR, "could not bind socket to [%s]:%s",
-                  local_addr ? local_addr : "", static_preferred_port);
-        return -1;
-    }
-
-    return 0;
-}
-
-int _anjay_bind_and_connect_socket(avs_net_abstract_socket_t *socket,
-                                   const anjay_socket_bind_config_t *bind_conf,
-                                   const char *remote_host,
-                                   const char *remote_port) {
-    if (bind_socket(socket, bind_conf)) {
-        return -1;
-    }
-
-    if (avs_net_socket_connect(socket, remote_host, remote_port)) {
-        anjay_log(ERROR, "could not connect to %s:%s", remote_host,
-                  remote_port);
-        return -1;
-    }
-
-    if (bind_conf && bind_conf->last_local_port_buffer) {
-        if (!avs_net_socket_get_local_port(socket,
-                                           *bind_conf->last_local_port_buffer,
-                                           ANJAY_MAX_URL_PORT_SIZE)) {
-            anjay_log(DEBUG, "bound to port %s",
-                      *bind_conf->last_local_port_buffer);
-        } else {
-            anjay_log(WARNING, "could not store bound local port");
-            (*bind_conf->last_local_port_buffer)[0] = '\0';
-        }
-    }
-
-    return 0;
-}
-
-int _anjay_create_connected_udp_socket(
-        avs_net_abstract_socket_t **out,
-        avs_net_socket_type_t type,
-        const void *socket_config,
-        const anjay_socket_bind_config_t *bind_conf,
-        const anjay_url_t *uri) {
-    int result = 0;
-    assert(!*out);
-
-    switch (type) {
-    case AVS_NET_UDP_SOCKET:
-    case AVS_NET_DTLS_SOCKET:
-        if (avs_net_socket_create(out, type, socket_config)) {
-            result = ENOMEM;
-            anjay_log(ERROR, "could not create CoAP socket");
-            goto fail;
-        }
-
-        if (_anjay_bind_and_connect_socket(*out, bind_conf, uri->host,
-                                           uri->port)) {
-            goto fail;
-        }
-
-        return 0;
-    default:
-        anjay_log(ERROR, "unsupported socket type requested: %d", type);
-        return EPROTONOSUPPORT;
-    }
-
-fail:
-    if (*out) {
-        result = avs_net_socket_errno(*out);
-    }
-    if (!result) {
-        result = EPROTO;
-    }
-    avs_net_socket_cleanup(out);
-    return result;
 }
 
 #ifdef ANJAY_TEST

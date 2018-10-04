@@ -420,6 +420,8 @@ class UnbootstrappingOnlyOneOwnerTest(AccessControl.Test):
         assert ac_iid
         # Deleting server shall delete ACO Instance and /TEST_OID/1 instance too.
         self.communicate('trim-servers 2')
+        self.assertDemoUpdatesRegistration(self.servers[0], content=ANY)
+        self.assertDemoUpdatesRegistration(self.servers[1], content=ANY)
         self.assertDemoDeregisters(self.servers[2])
         del (self.servers[2])
 
@@ -440,6 +442,8 @@ class UnbootstrappingOwnerElection(AccessControl.Test):
                                 make_acl_entry(2, ACCESS_MASK_WRITE | ACCESS_MASK_EXECUTE),
                                 make_acl_entry(3, ACCESS_MASK_OWNER)])
         self.communicate('trim-servers 2')
+        self.assertDemoUpdatesRegistration(self.servers[0], content=ANY)
+        self.assertDemoUpdatesRegistration(self.servers[1], content=ANY)
         self.assertDemoDeregisters(self.servers[2])
         del (self.servers[2])
         ac_iid = self.find_access_control_instance(server=self.servers[1], oid=TEST_OID, iid=1)
@@ -451,6 +455,8 @@ class UnbootstrappingOwnerElection(AccessControl.Test):
 
         serv3 = Lwm2mServer()
         self.communicate('add-server coap://127.0.0.1:%d' % serv3.get_listen_port())
+        self.assertDemoUpdatesRegistration(self.servers[0], content=ANY)
+        self.assertDemoUpdatesRegistration(self.servers[1], content=ANY)
         self.assertDemoRegisters(serv3)
 
         self.create_instance(server=serv3, oid=TEST_OID)
@@ -459,6 +465,8 @@ class UnbootstrappingOwnerElection(AccessControl.Test):
                                 make_acl_entry(2, ACCESS_MASK_WRITE | ACCESS_MASK_DELETE),
                                 make_acl_entry(3, ACCESS_MASK_OWNER)])
         self.communicate('trim-servers 2')
+        self.assertDemoUpdatesRegistration(self.servers[0], content=ANY)
+        self.assertDemoUpdatesRegistration(self.servers[1], content=ANY)
         self.assertDemoDeregisters(serv3)
 
         ac_iid = self.find_access_control_instance(server=self.servers[1], oid=TEST_OID, iid=2)
@@ -472,6 +480,9 @@ class AclActiveDespiteOnlyOneServerSuccessfullyConnected(AccessControl.Test):
     def setUp(self):
         super().setUp(auto_register=False)
 
+    def tearDown(self):
+        self.teardown_demo_with_servers(deregister_servers=[self.servers[0]])
+
     def runTest(self):
         self.assertDemoRegisters(self.servers[0])
 
@@ -483,10 +494,6 @@ class AclActiveDespiteOnlyOneServerSuccessfullyConnected(AccessControl.Test):
         # SSID 1 has no rights to read information about SSID 2, even though it's the only properly connected server
         self.read_resource(server=self.servers[0], oid=SERVER_OID, iid=2, rid=RID.Server.ShortServerID,
                            expect_error_code=coap.Code.RES_UNAUTHORIZED)
-
-        # allow the second registration retry to make cleanup easier
-        self.servers[1].reset()
-        self.assertDemoRegisters(self.servers[1])
 
 
 class AclBootstrapping(bootstrap_server.BootstrapServer.Test, test_suite.Lwm2mDmOperations):

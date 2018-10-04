@@ -577,7 +577,7 @@ int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     };
     ctx->common.vtable = &VTABLE;
 
-    if (_anjay_parse_url(cfg->url, &ctx->uri)) {
+    if (_anjay_url_parse(cfg->url, &ctx->uri)) {
         dl_log(ERROR, "invalid URL: %s", cfg->url);
         result = -EINVAL;
         goto error;
@@ -630,8 +630,17 @@ int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     // get duplicated between these "identical" sockets, or we may get some
     // kind of load-balancing behavior. In the last case, the client would
     // randomly handle or ignore LwM2M requests and CoAP download responses.
-    result = _anjay_create_connected_udp_socket(&ctx->socket, socket_type,
-                                                config, NULL, &ctx->uri);
+    if (avs_net_socket_create(&ctx->socket, socket_type, config)) {
+        dl_log(ERROR, "could not create CoAP socket");
+        result = -ENOMEM;
+    } else if (avs_net_socket_connect(ctx->socket, ctx->uri.host,
+                                      ctx->uri.port)) {
+        dl_log(ERROR, "could not connect CoAP socket");
+        if (!(result = -avs_net_socket_errno(ctx->socket))) {
+            result = -EPROTO;
+        }
+        avs_net_socket_cleanup(&ctx->socket);
+    }
     if (!ctx->socket) {
         dl_log(ERROR, "could not create CoAP socket");
         goto error;

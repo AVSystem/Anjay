@@ -96,6 +96,15 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server) {
     const anjay_registration_info_t *registration_info =
             _anjay_server_registration_info(server);
     assert(registration_info);
+    if (!_anjay_conn_session_tokens_equal(_anjay_server_primary_session_token(
+                                                  server),
+                                          registration_info->session_token)) {
+        anjay_log(DEBUG,
+                  "Registration session changed for SSID = %u, "
+                  "forcing re-register",
+                  _anjay_server_ssid(server));
+        return true;
+    }
     avs_time_duration_t remaining =
             _anjay_register_time_remaining(registration_info);
     // avs_time_duration_less() returns false when either argument is INVALID;

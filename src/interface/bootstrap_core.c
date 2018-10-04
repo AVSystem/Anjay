@@ -66,10 +66,13 @@ static void start_bootstrap_if_not_already_started(anjay_t *anjay) {
         _anjay_servers_foreach_active(anjay, suspend_nonbootstrap_server, NULL);
 
         _anjay_dm_transaction_begin(anjay);
-        anjay->bootstrap.in_progress = true;
         _anjay_sched_del(anjay->sched,
                          &anjay->bootstrap.purge_bootstrap_handle);
     }
+    anjay->bootstrap.bootstrap_session_token =
+            _anjay_server_primary_session_token(
+                    anjay->current_connection.server);
+    anjay->bootstrap.in_progress = true;
 }
 
 static int commit_bootstrap(anjay_t *anjay) {
@@ -78,6 +81,8 @@ static int commit_bootstrap(anjay_t *anjay) {
             return ANJAY_ERR_NOT_ACCEPTABLE;
         } else {
             anjay->bootstrap.in_progress = false;
+            _anjay_conn_session_token_reset(
+                    &anjay->bootstrap.bootstrap_session_token);
             _anjay_schedule_reload_servers(anjay);
             return _anjay_dm_transaction_finish_without_validation(anjay, 0);
         }
@@ -89,15 +94,17 @@ static void abort_bootstrap(anjay_t *anjay) {
     if (anjay->bootstrap.in_progress) {
         _anjay_dm_transaction_rollback(anjay);
         anjay->bootstrap.in_progress = false;
+        _anjay_conn_session_token_reset(
+                &anjay->bootstrap.bootstrap_session_token);
         _anjay_schedule_reload_servers(anjay);
     }
 }
 
-static void bootstrap_remove_notify_changed(anjay_t *anjay,
+static void bootstrap_remove_notify_changed(anjay_bootstrap_t *bootstrap,
                                             anjay_oid_t oid,
                                             anjay_iid_t iid) {
     AVS_LIST(anjay_notify_queue_object_entry_t) *obj_it;
-    AVS_LIST_FOREACH_PTR(obj_it, &anjay->bootstrap.notification_queue) {
+    AVS_LIST_FOREACH_PTR(obj_it, &bootstrap->notification_queue) {
         if ((*obj_it)->oid > oid) {
             return;
         } else if ((*obj_it)->oid == oid) {
@@ -360,7 +367,7 @@ static int delete_instance(anjay_t *anjay,
         anjay_log(ERROR, "delete_instance: cannot delete /%d/%d: %d",
                   (*obj)->oid, iid, retval);
     } else {
-        bootstrap_remove_notify_changed(anjay, (*obj)->oid, iid);
+        bootstrap_remove_notify_changed(&anjay->bootstrap, (*obj)->oid, iid);
         retval = _anjay_notify_queue_instance_removed(
                 &anjay->bootstrap.notification_queue, (*obj)->oid, iid);
     }
@@ -561,11 +568,11 @@ static int bootstrap_finish(anjay_t *anjay) {
     return bootstrap_finish_impl(anjay, true);
 }
 
-static void reset_client_initiated_bootstrap_backoff(anjay_t *anjay) {
-    anjay->bootstrap.client_initiated_bootstrap_last_attempt =
+static void
+reset_client_initiated_bootstrap_backoff(anjay_bootstrap_t *bootstrap) {
+    bootstrap->client_initiated_bootstrap_last_attempt =
             AVS_TIME_MONOTONIC_INVALID;
-    anjay->bootstrap.client_initiated_bootstrap_holdoff =
-            AVS_TIME_DURATION_INVALID;
+    bootstrap->client_initiated_bootstrap_holdoff = AVS_TIME_DURATION_INVALID;
 }
 
 int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay) {
@@ -576,7 +583,7 @@ int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay) {
         cancel_client_initiated_bootstrap(anjay);
     }
     if (!result) {
-        reset_client_initiated_bootstrap_backoff(anjay);
+        reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
     }
     return result;
 }
@@ -671,8 +678,8 @@ static int check_request_bootstrap_response(avs_stream_abstract_t *stream) {
 }
 
 static int send_request_bootstrap(anjay_t *anjay) {
-    const anjay_url_t *const server_uri =
-            _anjay_server_uri(anjay->current_connection.server);
+    const anjay_url_t *const connection_uri =
+            _anjay_connection_uri(anjay->current_connection);
     anjay_msg_details_t details = {
         .msg_type = AVS_COAP_MSG_CONFIRMABLE,
         .msg_code = AVS_COAP_CODE_POST,
@@ -680,9 +687,9 @@ static int send_request_bootstrap(anjay_t *anjay) {
     };
 
     int result = -1;
-    if (_anjay_copy_string_list(&details.uri_path, server_uri->uri_path)
+    if (_anjay_copy_string_list(&details.uri_path, connection_uri->uri_path)
             || _anjay_copy_string_list(&details.uri_query,
-                                       server_uri->uri_query)
+                                       connection_uri->uri_query)
             || !AVS_LIST_APPEND(&details.uri_path, ANJAY_MAKE_STRING_LIST("bs"))
             || !AVS_LIST_APPEND(
                        &details.uri_query,
@@ -709,7 +716,7 @@ cleanup:
     return result;
 }
 
-static void request_bootstrap(anjay_t *anjay, const void *dummy);
+static void request_bootstrap_job(anjay_t *anjay, const void *dummy);
 
 static int schedule_request_bootstrap(anjay_t *anjay) {
     avs_time_monotonic_t now = avs_time_monotonic_now();
@@ -729,7 +736,7 @@ static int schedule_request_bootstrap(anjay_t *anjay) {
     if (_anjay_sched(anjay->sched,
                      &anjay->bootstrap.client_initiated_bootstrap_handle,
                      avs_time_monotonic_diff(attempt_instant, now),
-                     request_bootstrap, NULL, 0)) {
+                     request_bootstrap_job, NULL, 0)) {
         anjay_log(ERROR, "Could not schedule Client Initiated Bootstrap");
         return -1;
     }
@@ -782,11 +789,20 @@ static bool is_connected_to_non_bootstrap(anjay_t *anjay) {
     return non_bootstrap_connected;
 }
 
-static void request_bootstrap(anjay_t *anjay, const void *dummy) {
-    if (is_connected_to_non_bootstrap(anjay)) {
+static void request_bootstrap_job(anjay_t *anjay, const void *dummy) {
+    // This function is called from the scheduler - we need to do these checks
+    // here and not e.g. in _anjay_bootstrap_request_if_appropriate(), because a
+    // non-bootstrap server connection might have been established between the
+    // call to _anjay_sched() and now. In fact, this is part of the server
+    // refresh logic - non-bootstrap servers are Registered immediately, but
+    // Client-Initiated Bootstrap is scheduled - if there were successful
+    // registrations after scheduling Bootstrap, then it's "cancelled" by these
+    // checks here.
+    if (is_connected_to_non_bootstrap(anjay)
+            || _anjay_can_retry_with_normal_server(anjay)) {
         anjay_log(DEBUG,
                   "Client Initiated Bootstrap not applicable, not performing");
-        reset_client_initiated_bootstrap_backoff(anjay);
+        reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
         return;
     }
 
@@ -806,26 +822,35 @@ static void request_bootstrap(anjay_t *anjay, const void *dummy) {
     if (connection.conn_type == ANJAY_CONNECTION_UNSET) {
         goto finish;
     }
+    if (_anjay_conn_session_tokens_equal(
+                anjay->bootstrap.bootstrap_session_token,
+                _anjay_server_primary_session_token(server))) {
+        anjay_log(DEBUG, "Bootstrap already started on the same connection");
+        result = 0;
+        goto finish;
+    }
     if (_anjay_bind_server_stream(anjay, connection)) {
         anjay_log(ERROR, "could not get stream for bootstrap server");
         goto finish;
     }
 
     result = send_request_bootstrap(anjay);
-    if (result == AVS_COAP_CTX_ERR_NETWORK) {
-        anjay_log(ERROR, "network communication error while "
-                         "sending Request Bootstrap");
-        _anjay_schedule_server_reconnect(anjay, server);
-    } else if (result) {
-        anjay_log(ERROR, "could not send Request Bootstrap");
-    } else {
+    if (!result) {
         start_bootstrap_if_not_already_started(anjay);
     }
 
     _anjay_release_server_stream(anjay);
-finish:
+
     if (result) {
-        schedule_request_bootstrap(anjay);
+        anjay_log(ERROR, "could not send Request Bootstrap");
+    }
+finish:
+    if (server) {
+        if (result == AVS_COAP_CTX_ERR_TIMEOUT) {
+            _anjay_server_on_registration_timeout(anjay, server);
+        } else if (result) {
+            _anjay_server_on_server_communication_error(anjay, server);
+        }
     }
 }
 
@@ -847,13 +872,13 @@ static int64_t client_hold_off_time_s(anjay_t *anjay) {
     return holdoff_s;
 }
 
-int _anjay_bootstrap_account_prepare(anjay_t *anjay) {
-    // schedule Client Initiated Bootstrap if not attempted already
-    if (anjay->bootstrap.client_initiated_bootstrap_handle
-            || _anjay_can_retry_with_normal_server(anjay)) {
+int _anjay_bootstrap_request_if_appropriate(anjay_t *anjay) {
+    if (anjay->bootstrap.client_initiated_bootstrap_handle) {
         return 0;
     }
-
+    // schedule Client Initiated Bootstrap if not attempted already;
+    // if bootstrap is already in progress, schedule_request_bootstrap()
+    // will check if the endpoint changed and re-request if so
     if (!avs_time_monotonic_valid(
                 anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
         int64_t holdoff_s = client_hold_off_time_s(anjay);
@@ -869,26 +894,17 @@ int _anjay_bootstrap_account_prepare(anjay_t *anjay) {
     return schedule_request_bootstrap(anjay);
 }
 
-int _anjay_bootstrap_update_reconnected(anjay_t *anjay) {
-    if (anjay->bootstrap.in_progress
-            && !anjay->bootstrap.client_initiated_bootstrap_handle) {
-        // if it's already scheduled then it'll happen on the new socket,
-        // so no need to reschedule
-        return schedule_request_bootstrap(anjay);
-    }
-    return 0;
-}
-
-void _anjay_bootstrap_init(anjay_t *anjay,
+void _anjay_bootstrap_init(anjay_bootstrap_t *bootstrap,
                            bool allow_server_initiated_bootstrap) {
-    anjay->bootstrap.allow_server_initiated_bootstrap =
+    bootstrap->allow_server_initiated_bootstrap =
             allow_server_initiated_bootstrap;
-    reset_client_initiated_bootstrap_backoff(anjay);
+    _anjay_conn_session_token_reset(&bootstrap->bootstrap_session_token);
+    reset_client_initiated_bootstrap_backoff(bootstrap);
 }
 
 void _anjay_bootstrap_cleanup(anjay_t *anjay) {
     cancel_client_initiated_bootstrap(anjay);
-    reset_client_initiated_bootstrap_backoff(anjay);
+    reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
     abort_bootstrap(anjay);
     _anjay_sched_del(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle);
     _anjay_notify_clear_queue(&anjay->bootstrap.notification_queue);

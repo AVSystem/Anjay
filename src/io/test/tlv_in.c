@@ -29,10 +29,10 @@
     anjay_input_ctx_t *in;                                            \
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_tlv_create(&in, &stream, false));
 
-#define TEST_TEARDOWN                  \
-    do {                               \
-        _anjay_input_ctx_destroy(&in); \
-        avs_stream_cleanup(&stream);   \
+#define TEST_TEARDOWN                                           \
+    do {                                                        \
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_ctx_destroy(&in)); \
+        AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));   \
     } while (0)
 
 #define TLV_BYTES_TEST_DATA(Header, Data)                                \
@@ -251,7 +251,7 @@ typedef struct {
                 }                                                        \
             };
 
-#define TEST_TEARDOWN avs_stream_cleanup(&test_stream)
+#define TEST_TEARDOWN AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&test_stream))
 
 AVS_UNIT_TEST(tlv_in_types, string_ok) {
     static const char TEST_STRING[] = "Hello, world!";

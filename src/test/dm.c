@@ -1105,6 +1105,26 @@ AVS_UNIT_TEST(dm_write_attributes, no_instance) {
     DM_TEST_FINISH;
 }
 
+AVS_UNIT_TEST(dm_write_attributes, negative_pmin) {
+    DM_TEST_INIT_WITH_SSIDS(42);
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "77"),
+                    QUERY("pmin=-1"));
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_OPTION, ID(0xFA3E),
+                            NO_PAYLOAD);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(dm_write_attributes, negative_pmax) {
+    DM_TEST_INIT_WITH_SSIDS(42);
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "77"),
+                    QUERY("pmax=-1"));
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_OPTION, ID(0xFA3E),
+                            NO_PAYLOAD);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
 AVS_UNIT_TEST(dm_discover, resource) {
     DM_TEST_INIT_WITH_SSIDS(7);
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID(0xFA3E), PATH("42", "69", "4"),

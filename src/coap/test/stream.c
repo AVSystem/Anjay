@@ -138,7 +138,7 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
     AVS_UNIT_ASSERT_TRUE(message_finished);
     AVS_UNIT_ASSERT_EQUAL_BYTES(buffer, DATA);
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
     AVS_LIST_CLEAR(&details.uri_path);
     AVS_LIST_CLEAR(&details.uri_query);
 }
@@ -174,7 +174,7 @@ AVS_UNIT_TEST(coap_stream, no_payload) {
     AVS_UNIT_ASSERT_EQUAL(bytes_read, 0);
     AVS_UNIT_ASSERT_TRUE(message_finished);
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, msg_id) {
@@ -254,7 +254,7 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_EQUAL(id.msg_id, 0x69EF);
 
         const avs_coap_msg_t *response =
-                COAP_MSG(NON, CONTENT, ID(0x69EF, TOKEN), NO_PAYLOAD);
+                COAP_MSG(NON, CONTENT, ID_TOKEN(0x69EF, TOKEN), NO_PAYLOAD);
         avs_unit_mocksock_expect_output(mocksock, response->content,
                                         response->length);
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
@@ -277,7 +277,7 @@ AVS_UNIT_TEST(coap_stream, msg_id) {
         AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
     }
     avs_unit_mocksock_assert_io_clean(mocksock);
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, read_some) {
@@ -319,7 +319,7 @@ AVS_UNIT_TEST(coap_stream, read_some) {
     AVS_UNIT_ASSERT_EQUAL_BYTES(buffer, " dolor amet");
     AVS_UNIT_ASSERT_TRUE(message_finished);
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, confirmable) {
@@ -357,7 +357,7 @@ AVS_UNIT_TEST(coap_stream, confirmable) {
     AVS_UNIT_ASSERT_EQUAL_BYTES(buffer, " dolor amet");
     AVS_UNIT_ASSERT_TRUE(message_finished);
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, reset_when_sending) {
@@ -377,7 +377,7 @@ AVS_UNIT_TEST(coap_stream, reset_when_sending) {
             _anjay_coap_stream_setup_request(stream, &details, NULL));
     AVS_UNIT_ASSERT_FAILED(avs_stream_finish_message(stream));
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, mismatched_reset) {
@@ -398,7 +398,7 @@ AVS_UNIT_TEST(coap_stream, mismatched_reset) {
             _anjay_coap_stream_setup_request(stream, &details, NULL));
     AVS_UNIT_ASSERT_FAILED(avs_stream_finish_message(stream));
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, garbage_response_when_waiting_for_ack) {
@@ -419,7 +419,7 @@ AVS_UNIT_TEST(coap_stream, garbage_response_when_waiting_for_ack) {
             _anjay_coap_stream_setup_request(stream, &details, NULL));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, ack_with_mismatched_id) {
@@ -440,7 +440,7 @@ AVS_UNIT_TEST(coap_stream, ack_with_mismatched_id) {
             _anjay_coap_stream_setup_request(stream, &details, NULL));
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_finish_message(stream));
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, long_separate) {
@@ -475,7 +475,7 @@ AVS_UNIT_TEST(coap_stream, long_separate) {
     AVS_UNIT_ASSERT_TRUE(message_finished);
     AVS_UNIT_ASSERT_EQUAL_BYTES(in_data, out_data);
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, receive_garbage) {
@@ -504,7 +504,7 @@ AVS_UNIT_TEST(coap_stream, receive_garbage) {
     AVS_UNIT_ASSERT_FAILED(avs_stream_read(stream, &bytes_read,
                                            &message_finished, buffer, 11));
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 AVS_UNIT_TEST(coap_stream, add_observe_option) {
@@ -550,7 +550,7 @@ AVS_UNIT_TEST(coap_stream, add_observe_option) {
         _anjay_mock_clock_finish();
     }
     avs_unit_mocksock_assert_io_clean(mocksock);
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }
 
 typedef struct test_data {
@@ -579,7 +579,7 @@ static test_data_t setup_test(void) {
 static void teardown_test(test_data_t *data) {
     avs_unit_mocksock_assert_expects_met(data->mock_socket);
     avs_unit_mocksock_assert_io_clean(data->mock_socket);
-    avs_stream_cleanup(&data->stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&data->stream));
     _anjay_mock_coap_stream_cleanup(&data->mock_stream);
     memset(data, 0, sizeof(*data));
 }
@@ -587,7 +587,8 @@ static void teardown_test(test_data_t *data) {
 static void mock_receive_request(test_data_t *test,
                                  const char *request,
                                  size_t request_size) {
-    avs_unit_mocksock_input(test->mock_socket, request, request_size);
+    avs_unit_mocksock_input(test->mock_socket, (const uint8_t *) request,
+                            request_size);
 
     const avs_coap_msg_t *msg;
     AVS_UNIT_ASSERT_SUCCESS(
@@ -597,8 +598,9 @@ static void mock_receive_request(test_data_t *test,
 AVS_UNIT_TEST(coap_stream, response_empty) {
     test_data_t test = setup_test();
 
-    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
-    mock_receive_request(&test, request->content, request->length);
+    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001), NO_PAYLOAD);
+    mock_receive_request(&test, (const char *) request->content,
+                         request->length);
 
     const avs_coap_msg_t *response =
             COAP_MSG(ACK, CHANGED, ID(0x0001), NO_PAYLOAD);
@@ -622,11 +624,13 @@ AVS_UNIT_TEST(coap_stream, response_token) {
 
 #define TOKEN "TOKEN123"
 
-    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001, TOKEN));
-    mock_receive_request(&test, request->content, request->length);
+    const avs_coap_msg_t *request =
+            COAP_MSG(CON, PUT, ID_TOKEN(0x0001, TOKEN), NO_PAYLOAD);
+    mock_receive_request(&test, (const char *) request->content,
+                         request->length);
 
     const avs_coap_msg_t *response =
-            COAP_MSG(ACK, CHANGED, ID(0x0001, TOKEN), NO_PAYLOAD);
+            COAP_MSG(ACK, CHANGED, ID_TOKEN(0x0001, TOKEN), NO_PAYLOAD);
     avs_unit_mocksock_expect_output(test.mock_socket, response->content,
                                     response->length);
 #undef TOKEN
@@ -649,8 +653,9 @@ AVS_UNIT_TEST(coap_stream, response_content) {
 #define CONTENT   \
     "jeden cios " \
     "tak by zlamal sie nos"
-    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
-    mock_receive_request(&test, request->content, request->length);
+    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001), NO_PAYLOAD);
+    mock_receive_request(&test, (const char *) request->content,
+                         request->length);
 
     const avs_coap_msg_t *response =
             COAP_MSG(ACK, CHANGED, ID(0x0001), PAYLOAD(CONTENT));
@@ -676,8 +681,9 @@ AVS_UNIT_TEST(coap_stream, response_content) {
 AVS_UNIT_TEST(coap_stream, response_options) {
     test_data_t test = setup_test();
 
-    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001));
-    mock_receive_request(&test, request->content, request->length);
+    const avs_coap_msg_t *request = COAP_MSG(CON, PUT, ID(0x0001), NO_PAYLOAD);
+    mock_receive_request(&test, (const char *) request->content,
+                         request->length);
 
     const avs_coap_msg_t *response = COAP_MSG(
             ACK, CHANGED, ID(0x0001),
@@ -736,12 +742,13 @@ AVS_UNIT_TEST(coap_stream, fuzz_1_invalid_block_size) {
             "\x07";    // seq_num = 0, has_more = 0, block_size = 2048
 
     const avs_coap_msg_t *bad_option_res =
-            COAP_MSG(ACK, BAD_REQUEST, ID(0x0001));
+            COAP_MSG(ACK, BAD_REQUEST, ID(0x0001), NO_PAYLOAD);
 
     avs_net_abstract_socket_t *mocksock = NULL;
     _anjay_mocksock_create(&mocksock, 1252, 1252);
     avs_unit_mocksock_expect_connect(mocksock, "", "");
-    avs_unit_mocksock_input(mocksock, MESSAGE, sizeof(MESSAGE) - 1);
+    avs_unit_mocksock_input(mocksock, (const uint8_t *) MESSAGE,
+                            sizeof(MESSAGE) - 1);
     avs_unit_mocksock_expect_output(mocksock, bad_option_res->content,
                                     bad_option_res->length);
 
@@ -757,5 +764,5 @@ AVS_UNIT_TEST(coap_stream, fuzz_1_invalid_block_size) {
     AVS_UNIT_ASSERT_FAILED(avs_stream_read(
             stream, &bytes_read, &message_finished, buffer, sizeof(buffer)));
 
-    avs_stream_cleanup(&stream);
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));
 }

@@ -197,10 +197,10 @@ AVS_UNIT_TEST(text_out, unimplemented) {
     anjay_input_ctx_t *in;                                            \
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_text_create(&in, &stream, false));
 
-#define TEST_TEARDOWN                  \
-    do {                               \
-        _anjay_input_ctx_destroy(&in); \
-        avs_stream_cleanup(&stream);   \
+#define TEST_TEARDOWN                                           \
+    do {                                                        \
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_ctx_destroy(&in)); \
+        AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&stream));   \
     } while (0)
 
 AVS_UNIT_TEST(text_in, string) {

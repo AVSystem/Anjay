@@ -429,6 +429,13 @@ static void cmd_enable_server(anjay_demo_t *demo, const char *args_string) {
     }
 }
 
+static void cmd_all_connections_failed(anjay_demo_t *demo,
+                                       const char *unused_args) {
+    (void) unused_args;
+    printf("ALL_CONNECTIONS_FAILED==%d\n",
+           (int) anjay_all_connections_failed(demo->anjay));
+}
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -483,6 +490,8 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "/x/y pmin=3,pmax=4"),
     CMD_HANDLER("enable-server", "ssid", cmd_enable_server,
                 "Enables a server with given SSID."),
+    CMD_HANDLER("get-all-connections-failed", "", cmd_all_connections_failed,
+                "Returns the result of anjay_all_connections_failed()"),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };

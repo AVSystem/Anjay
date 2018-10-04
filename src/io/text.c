@@ -435,7 +435,7 @@ static int text_get_objlnk(anjay_input_ctx_t *ctx,
 static int text_in_close(anjay_input_ctx_t *ctx_) {
     text_in_t *ctx = (text_in_t *) ctx_;
     if (ctx->autoclose) {
-        avs_stream_cleanup(&ctx->stream);
+        return avs_stream_cleanup(&ctx->stream);
     }
     return 0;
 }

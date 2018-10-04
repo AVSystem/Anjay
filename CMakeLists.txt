@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 2.8.12)
 
 project(anjay C)
-set(ANJAY_VERSION "1.12.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.13.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -155,6 +155,7 @@ endmacro()
 ################# CODE #########################################################
 
 set(CORE_SOURCES
+    src/access_utils.c
     src/anjay_core.c
     src/coap/id_source/auto.c
     src/coap/id_source/static.c
@@ -164,21 +165,21 @@ set(CORE_SOURCES
     src/coap/stream/out.c
     src/coap/stream/server_internal.c
     src/coap/stream/stream_internal.c
+    src/dm_core.c
     src/dm/dm_attributes.c
     src/dm/dm_execute.c
     src/dm/dm_handlers.c
     src/dm/modules.c
     src/dm/query.c
-    src/dm_core.c
     src/interface/register.c
     src/io/base64_out.c
+    src/io_core.c
     src/io/dynamic.c
     src/io/opaque.c
     src/io/output_buf.c
     src/io/text.c
     src/io/tlv_in.c
     src/io/tlv_out.c
-    src/io_core.c
     src/io_utils.c
     src/notify.c
     src/raw_buffer.c
@@ -193,9 +194,7 @@ set(CORE_SOURCES
     src/servers/servers_internal.c
     src/servers_utils.c
     src/utils_core.c)
-if(WITH_ACCESS_CONTROL)
-    set(CORE_SOURCES ${CORE_SOURCES} src/access_control_utils.c)
-endif()
+
 if(WITH_DOWNLOADER)
     set(CORE_SOURCES ${CORE_SOURCES}
         src/downloader/downloader.c)
@@ -230,7 +229,7 @@ if(WITH_JSON OR WITH_SENML_JSON)
         src/io/json_out.c)
 endif()
 set(CORE_PRIVATE_HEADERS
-    src/access_control_utils.h
+    src/access_utils.h
     src/anjay_core.h
     src/coap/block/request.h
     src/coap/block/response.h
@@ -577,9 +576,15 @@ if(WITH_TEST)
                      ANJAY_TEST
                      "ANJAY_BIN_DIR=\"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\"")
 
-        set(TEST_COMPILE_FLAGS "-Wno-pedantic -Wno-overlength-strings -Wno-vla")
+        set(TEST_COMPILE_FLAGS " -Wno-overlength-strings -Wno-vla -Wno-c++-compat")
         if(CMAKE_C_COMPILER_ID MATCHES "GNU")
-            set(TEST_COMPILE_FLAGS "${TEST_COMPILE_FLAGS} -Wno-jump-misses-init")
+            string(APPEND TEST_COMPILE_FLAGS " -Wno-jump-misses-init")
+            if(CMAKE_C_COMPILER_VERSION VERSION_LESS 4.8)
+                string(APPEND TEST_COMPILE_FLAGS " -Wno-missing-field-initializers -Wno-uninitialized -Wno-unused-value")
+            else()
+                # before GCC 4.8 there was no -Wpedantic, only -pedantic; and no way to disable it
+                string(APPEND TEST_COMPILE_FLAGS " -Wno-pedantic")
+            endif()
         endif()
         set_property(TARGET ${NAME}_test APPEND PROPERTY COMPILE_FLAGS
                      "${TEST_COMPILE_FLAGS}")

@@ -160,3 +160,17 @@ class Lwm2mAsserts:
         with self.assertRaises(RuntimeError) as raised:
             serv.recv(timeout_s=timeout_s)
         self.assertIn('0x6780', raised.exception.args[0])  # -0x6780 == MBEDTLS_ERR_SSL_CLIENT_RECONNECT
+
+    def assertPktIsDtlsClientHello(self, pkt, seq_number=ANY):
+        header = b'\x16'  # Content Type: Handshake
+        header += b'\xfe\xfd'  # Version: DTLS 1.2
+        header += b'\x00\x00'  # Epoch: 0
+
+        if seq_number is not ANY:
+            if seq_number >= 2**48:
+                raise RuntimeError("Sorry, encoding of sequence number greater than 2**48 - 1 is not supported")
+
+            # Sequence number is 48bit in length.
+            header += seq_number.to_bytes(48 // 8, byteorder='big')
+
+        self.assertEqual(pkt[:len(header)], header)

@@ -36,8 +36,7 @@ static int null_instance_it(anjay_t *anjay,
     return 0;
 }
 
-static const anjay_dm_supported_rids_t MOCK_SUPPORTED_RIDS =
-        ANJAY_DM_SUPPORTED_RIDS();
+static const anjay_dm_supported_rids_t MOCK_SUPPORTED_RIDS = { 0, NULL };
 
 static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
     anjay_dm_object_def_t *obj =
@@ -117,7 +116,7 @@ AVS_UNIT_TEST(access_control_persistence, empty_aco) {
     anjay_t *anjay2 = ac_test_create_fake_anjay();
 
     storage_ctx_t ctx = {
-        .buffer = {}
+        .buffer = { 0 }
     };
     init_context(&ctx);
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay1));
@@ -141,7 +140,7 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     anjay_t *anjay2 = ac_test_create_fake_anjay();
 
     storage_ctx_t ctx = {
-        .buffer = {}
+        .buffer = { 0 }
     };
     init_context(&ctx);
 

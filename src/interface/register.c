@@ -156,8 +156,8 @@ get_server_lifetime(anjay_t *anjay, anjay_ssid_t ssid, int64_t *out_lifetime) {
 
 static int send_register(anjay_t *anjay,
                          const anjay_update_parameters_t *params) {
-    const anjay_url_t *const server_uri =
-            _anjay_server_uri(anjay->current_connection.server);
+    const anjay_url_t *const connection_uri =
+            _anjay_connection_uri(anjay->current_connection);
     anjay_msg_details_t details = {
         .msg_type = AVS_COAP_MSG_CONFIRMABLE,
         .msg_code = AVS_COAP_CODE_POST,
@@ -165,9 +165,9 @@ static int send_register(anjay_t *anjay,
     };
 
     int result = -1;
-    if (_anjay_copy_string_list(&details.uri_path, server_uri->uri_path)
+    if (_anjay_copy_string_list(&details.uri_path, connection_uri->uri_path)
             || _anjay_copy_string_list(&details.uri_query,
-                                       server_uri->uri_query)
+                                       connection_uri->uri_query)
             || !AVS_LIST_APPEND(&details.uri_path, ANJAY_MAKE_STRING_LIST("rd"))
             || !AVS_LIST_APPEND(&details.uri_query,
                                 _anjay_make_query_string_list(
@@ -182,13 +182,13 @@ static int send_register(anjay_t *anjay,
         goto cleanup;
     }
 
-    if (_anjay_coap_stream_setup_request(anjay->comm_stream, &details, NULL)
-            || send_objects_list(anjay->comm_stream, params->dm)
-            || avs_stream_finish_message(anjay->comm_stream)) {
+    if ((result = _anjay_coap_stream_setup_request(anjay->comm_stream, &details,
+                                                   NULL))
+            || (result = send_objects_list(anjay->comm_stream, params->dm))
+            || (result = avs_stream_finish_message(anjay->comm_stream))) {
         anjay_log(ERROR, "could not send Register message");
     } else {
         anjay_log(INFO, "Register sent");
-        result = 0;
     }
 
 cleanup:
@@ -379,8 +379,8 @@ int _anjay_register(anjay_registration_update_ctx_t *ctx) {
         return -1;
     }
 
-    int result = -1;
-    if (send_register(ctx->anjay, &ctx->new_params)
+    int result;
+    if ((result = send_register(ctx->anjay, &ctx->new_params))
             || (result = check_register_response(ctx->anjay->comm_stream,
                                                  &endpoint_path))) {
         anjay_log(ERROR, "could not register to server %u",
@@ -463,7 +463,6 @@ static int send_update(anjay_t *anjay,
         anjay_log(ERROR, "could not send Update message");
     } else {
         anjay_log(INFO, "Update sent");
-        result = 0;
     }
 
     // request_uri must not be cleared here
@@ -482,7 +481,7 @@ static int check_update_response(avs_stream_abstract_t *stream) {
     if (code == AVS_COAP_CODE_CHANGED) {
         anjay_log(INFO, "registration successfully updated");
         return 0;
-    } else if (avs_coap_msg_code_is_client_error(code)) {
+    } else {
         /* 4.xx (client error) response means that a server received a request
          * it considers invalid, so retransmission of the same message will
          * most likely fail again. That may happen if:
@@ -493,19 +492,16 @@ static int check_update_response(avs_stream_abstract_t *stream) {
          *
          * In the first case, the correct response is to Register again.
          * Otherwise, we might as well do the same, as server is required to
-         * replace client registration information in such case. */
-        anjay_log(DEBUG, "Update rejected: %s", AVS_COAP_CODE_STRING(code));
-        return ANJAY_REGISTRATION_UPDATE_REJECTED;
-    } else {
-        /* Any other response is either an 5.xx (server error), in which case
+         * replace client registration information in such case.
+         *
+         * Any other response is either an 5.xx (server error), in which case
          * retransmission may succeed, or an unexpected non-error response.
-         * In the latter case the server is broken and deserves to be flooded
-         * with retransmitted Updates until the server implementer notices
-         * something is wrong. */
-        anjay_log(ERROR, "server responded with %s (expected %s)",
+         * However, as we don't do retransmissions, degenerating to Register
+         * seems the best thing we can do. */
+        anjay_log(DEBUG, "Update rejected: %s (expected %s)",
                   AVS_COAP_CODE_STRING(code),
                   AVS_COAP_CODE_STRING(AVS_COAP_CODE_CHANGED));
-        return -1;
+        return ANJAY_REGISTRATION_UPDATE_REJECTED;
     }
 }
 
@@ -513,7 +509,8 @@ bool _anjay_needs_registration_update(anjay_registration_update_ctx_t *ctx) {
     const anjay_registration_info_t *info =
             _anjay_server_registration_info(ctx->server);
     const anjay_update_parameters_t *old_params = &info->last_update_params;
-    return old_params->lifetime_s != ctx->new_params.lifetime_s
+    return info->update_forced
+           || old_params->lifetime_s != ctx->new_params.lifetime_s
            || strcmp(old_params->binding_mode, ctx->new_params.binding_mode)
            || !dm_caches_equal(old_params->dm, ctx->new_params.dm);
 }

@@ -318,7 +318,7 @@ static int tlv_in_close(anjay_input_ctx_t *ctx_) {
     tlv_in_t *ctx = (tlv_in_t *) ctx_;
     _anjay_input_ctx_destroy(&ctx->child);
     if (ctx->autoclose) {
-        avs_stream_cleanup(&ctx->stream.backend);
+        return avs_stream_cleanup(&ctx->stream.backend);
     }
     return 0;
 }

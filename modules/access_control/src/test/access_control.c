@@ -53,6 +53,11 @@ AVS_UNIT_TEST(access_control, set_acl) {
     const anjay_ssid_t ssid = 1;
 
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay));
+
+    // prevent sending Update, as that will fail in the test environment
+    _anjay_sched_del(anjay->sched,
+                     &anjay->servers->servers->next_action_handle);
+
     AVS_UNIT_ASSERT_SUCCESS(anjay_sched_run(anjay));
 
     {

@@ -277,7 +277,6 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         },
 #endif
         .confirmable_notifications = cmdline_args->confirmable_notifications,
-        .max_icmp_failures = &cmdline_args->max_icmp_failures,
         .disable_server_initiated_bootstrap =
                 cmdline_args->disable_server_initiated_bootstrap,
         .udp_tx_params = &cmdline_args->tx_params,

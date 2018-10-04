@@ -55,7 +55,7 @@ avs_net_abstract_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
     _anjay_mocksock_create(&socket, 1252, 1252);
     avs_unit_mocksock_expect_connect(socket, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
-    anjay->servers->servers->connections.primary_conn_type =
+    anjay->servers->servers->connections.primary_connection =
             ANJAY_CONNECTION_UDP;
     anjay->servers->servers->registration_info.expire_time.since_real_epoch
             .seconds = INT64_MAX;
@@ -103,7 +103,9 @@ int _anjay_test_dm_fake_security_instance_it(
         *cookie = AVS_LIST_NEXT(*cookie);
     }
     if (*cookie) {
-        *out = ((*cookie)->ssid == ANJAY_IID_INVALID) ? 0 : (*cookie)->ssid;
+        *out = (anjay_iid_t) (((*cookie)->ssid == ANJAY_IID_INVALID)
+                                      ? 0
+                                      : (*cookie)->ssid);
     } else {
         *out = ANJAY_IID_INVALID;
     }

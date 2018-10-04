@@ -13,15 +13,18 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Commercial support
-==================
+Other library features
+======================
 
-.. image:: avsystem_logo.png
-   :align: center
-   :target: https://www.avsystem.com/products/anjay/
-   :alt: AVSystem logo
+.. _coap-pull-download:
 
-Enterprise-grade commercial support for the Anjay library, as well as additional
-commercially-licensed library features, are provided by AVSystem. For more
-details, see
-`AVSystem Anjay website <https://www.avsystem.com/products/anjay/>`_.
+CoAP PULL download
+------------------
+
+If the LwM2M client needs to download a large file from an external CoAP server,
+it may use the `anjay_download API <../api/download_8h.html>`_. The built-in
+downloader supports both CoAP and CoAP/DTLS connections and is able to perform
+transfers without interrupting regular LwM2M operations.
+
+For a simple example, see `examples/tutorial/downloader` subdirectory of main
+Anjay project repository.

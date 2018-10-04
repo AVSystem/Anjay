@@ -41,6 +41,9 @@ typedef struct {
     anjay_udp_connection_info_t udp;
 } anjay_connection_info_t;
 
+typedef const avs_net_dtls_handshake_timeouts_t *
+anjay_connection_get_dtls_handshake_timeouts_t(anjay_t *anjay);
+
 typedef int
 anjay_connection_get_info_t(anjay_t *anjay,
                             anjay_connection_info_t *inout_info,
@@ -51,26 +54,29 @@ typedef int anjay_connection_get_net_security_info_t(
         const anjay_connection_info_t *info,
         const anjay_server_dtls_keys_t *dtls_keys);
 
-typedef int anjay_connection_create_connected_socket_t(
-        anjay_t *anjay,
-        anjay_server_connection_t *out_connection,
-        avs_net_ssl_configuration_t *inout_socket_config,
-        const anjay_connection_info_t *info);
+typedef int
+anjay_connection_prepare_t(anjay_t *anjay,
+                           anjay_server_connection_t *out_connection,
+                           const avs_net_ssl_configuration_t *socket_config,
+                           const anjay_connection_info_t *info);
+
+typedef int
+anjay_connection_connect_socket_t(anjay_t *anjay,
+                                  anjay_server_connection_t *connection);
 
 typedef struct {
     const char *name;
+    anjay_connection_get_dtls_handshake_timeouts_t *get_dtls_handshake_timeouts;
     anjay_connection_get_info_t *get_connection_info;
     anjay_connection_get_net_security_info_t *get_net_security_info;
-    anjay_connection_create_connected_socket_t *create_connected_socket;
+    anjay_connection_prepare_t *prepare_connection;
+    anjay_connection_connect_socket_t *connect_socket;
 } anjay_connection_type_definition_t;
 
 extern const anjay_connection_type_definition_t ANJAY_CONNECTION_DEF_UDP;
 
 int _anjay_connection_init_psk_security(avs_net_security_info_t *security,
                                         const anjay_server_dtls_keys_t *keys);
-
-avs_net_af_t _anjay_socket_af_from_preferred_endpoint(
-        const avs_net_resolved_endpoint_t *endpoint);
 
 VISIBILITY_PRIVATE_HEADER_END
 

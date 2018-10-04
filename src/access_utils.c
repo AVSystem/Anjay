@@ -18,11 +18,13 @@
 
 #include <anjay_modules/raw_buffer.h>
 
-#include "access_control_utils.h"
+#include "access_utils.h"
 #include "io_core.h"
 #include "servers_utils.h"
 
 VISIBILITY_SOURCE_BEGIN
+
+#ifdef WITH_ACCESS_CONTROL
 
 static inline const anjay_dm_object_def_t *const *
 get_access_control(anjay_t *anjay) {
@@ -218,17 +220,27 @@ static bool is_single_ssid_environment(anjay_t *anjay) {
     return non_bootstrap_count == 1;
 }
 
-bool _anjay_access_control_action_allowed(anjay_t *anjay,
-                                          const anjay_action_info_t *info) {
-    if (info->oid == ANJAY_DM_OID_SECURITY) {
-        return false;
-    } else if (!get_access_control(anjay)
-               || is_single_ssid_environment(anjay)) {
+#endif // WITH_ACCESS_CONTROL
+
+bool _anjay_instance_action_allowed(anjay_t *anjay,
+                                    const anjay_action_info_t *info) {
+    assert(info->oid != ANJAY_DM_OID_SECURITY);
+    assert(info->iid != ANJAY_IID_INVALID
+           || info->action == ANJAY_ACTION_CREATE);
+#ifndef WITH_ACCESS_CONTROL
+    return true;
+#else
+    if (info->action == ANJAY_ACTION_DISCOVER) {
+        return true;
+    }
+
+    if (!get_access_control(anjay) || is_single_ssid_environment(anjay)) {
         return true;
     }
 
     if (info->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
-        if (info->action == ANJAY_ACTION_READ) {
+        if (info->action == ANJAY_ACTION_READ
+                || info->action == ANJAY_ACTION_WRITE_ATTRIBUTES) {
             return true;
         } else if (info->action == ANJAY_ACTION_CREATE
                    || info->action == ANJAY_ACTION_DELETE) {
@@ -249,20 +261,20 @@ bool _anjay_access_control_action_allowed(anjay_t *anjay,
     anjay_access_mask_t mask = access_control_mask(anjay, info);
     switch (info->action) {
     case ANJAY_ACTION_READ:
-    case ANJAY_ACTION_DISCOVER:
-        return mask & ANJAY_ACCESS_MASK_READ;
+    case ANJAY_ACTION_WRITE_ATTRIBUTES:
+        return !!(mask & ANJAY_ACCESS_MASK_READ);
     case ANJAY_ACTION_WRITE:
     case ANJAY_ACTION_WRITE_UPDATE:
-        return mask & ANJAY_ACCESS_MASK_WRITE;
+        return !!(mask & ANJAY_ACCESS_MASK_WRITE);
     case ANJAY_ACTION_EXECUTE:
-        return mask & ANJAY_ACCESS_MASK_EXECUTE;
+        return !!(mask & ANJAY_ACCESS_MASK_EXECUTE);
     case ANJAY_ACTION_DELETE:
-        return mask & ANJAY_ACCESS_MASK_DELETE;
-    case ANJAY_ACTION_WRITE_ATTRIBUTES:
+        return !!(mask & ANJAY_ACCESS_MASK_DELETE);
     case ANJAY_ACTION_CANCEL_OBSERVE:
         return true;
     default:
         AVS_UNREACHABLE("invalid enum value");
         return false;
     }
+#endif // WITH_ACCESS_CONTROL
 }

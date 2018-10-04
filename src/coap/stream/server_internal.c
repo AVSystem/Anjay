@@ -658,9 +658,10 @@ int _anjay_coap_server_read(coap_server_t *server,
 static int
 block_write(coap_server_t *server, const void *data, size_t data_length) {
     if (!server->block_ctx) {
-        uint16_t block_size = server->curr_block.valid
-                                      ? server->curr_block.size
-                                      : AVS_COAP_MSG_BLOCK_MAX_SIZE;
+        uint16_t block_size =
+                (uint16_t) (server->curr_block.valid
+                                    ? server->curr_block.size
+                                    : AVS_COAP_MSG_BLOCK_MAX_SIZE);
 
         server->static_id_source = _anjay_coap_id_source_new_static(
                 _anjay_coap_server_get_request_identity(server));

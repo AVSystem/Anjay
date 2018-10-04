@@ -232,8 +232,16 @@ schedule_trigger(anjay_t *anjay, anjay_observe_entry_t *entry, int32_t period) {
               (long) delay.nanoseconds);
 
     _anjay_sched_del(anjay->sched, &entry->notify_task);
-    return _anjay_sched(anjay->sched, &entry->notify_task, delay,
-                        trigger_observe, &entry, sizeof(entry));
+
+    int retval = _anjay_sched(anjay->sched, &entry->notify_task, delay,
+                              trigger_observe, &entry, sizeof(entry));
+    if (retval) {
+        anjay_log(ERROR,
+                  "Could not schedule automatic notification trigger, result: "
+                  "%" PRIi32,
+                  retval);
+    }
+    return retval;
 }
 
 static AVS_LIST(anjay_observe_resource_value_t)
@@ -353,14 +361,37 @@ static inline int get_attrs(anjay_t *anjay,
     return get_effective_attrs(anjay, out_attrs, obj, key);
 }
 
-int _anjay_observe_schedule_trigger(anjay_t *anjay,
-                                    anjay_observe_entry_t *entry) {
+static inline bool is_pmax_valid(anjay_dm_attributes_t attr) {
+    if (attr.max_period < 0) {
+        return false;
+    }
+
+    if (attr.max_period == 0 || attr.max_period < attr.min_period) {
+        anjay_log(DEBUG,
+                  "invalid pmax (%" PRIi32
+                  "); expected pmax > 0 && pmax >= pmin (%" PRIi32 ")",
+                  attr.max_period, attr.min_period);
+        return false;
+    }
+
+    return true;
+}
+
+int _anjay_observe_schedule_pmax_trigger(anjay_t *anjay,
+                                         anjay_observe_entry_t *entry) {
     anjay_dm_internal_res_attrs_t attrs;
     int result;
 
-    (void) ((result = get_attrs(anjay, &attrs, &entry->key))
-            || (result = schedule_trigger(anjay, entry,
-                                          attrs.standard.common.max_period)));
+    if ((result = get_attrs(anjay, &attrs, &entry->key))) {
+        anjay_log(DEBUG, "Could not get observe attributes, result: %" PRIi32,
+                  result);
+        return result;
+    }
+
+    if (is_pmax_valid(attrs.standard.common)) {
+        result = schedule_trigger(anjay, entry,
+                                  attrs.standard.common.max_period);
+    }
 
     return result;
 }
@@ -383,7 +414,7 @@ static int insert_initial_value(anjay_t *anjay,
     // even though we haven't actually sent it ourselves
     if ((entry->last_sent = create_resource_value(details, entry, identity,
                                                   numeric, data, size))
-            && !(result = _anjay_observe_schedule_trigger(anjay, entry))) {
+            && !(result = _anjay_observe_schedule_pmax_trigger(anjay, entry))) {
         entry->last_confirmable = now;
     } else {
         clear_entry(anjay, conn_state, entry);
@@ -532,7 +563,7 @@ void _anjay_observe_gc(anjay_t *anjay) {
 
 static bool has_pmax_expired(const anjay_observe_resource_value_t *value,
                              const anjay_dm_attributes_t *attrs) {
-    return attrs->max_period >= 0
+    return is_pmax_valid(*attrs)
            && avs_time_real_diff(avs_time_real_now(), value->timestamp).seconds
                       >= attrs->max_period;
 }
@@ -606,60 +637,6 @@ static inline ssize_t read_new_value(anjay_t *anjay,
             out_details, out_numeric, buffer, size);
 }
 
-static int get_conn_ref(anjay_t *anjay,
-                        anjay_connection_ref_t *out_ref,
-                        anjay_ssid_t ssid,
-                        anjay_connection_type_t conn_type) {
-    if (!(out_ref->server = _anjay_servers_find_active(anjay, ssid))) {
-        return -1;
-    }
-    out_ref->conn_type = conn_type;
-    return 0;
-}
-
-static int ensure_conn_online(anjay_t *anjay, anjay_connection_ref_t ref) {
-    if (_anjay_connection_current_mode(ref) != ANJAY_CONNECTION_QUEUE
-            || _anjay_connection_get_online_socket(ref)) {
-        return 0;
-    }
-
-    // We're checking the *primary* connection session timestamp, even though
-    // the notification might not be on a primary connection at all. However, we
-    // only care about whether we need to re-register, and this only concerns
-    // the primary connection. If the notification to be sent is not on the
-    // primary connection, the primary session timestamp is guaranteed not to
-    // change during _anjay_connection_bring_online().
-    anjay_conn_session_token_t previous_session_token =
-            _anjay_server_primary_session_token(ref.server);
-    if (_anjay_connection_bring_online(anjay, ref)) {
-        anjay_log(ERROR, "broken socket for server %" PRIu16,
-                  _anjay_server_ssid(ref.server));
-        if (_anjay_schedule_server_reconnect(anjay, ref.server)) {
-            anjay_log(ERROR,
-                      "could not schedule reconnect for server %" PRIu16,
-                      _anjay_server_ssid(ref.server));
-        }
-        return -1;
-    }
-    if (!_anjay_conn_session_tokens_equal(_anjay_server_primary_session_token(
-                                                  ref.server),
-                                          previous_session_token)) {
-        if (_anjay_schedule_reregister(anjay, ref.server)) {
-            anjay_log(ERROR,
-                      "could not schedule reregister for server %" PRIu16,
-                      _anjay_server_ssid(ref.server));
-        }
-        // THIS IS A HACK: We have successfully connected, but we cannot send a
-        // notification, because Register needs to be sent first. That's why
-        // AVS_COAP_CTX_ERR_NETWORK is passed down the call stack to break the
-        // sending procedure. Notifications will be sent through
-        // _anjay_observe_sched_flush() called from
-        // perform_registration_action().
-        return AVS_COAP_CTX_ERR_NETWORK;
-    }
-    return 0;
-}
-
 static bool confirmable_required(const avs_time_real_t now,
                                  const anjay_observe_entry_t *entry) {
     return !avs_time_duration_less(
@@ -692,20 +669,8 @@ static void value_sent(anjay_observe_connection_entry_t *conn_state) {
     entry->last_sent = sent;
 }
 
-static int sched_flush_send_queue(anjay_t *anjay,
-                                  anjay_observe_connection_entry_t *conn);
-
 static int send_entry(anjay_t *anjay,
                       anjay_observe_connection_entry_t *conn_state) {
-    int result;
-    anjay_connection_ref_t ref;
-    if ((result = get_conn_ref(anjay, &ref, conn_state->key.ssid,
-                               conn_state->key.type))
-            || (result = ensure_conn_online(anjay, ref))
-            || (result = _anjay_bind_server_stream(anjay, ref))) {
-        return result;
-    }
-    anjay_server_info_t *server = anjay->current_connection.server;
     assert(conn_state->unsent);
     anjay_observe_entry_t *entry = conn_state->unsent->ref;
     const avs_coap_msg_identity_t *id = &conn_state->unsent->identity;
@@ -718,6 +683,7 @@ static int send_entry(anjay_t *anjay,
         details.msg_type = AVS_COAP_MSG_CONFIRMABLE;
     }
 
+    int result;
     (void) ((result = _anjay_coap_stream_setup_request(anjay->comm_stream,
                                                        &details, &id->token))
             || (result = avs_stream_write(anjay->comm_stream,
@@ -727,54 +693,17 @@ static int send_entry(anjay_t *anjay,
                         anjay->comm_stream, &notify_id))
             || (result = avs_stream_finish_message(anjay->comm_stream)));
 
-    _anjay_release_server_stream(anjay);
-
     if (!result) {
         if (details.msg_type == AVS_COAP_MSG_CONFIRMABLE) {
             entry->last_confirmable = now;
         }
         value_sent(conn_state);
         entry->last_sent->identity.msg_id = notify_id.msg_id;
-    } else if (result == AVS_COAP_CTX_ERR_NETWORK
-               || result == AVS_COAP_CTX_ERR_TIMEOUT) {
-        anjay_log(ERROR, "network communication error while sending Observe");
-        _anjay_schedule_server_reconnect(anjay, server);
     }
     return result;
 }
 
-static bool server_active(anjay_t *anjay, anjay_ssid_t ssid) {
-    if (anjay_is_offline(anjay)) {
-        return false;
-    }
-    anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
-    if (!server) {
-        return false;
-    }
-    // Checking registration state here is a hack that improves performance in
-    // NoSec mode, by preventing Notifications to trigger re-registration
-    // attempts when it has already been established that we need to
-    // re-register.
-    //
-    // Thus, backoff during re-registration starts to work correctly-ish - ICMP
-    // error limits are not honoured properly (because the errors come from
-    // recv() rather than connect() - this is also the reason why the socket is
-    // not closed, which would effectively deactivate the server), but otherwise
-    // the backoff is sane.
-    return !_anjay_server_registration_expired(server);
-}
-
-typedef struct {
-    bool server_active : 1;
-    bool notification_storing_enabled : 1;
-} observe_server_state_t;
-
-static observe_server_state_t server_state(anjay_t *anjay, anjay_ssid_t ssid) {
-    observe_server_state_t result = {
-        .server_active = server_active(anjay, ssid),
-        .notification_storing_enabled = true
-    };
-
+static bool notification_storing_enabled(anjay_t *anjay, anjay_ssid_t ssid) {
     anjay_iid_t server_iid;
     if (!_anjay_find_server_iid(anjay, ssid, &server_iid)) {
         const anjay_uri_path_t path =
@@ -783,14 +712,44 @@ static observe_server_state_t server_state(anjay_t *anjay, anjay_ssid_t ssid) {
         bool storing;
         if (!_anjay_dm_res_read_bool(anjay, &path, &storing) && !storing) {
             // default value is true, use false only if explicitly set
-            result.notification_storing_enabled = false;
+            return false;
         }
+    }
+    return true;
+}
+
+typedef struct {
+    anjay_connection_ref_t ref;
+    bool server_active;
+    bool notification_storing_enabled;
+} observe_conn_state_t;
+
+static observe_conn_state_t conn_state(anjay_t *anjay,
+                                       const anjay_connection_key_t *key) {
+    observe_conn_state_t result = {
+        .ref = {
+            .conn_type = key->type
+        },
+        .notification_storing_enabled =
+                notification_storing_enabled(anjay, key->ssid)
+    };
+
+    if (!anjay_is_offline(anjay)
+            && (result.ref.server =
+                        _anjay_servers_find_active(anjay, key->ssid))) {
+        // It is now possible for the socket to exist and be connected even
+        // though the server has no valid registration. This may happen during
+        // the _anjay_connection_internal_bring_online() backoff. We don't want
+        // to send notifications if we don't have a valid registration, so we
+        // treat such server as inactive for notification purposes.
+        result.server_active =
+                !_anjay_server_registration_expired(result.ref.server);
     }
 
     anjay_log(TRACE,
-              "observe state for SSID %u: active %d, notification "
-              "storing %d",
-              ssid, result.server_active, result.notification_storing_enabled);
+              "observe state for SSID %u: active %d, notification storing %d",
+              key->ssid, result.server_active,
+              result.notification_storing_enabled);
     return result;
 }
 
@@ -808,9 +767,9 @@ static void remove_all_unsent_values(anjay_observe_connection_entry_t *conn) {
 
 static int handle_send_queue_entry(anjay_t *anjay,
                                    anjay_observe_connection_entry_t *conn_state,
-                                   observe_server_state_t observe_state) {
+                                   const observe_conn_state_t *observe_state) {
     assert(conn_state->unsent);
-    assert(observe_state.server_active);
+    assert(observe_state->server_active);
     bool is_error = is_error_value(conn_state->unsent);
     int result = send_entry(anjay, conn_state);
     if (result > 0) {
@@ -820,12 +779,14 @@ static int handle_send_queue_entry(anjay_t *anjay,
         anjay_log(ERROR, "Could not send Observe notification, result == %d",
                   result);
         if (result != AVS_COAP_CTX_ERR_NETWORK
-                && !observe_state.notification_storing_enabled) {
+                && result != AVS_COAP_CTX_ERR_TIMEOUT
+                && !observe_state->notification_storing_enabled) {
             remove_all_unsent_values(conn_state);
         }
     }
     if (is_error && result != AVS_COAP_CTX_ERR_NETWORK
-            && (result == 0 || !observe_state.notification_storing_enabled)) {
+            && result != AVS_COAP_CTX_ERR_TIMEOUT
+            && (result == 0 || !observe_state->notification_storing_enabled)) {
         result = 1;
     }
     return result;
@@ -840,33 +801,25 @@ static void schedule_all_triggers(anjay_t *anjay,
     AVS_RBTREE_ELEM(anjay_observe_entry_t) entry;
     AVS_RBTREE_FOREACH(entry, conn->entries) {
         if (!entry->notify_task) {
-            anjay_dm_internal_res_attrs_t attrs;
-            if (get_attrs(anjay, &attrs, &entry->key)
-                    || schedule_trigger(anjay, entry,
-                                        attrs.standard.common.max_period)) {
-                anjay_log(ERROR,
-                          "Could not schedule automatic notification trigger");
-            }
+            _anjay_observe_schedule_pmax_trigger(anjay, entry);
         }
     }
 }
 
 static void flush_send_queue(anjay_t *anjay,
                              anjay_observe_connection_entry_t *conn,
-                             const observe_server_state_t *observe_state) {
-    int result = 0;
-    observe_server_state_t observe_state_buf;
+                             const observe_conn_state_t *observe_state) {
+    assert(conn);
+    assert(observe_state);
+    assert(observe_state->ref.server);
+    assert(observe_state->server_active);
+
+    int result = _anjay_bind_server_stream(anjay, observe_state->ref);
+    assert(result == 0);
 
     while (result >= 0 && conn && conn->unsent) {
         anjay_observe_key_t key = conn->unsent->ref->key;
-        if (!observe_state) {
-            observe_state_buf = server_state(anjay, key.connection.ssid);
-            observe_state = &observe_state_buf;
-            if (!observe_state_buf.server_active) {
-                break;
-            }
-        }
-        if ((result = handle_send_queue_entry(anjay, conn, *observe_state))
+        if ((result = handle_send_queue_entry(anjay, conn, observe_state))
                 > 0) {
             _anjay_observe_remove_entry(anjay, &key);
             // the above might've deleted the connection entry,
@@ -875,30 +828,32 @@ static void flush_send_queue(anjay_t *anjay,
                                    connection_query(&key.connection));
         }
     }
+
+    _anjay_release_server_stream(anjay);
+
     if (result >= 0 && conn && !conn->unsent) {
         schedule_all_triggers(anjay, conn);
+    } else if (result == AVS_COAP_CTX_ERR_NETWORK) {
+        anjay_log(ERROR, "network communication error while sending Notify");
+        if (observe_state->ref.conn_type
+                == _anjay_server_primary_conn_type(observe_state->ref.server)) {
+            _anjay_server_on_server_communication_error(
+                    anjay, observe_state->ref.server);
+        }
     }
 }
 
 static void flush_send_queue_job(anjay_t *anjay, const void *conn_ptr) {
-    flush_send_queue(
-            anjay, *(anjay_observe_connection_entry_t *const *) conn_ptr, NULL);
-}
-
-static int sched_flush_send_queue(anjay_t *anjay,
-                                  anjay_observe_connection_entry_t *conn) {
-    if (!conn || conn->flush_task) {
-        anjay_log(TRACE, "skipping notification flush scheduling: %s",
-                  !conn ? "no appropriate connection found"
-                        : "flush task already scheduled");
-        return 0;
+    anjay_observe_connection_entry_t *conn =
+            *(anjay_observe_connection_entry_t *const *) conn_ptr;
+    if (conn && conn->unsent) {
+        observe_conn_state_t observe_state =
+                conn_state(anjay, &conn->unsent->ref->key.connection);
+        if (observe_state.server_active
+                && _anjay_connection_get_online_socket(observe_state.ref)) {
+            flush_send_queue(anjay, conn, &observe_state);
+        }
     }
-    if (_anjay_sched_now(anjay->sched, &conn->flush_task, flush_send_queue_job,
-                         &conn, sizeof(conn))) {
-        anjay_log(WARNING, "Could not schedule notification flush");
-        return -1;
-    }
-    return 0;
 }
 
 int _anjay_observe_sched_flush_current_connection(anjay_t *anjay) {
@@ -917,7 +872,18 @@ int _anjay_observe_sched_flush(anjay_t *anjay, anjay_connection_key_t key) {
     anjay_observe_connection_entry_t *conn =
             AVS_RBTREE_FIND(anjay->observe.connection_entries,
                             connection_query(&key));
-    return sched_flush_send_queue(anjay, conn);
+    if (!conn || conn->flush_task) {
+        anjay_log(TRACE, "skipping notification flush scheduling: %s",
+                  !conn ? "no appropriate connection found"
+                        : "flush task already scheduled");
+        return 0;
+    }
+    if (_anjay_sched_now(anjay->sched, &conn->flush_task, flush_send_queue_job,
+                         &conn, sizeof(conn))) {
+        anjay_log(WARNING, "Could not schedule notification flush");
+        return -1;
+    }
+    return 0;
 }
 
 static int
@@ -971,8 +937,8 @@ update_notification_value(anjay_t *anjay,
                                   (size_t) size);
     }
 
-    if (schedule_trigger(anjay, entry, attrs.standard.common.max_period)) {
-        anjay_log(ERROR, "Could not schedule automatic notification trigger");
+    if (is_pmax_valid(attrs.standard.common)) {
+        schedule_trigger(anjay, entry, attrs.standard.common.max_period);
     }
 
     return result;
@@ -984,8 +950,7 @@ static void trigger_observe(anjay_t *anjay, const void *entry_ptr) {
             AVS_RBTREE_FIND(anjay->observe.connection_entries,
                             connection_query(&entry->key.connection));
     assert(conn);
-    observe_server_state_t state =
-            server_state(anjay, entry->key.connection.ssid);
+    observe_conn_state_t state = conn_state(anjay, &entry->key.connection);
     if (!state.server_active && !state.notification_storing_enabled) {
         return;
     }
@@ -995,10 +960,20 @@ static void trigger_observe(anjay_t *anjay, const void *entry_ptr) {
         insert_error(anjay, conn, entry, &newest_value(entry)->identity,
                      result);
     }
-    if (state.server_active) {
+    if (state.server_active && conn->unsent) {
         _anjay_sched_del(anjay->sched, &conn->flush_task);
         assert(!conn->flush_task);
-        flush_send_queue(anjay, conn, &state);
+        assert(state.ref.server);
+        if (_anjay_connection_get_online_socket(state.ref)) {
+            flush_send_queue(anjay, conn, &state);
+        } else if (_anjay_connection_current_mode(state.ref)
+                   == ANJAY_CONNECTION_QUEUE) {
+            _anjay_connection_bring_online(anjay, state.ref);
+            // once the connection is up, _anjay_observe_sched_flush()
+            // will be called; we're done here
+        } else if (!state.notification_storing_enabled) {
+            remove_all_unsent_values(conn);
+        }
     }
 }
 

@@ -258,19 +258,6 @@ typedef struct anjay_configuration {
     bool prefer_multipart_sms;
 
     /**
-     * Configures the number of ICMP Host / Port Unreachable after which the
-     * Server is considered unreachable.
-     *
-     * If NULL, the default value of 7 will be used.
-     *
-     * NOTE: If the LwM2M Client is expected to attempt to reach servers
-     * indefinitely, then one shall use this configuration option along with
-     * @ref anjay_all_connections_failed() to know when is the right time to
-     * call e.g. @ref anjay_schedule_reconnect() method.
-     */
-    const uint32_t *max_icmp_failures;
-
-    /**
      * If set to true, connection to the Bootstrap Server will be closed
      * immediately after making a successful connection to any regular LwM2M
      * Server and only opened again if (re)connection to a regular server is
@@ -686,6 +673,12 @@ int anjay_exit_offline(anjay_t *anjay);
 /**
  * Tests if Anjay gave up on any further server connection attempts. It will
  * happen if none of the configured servers could be reached.
+ *
+ * If this function returns <c>true</c>, it means that Anjay is in an
+ * essentially non-operational state. @ref anjay_schedule_reconnect may be
+ * called to reset the failure state and retry connecting to all configured
+ * servers. Alternatively, @ref anjay_enable_server may be used to retry
+ * connection only to a specific server.
  *
  * @param anjay Anjay object to operate on.
  *

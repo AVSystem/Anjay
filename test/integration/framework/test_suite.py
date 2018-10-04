@@ -212,15 +212,15 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.servers = []
         self.bootstrap_server = None
 
-    def setUp(self):
-        return super().setUp()
+    def setUp(self, *args, **kwargs):
+        self.setup_demo_with_servers(*args, **kwargs)
 
     @unittest.skip
     def runTest(self):
         raise NotImplementedError('runTest not implemented')
 
-    def tearDown(self):
-        pass
+    def tearDown(self, *args, **kwargs):
+        self.teardown_demo_with_servers(*args, **kwargs)
 
     def set_config(self, config):
         self.config = config
@@ -648,6 +648,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def get_transport(self, socket_index=-1):
         return self.communicate('get-transport %s' % (socket_index,), match_regex='TRANSPORT==([0-9a-zA-Z]+)\n').group(1)
 
+    def get_all_connections_failed(self):
+        return bool(int(self.communicate('get-all-connections-failed', match_regex='ALL_CONNECTIONS_FAILED==([0-9])\n').group(1)))
+
 
 class SingleServerAccessor:
     @property
@@ -667,15 +670,9 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
     def runTest(self):
         pass
 
-    def setUp(self,
-              extra_cmdline_args=None,
-              auto_register=True,
-              lifetime=None,
-              fw_updated_marker_path=None,
-              psk_identity=None,
-              psk_key=None):
+    def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None, *args, **kwargs):
         assert((psk_identity is None) == (psk_key is None))
-        extra_args = ['--lifetime', str(lifetime)] if lifetime else []
+        extra_args = []
         if psk_identity:
             extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
                            '--key', str(binascii.hexlify(psk_key), 'ascii')]
@@ -687,9 +684,8 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
 
         self.setup_demo_with_servers(servers=[Lwm2mServer(coap_server)],
                                      extra_cmdline_args=extra_args,
-                                     auto_register=auto_register,
-                                     lifetime=lifetime,
-                                     fw_updated_marker_path=fw_updated_marker_path)
+                                     *args,
+                                     **kwargs)
 
     def tearDown(self, *args, **kwargs):
         self.teardown_demo_with_servers(*args, **kwargs)
@@ -699,14 +695,8 @@ class Lwm2mDtlsSingleServerTest(Lwm2mSingleServerTest):
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
 
-    def setUp(self,
-              extra_cmdline_args=None,
-              auto_register=True,
-              lifetime=None,
-              fw_updated_marker_path=None):
-        super().setUp(extra_cmdline_args=extra_cmdline_args, auto_register=auto_register, lifetime=lifetime,
-                      fw_updated_marker_path=fw_updated_marker_path, psk_identity=self.PSK_IDENTITY,
-                      psk_key=self.PSK_KEY)
+    def setUp(self, *args, **kwargs):
+        super().setUp(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY, *args, **kwargs)
 
 
 # This class **MUST** be specified as the first in superclass list, due to Python's method resolution order
@@ -735,23 +725,61 @@ class PcapEnabledTest(Lwm2mTest):
             for pkt in iter(r):
                 yield decode_packet(pkt[1]).data
 
-    def count_icmp_unreachable_packets(self):
-        result = 0
-        for pkt in self.read_pcap():
-            if isinstance(pkt, dpkt.ip.IP) and isinstance(pkt.data, dpkt.icmp.ICMP) and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach):
-                result += 1
-        return result
-
-    def wait_until_icmp_unreachable_count(self, value, timeout_s=None, step_s=0.1):
+    def _wait_until_condition(self, timeout_s, step_s, condition: lambda pkts: True):
         if timeout_s is None:
             timeout_s = self.DEFAULT_MSG_TIMEOUT
         deadline = time.time() + timeout_s
         while True:
-            if self.count_icmp_unreachable_packets() >= value:
+            if condition(self.read_pcap()):
                 return
             if time.time() >= deadline:
-                raise TimeoutError('ICMP Unreachable packet not generated')
+                raise TimeoutError('Condition was not true in specified time interval')
             time.sleep(step_s)
+
+    def _count_packets(self, condition: lambda pkts: True):
+        result = 0
+        for pkt in self.read_pcap():
+            if condition(pkt):
+                result += 1
+        return result
+
+    @staticmethod
+    def is_icmp_unreachable(pkt):
+        return isinstance(pkt, dpkt.ip.IP) \
+                and isinstance(pkt.data, dpkt.icmp.ICMP) \
+                and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
+
+    @staticmethod
+    def is_dtls_client_hello(pkt):
+        header = b'\x16'  # Content Type: Handshake
+        header += b'\xfe\xfd'  # Version: DTLS 1.2
+        header += b'\x00\x00'  # Epoch: 0
+        if isinstance(pkt, dpkt.ip.IP) and isinstance(pkt.data, dpkt.udp.UDP):
+            return pkt.udp.data[:len(header)] == header
+        else:
+            return False
+
+    def count_icmp_unreachable_packets(self):
+        return self._count_packets(PcapEnabledTest.is_icmp_unreachable)
+
+    def count_dtls_client_hello_packets(self):
+        return self._count_packets(PcapEnabledTest.is_dtls_client_hello)
+
+    def wait_until_icmp_unreachable_count(self, value, timeout_s=None, step_s=0.1):
+        def count_of_icmps_is_expected(pkts):
+            return self.count_icmp_unreachable_packets() >= value
+        try:
+            self._wait_until_condition(timeout_s=timeout_s, step_s=step_s, condition=count_of_icmps_is_expected)
+        except TimeoutError:
+            raise TimeoutError('ICMP Unreachable packet not generated')
+
+    def wait_until_dtls_client_hello_count(self, value, timeout_s=None, step_s=0.1):
+        def count_of_dtls_client_hello_is_expected(pkts):
+            return self.count_dtls_client_hello_packets() >= value
+        try:
+            self._wait_until_condition(timeout_s=timeout_s, step_s=step_s, condition=count_of_dtls_client_hello_is_expected)
+        except TimeoutError:
+            raise TimeoutError('DTLS Client Hello packets were not captured in time')
 
 
 def get_test_name(test):

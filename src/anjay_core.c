@@ -51,6 +51,8 @@
 VISIBILITY_SOURCE_BEGIN
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
+    _anjay_bootstrap_init(&anjay->bootstrap,
+                          !config->disable_server_initiated_bootstrap);
     anjay->dtls_version = config->dtls_version;
     if (anjay->dtls_version == AVS_NET_SSL_VERSION_DEFAULT) {
         anjay->dtls_version = AVS_NET_SSL_VERSION_TLSv1_2;
@@ -126,7 +128,6 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
         return -1;
     }
 
-    _anjay_bootstrap_init(anjay, !config->disable_server_initiated_bootstrap);
     if (_anjay_observe_init(&anjay->observe,
                             config->confirmable_notifications)) {
         return -1;
@@ -158,9 +159,6 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
     }
 #endif // WITH_DOWNLOADER
     assert(!id_source);
-
-    anjay->max_icmp_failures =
-            config->max_icmp_failures ? *config->max_icmp_failures : 7u;
 
     return 0;
 }

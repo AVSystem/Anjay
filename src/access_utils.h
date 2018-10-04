@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ACCESS_CONTROL_UTILS_H
-#define ACCESS_CONTROL_UTILS_H
+#ifndef ACCESS_UTILS_H
+#define ACCESS_UTILS_H
 
 #include "anjay_core.h"
 #include "dm_core.h"
@@ -29,18 +29,20 @@ typedef struct {
     anjay_request_action_t action;
 } anjay_action_info_t;
 
-#ifdef WITH_ACCESS_CONTROL
-
-bool _anjay_access_control_action_allowed(anjay_t *anjay,
-                                          const anjay_action_info_t *info);
-
-#else
-
-#    define _anjay_access_control_action_allowed(anjay, info) \
-        ((void) (info), true)
-
-#endif
+/**
+ * Checks whether an operation described by the @p info on a non-restricted
+ * Object is allowed. Security checks for restricted objects shall be performed
+ * elsewhere.
+ *
+ * Restricted Objects in LwM2M 1.0 are:
+ *  - Security Object (/0)
+ *
+ * NOTE: The instance ID may be @ref ANJAY_IID_INVALID only if the operation is
+ * Create.
+ */
+bool _anjay_instance_action_allowed(anjay_t *anjay,
+                                    const anjay_action_info_t *info);
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif /* ACCESS_CONTROL_UTILS_H */
+#endif /* ACCESS_UTILS_H */

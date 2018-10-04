@@ -148,12 +148,13 @@ typedef struct {
         .observe_serial = ((Request)->observe == ANJAY_COAP_OBSERVE_REGISTER) \
     }
 
-#define REQUEST_TO_ACTION_INFO(Anjay, Request) \
-    (const anjay_action_info_t) {              \
-        .oid = (Request)->uri.oid,             \
-        .iid = (Request)->uri.iid,             \
-        .ssid = _anjay_dm_current_ssid(Anjay), \
-        .action = (Request)->action            \
+#define REQUEST_TO_ACTION_INFO(Anjay, Request)                               \
+    (const anjay_action_info_t) {                                            \
+        .oid = (Request)->uri.oid,                                           \
+        .iid = _anjay_uri_path_has_iid(&(Request)->uri) ? (Request)->uri.iid \
+                                                        : ANJAY_IID_INVALID, \
+        .ssid = _anjay_dm_current_ssid(Anjay),                               \
+        .action = (Request)->action                                          \
     }
 
 int _anjay_dm_transaction_validate(anjay_t *anjay);

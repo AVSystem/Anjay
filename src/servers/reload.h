@@ -27,7 +27,9 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 int _anjay_schedule_delayed_reload_servers(anjay_t *anjay);
 
-int _anjay_schedule_reload_server(anjay_t *anjay, anjay_server_info_t *server);
+int _anjay_schedule_refresh_server(anjay_t *anjay,
+                                   anjay_server_info_t *server,
+                                   avs_time_duration_t delay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

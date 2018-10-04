@@ -61,8 +61,8 @@ int _anjay_observe_key_cmp(const anjay_observe_key_t *left,
                            const anjay_observe_key_t *right);
 int _anjay_observe_entry_cmp(const void *left, const void *right);
 
-int _anjay_observe_schedule_trigger(anjay_t *anjay,
-                                    anjay_observe_entry_t *entry);
+int _anjay_observe_schedule_pmax_trigger(anjay_t *anjay,
+                                         anjay_observe_entry_t *entry);
 
 VISIBILITY_PRIVATE_HEADER_END
 

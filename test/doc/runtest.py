@@ -45,7 +45,7 @@ def find_urls(rst_content):
             for found_url in re.findall(REGEX, line_content))
 
 def find_invalid_urls(urls):
-    responses = grequests.map(grequests.head(url, allow_redirects=True)
+    responses = grequests.map(grequests.head(url, allow_redirects=True, timeout=10)
                               for url in urls)
     invalid_urls = defaultdict(list)
     for url, status in zip(urls, responses):
