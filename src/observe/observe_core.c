@@ -238,7 +238,7 @@ schedule_trigger(anjay_t *anjay, anjay_observe_entry_t *entry, int32_t period) {
     if (retval) {
         anjay_log(ERROR,
                   "Could not schedule automatic notification trigger, result: "
-                  "%" PRIi32,
+                  "%d",
                   retval);
     }
     return retval;
@@ -383,7 +383,7 @@ int _anjay_observe_schedule_pmax_trigger(anjay_t *anjay,
     int result;
 
     if ((result = get_attrs(anjay, &attrs, &entry->key))) {
-        anjay_log(DEBUG, "Could not get observe attributes, result: %" PRIi32,
+        anjay_log(DEBUG, "Could not get observe attributes, result: %d",
                   result);
         return result;
     }

@@ -163,6 +163,7 @@ void _anjay_connection_bring_online(anjay_t *anjay,
     anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
     assert(connection);
     assert(!_anjay_connection_is_online(connection));
+    (void) connection;
     _anjay_connection_internal_bring_online(anjay, &ref.server->connections,
                                             ref.conn_type);
 }

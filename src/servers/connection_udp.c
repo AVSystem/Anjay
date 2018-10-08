@@ -241,6 +241,7 @@ prepare_udp_connection(anjay_t *anjay,
         anjay_log(ERROR, "could not create CoAP socket");
         return -ENOMEM;
     }
+    (void) result;
     out_conn->conn_socket_ = socket;
     return 0;
 }

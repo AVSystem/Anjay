@@ -251,9 +251,8 @@ static void ensure_socket_connected(anjay_t *anjay,
     avs_net_abstract_socket_t *existing_socket =
             _anjay_connection_internal_get_socket(connection);
 
-    int result = 0;
     if (existing_socket == NULL
-            && (result = recreate_socket(anjay, def, connection, inout_info))) {
+            && recreate_socket(anjay, def, connection, inout_info)) {
         connection->state = ANJAY_SERVER_CONNECTION_ERROR;
         on_connection_refreshed(anjay, connections);
         return;
