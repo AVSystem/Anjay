@@ -81,13 +81,22 @@ int _anjay_observe_entry_cmp(const void *left, const void *right) {
 }
 
 int _anjay_observe_init(anjay_observe_state_t *observe,
-                        bool confirmable_notifications) {
+                        bool confirmable_notifications,
+                        size_t stored_notification_limit) {
     if (!(observe->connection_entries = AVS_RBTREE_NEW(
                   anjay_observe_connection_entry_t, connection_state_cmp))) {
         anjay_log(ERROR, "Could not initialize Observe structures");
         return -1;
     }
     observe->confirmable_notifications = confirmable_notifications;
+
+    if (stored_notification_limit == 0) {
+        observe->notify_queue_limit_mode = NOTIFY_QUEUE_UNLIMITED;
+    } else {
+        observe->notify_queue_limit = stored_notification_limit;
+        observe->notify_queue_limit_mode = NOTIFY_QUEUE_DROP_OLDEST;
+    }
+
     return 0;
 }
 
@@ -273,19 +282,103 @@ create_resource_value(const anjay_msg_details_t *details,
     return result;
 }
 
-static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
+static size_t count_queued_notifications(const anjay_observe_state_t *observe) {
+    size_t count = 0;
+
+    AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) conn;
+    AVS_RBTREE_FOREACH(conn, observe->connection_entries) {
+        count += AVS_LIST_SIZE(conn->unsent);
+    }
+
+    return count;
+}
+
+static bool is_observe_queue_full(const anjay_observe_state_t *observe) {
+    if (observe->notify_queue_limit_mode == NOTIFY_QUEUE_UNLIMITED) {
+        return false;
+    }
+
+    size_t num_queued = count_queued_notifications(observe);
+    anjay_log(TRACE, "%u/%u queued notifications", (unsigned) num_queued,
+              (unsigned) observe->notify_queue_limit);
+
+    assert(num_queued <= observe->notify_queue_limit);
+    return num_queued >= observe->notify_queue_limit;
+}
+
+static AVS_LIST(anjay_observe_connection_entry_t)
+find_oldest_queued_notification(anjay_observe_state_t *observe) {
+    AVS_LIST(anjay_observe_connection_entry_t) oldest = NULL;
+
+    AVS_RBTREE_ELEM(anjay_observe_connection_entry_t) conn;
+    AVS_RBTREE_FOREACH(conn, observe->connection_entries) {
+        if (conn->unsent) {
+            if (!oldest
+                    || avs_time_real_before(conn->unsent->timestamp,
+                                            oldest->unsent->timestamp)) {
+                oldest = conn;
+            }
+        }
+    }
+
+    return oldest;
+}
+
+static anjay_observe_resource_value_t *
+detach_first_unsent_value(anjay_observe_connection_entry_t *conn_state) {
+    assert(conn_state->unsent);
+    anjay_observe_entry_t *entry = conn_state->unsent->ref;
+    if (entry->last_unsent == conn_state->unsent) {
+        entry->last_unsent = NULL;
+    }
+    anjay_observe_resource_value_t *result =
+            AVS_LIST_DETACH(&conn_state->unsent);
+    if (conn_state->unsent_last == result) {
+        assert(!conn_state->unsent);
+        conn_state->unsent_last = NULL;
+    }
+    return result;
+}
+
+static void drop_oldest_queued_notification(anjay_observe_state_t *observe) {
+    AVS_LIST(anjay_observe_connection_entry_t) oldest =
+            find_oldest_queued_notification(observe);
+
+    AVS_ASSERT(oldest, "function is not supposed to be called when there are "
+                       "no queued notifications");
+
+    anjay_observe_resource_value_t *entry = detach_first_unsent_value(oldest);
+    AVS_LIST_DELETE(&entry);
+}
+
+static int insert_new_value(anjay_observe_state_t *observe,
+                            anjay_observe_connection_entry_t *conn_state,
                             anjay_observe_entry_t *entry,
                             const anjay_msg_details_t *details,
                             const avs_coap_msg_identity_t *identity,
                             double numeric,
                             const void *data,
                             size_t size) {
+    if (is_observe_queue_full(observe)) {
+        switch (observe->notify_queue_limit_mode) {
+        case NOTIFY_QUEUE_UNLIMITED:
+            AVS_UNREACHABLE("is_observe_queue_full broken");
+            return -1;
+
+        case NOTIFY_QUEUE_DROP_OLDEST:
+            assert(observe->notify_queue_limit != 0);
+            drop_oldest_queued_notification(observe);
+            break;
+        }
+    }
+
     AVS_LIST(anjay_observe_resource_value_t) res_value =
             create_resource_value(details, entry, identity, numeric, data,
                                   size);
     if (!res_value) {
         return -1;
     }
+
     AVS_LIST_APPEND(&conn_state->unsent_last, res_value);
     conn_state->unsent_last = res_value;
     if (!conn_state->unsent) {
@@ -306,8 +399,8 @@ static int insert_error(anjay_t *anjay,
         .msg_code = _anjay_make_error_response_code(outer_result),
         .format = AVS_COAP_FORMAT_NONE
     };
-    return insert_new_value(conn_state, entry, &details, identity, NAN, NULL,
-                            0);
+    return insert_new_value(&anjay->observe, conn_state, entry, &details,
+                            identity, NAN, NULL, 0);
 }
 
 static int get_effective_attrs(anjay_t *anjay,
@@ -644,22 +737,6 @@ static bool confirmable_required(const avs_time_real_t now,
             avs_time_duration_from_scalar(1, AVS_TIME_DAY));
 }
 
-static anjay_observe_resource_value_t *
-detach_first_unsent_value(anjay_observe_connection_entry_t *conn_state) {
-    assert(conn_state->unsent);
-    anjay_observe_entry_t *entry = conn_state->unsent->ref;
-    if (entry->last_unsent == conn_state->unsent) {
-        entry->last_unsent = NULL;
-    }
-    anjay_observe_resource_value_t *result =
-            AVS_LIST_DETACH(&conn_state->unsent);
-    if (conn_state->unsent_last == result) {
-        assert(!conn_state->unsent);
-        conn_state->unsent_last = NULL;
-    }
-    return result;
-}
-
 static void value_sent(anjay_observe_connection_entry_t *conn_state) {
     anjay_observe_resource_value_t *sent =
             detach_first_unsent_value(conn_state);
@@ -932,7 +1009,8 @@ update_notification_value(anjay_t *anjay,
     if (pmax_expired
             || should_update(newest_value(entry), &attrs.standard,
                              &observe_details, numeric, buf, (size_t) size)) {
-        result = insert_new_value(conn_state, entry, &observe_details,
+        result = insert_new_value(&anjay->observe, conn_state, entry,
+                                  &observe_details,
                                   &newest_value(entry)->identity, numeric, buf,
                                   (size_t) size);
     }

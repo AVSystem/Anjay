@@ -361,10 +361,18 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     const char *args = NULL, *pmin = NULL, *pmax = NULL, *lt = NULL, *gt = NULL,
                *st = NULL;
     anjay_dm_resource_attributes_t attrs;
+    int ssid;
 
-    if (sscanf(args_string, "%s%n", path, &path_len) != 1) {
+    if (sscanf(args_string, "%s %d%n", path, &ssid, &path_len) != 2) {
         goto error;
     }
+
+    if (ssid < 0 || UINT16_MAX <= ssid) {
+        demo_log(ERROR, "invalid SSID: expected 0 <= ssid < 65535, got %d",
+                 ssid);
+        goto error;
+    }
+
     args = args_string + path_len;
     attrs = ANJAY_RES_ATTRIBS_EMPTY;
     pmin = strstr(args, "pmin=");
@@ -392,21 +400,22 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     switch (sscanf(path, "/%d/%d/%d", &oid, &iid, &rid)) {
     case 3:
         if (anjay_attr_storage_set_resource_attrs(
-                    demo->anjay, 1, (anjay_oid_t) oid, (anjay_iid_t) iid,
-                    (anjay_rid_t) rid, &attrs)) {
+                    demo->anjay, (anjay_ssid_t) ssid, (anjay_oid_t) oid,
+                    (anjay_iid_t) iid, (anjay_rid_t) rid, &attrs)) {
             demo_log(ERROR, "failed to set resource level attributes");
         }
         goto finish;
     case 2:
         if (anjay_attr_storage_set_instance_attrs(
-                    demo->anjay, 1, (anjay_oid_t) oid, (anjay_iid_t) iid,
-                    &attrs.common)) {
+                    demo->anjay, (anjay_ssid_t) ssid, (anjay_oid_t) oid,
+                    (anjay_iid_t) iid, &attrs.common)) {
             demo_log(ERROR, "failed to set instance level attributes");
         }
         goto finish;
     case 1:
         if (anjay_attr_storage_set_object_attrs(
-                    demo->anjay, 1, (anjay_oid_t) oid, &attrs.common)) {
+                    demo->anjay, (anjay_ssid_t) ssid, (anjay_oid_t) oid,
+                    &attrs.common)) {
             demo_log(ERROR, "failed to set object level attributes");
         }
         goto finish;

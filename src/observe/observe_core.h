@@ -48,9 +48,17 @@ typedef struct anjay_observe_entry_struct anjay_observe_entry_t;
 typedef struct anjay_observe_connection_entry_struct
         anjay_observe_connection_entry_t;
 
+typedef enum {
+    NOTIFY_QUEUE_UNLIMITED,
+    NOTIFY_QUEUE_DROP_OLDEST
+} notify_queue_limit_mode_t;
+
 typedef struct {
     AVS_RBTREE(anjay_observe_connection_entry_t) connection_entries;
     bool confirmable_notifications;
+
+    notify_queue_limit_mode_t notify_queue_limit_mode;
+    size_t notify_queue_limit;
 } anjay_observe_state_t;
 
 typedef struct {
@@ -72,7 +80,8 @@ typedef struct {
 } anjay_observe_key_t;
 
 int _anjay_observe_init(anjay_observe_state_t *observe,
-                        bool confirmable_notifications);
+                        bool confirmable_notifications,
+                        size_t stored_notification_limit);
 
 void _anjay_observe_cleanup(anjay_observe_state_t *observe,
                             anjay_sched_t *sched);

@@ -145,6 +145,9 @@ static void print_option_help(const struct option *opt) {
         { 'l', "SECONDS", "86400",
           "set registration lifetime. If SECONDS <= 0, use default value and "
           "don't send lifetime in Register/Update messages." },
+        { 'L', "MAX_NOTIFICATIONS", "0",
+          "set limit of queued notifications in queue/offline mode. 0: "
+          "unlimited; >0: keep that much newest ones" },
         { 'c', "CSV_FILE", NULL, "file to load location CSV from" },
         { 'f', "SECONDS", "1", "location update frequency in seconds" },
         { 'p', "PORT", NULL, "bind all sockets to the specified UDP port." },
@@ -282,6 +285,18 @@ static int parse_u16(const char *str, uint16_t *out_value) {
     return 0;
 }
 
+static int parse_size(const char *str, size_t *out_value) {
+    long long_value;
+    if (demo_parse_long(str, &long_value) || long_value < 0
+            || (size_t) long_value > SIZE_MAX) {
+        demo_log(ERROR, "value out of range: %s", str);
+        return -1;
+    }
+
+    *out_value = (size_t) long_value;
+    return 0;
+}
+
 static int parse_double(const char *str, double *out_value) {
     errno = 0;
     char *endptr = NULL;
@@ -408,6 +423,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "endpoint-name",                 required_argument, 0, 'e' },
         { "help",                          no_argument,       0, 'h' },
         { "lifetime",                      required_argument, 0, 'l' },
+        { "stored-notification-limit",     required_argument, 0, 'L' },
         { "location-csv",                  required_argument, 0, 'c' },
         { "location-update-freq-s",        required_argument, 0, 'f' },
         { "port",                          required_argument, 0, 'p' },
@@ -540,6 +556,11 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             goto finish;
         case 'l':
             if (parse_i32(optarg, &parsed_args->connection_args.lifetime)) {
+                goto finish;
+            }
+            break;
+        case 'L':
+            if (parse_size(optarg, &parsed_args->stored_notification_limit)) {
                 goto finish;
             }
             break;

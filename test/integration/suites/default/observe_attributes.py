@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import socket
+import time
 
 from framework.lwm2m_test import *
 
@@ -142,10 +143,126 @@ class ObserveWithDefaultAttributesTest(test_suite.Lwm2mSingleServerTest,
             self.serv.recv(timeout_s=5)
 
         # Attributes set via public API
-        self.communicate('set-attrs /1337/0/1 pmax=1 pmin=1')
+        self.communicate('set-attrs /1337/0/1 1 pmax=1 pmin=1')
         # And should now start arriving each second
         pkt = self.serv.recv(timeout_s=2)
         self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
         self.assertEqual(pkt.content, counter_pkt.content)
         # Up until they're reset
-        self.communicate('set-attrs /1337/0/1')
+        self.communicate('set-attrs /1337/0/1 1')
+
+
+class ObserveOfflineWithStoredNotificationLimit(test_suite.Lwm2mSingleServerTest,
+                                                test_suite.Lwm2mDmOperations):
+    QUEUE_SIZE = 3
+
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--stored-notification-limit', str(self.QUEUE_SIZE)])
+        self.write_resource(self.serv, OID.Server, 1, RID.Server.NotificationStoring, '1')
+
+    def runTest(self):
+        PMAX_S = 1
+        SKIP_NOTIFICATIONS = 3  # number of Notify messages that should be skipped
+        EPSILON_S = PMAX_S / 2  # extra time to wait for each Notify
+
+        self.write_attributes(self.serv, OID.Device, 0, RID.Device.CurrentTime, query=['pmax=%d' % PMAX_S])
+        observe = self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+
+        self.communicate('enter-offline')
+        # wait long enough to cause dropping oldest notifications
+        time.sleep(PMAX_S * (self.QUEUE_SIZE + SKIP_NOTIFICATIONS))
+        self.serv.reset()
+
+        # prevent the demo from queueing any additional notifications
+        self.communicate('set-attrs %s 1 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        # wait until attribute change gets applied during next notification poll
+        time.sleep(PMAX_S)
+
+        self.communicate('exit-offline')
+
+        self.assertDemoRegisters()
+
+        seen_values = []
+
+        # exactly QUEUE_SIZE notifications should be sent
+        for _ in range(self.QUEUE_SIZE):
+            pkt = self.serv.recv(timeout_s=EPSILON_S)
+            self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                             type=coap.Type.NON_CONFIRMABLE,
+                                             token=observe.token),
+                                pkt)
+            seen_values.append(pkt.content)
+
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(PMAX_S * 2)
+
+        # make sure the oldest values were dropped
+        for idx in range(SKIP_NOTIFICATIONS):
+            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'), seen_values)
+
+
+class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm2mTest,
+                                                                  test_suite.Lwm2mDmOperations):
+    QUEUE_SIZE = 3
+
+    def setUp(self):
+        super().setUp(servers=2,
+                      extra_cmdline_args=['--stored-notification-limit', str(self.QUEUE_SIZE)])
+        self.write_resource(self.servers[0], OID.Server, 1, RID.Server.NotificationStoring, '1')
+        self.write_resource(self.servers[1], OID.Server, 2, RID.Server.NotificationStoring, '1')
+
+    def runTest(self):
+        PMAX_S = 1
+        SKIP_NOTIFICATIONS = 3  # number of Notify messages that should be skipped per server
+        EPSILON_S = PMAX_S / 2  # extra time to wait for each Notify
+
+        self.write_attributes(self.servers[0], OID.Device, 0, RID.Device.CurrentTime, query=['pmax=%d' % PMAX_S])
+        self.write_attributes(self.servers[1], OID.Device, 0, RID.Device.CurrentTime, query=['pmax=%d' % PMAX_S])
+
+        observes = [
+            self.observe(self.servers[0], OID.Device, 0, RID.Device.CurrentTime),
+            self.observe(self.servers[1], OID.Device, 0, RID.Device.CurrentTime),
+        ]
+
+        self.communicate('enter-offline')
+        # wait long enough to cause dropping oldest notifications
+        time.sleep(PMAX_S * (self.QUEUE_SIZE / 2 + SKIP_NOTIFICATIONS))
+        for serv in self.servers:
+            serv.reset()
+
+        # prevent the demo from queueing any additional notifications
+        self.communicate('set-attrs %s 1 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        self.communicate('set-attrs %s 2 pmin=9999 pmax=9999' % (ResPath.Device.CurrentTime,))
+        # wait until attribute change gets applied during next notification poll
+        time.sleep(PMAX_S)
+
+        self.communicate('exit-offline')
+
+        # TODO: why does Anjay reconnect in reverse order? It doesn't really matter, but... why?
+        for serv in reversed(self.servers):
+            self.assertDemoRegisters(serv)
+
+        remaining_notifications = self.QUEUE_SIZE
+        seen_values = []
+
+        # exactly QUEUE_SIZE notifications in total should be sent
+        for observe, serv in zip(observes, self.servers):
+            try:
+                for _ in range(remaining_notifications):
+                    pkt = serv.recv(timeout_s=EPSILON_S)
+                    self.assertMsgEqual(Lwm2mContent(msg_id=ANY,
+                                                     type=coap.Type.NON_CONFIRMABLE,
+                                                     token=observe.token),
+                                        pkt)
+                    remaining_notifications -= 1
+                    seen_values.append(pkt.content)
+            except socket.timeout:
+                pass
+
+        for serv in self.servers:
+            with self.assertRaises(socket.timeout):
+                serv.recv(PMAX_S * 2)
+
+        # make sure the oldest values were dropped
+        for idx in range(SKIP_NOTIFICATIONS):
+            self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'), seen_values)

@@ -129,7 +129,8 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
     }
 
     if (_anjay_observe_init(&anjay->observe,
-                            config->confirmable_notifications)) {
+                            config->confirmable_notifications,
+                            config->stored_notification_limit)) {
         return -1;
     }
 

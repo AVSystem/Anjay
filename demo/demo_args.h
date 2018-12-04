@@ -53,6 +53,7 @@ typedef struct cmdline_args {
      */
     bool fwu_tx_params_modified;
     avs_coap_tx_params_t fwu_tx_params;
+    size_t stored_notification_limit;
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

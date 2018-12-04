@@ -268,6 +268,22 @@ typedef struct anjay_configuration {
      * bootstrap sequence.
      */
     bool disable_server_initiated_bootstrap;
+
+    /**
+     * If "Notification Storing When Disabled or Offline" resource is set to
+     * true and either the client is in offline mode, or uses Queue Mode,
+     * Notify messages are enqueued and sent whenever the client is online
+     * again. This value allows one to limit the size of said notification
+     * queue. The limit applies to notifications queued for all servers.
+     *
+     * If set to 0, size of the stored notification queue is only limited by
+     * the amount of available RAM.
+     *
+     * If set to a positive value, that much *most recent* notifications are
+     * stored. Attempting to add a notification to the queue while it is
+     * already full drops the oldest one to make room for new one.
+     */
+    size_t stored_notification_limit;
 } anjay_configuration_t;
 
 /**

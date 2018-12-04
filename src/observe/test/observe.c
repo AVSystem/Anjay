@@ -1322,7 +1322,7 @@ static void test_observe_entry(anjay_t *anjay,
 
 static anjay_t *create_test_env(void) {
     anjay_t *anjay = (anjay_t *) avs_calloc(1, sizeof(anjay_t));
-    _anjay_observe_init(&anjay->observe, false);
+    _anjay_observe_init(&anjay->observe, false, 0);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 1);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 3, 2);
     test_observe_entry(anjay, 1, ANJAY_CONNECTION_UDP, 2, 9, 4);

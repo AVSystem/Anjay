@@ -280,7 +280,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .disable_server_initiated_bootstrap =
                 cmdline_args->disable_server_initiated_bootstrap,
         .udp_tx_params = &cmdline_args->tx_params,
-        .udp_dtls_hs_tx_params = &cmdline_args->dtls_hs_tx_params
+        .udp_dtls_hs_tx_params = &cmdline_args->dtls_hs_tx_params,
+        .stored_notification_limit = cmdline_args->stored_notification_limit
     };
 
     const avs_net_security_info_t *fw_security_info_ptr = NULL;
