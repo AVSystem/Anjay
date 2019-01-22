@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -291,7 +291,7 @@ static int send_confirmable_with_retry(coap_client_t *client,
             break;
         }
 
-        coap_log(DEBUG, "timeout reached, next: %" PRId64 ".09%" PRId32 " s",
+        coap_log(DEBUG, "timeout reached after %" PRId64 ".%09" PRId32 " s",
                  retry_state.recv_timeout.seconds,
                  retry_state.recv_timeout.nanoseconds);
     } while (retry_state.retry_count

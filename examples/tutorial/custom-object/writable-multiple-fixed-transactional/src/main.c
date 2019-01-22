@@ -1,5 +1,5 @@
-#include <poll.h>
 #include <assert.h>
+#include <poll.h>
 #include <string.h>
 
 #include <anjay/anjay.h>
@@ -15,10 +15,10 @@ typedef struct test_instance {
 } test_instance_t;
 
 static const test_instance_t DEFAULT_INSTANCE_VALUES[] = {
-    { true, "First", true, 1 },
-    { true, "Second", true, 2 }
+    { true, "First", true, 1 }, { true, "Second", true, 2 }
 };
-#define NUM_INSTANCES (sizeof(DEFAULT_INSTANCE_VALUES) / sizeof(DEFAULT_INSTANCE_VALUES[0]))
+#define NUM_INSTANCES \
+    (sizeof(DEFAULT_INSTANCE_VALUES) / sizeof(DEFAULT_INSTANCE_VALUES[0]))
 
 typedef struct test_object {
     // handlers
@@ -30,8 +30,7 @@ typedef struct test_object {
     test_instance_t backup_instances[NUM_INSTANCES];
 } test_object_t;
 
-static test_object_t *
-get_test_object(const anjay_dm_object_def_t *const *obj) {
+static test_object_t *get_test_object(const anjay_dm_object_def_t *const *obj) {
     assert(obj);
 
     // use the container_of pattern to retrieve test_object_t pointer
@@ -42,19 +41,19 @@ get_test_object(const anjay_dm_object_def_t *const *obj) {
 static int test_instance_present(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
                                  anjay_iid_t iid) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
     // return 1 (true) if `iid` is a valid index of `TEST_INSTANCES` array
-    return (size_t)iid < NUM_INSTANCES;
+    return (size_t) iid < NUM_INSTANCES;
 }
 
 static int test_instance_it(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,
                             anjay_iid_t *out,
                             void **cookie) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     anjay_iid_t curr = 0;
     test_object_t *test = get_test_object(obj_ptr);
@@ -62,10 +61,10 @@ static int test_instance_it(anjay_t *anjay,
     // if `*cookie == NULL`, then the iteration has just started,
     // otherwise `*cookie` contains iterator value saved below
     if (*cookie) {
-        curr = (anjay_iid_t)(intptr_t)*cookie;
+        curr = (anjay_iid_t) (intptr_t) *cookie;
     }
 
-    if ((size_t)curr < NUM_INSTANCES) {
+    if ((size_t) curr < NUM_INSTANCES) {
         *out = curr;
     } else {
         // no more Object Instances available
@@ -73,7 +72,7 @@ static int test_instance_it(anjay_t *anjay,
     }
 
     // use `*cookie` to store the iterator
-    *cookie = (void*)(intptr_t)(curr + 1);
+    *cookie = (void *) (intptr_t) (curr + 1);
     return 0;
 }
 
@@ -87,7 +86,7 @@ static int test_instance_reset(anjay_t *anjay,
     // IID validity was checked by the `anjay_dm_instance_present_t` handler.
     // If the Object Instance set does not change, or can only be modifed
     // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
-    assert((size_t)iid < NUM_INSTANCES);
+    assert((size_t) iid < NUM_INSTANCES);
 
     // mark all Resource values for Object Instance `iid` as unset
     test->instances[iid].has_label = false;
@@ -100,14 +99,14 @@ static int test_resource_read(anjay_t *anjay,
                               anjay_iid_t iid,
                               anjay_rid_t rid,
                               anjay_output_ctx_t *ctx) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
     // IID validity was checked by the `anjay_dm_instance_present_t` handler.
     // If the Object Instance set does not change, or can only be modifed
     // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
-    assert((size_t)iid < NUM_INSTANCES);
+    assert((size_t) iid < NUM_INSTANCES);
     const struct test_instance *current_instance = &test->instances[iid];
 
     switch (rid) {
@@ -122,39 +121,39 @@ static int test_resource_read(anjay_t *anjay,
 }
 
 static int test_resource_write(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_iid_t iid,
-                              anjay_rid_t rid,
-                              anjay_input_ctx_t *ctx) {
-    (void) anjay;   // unused
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid,
+                               anjay_rid_t rid,
+                               anjay_input_ctx_t *ctx) {
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
     // IID validity was checked by the `anjay_dm_instance_present_t` handler.
     // If the Object Instance set does not change, or can only be modifed
     // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
-    assert((size_t)iid < NUM_INSTANCES);
+    assert((size_t) iid < NUM_INSTANCES);
     struct test_instance *current_instance = &test->instances[iid];
 
     switch (rid) {
     case 0: {
-            // `anjay_get_string` may return a chunk of data instead of the
-            // whole value - we need to make sure the client is able to hold
-            // the entire value
-            char buffer[sizeof(current_instance->label)];
-            int result = anjay_get_string(ctx, buffer, sizeof(buffer));
+        // `anjay_get_string` may return a chunk of data instead of the
+        // whole value - we need to make sure the client is able to hold
+        // the entire value
+        char buffer[sizeof(current_instance->label)];
+        int result = anjay_get_string(ctx, buffer, sizeof(buffer));
 
-            if (result == 0) {
-                // value OK - save it
-                memcpy(current_instance->label, buffer, sizeof(buffer));
-                current_instance->has_label = true;
-            } else if (result == ANJAY_BUFFER_TOO_SHORT) {
-                // the value is too long to store in the buffer
-                result = ANJAY_ERR_BAD_REQUEST;
-            }
-
-            return result;
+        if (result == 0) {
+            // value OK - save it
+            memcpy(current_instance->label, buffer, sizeof(buffer));
+            current_instance->has_label = true;
+        } else if (result == ANJAY_BUFFER_TOO_SHORT) {
+            // the value is too long to store in the buffer
+            result = ANJAY_ERR_BAD_REQUEST;
         }
+
+        return result;
+    }
 
     case 1: {
         // reading primitive values can be done directly - the value will only
@@ -172,10 +171,9 @@ static int test_resource_write(anjay_t *anjay,
     }
 }
 
-static int
-test_transaction_begin(anjay_t *anjay,
-                       const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;   // unused
+static int test_transaction_begin(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr) {
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
@@ -187,14 +185,13 @@ test_transaction_begin(anjay_t *anjay,
 static int
 test_transaction_validate(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
     // ensure all Object Instances contain all Mandatory Resources
     for (size_t i = 0; i < NUM_INSTANCES; ++i) {
-        if (!test->instances[i].has_label
-                || !test->instances[i].has_value) {
+        if (!test->instances[i].has_label || !test->instances[i].has_value) {
             // validation failed: Object state invalid, rollback required
             return ANJAY_ERR_BAD_REQUEST;
         }
@@ -218,7 +215,7 @@ test_transaction_commit(anjay_t *anjay,
 static int
 test_transaction_rollback(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
@@ -355,8 +352,7 @@ int main() {
 
     int result = 0;
 
-    if (setup_security_object(anjay)
-            || setup_server_object(anjay)) {
+    if (setup_security_object(anjay) || setup_server_object(anjay)) {
         result = -1;
         goto cleanup;
     }
@@ -379,4 +375,3 @@ cleanup:
     // test object does not need cleanup
     return result;
 }
-

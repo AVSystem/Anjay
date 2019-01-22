@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include <avsystem/commons/memory.h>
+#include <avsystem/commons/utils.h>
 
 #define DEV_RES_MANUFACTURER 0     // string
 #define DEV_RES_MODEL_NUMBER 1     // string
@@ -373,6 +374,7 @@ static void extract_device_info(const char *endpoint_name,
                                 size_t manufacturer_size,
                                 char *out_serial,
                                 size_t serial_size) {
+    int result = 0;
     // skip everything up to (and including) last colon
     // this throws away urn:dev:os: prefix, if any
     const char *at = endpoint_name;
@@ -383,7 +385,9 @@ static void extract_device_info(const char *endpoint_name,
     const char *dash = strchr(at, '-');
     if (!dash || at == dash) {
         demo_log(WARNING, "empty manufacturer part of endpoint name");
-        strncpy(out_manufacturer, "Anjay", sizeof("Anjay"));
+        result = avs_simple_snprintf(out_manufacturer, manufacturer_size,
+                                     "Anjay");
+        assert(result >= 0);
     } else {
         AVS_ASSERT((size_t) (dash - at) < manufacturer_size,
                    "manufacturer part of endpoint name too long");
@@ -396,7 +400,8 @@ static void extract_device_info(const char *endpoint_name,
     size_t serial_length = strlen(at);
     if (serial_length == 0) {
         demo_log(WARNING, "empty serial number part of endpoint name");
-        strncpy(out_serial, "000001", sizeof("000001"));
+        result = avs_simple_snprintf(out_serial, serial_size, "000001");
+        assert(result >= 0);
     } else {
         AVS_ASSERT(serial_length < serial_size,
                    "serial number part of endpoint name too long");
@@ -406,6 +411,7 @@ static void extract_device_info(const char *endpoint_name,
 
     demo_log(DEBUG, "manufacturer: %s; serial number: %s", out_manufacturer,
              out_serial);
+    (void) result;
 }
 
 const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,

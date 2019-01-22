@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -625,3 +625,78 @@ class NotificationDtlsTimeoutIsIgnoredTest(NotificationTimeoutIsIgnored.TestMixi
 class NotificationTimeoutIsIgnoredTest(NotificationTimeoutIsIgnored.TestMixin,
                                        test_suite.Lwm2mSingleServerTest):
     pass
+
+
+class ReplacedBootstrapServerReconnectTest(RetransmissionTest.TestMixin,
+                                           test_suite.Lwm2mDtlsSingleServerTest,
+                                           test_suite.Lwm2mDmOperations):
+    MAX_RETRANSMIT=1
+    ACK_TIMEOUT=1
+
+    def setUp(self):
+        super().setUp(bootstrap_server=Lwm2mServer(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY)),
+                      num_servers_passed=0)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        lifetime = 2 * self.max_transmit_wait()
+
+        pkt = self.bootstrap_server.recv()
+        self.assertIsInstance(pkt, Lwm2mRequestBootstrap)
+        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
+
+        pkt = Lwm2mDiscover('/0')
+        self.bootstrap_server.send(pkt)
+        self.assertMsgEqual(Lwm2mContent.matching(pkt)(content=b'</0>,</0/1>'), self.bootstrap_server.recv())
+
+        # replace the existing instance
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=1,
+                            content=TLV.make_resource(RID.Security.ServerURI, 'coaps://127.0.0.1:%d' % self.bootstrap_server.get_listen_port()).serialize()
+                                     + TLV.make_resource(RID.Security.Bootstrap, 1).serialize()
+                                     + TLV.make_resource(RID.Security.Mode, coap.server.SecurityMode.PreSharedKey.value).serialize()
+                                     + TLV.make_resource(RID.Security.PKOrIdentity, self.PSK_IDENTITY).serialize()
+                                     + TLV.make_resource(RID.Security.SecretKey, self.PSK_KEY).serialize())
+
+        # provision the regular Server instance
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=2,
+                            content=TLV.make_resource(RID.Security.ServerURI, 'coaps://127.0.0.1:%d' % self.serv.get_listen_port()).serialize()
+                                     + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                                     + TLV.make_resource(RID.Security.Mode, coap.server.SecurityMode.PreSharedKey.value).serialize()
+                                     + TLV.make_resource(RID.Security.ShortServerID, 2).serialize()
+                                     + TLV.make_resource(RID.Security.PKOrIdentity, self.PSK_IDENTITY).serialize()
+                                     + TLV.make_resource(RID.Security.SecretKey, self.PSK_KEY).serialize())
+        self.write_instance(self.bootstrap_server, oid=OID.Server, iid=2,
+                            content=TLV.make_resource(RID.Server.Lifetime, int(lifetime)).serialize()
+                                    + TLV.make_resource(RID.Server.ShortServerID, 2).serialize()
+                                    + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
+                                    + TLV.make_resource(RID.Server.Binding, "U").serialize())
+
+        # Bootstrap Finish
+        pkt = Lwm2mBootstrapFinish()
+        self.bootstrap_server.send(pkt)
+        self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.bootstrap_server.recv())
+
+        # demo will refresh Bootstrap connection...
+        self.assertDtlsReconnect(self.bootstrap_server)
+
+        # ...and Register with the regular server
+        self.assertDemoRegisters(lifetime=lifetime)
+
+        # let the Update fail
+        self.assertIsInstance(self.serv.recv(timeout_s=lifetime), Lwm2mUpdate)
+        self.assertIsInstance(self.serv.recv(timeout_s=self.ACK_TIMEOUT + 1), Lwm2mUpdate)
+
+        # client falls back to Register
+        pkt = self.serv.recv(timeout_s=lifetime)
+        self.assertIsInstance(pkt, Lwm2mRegister)
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)(coap.Code.RES_FORBIDDEN))
+
+        # now the client falls back to Bootstrap, and doesn't get response
+        self.assertIsInstance(self.bootstrap_server.recv(), Lwm2mRequestBootstrap)
+        self.assertIsInstance(self.bootstrap_server.recv(timeout_s=self.ACK_TIMEOUT + 1), Lwm2mRequestBootstrap)
+
+        # rehandshake should appear here
+        self.assertDtlsReconnect(self.bootstrap_server, timeout_s=2*self.ACK_TIMEOUT + 1)
+        self.assertIsInstance(self.bootstrap_server.recv(), Lwm2mRequestBootstrap)

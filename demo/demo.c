@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,17 +303,21 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                                        fw_security_info_ptr,
                                        cmdline_args->fwu_tx_params_modified
                                                ? &cmdline_args->fwu_tx_params
-                                               : NULL)
+                                               : NULL)) {
+        return -1;
+    }
+
 #ifndef _WIN32
-            || !iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
-                                       POLLIN | POLLHUP, demo_command_dispatch,
-                                       demo, NULL)
+    if (!cmdline_args->disable_stdin) {
+        if (!iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
+                                    POLLIN | POLLHUP, demo_command_dispatch,
+                                    demo, NULL)) {
+            return -1;
+        }
+    }
 #else // _WIN32
 #    warning "TODO: Support stdin somehow on Windows"
 #endif // _WIN32
-    ) {
-        return -1;
-    }
 
     if (anjay_security_object_install(demo->anjay)
             || anjay_server_object_install(demo->anjay)
@@ -492,7 +496,7 @@ static void serve(anjay_demo_t *demo) {
                        / 1000000));
         demo_log(TRACE, "wait time: %d ms", waitms);
 
-        // +1 to prevent annoying annoying looping in case of
+        // +1 to prevent annoying looping in case of
         // sub-millisecond delays
         iosched_run(demo->iosched, waitms + 1);
 

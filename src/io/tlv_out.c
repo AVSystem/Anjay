@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -263,7 +263,7 @@ DEF_IRET(16, 32)
 DEF_IRET(32, 64)
 
 static int tlv_ret_float(anjay_output_ctx_t *ctx, float value) {
-    uint32_t portable = _anjay_htonf(value);
+    uint32_t portable = avs_htonf(value);
     return anjay_ret_bytes(ctx, &portable, sizeof(portable));
 }
 
@@ -271,7 +271,7 @@ static int tlv_ret_double(anjay_output_ctx_t *ctx, double value) {
     if (((double) ((float) value)) == value) {
         return tlv_ret_float(ctx, (float) value);
     } else {
-        uint64_t portable = _anjay_htond(value);
+        uint64_t portable = avs_htond(value);
         return anjay_ret_bytes(ctx, &portable, sizeof(portable));
     }
 }

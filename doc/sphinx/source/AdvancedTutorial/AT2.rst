@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -144,7 +144,7 @@ startup (if a valid persistence file exists).
         }
 
         avs_stream_abstract_t *file_stream =
-            avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_READ);
+                avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_READ);
 
         if (!file_stream) {
             return -1;

@@ -1,7 +1,7 @@
-#include <avsystem/commons/log.h>
 #include <anjay/anjay.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
+#include <avsystem/commons/log.h>
 
 #include <poll.h>
 

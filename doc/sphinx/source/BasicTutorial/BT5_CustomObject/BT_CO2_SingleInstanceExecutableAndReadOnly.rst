@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -247,7 +247,7 @@ handler is set as a ``resource_execute`` implementation:
             // ...
         }
     // ...
-    }
+    };
 
 And that's it.
 

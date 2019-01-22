@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ a generic and reusable way.
 To use the Attribute Storage module, you first need to include the appropriate
 header:
 
-.. snippet-source:: examples/tutorial/AT2/src/main.c
+.. snippet-source:: examples/tutorial/AT1/src/main.c
 
     #include <anjay/attr_storage.h>
 

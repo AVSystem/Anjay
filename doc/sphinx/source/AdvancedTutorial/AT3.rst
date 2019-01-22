@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -196,8 +196,8 @@ just load contents of certificate files in DER format into memory:
 
 .. snippet-source:: examples/tutorial/AT3-cert/src/main.c
 
-    static int load_buffer_from_file(uint8_t **out, size_t *out_size,
-                                     const char *filename) {
+    static int
+    load_buffer_from_file(uint8_t **out, size_t *out_size, const char *filename) {
         FILE *f = fopen(filename, "rb");
         if (!f) {
             avs_log(tutorial, ERROR, "could not open %s", filename);
@@ -208,8 +208,7 @@ just load contents of certificate files in DER format into memory:
             goto finish;
         }
         long size = ftell(f);
-        if (size < 0 || (unsigned long) size > SIZE_MAX
-                || fseek(f, 0, SEEK_SET)) {
+        if (size < 0 || (unsigned long) size > SIZE_MAX || fseek(f, 0, SEEK_SET)) {
             goto finish;
         }
         *out_size = (size_t) size;
@@ -248,13 +247,13 @@ This function can then be used to fill the relevant fields in the
                 &security_instance.public_cert_or_psk_identity_size,
                 "client_cert.der")
             || load_buffer_from_file(
-                (uint8_t **) &security_instance.private_cert_or_psk_key,
-                &security_instance.private_cert_or_psk_key_size,
-                "client_key.der")
+                       (uint8_t **) &security_instance.private_cert_or_psk_key,
+                       &security_instance.private_cert_or_psk_key_size,
+                       "client_key.der")
             || load_buffer_from_file(
-                (uint8_t **) &security_instance.server_public_key,
-                &security_instance.server_public_key_size,
-                "server_cert.der")) {
+                       (uint8_t **) &security_instance.server_public_key,
+                       &security_instance.server_public_key_size,
+                       "server_cert.der")) {
         result = -1;
         goto cleanup;
     }

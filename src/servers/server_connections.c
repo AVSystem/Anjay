@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +156,13 @@ void _anjay_connection_suspend(anjay_connection_ref_t conn_ref) {
     } else {
         connection_suspend(conn_ref);
     }
+}
+
+void _anjay_connection_mark_stable(anjay_connection_ref_t ref) {
+    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
+    assert(connection);
+    assert(_anjay_connection_is_online(connection));
+    connection->state = ANJAY_SERVER_CONNECTION_STABLE;
 }
 
 void _anjay_connection_bring_online(anjay_t *anjay,

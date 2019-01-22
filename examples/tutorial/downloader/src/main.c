@@ -1,10 +1,10 @@
-#include <avsystem/commons/log.h>
 #include <anjay/anjay.h>
 #include <anjay/download.h>
+#include <avsystem/commons/log.h>
 
 #include <poll.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 // This example uses hard-coded file path for simplicity.
 static const char DOWNLOAD_TARGET[] = "/tmp/coap-download";
@@ -35,9 +35,7 @@ static int coap_write_block(anjay_t *anjay,
     return 0;
 }
 
-static void coap_download_finished(anjay_t *anjay,
-                                   int result,
-                                   void *file_) {
+static void coap_download_finished(anjay_t *anjay, int result, void *file_) {
     (void) anjay;
 
     FILE *file = (FILE *) file_;

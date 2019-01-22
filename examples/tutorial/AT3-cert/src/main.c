@@ -1,13 +1,13 @@
-#include <avsystem/commons/log.h>
 #include <anjay/anjay.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
+#include <avsystem/commons/log.h>
 
 #include <poll.h>
 #include <string.h>
 
-static int load_buffer_from_file(uint8_t **out, size_t *out_size,
-                                 const char *filename) {
+static int
+load_buffer_from_file(uint8_t **out, size_t *out_size, const char *filename) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
         avs_log(tutorial, ERROR, "could not open %s", filename);
@@ -18,8 +18,7 @@ static int load_buffer_from_file(uint8_t **out, size_t *out_size,
         goto finish;
     }
     long size = ftell(f);
-    if (size < 0 || (unsigned long) size > SIZE_MAX
-            || fseek(f, 0, SEEK_SET)) {
+    if (size < 0 || (unsigned long) size > SIZE_MAX || fseek(f, 0, SEEK_SET)) {
         goto finish;
     }
     *out_size = (size_t) size;
@@ -104,13 +103,13 @@ static int setup_security_object(anjay_t *anjay) {
                 &security_instance.public_cert_or_psk_identity_size,
                 "client_cert.der")
             || load_buffer_from_file(
-                (uint8_t **) &security_instance.private_cert_or_psk_key,
-                &security_instance.private_cert_or_psk_key_size,
-                "client_key.der")
+                       (uint8_t **) &security_instance.private_cert_or_psk_key,
+                       &security_instance.private_cert_or_psk_key_size,
+                       "client_key.der")
             || load_buffer_from_file(
-                (uint8_t **) &security_instance.server_public_key,
-                &security_instance.server_public_key_size,
-                "server_cert.der")) {
+                       (uint8_t **) &security_instance.server_public_key,
+                       &security_instance.server_public_key_size,
+                       "server_cert.der")) {
         result = -1;
         goto cleanup;
     }
@@ -167,8 +166,7 @@ int main(int argc, char *argv[]) {
     int result = 0;
 
     // Instantiate necessary objects
-    if (setup_security_object(anjay)
-            || setup_server_object(anjay)) {
+    if (setup_security_object(anjay) || setup_server_object(anjay)) {
         result = -1;
         goto cleanup;
     }

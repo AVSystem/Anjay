@@ -1,9 +1,9 @@
 #include <poll.h>
 
 #include <anjay/anjay.h>
+#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
-#include <anjay/attr_storage.h>
 
 #include <avsystem/commons/time.h>
 
@@ -47,7 +47,8 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
 
         .resource_read = test_resource_read
 
-        // all other handlers can be left NULL if only Read operation is required
+        // all other handlers can be left NULL if only Read operation is
+        // required
     }
 };
 
@@ -160,8 +161,7 @@ int main() {
     // The module is cleaned up automatically in anjay_delete().
     int result = anjay_attr_storage_install(anjay);
 
-    if (setup_security_object(anjay)
-            || setup_server_object(anjay)) {
+    if (setup_security_object(anjay) || setup_server_object(anjay)) {
         result = -1;
     }
 
@@ -185,4 +185,3 @@ cleanup:
     // test object does not need cleanup
     return result;
 }
-

@@ -1,4 +1,4 @@
-# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ RUN apt-get update
 RUN apt-get install -y python3-pip git build-essential cmake libmbedtls-dev \
     libssl-dev python3 libpython3-dev python3-cryptography \
     python3-sphinx valgrind python3-requests <CC_PKG> <CXX_PKG>
-RUN pip3 install grequests
 RUN sed -i -e "s/-Wdate-time/ /g" \
     /usr/lib/python3.5/config-3.5m-x86_64-linux-gnu/Makefile \
     /usr/lib/python3.5/plat-x86_64-linux-gnu/_sysconfigdata_m.py

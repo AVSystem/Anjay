@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -52,27 +52,27 @@ The Read handler for our test object might be implemented as follows:
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/read-only/src/main.c
 
-   static int test_resource_read(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t iid,
-                                 anjay_rid_t rid,
-                                 anjay_output_ctx_t *ctx) {
-       // These arguments may seem superfluous now, but they will come in handy
-       // while defining more complex objects
-       (void) anjay;   // unused
-       (void) obj_ptr; // unused: the object holds no state
-       (void) iid;     // unused: will always be 0 for single-instance Objects
+    static int test_resource_read(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid,
+                                  anjay_output_ctx_t *ctx) {
+        // These arguments may seem superfluous now, but they will come in handy
+        // while defining more complex objects
+        (void) anjay;   // unused
+        (void) obj_ptr; // unused: the object holds no state
+        (void) iid;     // unused: will always be 0 for single-instance Objects
 
-       switch (rid) {
-       case 0:
-           return anjay_ret_string(ctx, "Test object");
-       case 1:
-           return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds);
-       default:
-           // control will never reach this part due to object's supported_rids
-           return 0;
-       }
-   }
+        switch (rid) {
+        case 0:
+            return anjay_ret_string(ctx, "Test object");
+        case 1:
+            return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds);
+        default:
+            // control will never reach this part due to object's supported_rids
+            return 0;
+        }
+    }
 
 
 What happens here?
@@ -109,7 +109,8 @@ Having the Read handler implemented, one can initialize the
 
             .resource_read = test_resource_read
 
-            // all other handlers can be left NULL if only Read operation is required
+            // all other handlers can be left NULL if only Read operation is
+            // required
         }
     };
 

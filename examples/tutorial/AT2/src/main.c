@@ -1,9 +1,9 @@
-#include <avsystem/commons/log.h>
-#include <avsystem/commons/stream/stream_file.h>
 #include <anjay/anjay.h>
+#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
-#include <anjay/attr_storage.h>
+#include <avsystem/commons/log.h>
+#include <avsystem/commons/stream/stream_file.h>
 
 #include <errno.h>
 #include <poll.h>
@@ -120,7 +120,7 @@ int restore_objects_if_possible(anjay_t *anjay) {
     }
 
     avs_stream_abstract_t *file_stream =
-        avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_READ);
+            avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_READ);
 
     if (!file_stream) {
         return -1;
@@ -194,8 +194,7 @@ int main(int argc, char *argv[]) {
         goto cleanup;
     }
 
-    int restore_retval =
-            restore_objects_if_possible(anjay);
+    int restore_retval = restore_objects_if_possible(anjay);
     if (restore_retval < 0) {
         result = -1;
         goto cleanup;

@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -66,10 +66,10 @@ We are going to modify the code from the :ref:`previous tutorial <anjay-hello-wo
 
 .. snippet-source:: examples/tutorial/BT2/src/main.c
 
-    #include <avsystem/commons/log.h>
     #include <anjay/anjay.h>
     #include <anjay/security.h>
     #include <anjay/server.h>
+    #include <avsystem/commons/log.h>
 
     int main(int argc, char *argv[]) {
         static const anjay_configuration_t CONFIG = {

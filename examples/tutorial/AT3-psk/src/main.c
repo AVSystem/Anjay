@@ -1,7 +1,7 @@
-#include <avsystem/commons/log.h>
 #include <anjay/anjay.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
+#include <avsystem/commons/log.h>
 
 #include <poll.h>
 #include <string.h>
@@ -118,8 +118,7 @@ int main(int argc, char *argv[]) {
     int result = 0;
 
     // Instantiate necessary objects
-    if (setup_security_object(anjay)
-            || setup_server_object(anjay)) {
+    if (setup_security_object(anjay) || setup_server_object(anjay)) {
         result = -1;
         goto cleanup;
     }

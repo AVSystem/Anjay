@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import argparse
 import logging
 import os
 import re
-import grequests
+import requests
 import sys
 from collections import defaultdict
 
@@ -31,7 +31,7 @@ DEFAULT_DOC_PATH = os.path.normpath(os.path.join(ROOT_DIR, '../../doc/sphinx/sou
 
 def explore(path):
     for root, directories, file_names in os.walk(path):
-        for file_name in file_names: 
+        for file_name in file_names:
             file_path = os.path.join(root, file_name)
             if file_path.lower().endswith(FILE_EXTENSION):
                 with open(file_path, encoding="utf-8") as f:
@@ -44,13 +44,39 @@ def find_urls(rst_content):
             for line_number, line_content in lines
             for found_url in re.findall(REGEX, line_content))
 
+def is_url_valid(url, attempt=1, max_attempts=5):
+    if attempt > max_attempts:
+        logging.error('URL %s could not be reached %d times. Giving up.' % (url, max_attempts))
+        return False
+
+    status = None
+    exception = None
+    try:
+        status = requests.head(url, allow_redirects=True, timeout=10)
+    except:
+        exception = sys.exc_info()[0]
+
+    if not status or status.status_code != HTTP_STATUS_OK:
+        logging.warning('URL %s could not be reached (%d/%d): %s'
+                        % (url,
+                           attempt,
+                           max_attempts,
+                           exception if exception is not None else status.status_code))
+        return is_url_valid(url, attempt + 1)
+
+    return True
+
 def find_invalid_urls(urls):
-    responses = grequests.map(grequests.head(url, allow_redirects=True, timeout=10)
-                              for url in urls)
+    from multiprocessing import pool
+
+    with pool.Pool(2 * os.cpu_count()) as p:
+        responses = p.map(is_url_valid, urls.keys())
+
     invalid_urls = defaultdict(list)
-    for url, status in zip(urls, responses):
-        if not status or status.status_code != HTTP_STATUS_OK:
+    for url, url_valid in zip(urls, responses):
+        if not url_valid:
             invalid_urls[url] = urls[url]
+
     return invalid_urls
 
 def report(path):

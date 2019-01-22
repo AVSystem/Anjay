@@ -1,9 +1,9 @@
-#include <avsystem/commons/log.h>
+#include <anjay/access_control.h>
 #include <anjay/anjay.h>
+#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
-#include <anjay/attr_storage.h>
-#include <anjay/access_control.h>
+#include <avsystem/commons/log.h>
 
 #include <poll.h>
 
@@ -69,8 +69,7 @@ int main(int argc, char *argv[]) {
     }
 
     int result;
-    if (anjay_attr_storage_install(anjay)
-            || anjay_access_control_install(anjay)
+    if (anjay_attr_storage_install(anjay) || anjay_access_control_install(anjay)
             || anjay_security_object_install(anjay)
             || anjay_server_object_install(anjay)) {
         result = -1;

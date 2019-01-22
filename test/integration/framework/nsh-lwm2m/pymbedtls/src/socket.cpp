@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -262,7 +262,13 @@ py::bytes Socket::recv(int) {
     if (result < 0) {
         if (result == MBEDTLS_ERR_SSL_TIMEOUT) {
             throw py::error_already_set();
-        } else {
+        } else if (result == MBEDTLS_ERR_SSL_CLIENT_RECONNECT) {
+            try {
+                do_handshake();
+            } catch (mbedtls_error &) {
+                // ignore handshake errors, if any, to make sure that the read
+                // error is the one that's actually thrown
+            }
             throw mbedtls_error("mbedtls_ssl_read failed", result);
         }
     }

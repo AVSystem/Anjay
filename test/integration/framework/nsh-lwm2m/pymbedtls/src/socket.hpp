@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,15 @@
 
 #ifndef PYMBEDTLS_SOCKET_HPP
 #define PYMBEDTLS_SOCKET_HPP
-#include <mbedtls/version.h>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/debug.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/error.h>
+#include <mbedtls/version.h>
 #if MBEDTLS_VERSION_NUMBER >= 0x02040000 // mbed TLS 2.4 deprecated net.h
-#include <mbedtls/net_sockets.h>
+#    include <mbedtls/net_sockets.h>
 #else // support mbed TLS <=2.3
-#include <mbedtls/net.h>
+#    include <mbedtls/net.h>
 #endif
 #include <mbedtls/ssl.h>
 #include <mbedtls/ssl_cache.h>
@@ -38,19 +38,13 @@
 namespace ssl {
 class Context;
 
-enum class SocketType {
-    Client,
-    Server
-};
+enum class SocketType { Client, Server };
 
 class Socket {
     friend class PskSecurity;
     friend class CertSecurity;
 
-    enum class HandshakeResult {
-        Finished,
-        HelloVerifyRequired
-    };
+    enum class HandshakeResult { Finished, HelloVerifyRequired };
 
     std::shared_ptr<Context> context_;
     mbedtls_ssl_context mbedtls_context_;
@@ -65,7 +59,8 @@ class Socket {
     bool in_handshake_;
 
     static int _send(void *self, const unsigned char *buf, size_t len);
-    static int _recv(void *self, unsigned char *buf, size_t len, uint32_t timeout_ms);
+    static int
+    _recv(void *self, unsigned char *buf, size_t len, uint32_t timeout_ms);
 
     HandshakeResult do_handshake();
 
@@ -89,8 +84,7 @@ class ServerSocket {
     py::object py_socket_;
 
 public:
-    ServerSocket(std::shared_ptr<Context> context,
-                 py::object py_socket);
+    ServerSocket(std::shared_ptr<Context> context, py::object py_socket);
 
     std::unique_ptr<Socket> accept(py::object handshake_timeouts_s);
 

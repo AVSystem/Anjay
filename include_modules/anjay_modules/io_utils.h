@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,11 +26,6 @@
 #include <anjay_modules/raw_buffer.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
-
-uint32_t _anjay_htonf(float f);
-uint64_t _anjay_htond(double d);
-float _anjay_ntohf(uint32_t v);
-double _anjay_ntohd(uint64_t v);
 
 typedef int anjay_input_ctx_constructor_t(anjay_input_ctx_t **out,
                                           avs_stream_abstract_t **stream_ptr,

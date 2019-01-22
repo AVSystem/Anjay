@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,6 @@ static int commit_bootstrap(anjay_t *anjay) {
             anjay->bootstrap.in_progress = false;
             _anjay_conn_session_token_reset(
                     &anjay->bootstrap.bootstrap_session_token);
-            _anjay_schedule_reload_servers(anjay);
             return _anjay_dm_transaction_finish_without_validation(anjay, 0);
         }
     }
@@ -233,7 +232,7 @@ static int with_instance_on_demand(anjay_t *anjay,
     if (!result) {
         result = callback(anjay, obj, iid, in_ctx, arg);
     }
-    if (!result) {
+    if (ipresent == 0 && !result) {
         result = _anjay_notify_queue_instance_created(
                 &anjay->bootstrap.notification_queue, (*obj)->oid, iid);
     }
@@ -560,6 +559,8 @@ static int bootstrap_finish_impl(anjay_t *anjay, bool perform_timeout) {
         anjay_log(ERROR,
                   "Bootstrap Finish failed, re-entering bootstrap phase");
         start_bootstrap_if_not_already_started(anjay);
+    } else {
+        _anjay_schedule_reload_servers(anjay);
     }
     return retval;
 }
@@ -761,51 +762,7 @@ static int schedule_request_bootstrap(anjay_t *anjay) {
     return 0;
 }
 
-static int find_connected_non_bootstrap(anjay_t *anjay,
-                                        anjay_server_info_t *server,
-                                        void *flag_ptr) {
-    (void) anjay;
-    if (_anjay_server_ssid(server) == ANJAY_SSID_BOOTSTRAP) {
-        return ANJAY_FOREACH_CONTINUE;
-    }
-    anjay_connection_ref_t ref = {
-        .server = server
-    };
-    ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
-        if (_anjay_connection_get_online_socket(ref)) {
-            *(bool *) flag_ptr = true;
-            return ANJAY_FOREACH_BREAK;
-        }
-    }
-    return ANJAY_FOREACH_CONTINUE;
-}
-
-static bool is_connected_to_non_bootstrap(anjay_t *anjay) {
-    bool non_bootstrap_connected = false;
-    if (_anjay_servers_foreach_active(anjay, find_connected_non_bootstrap,
-                                      &non_bootstrap_connected)) {
-        return false;
-    }
-    return non_bootstrap_connected;
-}
-
 static void request_bootstrap_job(anjay_t *anjay, const void *dummy) {
-    // This function is called from the scheduler - we need to do these checks
-    // here and not e.g. in _anjay_bootstrap_request_if_appropriate(), because a
-    // non-bootstrap server connection might have been established between the
-    // call to _anjay_sched() and now. In fact, this is part of the server
-    // refresh logic - non-bootstrap servers are Registered immediately, but
-    // Client-Initiated Bootstrap is scheduled - if there were successful
-    // registrations after scheduling Bootstrap, then it's "cancelled" by these
-    // checks here.
-    if (is_connected_to_non_bootstrap(anjay)
-            || _anjay_can_retry_with_normal_server(anjay)) {
-        anjay_log(DEBUG,
-                  "Client Initiated Bootstrap not applicable, not performing");
-        reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
-        return;
-    }
-
     anjay_log(TRACE, "sending Client Initiated Bootstrap");
 
     (void) dummy;

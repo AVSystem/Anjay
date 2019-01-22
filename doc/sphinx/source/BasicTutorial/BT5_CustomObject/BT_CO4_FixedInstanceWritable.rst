@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -75,44 +75,44 @@ Now the ``anjay_dm_resource_write_t`` handler implementation:
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_input_ctx_t *ctx) {
-      (void) anjay;   // unused
+       (void) anjay; // unused
 
-      test_object_t *test = get_test_object(obj_ptr);
+       test_object_t *test = get_test_object(obj_ptr);
 
-      // IID validity was checked by the `anjay_dm_instance_present_t` handler.
-      // If the Object Instance set does not change, or can only be modifed
-      // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
-      assert((size_t)iid < NUM_INSTANCES);
-      struct test_instance *current_instance = &test->instances[iid];
+       // IID validity was checked by the `anjay_dm_instance_present_t` handler.
+       // If the Object Instance set does not change, or can only be modifed
+       // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
+       assert((size_t) iid < NUM_INSTANCES);
+       struct test_instance *current_instance = &test->instances[iid];
 
-      switch (rid) {
-      case 0: {
-              // `anjay_get_string` may return a chunk of data instead of the
-              // whole value - we need to make sure the client is able to hold
-              // the entire value
-              char buffer[sizeof(current_instance->label)];
-              int result = anjay_get_string(ctx, buffer, sizeof(buffer));
+       switch (rid) {
+       case 0: {
+           // `anjay_get_string` may return a chunk of data instead of the
+           // whole value - we need to make sure the client is able to hold
+           // the entire value
+           char buffer[sizeof(current_instance->label)];
+           int result = anjay_get_string(ctx, buffer, sizeof(buffer));
 
-              if (result == 0) {
-                  // value OK - save it
-                  memcpy(current_instance->label, buffer, sizeof(buffer));
-              } else if (result == ANJAY_BUFFER_TOO_SHORT) {
-                  // the value is too long to store in the buffer
-                  result = ANJAY_ERR_BAD_REQUEST;
-              }
+           if (result == 0) {
+               // value OK - save it
+               memcpy(current_instance->label, buffer, sizeof(buffer));
+           } else if (result == ANJAY_BUFFER_TOO_SHORT) {
+               // the value is too long to store in the buffer
+               result = ANJAY_ERR_BAD_REQUEST;
+           }
 
-              return result;
-          }
+           return result;
+       }
 
-      case 1:
-          // reading primitive values can be done directly - the value will only
-          // be written to the output variable if everything went fine
-          return anjay_get_i32(ctx, &current_instance->value);
+       case 1:
+           // reading primitive values can be done directly - the value will only
+           // be written to the output variable if everything went fine
+           return anjay_get_i32(ctx, &current_instance->value);
 
-      default:
-          // control will never reach this part due to object's supported_rids
-          return ANJAY_ERR_INTERNAL;
-      }
+       default:
+           // control will never reach this part due to object's supported_rids
+           return ANJAY_ERR_INTERNAL;
+       }
    }
 
 
@@ -274,7 +274,7 @@ mark Resources as set/unset:
         // IID validity was checked by the `anjay_dm_instance_present_t` handler.
         // If the Object Instance set does not change, or can only be modifed
         // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
-        assert((size_t)iid < NUM_INSTANCES);
+        assert((size_t) iid < NUM_INSTANCES);
 
         // mark all Resource values for Object Instance `iid` as unset
         test->instances[iid].has_label = false;
@@ -322,10 +322,9 @@ transaction handlers:
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/writable-multiple-fixed-transactional/src/main.c
 
-    static int
-    test_transaction_begin(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj_ptr) {
-        (void) anjay;   // unused
+    static int test_transaction_begin(anjay_t *anjay,
+                                      const anjay_dm_object_def_t *const *obj_ptr) {
+        (void) anjay; // unused
 
         test_object_t *test = get_test_object(obj_ptr);
 
@@ -337,14 +336,13 @@ transaction handlers:
     static int
     test_transaction_validate(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr) {
-        (void) anjay;   // unused
+        (void) anjay; // unused
 
         test_object_t *test = get_test_object(obj_ptr);
 
         // ensure all Object Instances contain all Mandatory Resources
         for (size_t i = 0; i < NUM_INSTANCES; ++i) {
-            if (!test->instances[i].has_label
-                    || !test->instances[i].has_value) {
+            if (!test->instances[i].has_label || !test->instances[i].has_value) {
                 // validation failed: Object state invalid, rollback required
                 return ANJAY_ERR_BAD_REQUEST;
             }
@@ -368,7 +366,7 @@ transaction handlers:
     static int
     test_transaction_rollback(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr) {
-        (void) anjay;   // unused
+        (void) anjay; // unused
 
         test_object_t *test = get_test_object(obj_ptr);
 

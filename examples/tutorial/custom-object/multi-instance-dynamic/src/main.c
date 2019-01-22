@@ -110,8 +110,7 @@ int main() {
 
     int result = 0;
 
-    if (setup_security_object(anjay)
-            || setup_server_object(anjay)
+    if (setup_security_object(anjay) || setup_server_object(anjay)
             || anjay_register_object(anjay, test_object)) {
         result = -1;
         goto cleanup;
@@ -125,4 +124,3 @@ cleanup:
 
     return result;
 }
-

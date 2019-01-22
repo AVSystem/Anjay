@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,10 +154,10 @@ DEF_GETI(64)
         }                                                              \
         switch (bytes_read) {                                          \
         case 4:                                                        \
-            *value = (Type) _anjay_ntohf(data.f32);                    \
+            *value = (Type) avs_ntohf(data.f32);                       \
             return 0;                                                  \
         case 8:                                                        \
-            *value = (Type) _anjay_ntohd(data.f64);                    \
+            *value = (Type) avs_ntohd(data.f64);                       \
             return 0;                                                  \
         default:                                                       \
             return ANJAY_ERR_BAD_REQUEST;                              \

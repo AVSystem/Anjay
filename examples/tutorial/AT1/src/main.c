@@ -1,8 +1,8 @@
-#include <avsystem/commons/log.h>
 #include <anjay/anjay.h>
+#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
-#include <anjay/attr_storage.h>
+#include <avsystem/commons/log.h>
 
 #include <poll.h>
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -510,6 +510,15 @@ void _anjay_connection_schedule_queue_mode_close(anjay_t *anjay,
  */
 avs_net_abstract_socket_t *
 _anjay_connection_get_online_socket(anjay_connection_ref_t ref);
+
+/**
+ * This function only makes sense when the connection is online. It marks the
+ * connection as "stable", which makes it eligible for reconnection if
+ * communication error occurs from now on.
+ *
+ * It is called from _anjay_server_on_refreshed().
+ */
+void _anjay_connection_mark_stable(anjay_connection_ref_t ref);
 
 /**
  * This function only makes sense when the connection is in a suspended (active

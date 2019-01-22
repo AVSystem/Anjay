@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 set -e
 
 . "$(dirname "$0")/utils.sh"
-PROJECT_ROOT="$(dirname "$(dirname "$(canonicalize "$0")")")"
+[[ "$PROJECT_ROOT" ]] || PROJECT_ROOT="$(dirname "$(dirname "$(canonicalize "$0")")")"
 
 function die() {
     echo -e "$@" >&2
@@ -29,7 +29,7 @@ which gcovr || die "gcovr not found, exiting"
 mkdir -p "$PROJECT_ROOT/build/coverage"
 pushd "$PROJECT_ROOT/build/coverage"
     mkdir -p "$PROJECT_ROOT/build/coverage"
-    "$PROJECT_ROOT/devconfig" --c-flags "-std=c99 -D_POSIX_C_SOURCE=200809L -g -fprofile-arcs -ftest-coverage" -D CMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
+    "$PROJECT_ROOT/devconfig" -D CMAKE_C_FLAGS="-std=c99 -D_POSIX_C_SOURCE=200809L -g --coverage" -D CMAKE_EXE_LINKER_FLAGS="--coverage" "$@"
     make -j$(num_processors)
     make check
 

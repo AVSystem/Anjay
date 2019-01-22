@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,8 +85,16 @@ void _anjay_server_on_refreshed(anjay_t *anjay,
                   server->ssid);
         _anjay_server_on_server_communication_error(anjay, server);
     } else if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
-        server->refresh_failed =
-                !!_anjay_bootstrap_request_if_appropriate(anjay);
+        if (_anjay_should_retry_bootstrap(anjay)) {
+            server->refresh_failed =
+                    !!_anjay_bootstrap_request_if_appropriate(anjay);
+        } else {
+            server->refresh_failed = false;
+            _anjay_connection_mark_stable((anjay_connection_ref_t) {
+                .server = server,
+                .conn_type = _anjay_server_primary_conn_type(server)
+            });
+        }
         if (!server->refresh_failed) {
             server->reactivate_time = AVS_TIME_REAL_INVALID;
         }
@@ -97,6 +105,9 @@ void _anjay_server_on_refreshed(anjay_t *anjay,
         case ANJAY_REGISTRATION_SUCCESS:
             server->reactivate_time = AVS_TIME_REAL_INVALID;
             server->refresh_failed = false;
+            // Failure to handle Bootstrap state is not a failure of the
+            // Register operation - hence, not checking return value.
+            _anjay_bootstrap_notify_regular_connection_available(anjay);
             break;
         case ANJAY_REGISTRATION_TIMEOUT:
             _anjay_server_on_registration_timeout(anjay, server);
@@ -124,14 +135,16 @@ bool _anjay_can_retry_with_normal_server(anjay_t *anjay) {
 
 bool _anjay_should_retry_bootstrap(anjay_t *anjay) {
 #ifdef WITH_BOOTSTRAP
-    if (anjay->bootstrap.in_progress) {
-        // Bootstrap already in progress, no need to retry
-        return false;
-    }
     bool bootstrap_server_exists = false;
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, AVS_LIST_NEXT(anjay->servers->servers)) {
+    AVS_LIST_FOREACH(it, anjay->servers->servers) {
         if (it->ssid == ANJAY_SSID_BOOTSTRAP) {
+            if (anjay->bootstrap.in_progress) {
+                // Bootstrap already in progress, there may be no need to retry
+                return !_anjay_conn_session_tokens_equal(
+                        anjay->bootstrap.bootstrap_session_token,
+                        _anjay_server_primary_session_token(it));
+            }
             bootstrap_server_exists = true;
         } else if (_anjay_server_active(it)) {
             // Bootstrap Server is not the only active one

@@ -1,4 +1,4 @@
-# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ RUN ln -s /usr/bin/cmake3 /usr/bin/cmake
 # required to compile pybind11
 RUN yum install -y python-tools
 RUN yum install -y python35u python35u-devel python35u-pip
-RUN python3.5 -m pip install cryptography requests grequests
+RUN python3.5 -m pip install cryptography requests
 RUN ln -s /usr/bin/python3.5 /usr/bin/python3
 COPY . /Anjay
 CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && make -j && cd test/integration && make integration_check

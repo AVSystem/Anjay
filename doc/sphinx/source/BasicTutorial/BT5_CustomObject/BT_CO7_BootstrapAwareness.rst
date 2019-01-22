@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -78,44 +78,44 @@ To achieve that, ``anjay_dm_resource_operations_t`` handler is required:
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/bootstrap-awareness/src/main.c
 
-   static int test_resource_operations(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       anjay_rid_t rid,
-                                       anjay_dm_resource_op_mask_t *out) {
-       (void) anjay;
-       (void) obj_ptr;
-       *out = ANJAY_DM_RESOURCE_OP_NONE;
+    static int test_resource_operations(anjay_t *anjay,
+                                        const anjay_dm_object_def_t *const *obj_ptr,
+                                        anjay_rid_t rid,
+                                        anjay_dm_resource_op_mask_t *out) {
+        (void) anjay;
+        (void) obj_ptr;
+        *out = ANJAY_DM_RESOURCE_OP_NONE;
 
-       switch (rid) {
-       case 0:
-           // only allow reading Resource 0 by LwM2M Servers
-           // this will be ignored for LwM2M Bootstrap Server
-           *out = ANJAY_DM_RESOURCE_OP_BIT_R;
-           break;
-       case 1:
-           // Value Resource can be read/written by LwM2M Servers
-           *out = ANJAY_DM_RESOURCE_OP_BIT_R | ANJAY_DM_RESOURCE_OP_BIT_W;
-           break;
-       default:
-           break;
-       }
+        switch (rid) {
+        case 0:
+            // only allow reading Resource 0 by LwM2M Servers
+            // this will be ignored for LwM2M Bootstrap Server
+            *out = ANJAY_DM_RESOURCE_OP_BIT_R;
+            break;
+        case 1:
+            // Value Resource can be read/written by LwM2M Servers
+            *out = ANJAY_DM_RESOURCE_OP_BIT_R | ANJAY_DM_RESOURCE_OP_BIT_W;
+            break;
+        default:
+            break;
+        }
 
-       return 0;
-   }
+        return 0;
+    }
 
-   // ...
+    // ...
 
-   static const anjay_dm_object_def_t OBJECT_DEF = {
-       // Object ID
-       .oid = 1234,
-       // ...
-       .handlers = {
-           // ... other handlers
+    static const anjay_dm_object_def_t OBJECT_DEF = {
+        // Object ID
+        .oid = 1234,
+        // ...
+        .handlers = {
+            // ... other handlers
 
-           .resource_operations = test_resource_operations,
-           // ... other handlers
-       }
-   };
+            .resource_operations = test_resource_operations,
+            // ... other handlers
+        }
+    };
 
 
 That leaves one more issue with the example project: it has a pre-configured

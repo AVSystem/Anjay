@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -115,8 +115,7 @@ Object and Server Object modules:
 .. snippet-source:: examples/tutorial/AT4/src/main.c
 
     int result;
-    if (anjay_attr_storage_install(anjay)
-            || anjay_access_control_install(anjay)
+    if (anjay_attr_storage_install(anjay) || anjay_access_control_install(anjay)
             || anjay_security_object_install(anjay)
             || anjay_server_object_install(anjay)) {
         result = -1;

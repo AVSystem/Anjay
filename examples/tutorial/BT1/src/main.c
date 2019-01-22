@@ -1,5 +1,5 @@
-#include <avsystem/commons/log.h>
 #include <anjay/anjay.h>
+#include <avsystem/commons/log.h>
 
 int main(int argc, char *argv[]) {
     static const anjay_configuration_t CONFIG = {

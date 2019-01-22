@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,8 +71,8 @@ AVS_UNIT_TEST(coap_stream, udp_read_write) {
     size_t bytes_read;
     char message_finished;
     uint16_t format;
-    AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_get_option_uint(
-            msg, AVS_COAP_OPT_CONTENT_FORMAT, &format, sizeof(format)));
+    AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_get_option_u16(
+            msg, AVS_COAP_OPT_CONTENT_FORMAT, &format));
     AVS_UNIT_ASSERT_EQUAL(format, details.format);
 
     avs_coap_opt_iterator_t optit = AVS_COAP_OPT_ITERATOR_EMPTY;

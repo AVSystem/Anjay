@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,6 +142,10 @@ static void print_option_help(const struct option *opt) {
         { 'e', "URN", DEFAULT_CMDLINE_ARGS.endpoint_name,
           "endpoint name to use." },
         { 'h', NULL, NULL, "show this message and exit." },
+#ifndef _WIN32
+        { 't', NULL, NULL, "disables standard input. Useful for running the "
+          "client as a daemon." },
+#endif // _WIN32
         { 'l', "SECONDS", "86400",
           "set registration lifetime. If SECONDS <= 0, use default value and "
           "don't send lifetime in Register/Update messages." },
@@ -298,6 +302,7 @@ static int parse_size(const char *str, size_t *out_value) {
 }
 
 static int parse_double(const char *str, double *out_value) {
+    assert(str);
     errno = 0;
     char *endptr = NULL;
     *out_value = strtod(str, &endptr);
@@ -422,6 +427,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "bootstrap-timeout",             required_argument, 0, 'T' },
         { "endpoint-name",                 required_argument, 0, 'e' },
         { "help",                          no_argument,       0, 'h' },
+#ifndef _WIN32
+        { "disable-stdin",                 no_argument,       0, 't' },
+#endif // _WIN32
         { "lifetime",                      required_argument, 0, 'l' },
         { "stored-notification-limit",     required_argument, 0, 'L' },
         { "location-csv",                  required_argument, 0, 'c' },
@@ -554,6 +562,11 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 print_option_help(&options[i]);
             }
             goto finish;
+#ifndef _WIN32
+        case 't':
+            parsed_args->disable_stdin = true;
+            break;
+#endif // _WIN32
         case 'l':
             if (parse_i32(optarg, &parsed_args->connection_args.lifetime)) {
                 goto finish;

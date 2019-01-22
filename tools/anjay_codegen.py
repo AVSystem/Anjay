@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -57,8 +57,7 @@ const uint16_t OBJ_SUPPORTED_RIDS[] = {
 };
 
 struct ObjDef : public anjay_dm_object_def_t {
-    ObjDef() :
-            anjay_dm_object_def_t() {
+    ObjDef() : anjay_dm_object_def_t() {
         oid = {{ oid }};
         supported_rids.count = AVS_ARRAY_SIZE(OBJ_SUPPORTED_RIDS);
         supported_rids.rids = OBJ_SUPPORTED_RIDS;
@@ -73,7 +72,7 @@ struct ObjDef : public anjay_dm_object_def_t {
     }
 } const OBJ_DEF;
 
-}
+} // namespace
 """
 
 TEMPLATE = """\
@@ -90,16 +89,18 @@ TEMPLATE = """\
 
 #include <anjay/anjay.h>
 #include <avsystem/commons/defs.h>
-#include <avsystem/commons/memory.h>
 {% if obj.multiple %}
 #include <avsystem/commons/list.h>
 {% endif %}
+#include <avsystem/commons/memory.h>
 
 {% for res in obj.resources %}
 /**
  * {{ res.name }}: {{ res.operations }}, {{ res.multiple_str }}, {{ res.mandatory_str }}
  * type: {{ res.type }}, range: {{ res.range_enumeration }}, unit: {{ res.units }}
+{% if res.description %}
  * {{ res.description }}
+{% endif %}
  */
 #define {{ res.name_upper }} {{ res.rid }}
 
@@ -128,9 +129,8 @@ get_obj(const anjay_dm_object_def_t *const *obj_ptr) {
 }
 
 {% if obj.multiple %}
-static {{ obj_inst_type }} *
-find_instance(const {{ obj_repr_type }} *obj,
-              anjay_iid_t iid) {
+static {{ obj_inst_type }} *find_instance(const {{ obj_repr_type }} *obj,
+{{ " " * (obj_inst_type|length + 22) }} anjay_iid_t iid) {
     AVS_LIST({{ obj_inst_type }}) it;
     AVS_LIST_FOREACH(it, obj->instances) {
         if (it->iid == iid) {
@@ -181,8 +181,7 @@ static anjay_iid_t get_new_iid(AVS_LIST({{ obj_inst_type }}) instances) {
     return iid;
 }
 
-static int init_instance({{ obj_inst_type }} *inst,
-                         anjay_iid_t iid) {
+static int init_instance({{ obj_inst_type }} *inst, anjay_iid_t iid) {
     assert(iid != ANJAY_IID_INVALID);
 
     inst->iid = iid;
@@ -201,11 +200,13 @@ static int instance_create(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
                            anjay_iid_t *inout_iid,
                            anjay_ssid_t ssid) {
-    (void) anjay; (void) ssid;
+    (void) anjay;
+    (void) ssid;
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
     assert(obj);
 
-    AVS_LIST({{ obj_inst_type }}) created = AVS_LIST_NEW_ELEMENT({{ obj_inst_type }});
+    AVS_LIST({{ obj_inst_type }}) created =
+            AVS_LIST_NEW_ELEMENT({{ obj_inst_type }});
     if (!created) {
         return ANJAY_ERR_INTERNAL;
     }
@@ -295,8 +296,7 @@ static int resource_read(anjay_t *anjay,
     switch (rid) {
 {% for res in obj.resources %}
 {% if 'R' in res.operations %}
-    case {{ res.name_upper }}:
-        {{ res.read_handler|indent(8) }}
+    case {{ res.name_upper }}:{{ res.read_handler|indent(4) }}
 
 {% endif %}
 {% endfor %}
@@ -326,8 +326,7 @@ static int resource_write(anjay_t *anjay,
     switch (rid) {
 {% for res in obj.resources %}
 {% if 'W' in res.operations %}
-    case {{ res.name_upper }}:
-        {{ res.write_handler|indent(8) }}
+    case {{ res.name_upper }}:{{ res.write_handler|indent(4) }}
 
 {% endif %}
 {% endfor %}
@@ -401,8 +400,7 @@ static int resource_dim(anjay_t *anjay,
 {{ cdef }}
 
 const anjay_dm_object_def_t **{{ obj_name_snake }}_object_create(void) {
-    {{ obj_repr_type }} *obj = ({{ obj_repr_type }} *)
-            avs_calloc(1, sizeof({{ obj_repr_type }}));
+    {{ obj_repr_type }} *obj = ({{ obj_repr_type }} *) avs_calloc(1, sizeof({{ obj_repr_type }}));
     if (!obj) {
         return NULL;
     }
@@ -475,20 +473,18 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                 raise AssertionError('unexpected type: ' + type)
 
         if not self.multiple:
-            return 'return %s; // TODO' % (get_ret_func(self.type) % ('ctx',))
+            return '\n    return %s; // TODO' % (get_ret_func(self.type) % ('ctx',))
         else:
-            return textwrap.dedent("""\
+            return ' ' + textwrap.dedent("""\
                     {
                         anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
                         int result = 0;
-                        if (!array
-                                || (result = anjay_ret_array_index(array, 0))
+                        if (!array || (result = anjay_ret_array_index(array, 0))
                                 || (result = %s)) {
                             return result ? result : ANJAY_ERR_INTERNAL;
                         }
                         return anjay_ret_array_finish(array);
-                    }
-                    """) % (get_ret_func(self.type) % ('array',))
+                    }""") % (get_ret_func(self.type) % ('array',))
 
 
     @property
@@ -505,7 +501,11 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                  'uint8_t value[256];\n'
                  '    bool finished;\n'
                  '    size_t bytes_read',
-                 'anjay_get_bytes(%s, &bytes_read, &finished, value, sizeof(value))'),
+                 'anjay_get_bytes(%s,\n'
+                 '                &bytes_read,\n'
+                 '                &finished,\n'
+                 '                value,\n'
+                 '                sizeof(value))'),
             (('time',),           'int64_t value',   'anjay_get_i64(%s, &value)'),
             (('objlnk',),
                 'anjay_oid_t oid;\n'
@@ -524,15 +524,14 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
         local_def, get_func = get_get_func(self.type.lower())
         if not self.multiple:
             get_func %= ('ctx',)
-            return textwrap.dedent("""\
+            return ' ' + textwrap.dedent("""\
                     {
                         %s; // TODO
                         return %s; // TODO
-                    }
-                    """) % (local_def, get_func)
+                    }""") % (local_def, textwrap.indent(get_func, len('    return ') * ' ').strip())
         else:
             get_func %= ('array',)
-            return textwrap.dedent("""\
+            return ' ' + textwrap.dedent("""\
                     {
                         anjay_input_ctx_t *array = anjay_get_array(ctx);
                         if (!array) {
@@ -542,13 +541,13 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                         anjay_riid_t riid;
                         int result = 0;
                         %s; // TODO
-                        while (result == 0 && (result = anjay_get_array_index(array, &riid)) == 0) {
+                        while (result == 0
+                               && (result = anjay_get_array_index(array, &riid)) == 0) {
                             result = %s; // TODO
                         }
 
                         return result;
-                    }
-                    """) % (local_def, get_func)
+                    }""") % (local_def, textwrap.indent(get_func, len('        result = ') * ' ').strip())
 
     @classmethod
     def from_etree(cls, res: Element) -> 'ResourceDef':

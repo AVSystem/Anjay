@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -127,7 +127,8 @@ to read whole sequence of `(index, value)` pairs and store them on the list.
         test_value_instance_t instance;
         AVS_ASSERT(*out_instances == NULL, "Nonempty list provided");
 
-        while ((result = anjay_get_array_index(input_array, &instance.index)) == 0) {
+        while ((result = anjay_get_array_index(input_array, &instance.index))
+               == 0) {
             if (anjay_get_i32(input_array, &instance.value)) {
                 // An error occurred during the read.
                 result = ANJAY_ERR_INTERNAL;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,7 @@ class Context {
     bool debug_;
 
 public:
-    Context(std::shared_ptr<SecurityInfo> security,
-            bool debug);
+    Context(std::shared_ptr<SecurityInfo> security, bool debug);
     ~Context();
 
     mbedtls_ssl_cache_context *session_cache() {

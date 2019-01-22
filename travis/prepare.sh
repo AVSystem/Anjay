@@ -1,4 +1,4 @@
-# Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 case "$TRAVIS_OS_NAME" in
 osx)
     HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake mbedtls python3
-    python3 -m pip install cryptography sphinx sphinx_rtd_theme requests grequests
+    python3 -m pip install cryptography sphinx sphinx_rtd_theme requests
 
     # Travis sets CC=gcc for some reason, revert to OSX's default (clang)
     unset CC

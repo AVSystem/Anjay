@@ -112,7 +112,8 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
         .resource_read = test_resource_read,
         .resource_execute = test_resource_execute
 
-        // all other handlers can be left NULL if only Read and Execute operations are required
+        // all other handlers can be left NULL if only Read and Execute
+        // operations are required
     }
 };
 
@@ -218,8 +219,7 @@ int main() {
 
     int result = 0;
 
-    if (setup_security_object(anjay)
-            || setup_server_object(anjay)) {
+    if (setup_security_object(anjay) || setup_server_object(anjay)) {
         result = -1;
         goto cleanup;
     }
@@ -240,4 +240,3 @@ cleanup:
     // test object does not need cleanup
     return result;
 }
-

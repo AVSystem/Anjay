@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -481,9 +481,8 @@ static int get_msg_action(avs_coap_msg_type_t msg_type,
 
 static int parse_action(const avs_coap_msg_t *msg,
                         anjay_request_t *inout_request) {
-    if (avs_coap_msg_get_option_uint(msg, AVS_COAP_OPT_ACCEPT,
-                                     &inout_request->requested_format,
-                                     sizeof(inout_request->requested_format))) {
+    if (avs_coap_msg_get_option_u16(msg, AVS_COAP_OPT_ACCEPT,
+                                    &inout_request->requested_format)) {
         inout_request->requested_format = AVS_COAP_FORMAT_NONE;
     }
 
@@ -595,8 +594,8 @@ static int parse_request_uri(const avs_coap_msg_t *msg,
 
 static int parse_observe(const avs_coap_msg_t *msg, anjay_coap_observe_t *out) {
     uint32_t raw_value;
-    int retval = avs_coap_msg_get_option_uint(msg, AVS_COAP_OPT_OBSERVE,
-                                              &raw_value, sizeof(raw_value));
+    int retval =
+            avs_coap_msg_get_option_u32(msg, AVS_COAP_OPT_OBSERVE, &raw_value);
     if (retval == AVS_COAP_OPTION_MISSING) {
         *out = ANJAY_COAP_OBSERVE_NONE;
         return 0;
