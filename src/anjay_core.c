@@ -337,7 +337,8 @@ static int parse_attribute(anjay_request_attributes_t *out_attrs,
                          &out_attrs->values.custom.data.con);
 #endif // WITH_CON_ATTR
     } else {
-        anjay_log(ERROR, "unrecognized query string: %s = %s", key, value);
+        anjay_log(ERROR, "unrecognized query string: %s = %s", key,
+                  value ? value : "(null)");
         return -1;
     }
 }
@@ -361,9 +362,11 @@ static int parse_attributes(const avs_coap_msg_t *msg,
 
         buffer[attr_size] = '\0';
         split_query_string(buffer, &key, &value);
+        assert(key != NULL);
 
         if (parse_attribute(out_attrs, key, value)) {
-            anjay_log(ERROR, "invalid query string: %s = %s", key, value);
+            anjay_log(ERROR, "invalid query string: %s = %s", key,
+                      value ? value : "(null)");
             return -1;
         }
     }
