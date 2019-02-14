@@ -352,3 +352,4 @@ int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid) {
             || (retval = reschedule_notify(anjay)));
     return retval;
 }
+

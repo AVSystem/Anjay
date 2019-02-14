@@ -1055,27 +1055,38 @@ static void trigger_observe(anjay_t *anjay, const void *entry_ptr) {
     }
 }
 
-static inline int notify_entry(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj,
-                               anjay_observe_entry_t *entry) {
+static int32_t get_min_period(anjay_t *anjay, const anjay_observe_key_t *key) {
     anjay_dm_internal_res_attrs_t attrs = ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
-    int32_t period = 0;
-    if (!get_effective_attrs(anjay, &attrs, obj, &entry->key)
+    if (!get_attrs(anjay, &attrs, key)
             && attrs.standard.common.min_period > 0) {
-        period = attrs.standard.common.min_period;
+        return attrs.standard.common.min_period;
     }
-    return schedule_trigger(anjay, entry, period);
+    return 0;
+}
+
+static int
+notify_entry(anjay_t *anjay, anjay_observe_entry_t *entry, void *result_ptr) {
+    _anjay_update_ret((int *) result_ptr,
+                      schedule_trigger(anjay, entry,
+                                       get_min_period(anjay, &entry->key)));
+    return 0;
 }
 
 #ifdef ANJAY_TEST
 #    include "test/observe_mock.h"
 #endif // ANJAY_TEST
 
-static int observe_notify_bound(anjay_t *anjay,
-                                anjay_observe_connection_entry_t *connection,
-                                const anjay_observe_key_t *lower_bound,
-                                const anjay_observe_key_t *upper_bound,
-                                const anjay_dm_object_def_t *const *obj) {
+typedef int observe_for_each_matching_clb_t(anjay_t *anjay,
+                                            anjay_observe_entry_t *entry,
+                                            void *arg);
+
+static int
+observe_for_each_in_bounds(anjay_t *anjay,
+                           anjay_observe_connection_entry_t *connection,
+                           const anjay_observe_key_t *lower_bound,
+                           const anjay_observe_key_t *upper_bound,
+                           observe_for_each_matching_clb_t *clb,
+                           void *clb_arg) {
     int retval = 0;
     AVS_RBTREE_ELEM(anjay_observe_entry_t) it =
             AVS_RBTREE_LOWER_BOUND(connection->entries,
@@ -1088,17 +1099,20 @@ static int observe_notify_bound(anjay_t *anjay,
 
     for (; it != end; it = AVS_RBTREE_ELEM_NEXT(it)) {
         assert(it);
-        _anjay_update_ret(&retval, notify_entry(anjay, obj, it));
+        if ((retval = clb(anjay, it, clb_arg))) {
+            return retval;
+        }
     }
-    return retval;
+    return 0;
 }
 
 static int
-observe_notify_wildcard_impl(anjay_t *anjay,
-                             anjay_observe_connection_entry_t *connection,
-                             const anjay_observe_key_t *specimen_key,
-                             const anjay_dm_object_def_t *const *obj,
-                             bool iid_wildcard) {
+observe_for_each_in_wildcard_impl(anjay_t *anjay,
+                                  anjay_observe_connection_entry_t *connection,
+                                  const anjay_observe_key_t *specimen_key,
+                                  bool iid_wildcard,
+                                  observe_for_each_matching_clb_t *clb,
+                                  void *clb_arg) {
     anjay_observe_key_t lower_bound = *specimen_key;
     anjay_observe_key_t upper_bound = *specimen_key;
     lower_bound.format = 0;
@@ -1109,31 +1123,32 @@ observe_notify_wildcard_impl(anjay_t *anjay,
     }
     lower_bound.rid = -1;
     upper_bound.rid = -1;
-    return observe_notify_bound(anjay, connection, &lower_bound, &upper_bound,
-                                obj);
+    return observe_for_each_in_bounds(anjay, connection, &lower_bound,
+                                      &upper_bound, clb, clb_arg);
 }
 
 static inline int
-observe_notify_iid_wildcard(anjay_t *anjay,
-                            anjay_observe_connection_entry_t *connection,
-                            const anjay_observe_key_t *specimen_key,
-                            const anjay_dm_object_def_t *const *obj) {
-    return observe_notify_wildcard_impl(anjay, connection, specimen_key, obj,
-                                        true);
+observe_for_each_in_iid_wildcard(anjay_t *anjay,
+                                 anjay_observe_connection_entry_t *connection,
+                                 const anjay_observe_key_t *specimen_key,
+                                 observe_for_each_matching_clb_t *clb,
+                                 void *clb_arg) {
+    return observe_for_each_in_wildcard_impl(anjay, connection, specimen_key,
+                                             true, clb, clb_arg);
 }
 
 static inline int
-observe_notify_rid_wildcard(anjay_t *anjay,
-                            anjay_observe_connection_entry_t *connection,
-                            const anjay_observe_key_t *specimen_key,
-                            const anjay_dm_object_def_t *const *obj) {
-    return observe_notify_wildcard_impl(anjay, connection, specimen_key, obj,
-                                        false);
+observe_for_each_in_rid_wildcard(anjay_t *anjay,
+                                 anjay_observe_connection_entry_t *connection,
+                                 const anjay_observe_key_t *specimen_key,
+                                 observe_for_each_matching_clb_t *clb,
+                                 void *clb_arg) {
+    return observe_for_each_in_wildcard_impl(anjay, connection, specimen_key,
+                                             false, clb, clb_arg);
 }
 
 /**
- * Calls <c>notify_entry()</c> on all registered Observe entries that match
- * <c>key</c>.
+ * Calls <c>clb()</c> on all registered Observe entries that match <c>key</c>.
  *
  * This is harder than may seem at the first glance, because both <c>key</c>
  * (the query) and keys of the registered Observe entries may contain wildcards.
@@ -1204,12 +1219,13 @@ observe_notify_rid_wildcard(anjay_t *anjay,
  * yet another search, with lower bound at (SSID, conn_type, OID, 65535, -1, 0)
  * and the upper bound at (SSID, conn_type, OID, 65535, -1, U16_MAX).
  */
-static int observe_notify(anjay_t *anjay,
+static int
+observe_for_each_matching(anjay_t *anjay,
                           anjay_observe_connection_entry_t *connection,
                           const anjay_observe_key_t *key,
-                          const anjay_dm_object_def_t *const *obj) {
+                          observe_for_each_matching_clb_t *clb,
+                          void *clb_arg) {
     assert(key->format == AVS_COAP_FORMAT_NONE);
-    assert(!obj || !*obj || (*obj)->oid == key->oid);
     assert(key->rid >= -1 && key->rid <= UINT16_MAX);
 
     int retval = 0;
@@ -1224,32 +1240,28 @@ static int observe_notify(anjay_t *anjay,
         if (key->iid == ANJAY_IID_INVALID) {
             lower_bound.iid = 0;
             upper_bound.iid = ANJAY_IID_INVALID;
-        } else {
-            _anjay_update_ret(&retval,
-                              observe_notify_iid_wildcard(anjay, connection,
-                                                          key, obj));
+        } else if ((retval = observe_for_each_in_iid_wildcard(
+                            anjay, connection, key, clb, clb_arg))) {
+            goto finish;
         }
-    } else {
-        _anjay_update_ret(&retval,
-                          observe_notify_rid_wildcard(anjay, connection, key,
-                                                      obj));
-        _anjay_update_ret(&retval,
-                          observe_notify_iid_wildcard(anjay, connection, key,
-                                                      obj));
+    } else if ((retval = observe_for_each_in_rid_wildcard(anjay, connection,
+                                                          key, clb, clb_arg))
+               || (retval = observe_for_each_in_iid_wildcard(
+                           anjay, connection, key, clb, clb_arg))) {
+        goto finish;
     }
 
-    _anjay_update_ret(&retval,
-                      observe_notify_bound(anjay, connection, &lower_bound,
-                                           &upper_bound, obj));
-    return retval;
+    retval = observe_for_each_in_bounds(anjay, connection, &lower_bound,
+                                        &upper_bound, clb, clb_arg);
+finish:
+    return retval == ANJAY_FOREACH_BREAK ? 0 : retval;
 }
 
-int _anjay_observe_notify(anjay_t *anjay,
-                          const anjay_observe_key_t *key,
-                          bool invert_server_match) {
+static int observe_notify_impl(anjay_t *anjay,
+                               const anjay_observe_key_t *key,
+                               bool invert_server_match,
+                               observe_for_each_matching_clb_t *clb) {
     assert(key->format == AVS_COAP_FORMAT_NONE);
-    const anjay_dm_object_def_t *const *obj =
-            _anjay_dm_find_object_by_oid(anjay, key->oid);
 
     // iterate through all SSIDs we have
     int result = 0;
@@ -1263,11 +1275,21 @@ int _anjay_observe_notify(anjay_t *anjay,
             continue;
         }
         modified_key.connection = connection->key;
-        _anjay_update_ret(&result, observe_notify(anjay, connection,
-                                                  &modified_key, obj));
+        observe_for_each_matching(anjay, connection, &modified_key, clb,
+                                  &result);
     }
     return result;
 }
+
+int _anjay_observe_notify(anjay_t *anjay,
+                          const anjay_observe_key_t *key,
+                          bool invert_server_match) {
+    // This extra level of indirection is required to be able to mock
+    // notify_entry in unit tests.
+    // Hopefully compilers will inline it in production builds.
+    return observe_notify_impl(anjay, key, invert_server_match, notify_entry);
+}
+
 
 #ifdef ANJAY_TEST
 #    include "test/observe.c"

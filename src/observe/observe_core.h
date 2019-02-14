@@ -107,6 +107,7 @@ int _anjay_observe_notify(anjay_t *anjay,
                           const anjay_observe_key_t *origin_key,
                           bool invert_ssid_match);
 
+
 anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
                                                 double *out_numeric);
 
@@ -117,8 +118,8 @@ anjay_output_ctx_t *_anjay_observe_decorate_ctx(anjay_output_ctx_t *backend,
 #    define _anjay_observe_cleanup(...) ((void) 0)
 #    define _anjay_observe_sched_flush_current_connection(...) 0
 #    define _anjay_observe_sched_flush(...) 0
-#    define _anjay_observe_persist(...) 0
-#    define _anjay_observe_restore(...) 0
+
+
 
 #endif // WITH_OBSERVE
 

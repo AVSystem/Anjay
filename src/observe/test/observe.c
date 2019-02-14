@@ -1361,16 +1361,15 @@ typedef struct {
 static AVS_LIST(mock_notify_entry_value_t) MOCK_NOTIFY = NULL;
 
 static int mock_notify_entry(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj,
-                             anjay_observe_entry_t *entity) {
+                             anjay_observe_entry_t *entity,
+                             void *result_ptr) {
     (void) anjay;
-    (void) obj;
     AVS_UNIT_ASSERT_NOT_NULL(MOCK_NOTIFY);
     mock_notify_entry_value_t *entry = AVS_LIST_DETACH(&MOCK_NOTIFY);
     AVS_UNIT_ASSERT_EQUAL(_anjay_observe_key_cmp(&entity->key, &entry->key), 0);
-    int retval = entry->retval;
+    _anjay_update_ret((int *) result_ptr, entry->retval);
     AVS_LIST_DELETE(&entry);
-    return retval;
+    return 0;
 }
 
 static void expect_notify_entry(anjay_ssid_t ssid,
@@ -1400,50 +1399,49 @@ AVS_UNIT_TEST(notify, notify_changed) {
     anjay_t *anjay = create_test_env();
 
     AVS_UNIT_MOCK(_anjay_dm_find_object_by_oid) = fake_object;
-    AVS_UNIT_MOCK(notify_entry) = mock_notify_entry;
 
     expect_notify_entry(8, 4, ANJAY_IID_INVALID, -1, AVS_COAP_FORMAT_NONE, 0);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_observe_notify(
+    AVS_UNIT_ASSERT_SUCCESS(observe_notify_impl(
             anjay,
             &(const anjay_observe_key_t) { { 1, ANJAY_CONNECTION_UNSET },
                                            4,
                                            1,
                                            1,
                                            AVS_COAP_FORMAT_NONE },
-            true));
+            true, mock_notify_entry));
     expect_notify_clear();
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_observe_notify(
+    AVS_UNIT_ASSERT_SUCCESS(observe_notify_impl(
             anjay,
             &(const anjay_observe_key_t) { { 3, ANJAY_CONNECTION_UNSET },
                                            2,
                                            7,
                                            -1,
                                            AVS_COAP_FORMAT_NONE },
-            true));
+            true, mock_notify_entry));
     expect_notify_clear();
 
     expect_notify_entry(3, 6, 0, 1, AVS_COAP_FORMAT_NONE, 0);
     expect_notify_entry(8, 6, 0, 1, AVS_COAP_FORMAT_NONE, 0);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_observe_notify(
+    AVS_UNIT_ASSERT_SUCCESS(observe_notify_impl(
             anjay,
             &(const anjay_observe_key_t) { { 1, ANJAY_CONNECTION_UNSET },
                                            6,
                                            0,
                                            1,
                                            AVS_COAP_FORMAT_NONE },
-            true));
+            true, mock_notify_entry));
     expect_notify_clear();
 
     expect_notify_entry(3, 6, 0, 2, AVS_COAP_FORMAT_NONE, 0);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_observe_notify(
+    AVS_UNIT_ASSERT_SUCCESS(observe_notify_impl(
             anjay,
             &(const anjay_observe_key_t) { { 1, ANJAY_CONNECTION_UNSET },
                                            6,
                                            0,
                                            2,
                                            AVS_COAP_FORMAT_NONE },
-            true));
+            true, mock_notify_entry));
     expect_notify_clear();
 
     expect_notify_entry(1, 2, 3, 1, AVS_COAP_FORMAT_NONE, 0);
@@ -1453,7 +1451,7 @@ AVS_UNIT_TEST(notify, notify_changed) {
     expect_notify_entry(3, 2, 3, 3, AVS_COAP_FORMAT_NONE, 0);
     expect_notify_entry(3, 2, 7, 3, AVS_COAP_FORMAT_NONE, 0);
     AVS_UNIT_ASSERT_EQUAL(
-            _anjay_observe_notify(
+            observe_notify_impl(
                     anjay,
                     &(const anjay_observe_key_t) { { ANJAY_IID_INVALID,
                                                      ANJAY_CONNECTION_UNSET },
@@ -1461,7 +1459,7 @@ AVS_UNIT_TEST(notify, notify_changed) {
                                                    ANJAY_IID_INVALID,
                                                    -1,
                                                    AVS_COAP_FORMAT_NONE },
-                    true),
+                    true, mock_notify_entry),
             -42);
     expect_notify_clear();
 

@@ -659,7 +659,8 @@ static bool critical_option_validator(uint8_t msg_code, uint32_t optnum) {
     case AVS_COAP_CODE_PUT:
     case AVS_COAP_CODE_POST:
         return optnum == AVS_COAP_OPT_URI_PATH
-               || optnum == AVS_COAP_OPT_URI_QUERY;
+               || optnum == AVS_COAP_OPT_URI_QUERY
+               || optnum == AVS_COAP_OPT_ACCEPT;
     case AVS_COAP_CODE_DELETE:
         return optnum == AVS_COAP_OPT_URI_PATH;
     default:
