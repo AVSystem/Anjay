@@ -138,6 +138,12 @@ static void demo_delete(anjay_demo_t *demo) {
         }
         avs_stream_cleanup(&data);
     }
+
+    if (demo->schedule_update_on_exit) {
+        demo_log(INFO, "forced registration update on exit");
+        anjay_schedule_registration_update(demo->anjay, ANJAY_SSID_ANY);
+    }
+
     if (demo->anjay) {
         anjay_delete(demo->anjay);
     }

@@ -53,6 +53,10 @@ struct anjay_demo_struct {
     fw_update_logic_t fw_update;
 
     AVS_LIST(anjay_demo_object_t) objects;
+
+    // for testing purposes only: causes a Registration Update to be scheduled
+    // immediately before calling anjay_delete
+    bool schedule_update_on_exit;
 };
 
 const anjay_dm_object_def_t **demo_find_object(anjay_demo_t *demo,

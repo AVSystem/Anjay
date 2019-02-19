@@ -20,7 +20,9 @@ RUN ln -s /usr/bin/cmake3 /usr/bin/cmake
 # required to compile pybind11
 RUN yum install -y python-tools
 RUN yum install -y python35u python35u-devel python35u-pip
-RUN python3.5 -m pip install cryptography requests
-RUN which python3 || ln -s /usr/bin/python3.5 /usr/bin/python3
+RUN python3.5 -m pip install cryptography requests jinja2
+# older centos7 images do not have python3
+# some newer ones make it resolve to python3.4 and we need 3.5+
+RUN ln -sf /usr/bin/python3.5 /usr/bin/python3
 COPY . /Anjay
 CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && make -j && cd test/integration && make integration_check

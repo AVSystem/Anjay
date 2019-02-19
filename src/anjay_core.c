@@ -199,10 +199,6 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     // _anjay_sched_delete()
     _anjay_observe_cleanup(&anjay->observe, anjay->sched);
 
-    _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
-    _anjay_sched_del(anjay->sched, &anjay->scheduled_notify.handle);
-    _anjay_sched_delete(&anjay->sched);
-
 #ifdef WITH_DOWNLOADER
     _anjay_downloader_cleanup(&anjay->downloader);
 #endif // WITH_DOWNLOADER
@@ -211,6 +207,14 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     if (deregister) {
         _anjay_servers_deregister(anjay);
     }
+
+    // Make sure to deregister from all servers *before* cleaning up the
+    // scheduler. That prevents us from updating a registration even though
+    // we're about to deregister anyway.
+    _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
+    _anjay_sched_del(anjay->sched, &anjay->scheduled_notify.handle);
+    _anjay_sched_delete(&anjay->sched);
+
     // Note: this MUST NOT be called before _anjay_sched_del(), because
     // it avs_free()s anjay->servers, which might be used without null-guards in
     // scheduled jobs

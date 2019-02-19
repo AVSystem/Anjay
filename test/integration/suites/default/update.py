@@ -242,3 +242,10 @@ class UpdateAfterLifetimeChange(test_suite.Lwm2mSingleServerTest):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
         self.assertDemoUpdatesRegistration(lifetime=86400)
+
+
+class NoUpdateDuringShutdownTest(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        self.communicate('schedule-update-on-exit')
+        # tearDown() expects a De-Register operation and will fail on
+        # unexpected Update

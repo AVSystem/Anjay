@@ -296,6 +296,10 @@ _anjay_server_ensure_valid_registration(anjay_t *anjay,
 }
 
 int _anjay_server_deregister(anjay_t *anjay, anjay_server_info_t *server) {
+    // make sure to cancel the reconnect/register/update job. there's no point
+    // in doing that if we don't want to be registered to the server.
+    _anjay_sched_del(anjay->sched, &server->next_action_handle);
+
     assert(_anjay_server_active(server));
     anjay_connection_ref_t connection = {
         .server = server,

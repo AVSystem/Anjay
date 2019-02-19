@@ -445,6 +445,12 @@ static void cmd_all_connections_failed(anjay_demo_t *demo,
            (int) anjay_all_connections_failed(demo->anjay));
 }
 
+static void cmd_schedule_update_on_exit(anjay_demo_t *demo,
+                                        const char *unused_args) {
+    (void) unused_args;
+    demo->schedule_update_on_exit = true;
+}
+
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
@@ -501,6 +507,9 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Enables a server with given SSID."),
     CMD_HANDLER("get-all-connections-failed", "", cmd_all_connections_failed,
                 "Returns the result of anjay_all_connections_failed()"),
+    CMD_HANDLER("schedule-update-on-exit", "", cmd_schedule_update_on_exit,
+                "Ensure Registration Update is scheduled for immediate "
+                "execution at the point of calling anjay_delete()"),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };
