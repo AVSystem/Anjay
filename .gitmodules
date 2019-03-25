@@ -1,6 +1,6 @@
 [submodule "avs_commons/git"]
 	path = avs_commons/git
-	url = git://github.com/AVSystem/avs_commons.git
+	url = https://github.com/AVSystem/avs_commons.git
 [submodule "test/integration/framework/nsh-lwm2m/pymbedtls/src/pybind11"]
 	path = test/integration/framework/nsh-lwm2m/pymbedtls/src/pybind11
 	url = https://github.com/pybind/pybind11.git
