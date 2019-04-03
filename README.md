@@ -223,6 +223,8 @@ See [LICENSE](LICENSE) file.
 ### Commercial support
 
 Anjay LwM2M library comes with the option of [full commercial support, provided by AVSystem](https://www.avsystem.com/products/anjay/).
+The commercial version supports the latest LwM2M 1.1 release. 
+If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem, which also focuses on LwM2M along with its latest 1.1 specification.
 
 ## Contributing
 

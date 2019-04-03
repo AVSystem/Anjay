@@ -292,7 +292,10 @@ static int parse_u16(const char *str, uint16_t *out_value) {
 static int parse_size(const char *str, size_t *out_value) {
     long long_value;
     if (demo_parse_long(str, &long_value) || long_value < 0
-            || (size_t) long_value > SIZE_MAX) {
+#if SIZE_MAX < LONG_MAX
+            || long_value > SIZE_MAX
+#endif
+    ) {
         demo_log(ERROR, "value out of range: %s", str);
         return -1;
     }

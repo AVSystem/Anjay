@@ -141,7 +141,11 @@ static void demo_delete(anjay_demo_t *demo) {
 
     if (demo->schedule_update_on_exit) {
         demo_log(INFO, "forced registration update on exit");
-        anjay_schedule_registration_update(demo->anjay, ANJAY_SSID_ANY);
+        if (demo->anjay) {
+            anjay_schedule_registration_update(demo->anjay, ANJAY_SSID_ANY);
+        } else {
+            demo_log(INFO, "Anjay object not created, skipping");
+        }
     }
 
     if (demo->anjay) {
