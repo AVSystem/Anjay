@@ -22,7 +22,6 @@ The project has been created and is actively maintained by [AVSystem](https://ww
     * [Ubuntu 16.04 LTS](#ubuntu-1604-lts)
     * [CentOS 7](#centos-7)
     * [macOS Sierra with Homebrew](#macos-sierra-with-homebrewhttpsbrewsh)
-    * [Windows](#windows)
   * [Running the demo client](#running-the-demo-client)
   * [Detailed compilation guide](#detailed-compilation-guide)
 * [License](#license)
@@ -68,6 +67,13 @@ The project has been created and is actively maintained by [AVSystem](https://ww
     - mbed TLS
     - OpenSSL
     - tinydtls
+
+- Supported platforms:
+    - any Unix-like operating system, such as Linux (including Android), mac OS and *BSD
+    - Microsoft Windows (preliminary support, see [README.Windows.md](README.Windows.md) for details)
+    - any embedded platform (e.g. FreeRTOS, ThreadX) with lwIP networking stack
+    - porting is possible for any other platform that has ISO C99 compiler available, see [Porting guide for non-POSIX platforms](https://avsystem.github.io/Anjay-doc/PortingGuideForNonPOSIXPlatforms.html) for details
+        - preimplemented integration layer for ARM mbed OS is available commercially
 
 - CoAP data formats:
     - TLV
@@ -140,10 +146,6 @@ brew install cmake mbedtls
 brew install python3 openssl llvm
 pip3 install cryptography sphinx sphinx_rtd_theme requests
 ```
-
-#### Windows
-
-Windows support is currently in a preliminary stage. See [README.Windows.md](README.Windows.md) for details.
 
 ### Running the demo client
 
