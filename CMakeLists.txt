@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 2.8.12)
 
 project(anjay C)
-set(ANJAY_VERSION "1.15.3a" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.15.4" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -499,24 +499,24 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/anjay_config_log.h.in"
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/config")
 
 if(WITH_LIBRARY_SHARED)
-    add_library(${PROJECT_NAME} SHARED ${ABSOLUTE_SOURCES})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${DEPS_LIBRARIES})
-    target_link_libraries(${PROJECT_NAME} PUBLIC ${DEPS_LIBRARIES_WEAK})
-    set_target_properties(${PROJECT_NAME} PROPERTIES
+    add_library(anjay SHARED ${ABSOLUTE_SOURCES})
+    target_link_libraries(anjay PRIVATE ${DEPS_LIBRARIES})
+    target_link_libraries(anjay PUBLIC ${DEPS_LIBRARIES_WEAK})
+    set_target_properties(anjay PROPERTIES
                           VERSION ${ANJAY_BINARY_VERSION})
     if(HAVE_VISIBILITY)
-        get_property(LINK_FLAGS TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS)
-        set_property(TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,--exclude-libs,ALL")
+        get_property(LINK_FLAGS TARGET anjay PROPERTY LINK_FLAGS)
+        set_property(TARGET anjay PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,--exclude-libs,ALL")
     endif()
     if(APPLE)
-        get_property(LINK_FLAGS TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS)
-        set_property(TARGET ${PROJECT_NAME} PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,-undefined,dynamic_lookup")
+        get_property(LINK_FLAGS TARGET anjay PROPERTY LINK_FLAGS)
+        set_property(TARGET anjay PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,-undefined,dynamic_lookup")
     endif()
 endif()
 
-add_library(${PROJECT_NAME}_static STATIC ${ABSOLUTE_SOURCES})
-target_link_libraries(${PROJECT_NAME}_static ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
-anjay_emit_deps(${PROJECT_NAME}_static ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
+add_library(anjay_static STATIC ${ABSOLUTE_SOURCES})
+target_link_libraries(anjay_static ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
+anjay_emit_deps(anjay_static ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
 
 ################# DEMO #########################################################
 
@@ -550,8 +550,8 @@ if(WITH_DEMO)
     endif()
 
     set(ANJAY_INCLUDE_DIRS ${PUBLIC_INCLUDE_DIRS})
-    set(ANJAY_LIBRARIES ${PROJECT_NAME})
-    set(ANJAY_LIBRARIES_STATIC ${PROJECT_NAME}_static)
+    set(ANJAY_LIBRARIES anjay)
+    set(ANJAY_LIBRARIES_STATIC anjay_static)
     add_subdirectory(demo)
 endif()
 
@@ -656,12 +656,12 @@ if(WITH_TEST)
     add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
 
     if(WITH_LIBRARY_SHARED)
-        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}> anjay_ ANJAY_)
-        add_dependencies(symbols_check ${PROJECT_NAME})
+        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_)
+        add_dependencies(symbols_check anjay)
     endif()
 
-    add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:${PROJECT_NAME}_static> anjay_ ANJAY_ _anjay_ _ANJAY_)
-    add_dependencies(symbols_check ${PROJECT_NAME}_static)
+    add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:anjay_static> anjay_ ANJAY_ _anjay_ _ANJAY_)
+    add_dependencies(symbols_check anjay_static)
 
     add_dependencies(anjay_unit_check symbols_check)
 
@@ -676,8 +676,8 @@ if(WITH_TEST)
     endif()
 
     include_directories(test/include)
-    add_anjay_test(${PROJECT_NAME} ${ABSOLUTE_TEST_SOURCES})
-    target_link_libraries(${PROJECT_NAME}_test ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
+    add_anjay_test(anjay ${ABSOLUTE_TEST_SOURCES})
+    target_link_libraries(anjay_test ${DEPS_LIBRARIES} ${DEPS_LIBRARIES_WEAK})
 
     add_subdirectory(test/codegen)
 
@@ -739,9 +739,9 @@ endif()
 
 # libraries
 if(WITH_LIBRARY_SHARED)
-    anjay_install_export(${PROJECT_NAME})
+    anjay_install_export(anjay)
 endif()
-anjay_install_export(${PROJECT_NAME}_static)
+anjay_install_export(anjay_static)
 
 # include directories
 foreach(INCLUDE_DIR ${PUBLIC_INCLUDE_DIRS})
@@ -752,14 +752,14 @@ endforeach()
 
 # install CMake package
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/anjay-config.cmake.in
-               ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-config.cmake
+               ${ANJAY_BUILD_OUTPUT_DIR}/cmake/anjay-config.cmake
                @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/anjay-version.cmake.in
-               ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-version.cmake
+               ${ANJAY_BUILD_OUTPUT_DIR}/cmake/anjay-version.cmake
                @ONLY)
 
-install(EXPORT ${PROJECT_NAME}-targets DESTINATION ${LIB_INSTALL_DIR}/${PROJECT_NAME})
+install(EXPORT anjay-targets DESTINATION ${LIB_INSTALL_DIR}/anjay)
 install(FILES
-        ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-config.cmake
-        ${ANJAY_BUILD_OUTPUT_DIR}/cmake/${PROJECT_NAME}-version.cmake
-        DESTINATION ${LIB_INSTALL_DIR}/${PROJECT_NAME})
+        ${ANJAY_BUILD_OUTPUT_DIR}/cmake/anjay-config.cmake
+        ${ANJAY_BUILD_OUTPUT_DIR}/cmake/anjay-version.cmake
+        DESTINATION ${LIB_INSTALL_DIR}/anjay)

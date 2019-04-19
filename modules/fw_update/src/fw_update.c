@@ -705,7 +705,15 @@ static int
 fw_on_notify(anjay_t *anjay, anjay_notify_queue_t incoming_queue, void *fw_) {
     fw_repr_t *fw = (fw_repr_t *) fw_;
     (void) incoming_queue;
+    // fw->state represents our current internal object state
+    // fw->user_state.state is the state exposed to user handlers
+    //
+    // If fw->state == UPDATING and fw->user_state == DOWNLOADED, that means
+    // firmware was downloaded successfully and we did not call user-defined
+    // perform_upgrade handler yet. After calling the user-defined handler,
+    // fw->user_state.state will be set to UPDATING.
     if (!fw->update_job && fw->state == UPDATE_STATE_UPDATING
+            && fw->user_state.state != UPDATE_STATE_UPDATING
             && _anjay_sched_now(_anjay_sched_get(anjay), &fw->update_job,
                                 perform_upgrade, &fw, sizeof(fw))) {
         // we don't need to reschedule notifying,
