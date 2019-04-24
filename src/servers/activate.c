@@ -32,14 +32,16 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-void _anjay_server_on_server_communication_error(anjay_t *anjay,
-                                                 anjay_server_info_t *server) {
+void _anjay_server_on_failure(anjay_t *anjay,
+                              anjay_server_info_t *server,
+                              const char *debug_msg) {
     _anjay_server_clean_active_data(anjay, server);
     server->refresh_failed = true;
 
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
-        anjay_log(DEBUG, "Bootstrap Server could not be reached. "
-                         "Disabling all communication.");
+        anjay_log(DEBUG,
+                  "Bootstrap Server: %s. Disabling all communication.",
+                  debug_msg);
         // Abort any further bootstrap retries.
         _anjay_bootstrap_cleanup(anjay);
     } else if (_anjay_should_retry_bootstrap(anjay)) {
@@ -49,12 +51,16 @@ void _anjay_server_on_server_communication_error(anjay_t *anjay,
             anjay_enable_server(anjay, ANJAY_SSID_BOOTSTRAP);
         }
     } else {
-        anjay_log(DEBUG,
-                  "Non-Bootstrap Server %" PRIu16 " could not be reached.",
-                  server->ssid);
+        anjay_log(DEBUG, "Non-Bootstrap Server %" PRIu16 ": %s.", server->ssid,
+                  debug_msg);
     }
     // make sure that the server will not be reactivated at next refresh
     server->reactivate_time = AVS_TIME_REAL_INVALID;
+}
+
+void _anjay_server_on_server_communication_error(anjay_t *anjay,
+                                                 anjay_server_info_t *server) {
+    _anjay_server_on_failure(anjay, server, "not reachable");
 }
 
 void _anjay_server_on_registration_timeout(anjay_t *anjay,

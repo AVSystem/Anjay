@@ -26,6 +26,7 @@
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/stream/stream_file.h>
+#include <avsystem/commons/time.h>
 
 typedef struct {
     char data[1]; // actually a VLA, but struct cannot be empty

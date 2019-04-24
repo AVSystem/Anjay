@@ -17,6 +17,7 @@
 import binascii
 import struct
 import tempfile
+import collections
 
 from typing import Optional
 
@@ -305,6 +306,36 @@ class ResPath:
                                                                     multi_instance=True)
     Test = _Lwm2mResourcePathHelper.from_rid_object(RID.Test, oid=OID.Test, multi_instance=True)
     Portfolio = _Lwm2mResourcePathHelper.from_rid_object(RID.Portfolio, oid=OID.Portfolio, multi_instance=True)
+
+
+class TxParams(collections.namedtuple('TxParams',
+                                      ['ack_timeout',
+                                      'ack_random_factor',
+                                      'max_retransmit',
+                                      'max_latency'],
+                                      defaults=(2.0, 1.5, 4.0, 100.0))):
+    def max_transmit_wait(self):
+        return self.ack_timeout * self.ack_random_factor * (2**(self.max_retransmit + 1) - 1)
+
+    def max_transmit_span(self):
+        return self.ack_timeout * (2**self.max_retransmit - 1) * self.ack_random_factor
+
+    def exchange_lifetime(self):
+        """
+        From RFC7252: "PROCESSING_DELAY is the time a node takes to turn
+        around a Confirmable message into an acknowledgement. We assume
+        the node will attempt to send an ACK before having the sender time
+        out, so as a conservative assumption we set it equal to ACK_TIMEOUT"
+
+        Thus we use self.ack_timeout as a PROCESSING_DELAY in the formula below.
+        """
+        return self.max_transmit_span() + 2 * self.max_latency + self.ack_timeout
+
+    def first_retransmission_timeout(self):
+        return self.ack_random_factor * self.ack_timeout
+
+    def last_retransmission_timeout(self):
+        return self.first_retransmission_timeout() * 2**self.max_retransmit
 
 
 DEMO_ENDPOINT_NAME = 'urn:dev:os:0023C7-000001'

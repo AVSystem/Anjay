@@ -35,6 +35,7 @@ typedef struct {
     anjay_notify_queue_t notification_queue;
     anjay_sched_handle_t purge_bootstrap_handle;
     anjay_sched_handle_t client_initiated_bootstrap_handle;
+    anjay_sched_handle_t finish_timeout_handle;
     avs_time_monotonic_t client_initiated_bootstrap_last_attempt;
     avs_time_duration_t client_initiated_bootstrap_holdoff;
 } anjay_bootstrap_t;

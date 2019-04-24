@@ -526,15 +526,15 @@ log_handler(avs_log_level_t level, const char *module, const char *message) {
     (void) module;
 
     char timebuf[128];
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    time_t seconds = now.tv_sec;
+    avs_time_real_t now = avs_time_real_now();
+    time_t seconds = now.since_real_epoch.seconds;
 
     struct tm *now_tm = localtime(&seconds);
     assert(now_tm);
     strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", now_tm);
 
-    fprintf(stderr, "%s.%06d %s\n", timebuf, (int) now.tv_usec, message);
+    fprintf(stderr, "%s.%06d %s\n", timebuf,
+            (int) now.since_real_epoch.nanoseconds / 1000, message);
 }
 
 static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {

@@ -297,9 +297,9 @@ static bool has_multiple_bootstrap_security_instances(anjay_t *anjay) {
     return false;
 }
 
-static int bootstrap_write(anjay_t *anjay,
-                           const anjay_uri_path_t *uri,
-                           anjay_input_ctx_t *in_ctx) {
+static int bootstrap_write_impl(anjay_t *anjay,
+                                const anjay_uri_path_t *uri,
+                                anjay_input_ctx_t *in_ctx) {
     anjay_log(DEBUG, "Bootstrap Write %s", ANJAY_DEBUG_MAKE_PATH(uri));
     if (!_anjay_uri_path_has_oid(uri)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -561,6 +561,7 @@ static int bootstrap_finish_impl(anjay_t *anjay, bool perform_timeout) {
         start_bootstrap_if_not_already_started(anjay);
     } else {
         _anjay_schedule_reload_servers(anjay);
+        _anjay_sched_del(anjay->sched, &anjay->bootstrap.finish_timeout_handle);
     }
     return retval;
 }
@@ -600,45 +601,91 @@ int _anjay_bootstrap_object_write(anjay_t *anjay,
         .type = ANJAY_PATH_OBJECT,
         .oid = oid
     };
-    return bootstrap_write(anjay, &uri, in_ctx);
+    return bootstrap_write_impl(anjay, &uri, in_ctx);
 }
 
-static int invoke_action(anjay_t *anjay, const anjay_request_t *request) {
+static void timeout_bootstrap_finish(anjay_t *anjay, const void *dummy) {
+    (void) dummy;
+    anjay_log(ERROR, "Bootstrap Finish not received in time - aborting");
+
+    // Abort client-initiated-bootstrap entirely. After that,
+    // anjay_all_connections_failed() starts returning true (if the
+    // bootstrap was the only server), which gives the user an opportunity
+    // to react accordingly.
+    anjay_server_info_t *server =
+            _anjay_servers_find_active(anjay, ANJAY_SSID_BOOTSTRAP);
+    if (server) {
+        _anjay_server_on_server_communication_error(anjay, server);
+    }
+}
+
+static int schedule_finish_timeout(anjay_t *anjay) {
+    _anjay_sched_del(anjay->sched, &anjay->bootstrap.finish_timeout_handle);
+    if (_anjay_sched(anjay->sched, &anjay->bootstrap.finish_timeout_handle,
+                     avs_coap_exchange_lifetime(&anjay->udp_tx_params),
+                     timeout_bootstrap_finish, NULL, 0)) {
+        anjay_log(ERROR, "could not schedule finish timeout");
+        return -1;
+    }
+    return 0;
+}
+
+static int bootstrap_write(anjay_t *anjay, const anjay_request_t *request) {
+    assert(request->action == ANJAY_ACTION_WRITE);
     anjay_input_ctx_t *in_ctx = NULL;
     const uint16_t format =
             _anjay_translate_legacy_content_format(request->content_format);
-    int result = -1;
+
+    int result;
+    if ((result = _anjay_input_dynamic_create(&in_ctx, &anjay->comm_stream,
+                                              false))) {
+        anjay_log(ERROR, "could not create input context");
+        return result;
+    }
+
+    if (format == ANJAY_COAP_FORMAT_TLV
+            && _anjay_uri_path_has_rid(&request->uri)) {
+        result = _anjay_dm_check_if_tlv_rid_matches_uri_rid(in_ctx,
+                                                            request->uri.rid);
+    }
+
+    if (!result) {
+        result = bootstrap_write_impl(anjay, &request->uri, in_ctx);
+    }
+    if (_anjay_input_ctx_destroy(&in_ctx)) {
+        anjay_log(ERROR, "input ctx cleanup failed");
+    }
+    return result;
+}
+
+static int invoke_action(anjay_t *anjay, const anjay_request_t *request) {
+    _anjay_sched_del(anjay->sched, &anjay->bootstrap.finish_timeout_handle);
+
+    int result;
     switch (request->action) {
     case ANJAY_ACTION_WRITE:
-        if ((result = _anjay_input_dynamic_create(&in_ctx, &anjay->comm_stream,
-                                                  false))) {
-            anjay_log(ERROR, "could not create input context");
-            return result;
-        }
-
-        if (format == ANJAY_COAP_FORMAT_TLV
-                && _anjay_uri_path_has_rid(&request->uri)) {
-            result = _anjay_dm_check_if_tlv_rid_matches_uri_rid(
-                    in_ctx, request->uri.rid);
-        }
-
-        if (!result) {
-            result = bootstrap_write(anjay, &request->uri, in_ctx);
-        }
-        if (_anjay_input_ctx_destroy(&in_ctx)) {
-            anjay_log(ERROR, "input ctx cleanup failed");
-        }
-        return result;
+        result = bootstrap_write(anjay, request);
+        break;
     case ANJAY_ACTION_DELETE:
-        return bootstrap_delete(anjay, request);
+        result = bootstrap_delete(anjay, request);
+        break;
     case ANJAY_ACTION_DISCOVER:
-        return bootstrap_discover(anjay, request);
+        result = bootstrap_discover(anjay, request);
+        break;
     case ANJAY_ACTION_BOOTSTRAP_FINISH:
-        return bootstrap_finish(anjay);
+        result = bootstrap_finish(anjay);
+        break;
     default:
         anjay_log(ERROR, "Invalid action for Bootstrap Interface");
-        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+        result = ANJAY_ERR_METHOD_NOT_ALLOWED;
+        break;
     }
+
+    if ((request->action != ANJAY_ACTION_BOOTSTRAP_FINISH || result)
+            && schedule_finish_timeout(anjay)) {
+        result = -1;
+    }
+    return result;
 }
 
 int _anjay_bootstrap_perform_action(anjay_t *anjay,
@@ -807,6 +854,9 @@ finish:
             _anjay_server_on_registration_timeout(anjay, server);
         } else if (result) {
             _anjay_server_on_server_communication_error(anjay, server);
+        } else if (schedule_finish_timeout(anjay)) {
+            _anjay_server_on_failure(anjay, server,
+                                     "cannot schedule finish timeout job");
         }
     }
 }
@@ -864,6 +914,7 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay) {
     reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
     abort_bootstrap(anjay);
     _anjay_sched_del(anjay->sched, &anjay->bootstrap.purge_bootstrap_handle);
+    _anjay_sched_del(anjay->sched, &anjay->bootstrap.finish_timeout_handle);
     _anjay_notify_clear_queue(&anjay->bootstrap.notification_queue);
 }
 

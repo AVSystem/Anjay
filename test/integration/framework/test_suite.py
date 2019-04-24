@@ -651,7 +651,6 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def get_all_connections_failed(self):
         return bool(int(self.communicate('get-all-connections-failed', match_regex='ALL_CONNECTIONS_FAILED==([0-9])\n').group(1)))
 
-
 class SingleServerAccessor:
     @property
     def serv(self) -> Lwm2mServer:

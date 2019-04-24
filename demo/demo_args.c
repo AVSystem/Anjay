@@ -15,6 +15,7 @@
  */
 
 #include "demo_args.h"
+#include "demo.h"
 
 #include <assert.h>
 #include <ctype.h>

@@ -453,10 +453,15 @@ void _anjay_server_update_registration_info(
         anjay_update_parameters_t *move_params);
 
 /**
- * Handles a network communication error on the primary connection of the
- * server. Effectively disables the server, and might schedule Client-Initiated
- * Bootstrap if applicable.
+ * Handles a critical error (including network communication error) on the
+ * primary connection of the server. Effectively disables the server, and might
+ * schedule Client-Initiated Bootstrap if applicable.
  */
+void _anjay_server_on_failure(anjay_t *anjay,
+                              anjay_server_info_t *server,
+                              const char *debug_msg);
+
+/** Alias for @ref _anjay_server_on_failure(). */
 void _anjay_server_on_server_communication_error(anjay_t *anjay,
                                                  anjay_server_info_t *server);
 

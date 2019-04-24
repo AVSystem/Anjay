@@ -30,13 +30,18 @@ class RetransmissionTest:
         MAX_RETRANSMIT=2
         CONFIRMABLE_NOTIFICATIONS=False
 
+        def tx_params(self):
+            return TxParams(ack_random_factor=self.ACK_RANDOM_FACTOR,
+                            ack_timeout=self.ACK_TIMEOUT,
+                            max_retransmit=self.MAX_RETRANSMIT)
+
         def setUp(self, *args, **kwargs):
             extra_cmdline_args=[
-                '--ack-random-factor', str(self.ACK_RANDOM_FACTOR),
-                '--ack-timeout', str(self.ACK_TIMEOUT),
-                '--max-retransmit', str(self.MAX_RETRANSMIT),
-                '--dtls-hs-retry-wait-min', str(self.ACK_TIMEOUT * self.ACK_RANDOM_FACTOR),
-                '--dtls-hs-retry-wait-max', str(self.ACK_TIMEOUT * 2**self.MAX_RETRANSMIT * self.ACK_RANDOM_FACTOR),
+                '--ack-random-factor', str(self.tx_params().ack_random_factor),
+                '--ack-timeout', str(self.tx_params().ack_timeout),
+                '--max-retransmit', str(self.tx_params().max_retransmit),
+                '--dtls-hs-retry-wait-min', str(self.tx_params().first_retransmission_timeout()),
+                '--dtls-hs-retry-wait-max', str(self.tx_params().last_retransmission_timeout()),
             ]
             if self.CONFIRMABLE_NOTIFICATIONS:
                 extra_cmdline_args += ['--confirmable-notifications']
@@ -47,13 +52,13 @@ class RetransmissionTest:
                 super().setUp(*args, **kwargs, extra_cmdline_args=extra_cmdline_args)
 
         def last_retransmission_timeout(self):
-            return self.ACK_RANDOM_FACTOR * self.ACK_TIMEOUT * 2**self.MAX_RETRANSMIT
+            return self.tx_params().last_retransmission_timeout()
 
         def wait_for_retransmission_response_timeout(self):
             time.sleep(self.last_retransmission_timeout())
 
         def max_transmit_wait(self):
-            return self.ACK_TIMEOUT * self.ACK_RANDOM_FACTOR * (2**(self.MAX_RETRANSMIT+1) - 1)
+            return self.tx_params().max_transmit_wait()
 
 
 class DtlsHsFailOnIcmpTest(test_suite.PcapEnabledTest,
