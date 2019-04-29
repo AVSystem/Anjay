@@ -308,12 +308,17 @@ class ResPath:
     Portfolio = _Lwm2mResourcePathHelper.from_rid_object(RID.Portfolio, oid=OID.Portfolio, multi_instance=True)
 
 
-class TxParams(collections.namedtuple('TxParams',
-                                      ['ack_timeout',
-                                      'ack_random_factor',
-                                      'max_retransmit',
-                                      'max_latency'],
-                                      defaults=(2.0, 1.5, 4.0, 100.0))):
+class TxParams:
+    def __init__(self,
+                 ack_timeout=2.0,
+                 ack_random_factor=1.5,
+                 max_retransmit=4.0,
+                 max_latency=100.0):
+        self.ack_timeout = ack_timeout
+        self.ack_random_factor = ack_random_factor
+        self.max_retransmit = max_retransmit
+        self.max_latency = max_latency
+
     def max_transmit_wait(self):
         return self.ack_timeout * self.ack_random_factor * (2**(self.max_retransmit + 1) - 1)
 
