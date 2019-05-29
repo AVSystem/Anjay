@@ -55,7 +55,9 @@ def _read_url(url: str) -> bytes:
 
 
 class Lwm2mObjectRegistry:
-    def __init__(self, ddf_url='http://www.openmobilealliance.org/wp/OMNA/LwM2M/DDF.xml'):
+    def __init__(self, repo_url='https://raw.githubusercontent.com/OpenMobileAlliance/lwm2m-registry/test'):
+        self.repo_url = repo_url
+        ddf_url = repo_url + '/DDF.xml'
         root = ElementTree.fromstring(_read_url(ddf_url))
         entries = (Lwm2mObjectEntry(obj) for obj in root.findall('Item'))
 
@@ -77,7 +79,8 @@ def get_object_definition(urn_or_oid, version):
         oid = int(urn)
 
     try:
-        objects = Lwm2mObjectRegistry().objects[oid]
+        registry = Lwm2mObjectRegistry()
+        objects = registry.objects[oid]
         available_versions_message = 'Available versions for object with ID %d: %s' % (
             oid, ', '.join(str(obj.Ver) for obj in objects))
 
@@ -87,6 +90,8 @@ def get_object_definition(urn_or_oid, version):
             object_ddf_url = max(objects).DDF
         else:
             object_ddf_url = next(obj for obj in objects if obj.Ver == version).DDF
+        if not object_ddf_url.startswith('http'):
+            object_ddf_url = registry.repo_url + '/' + object_ddf_url
         return _read_url(object_ddf_url).decode('utf-8-sig')
     except KeyError:
         raise ValueError('Object with ID = %d not found' % oid)
