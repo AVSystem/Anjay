@@ -188,6 +188,10 @@ static void print_option_help(const struct option *opt) {
                             "it to 0 disables caching mechanism." },
         { 'N', NULL, NULL,
           "Send notifications as Confirmable messages by default" },
+        { 'r', "RESULT", NULL, "If specified and nonzero, initializes the "
+                               "Firmware Update object in UPDATING state, and "
+                               "sets the result to given value after a short "
+                               "while" },
         { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
         { 2, "CERT_FILE", NULL, "Require certificate validation against "
@@ -452,6 +456,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "outbuf-size",                   required_argument, 0, 'O' },
         { "cache-size",                    required_argument, 0, '$' },
         { "confirmable-notifications",     no_argument,       0, 'N' },
+        { "delayed-upgrade-result",        required_argument, 0, 'r' },
         { "fw-updated-marker-path",        required_argument, 0, 1 },
         { "fw-cert-file",                  required_argument, 0, 2 },
         { "fw-cert-path",                  required_argument, 0, 3 },
@@ -696,6 +701,18 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'N':
             parsed_args->confirmable_notifications = true;
             break;
+        case 'r': {
+            int result;
+            if (parse_i32(optarg, &result)
+                    || result < (int) ANJAY_FW_UPDATE_RESULT_INITIAL
+                    || result > (int) ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL) {
+                demo_log(ERROR, "invalid update result value: %s", optarg);
+                goto finish;
+            }
+            parsed_args->fw_update_delayed_result =
+                    (anjay_fw_update_result_t) result;
+            break;
+        }
         case 1:
             parsed_args->fw_updated_marker_path = optarg;
             break;

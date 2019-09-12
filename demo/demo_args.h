@@ -22,6 +22,7 @@
 
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>
+#include <anjay/fw_update.h>
 
 typedef struct access_entry {
     anjay_ssid_t ssid;
@@ -44,6 +45,14 @@ typedef struct cmdline_args {
 #endif // _WIN32
     const char *fw_updated_marker_path;
     avs_net_security_info_t fw_security_info;
+    /**
+     * If nonzero (not @ref ANJAY_FW_UPDATE_RESULT_INITIAL), Firmware Update
+     * object will be initialized in UPDATING state. In that case,
+     * @ref anjay_fw_update_set_result will be used after a while to trigger a
+     * transition to this update result. This simulates a FOTA procedure during
+     * which the client is restarted while upgrade is still in progress.
+     */
+    anjay_fw_update_result_t fw_update_delayed_result;
     const char *attr_storage_file;
     bool disable_server_initiated_bootstrap;
     avs_coap_tx_params_t tx_params;

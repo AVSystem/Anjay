@@ -406,6 +406,7 @@ bool _anjay_dm_attributes_full(const anjay_dm_internal_attrs_t *attrs);
 #define ANJAY_DM_OID_SECURITY 0
 #define ANJAY_DM_OID_SERVER 1
 #define ANJAY_DM_OID_ACCESS_CONTROL 2
+#define ANJAY_DM_OID_FIRMWARE_UPDATE 5
 
 #define ANJAY_DM_RID_SECURITY_SERVER_URI 0
 #define ANJAY_DM_RID_SECURITY_BOOTSTRAP 1

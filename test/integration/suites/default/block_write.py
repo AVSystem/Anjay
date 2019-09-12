@@ -59,58 +59,70 @@ def packets_from_chunks(chunks, process_options=None, path='/5/0/0',
                           content=chunk.content)
 
 
-class BlockTest(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
-    def block_init_file(self):
-        import tempfile
+class Block:
+    class Test(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+        def block_init_file(self):
+            import tempfile
 
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            fw_file_name = f.name
-        self.communicate('set-fw-package-path %s' % (os.path.abspath(fw_file_name)))
-        return fw_file_name
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                fw_file_name = f.name
+            self.communicate('set-fw-package-path %s' % (os.path.abspath(fw_file_name)))
+            return fw_file_name
 
-    def block_send(self, data, splitter):
-        fw_file_name = self.block_init_file()
+        def block_send(self, data, splitter, **make_firmware_package_args):
+            fw_file_name = self.block_init_file()
 
-        chunks = list(splitter(make_firmware_package(data)))
+            chunks = list(splitter(make_firmware_package(data, **make_firmware_package_args)))
 
-        for request in packets_from_chunks(chunks):
-            self.serv.send(request)
-            response = self.serv.recv()
-            self.assertIsSuccessResponse(response, request)
+            for request in packets_from_chunks(chunks):
+                self.serv.send(request)
+                response = self.serv.recv()
+                self.assertIsSuccessResponse(response, request)
 
-        with open(fw_file_name, 'rb') as fw_file:
-            self.assertEqual(fw_file.read(), data)
+            with open(fw_file_name, 'rb') as fw_file:
+                self.assertEqual(fw_file.read(), data)
 
-        os.unlink(fw_file_name)
+            self.files_to_cleanup.append(fw_file_name)
 
-    def assertIsResponse(self, response, request):
-        self.assertEqual(coap.Type.ACKNOWLEDGEMENT, response.type)
-        self.assertEqual(request.msg_id, response.msg_id)
-        self.assertEqual(request.token, response.token)
+        def assertIsResponse(self, response, request):
+            self.assertEqual(coap.Type.ACKNOWLEDGEMENT, response.type)
+            self.assertEqual(request.msg_id, response.msg_id)
+            self.assertEqual(request.token, response.token)
 
-    def assertIsSuccessResponse(self, response, request):
-        self.assertIsResponse(response, request)
+        def assertIsSuccessResponse(self, response, request):
+            self.assertIsResponse(response, request)
 
-        if request.get_options(coap.Option.BLOCK1)[0].has_more():
-            self.assertEqual(coap.Code.RES_CONTINUE, response.code)
-        else:
-            self.assertEqual(coap.Code.RES_CHANGED, response.code)
+            if request.get_options(coap.Option.BLOCK1)[0].has_more():
+                self.assertEqual(coap.Code.RES_CONTINUE, response.code)
+            else:
+                self.assertEqual(coap.Code.RES_CHANGED, response.code)
 
-        self.assertEqual(request.get_options(coap.Option.BLOCK1),
-                         response.options)
+            self.assertEqual(request.get_options(coap.Option.BLOCK1),
+                             response.options)
 
-    def tearDown(self):
-        # now reset the state machine
-        self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'\0',
-                            format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
-        super().tearDown()
-
-    @unittest.skip
-    def runTest(self):
-        pass
+        def setUp(self, *args, **kwargs):
+            super().setUp(*args, **kwargs)
+            self.files_to_cleanup = []
 
 
-class BlockIncompleteTest(BlockTest):
+        def tearDown(self):
+            for file in self.files_to_cleanup:
+                try:
+                    os.unlink(file)
+                except FileNotFoundError:
+                    pass
+
+            # now reset the state machine
+            self.write_resource(self.serv, OID.FirmwareUpdate, 0, RID.FirmwareUpdate.Package, b'\0',
+                                format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
+            super().tearDown()
+
+        @unittest.skip
+        def runTest(self):
+            pass
+
+
+class BlockIncompleteTest(Block.Test):
     def runTest(self):
         # incomplete BLOCK should be rejected
         chunks = list(equal_chunk_splitter(1024)(A_LOT_OF_STUFF))
@@ -153,7 +165,7 @@ class BlockIncompleteTest(BlockTest):
                             self.serv.recv())
 
 
-class BlockSizesTest(BlockTest):
+class BlockSizesTest(Block.Test):
     def runTest(self):
         # multiple chunk sizes: min/max/something in between
         for chunk_size in (16, 256, 1024):
@@ -163,13 +175,13 @@ class BlockSizesTest(BlockTest):
                                 format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
 
 
-class BlockSingleChunkTest(BlockTest):
+class BlockSingleChunkTest(Block.Test):
     def runTest(self):
         # single-chunk block
         self.block_send(A_LITTLE_STUFF, equal_chunk_splitter(chunk_size=len(A_LITTLE_STUFF) * 2))
 
 
-class BlockVariableChunkSizeTest(BlockTest):
+class BlockVariableChunkSizeTest(Block.Test):
     def runTest(self):
         def shrinking_chunk_splitter(initial_chunk_size):
             def split(data):
@@ -258,7 +270,7 @@ class BlockVariableChunkSizeTest(BlockTest):
         self.block_send(A_LOT_OF_STUFF, alternating_size_chunk_splitter(sizes=[32, 512, 256, 1024, 64]))
 
 
-class BlockNonFirstTest(BlockTest):
+class BlockNonFirstTest(Block.Test):
     def runTest(self):
         data = A_LOT_OF_STUFF
         splitter = equal_chunk_splitter(1024)
@@ -276,7 +288,7 @@ class BlockNonFirstTest(BlockTest):
             os.unlink(fw_file)
 
 
-class BlockBrokenStreamTest(BlockTest):
+class BlockBrokenStreamTest(Block.Test):
     def runTest(self):
 
         data = A_LOT_OF_STUFF
@@ -323,7 +335,7 @@ def block2_adder(options, idx):
     return options + [coap.Option.BLOCK2(seq_num=0, has_more=0, block_size=16)]
 
 
-class BlockBidirectionalFailure(BlockTest):
+class BlockBidirectionalFailure(Block.Test):
     def runTest(self):
         splitter = equal_chunk_splitter(1024)
         chunks = list(splitter(A_LOT_OF_STUFF))
@@ -333,7 +345,7 @@ class BlockBidirectionalFailure(BlockTest):
                             self.serv.recv())
 
 
-class BlockMostlyUnidirectionalWithSmallSurprise(BlockTest):
+class BlockMostlyUnidirectionalWithRandomlyInsertedBlock2(Block.Test):
     def runTest(self):
         chunks = list(equal_chunk_splitter(1024)(A_LOT_OF_STUFF))
         self.assertGreater(len(chunks), 4)
@@ -362,7 +374,10 @@ class BlockMostlyUnidirectionalWithSmallSurprise(BlockTest):
                             self.serv.recv())
 
 
-class BlockDuplicate(BlockTest):
+class BlockDuplicate(Block.Test):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--cache-size', '1024'])
+
     def runTest(self):
         pkt1 = Lwm2mWrite('/5/0/0', b'x' * 16,
                           format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
@@ -384,7 +399,7 @@ class BlockDuplicate(BlockTest):
         self.assertMsgEqual(Lwm2mChanged.matching(pkt2)(), self.serv.recv())
 
 
-class BlockBadBlock1SizeInTheMiddleOfTransfer(BlockTest):
+class BlockBadBlock1SizeInTheMiddleOfTransfer(Block.Test):
     def runTest(self):
         num_correct_blocks = 4
         seq_num = 0
@@ -408,7 +423,7 @@ class BlockBadBlock1SizeInTheMiddleOfTransfer(BlockTest):
         # fine here
 
 
-class ValueSplitIntoSeparateBlocks(BlockTest):
+class ValueSplitIntoSeparateBlocks(Block.Test):
     def assertIntValueSplit(self, chunks, value):
         chunks_content = [chunk.content for chunk in chunks]
         chunk_pairs = zip(chunks_content[:-1], chunks_content[1:])
@@ -444,7 +459,7 @@ class ValueSplitIntoSeparateBlocks(BlockTest):
 
 
 class MessageInTheMiddleOfBlockTransfer:
-    class Test(BlockTest):
+    class Test(Block.Test):
         def test_with_message(self, request, expected_response):
             chunks = list(equal_chunk_splitter(1024)(A_LOT_OF_STUFF))
             self.assertGreater(len(chunks), 4)

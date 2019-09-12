@@ -126,16 +126,11 @@ int anjay_security_object_persist(anjay_t *anjay,
     if (retval) {
         return retval;
     }
-    avs_persistence_context_t *ctx =
-            avs_persistence_store_context_new(out_stream);
-    if (!ctx) {
-        persistence_log(ERROR, "Out of memory");
-        return -1;
-    }
-    retval = avs_persistence_list(ctx, (AVS_LIST(void) *) &repr->instances,
+    avs_persistence_context_t ctx =
+            avs_persistence_store_context_create(out_stream);
+    retval = avs_persistence_list(&ctx, (AVS_LIST(void) *) &repr->instances,
                                   sizeof(sec_instance_t), handle_instance,
                                   (void *) (intptr_t) 1, NULL);
-    avs_persistence_context_delete(ctx);
     if (!retval) {
         _anjay_sec_clear_modified(repr);
         persistence_log(INFO, "Security Object state persisted");
@@ -173,14 +168,10 @@ int anjay_security_object_restore(anjay_t *anjay,
         persistence_log(ERROR, "Header magic constant mismatch");
         return -1;
     }
-    avs_persistence_context_t *restore_ctx =
-            avs_persistence_restore_context_new(in_stream);
-    if (!restore_ctx) {
-        persistence_log(ERROR, "Cannot create persistence restore context");
-        return -1;
-    }
+    avs_persistence_context_t restore_ctx =
+            avs_persistence_restore_context_create(in_stream);
     repr->instances = NULL;
-    retval = avs_persistence_list(restore_ctx,
+    retval = avs_persistence_list(&restore_ctx,
                                   (AVS_LIST(void) *) &repr->instances,
                                   sizeof(sec_instance_t), handle_instance,
                                   (void *) (intptr_t) version, NULL);
@@ -190,7 +181,6 @@ int anjay_security_object_restore(anjay_t *anjay,
     } else {
         _anjay_sec_destroy_instances(&backup.instances);
     }
-    avs_persistence_context_delete(restore_ctx);
     if (!retval) {
         _anjay_sec_clear_modified(repr);
         persistence_log(INFO, "Security Object state restored");

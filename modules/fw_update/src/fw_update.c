@@ -22,6 +22,7 @@
 #include <anjay/fw_update.h>
 
 #include <anjay_modules/dm/modules.h>
+#include <anjay_modules/dm_utils.h>
 #include <anjay_modules/downloader.h>
 #include <anjay_modules/io_utils.h>
 #include <anjay_modules/sched.h>
@@ -53,19 +54,6 @@ typedef enum {
     UPDATE_STATE_UPDATING
 } fw_update_state_t;
 
-typedef enum {
-    UPDATE_RESULT_INITIAL = 0,
-    UPDATE_RESULT_SUCCESS = 1,
-    UPDATE_RESULT_NOT_ENOUGH_SPACE = 2,
-    UPDATE_RESULT_OUT_OF_MEMORY = 3,
-    UPDATE_RESULT_CONNECTION_LOST = 4,
-    UPDATE_RESULT_INTEGRITY_FAILURE = 5,
-    UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE = 6,
-    UPDATE_RESULT_INVALID_URI = 7,
-    UPDATE_RESULT_FAILED = 8,
-    UPDATE_RESULT_UNSUPPORTED_PROTOCOL = 9
-} fw_update_result_t;
-
 typedef struct {
     const anjay_fw_update_handlers_t *handlers;
     void *arg;
@@ -79,7 +67,7 @@ typedef struct fw_repr {
     avs_net_security_info_t *security_from_dm;
 
     fw_update_state_t state;
-    fw_update_result_t result;
+    anjay_fw_update_result_t result;
     const char *package_uri;
     bool retry_download_on_expired;
     anjay_sched_handle_t update_job;
@@ -88,6 +76,33 @@ typedef struct fw_repr {
 static inline fw_repr_t *get_fw(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
     return AVS_CONTAINER_OF(obj_ptr, fw_repr_t, def);
+}
+
+static void set_update_result(anjay_t *anjay,
+                              fw_repr_t *fw,
+                              anjay_fw_update_result_t new_result) {
+    if (fw->result != new_result) {
+        fw_log(DEBUG, "Firmware Update Result change: %d -> %d",
+               (int) fw->result, (int) new_result);
+        fw->result = new_result;
+        anjay_notify_changed(anjay, FW_OID, 0, FW_RES_UPDATE_RESULT);
+    }
+}
+
+static void
+set_state(anjay_t *anjay, fw_repr_t *fw, fw_update_state_t new_state) {
+    if (fw->state != new_state) {
+        fw_log(DEBUG, "Firmware Update State change: %d -> %d", (int) fw->state,
+               (int) new_state);
+        fw->state = new_state;
+        anjay_notify_changed(anjay, FW_OID, 0, FW_RES_STATE);
+    }
+}
+
+static void set_user_state(fw_user_state_t *user, fw_update_state_t new_state) {
+    fw_log(DEBUG, "user->state change: %d -> %d", (int) user->state,
+           (int) new_state);
+    user->state = new_state;
 }
 
 static int
@@ -101,7 +116,7 @@ user_state_ensure_stream_open(fw_user_state_t *user,
     int result =
             user->handlers->stream_open(user->arg, package_uri, package_etag);
     if (!result) {
-        user->state = UPDATE_STATE_DOWNLOADING;
+        set_user_state(user, UPDATE_STATE_DOWNLOADING);
     }
     return result;
 }
@@ -129,10 +144,18 @@ static const char *user_state_get_version(fw_user_state_t *user) {
 }
 
 static int user_state_perform_upgrade(fw_user_state_t *user) {
-    assert(user->state == UPDATE_STATE_DOWNLOADED);
+    if (user->state != UPDATE_STATE_DOWNLOADED) {
+        fw_log(WARNING, "Update State %d != %d (DOWNLOADED); aborting",
+               (int) user->state, (int) UPDATE_STATE_DOWNLOADED);
+        return -1;
+    }
+
     int result = user->handlers->perform_upgrade(user->arg);
-    if (!result) {
-        user->state = UPDATE_STATE_UPDATING;
+    // If the state was changed during perform_upgrade handler, this means
+    // @ref anjay_fw_update_set_result was called and has overwritten the
+    // State and Result. In that case, do not change State to Updating.
+    if (!result && user->state == UPDATE_STATE_DOWNLOADED) {
+        set_user_state(user, UPDATE_STATE_UPDATING);
     }
     return result;
 }
@@ -141,18 +164,18 @@ static int finish_user_stream(fw_repr_t *fw) {
     assert(fw->user_state.state == UPDATE_STATE_DOWNLOADING);
     int result = fw->user_state.handlers->stream_finish(fw->user_state.arg);
     if (result) {
-        fw->user_state.state = UPDATE_STATE_IDLE;
+        set_user_state(&fw->user_state, UPDATE_STATE_IDLE);
         avs_free(fw->security_from_dm);
         fw->security_from_dm = NULL;
     } else {
-        fw->user_state.state = UPDATE_STATE_DOWNLOADED;
+        set_user_state(&fw->user_state, UPDATE_STATE_DOWNLOADED);
     }
     return result;
 }
 
 static void reset_user_state(fw_repr_t *fw) {
     fw->user_state.handlers->reset(fw->user_state.arg);
-    fw->user_state.state = UPDATE_STATE_IDLE;
+    set_user_state(&fw->user_state, UPDATE_STATE_IDLE);
     avs_free(fw->security_from_dm);
     fw->security_from_dm = NULL;
 }
@@ -186,35 +209,18 @@ static int get_coap_tx_params(fw_repr_t *fw,
     return -1;
 }
 
-static void set_update_result(anjay_t *anjay,
-                              fw_repr_t *fw,
-                              fw_update_result_t new_result) {
-    if (fw->result != new_result) {
-        fw->result = new_result;
-        anjay_notify_changed(anjay, FW_OID, 0, FW_RES_UPDATE_RESULT);
-    }
-}
-
-static void
-set_state(anjay_t *anjay, fw_repr_t *fw, fw_update_state_t new_state) {
-    if (fw->state != new_state) {
-        fw->state = new_state;
-        anjay_notify_changed(anjay, FW_OID, 0, FW_RES_STATE);
-    }
-}
-
 static void handle_err_result(anjay_t *anjay,
                               fw_repr_t *fw,
                               fw_update_state_t new_state,
                               int result,
-                              fw_update_result_t default_result) {
-    fw_update_result_t new_result;
+                              anjay_fw_update_result_t default_result) {
+    anjay_fw_update_result_t new_result;
     switch (result) {
-    case -UPDATE_RESULT_NOT_ENOUGH_SPACE:
-    case -UPDATE_RESULT_OUT_OF_MEMORY:
-    case -UPDATE_RESULT_INTEGRITY_FAILURE:
-    case -UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE:
-        new_result = (fw_update_result_t) -result;
+    case -ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE:
+    case -ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY:
+    case -ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE:
+    case -ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE:
+        new_result = (anjay_fw_update_result_t) -result;
         break;
     default:
         new_result = default_result;
@@ -226,7 +232,7 @@ static void handle_err_result(anjay_t *anjay,
 static void reset(anjay_t *anjay, fw_repr_t *fw) {
     reset_user_state(fw);
     set_state(anjay, fw, UPDATE_STATE_IDLE);
-    set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
+    set_update_result(anjay, fw, ANJAY_FW_UPDATE_RESULT_INITIAL);
     fw_log(INFO, "Firmware Object state reset");
 }
 
@@ -357,7 +363,7 @@ static int download_write_block(anjay_t *anjay,
     if (result) {
         fw_log(ERROR, "could not write firmware");
         handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
-                          UPDATE_RESULT_NOT_ENOUGH_SPACE);
+                          ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE);
         return -1;
     }
 
@@ -377,14 +383,15 @@ static void download_finished(anjay_t *anjay, int result, void *fw_) {
         // something already failed in download_write_block()
         reset_user_state(fw);
     } else if (result) {
-        fw_update_result_t update_result = UPDATE_RESULT_CONNECTION_LOST;
+        anjay_fw_update_result_t update_result =
+                ANJAY_FW_UPDATE_RESULT_CONNECTION_LOST;
         if (errno == ENOMEM) {
-            update_result = UPDATE_RESULT_OUT_OF_MEMORY;
+            update_result = ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY;
         } else if (errno == EADDRNOTAVAIL) {
-            update_result = UPDATE_RESULT_INVALID_URI;
+            update_result = ANJAY_FW_UPDATE_RESULT_INVALID_URI;
         } else if (errno == ECONNREFUSED) {
             if (result == ANJAY_ERR_NOT_FOUND || result == 404) {
-                update_result = UPDATE_RESULT_INVALID_URI;
+                update_result = ANJAY_FW_UPDATE_RESULT_INVALID_URI;
             }
         }
         reset_user_state(fw);
@@ -407,10 +414,10 @@ static void download_finished(anjay_t *anjay, int result, void *fw_) {
                                                        fw->package_uri, NULL))
                || (result = finish_user_stream(fw))) {
         handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
-                          UPDATE_RESULT_NOT_ENOUGH_SPACE);
+                          ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE);
     } else {
         set_state(anjay, fw, UPDATE_STATE_DOWNLOADED);
-        set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
+        set_update_result(anjay, fw, ANJAY_FW_UPDATE_RESULT_INITIAL);
     }
 }
 
@@ -432,7 +439,7 @@ static int schedule_background_anjay_download(anjay_t *anjay,
         int result = get_security_info(anjay, fw, &cfg.security_info);
         if (result) {
             handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
-                              UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
+                              ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
             return -1;
         }
     }
@@ -444,15 +451,15 @@ static int schedule_background_anjay_download(anjay_t *anjay,
 
     anjay_download_handle_t handle = anjay_download(anjay, &cfg);
     if (!handle) {
-        fw_update_result_t update_result;
+        anjay_fw_update_result_t update_result;
         if (errno == EADDRNOTAVAIL || errno == EINVAL) {
-            update_result = UPDATE_RESULT_INVALID_URI;
+            update_result = ANJAY_FW_UPDATE_RESULT_INVALID_URI;
         } else if (errno == ENOMEM) {
-            update_result = UPDATE_RESULT_OUT_OF_MEMORY;
+            update_result = ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY;
         } else if (errno == EPROTONOSUPPORT) {
-            update_result = UPDATE_RESULT_UNSUPPORTED_PROTOCOL;
+            update_result = ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL;
         } else {
-            update_result = UPDATE_RESULT_CONNECTION_LOST;
+            update_result = ANJAY_FW_UPDATE_RESULT_CONNECTION_LOST;
         }
         reset_user_state(fw);
         set_update_result(anjay, fw, update_result);
@@ -460,7 +467,7 @@ static int schedule_background_anjay_download(anjay_t *anjay,
     }
 
     fw->retry_download_on_expired = (etag != NULL);
-    set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
+    set_update_result(anjay, fw, ANJAY_FW_UPDATE_RESULT_INITIAL);
     set_state(anjay, fw, UPDATE_STATE_DOWNLOADING);
     fw_log(INFO, "download started: %s", fw->package_uri);
     return 0;
@@ -485,7 +492,8 @@ static int write_firmware_to_stream(anjay_t *anjay,
             fw_log(ERROR, "anjay_get_bytes() failed");
 
             set_state(anjay, fw, UPDATE_STATE_IDLE);
-            set_update_result(anjay, fw, UPDATE_RESULT_CONNECTION_LOST);
+            set_update_result(anjay, fw,
+                              ANJAY_FW_UPDATE_RESULT_CONNECTION_LOST);
             return result;
         }
 
@@ -498,7 +506,7 @@ static int write_firmware_to_stream(anjay_t *anjay,
         }
         if (result) {
             handle_err_result(anjay, fw, UPDATE_STATE_IDLE, result,
-                              UPDATE_RESULT_NOT_ENOUGH_SPACE);
+                              ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE);
             return ANJAY_ERR_INTERNAL;
         }
         written += bytes_read;
@@ -548,10 +556,10 @@ static int write_firmware(anjay_t *anjay,
         if (stream_finish_result) {
             handle_err_result(anjay, fw, UPDATE_STATE_IDLE,
                               stream_finish_result,
-                              UPDATE_RESULT_NOT_ENOUGH_SPACE);
+                              ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE);
         } else {
             set_state(anjay, fw, UPDATE_STATE_DOWNLOADED);
-            set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
+            set_update_result(anjay, fw, ANJAY_FW_UPDATE_RESULT_INITIAL);
         }
     }
     return result;
@@ -604,7 +612,8 @@ static int fw_write(anjay_t *anjay,
             fw_log(ERROR,
                    "unsupported download protocol required for uri %s",
                    new_uri);
-            set_update_result(anjay, fw, UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
+            set_update_result(anjay, fw,
+                              ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
             result = ANJAY_ERR_BAD_REQUEST;
         }
 
@@ -643,7 +652,7 @@ static void perform_upgrade(anjay_t *anjay, const void *fw_ptr) {
     if (result) {
         fw_log(ERROR, "user_state_perform_upgrade() failed: %d", result);
         handle_err_result(anjay, fw, UPDATE_STATE_DOWNLOADED, result,
-                          UPDATE_RESULT_FAILED);
+                          ANJAY_FW_UPDATE_RESULT_FAILED);
     }
 }
 
@@ -667,7 +676,7 @@ static int fw_execute(anjay_t *anjay,
         }
 
         set_state(anjay, fw, UPDATE_STATE_UPDATING);
-        set_update_result(anjay, fw, UPDATE_RESULT_INITIAL);
+        set_update_result(anjay, fw, ANJAY_FW_UPDATE_RESULT_INITIAL);
         // update process will be continued in fw_on_notify
         return 0;
     }
@@ -719,7 +728,7 @@ fw_on_notify(anjay_t *anjay, anjay_notify_queue_t incoming_queue, void *fw_) {
         // we don't need to reschedule notifying,
         // we're already in the middle of it
         fw->state = UPDATE_STATE_DOWNLOADED;
-        fw->result = UPDATE_RESULT_OUT_OF_MEMORY;
+        fw->result = ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY;
     }
     return 0;
 }
@@ -775,7 +784,7 @@ initialize_fw_repr(anjay_t *anjay,
                            initial_state->resume_etag)) {
             fw_log(WARNING, "Could not resume firmware download");
             reset_user_state(repr);
-            if (repr->result == UPDATE_RESULT_CONNECTION_LOST
+            if (repr->result == ANJAY_FW_UPDATE_RESULT_CONNECTION_LOST
                     && initial_state->resume_etag
                     && schedule_background_anjay_download(anjay, repr, 0,
                                                           NULL)) {
@@ -788,11 +797,16 @@ initialize_fw_repr(anjay_t *anjay,
 #endif // WITH_DOWNLOADER
         return 0;
     }
+    case ANJAY_FW_UPDATE_INITIAL_UPDATING:
+        repr->user_state.state = UPDATE_STATE_UPDATING;
+        repr->state = UPDATE_STATE_UPDATING;
+        repr->result = ANJAY_FW_UPDATE_RESULT_INITIAL;
+        return 0;
     case ANJAY_FW_UPDATE_INITIAL_NEUTRAL:
     case ANJAY_FW_UPDATE_INITIAL_SUCCESS:
     case ANJAY_FW_UPDATE_INITIAL_INTEGRITY_FAILURE:
     case ANJAY_FW_UPDATE_INITIAL_FAILED:
-        repr->result = (fw_update_result_t) initial_state->result;
+        repr->result = (anjay_fw_update_result_t) initial_state->result;
         return 0;
     default:
         fw_log(ERROR, "Invalid initial_state->result");
@@ -831,5 +845,55 @@ int anjay_fw_update_install(
         return -1;
     }
 
+    return 0;
+}
+
+static bool is_error_result(anjay_fw_update_result_t result) {
+    return result != ANJAY_FW_UPDATE_RESULT_INITIAL
+           && result != ANJAY_FW_UPDATE_RESULT_SUCCESS;
+}
+
+static bool is_result_change_allowed(fw_update_state_t current_state,
+                                     anjay_fw_update_result_t new_result) {
+    switch (current_state) {
+    case UPDATE_STATE_IDLE:
+        // changing result while nothing is going on is pointless
+        return false;
+    case UPDATE_STATE_DOWNLOADING:
+    case UPDATE_STATE_DOWNLOADED:
+        // FOTA is not supposed to be performed unless requested by the server;
+        // failing while downloading should still be an option
+        return is_error_result(new_result);
+    case UPDATE_STATE_UPDATING:
+        // unexpected reset is likely to confuse the server
+        return new_result != ANJAY_FW_UPDATE_RESULT_INITIAL;
+    }
+
+    AVS_UNREACHABLE("invalid enum value");
+    return false;
+}
+
+int anjay_fw_update_set_result(anjay_t *anjay,
+                               anjay_fw_update_result_t result) {
+    const anjay_dm_object_def_t *const *obj =
+            _anjay_dm_find_object_by_oid(anjay, FW_OID);
+    if (!obj) {
+        fw_log(WARNING, "Firmware Update object not installed");
+        return -1;
+    }
+
+    fw_repr_t *fw = get_fw(obj);
+    assert(fw);
+
+    if (!is_result_change_allowed(fw->state, result)) {
+        fw_log(WARNING,
+               "Firmware Update Result change to %d not allowed in State %d",
+               (int) result, (int) fw->state);
+        return -1;
+    }
+
+    reset_user_state(fw);
+    set_state(anjay, fw, UPDATE_STATE_IDLE);
+    set_update_result(anjay, fw, result);
     return 0;
 }

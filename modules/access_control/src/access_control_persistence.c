@@ -136,26 +136,20 @@ static int restore_instances(anjay_t *anjay,
 
 static int
 restore(anjay_t *anjay, access_control_t *ac, avs_stream_abstract_t *in) {
-    avs_persistence_context_t *restore_ctx =
-            avs_persistence_restore_context_new(in);
-    avs_persistence_context_t *ignore_ctx =
-            avs_persistence_ignore_context_new(in);
+    avs_persistence_context_t restore_ctx =
+            avs_persistence_restore_context_create(in);
+    avs_persistence_context_t ignore_ctx =
+            avs_persistence_ignore_context_create(in);
     access_control_state_t state = { NULL };
     int retval = -1;
-    if (!restore_ctx || !ignore_ctx) {
-        goto finish;
-    }
 
-    if ((retval = restore_instances(anjay, &state.instances, restore_ctx,
-                                    ignore_ctx))) {
+    if ((retval = restore_instances(anjay, &state.instances, &restore_ctx,
+                                    &ignore_ctx))) {
         _anjay_access_control_clear_state(&state);
-        goto finish;
+    } else {
+        _anjay_access_control_clear_state(&ac->current);
+        ac->current = state;
     }
-    _anjay_access_control_clear_state(&ac->current);
-    ac->current = state;
-finish:
-    avs_persistence_context_delete(restore_ctx);
-    avs_persistence_context_delete(ignore_ctx);
     return retval;
 }
 
@@ -172,20 +166,15 @@ int anjay_access_control_persist(anjay_t *anjay, avs_stream_abstract_t *out) {
     if (retval) {
         return retval;
     }
-    avs_persistence_context_t *ctx = avs_persistence_store_context_new(out);
-    if (!ctx) {
-        ac_log(ERROR, "Out of memory");
-        return -1;
-    }
-    retval =
-            avs_persistence_list(ctx, (AVS_LIST(void) *) &ac->current.instances,
-                                 sizeof(*ac->current.instances),
-                                 persist_instance, NULL, NULL);
+    avs_persistence_context_t ctx = avs_persistence_store_context_create(out);
+    retval = avs_persistence_list(&ctx,
+                                  (AVS_LIST(void) *) &ac->current.instances,
+                                  sizeof(*ac->current.instances),
+                                  persist_instance, NULL, NULL);
     if (!retval) {
         ac_log(INFO, "Access Control state persisted");
         _anjay_access_control_clear_modified(ac);
     }
-    avs_persistence_context_delete(ctx);
     return retval;
 }
 

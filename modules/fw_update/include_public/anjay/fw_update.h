@@ -23,6 +23,25 @@
 extern "C" {
 #endif
 
+/**
+ * Numeric values of the Firmware Update Result resource. See LwM2M
+ * specification for details.
+ *
+ * Note: they SHOULD only be used with @ref anjay_fw_update_set_result .
+ */
+typedef enum {
+    ANJAY_FW_UPDATE_RESULT_INITIAL = 0,
+    ANJAY_FW_UPDATE_RESULT_SUCCESS = 1,
+    ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE = 2,
+    ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY = 3,
+    ANJAY_FW_UPDATE_RESULT_CONNECTION_LOST = 4,
+    ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE = 5,
+    ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE = 6,
+    ANJAY_FW_UPDATE_RESULT_INVALID_URI = 7,
+    ANJAY_FW_UPDATE_RESULT_FAILED = 8,
+    ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL = 9
+} anjay_fw_update_result_t;
+
 /** @name Firmware update result codes
  * @{
  * The following result codes may be returned from
@@ -34,10 +53,14 @@ extern "C" {
  * attempting to use other negated value will be checked and cause a fall-back
  * to a value default for a given handler.
  */
-#define ANJAY_FW_UPDATE_ERR_NOT_ENOUGH_SPACE (-2)
-#define ANJAY_FW_UPDATE_ERR_OUT_OF_MEMORY (-3)
-#define ANJAY_FW_UPDATE_ERR_INTEGRITY_FAILURE (-5)
-#define ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE (-6)
+#define ANJAY_FW_UPDATE_ERR_NOT_ENOUGH_SPACE \
+    (-ANJAY_FW_UPDATE_RESULT_NOT_ENOUGH_SPACE)
+#define ANJAY_FW_UPDATE_ERR_OUT_OF_MEMORY \
+    (-ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY)
+#define ANJAY_FW_UPDATE_ERR_INTEGRITY_FAILURE \
+    (-ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE)
+#define ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE \
+    (-ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE)
 /** @} */
 
 /**
@@ -45,6 +68,14 @@ extern "C" {
  * time of initialization of the Firmware Update object.
  */
 typedef enum {
+    /**
+     * Corresponds to the "Updating" State and "Initial" Result. Shall be used
+     * when the device rebooted as part of the update process, but the firmware
+     * image is not fully applied yet. The application MUST use
+     * @ref anjay_fw_update_set_result to set the result to success or failure
+     * after the update process is complete.
+     */
+    ANJAY_FW_UPDATE_INITIAL_UPDATING = -3,
     /**
      * Corresponds to the "Downloaded" State and "Initial" Result. Shall be used
      * when the device unexpectedly rebooted when the firmware image has already
@@ -539,6 +570,38 @@ int anjay_fw_update_install(
  */
 avs_net_security_info_t *anjay_fw_update_load_security_from_dm(anjay_t *anjay,
                                                                const char *uri);
+
+/**
+ * Sets the Firmware Update Result to @p result, interrupting the update
+ * process.
+ *
+ * A successful call to this function always sets Update State to Idle (0).
+ * If the function fails, neither Update State nor Update Result are changed.
+ *
+ * Some state transitions are disallowed and cause this function to fail:
+ *
+ * - @ref ANJAY_FW_UPDATE_RESULT_INITIAL is never allowed and causes this
+ *   function to fail.
+ *
+ * - @ref ANJAY_FW_UPDATE_RESULT_SUCCESS is only allowed if the firmware
+ *   application process was started by the server (an Execute operation was
+ *   already performed on the Update resource of the Firmware Update object or
+ *   @ref ANJAY_FW_UPDATE_INITIAL_UPDATING was used in a call to @ref
+ *   anjay_fw_update_install . Otherwise, the function fails.
+ *
+ * - Other values of @p result (various error codes) are only allowed if
+ *   Firmware Update State is not Idle (0), i.e. firmware is being downloaded,
+ *   was already downloaded or is being applied.
+ *
+ * WARNING: calling this in @ref anjay_fw_update_perform_upgrade_t handler is
+ * supported, but the result of using it from within any other of
+ * @ref anjay_fw_update_handlers_t handlers is undefined.
+ *
+ * @param anjay  Anjay object to operate on.
+ *
+ * @param result Value of the Update Result resource to set.
+ */
+int anjay_fw_update_set_result(anjay_t *anjay, anjay_fw_update_result_t result);
 
 #ifdef __cplusplus
 }

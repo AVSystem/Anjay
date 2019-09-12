@@ -38,7 +38,9 @@
 #define container_of(Ptr, Type, Member) \
     ((Type *) (intptr_t) ((const char *) (Ptr) -offsetof(Type, Member)))
 
-extern char **saved_argv;
+char **argv_get(void);
+int argv_store(int argc, char **argv);
+int argv_append(const char *arg);
 
 static inline unsigned time_to_rand(void) {
     return 1103515245u * (unsigned) avs_time_real_now().since_real_epoch.seconds

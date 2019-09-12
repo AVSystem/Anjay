@@ -51,7 +51,7 @@ extensions = [
                        os.path.join(SCRIPT_DIR, 'src/common.cpp'),
                        os.path.join(SCRIPT_DIR, 'src/context.cpp'),
                        os.path.join(SCRIPT_DIR, 'src/security.cpp')],
-              libraries=['mbedtls', 'mbedcrypto'],
+              libraries=['mbedtls', 'mbedcrypto', 'mbedx509'],
               include_dirs=[os.path.join(SCRIPT_DIR, 'src/pybind11/include/')],
               extra_compile_args=['-std=c++11', '-isystem', '/usr/local/include'])
 ]

@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 2.8.12)
 
 project(anjay C)
-set(ANJAY_VERSION "1.15.5" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "1.16" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -410,6 +410,7 @@ if(WITH_LOCAL_AVS_COMMONS)
 
         find_program(VALGRIND_EXECUTABLE valgrind)
         cmake_dependent_option(WITH_VALGRIND "Enable usage of valgrind during unit tests" OFF "VALGRIND_EXECUTABLE" OFF)
+        cmake_dependent_option(WITH_VALGRIND_TRACK_ORIGINS "Add --track-origins to valgrind command line during unit tests" ON "WITH_VALGRIND" OFF)
     endif()
     find_package(avs_commons COMPONENTS ${AVS_COMMONS_COMPONENTS} REQUIRED)
 else()
@@ -672,7 +673,10 @@ if(WITH_TEST)
     set(NPROC "${ANJAY_DEFAULT_NPROC}" CACHE STRING "Number of threads for multi-threaded build/test operations")
 
     if(WITH_VALGRIND)
-        set(VALGRIND ${VALGRIND_EXECUTABLE} --leak-check=full --track-origins=yes -q --error-exitcode=63 --suppressions=${CMAKE_CURRENT_SOURCE_DIR}/valgrind_test.supp)
+        set(VALGRIND ${VALGRIND_EXECUTABLE} --leak-check=full -q --error-exitcode=63 --suppressions=${CMAKE_CURRENT_SOURCE_DIR}/valgrind_test.supp)
+        if(WITH_VALGRIND_TRACK_ORIGINS)
+            list(APPEND VALGRIND --track-origins=yes)
+        endif()
     endif()
 
     include_directories(test/include)

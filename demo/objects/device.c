@@ -278,7 +278,7 @@ static void perform_reboot(void *unused) {
 #endif
     {
         demo_log(INFO, "*** REBOOT ***");
-        execv(exe_path, saved_argv);
+        execv(exe_path, argv_get());
     }
     demo_log(ERROR, "could not reboot");
 }

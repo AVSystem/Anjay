@@ -375,13 +375,8 @@ int _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
     if (retval) {
         return retval;
     }
-    avs_persistence_context_t *ctx = avs_persistence_store_context_new(out);
-    if (!ctx) {
-        fas_log(ERROR, "Out of memory");
-        return -1;
-    }
-    retval = HANDLE_LIST(object, ctx, &attr_storage->objects, (void *) 2);
-    avs_persistence_context_delete(ctx);
+    avs_persistence_context_t ctx = avs_persistence_store_context_create(out);
+    retval = HANDLE_LIST(object, &ctx, &attr_storage->objects, (void *) 2);
     return retval;
 }
 
@@ -414,16 +409,11 @@ int _anjay_attr_storage_restore_inner(anjay_t *anjay,
     }
 
     int retval = -1;
-    avs_persistence_context_t *ctx = avs_persistence_restore_context_new(in);
-    if (!ctx) {
-        fas_log(ERROR, "Out of memory");
-    } else {
-        (void) ((retval = HANDLE_LIST(object, ctx, &attr_storage->objects,
-                                      (void *) version))
-                || (retval = (is_attr_storage_sane(attr_storage) ? 0 : -1))
-                || (retval = clear_nonexistent_entries(anjay, attr_storage)));
-        avs_persistence_context_delete(ctx);
-    }
+    avs_persistence_context_t ctx = avs_persistence_restore_context_create(in);
+    (void) ((retval = HANDLE_LIST(object, &ctx, &attr_storage->objects,
+                                  (void *) version))
+            || (retval = (is_attr_storage_sane(attr_storage) ? 0 : -1))
+            || (retval = clear_nonexistent_entries(anjay, attr_storage)));
     if (retval) {
         _anjay_attr_storage_clear(attr_storage);
     }
