@@ -22,6 +22,8 @@
 
 #include <anjay/fw_update.h>
 
+#include "iosched.h"
+
 typedef struct firmware_metadata {
     uint8_t magic[8]; // "ANJAY_FW"
     uint16_t version;
@@ -30,6 +32,7 @@ typedef struct firmware_metadata {
 } fw_metadata_t;
 
 typedef struct {
+    anjay_t *anjay;
     fw_metadata_t metadata;
     char *administratively_set_target_path;
     char *next_target_path;
@@ -40,10 +43,12 @@ typedef struct {
 } fw_update_logic_t;
 
 int firmware_update_install(anjay_t *anjay,
+                            iosched_t *iosched,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
-                            const avs_coap_tx_params_t *tx_params);
+                            const avs_coap_tx_params_t *tx_params,
+                            anjay_fw_update_result_t delayed_result);
 
 void firmware_update_destroy(fw_update_logic_t *fw_update);
 

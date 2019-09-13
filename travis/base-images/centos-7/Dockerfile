@@ -13,6 +13,8 @@
 # limitations under the License.
 
 FROM centos:7
+# Work around issue described in https://sourceware.org/ml/libc-alpha/2014-07/msg00200.html
+COPY ./valgrind.supp /tmp/valgrind.supp
 # required for mbedtls-devel and python3.5
 RUN yum install -y https://centos7.iuscommunity.org/ius-release.rpm
 RUN yum install -y which git make cmake3 boost-python-devel mbedtls-devel openssl openssl-devel python-sphinx python-sphinx_rtd_theme valgrind valgrind-devel gcc gcc-c++
@@ -24,5 +26,4 @@ RUN python3.5 -m pip install cryptography requests jinja2
 # older centos7 images do not have python3
 # some newer ones make it resolve to python3.4 and we need 3.5+
 RUN ln -sf /usr/bin/python3.5 /usr/bin/python3
-COPY . /Anjay
-CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && make -j && cd test/integration && make integration_check
+RUN cat /tmp/valgrind.supp >> /usr/lib64/valgrind/default.supp

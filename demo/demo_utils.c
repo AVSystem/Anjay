@@ -30,6 +30,52 @@
 
 #include "demo_utils.h"
 
+static struct {
+    size_t argc;
+    char **argv;
+} g_saved_args;
+
+char **argv_get(void) {
+    AVS_ASSERT(g_saved_args.argv, "argv_store not called before argv_get");
+    return g_saved_args.argv;
+}
+
+int argv_store(int argc, char **argv) {
+    AVS_ASSERT(argc >= 0, "unexpected negative value of argc");
+
+    char **argv_copy = (char **) avs_calloc((size_t) argc + 1, sizeof(char *));
+    if (!argv_copy) {
+        return -1;
+    }
+
+    for (size_t i = 0; i < (size_t) argc; ++i) {
+        argv_copy[i] = argv[i];
+    }
+
+    avs_free(g_saved_args.argv);
+    g_saved_args.argv = argv_copy;
+    g_saved_args.argc = (size_t) argc;
+    return 0;
+}
+
+int argv_append(const char *arg) {
+    assert(arg);
+
+    size_t new_argc = g_saved_args.argc + 1;
+
+    char **new_argv = (char **) avs_realloc(g_saved_args.argv,
+                                            (new_argc + 1) * sizeof(char *));
+    if (new_argv == NULL) {
+        return -1;
+    }
+
+    new_argv[new_argc - 1] = (char *) (intptr_t) arg;
+    new_argv[new_argc] = NULL;
+    g_saved_args.argv = new_argv;
+    g_saved_args.argc = new_argc;
+    return 0;
+}
+
 static double geo_distance_m_with_radians(double lat1,
                                           double lon1,
                                           double lat2,

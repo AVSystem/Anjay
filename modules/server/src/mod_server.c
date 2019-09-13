@@ -65,8 +65,8 @@ static int assign_iid(server_repr_t *repr, anjay_iid_t *inout_iid) {
     return 0;
 }
 
-static int insert_created_instance(server_repr_t *repr,
-                                   AVS_LIST(server_instance_t) new_instance) {
+static void insert_created_instance(server_repr_t *repr,
+                                    AVS_LIST(server_instance_t) new_instance) {
     AVS_LIST(server_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
         assert((*ptr)->iid != new_instance->iid);
@@ -76,7 +76,6 @@ static int insert_created_instance(server_repr_t *repr,
     }
     _anjay_serv_mark_modified(repr);
     AVS_LIST_INSERT(ptr, new_instance);
-    return 0;
 }
 
 static int add_instance(server_repr_t *repr,
@@ -112,10 +111,8 @@ static int add_instance(server_repr_t *repr,
     new_instance->has_ssid = true;
     new_instance->has_lifetime = true;
     new_instance->has_notification_storing = true;
-    if (insert_created_instance(repr, new_instance)) {
-        AVS_LIST_CLEAR(&new_instance);
-        return -1;
-    }
+    insert_created_instance(repr, new_instance);
+
     server_log(INFO, "Added instance %u (SSID: %u)", *inout_iid,
                instance->ssid);
     return 0;
@@ -194,10 +191,7 @@ static int serv_instance_create(anjay_t *anjay,
     created->iid = *inout_iid;
     reset_instance_resources(created);
 
-    if (insert_created_instance(repr, created)) {
-        AVS_LIST_CLEAR(&created);
-        return ANJAY_ERR_INTERNAL;
-    }
+    insert_created_instance(repr, created);
     return 0;
 }
 

@@ -35,6 +35,10 @@
 
 #define FORCE_ERROR_OUT_OF_MEMORY 1
 #define FORCE_ERROR_FAILED_UPDATE 2
+#define FORCE_DELAYED_SUCCESS 3
+#define FORCE_DELAYED_ERROR_FAILED_UPDATE 4
+#define FORCE_SET_SUCCESS_FROM_PERFORM_UPGRADE 5
+#define FORCE_SET_FAILURE_FROM_PERFORM_UPGRADE 6
 
 static char *generate_random_target_filepath(void) {
     char *result = NULL;
@@ -344,21 +348,18 @@ static int write_persistence_file(const char *path,
                                   bool filename_administratively_set,
                                   const anjay_etag_t *etag) {
     avs_stream_abstract_t *stream = NULL;
-    avs_persistence_context_t *ctx = NULL;
+    avs_persistence_context_t ctx;
     int8_t result8 = (int8_t) result;
     int retval = 0;
     if (!(stream = avs_stream_file_create(path, AVS_STREAM_FILE_WRITE))
-            || !(ctx = avs_persistence_store_context_new(stream))
-            || avs_persistence_bytes(ctx, (uint8_t *) &result8, 1)
-            || avs_persistence_string(ctx, (char **) (intptr_t) &uri)
-            || avs_persistence_string(ctx, &download_file)
-            || avs_persistence_bool(ctx, &filename_administratively_set)
-            || store_etag(ctx, etag)) {
+            || ((ctx = avs_persistence_store_context_create(stream)), 0)
+            || avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1)
+            || avs_persistence_string(&ctx, (char **) (intptr_t) &uri)
+            || avs_persistence_string(&ctx, &download_file)
+            || avs_persistence_bool(&ctx, &filename_administratively_set)
+            || store_etag(&ctx, etag)) {
         demo_log(ERROR, "Could not write firmware state persistence file");
         retval = -1;
-    }
-    if (ctx) {
-        avs_persistence_context_delete(ctx);
     }
     if (stream) {
         avs_stream_cleanup(&stream);
@@ -485,13 +486,42 @@ static int fw_perform_upgrade(void *fw_) {
     }
 
     demo_log(INFO, "*** FIRMWARE UPDATE: %s ***", fw->next_target_path);
-    if (fw->metadata.force_error_case == FORCE_ERROR_FAILED_UPDATE) {
+    switch (fw->metadata.force_error_case) {
+    case FORCE_ERROR_FAILED_UPDATE:
         demo_log(ERROR, "update failed");
         delete_persistence_file(fw);
         return -1;
+    case FORCE_DELAYED_SUCCESS:
+        if (argv_append("--delayed-upgrade-result") || argv_append("0")) {
+            demo_log(ERROR, "could not append delayed result to argv");
+            return -1;
+        }
+        break;
+    case FORCE_DELAYED_ERROR_FAILED_UPDATE:
+        if (argv_append("--delayed-upgrade-result") || argv_append("8")) {
+            demo_log(ERROR, "could not append delayed result to argv");
+            return -1;
+        }
+        break;
+    case FORCE_SET_SUCCESS_FROM_PERFORM_UPGRADE:
+        if (anjay_fw_update_set_result(fw->anjay,
+                                       ANJAY_FW_UPDATE_RESULT_SUCCESS)) {
+            demo_log(ERROR, "anjay_fw_update_set_result failed");
+            return -1;
+        }
+        return 0;
+    case FORCE_SET_FAILURE_FROM_PERFORM_UPGRADE:
+        if (anjay_fw_update_set_result(fw->anjay,
+                                       ANJAY_FW_UPDATE_RESULT_FAILED)) {
+            demo_log(ERROR, "anjay_fw_update_set_result failed");
+            return -1;
+        }
+        return 0;
+    default:
+        break;
     }
 
-    execv(fw->next_target_path, saved_argv);
+    execv(fw->next_target_path, argv_get());
 
     demo_log(ERROR, "execv failed (%s)", strerror(errno));
     delete_persistence_file(fw);
@@ -572,19 +602,19 @@ static persistence_file_data_t read_persistence_file(const char *path) {
     persistence_file_data_t data;
     memset(&data, 0, sizeof(data));
     avs_stream_abstract_t *stream = NULL;
-    avs_persistence_context_t *ctx = NULL;
+    avs_persistence_context_t ctx;
     int8_t result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_NEUTRAL;
     if ((stream = avs_stream_file_create(path, AVS_STREAM_FILE_READ))) {
         // invalid or empty but existing file still signifies success
         result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_SUCCESS;
     }
-    if (!stream || !(ctx = avs_persistence_restore_context_new(stream))
-            || avs_persistence_bytes(ctx, (uint8_t *) &result8, 1)
+    if (!stream || ((ctx = avs_persistence_restore_context_create(stream)), 0)
+            || avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1)
             || !is_valid_result(result8)
-            || avs_persistence_string(ctx, &data.uri)
-            || avs_persistence_string(ctx, &data.download_file)
-            || avs_persistence_bool(ctx, &data.filename_administratively_set)
-            || restore_etag(ctx, &data.etag)) {
+            || avs_persistence_string(&ctx, &data.uri)
+            || avs_persistence_string(&ctx, &data.download_file)
+            || avs_persistence_bool(&ctx, &data.filename_administratively_set)
+            || restore_etag(&ctx, &data.etag)) {
         demo_log(WARNING,
                  "Invalid data in the firmware state persistence file");
         avs_free(data.uri);
@@ -592,20 +622,34 @@ static persistence_file_data_t read_persistence_file(const char *path) {
         memset(&data, 0, sizeof(data));
     }
     data.result = (anjay_fw_update_initial_result_t) result8;
-    if (ctx) {
-        avs_persistence_context_delete(ctx);
-    }
     if (stream) {
         avs_stream_cleanup(&stream);
     }
     return data;
 }
 
+typedef struct {
+    anjay_t *anjay;
+    anjay_fw_update_result_t delayed_result;
+} set_delayed_fw_update_result_args_t;
+
+static void set_delayed_fw_update_result(void *arg) {
+    set_delayed_fw_update_result_args_t *args =
+            (set_delayed_fw_update_result_args_t *) arg;
+
+    anjay_fw_update_set_result(args->anjay, args->delayed_result);
+}
+
 int firmware_update_install(anjay_t *anjay,
+                            iosched_t *iosched,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
-                            const avs_coap_tx_params_t *tx_params) {
+                            const avs_coap_tx_params_t *tx_params,
+                            anjay_fw_update_result_t delayed_result) {
+    int result = -1;
+
+    fw->anjay = anjay;
     fw->persistence_file = persistence_file;
     if (security_info) {
         memcpy(&fw->security_info, security_info, sizeof(fw->security_info));
@@ -638,6 +682,33 @@ int firmware_update_install(anjay_t *anjay,
         .resume_etag = data.etag
     };
 
+    if (delayed_result != ANJAY_FW_UPDATE_RESULT_INITIAL) {
+        demo_log(INFO,
+                 "delayed_result == %d; initializing Firmware Update in "
+                 "UPDATING state",
+                 (int) delayed_result);
+        state.result = ANJAY_FW_UPDATE_INITIAL_UPDATING;
+    } else {
+        // Simulate FOTA process that finishes after the LwM2M client starts by
+        // changing the Update Result later at runtime
+        set_delayed_fw_update_result_args_t *args =
+                (set_delayed_fw_update_result_args_t *) avs_malloc(
+                        sizeof(*args));
+        if (!args) {
+            goto exit;
+        }
+        *args = (set_delayed_fw_update_result_args_t) {
+            .anjay = anjay,
+            .delayed_result = delayed_result
+        };
+        if (iosched_instant_entry_new(iosched, set_delayed_fw_update_result,
+                                      args, free)
+                == NULL) {
+            avs_free(args);
+            goto exit;
+        }
+    }
+
     if (state.result == ANJAY_FW_UPDATE_INITIAL_DOWNLOADING) {
         long offset;
         if (!fw->next_target_path
@@ -658,8 +729,9 @@ int firmware_update_install(anjay_t *anjay,
         maybe_delete_firmware_file(fw);
     }
 
-    int result =
-            anjay_fw_update_install(anjay, &FW_UPDATE_HANDLERS, fw, &state);
+    result = anjay_fw_update_install(anjay, &FW_UPDATE_HANDLERS, fw, &state);
+
+exit:
     avs_free(data.uri);
     avs_free(data.etag);
     if (result) {

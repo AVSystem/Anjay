@@ -39,8 +39,6 @@
 #include <anjay/security.h>
 #include <anjay/server.h>
 
-char **saved_argv;
-
 static int security_object_reload(anjay_demo_t *demo) {
     anjay_security_object_purge(demo->anjay);
     const server_connection_args_t *args = demo->connection_args;
@@ -308,12 +306,14 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     if (!demo->anjay || !demo->iosched
             || anjay_attr_storage_install(demo->anjay)
             || anjay_access_control_install(demo->anjay)
-            || firmware_update_install(demo->anjay, &demo->fw_update,
-                                       cmdline_args->fw_updated_marker_path,
-                                       fw_security_info_ptr,
-                                       cmdline_args->fwu_tx_params_modified
-                                               ? &cmdline_args->fwu_tx_params
-                                               : NULL)) {
+            || firmware_update_install(
+                       demo->anjay, demo->iosched, &demo->fw_update,
+                       cmdline_args->fw_updated_marker_path,
+                       fw_security_info_ptr,
+                       cmdline_args->fwu_tx_params_modified
+                               ? &cmdline_args->fwu_tx_params
+                               : NULL,
+                       cmdline_args->fw_update_delayed_result)) {
         return -1;
     }
 
@@ -390,6 +390,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         // no success log there, as Attribute Storage module logs it by itself
         avs_stream_cleanup(&data);
     }
+
     return 0;
 }
 
@@ -566,6 +567,22 @@ int main(int argc, char *argv[]) {
     }
 #endif // WIN32
 
+    /*
+     * If, as a result of a single poll() more than a single line is read into
+     * stdin buffer, we will end up handling just a single command and then
+     * wait for another poll() trigger which may never happen - because all the
+     * data from fd 0 was already read, and it's just waiting to be read from
+     * the buffer.
+     *
+     * This problematic behavior can be reproduced by sending a "\ncommand\n"
+     * string to the demo application with a single write() syscall.
+     *
+     * Disabling stdin buffering prevents Python tests from hanging randomly.
+     * While generally that is not a good idea performance-wise, demo commands
+     * do not require passing large amounts of data, so it is fine in our use
+     * case.
+     */
+    setbuf(stdin, NULL);
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
 
@@ -574,7 +591,9 @@ int main(int argc, char *argv[]) {
     avs_log_set_level(demo, AVS_LOG_DEBUG);
     avs_log_set_level(anjay_sched, AVS_LOG_DEBUG);
 
-    saved_argv = argv;
+    if (argv_store(argc, argv)) {
+        return -1;
+    }
 
     cmdline_args_t cmdline_args;
     if (demo_parse_argv(&cmdline_args, argc, argv)) {

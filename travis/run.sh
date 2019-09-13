@@ -21,7 +21,7 @@ if [ -n "$DOCKER_IMAGE" ]; then
             "<DEVCONFIG_FLAGS>" "$DEVCONFIG_FLAGS" \
             "<COVERITY_SCAN_TOKEN>" "$COVERITY_SCAN_TOKEN" \
             "<COVERITY_EMAIL>" "$COVERITY_EMAIL" \
-            -- "travis/$DOCKER_IMAGE"/Dockerfile
+            -- "travis/$DOCKER_IMAGE/Dockerfile"
     docker build -t "$DOCKER_IMAGE" -f "travis/$DOCKER_IMAGE/Dockerfile" .
     docker run -e CC="$ANJAY_CC" \
                -e CXX="$ANJAY_CXX" \

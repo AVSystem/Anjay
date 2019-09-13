@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM avsystemembedded/anjay-travis:ubuntu-16.04
+FROM ubuntu:16.04
 RUN apt-get update
-RUN apt-get -y install <CC_PKG> <CXX_PKG>
-COPY . /Anjay
-CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=$PYMBEDTLS_CC; make check
+RUN apt-get install -y python3-pip git build-essential cmake libmbedtls-dev \
+    libssl-dev python3 libpython3-dev wget python3-cryptography \
+    python3-sphinx python3-requests valgrind curl
+RUN sed -i -e "s/-Wdate-time/ /g" \
+    /usr/lib/python3.5/config-3.5m-x86_64-linux-gnu/Makefile \
+    /usr/lib/python3.5/plat-x86_64-linux-gnu/_sysconfigdata_m.py

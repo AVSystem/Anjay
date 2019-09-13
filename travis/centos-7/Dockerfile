@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM avsystemembedded/anjay-travis:ubuntu-16.04
-RUN apt-get update
-RUN apt-get -y install <CC_PKG> <CXX_PKG>
+FROM avsystemembedded/anjay-travis:centos-7
 COPY . /Anjay
 CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=$PYMBEDTLS_CC; make check

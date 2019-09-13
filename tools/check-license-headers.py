@@ -52,7 +52,8 @@ IGNORE_PATTERNS = list(map(re.compile, [
     '^valgrind_test\.supp$',
     '^\.clang-format$',
     '\.png$',
-    '\.svg$'
+    '\.svg$',
+    'valgrind\.supp$'
 ]))
 
 

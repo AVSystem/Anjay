@@ -26,6 +26,8 @@ import zlib
 from framework.coap_file_server import CoapFileServerThread
 from framework.lwm2m_test import *
 
+from .block_write import Block, equal_chunk_splitter
+
 UPDATE_STATE_IDLE = 0
 UPDATE_STATE_DOWNLOADING = 1
 UPDATE_STATE_DOWNLOADED = 2
@@ -1049,3 +1051,111 @@ class FirmwareUpdateRestartAfter412WithDownloadingOverHttp(FirmwareUpdate.TestWi
         self.assertTrue(file_truncated)
 
         self.assertEqual(len(self.requests), 3)
+
+
+class FirmwareUpdateWithDelayedSuccessTest(Block.Test):
+    def runTest(self):
+        with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
+            firmware = f.read()
+
+        # Write /5/0/0 (Firmware)
+        self.block_send(firmware,
+                        equal_chunk_splitter(chunk_size=1024),
+                        force_error=FirmwareUpdateForcedError.DelayedSuccess)
+
+        # Execute /5/0/2 (Update)
+        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        self.serv.reset()
+        self.assertDemoRegisters()
+        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content, str(UPDATE_RESULT_SUCCESS).encode())
+        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content, str(UPDATE_STATE_IDLE).encode())
+
+
+class FirmwareUpdateWithDelayedFailureTest(Block.Test):
+    def runTest(self):
+        with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
+            firmware = f.read()
+
+        # Write /5/0/0 (Firmware)
+        self.block_send(firmware,
+                        equal_chunk_splitter(chunk_size=1024),
+                        force_error=FirmwareUpdateForcedError.DelayedSuccess)
+
+        # Execute /5/0/2 (Update)
+        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        self.serv.reset()
+        self.assertDemoRegisters()
+        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content, str(UPDATE_RESULT_SUCCESS).encode())
+        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content, str(UPDATE_STATE_IDLE).encode())
+
+
+class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
+    def runTest(self):
+        with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
+            firmware = f.read()
+
+        # Write /5/0/0 (Firmware)
+        self.block_send(firmware,
+                        equal_chunk_splitter(chunk_size=1024),
+                        force_error=FirmwareUpdateForcedError.SetSuccessInPerformUpgrade)
+
+        # Execute /5/0/2 (Update)
+        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # perform_upgrade handler is called via scheduler, so there is a small
+        # window during which reading the Firmware Update State still returns
+        # Updating. Wait for a while for State to actually change.
+        observed_states = []
+        deadline = time.time() + 5  # arbitrary limit
+        while not observed_states or observed_states[-1] == str(UPDATE_STATE_UPDATING):
+            if time.time() > deadline:
+                self.fail('Firmware Update did not finish on time, last state = %s' % (observed_states[-1] if observed_states else 'NONE'))
+            observed_states.append(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content.decode())
+            time.sleep(0.5)
+
+        self.assertNotEqual([], observed_states)
+        self.assertEqual(observed_states[-1], str(UPDATE_STATE_IDLE))
+        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content, str(UPDATE_RESULT_SUCCESS).encode())
+
+
+class FirmwareUpdateWithSetFailureInPerformUpgrade(Block.Test):
+    def runTest(self):
+        with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
+            firmware = f.read()
+
+        # Write /5/0/0 (Firmware)
+        self.block_send(firmware,
+                        equal_chunk_splitter(chunk_size=1024),
+                        force_error=FirmwareUpdateForcedError.SetFailureInPerformUpgrade)
+
+        # Execute /5/0/2 (Update)
+        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # perform_upgrade handler is called via scheduler, so there is a small
+        # window during which reading the Firmware Update State still returns
+        # Updating. Wait for a while for State to actually change.
+        observed_states = []
+        deadline = time.time() + 5  # arbitrary limit
+        while not observed_states or observed_states[-1] == str(UPDATE_STATE_UPDATING):
+            if time.time() > deadline:
+                self.fail('Firmware Update did not finish on time, last state = %s' % (observed_states[-1] if observed_states else 'NONE'))
+            observed_states.append(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content.decode())
+            time.sleep(0.5)
+
+        self.assertNotEqual([], observed_states)
+        self.assertEqual(observed_states[-1], str(UPDATE_STATE_IDLE))
+        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content, str(UPDATE_RESULT_FAILED).encode())

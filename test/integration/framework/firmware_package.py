@@ -25,6 +25,10 @@ class FirmwareUpdateForcedError(enum.IntEnum):
     NoError = 0
     OutOfMemory = 1
     FailedUpdate = 2
+    DelayedSuccess = 3
+    DelayedFailedUpdate = 4
+    SetSuccessInPerformUpgrade = 5
+    SetFailureInPerformUpgrade = 6
 
 
 def make_firmware_package(binary: bytes,
