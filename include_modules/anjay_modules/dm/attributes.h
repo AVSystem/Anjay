@@ -49,8 +49,8 @@ typedef struct {
  * of the custom attributes relative to standard ones. To rationalize this
  * problem, let's consider what structures do we have:
  *
- *       anjay_dm_          anjay_dm_          anjay_dm_     anjay_dm_internal_
- *     attributes_t     res_attributes_t   internal_attrs_t     res_attrs_t
+ *     anjay_dm_oi_       anjay_dm_r_     anjay_dm_internal_ anjay_dm_internal_
+ *     attributes_t       attributes_t        oi_attrs_t         r_attrs_t
  *                                        +----------------+ +----------------+
  *                                        |  custom attrs: | |  custom attrs: |
  *                                        |    anjay_dm_   | |    anjay_dm_   |
@@ -60,7 +60,7 @@ typedef struct {
  *  +----------------+ +----------------+ +----------------+ +-+--------------+
  *  |                | |  common attrs: | |   std attrs:   | |s| common attrs:|
  *  |     common     | |                | |                | |t|              |
- *  |   attributes   | |    anjay_dm_   | |    anjay_dm_   | |d|   anjay_dm_  |
+ *  |   attributes   | |  anjay_dm_oi_  | |  anjay_dm_r_   | |d| anjay_dm_oi_ |
  *  |                | |  attributes_t  | |  attributes_t  | | | attributes_t |
  *  +----------------+ +----------------+ +----------------+ |a+--------------+
  *                     |    PADDING C   |                    |t|  PADDING C'  |
@@ -70,27 +70,27 @@ typedef struct {
  *                     |   attributes   |                    |*|  attributes  |
  *                     +----------------+                    +-+--------------+
  *
- * (*) note that "std attrs" is of type anjay_dm_res_attributes_t
+ * (*) note that "std attrs" is of type anjay_dm_r_attributes_t
  *
- * We need to be able to extract a pointer to anjay_dm_internal_attrs_t from
- * any pointer to anjay_dm_internal_res_attrs_t; for example, one place where
+ * We need to be able to extract a pointer to anjay_dm_internal_oi_attrs_t from
+ * any pointer to anjay_dm_internal_r_attrs_t; for example, one place where
  * we need this is _anjay_dm_effective_attrs().
  *
  * for this to be possible, we need to ensure that PADDING A and PADDING B have
- * the same size. This is not exactly trivial, because anjay_dm_attributes_t
- * and anjay_dm_res_attributes_t might have different alignment requirements.
+ * the same size. This is not exactly trivial, because anjay_dm_oi_attributes_t
+ * and anjay_dm_r_attributes_t might have different alignment requirements.
  *
  * If we had C11, we could just do something like:
  *
  * typedef struct {
  *     anjay_dm_custom_attrs_storage_t custom;
- *     alignas(anjay_dm_resource_attributes_t) anjay_dm_attributes_t standard;
- * } anjay_dm_internal_attrs_t;
+ *     alignas(anjay_dm_r_attributes_t) anjay_dm_oi_attributes_t standard;
+ * } anjay_dm_internal_oi_attrs_t;
  *
  * typedef struct {
  *     anjay_dm_custom_attrs_storage_t custom;
- *     anjay_dm_resource_attributes_t standard;
- * } anjay_dm_internal_res_attrs_t;
+ *     anjay_dm_r_attributes_t standard;
+ * } anjay_dm_internal_r_attrs_t;
  *
  * But we're using C99 for better compiler compatibility, and C99 does not have
  * a standard alignas attribute. Thus, we calculate the size of the padding
@@ -100,25 +100,25 @@ typedef struct {
  *
  * NOTE: One might think that we could work around this problem by introducing
  * a dedicated structure for the resource-specific part of
- * anjay_dm_res_attributes_t and writing declaractions like:
+ * anjay_dm_r_attributes_t and writing declaractions like:
  *
  * typedef struct {
- *     anjay_dm_attributes_t common;
+ *     anjay_dm_oi_attributes_t common;
  *     // PADDING C
  *     anjay_dm_resource_specific_attributes_t resource;
- * } anjay_dm_res_attributes_t;
+ * } anjay_dm_r_attributes_t;
  *
  * typedef struct {
  *     anjay_dm_custom_attrs_storage_t custom;
- *     anjay_dm_attributes_t standard;
- * } anjay_dm_internal_attrs_t;
+ *     anjay_dm_oi_attributes_t standard;
+ * } anjay_dm_internal_oi_attrs_t;
  *
  * typedef struct {
  *     anjay_dm_custom_attrs_storage_t custom;
- *     anjay_dm_attributes_t standard_common;
+ *     anjay_dm_oi_attributes_t standard_common;
  *     // PADDING C'
  *     anjay_dm_resource_specific_attributes_t standard_resource;
- * } anjay_dm_internal_res_attrs_t;
+ * } anjay_dm_internal_r_attrs_t;
  *
  * But then we would have no guarantees on whether PADDING C and PADDING C'
  * are the same. For similar reasons, any method involving moving the custom
@@ -133,62 +133,60 @@ typedef union {
             struct {
                 anjay_dm_custom_attrs_t custom;
                 union {
-                    anjay_dm_attributes_t common;
-                    anjay_dm_resource_attributes_t res;
+                    anjay_dm_oi_attributes_t common;
+                    anjay_dm_r_attributes_t res;
                 } standard;
             },
             standard)];
 } anjay_dm_custom_attrs_storage_t;
 #endif // WITH_CUSTOM_ATTRIBUTES
 
-AVS_STATIC_ASSERT(offsetof(anjay_dm_resource_attributes_t, common) == 0,
+AVS_STATIC_ASSERT(offsetof(anjay_dm_r_attributes_t, common) == 0,
                   common_attributes_at_start_of_resource_attributes);
 
 typedef struct {
 #ifdef WITH_CUSTOM_ATTRIBUTES
     anjay_dm_custom_attrs_storage_t custom;
 #endif
-    anjay_dm_attributes_t standard;
-} anjay_dm_internal_attrs_t;
+    anjay_dm_oi_attributes_t standard;
+} anjay_dm_internal_oi_attrs_t;
 
 typedef struct {
 #ifdef WITH_CUSTOM_ATTRIBUTES
     anjay_dm_custom_attrs_storage_t custom;
 #endif
-    anjay_dm_resource_attributes_t standard;
-} anjay_dm_internal_res_attrs_t;
+    anjay_dm_r_attributes_t standard;
+} anjay_dm_internal_r_attrs_t;
 
-AVS_STATIC_ASSERT(offsetof(anjay_dm_internal_attrs_t, standard)
-                          == offsetof(anjay_dm_internal_res_attrs_t, standard),
+AVS_STATIC_ASSERT(offsetof(anjay_dm_internal_oi_attrs_t, standard)
+                          == offsetof(anjay_dm_internal_r_attrs_t, standard),
                   standard_attrs_alignment_constant);
 
-static inline anjay_dm_internal_attrs_t *
-_anjay_dm_get_internal_attrs(anjay_dm_attributes_t *attrs) {
-    return AVS_CONTAINER_OF(attrs, anjay_dm_internal_attrs_t, standard);
+static inline anjay_dm_internal_oi_attrs_t *
+_anjay_dm_get_internal_oi_attrs(anjay_dm_oi_attributes_t *attrs) {
+    return AVS_CONTAINER_OF(attrs, anjay_dm_internal_oi_attrs_t, standard);
 }
 
-static inline const anjay_dm_internal_attrs_t *
-_anjay_dm_get_internal_attrs_const(const anjay_dm_attributes_t *attrs) {
-    return AVS_CONTAINER_OF(attrs, anjay_dm_internal_attrs_t, standard);
+static inline const anjay_dm_internal_oi_attrs_t *
+_anjay_dm_get_internal_oi_attrs_const(const anjay_dm_oi_attributes_t *attrs) {
+    return AVS_CONTAINER_OF(attrs, anjay_dm_internal_oi_attrs_t, standard);
 }
 
-static inline anjay_dm_internal_res_attrs_t *
-_anjay_dm_get_internal_res_attrs(anjay_dm_resource_attributes_t *attrs) {
-    return AVS_CONTAINER_OF(attrs, anjay_dm_internal_res_attrs_t, standard);
+static inline anjay_dm_internal_r_attrs_t *
+_anjay_dm_get_internal_r_attrs(anjay_dm_r_attributes_t *attrs) {
+    return AVS_CONTAINER_OF(attrs, anjay_dm_internal_r_attrs_t, standard);
 }
 
-static inline const anjay_dm_internal_res_attrs_t *
-_anjay_dm_get_internal_res_attrs_const(
-        const anjay_dm_resource_attributes_t *attrs) {
-    return AVS_CONTAINER_OF(attrs, const anjay_dm_internal_res_attrs_t,
-                            standard);
+static inline const anjay_dm_internal_r_attrs_t *
+_anjay_dm_get_internal_r_attrs_const(const anjay_dm_r_attributes_t *attrs) {
+    return AVS_CONTAINER_OF(attrs, const anjay_dm_internal_r_attrs_t, standard);
 }
 
 #ifdef WITH_CUSTOM_ATTRIBUTES
 
 #    ifdef WITH_CON_ATTR
 #        define _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER \
-            .con = ANJAY_DM_CON_ATTR_DEFAULT,
+            .con = ANJAY_DM_CON_ATTR_DEFAULT
 #    else // WITH_CON_ATTR
 #        define _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER
 #    endif // WITH_CON_ATTR
@@ -196,36 +194,44 @@ _anjay_dm_get_internal_res_attrs_const(
 #    define _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER                \
         .custom = {                                           \
             .data = { _ANJAY_DM_CUSTOM_CON_ATTR_INITIALIZER } \
-        },
+        }
 
 #else // WITH_CUSTOM_ATTRIBUTES
 #    define _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
 #endif // WITH_CUSTOM_ATTRIBUTES
 
-#define _ANJAY_DM_ATTRIBS_EMPTY                 \
-    {                                           \
-        .min_period = ANJAY_ATTRIB_PERIOD_NONE, \
-        .max_period = ANJAY_ATTRIB_PERIOD_NONE  \
+#define _ANJAY_DM_OI_ATTRIBUTES_EMPTY                \
+    {                                                \
+        .min_period = ANJAY_ATTRIB_PERIOD_NONE,      \
+        .max_period = ANJAY_ATTRIB_PERIOD_NONE,      \
+        .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE, \
+        .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE  \
     }
 
-#define _ANJAY_DM_INTERNAL_ATTRS_EMPTY \
-    { _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER.standard = _ANJAY_DM_ATTRIBS_EMPTY }
+#define _ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY          \
+    {                                              \
+        .standard = _ANJAY_DM_OI_ATTRIBUTES_EMPTY, \
+        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER         \
+    }
 
 // clang-format off
-#define _ANJAY_RES_ATTRIBS_EMPTY                 \
+#define _ANJAY_DM_R_ATTRIBUTES_EMPTY             \
     {                                            \
-        .common = _ANJAY_DM_ATTRIBS_EMPTY,       \
+        .common = _ANJAY_DM_OI_ATTRIBUTES_EMPTY, \
         .greater_than = ANJAY_ATTRIB_VALUE_NONE, \
         .less_than = ANJAY_ATTRIB_VALUE_NONE,    \
         .step = ANJAY_ATTRIB_VALUE_NONE          \
     }
 // clang-format on
 
-#define _ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY \
-    { _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER.standard = _ANJAY_RES_ATTRIBS_EMPTY }
+#define _ANJAY_DM_INTERNAL_R_ATTRS_EMPTY          \
+    {                                             \
+        .standard = _ANJAY_DM_R_ATTRIBUTES_EMPTY, \
+        _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER        \
+    }
 
-extern const anjay_dm_internal_attrs_t ANJAY_DM_INTERNAL_ATTRS_EMPTY;
-extern const anjay_dm_internal_res_attrs_t ANJAY_DM_INTERNAL_RES_ATTRS_EMPTY;
+extern const anjay_dm_internal_oi_attrs_t ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
+extern const anjay_dm_internal_r_attrs_t ANJAY_DM_INTERNAL_R_ATTRS_EMPTY;
 
 VISIBILITY_PRIVATE_HEADER_END
 

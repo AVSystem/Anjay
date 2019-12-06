@@ -31,14 +31,13 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 typedef struct {
     int (*get_socket)(anjay_downloader_t *dl,
                       anjay_download_ctx_t *ctx,
-                      avs_net_abstract_socket_t **out_socket,
+                      avs_net_socket_t **out_socket,
                       anjay_socket_transport_t *out_transport);
     void (*handle_packet)(anjay_downloader_t *dl,
                           AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
-    void (*cleanup)(anjay_downloader_t *dl,
-                    AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
-    int (*reconnect)(anjay_downloader_t *dl,
-                     AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    void (*cleanup)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    avs_error_t (*reconnect)(anjay_downloader_t *dl,
+                             AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
 } anjay_download_ctx_vtable_t;
 
 typedef struct {
@@ -60,21 +59,60 @@ _anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl, uintptr_t id);
 
 void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
                                       AVS_LIST(anjay_download_ctx_t) *ctx,
-                                      int result,
-                                      int errno_value);
+                                      anjay_download_status_t status);
 
-#ifdef WITH_BLOCK_DOWNLOAD
-int _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
-                                   AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
-                                   const anjay_download_config_t *cfg,
-                                   uintptr_t id);
-#endif // WITH_BLOCK_DOWNLOAD
+static inline anjay_download_status_t _anjay_download_status_success(void) {
+    return (anjay_download_status_t) {
+        .result = ANJAY_DOWNLOAD_FINISHED
+    };
+}
+
+static inline anjay_download_status_t
+_anjay_download_status_failed(avs_error_t error) {
+    return (anjay_download_status_t) {
+        .result = ANJAY_DOWNLOAD_ERR_FAILED,
+        .details = {
+            .error = error
+        }
+    };
+}
+
+static inline anjay_download_status_t
+_anjay_download_status_invalid_response(int status_code) {
+    return (anjay_download_status_t) {
+        .result = ANJAY_DOWNLOAD_ERR_INVALID_RESPONSE,
+        .details = {
+            .status_code = status_code
+        }
+    };
+}
+
+static inline anjay_download_status_t _anjay_download_status_expired(void) {
+    return (anjay_download_status_t) {
+        .result = ANJAY_DOWNLOAD_ERR_EXPIRED
+    };
+}
+
+static inline anjay_download_status_t _anjay_download_status_aborted(void) {
+    return (anjay_download_status_t) {
+        .result = ANJAY_DOWNLOAD_ERR_ABORTED
+    };
+}
+
+#ifdef WITH_COAP_DOWNLOAD
+avs_error_t
+_anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
+                               AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
+                               const anjay_download_config_t *cfg,
+                               uintptr_t id);
+#endif // WITH_COAP_DOWNLOAD
 
 #ifdef WITH_HTTP_DOWNLOAD
-int _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
-                                   AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
-                                   const anjay_download_config_t *cfg,
-                                   uintptr_t id);
+avs_error_t
+_anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
+                               AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
+                               const anjay_download_config_t *cfg,
+                               uintptr_t id);
 #endif // WITH_HTTP_DOWNLOAD
 
 VISIBILITY_PRIVATE_HEADER_END

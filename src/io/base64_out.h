@@ -19,12 +19,12 @@
 
 #include <avsystem/commons/stream.h>
 
-#include <anjay/core.h>
+#include <anjay/io.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-anjay_ret_bytes_ctx_t *
-_anjay_base64_ret_bytes_ctx_new(avs_stream_abstract_t *stream, size_t length);
+anjay_ret_bytes_ctx_t *_anjay_base64_ret_bytes_ctx_new(
+        avs_stream_t *stream, avs_base64_config_t config, size_t length);
 int _anjay_base64_ret_bytes_ctx_close(anjay_ret_bytes_ctx_t *ctx);
 
 void _anjay_base64_ret_bytes_ctx_delete(anjay_ret_bytes_ctx_t **ctx);

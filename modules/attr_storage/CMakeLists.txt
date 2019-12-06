@@ -12,18 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(SOURCES
-    src/attr_storage_persistence.c
-    src/mod_attr_storage.c)
-set(PRIVATE_HEADERS
-    src/mod_attr_storage.h)
-set(PUBLIC_HEADERS
-    include_public/anjay/attr_storage.h)
+target_sources(anjay PRIVATE
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_attr_storage.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/attr_storage.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/attr_storage_persistence.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_attr_storage.c)
+target_include_directories(anjay PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_public>)
 
-set(TEST_SOURCES
-    ${SOURCES}
-    ${PRIVATE_HEADERS}
-    ${PUBLIC_HEADERS}
-    src/test/attr_storage_test.h)
-
-include(../module_common.cmake)
+install(DIRECTORY include_public/anjay
+        DESTINATION include
+        FILES_MATCHING REGEX "[.]h$")

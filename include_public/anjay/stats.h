@@ -16,6 +16,8 @@
 #ifndef ANJAY_INCLUDE_ANJAY_STATS_H
 #define ANJAY_INCLUDE_ANJAY_STATS_H
 
+#include <anjay/core.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

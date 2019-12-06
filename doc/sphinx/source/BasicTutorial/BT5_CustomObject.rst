@@ -38,10 +38,8 @@ which holds:
          */
         anjay_dm_object_write_default_attrs_t *object_write_default_attrs;
 
-        /** Enumerate available Object Instances, @ref anjay_dm_instance_it_t */
-        anjay_dm_instance_it_t *instance_it;
-        /** Check if an Object Instance exists, @ref anjay_dm_instance_present_t */
-        anjay_dm_instance_present_t *instance_present;
+        /** Enumerate available Object Instances, @ref anjay_dm_list_instances_t */
+        anjay_dm_list_instances_t *list_instances;
 
         /** Resets an Object Instance, @ref anjay_dm_instance_reset_t */
         anjay_dm_instance_reset_t *instance_reset;
@@ -62,15 +60,10 @@ which holds:
         anjay_dm_instance_write_default_attrs_t *instance_write_default_attrs;
 
         /**
-         * Check if a Resource is present in given Object Instance,
-         * @ref anjay_dm_resource_present_t
+         * Enumerate PRESENT Resources in a given Object Instance,
+         * @ref anjay_dm_list_resources_t
          */
-        anjay_dm_resource_present_t *resource_present;
-        /**
-         * Returns a mask of supported operations on a given Resource,
-         * @ref anjay_dm_resource_operations_t
-         */
-        anjay_dm_resource_operations_t *resource_operations;
+        anjay_dm_list_resources_t *list_resources;
 
         /** Get Resource value, @ref anjay_dm_resource_read_t */
         anjay_dm_resource_read_t *resource_read;
@@ -82,9 +75,16 @@ which holds:
         anjay_dm_resource_execute_t *resource_execute;
 
         /**
-         * Get number of Multiple Resource instances, @ref anjay_dm_resource_dim_t
+         * Remove all Resource Instances from a Multiple Resource,
+         * @ref anjay_dm_resource_reset_t
          */
-        anjay_dm_resource_dim_t *resource_dim;
+        anjay_dm_resource_reset_t *resource_reset;
+        /**
+         * Enumerate available Resource Instances,
+         * @ref anjay_dm_list_resource_instances_t
+         */
+        anjay_dm_list_resource_instances_t *list_resource_instances;
+
         /** Get Resource attributes, @ref anjay_dm_resource_read_attrs_t */
         anjay_dm_resource_read_attrs_t *resource_read_attrs;
         /** Set Resource attributes, @ref anjay_dm_resource_write_attrs_t */
@@ -108,35 +108,9 @@ which holds:
         anjay_dm_transaction_rollback_t *transaction_rollback;
     } anjay_dm_handlers_t;
 
-    /** A simple array-plus-size container for a list of supported Resource IDs. */
-    typedef struct {
-        /** Number of element in the array */
-        size_t count;
-        /**
-         * Pointer to an array of Resource IDs supported by the object. A Resource
-         * is considered SUPPORTED if it may ever be present within the Object. The
-         * array MUST be exactly <c>count</c> elements long and sorted in strictly
-         * ascending order.
-         */
-        const uint16_t *rids;
-    } anjay_dm_supported_rids_t;
-
-    // ...
-    /**
-     * Convenience macro for initializing @ref anjay_dm_supported_rids_t objects.
-     *
-     * The parameters shall compose a properly sorted list of supported Resource
-     * IDs. The result of the macro is an initializer list suitable for initializing
-     * an object of type <c>anjay_dm_supported_rids_t</c>, like for example the
-     * <c>supported_rids</c> field of @ref anjay_dm_object_def_t. The <c>count</c>
-     * field will be automatically calculated.
-     */
-    #    define ANJAY_DM_SUPPORTED_RIDS(...)                                   \
-            // ...
-
     /** A struct defining an LwM2M Object. */
     struct anjay_dm_object_def_struct {
-        /** Object ID */
+        /** Object ID; MUST not be <c>ANJAY_ID_INVALID</c> (65535) */
         anjay_oid_t oid;
 
         /**
@@ -146,13 +120,6 @@ which holds:
          * and Discover messages, which implies version 1.0.
          */
         const char *version;
-
-        /**
-         * List of Resource IDs supported by the object. The
-         * @ref ANJAY_DM_SUPPORTED_RIDS macro is the preferred way of initializing
-         * it.
-         */
-        anjay_dm_supported_rids_t supported_rids;
 
         /** Handler callbacks for this object. */
         anjay_dm_handlers_t handlers;

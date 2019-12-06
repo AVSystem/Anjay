@@ -52,19 +52,19 @@ class Test:
 class Test1630_CreatePortfolioObjectInstance(Test.Portfolio):
     def runTest(self):
         # 1. Discover is performed by the Server on /16, expecting '</16/0/0>' in the resulting payload
-        linklist = self.discover(self.serv, oid=OID.Portfolio).content
+        linklist = self.discover(self.serv, oid=OID.Portfolio).content.decode()
         self.assertLinkListValid(linklist)
-        self.assertIn(b'</16/0/0>', linklist.split(b','))
+        self.assertIn('<%s>' % (ResPath.Portfolio[0].Identity,), linklist.split(','))
 
         # 2. Create is performed </16/1> with specified payload
         self.create_instance_with_payload(self.serv, oid=OID.Portfolio, iid=1,
                                           payload=[TLV.make_multires(RID.Portfolio.Identity,
                                                                      IDENTITIES_FOR_INSTANCE[1])])
         # 3. Discover is performed by the Server on /16
-        linklist = self.discover(self.serv, oid=OID.Portfolio).content
+        linklist = self.discover(self.serv, oid=OID.Portfolio).content.decode()
         self.assertLinkListValid(linklist)
-        self.assertIn(b'</16/0/0>', linklist.split(b','))
-        self.assertIn(b'</16/1/0>', linklist.split(b','))
+        self.assertIn('<%s>' % (ResPath.Portfolio[0].Identity,), linklist.split(','))
+        self.assertIn('<%s>' % (ResPath.Portfolio[1].Identity,), linklist.split(','))
 
         # 4. Read entire object.
         EXPECTED_TLV = TLV.make_instance(0, [ TLV.make_multires(RID.Portfolio.Identity, IDENTITIES_FOR_INSTANCE[0]) ]).serialize() \
@@ -74,12 +74,13 @@ class Test1630_CreatePortfolioObjectInstance(Test.Portfolio):
 class Test1635_DeletePortfolioObjectInstance(Test.Portfolio):
     def runTest(self):
         # 1. Discover is performed by the Server on /16, expecting '</16/0/0>' in the resulting payload
-        linklist = self.discover(self.serv, oid=OID.Portfolio).content
+        linklist = self.discover(self.serv, oid=OID.Portfolio).content.decode()
         self.assertLinkListValid(linklist)
-        self.assertIn(b'</16/0/0>', linklist.split(b','))
+        self.assertIn('<%s>' % (ResPath.Portfolio[0].Identity,), linklist.split(','))
 
         # 2. Delete on each instance (we have one)
         self.delete_instance(self.serv, oid=OID.Portfolio, iid=0)
 
         # 3. Discover to confirm object is cleared
-        self.assertEqual(self.discover(self.serv, oid=OID.Portfolio).content, b'</16>')
+        self.assertEqual(self.discover(self.serv, oid=OID.Portfolio).content,
+                         b'</%d>' % (OID.Portfolio,))

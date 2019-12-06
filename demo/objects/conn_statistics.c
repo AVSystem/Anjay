@@ -43,7 +43,7 @@ typedef struct {
 
 static conn_stats_repr_t *get_cs(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, conn_stats_repr_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, conn_stats_repr_t, def);
 }
 
 static int read_uint64_from_file(uint64_t *number, const char *filename) {
@@ -63,11 +63,11 @@ static int read_uint64_from_file(uint64_t *number, const char *filename) {
 
 static int ifname_for_first_socket(anjay_t *anjay,
                                    avs_net_socket_interface_name_t *if_name) {
-    avs_net_abstract_socket_t *const *first = anjay_get_sockets(anjay);
+    avs_net_socket_t *const *first = anjay_get_sockets(anjay);
     if (!first) {
         return -1;
     }
-    return avs_net_socket_interface_name(*first, if_name);
+    return avs_is_ok(avs_net_socket_interface_name(*first, if_name)) ? 0 : -1;
 }
 
 static const char *RX_STATS = "rx_bytes";
@@ -123,6 +123,31 @@ static int cs_instance_reset(anjay_t *anjay,
     return 0;
 }
 
+static int cs_list_resources(anjay_t *anjay,
+                             const anjay_dm_object_def_t *const *obj_ptr,
+                             anjay_iid_t iid,
+                             anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+    anjay_dm_emit_res(
+            ctx, CS_SMS_TX_COUNTER, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(
+            ctx, CS_SMS_RX_COUNTER, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, CS_TX_KB, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, CS_RX_KB, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(
+            ctx, CS_MAX_MSG_SIZE, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(
+            ctx, CS_AVG_MSG_SIZE, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, CS_START, ANJAY_DM_RES_E, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, CS_STOP, ANJAY_DM_RES_E, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(
+            ctx, CS_COLLECTION_PERIOD, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int cs_resource_execute(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
@@ -133,20 +158,12 @@ static int cs_resource_execute(anjay_t *anjay,
     (void) ctx;
     conn_stats_repr_t *repr = get_cs(obj_ptr);
     switch ((conn_stats_res_t) rid) {
-    case CS_SMS_TX_COUNTER:
-    case CS_SMS_RX_COUNTER:
-    case CS_TX_KB:
-    case CS_RX_KB:
-    case CS_MAX_MSG_SIZE:
-    case CS_AVG_MSG_SIZE:
-    case CS_COLLECTION_PERIOD:
-        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     case CS_START:
         // TODO: actually use Collection Period resource
         repr->last_tx_bytes = first_socket_stats(anjay, TX_STATS);
         repr->last_rx_bytes = first_socket_stats(anjay, RX_STATS);
         repr->is_collecting = true;
-        break;
+        return 0;
     case CS_STOP:
         if (!repr->is_collecting) {
             return ANJAY_ERR_BAD_REQUEST;
@@ -156,19 +173,22 @@ static int cs_resource_execute(anjay_t *anjay,
         repr->last_rx_bytes =
                 first_socket_stats(anjay, RX_STATS) - repr->last_rx_bytes;
         repr->is_collecting = false;
-        break;
+        return 0;
     default:
-        return ANJAY_ERR_NOT_FOUND;
+        AVS_UNREACHABLE("Execute called on unknown or non-executable resource");
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-    return 0;
 }
 
 static int cs_resource_read(anjay_t *anjay,
                             const anjay_dm_object_def_t *const *obj_ptr,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
+                            anjay_riid_t riid,
                             anjay_output_ctx_t *ctx) {
     (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     conn_stats_repr_t *repr = get_cs(obj_ptr);
     switch (rid) {
     case CS_SMS_TX_COUNTER:
@@ -183,18 +203,21 @@ static int cs_resource_read(anjay_t *anjay,
     case CS_COLLECTION_PERIOD:
         return anjay_ret_i64(ctx, (int64_t) repr->collection_period);
     default:
-        return ANJAY_ERR_NOT_FOUND;
+        AVS_UNREACHABLE("Read called on unknown or non-readable resource");
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-    return 0;
 }
 
 static int cs_resource_write(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj_ptr,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
+                             anjay_riid_t riid,
                              anjay_input_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     conn_stats_repr_t *repr = get_cs(obj_ptr);
     switch (rid) {
     case CS_COLLECTION_PERIOD: {
@@ -209,35 +232,19 @@ static int cs_resource_write(anjay_t *anjay,
         repr->collection_period = (uint32_t) val;
         return 0;
     }
-    case CS_MAX_MSG_SIZE:
-    case CS_AVG_MSG_SIZE:
-    case CS_SMS_TX_COUNTER:
-    case CS_SMS_RX_COUNTER:
-    case CS_TX_KB:
-    case CS_RX_KB:
-    case CS_START:
-    case CS_STOP:
+    default:
+        // Bootstrap Server may try to write to other resources,
+        // so no AVS_UNREACHABLE() here
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-    return 0;
 }
 
 static const anjay_dm_object_def_t CONN_STATISTICS = {
     .oid = DEMO_OID_CONN_STATISTICS,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(CS_SMS_TX_COUNTER,
-                                              CS_SMS_RX_COUNTER,
-                                              CS_TX_KB,
-                                              CS_RX_KB,
-                                              CS_MAX_MSG_SIZE,
-                                              CS_AVG_MSG_SIZE,
-                                              CS_START,
-                                              CS_STOP,
-                                              CS_COLLECTION_PERIOD),
     .handlers = {
-        .instance_it = anjay_dm_instance_it_SINGLE,
-        .instance_present = anjay_dm_instance_present_SINGLE,
+        .list_instances = anjay_dm_list_instances_SINGLE,
         .instance_reset = cs_instance_reset,
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_resources = cs_list_resources,
         .resource_execute = cs_resource_execute,
         .resource_read = cs_resource_read,
         .resource_write = cs_resource_write,

@@ -18,18 +18,11 @@
 #define ANJAY_COAP_CONTENT_FORMAT_H
 
 /* for AVS_COAP_FORMAT_NONE */
-#include <avsystem/commons/coap/msg_info.h>
+#include <avsystem/coap/option.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 /** Auxiliary constants for common Content-Format Option values */
-
-#define ANJAY_COAP_FORMAT_APPLICATION_LINK 40
-
-#define ANJAY_COAP_FORMAT_PLAINTEXT 0
-#define ANJAY_COAP_FORMAT_OPAQUE 42
-#define ANJAY_COAP_FORMAT_TLV 11542
-#define ANJAY_COAP_FORMAT_JSON 11543
 
 #ifdef WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 #    define ANJAY_COAP_FORMAT_LEGACY_PLAINTEXT 1541

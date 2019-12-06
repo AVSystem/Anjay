@@ -20,6 +20,7 @@
 
 #include "../anjay_core.h"
 #include "../servers.h"
+#include "../servers_inactive.h"
 
 #include "reload.h"
 #include "server_connections.h"
@@ -27,31 +28,38 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static void enter_offline_job(anjay_t *anjay, const void *dummy) {
+static void enter_offline_job(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
-    avs_time_real_t now = avs_time_real_now();
+    anjay_t *anjay = _anjay_get_from_sched(sched);
     AVS_LIST(anjay_server_info_t) server;
     AVS_LIST_FOREACH(server, anjay->servers->servers) {
-        _anjay_sched_del(anjay->sched, &server->next_action_handle);
+        avs_sched_del(&server->next_action_handle);
         if (_anjay_server_active(server)) {
-            // If the server is active, we clean up all its sockets, essentially
-            // deactivating it. We don't schedule reactivation, as that would
-            // fill the sched_update_or_reactivate_handle field we have just
-            // cleared - but rather we store the reactivation time of "now".
-            // Note that after exiting offline mode, this will schedule
-            // reactivation with negative delay, but it will effectively cause
-            // the reactivation to be scheduled for immediate execution.
             anjay_connection_ref_t ref = {
                 .server = server
             };
             ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
-                _anjay_connection_internal_clean_socket(
-                        anjay, _anjay_get_server_connection(ref));
+                anjay_server_connection_t *conn =
+                        _anjay_get_server_connection(ref);
+                avs_net_socket_t *socket =
+                        _anjay_connection_internal_get_socket(conn);
+                if (ref.conn_type == ANJAY_CONNECTION_PRIMARY && conn->coap_ctx
+                        && avs_coap_exchange_id_valid(
+                                   server->registration_exchange_state
+                                           .exchange_id)) {
+                    avs_coap_exchange_cancel(
+                            conn->coap_ctx,
+                            server->registration_exchange_state.exchange_id);
+                }
+                _anjay_observe_interrupt(ref);
+                if (socket) {
+                    avs_net_socket_shutdown(socket);
+                    avs_net_socket_close(socket);
+                }
             }
-            server->reactivate_time = now;
         }
     }
-    _anjay_sched_del(anjay->sched, &anjay->reload_servers_sched_job_handle);
+    avs_sched_del(&anjay->reload_servers_sched_job_handle);
     anjay->offline = true;
 }
 
@@ -76,7 +84,9 @@ bool anjay_is_offline(anjay_t *anjay) {
  * everything would burn when the code attempts to actually send it.
  */
 int anjay_enter_offline(anjay_t *anjay) {
-    if (_anjay_sched_now(anjay->sched, NULL, enter_offline_job, NULL, 0)) {
+    avs_sched_del(&anjay->enter_offline_job_handle);
+    if (AVS_SCHED_NOW(anjay->sched, &anjay->enter_offline_job_handle,
+                      enter_offline_job, NULL, 0)) {
         anjay_log(ERROR, "could not schedule enter_offline_job");
         return -1;
     }

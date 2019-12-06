@@ -9,11 +9,11 @@
 // This example uses hard-coded file path for simplicity.
 static const char DOWNLOAD_TARGET[] = "/tmp/coap-download";
 
-static int coap_write_block(anjay_t *anjay,
-                            const uint8_t *data,
-                            size_t data_size,
-                            const anjay_etag_t *etag,
-                            void *file_) {
+static avs_error_t coap_write_block(anjay_t *anjay,
+                                    const uint8_t *data,
+                                    size_t data_size,
+                                    const anjay_etag_t *etag,
+                                    void *file_) {
     (void) anjay;
     // ETag value can be saved to allow resuming the download later, in case
     // where it could be interrupted at any point.
@@ -29,22 +29,25 @@ static int coap_write_block(anjay_t *anjay,
     FILE *file = (FILE *) file_;
     if (fwrite(data, data_size, 1, file) != 1) {
         avs_log(tutorial, ERROR, "could not write file");
-        return -1;
+        return avs_errno(AVS_EIO);
     }
 
-    return 0;
+    return AVS_OK;
 }
 
-static void coap_download_finished(anjay_t *anjay, int result, void *file_) {
+static void coap_download_finished(anjay_t *anjay,
+                                   anjay_download_status_t status,
+                                   void *file_) {
     (void) anjay;
 
     FILE *file = (FILE *) file_;
     fclose(file);
 
-    if (!result) {
+    if (status.result == ANJAY_DOWNLOAD_FINISHED) {
         avs_log(tutorial, INFO, "download complete: %s", DOWNLOAD_TARGET);
     } else {
-        avs_log(tutorial, ERROR, "download failed: result = %d", result);
+        avs_log(tutorial, ERROR, "download failed: result = %d",
+                (int) status.result);
         remove(DOWNLOAD_TARGET);
     }
 }
@@ -72,11 +75,13 @@ static int request_coap_download(anjay_t *anjay,
         .on_next_block = coap_write_block,
         .on_download_finished = coap_download_finished,
         .user_data = file,
-        .security_info = avs_net_security_info_from_psk(psk)
+        .security_config = {
+            .security_info = avs_net_security_info_from_psk(psk)
+        }
     };
 
-    anjay_download_handle_t handle = anjay_download(anjay, &cfg);
-    if (!handle) {
+    anjay_download_handle_t handle;
+    if (avs_is_err(anjay_download(anjay, &cfg, &handle))) {
         avs_log(tutorial, ERROR, "could not schedule download: %s", url);
         // In case of anjay_download failure, cfg.user_data needs to be freed
         fclose(file);
@@ -92,14 +97,13 @@ static int request_coap_download(anjay_t *anjay,
 int main_loop(anjay_t *anjay) {
     while (true) {
         // Obtain all network data sources
-        AVS_LIST(avs_net_abstract_socket_t *const) sockets =
-                anjay_get_sockets(anjay);
+        AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
 
         // Prepare to poll() on them
         size_t numsocks = AVS_LIST_SIZE(sockets);
         struct pollfd pollfds[numsocks];
         size_t i = 0;
-        AVS_LIST(avs_net_abstract_socket_t *const) sock;
+        AVS_LIST(avs_net_socket_t *const) sock;
         AVS_LIST_FOREACH(sock, sockets) {
             pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
             pollfds[i].events = POLLIN;
@@ -117,7 +121,7 @@ int main_loop(anjay_t *anjay) {
         // Wait for the events if necessary, and handle them.
         if (poll(pollfds, numsocks, wait_ms) > 0) {
             int socket_id = 0;
-            AVS_LIST(avs_net_abstract_socket_t *const) socket = NULL;
+            AVS_LIST(avs_net_socket_t *const) socket = NULL;
             AVS_LIST_FOREACH(socket, sockets) {
                 if (pollfds[socket_id].revents) {
                     if (anjay_serve(anjay, *socket)) {
@@ -128,9 +132,8 @@ int main_loop(anjay_t *anjay) {
             }
         }
 
-        // Finally run the scheduler (ignoring its return value, which
-        // is the number of tasks executed)
-        (void) anjay_sched_run(anjay);
+        // Finally run the scheduler
+        anjay_sched_run(anjay);
     }
     return 0;
 }

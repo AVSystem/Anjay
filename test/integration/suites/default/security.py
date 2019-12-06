@@ -30,9 +30,9 @@ class SecurityObjectDmOperationsBySingleServer(test_suite.Lwm2mSingleServerTest,
                                  expect_error_code=coap.Code.RES_UNAUTHORIZED)
             self.write_instance(server=self.serv, oid=OID.Security, iid=i,
                                 expect_error_code=coap.Code.RES_UNAUTHORIZED)
-            self.execute_resource(server=self.serv, oid=OID.Security, iid=i, rid=1,
+            self.execute_resource(server=self.serv, oid=OID.Security, iid=i,
+                                  rid=RID.Security.Bootstrap,
                                   expect_error_code=coap.Code.RES_UNAUTHORIZED)
-            self.write_attributes(server=self.serv, oid=OID.Security, iid=i, rid=1,
-                                  query=['pmax=1'], expect_error_code=coap.Code.RES_UNAUTHORIZED)
-
-
+            self.write_attributes(server=self.serv, oid=OID.Security, iid=i,
+                                  rid=RID.Security.Bootstrap, query=['pmax=1'],
+                                  expect_error_code=coap.Code.RES_UNAUTHORIZED)

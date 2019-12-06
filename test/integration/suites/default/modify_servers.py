@@ -35,8 +35,8 @@ class ModifyServersTest(test_suite.Lwm2mTest):
 
         # remove second server
         self.communicate("trim-servers 1")
-        self.assertDemoUpdatesRegistration(server=self.servers[0], content=ANY)
         self.assertDemoDeregisters(server=self.servers[1], path='/rd/server2')
+        self.assertDemoUpdatesRegistration(server=self.servers[0], content=ANY)
 
         # add another server
         self.communicate("add-server coap://127.0.0.1:%d" % self.servers[1].get_listen_port())

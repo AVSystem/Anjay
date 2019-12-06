@@ -25,20 +25,22 @@
 #include <anjay_modules/dm_utils.h>
 #include <anjay_modules/io_utils.h>
 
-#include <avsystem/commons/coap/msg_opt.h>
+#include "coap/msg_details.h"
 
-#include "coap/coap_stream.h"
+#include "dm_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-typedef enum {
-    ANJAY_ID_OID,
-    ANJAY_ID_IID,
-    ANJAY_ID_RID,
-    ANJAY_ID_RIID
-} anjay_id_type_t;
+int _anjay_input_dynamic_construct(anjay_input_ctx_t **out,
+                                   avs_stream_t *stream,
+                                   const anjay_request_t *request);
 
-anjay_input_ctx_constructor_t _anjay_input_dynamic_create;
+int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,
+                                    avs_stream_t *stream,
+                                    const anjay_uri_path_t *uri,
+                                    uint16_t format,
+                                    anjay_request_action_t action);
+
 anjay_input_ctx_constructor_t _anjay_input_opaque_create;
 anjay_input_ctx_constructor_t _anjay_input_text_create;
 
@@ -48,70 +50,101 @@ uint16_t _anjay_translate_legacy_content_format(uint16_t format);
 #    define _anjay_translate_legacy_content_format(fmt) (fmt)
 #endif
 
-int _anjay_handle_requested_format(uint16_t *out_ptr,
-                                   uint16_t requested_format);
-
 #define ANJAY_OUTCTXERR_FORMAT_MISMATCH (-0xCE0)
 #define ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED (-0xCE1)
 /* returned from _anjay_output_ctx_destroy if no anjay_ret_* function was
  * called, making it impossible to determine actual resource format */
 #define ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED (-0xCE2)
 
-anjay_output_ctx_t *
-_anjay_output_dynamic_create(avs_stream_abstract_t *stream,
-                             int *errno_ptr,
-                             anjay_msg_details_t *details_template,
-                             const anjay_uri_path_t *uri);
+/** A value returned from @ref anjay_input_ctx_get_path_t to indicate end of the
+ * path listing. */
+#define ANJAY_GET_PATH_END 1
 
-anjay_output_ctx_t *
-_anjay_output_opaque_create(avs_stream_abstract_t *stream,
-                            int *errno_ptr,
-                            anjay_msg_details_t *inout_details);
+typedef struct anjay_output_ctx_vtable_struct anjay_output_ctx_vtable_t;
 
-anjay_output_ctx_t *
-_anjay_output_text_create(avs_stream_abstract_t *stream,
-                          int *errno_ptr,
-                          anjay_msg_details_t *inout_details);
+struct anjay_output_ctx_struct {
+    const anjay_output_ctx_vtable_t *vtable;
+    int error;
+};
 
-anjay_output_ctx_t *_anjay_output_raw_tlv_create(avs_stream_abstract_t *stream);
+anjay_output_ctx_t *_anjay_output_opaque_create(avs_stream_t *stream);
 
-anjay_output_ctx_t *
-_anjay_output_tlv_create(avs_stream_abstract_t *stream,
-                         int *errno_ptr,
-                         anjay_msg_details_t *inout_details);
+anjay_output_ctx_t *_anjay_output_text_create(avs_stream_t *stream);
 
-#if defined(WITH_JSON) || defined(WITH_SENML_JSON)
-anjay_output_ctx_t *
-_anjay_output_json_create(avs_stream_abstract_t *stream,
-                          int *errno_ptr,
-                          anjay_msg_details_t *inout_details,
-                          const anjay_uri_path_t *uri,
-                          uint16_t format);
+anjay_output_ctx_t *_anjay_output_tlv_create(avs_stream_t *stream,
+                                             const anjay_uri_path_t *uri);
+
+#if defined(WITH_LWM2M_JSON) || defined(WITH_SENML_JSON) || defined(WITH_CBOR)
+anjay_output_ctx_t *_anjay_output_senml_like_create(avs_stream_t *stream,
+                                                    const anjay_uri_path_t *uri,
+                                                    uint16_t format);
 #endif
 
-int *_anjay_output_ctx_errno_ptr(anjay_output_ctx_t *ctx);
-anjay_output_ctx_t *_anjay_output_object_start(anjay_output_ctx_t *ctx);
-int _anjay_output_object_finish(anjay_output_ctx_t *ctx);
-int _anjay_output_set_id(anjay_output_ctx_t *ctx,
-                         anjay_id_type_t type,
-                         uint16_t id);
+int _anjay_output_bytes_begin(anjay_output_ctx_t *ctx,
+                              size_t length,
+                              anjay_ret_bytes_ctx_t **out_bytes_ctx);
+
+/**
+ * Starts an aggregate object, which may be an Object Instance (aggregate of
+ * Resources) or Multi-Instance Resource (aggregate of Resource Instances).
+ *
+ * Normally, this operation is implicit, as it's enough to call
+ * @ref _anjay_output_set_path to inform the output context of the appropriate
+ * nesting level of the data to serialize. However, there is a need to handle
+ * empty aggregates specially - e.g. when a Read was issued on a Multi-Instance
+ * Resource that exists, but has zero instances.
+ *
+ * Currently such empty aggregates are only representable in TLV format, so this
+ * method is implemented as a no-op in the SenML context.
+ *
+ * Note that it wouldn't be enough to specially handle
+ * @ref _anjay_output_set_path when not followed by data, because TLV requires
+ * different serialization format for Single and Multiple Instance Resources.
+ * Call to this function after having called @ref _anjay_output_set_path with a
+ * Resource path also doubles as an information for the context that it's
+ * dealing with a Multiple Resource.
+ */
+int _anjay_output_start_aggregate(anjay_output_ctx_t *ctx);
+
+int _anjay_output_set_path(anjay_output_ctx_t *ctx,
+                           const anjay_uri_path_t *path);
+
+int _anjay_output_clear_path(anjay_output_ctx_t *ctx);
+
+int _anjay_output_set_time(anjay_output_ctx_t *ctx, double value);
+
+/**
+ * @returns Code of the FIRST known error encountered on this output context,
+ *          in the following precedence order:
+ *          1. First known error code of any method call on this context
+ *          2. Error code of the destroy operation
+ */
 int _anjay_output_ctx_destroy(anjay_output_ctx_t **ctx_ptr);
 
-avs_stream_abstract_t *_anjay_input_bytes_stream(anjay_input_ctx_t *ctx);
-int _anjay_input_attach_child(anjay_input_ctx_t *ctx, anjay_input_ctx_t *child);
-anjay_input_ctx_t *_anjay_input_nested_ctx(anjay_input_ctx_t *ctx);
-int _anjay_input_get_id(anjay_input_ctx_t *ctx,
-                        anjay_id_type_t *out_type,
-                        uint16_t *out_id);
+int _anjay_output_ctx_destroy_and_process_result(
+        anjay_output_ctx_t **out_ctx_ptr, int result);
+
 int _anjay_input_next_entry(anjay_input_ctx_t *ctx);
+int _anjay_input_get_path(anjay_input_ctx_t *ctx,
+                          anjay_uri_path_t *uri_path,
+                          bool *out_is_array);
+int _anjay_input_update_root_path(anjay_input_ctx_t *ctx,
+                                  const anjay_uri_path_t *root_path);
 
 typedef struct anjay_output_buf_ctx {
-    const void *vtable;
+    anjay_output_ctx_t base;
     const void *ret_bytes_vtable;
-    avs_stream_outbuf_t *stream;
+    avs_stream_t *stream;
 } anjay_output_buf_ctx_t;
 
-anjay_output_buf_ctx_t _anjay_output_buf_ctx_init(avs_stream_outbuf_t *stream);
+anjay_output_buf_ctx_t _anjay_output_buf_ctx_init(avs_stream_t *stream);
+
+bool _anjay_is_supported_hierarchical_format(uint16_t content_format);
+
+uint16_t _anjay_default_hierarchical_format(anjay_lwm2m_version_t version);
+
+uint16_t _anjay_default_simple_format(anjay_t *anjay,
+                                      anjay_lwm2m_version_t version);
 
 VISIBILITY_PRIVATE_HEADER_END
 

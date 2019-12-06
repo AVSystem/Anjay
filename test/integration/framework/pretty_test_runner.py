@@ -21,7 +21,7 @@ import time
 import traceback
 import unittest
 
-from .test_suite import get_test_name, get_suite_name
+from .test_suite import get_test_name, get_suite_name, LogType
 
 COLOR_DEFAULT = '\033[0m'
 COLOR_YELLOW = '\033[0;33m'
@@ -112,6 +112,7 @@ class PrettyTestResult(unittest.TestResult):
         self.stream = stream
         self.logfile = logfile_stream
         self.times = {}
+        self.successes = []
 
     def startTest(self, test):
         self.logfile.write_test_name(get_test_name(test))
@@ -125,6 +126,7 @@ class PrettyTestResult(unittest.TestResult):
 
         self.logfile.write_test_success(seconds_elapsed)
         self.stream.write_test_success(seconds_elapsed)
+        self.successes.append(test)
 
     def _logError(self, header, test, err):
         self.logfile.write_test_failure(header, test, err)
@@ -152,9 +154,9 @@ class PrettyTestResult(unittest.TestResult):
                           '-----\n'
                           % (get_test_name(test),
                              ''.join(traceback.format_exception(*err)),
-                             test.logs_path('console', log_root),
-                             test.logs_path('valgrind', log_root),
-                             test.logs_path('pcap', log_root, extension='.pcapng'))
+                             test.logs_path(LogType.Console, log_root),
+                             test.logs_path(LogType.Valgrind, log_root),
+                             test.logs_path(LogType.Pcap, log_root))
                           for test, err in self.errors + self.failures))
 
     @property

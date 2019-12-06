@@ -18,6 +18,11 @@
 #define ANJAY_UTILS_H
 
 #include <avsystem/commons/list.h>
+#include <avsystem/commons/socket.h>
+#include <avsystem/commons/utils.h>
+
+#include <avsystem/coap/option.h>
+#include <avsystem/coap/token.h>
 
 #include <anjay_modules/raw_buffer.h>
 #include <anjay_modules/utils_core.h>
@@ -33,10 +38,6 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 int _anjay_safe_strtoll(const char *in, long long *value);
 int _anjay_safe_strtod(const char *in, double *value);
-int _anjay_safe_strtof(const char *in, float *value);
-
-int _anjay_copy_string_list(AVS_LIST(const anjay_string_t) *outptr,
-                            AVS_LIST(const anjay_string_t) input);
 
 AVS_LIST(const anjay_string_t)
 _anjay_make_string_list(const char *string, ... /* strings */) AVS_F_SENTINEL;
@@ -46,25 +47,28 @@ _anjay_make_string_list(const char *string, ... /* strings */) AVS_F_SENTINEL;
 #define ANJAY_MAKE_STRING_LIST(...) \
     _anjay_make_string_list(__VA_ARGS__, (const char *) NULL)
 
-AVS_LIST(const anjay_string_t)
-_anjay_make_query_string_list(const char *version,
-                              const char *endpoint_name,
-                              const int64_t *lifetime,
-                              const char *binding_mode,
-                              const char *sms_msisdn);
+typedef enum { ANJAY_LWM2M_DUMMY_VERSION } anjay_lwm2m_dummy_version_t;
+#define anjay_lwm2m_version_t anjay_lwm2m_dummy_version_t
+#define ANJAY_LWM2M_VERSION_1_0 ANJAY_LWM2M_DUMMY_VERSION
 
-#ifdef ANJAY_TEST
-typedef uint32_t anjay_rand_seed_t;
-#else
-typedef unsigned anjay_rand_seed_t;
-#endif
-uint32_t _anjay_rand32(anjay_rand_seed_t *seed);
-
-static inline void _anjay_update_ret(int *var, int new_retval) {
-    if (!*var) {
-        *var = new_retval;
-    }
+static inline const char *
+_anjay_lwm2m_version_as_string(anjay_lwm2m_version_t version) {
+    (void) version;
+    return "1.0";
 }
+
+avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
+                                          const anjay_lwm2m_version_t *version,
+                                          const char *endpoint_name,
+                                          const int64_t *lifetime,
+                                          const char *binding_mode,
+                                          bool lwm2m11_queue_mode,
+                                          const char *sms_msisdn);
+
+avs_error_t
+_anjay_coap_add_string_options(avs_coap_options_t *opts,
+                               AVS_LIST(const anjay_string_t) strings,
+                               uint16_t opt_number);
 
 static inline size_t _anjay_max_power_of_2_not_greater_than(size_t bound) {
     int exponent = -1;
@@ -74,6 +78,36 @@ static inline size_t _anjay_max_power_of_2_not_greater_than(size_t bound) {
     }
     return (exponent >= 0) ? ((size_t) 1 << exponent) : 0;
 }
+
+static inline const char *_anjay_token_to_string(const avs_coap_token_t *token,
+                                                 char *out_buffer,
+                                                 size_t out_size) {
+    ssize_t result =
+            avs_hexlify(out_buffer, out_size, token->bytes, token->size);
+    assert(result >= 0);
+    (void) result;
+    return out_buffer;
+}
+
+#define ANJAY_TOKEN_TO_STRING(token)                                       \
+    _anjay_token_to_string(&(token),                                       \
+                           &(char[sizeof((token).bytes) * 2 + 1]){ 0 }[0], \
+                           sizeof((token).bytes) * 2 + 1)
+
+static inline bool _anjay_was_session_resumed(avs_net_socket_t *socket) {
+    avs_net_socket_opt_value_t session_resumed;
+    if (avs_is_err(avs_net_socket_get_opt(socket,
+                                          AVS_NET_SOCKET_OPT_SESSION_RESUMED,
+                                          &session_resumed))) {
+        return false;
+    }
+    return session_resumed.flag;
+}
+
+int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,
+                                 const avs_net_socket_tls_ciphersuites_t *src);
+
+#define ANJAY_SMS_URI_SCHEME "tel"
 
 VISIBILITY_PRIVATE_HEADER_END
 

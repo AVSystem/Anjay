@@ -60,13 +60,13 @@ class CrashAfterRequestWithTokenFollowedByNoToken(test_suite.Lwm2mSingleServerTe
         # buffer combined with not overriding cached token length in case of
         # a zero-length token caused anjay to incorrectly assume a non-empty
         # token was already written to the buffer
-        req = Lwm2mRead('/6/0/0', token=b'foo')
+        req = Lwm2mRead(ResPath.Location.Latitude, token=b'foo')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mContent.matching(req)(),
                             self.serv.recv())
 
         # the bug causes assertion failure during handling of this message
-        req = Lwm2mRead('/6/0/0', token=b'')
+        req = Lwm2mRead(ResPath.Location.Latitude, token=b'')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mContent.matching(req)(),
                             self.serv.recv())

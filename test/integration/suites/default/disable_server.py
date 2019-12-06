@@ -27,12 +27,12 @@ class DisableServerTest(test_suite.Lwm2mSingleServerTest):
         self.serv.set_timeout(timeout_s=1)
 
         # Write Disable Timeout
-        req = Lwm2mWrite('/1/1/5', '6')
+        req = Lwm2mWrite(ResPath.Server[1].DisableTimeout, '6')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 
         # Execute Disable
-        req = Lwm2mExecute('/1/1/4')
+        req = Lwm2mExecute(ResPath.Server[1].Disable)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 

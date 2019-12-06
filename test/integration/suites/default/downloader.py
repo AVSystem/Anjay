@@ -105,8 +105,13 @@ class CoapDownload:
                 def transferData(self, bytes_limit=len(payload)):
                     while self.read_offset < bytes_limit:
                         req = test_case.file_server.recv()
-                        test_case.assertMsgEqual(CoapGet(path, options=[
-                            coap.Option.BLOCK2(seq_num=self.seq_num, block_size=self.block_size, has_more=0)]), req)
+                        if self.read_offset != 0:
+                            test_case.assertMsgEqual(CoapGet(path, options=[
+                                coap.Option.BLOCK2(seq_num=self.seq_num, block_size=self.block_size, has_more=0)]), req)
+                        else:
+                            # NOTE: demo does not force any BLOCK2() option in first request at offset 0
+                            test_case.assertMsgEqual(CoapGet(path), req)
+
                         block2opt = coap.Option.BLOCK2(
                             seq_num=self.seq_num,
                             has_more=(len(DUMMY_PAYLOAD) > self.read_offset + self.block_size),

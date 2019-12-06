@@ -22,6 +22,8 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #define ANJAY_ATTR_PMIN "pmin"
 #define ANJAY_ATTR_PMAX "pmax"
+#define ANJAY_ATTR_EPMIN "epmin"
+#define ANJAY_ATTR_EPMAX "epmax"
 #define ANJAY_ATTR_GT "gt"
 #define ANJAY_ATTR_LT "lt"
 #define ANJAY_ATTR_ST "st"
@@ -35,10 +37,15 @@ typedef struct {
     /** Instance whose Resource is being queried. */
     anjay_iid_t iid;
     /**
-     * Resource whose Attributes are being queried, or negative value in case
+     * Resource whose Attributes are being queried, or ANJAY_ID_INVALID in case
      * when query on an Instance is only performed.
      */
-    int32_t rid;
+    anjay_rid_t rid;
+    /**
+     * Resource Instance whose Attributes are being queried, or ANJAY_ID_INVALID
+     * in case when query on a Resource is only performed.
+     */
+    anjay_riid_t riid;
     /** Server, for which Attributes shall be obtained. */
     anjay_ssid_t ssid;
     /**
@@ -59,18 +66,19 @@ typedef struct {
  * Attribute inheritance logic (assuming Resource and Instance ids are
  * provided):
  *
- *  0. Set *out to ANJAY_DM_ATTRIBS_EMPTY.
- *  1. Read Resource attributes and combine them with *out attributes.
- *  2. Read Instance attributes and combine them with *out attributes.
- *  3. Read Object attributes and combine them with *out attributes.
- *  4. (If with_server_level_attrs is set) Read Server attributes and combine
+ *  0. Set *out to ANJAY_DM_INTERNAL_R_ATTRS_EMPTY.
+ *  1. Read Resource Instance attributes and combine them with *out attributes.
+ *  2. Read Resource attributes and combine them with *out attributes.
+ *  3. Read Instance attributes and combine them with *out attributes.
+ *  4. Read Object attributes and combine them with *out attributes.
+ *  5. (If with_server_level_attrs is set) Read Server attributes and combine
  *     them with *out attributes.
  *
  * Additional information:
  * - If any step from above fails, then the function returns negative value.
  * - If @p query->rid is negative, then attributes of the Resource are not
  *   queried.
- * - If @p query->iid is ANJAY_IID_INVALID, then attributes of the Instance
+ * - If @p query->iid is ANJAY_ID_INVALID, then attributes of the Instance
  *   are not queried.
  *
  * @param anjay     ANJAY object to operate on.
@@ -80,37 +88,7 @@ typedef struct {
  */
 int _anjay_dm_effective_attrs(anjay_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
-                              anjay_dm_internal_res_attrs_t *out);
-
-/**
- * Reads attributes assigned to the Instance (if *out has at least one unset
- * attribute) and combines them with *out.
- *
- * WARNING: This function does not perform any presence checks. Caller must
- * ensure this on its own.
- */
-int _anjay_dm_read_combined_instance_attrs(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj,
-        anjay_iid_t iid,
-        anjay_ssid_t ssid,
-        anjay_dm_internal_attrs_t *out);
-/**
- * Reads attributes assigned to the Object (if *out has at least one unset
- * attribute) and combines them with *out.
- */
-int _anjay_dm_read_combined_object_attrs(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj,
-        anjay_ssid_t ssid,
-        anjay_dm_internal_attrs_t *out);
-/**
- * Reads Default Minimum Period and Default Maximum Period (if *out has not
- * set at least one of them) and combines them with *out.
- */
-int _anjay_dm_read_combined_server_attrs(anjay_t *anjay,
-                                         anjay_ssid_t ssid,
-                                         anjay_dm_internal_attrs_t *out);
+                              anjay_dm_internal_r_attrs_t *out);
 
 VISIBILITY_PRIVATE_HEADER_END
 

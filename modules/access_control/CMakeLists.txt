@@ -12,18 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(SOURCES
-    src/access_control_handlers.c
-    src/access_control_persistence.c
-    src/mod_access_control.c)
-set(PRIVATE_HEADERS
-    src/mod_access_control.h)
-set(PUBLIC_HEADERS
-    include_public/anjay/access_control.h)
+target_sources(anjay PRIVATE
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_access_control.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/access_control.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/access_control_handlers.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/access_control_persistence.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_access_control.c)
+target_include_directories(anjay PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_public>)
 
-set(TEST_SOURCES
-    ${SOURCES}
-    ${PRIVATE_HEADERS}
-    ${PUBLIC_HEADERS})
-
-include(../module_common.cmake)
+install(DIRECTORY include_public/anjay
+        DESTINATION include
+        FILES_MATCHING REGEX "[.]h$")

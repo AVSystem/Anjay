@@ -21,7 +21,7 @@
 #include <string>
 
 namespace ssl {
-struct Socket;
+class Socket;
 
 class SecurityInfo {
 public:

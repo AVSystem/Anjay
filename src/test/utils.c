@@ -32,13 +32,6 @@
 #define AUTO_URL(Name) \
     __attribute__((__cleanup__(_anjay_url_cleanup))) anjay_url_t Name
 
-AVS_UNIT_TEST(parse_url, invalid_protocol_terminator) {
-    anjay_url_t parsed_url = ANJAY_URL_EMPTY;
-
-    AVS_UNIT_ASSERT_FAILED(
-            _anjay_url_parse("coap:/acs.avsystem.com", &parsed_url));
-}
-
 AVS_UNIT_TEST(parse_url, square_bracket_enclosed_host_address_too_long) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
@@ -57,9 +50,8 @@ AVS_UNIT_TEST(parse_url, without_credentials_port_and_path) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_url_parse("coap://acs.avsystem.com", &parsed_url));
-    AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAP);
     AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.host, "acs.avsystem.com");
-    AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.port, "");
+    AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.port, "5683");
 }
 
 AVS_UNIT_TEST(parse_url, with_port_and_path) {
@@ -118,20 +110,17 @@ AVS_UNIT_TEST(parse_url, coaps_url) {
         parsed_url = ANJAY_URL_EMPTY;
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_url_parse("coaps://[12::34]", &parsed_url));
-        AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAPS);
         AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.host, "12::34");
     }
     {
         parsed_url = ANJAY_URL_EMPTY;
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_url_parse("coaps://acs.avsystem.com", &parsed_url));
-        AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAPS);
     }
     {
         parsed_url = ANJAY_URL_EMPTY;
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_url_parse("coaps://acs.avsystem.com:123", &parsed_url));
-        AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAPS);
     }
 }
 
@@ -176,9 +165,8 @@ AVS_UNIT_TEST(parse_url, ipv6_address) {
     anjay_url_t parsed_url = ANJAY_URL_EMPTY;
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coap://[12::34]", &parsed_url));
-    AVS_UNIT_ASSERT_EQUAL(parsed_url.protocol, ANJAY_URL_PROTOCOL_COAP);
     AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.host, "12::34");
-    AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.port, "");
+    AVS_UNIT_ASSERT_EQUAL_STRING(parsed_url.port, "5683");
 }
 
 AVS_UNIT_TEST(parse_url, ipv6_address_with_port_and_path) {
@@ -206,14 +194,6 @@ AVS_UNIT_TEST(parse_url, invalid_ipv6_address) {
             _anjay_url_parse("coap://[12:ff:ff::34", &parsed_url));
     AVS_UNIT_ASSERT_FAILED(
             _anjay_url_parse("coap://[12:ff:ff::34]:", &parsed_url));
-}
-
-AVS_UNIT_TEST(parse_url, empty_host) {
-    anjay_url_t parsed_url = ANJAY_URL_EMPTY;
-
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_url_parse("coap://host", &parsed_url));
-    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse("coap://", &parsed_url));
-    AVS_UNIT_ASSERT_FAILED(_anjay_url_parse("coap://:123", &parsed_url));
 }
 
 AVS_UNIT_TEST(parse_url, hostname_length) {

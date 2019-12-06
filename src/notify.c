@@ -21,6 +21,7 @@
 
 #include "coap/content_format.h"
 
+#include "access_utils.h"
 #include "anjay_core.h"
 #include "observe/observe_core.h"
 #include "servers_utils.h"
@@ -29,29 +30,23 @@ VISIBILITY_SOURCE_BEGIN
 
 #ifdef WITH_OBSERVE
 static int observe_notify(anjay_t *anjay, anjay_notify_queue_t queue) {
-    anjay_observe_key_t observe_key = {
-        .connection = {
-            .ssid = _anjay_dm_current_ssid(anjay),
-            .type = ANJAY_CONNECTION_UNSET
-        },
-        .format = AVS_COAP_FORMAT_NONE
-    };
     int ret = 0;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, queue) {
-        observe_key.oid = it->oid;
         if (it->instance_set_changes.instance_set_changed) {
-            observe_key.iid = ANJAY_IID_INVALID;
-            observe_key.rid = ANJAY_RID_EMPTY;
-            _anjay_update_ret(&ret,
-                              _anjay_observe_notify(anjay, &observe_key, true));
+            _anjay_update_ret(
+                    &ret,
+                    _anjay_observe_notify(anjay, &MAKE_OBJECT_PATH(it->oid),
+                                          _anjay_dm_current_ssid(anjay), true));
         } else {
             AVS_LIST(anjay_notify_queue_resource_entry_t) it2;
             AVS_LIST_FOREACH(it2, it->resources_changed) {
-                observe_key.iid = it2->iid;
-                observe_key.rid = it2->rid;
-                _anjay_update_ret(
-                        &ret, _anjay_observe_notify(anjay, &observe_key, true));
+                _anjay_update_ret(&ret,
+                                  _anjay_observe_notify(
+                                          anjay,
+                                          &MAKE_RESOURCE_PATH(it->oid, it2->iid,
+                                                              it2->rid),
+                                          _anjay_dm_current_ssid(anjay), true));
             }
         }
     }
@@ -96,7 +91,7 @@ static int server_modified_notify(anjay_t *anjay,
                 MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, it->iid,
                                    ANJAY_DM_RID_SERVER_SSID);
         int64_t ssid;
-        if (_anjay_dm_res_read_i64(anjay, &path, &ssid) || ssid <= 0
+        if (_anjay_dm_read_resource_i64(anjay, &path, &ssid) || ssid <= 0
                 || ssid >= UINT16_MAX) {
             _anjay_update_ret(&ret, -1);
         } else if (_anjay_servers_find_active(anjay, (anjay_ssid_t) ssid)) {
@@ -108,22 +103,25 @@ static int server_modified_notify(anjay_t *anjay,
     return ret;
 }
 
-int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue) {
+static int anjay_notify_perform_impl(anjay_t *anjay,
+                                     anjay_notify_queue_t queue,
+                                     bool server_notify) {
     if (!queue) {
         return 0;
     }
     int ret = 0;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, queue) {
-        if (it->oid > 1) {
+        if (it->oid > ANJAY_DM_OID_SERVER) {
             break;
         } else if (it->oid == ANJAY_DM_OID_SECURITY) {
             _anjay_update_ret(&ret, security_modified_notify(anjay, it));
-        } else if (it->oid == ANJAY_DM_OID_SERVER) {
+        } else if (server_notify && it->oid == ANJAY_DM_OID_SERVER) {
             _anjay_update_ret(&ret, server_modified_notify(anjay, it));
         }
     }
     _anjay_update_ret(&ret, observe_notify(anjay, queue));
+    _anjay_update_ret(&ret, _anjay_sync_access_control(anjay, queue));
     AVS_LIST(anjay_dm_installed_module_t) module;
     AVS_LIST_FOREACH(module, anjay->dm.modules) {
         if (module->def->notify_callback) {
@@ -133,6 +131,15 @@ int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue) {
         }
     }
     return ret;
+}
+
+int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue) {
+    return anjay_notify_perform_impl(anjay, queue, true);
+}
+
+int _anjay_notify_perform_without_servers(anjay_t *anjay,
+                                          anjay_notify_queue_t queue) {
+    return anjay_notify_perform_impl(anjay, queue, false);
 }
 
 int _anjay_notify_flush(anjay_t *anjay, anjay_notify_queue_t *queue_ptr) {
@@ -199,7 +206,6 @@ static void delete_notify_queue_object_entry_if_empty(
         return;
     }
     assert(!(*entry_ptr)->instance_set_changes.known_added_iids);
-    assert(!(*entry_ptr)->instance_set_changes.known_removed_iids);
     AVS_LIST_DELETE(entry_ptr);
 }
 
@@ -209,17 +215,15 @@ int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!entry_ptr) {
-        anjay_log(ERROR, "Out of memory");
+        anjay_log(ERROR, "out of memory");
         return -1;
     }
     if (add_entry_to_iid_set(
                 &(*entry_ptr)->instance_set_changes.known_added_iids, iid)) {
-        anjay_log(ERROR, "Out of memory");
+        anjay_log(ERROR, "out of memory");
         delete_notify_queue_object_entry_if_empty(entry_ptr);
         return -1;
     }
-    remove_entry_from_iid_set(
-            &(*entry_ptr)->instance_set_changes.known_removed_iids, iid);
     (*entry_ptr)->instance_set_changes.instance_set_changed = true;
     return 0;
 }
@@ -230,13 +234,7 @@ int _anjay_notify_queue_instance_removed(anjay_notify_queue_t *out_queue,
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!entry_ptr) {
-        anjay_log(ERROR, "Out of memory");
-        return -1;
-    }
-    if (add_entry_to_iid_set(
-                &(*entry_ptr)->instance_set_changes.known_removed_iids, iid)) {
-        anjay_log(ERROR, "Out of memory");
-        delete_notify_queue_object_entry_if_empty(entry_ptr);
+        anjay_log(ERROR, "out of memory");
         return -1;
     }
     remove_entry_from_iid_set(
@@ -250,7 +248,7 @@ int _anjay_notify_queue_instance_set_unknown_change(
     AVS_LIST(anjay_notify_queue_object_entry_t) *entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!entry_ptr) {
-        anjay_log(ERROR, "Out of memory");
+        anjay_log(ERROR, "out of memory");
         return -1;
     }
     (*entry_ptr)->instance_set_changes.instance_set_changed = true;
@@ -274,7 +272,7 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
     AVS_LIST(anjay_notify_queue_object_entry_t) *obj_entry_ptr =
             find_or_create_object_entry(out_queue, oid);
     if (!obj_entry_ptr) {
-        anjay_log(ERROR, "Out of memory");
+        anjay_log(ERROR, "out of memory");
         return -1;
     }
     anjay_notify_queue_resource_entry_t new_entry = {
@@ -292,7 +290,7 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
     }
     if (!AVS_LIST_INSERT_NEW(anjay_notify_queue_resource_entry_t,
                              res_entry_ptr)) {
-        anjay_log(ERROR, "Out of memory");
+        anjay_log(ERROR, "out of memory");
         if (!(*obj_entry_ptr)->instance_set_changes.instance_set_changed
                 && !(*obj_entry_ptr)->resources_changed) {
             AVS_LIST_DELETE(obj_entry_ptr);
@@ -306,13 +304,13 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
 void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue) {
     AVS_LIST_CLEAR(out_queue) {
         AVS_LIST_CLEAR(&(*out_queue)->instance_set_changes.known_added_iids);
-        AVS_LIST_CLEAR(&(*out_queue)->instance_set_changes.known_removed_iids);
         AVS_LIST_CLEAR(&(*out_queue)->resources_changed);
     }
 }
 
-static void notify_clb(anjay_t *anjay, const void *dummy) {
+static void notify_clb(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
+    anjay_t *anjay = _anjay_get_from_sched(sched);
     _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
 }
 
@@ -320,8 +318,8 @@ static int reschedule_notify(anjay_t *anjay) {
     if (anjay->scheduled_notify.handle) {
         return 0;
     }
-    return _anjay_sched_now(anjay->sched, &anjay->scheduled_notify.handle,
-                            notify_clb, NULL, 0);
+    return AVS_SCHED_NOW(anjay->sched, &anjay->scheduled_notify.handle,
+                         notify_clb, NULL, 0);
 }
 
 int _anjay_notify_instance_created(anjay_t *anjay,
@@ -352,4 +350,3 @@ int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid) {
             || (retval = reschedule_notify(anjay)));
     return retval;
 }
-

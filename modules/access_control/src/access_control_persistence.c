@@ -30,15 +30,15 @@ VISIBILITY_SOURCE_BEGIN
 
 #ifdef WITH_AVS_PERSISTENCE
 
-static int handle_acl_entry(avs_persistence_context_t *ctx,
-                            void *element_,
-                            void *user_data) {
+static avs_error_t handle_acl_entry(avs_persistence_context_t *ctx,
+                                    void *element_,
+                                    void *user_data) {
     (void) user_data;
     acl_entry_t *element = (acl_entry_t *) element_;
-    int retval;
-    (void) ((retval = avs_persistence_u16(ctx, &element->mask))
-            || (retval = avs_persistence_u16(ctx, &element->ssid)));
-    return retval;
+    avs_error_t err;
+    (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->mask)))
+            || avs_is_err((err = avs_persistence_u16(ctx, &element->ssid))));
+    return err;
 }
 
 static void cleanup_acl_entry(void *element) {
@@ -46,33 +46,33 @@ static void cleanup_acl_entry(void *element) {
     (void) element;
 }
 
-static int handle_acl(avs_persistence_context_t *ctx,
-                      access_control_instance_t *inst) {
-    int retval = avs_persistence_bool(ctx, &inst->has_acl);
-    if (!retval && inst->has_acl) {
-        retval = avs_persistence_list(ctx, (AVS_LIST(void) *) &inst->acl,
-                                      sizeof(*inst->acl), handle_acl_entry,
-                                      NULL, cleanup_acl_entry);
+static avs_error_t handle_acl(avs_persistence_context_t *ctx,
+                              access_control_instance_t *inst) {
+    avs_error_t err = avs_persistence_bool(ctx, &inst->has_acl);
+    if (avs_is_ok(err) && inst->has_acl) {
+        err = avs_persistence_list(ctx, (AVS_LIST(void) *) &inst->acl,
+                                   sizeof(*inst->acl), handle_acl_entry, NULL,
+                                   cleanup_acl_entry);
     }
-    return retval;
+    return err;
 }
 
-static int persist_instance(avs_persistence_context_t *ctx,
-                            void *element_,
-                            void *user_data) {
+static avs_error_t persist_instance(avs_persistence_context_t *ctx,
+                                    void *element_,
+                                    void *user_data) {
     (void) user_data;
     access_control_instance_t *element = (access_control_instance_t *) element_;
     anjay_iid_t target_iid = (anjay_iid_t) element->target.iid;
     if (target_iid != element->target.iid) {
-        return -1;
+        return avs_errno(AVS_EINVAL);
     }
-    int retval;
-    (void) ((retval = avs_persistence_u16(ctx, &element->target.oid))
-            || (retval = avs_persistence_u16(ctx, &element->iid))
-            || (retval = avs_persistence_u16(ctx, &target_iid))
-            || (retval = avs_persistence_u16(ctx, &element->owner))
-            || (retval = handle_acl(ctx, element)));
-    return retval;
+    avs_error_t err;
+    (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->target.oid)))
+            || avs_is_err((err = avs_persistence_u16(ctx, &element->iid)))
+            || avs_is_err((err = avs_persistence_u16(ctx, &target_iid)))
+            || avs_is_err((err = avs_persistence_u16(ctx, &element->owner)))
+            || avs_is_err((err = handle_acl(ctx, element))));
+    return err;
 }
 
 static bool is_object_registered(anjay_t *anjay, anjay_oid_t oid) {
@@ -80,128 +80,125 @@ static bool is_object_registered(anjay_t *anjay, anjay_oid_t oid) {
            && _anjay_dm_find_object_by_oid(anjay, oid) != NULL;
 }
 
-static int restore_instance(access_control_instance_t *out_instance,
-                            avs_persistence_context_t *ctx) {
-    anjay_iid_t target_iid;
-    int retval;
-    (void) ((retval = avs_persistence_u16(ctx, &out_instance->iid))
-            || (retval = avs_persistence_u16(ctx, &target_iid))
-            || (retval = avs_persistence_u16(ctx, &out_instance->owner))
-            || (retval = handle_acl(ctx, out_instance)));
-    if (!retval) {
+static avs_error_t restore_instance(access_control_instance_t *out_instance,
+                                    avs_persistence_context_t *ctx) {
+    anjay_iid_t target_iid = 0;
+    avs_error_t err;
+    (void) (avs_is_err((err = avs_persistence_u16(ctx, &out_instance->iid)))
+            || avs_is_err((err = avs_persistence_u16(ctx, &target_iid)))
+            || avs_is_err(
+                       (err = avs_persistence_u16(ctx, &out_instance->owner)))
+            || avs_is_err((err = handle_acl(ctx, out_instance))));
+    if (avs_is_ok(err)) {
         out_instance->target.iid = target_iid;
     }
-    return retval;
+    return err;
 }
 
-static int restore_instances(anjay_t *anjay,
-                             AVS_LIST(access_control_instance_t) *instances_ptr,
-                             avs_persistence_context_t *restore_ctx,
-                             avs_persistence_context_t *ignore_ctx) {
+static avs_error_t
+restore_instances(anjay_t *anjay,
+                  AVS_LIST(access_control_instance_t) *instances_ptr,
+                  avs_persistence_context_t *restore_ctx) {
     uint32_t count;
-    if (avs_persistence_u32(restore_ctx, &count) || (count > UINT16_MAX)) {
-        return -1;
+    avs_error_t err = avs_persistence_u32(restore_ctx, &count);
+    if (avs_is_err(err)) {
+        return err;
+    }
+    if (count > UINT16_MAX) {
+        return avs_errno(AVS_EBADMSG);
     }
     AVS_LIST(access_control_instance_t) *tail = instances_ptr;
     while (count--) {
-        int retval;
         access_control_instance_t instance;
         memset(&instance, 0, sizeof(instance));
-        if ((retval = avs_persistence_u16(restore_ctx, &instance.target.oid))) {
-            return retval;
+        if (avs_is_err((err = avs_persistence_u16(restore_ctx,
+                                                  &instance.target.oid)))
+                || avs_is_err(
+                           (err = restore_instance(&instance, restore_ctx)))) {
+            return err;
         }
+
         if (!is_object_registered(anjay, instance.target.oid)) {
-            /* Actually ignore this instance. */
-            retval = restore_instance(&instance, ignore_ctx);
+            AVS_LIST_CLEAR(&instance.acl);
         } else {
-            retval = restore_instance(&instance, restore_ctx);
+            AVS_LIST(access_control_instance_t) entry =
+                    AVS_LIST_NEW_ELEMENT(access_control_instance_t);
+            if (!entry) {
+                ac_log(ERROR, "out of memory");
+                return avs_errno(AVS_ENOMEM);
+            }
+            *entry = instance;
+            AVS_LIST_INSERT(tail, entry);
+            AVS_LIST_ADVANCE_PTR(&tail);
         }
-
-        if (retval) {
-            return retval;
-        }
-
-        AVS_LIST(access_control_instance_t) entry =
-                AVS_LIST_NEW_ELEMENT(access_control_instance_t);
-        if (!entry) {
-            ac_log(ERROR, "out of memory");
-            return -1;
-        }
-        *entry = instance;
-        AVS_LIST_INSERT(tail, entry);
-        AVS_LIST_ADVANCE_PTR(&tail);
     }
-    return 0;
+    return AVS_OK;
 }
 
-static int
-restore(anjay_t *anjay, access_control_t *ac, avs_stream_abstract_t *in) {
+static avs_error_t
+restore(anjay_t *anjay, access_control_t *ac, avs_stream_t *in) {
     avs_persistence_context_t restore_ctx =
             avs_persistence_restore_context_create(in);
-    avs_persistence_context_t ignore_ctx =
-            avs_persistence_ignore_context_create(in);
     access_control_state_t state = { NULL };
-    int retval = -1;
-
-    if ((retval = restore_instances(anjay, &state.instances, &restore_ctx,
-                                    &ignore_ctx))) {
+    avs_error_t err = restore_instances(anjay, &state.instances, &restore_ctx);
+    if (avs_is_err(err)) {
         _anjay_access_control_clear_state(&state);
-    } else {
-        _anjay_access_control_clear_state(&ac->current);
-        ac->current = state;
+        return err;
     }
-    return retval;
+    _anjay_access_control_clear_state(&ac->current);
+    ac->current = state;
+    ac->last_accessed_instance = NULL;
+    return AVS_OK;
 }
 
 static const char MAGIC[] = { 'A', 'C', 'O', '\1' };
 
-int anjay_access_control_persist(anjay_t *anjay, avs_stream_abstract_t *out) {
+avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
         ac_log(ERROR, "Access Control not installed in this Anjay object");
-        return -1;
+        return avs_errno(AVS_EBADF);
     }
 
-    int retval = avs_stream_write(out, MAGIC, sizeof(MAGIC));
-    if (retval) {
-        return retval;
+    avs_error_t err = avs_stream_write(out, MAGIC, sizeof(MAGIC));
+    if (avs_is_err(err)) {
+        return err;
     }
     avs_persistence_context_t ctx = avs_persistence_store_context_create(out);
-    retval = avs_persistence_list(&ctx,
-                                  (AVS_LIST(void) *) &ac->current.instances,
-                                  sizeof(*ac->current.instances),
-                                  persist_instance, NULL, NULL);
-    if (!retval) {
+    err = avs_persistence_list(&ctx, (AVS_LIST(void) *) &ac->current.instances,
+                               sizeof(*ac->current.instances), persist_instance,
+                               NULL, NULL);
+    if (avs_is_ok(err)) {
         ac_log(INFO, "Access Control state persisted");
         _anjay_access_control_clear_modified(ac);
     }
-    return retval;
+    return err;
 }
 
-int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
+avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
         ac_log(ERROR, "Access Control not installed in this Anjay object");
-        return -1;
+        return avs_errno(AVS_EBADF);
     }
 
     char magic_header[sizeof(MAGIC)];
-    int retval =
+    avs_error_t err =
             avs_stream_read_reliably(in, magic_header, sizeof(magic_header));
-    if (retval) {
-        ac_log(ERROR, "magic constant not found");
-        return retval;
+    if (avs_is_err(err)) {
+        ac_log(WARNING, "magic constant not found");
+        return err;
     }
 
     if (memcmp(magic_header, MAGIC, sizeof(MAGIC))) {
-        ac_log(ERROR, "header magic constant mismatch");
-        return -1;
+        ac_log(WARNING, "header magic constant mismatch");
+        return avs_errno(AVS_EBADMSG);
     }
-    if (!(retval = restore(anjay, ac, in))) {
+    if (avs_is_ok((err = restore(anjay, ac, in)))) {
         _anjay_access_control_clear_modified(ac);
         ac_log(INFO, "Access Control state restored");
     }
-    return retval;
+    return err;
 }
 
 #    ifdef ANJAY_TEST
@@ -210,18 +207,18 @@ int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
 
 #else // WITH_AVS_PERSISTENCE
 
-int anjay_access_control_persist(anjay_t *anjay, avs_stream_abstract_t *out) {
+avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
     (void) anjay;
     (void) out;
     ac_log(ERROR, "Persistence not compiled in");
-    return -1;
+    return avs_errno(AVS_ENOTSUP);
 }
 
-int anjay_access_control_restore(anjay_t *anjay, avs_stream_abstract_t *in) {
+avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
     (void) anjay;
     (void) in;
     ac_log(ERROR, "Persistence not compiled in");
-    return -1;
+    return avs_errno(AVS_ENOTSUP);
 }
 
 #endif // WITH_AVS_PERSISTENCE

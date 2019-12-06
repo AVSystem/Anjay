@@ -27,7 +27,7 @@ def unregister_test(oid):
         def setUp(self):
             super().setUp(auto_register=False)
             pkt = self.serv.recv()
-            expected = Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400))
+            expected = Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=%d' % (DEMO_ENDPOINT_NAME, 86400))
             self.assertMsgEqual(expected, pkt)
             self.serv.send(
                 Lwm2mCreated(location=self.DEFAULT_REGISTER_ENDPOINT, msg_id=pkt.msg_id, token=pkt.token))
@@ -73,7 +73,7 @@ class UnregisterExtDevInfo(unregister_test(OID.ExtDevInfo)): pass
 class UnregisterIpPing(unregister_test(OID.IpPing)): pass
 
 
-class UnregisterGeopoints(unregister_test(OID.Geopoints)): pass
+class UnregisterGeopoints(unregister_test(OID.GeoPoints)): pass
 
 
 class UnregisterDownloadDiagnostics(unregister_test(OID.DownloadDiagnostics)): pass

@@ -21,25 +21,49 @@
 #include "security_utils.h"
 
 #include <anjay_modules/dm_utils.h>
+#include <anjay_modules/utils_core.h>
 
 VISIBILITY_SOURCE_BEGIN
 
-static int ssid_cmp(const void *a, const void *b, size_t element_size) {
-    assert(element_size == sizeof(anjay_ssid_t));
+typedef struct {
+    anjay_ssid_t ssid;
+    anjay_socket_transport_t transport;
+} ssid_transport_pair_t;
+
+static int
+ssid_transport_pair_cmp(const void *a_, const void *b_, size_t element_size) {
+    assert(element_size == sizeof(ssid_transport_pair_t));
     (void) element_size;
-    return *((const anjay_ssid_t *) a) - *((const anjay_ssid_t *) b);
+    const ssid_transport_pair_t *a = (const ssid_transport_pair_t *) a_;
+    const ssid_transport_pair_t *b = (const ssid_transport_pair_t *) b_;
+    if (a->ssid != b->ssid) {
+        return a->ssid - b->ssid;
+    }
+    return (int) a->transport - (int) b->transport;
 }
 
-static bool uri_protocol_matching(anjay_udp_security_mode_t security_mode,
+static bool uri_protocol_matching(anjay_security_mode_t security_mode,
                                   const char *uri) {
-    const char *expected_prefix =
-            (security_mode == ANJAY_UDP_SECURITY_NOSEC) ? "coap:" : "coaps:";
-    return strncmp(uri, expected_prefix, strlen(expected_prefix)) == 0;
+    const anjay_transport_info_t *transport_info =
+            _anjay_transport_info_by_uri_scheme(uri);
+    if (!transport_info) {
+        return false;
+    }
+    if (transport_info->security == ANJAY_TRANSPORT_SECURITY_UNDEFINED) {
+        // URI scheme does not specify security,
+        // so it is valid for all security modes
+        return true;
+    }
+
+    const bool is_secure_uri =
+            (transport_info->security == ANJAY_TRANSPORT_ENCRYPTED);
+    const bool needs_secure_uri = (security_mode != ANJAY_SECURITY_NOSEC);
+    return is_secure_uri == needs_secure_uri;
 }
 
 #define LOG_VALIDATION_FAILED(SecInstance, ...)                     \
     do {                                                            \
-        char buffer[128];                                           \
+        char buffer[256];                                           \
         int offset = snprintf(buffer, sizeof(buffer),               \
                               "/%u/%u: ", ANJAY_DM_OID_SECURITY,    \
                               (unsigned) (SecInstance)->iid);       \
@@ -48,7 +72,7 @@ static bool uri_protocol_matching(anjay_udp_security_mode_t security_mode,
         }                                                           \
         snprintf(&buffer[offset], sizeof(buffer) - (size_t) offset, \
                  __VA_ARGS__);                                      \
-        security_log(ERROR, "%s", buffer);                          \
+        security_log(WARNING, "%s", buffer);                        \
     } while (0)
 
 static int validate_instance(sec_instance_t *it) {
@@ -62,7 +86,7 @@ static int validate_instance(sec_instance_t *it) {
                 it, "missing mandatory 'Bootstrap Server' resource value");
         return -1;
     }
-    if (!it->has_udp_security_mode) {
+    if (!it->has_security_mode) {
         LOG_VALIDATION_FAILED(
                 it, "missing mandatory 'Security Mode' resource value");
         return -1;
@@ -72,27 +96,24 @@ static int validate_instance(sec_instance_t *it) {
                 it, "missing mandatory 'Short Server ID' resource value");
         return -1;
     }
-    if (_anjay_sec_validate_udp_security_mode(
-                (int32_t) it->udp_security_mode)) {
-        LOG_VALIDATION_FAILED(it, "UDP Security mode %d not supported",
-                              (int) it->udp_security_mode);
+    if (_anjay_sec_validate_security_mode((int32_t) it->security_mode)) {
+        LOG_VALIDATION_FAILED(it, "Security mode %d not supported",
+                              (int) it->security_mode);
         return -1;
     }
-    if (!uri_protocol_matching(it->udp_security_mode, it->server_uri)) {
+    if (!uri_protocol_matching(it->security_mode, it->server_uri)) {
         LOG_VALIDATION_FAILED(
                 it,
-                "Expected '%s://' protocol in Server Uri '%s' due to security "
-                "configuration",
-                (it->udp_security_mode == ANJAY_UDP_SECURITY_NOSEC) ? "coap"
-                                                                    : "coaps",
+                "Incorrect protocol in Server Uri '%s' due to security "
+                "configuration (coap:// instead of coaps:// or vice versa?)",
                 it->server_uri);
         return -1;
     }
-    if (it->udp_security_mode != ANJAY_UDP_SECURITY_NOSEC) {
+    if (it->security_mode != ANJAY_SECURITY_NOSEC) {
         if (!it->public_cert_or_psk_identity.data
                 || !it->private_cert_or_psk_key.data) {
-            LOG_VALIDATION_FAILED(
-                    it, "UDP security credentials not fully configured");
+            LOG_VALIDATION_FAILED(it,
+                                  "security credentials not fully configured");
             return -1;
         }
     }
@@ -114,11 +135,13 @@ static int validate_instance(sec_instance_t *it) {
     return 0;
 }
 
-int _anjay_sec_object_validate(sec_repr_t *repr) {
-    AVS_LIST(anjay_ssid_t) seen_ssids = NULL;
+int _anjay_sec_object_validate(anjay_t *anjay, sec_repr_t *repr) {
+    AVS_LIST(ssid_transport_pair_t) seen_ssid_transport_pairs = NULL;
     AVS_LIST(sec_instance_t) it;
     int result = 0;
     bool bootstrap_server_present = false;
+    (void) anjay;
+
     AVS_LIST_FOREACH(it, repr->instances) {
         /* Assume something will go wrong */
         result = ANJAY_ERR_BAD_REQUEST;
@@ -132,22 +155,30 @@ int _anjay_sec_object_validate(sec_repr_t *repr) {
             }
             bootstrap_server_present = true;
         } else {
-            if (!AVS_LIST_INSERT_NEW(anjay_ssid_t, &seen_ssids)) {
+            const anjay_transport_info_t *transport_info =
+                    _anjay_transport_info_by_uri_scheme(it->server_uri);
+            if (!transport_info
+                    || !AVS_LIST_INSERT_NEW(ssid_transport_pair_t,
+                                            &seen_ssid_transport_pairs)) {
                 result = ANJAY_ERR_INTERNAL;
                 goto finish;
             }
-            *seen_ssids = it->ssid;
+            seen_ssid_transport_pairs->ssid = it->ssid;
+            seen_ssid_transport_pairs->transport = transport_info->transport;
         }
+
         /* We are still there - nothing went wrong, continue */
         result = 0;
     }
 
-    if (!result && seen_ssids) {
-        AVS_LIST_SORT(&seen_ssids, ssid_cmp);
-        AVS_LIST(anjay_ssid_t) prev = seen_ssids;
-        AVS_LIST(anjay_ssid_t) next = AVS_LIST_NEXT(seen_ssids);
+    if (!result && seen_ssid_transport_pairs) {
+        AVS_LIST_SORT(&seen_ssid_transport_pairs, ssid_transport_pair_cmp);
+        AVS_LIST(ssid_transport_pair_t) prev = seen_ssid_transport_pairs;
+        AVS_LIST(ssid_transport_pair_t) next =
+                AVS_LIST_NEXT(seen_ssid_transport_pairs);
         while (next) {
-            if (*prev == *next) {
+            if (prev->ssid == next->ssid
+                    && prev->transport == next->transport) {
                 /* Duplicate found */
                 result = ANJAY_ERR_BAD_REQUEST;
                 break;
@@ -157,7 +188,7 @@ int _anjay_sec_object_validate(sec_repr_t *repr) {
         }
     }
 finish:
-    AVS_LIST_CLEAR(&seen_ssids);
+    AVS_LIST_CLEAR(&seen_ssid_transport_pairs);
     return result;
 }
 
@@ -176,8 +207,8 @@ int _anjay_sec_transaction_commit_impl(sec_repr_t *repr) {
     return 0;
 }
 
-int _anjay_sec_transaction_validate_impl(sec_repr_t *repr) {
-    return _anjay_sec_object_validate(repr);
+int _anjay_sec_transaction_validate_impl(anjay_t *anjay, sec_repr_t *repr) {
+    return _anjay_sec_object_validate(anjay, repr);
 }
 
 int _anjay_sec_transaction_rollback_impl(sec_repr_t *repr) {

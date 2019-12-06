@@ -16,10 +16,7 @@
 
 import struct
 import typing
-
-
-def indent(text, indent='  '):
-    return indent + ('\n' + indent).join(text.split('\n'))
+from textwrap import indent
 
 
 class TLVType:
@@ -52,7 +49,7 @@ class TLVList(list):
         A list of TLVs used as a result of TLV.parse, with a custom __str__ function
         for convenience.
         """
-        return 'TLV (%d elements):\n\n' % len(self) + indent('\n'.join(x.full_description() for x in self))
+        return 'TLV (%d elements):\n\n' % len(self) + indent('\n'.join(x.full_description() for x in self), '  ')
 
 
 class TLV:
@@ -269,9 +266,9 @@ class TLV:
     def full_description(self):
         if self.tlv_type == TLVType.INSTANCE:
             return ('instance %d (%d resources)\n%s'
-                    % (self.identifier, len(self.value), indent('\n'.join(x.full_description() for x in self.value))))
+                    % (self.identifier, len(self.value), indent('\n'.join(x.full_description() for x in self.value), '  ')))
         elif self.tlv_type == TLVType.MULTIPLE_RESOURCE:
             return ('multiple resource %d (%d instances)\n%s'
-                    % (self.identifier, len(self.value), indent('\n'.join(x.full_description() for x in self.value))))
+                    % (self.identifier, len(self.value), indent('\n'.join(x.full_description() for x in self.value), '  ')))
         else:
             return str(self)

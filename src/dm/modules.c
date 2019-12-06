@@ -63,7 +63,7 @@ int _anjay_dm_module_uninstall(anjay_t *anjay,
         return -1;
     }
     if ((*module_ptr)->def->deleter) {
-        (*module_ptr)->def->deleter(anjay, (*module_ptr)->arg);
+        (*module_ptr)->def->deleter((*module_ptr)->arg);
     }
     AVS_LIST_DELETE(module_ptr);
     return 0;

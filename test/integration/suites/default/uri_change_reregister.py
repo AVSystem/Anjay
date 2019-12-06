@@ -34,7 +34,7 @@ class UriChangeReregisterTest(test_suite.Lwm2mTest):
         # Register to regular_serv1
         pkt = self.servers[0].recv()
         self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,)),
             pkt)
         self.servers[0].send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
 
@@ -44,8 +44,7 @@ class UriChangeReregisterTest(test_suite.Lwm2mTest):
         demo_port = self.get_demo_port()
         self.bootstrap_server.connect_to_client(('127.0.0.1', demo_port))
 
-        req = Lwm2mWrite('/0/2/%d' % RID.Security.ServerURI,
-                         regular_serv2_uri)
+        req = Lwm2mWrite(ResPath.Security[2].ServerURI, regular_serv2_uri)
         self.bootstrap_server.send(req)
 
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),

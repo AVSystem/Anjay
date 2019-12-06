@@ -46,7 +46,7 @@ Networking API
 
      - ``-DWITH_POSIX_AVS_SOCKET=ON``
      - ``-DWITH_IPV6=OFF``
-     - ``-DPOSIX_COMPAT_HEADER=avs_commons/git/compat/lwip-posix-compat.h``
+     - ``-DPOSIX_COMPAT_HEADER=deps/avs_commons/compat/lwip-posix-compat.h``
     CMake options for an out-of-the-box socket compatibility layer implementation.
 
 If POSIX socket API is not available:
@@ -58,15 +58,14 @@ If POSIX socket API is not available:
 
     .. code-block:: c
 
-        int _avs_net_create_udp_socket(avs_net_abstract_socket_t **socket,
-                                       const void *socket_configuration);
+        avs_error_t _avs_net_create_udp_socket(avs_net_socket_t **socket,
+                                               const void *socket_configuration);
 
     ``socket_configuration`` argument is a pointer to
     ``const avs_net_socket_configuration_t`` struct cast to ``void *``.
 
-    The function should return 0 on success and a negative value on error.
-    It should create a socket object, and return its pointer case to
-    ``avs_net_abstract_socket_t *`` through the ``*socket`` argument.
+    The function should create a socket object, and return its pointer case to
+    ``avs_net_socket_t *`` through the ``*socket`` argument.
     The socket object should be a struct, whose first field is
     ``avs_net_socket_v_table_t *`` filled with pointers to method handlers.
 
@@ -97,21 +96,20 @@ If POSIX socket API is not available:
 
   - ``_avs_net_create_tcp_socket`` - only required if the ``fw_update`` module
     should support HTTP/HTTPS transfers. Otherwise, can be safely implemented as
-    ``return -1;``.
+    ``return avs_errno(AVS_ENOTSUP);``.
 
     Function signature:
 
     .. code-block:: c
 
-        int _avs_net_create_tcp_socket(avs_net_abstract_socket_t **socket,
-                                       const void *socket_configuration);
+        avs_error_t _avs_net_create_tcp_socket(avs_net_socket_t **socket,
+                                               const void *socket_configuration);
 
     ``socket_configuration`` argument is a pointer to
     ``const avs_net_socket_configuration_t`` struct cast to ``void *``.
 
-    The function should return 0 on success and a negative value on error.
-    It should create a socket object, and return its pointer case to
-    ``avs_net_abstract_socket_t *`` through the ``*socket`` argument.
+    The function should create a socket object, and return its pointer case to
+    ``avs_net_socket_t *`` through the ``*socket`` argument.
     The socket object should be a struct, whose first field is
     ``avs_net_socket_v_table_t *`` filled with pointers to method handlers.
 

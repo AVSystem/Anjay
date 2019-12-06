@@ -23,4 +23,8 @@ AVS_UNIT_MOCK_CREATE(_anjay_dm_find_object_by_oid)
 #define _anjay_dm_find_object_by_oid(...) \
     AVS_UNIT_MOCK_WRAPPER(_anjay_dm_find_object_by_oid)(__VA_ARGS__)
 
+AVS_UNIT_MOCK_CREATE(send_initial_response)
+#define send_initial_response(...) \
+    AVS_UNIT_MOCK_WRAPPER(send_initial_response)(__VA_ARGS__)
+
 #endif /* ANJAY_TEST_OBSERVE_MOCK_H */

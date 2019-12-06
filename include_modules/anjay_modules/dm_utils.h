@@ -25,82 +25,159 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+// NOTE: A lot of code depends on numerical values of these constants.
+// Please be careful when refactoring.
 typedef enum {
-    ANJAY_PATH_ROOT,
-    ANJAY_PATH_OBJECT,
-    ANJAY_PATH_INSTANCE,
-    ANJAY_PATH_RESOURCE
-} anjay_uri_path_type_t;
+    ANJAY_ID_OID,
+    ANJAY_ID_IID,
+    ANJAY_ID_RID,
+    ANJAY_ID_RIID,
+    _ANJAY_URI_PATH_MAX_LENGTH
+} anjay_id_type_t;
 
+/**
+ * A data type that represents a data model path.
+ *
+ * It may represent a root path, an Object path, an Object Instance path, a
+ * Resource path, or a Resource Instance path.
+ *
+ * The path is terminated either by an @ref ANJAY_ID_INVALID value, or
+ * end-of-array (in case of Resource Instance paths). In case of root, Object
+ * and Object Instance paths, the array elements past the terminating invalid ID
+ * value are undefined and shall not be used. They are NOT required to be set to
+ * @ref ANJAY_ID_INVALID. Paths object that numerically differ only in values
+ * past the terminating invalid ID shall be treated as equal (and this is how
+ * @ref _anjay_uri_path_equal is implemented).
+ *
+ * The <c>ids</c> array is designed to be safely and meaningfully indexed by
+ * @ref anjay_id_type_t values.
+ */
 typedef struct {
-    anjay_uri_path_type_t type;
-    anjay_oid_t oid;
-    anjay_iid_t iid;
-    anjay_rid_t rid;
+    uint16_t ids[_ANJAY_URI_PATH_MAX_LENGTH];
 } anjay_uri_path_t;
 
-static inline bool _anjay_uri_path_has_rid(const anjay_uri_path_t *path) {
-    return path->type == ANJAY_PATH_RESOURCE;
+static inline size_t _anjay_uri_path_length(const anjay_uri_path_t *path) {
+    size_t result;
+    for (result = 0; result < AVS_ARRAY_SIZE(path->ids); ++result) {
+        if (path->ids[result] == ANJAY_ID_INVALID) {
+            break;
+        }
+    }
+    return result;
 }
 
-static inline bool _anjay_uri_path_has_iid(const anjay_uri_path_t *path) {
-    return path->type == ANJAY_PATH_INSTANCE || _anjay_uri_path_has_rid(path);
+static inline bool _anjay_uri_path_has(const anjay_uri_path_t *path,
+                                       anjay_id_type_t id_type) {
+    return _anjay_uri_path_length(path) > id_type;
 }
 
-static inline bool _anjay_uri_path_has_oid(const anjay_uri_path_t *path) {
-    return path->type == ANJAY_PATH_OBJECT || _anjay_uri_path_has_iid(path);
+static inline bool _anjay_uri_path_leaf_is(const anjay_uri_path_t *path,
+                                           anjay_id_type_t id_type) {
+    return _anjay_uri_path_length(path) == (size_t) id_type + 1u;
+}
+
+static inline int _anjay_uri_path_compare(const anjay_uri_path_t *left,
+                                          const anjay_uri_path_t *right) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(left->ids); ++i) {
+        if (left->ids[i] < right->ids[i]) {
+            return -1;
+        } else if (left->ids[i] > right->ids[i]) {
+            return 1;
+        } else if (left->ids[i] == ANJAY_ID_INVALID) {
+            break;
+        }
+    }
+    return 0;
 }
 
 static inline bool _anjay_uri_path_equal(const anjay_uri_path_t *left,
                                          const anjay_uri_path_t *right) {
-    if (left->type == right->type) {
-        switch (left->type) {
-        case ANJAY_PATH_ROOT:
+    return _anjay_uri_path_compare(left, right) == 0;
+}
+
+static inline bool _anjay_uri_path_outside_base(const anjay_uri_path_t *path,
+                                                const anjay_uri_path_t *base) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(base->ids); ++i) {
+        if (base->ids[i] == ANJAY_ID_INVALID) {
+            // base is no longer than path, previous IDs validated
+            return false;
+        } else if (path->ids[i] != base->ids[i]) {
+            // path is shorter than base (path->ids[i] == ANJAY_ID_INVALID)
+            // or IDs differ
             return true;
-        case ANJAY_PATH_OBJECT:
-            return left->oid == right->oid;
-        case ANJAY_PATH_INSTANCE:
-            return left->oid == right->oid && left->iid == right->iid;
-        case ANJAY_PATH_RESOURCE:
-            return left->oid == right->oid && left->iid == right->iid
-                   && left->rid == right->rid;
         }
-        AVS_UNREACHABLE("switch above is supposed to be exhaustive");
     }
     return false;
 }
 
-#define ASSERT_RESOURCE_PATH(uri) assert((uri).type == ANJAY_PATH_RESOURCE)
+/**
+ * Returns true if array of ids can be splitted into two consistent parts:
+ * - valid ids from the beginning
+ * - ANJAY_INVALID_ID from the end
+ */
+static inline bool _anjay_uri_path_normalized(const anjay_uri_path_t *path) {
+    for (size_t i = _anjay_uri_path_length(path) + 1;
+         i < AVS_ARRAY_SIZE(path->ids);
+         ++i) {
+        if (path->ids[i] != ANJAY_ID_INVALID) {
+            return false;
+        }
+    }
+    return true;
+}
 
-#define MAKE_OBJECT_PATH(Oid)     \
-    (anjay_uri_path_t) {          \
-        .oid = (Oid),             \
-        .type = ANJAY_PATH_OBJECT \
+const char *_anjay_debug_make_path__(char *buffer,
+                                     size_t buffer_size,
+                                     const anjay_uri_path_t *uri);
+
+#define ANJAY_DEBUG_MAKE_PATH(path) \
+    (_anjay_debug_make_path__(&(char[32]){ 0 }[0], 32, (path)))
+
+#define URI_PATH_INITIALIZER(Oid, Iid, Rid, Riid) \
+    {                                             \
+        .ids = {                                  \
+            [ANJAY_ID_OID] = (Oid),               \
+            [ANJAY_ID_IID] = (Iid),               \
+            [ANJAY_ID_RID] = (Rid),               \
+            [ANJAY_ID_RIID] = (Riid)              \
+        }                                         \
     }
 
-#define MAKE_INSTANCE_PATH(Oid, Iid) \
-    (anjay_uri_path_t) {             \
-        .oid = (Oid),                \
-        .iid = (Iid),                \
-        .type = ANJAY_PATH_INSTANCE  \
-    }
+#define RESOURCE_INSTANCE_PATH_INITIALIZER(Oid, Iid, Rid, Riid) \
+    URI_PATH_INITIALIZER(Oid, Iid, Rid, Riid)
 
-#define MAKE_INSTANCE_OR_RESOURCE_PATH(Oid, Iid, Rid)                    \
-    (anjay_uri_path_t) {                                                 \
-        .oid = (Oid),                                                    \
-        .iid = (Iid),                                                    \
-        .rid = (anjay_rid_t) (Rid),                                      \
-        .type = (0 <= (Rid) && (Rid) < UINT16_MAX) ? ANJAY_PATH_RESOURCE \
-                                                   : ANJAY_PATH_INSTANCE \
-    }
+#define RESOURCE_PATH_INITIALIZER(Oid, Iid, Rid) \
+    URI_PATH_INITIALIZER(Oid, Iid, Rid, ANJAY_ID_INVALID)
+
+#define INSTANCE_PATH_INITIALIZER(Oid, Iid) \
+    URI_PATH_INITIALIZER(Oid, Iid, ANJAY_ID_INVALID, ANJAY_ID_INVALID)
+
+#define OBJECT_PATH_INITIALIZER(Oid)                              \
+    URI_PATH_INITIALIZER(Oid, ANJAY_ID_INVALID, ANJAY_ID_INVALID, \
+                         ANJAY_ID_INVALID)
+
+#define ROOT_PATH_INITIALIZER()                                                \
+    URI_PATH_INITIALIZER(ANJAY_ID_INVALID, ANJAY_ID_INVALID, ANJAY_ID_INVALID, \
+                         ANJAY_ID_INVALID)
+
+#define MAKE_URI_PATH(...) \
+    ((const anjay_uri_path_t) URI_PATH_INITIALIZER(__VA_ARGS__))
+
+#define MAKE_RESOURCE_INSTANCE_PATH(Oid, Iid, Rid, Riid) \
+    MAKE_URI_PATH(Oid, Iid, Rid, Riid)
 
 #define MAKE_RESOURCE_PATH(Oid, Iid, Rid) \
-    (anjay_uri_path_t) {                  \
-        .oid = (Oid),                     \
-        .iid = (Iid),                     \
-        .rid = (Rid),                     \
-        .type = ANJAY_PATH_RESOURCE       \
-    }
+    MAKE_URI_PATH(Oid, Iid, Rid, ANJAY_ID_INVALID)
+
+#define MAKE_INSTANCE_PATH(Oid, Iid) \
+    MAKE_URI_PATH(Oid, Iid, ANJAY_ID_INVALID, ANJAY_ID_INVALID)
+
+#define MAKE_OBJECT_PATH(Oid) \
+    MAKE_URI_PATH(Oid, ANJAY_ID_INVALID, ANJAY_ID_INVALID, ANJAY_ID_INVALID)
+
+#define MAKE_ROOT_PATH()                                                \
+    MAKE_URI_PATH(ANJAY_ID_INVALID, ANJAY_ID_INVALID, ANJAY_ID_INVALID, \
+                  ANJAY_ID_INVALID)
 
 typedef enum anjay_request_action {
     ANJAY_ACTION_READ,
@@ -111,52 +188,70 @@ typedef enum anjay_request_action {
     ANJAY_ACTION_EXECUTE,
     ANJAY_ACTION_CREATE,
     ANJAY_ACTION_DELETE,
-    ANJAY_ACTION_CANCEL_OBSERVE,
     ANJAY_ACTION_BOOTSTRAP_FINISH
 } anjay_request_action_t;
 
-int _anjay_dm_res_read(anjay_t *anjay,
-                       const anjay_uri_path_t *path,
-                       char *buffer,
-                       size_t buffer_size,
-                       size_t *out_bytes_read);
+int _anjay_dm_read_resource(anjay_t *anjay,
+                            const anjay_uri_path_t *path,
+                            char *buffer,
+                            size_t buffer_size,
+                            size_t *out_bytes_read);
 
-static inline int _anjay_dm_res_read_string(anjay_t *anjay,
-                                            const anjay_uri_path_t *path,
-                                            char *buffer,
-                                            size_t buffer_size) {
+static inline int _anjay_dm_read_resource_string(anjay_t *anjay,
+                                                 const anjay_uri_path_t *path,
+                                                 char *buffer,
+                                                 size_t buffer_size) {
     assert(buffer && buffer_size > 0);
     size_t bytes_read;
-    int result = _anjay_dm_res_read(anjay, path, buffer, buffer_size - 1,
-                                    &bytes_read);
+    int result = _anjay_dm_read_resource(anjay, path, buffer, buffer_size - 1,
+                                         &bytes_read);
     if (!result) {
         buffer[bytes_read] = '\0';
     }
     return result;
 }
 
-static inline int _anjay_dm_res_read_i64(anjay_t *anjay,
-                                         const anjay_uri_path_t *path,
-                                         int64_t *out_value) {
+static inline int _anjay_dm_read_resource_i64(anjay_t *anjay,
+                                              const anjay_uri_path_t *path,
+                                              int64_t *out_value) {
     size_t bytes_read;
-    int result = _anjay_dm_res_read(anjay, path, (char *) out_value,
-                                    sizeof(*out_value), &bytes_read);
+    int result = _anjay_dm_read_resource(anjay, path, (char *) out_value,
+                                         sizeof(*out_value), &bytes_read);
     if (result) {
         return result;
     }
     return bytes_read != sizeof(*out_value);
 }
 
-static inline int _anjay_dm_res_read_bool(anjay_t *anjay,
-                                          const anjay_uri_path_t *path,
-                                          bool *out_value) {
+static inline int _anjay_dm_read_resource_bool(anjay_t *anjay,
+                                               const anjay_uri_path_t *path,
+                                               bool *out_value) {
     size_t bytes_read;
-    int result = _anjay_dm_res_read(anjay, path, (char *) out_value,
-                                    sizeof(*out_value), &bytes_read);
+    int result = _anjay_dm_read_resource(anjay, path, (char *) out_value,
+                                         sizeof(*out_value), &bytes_read);
     if (result) {
         return result;
     }
     return bytes_read != sizeof(*out_value);
+}
+
+static inline int _anjay_dm_read_resource_objlnk(anjay_t *anjay,
+                                                 const anjay_uri_path_t *path,
+                                                 anjay_oid_t *out_oid,
+                                                 anjay_iid_t *out_iid) {
+    size_t bytes_read;
+    uint32_t objlnk_encoded;
+    int result = _anjay_dm_read_resource(anjay, path, (char *) &objlnk_encoded,
+                                         sizeof(objlnk_encoded), &bytes_read);
+    if (result) {
+        return result;
+    }
+    if (bytes_read != sizeof(objlnk_encoded)) {
+        return -1;
+    }
+    *out_iid = (anjay_iid_t) (objlnk_encoded & 0xFFFF);
+    *out_oid = (anjay_oid_t) (objlnk_encoded >> 16);
+    return 0;
 }
 
 typedef struct anjay_dm anjay_dm_t;
@@ -178,6 +273,132 @@ int _anjay_dm_foreach_instance(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                anjay_dm_foreach_instance_handler_t *handler,
                                void *data);
+
+int _anjay_dm_get_sorted_instance_list(anjay_t *anjay,
+                                       const anjay_dm_object_def_t *const *obj,
+                                       AVS_LIST(anjay_iid_t) *out);
+
+int _anjay_dm_instance_present(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid);
+
+typedef int
+anjay_dm_foreach_resource_handler_t(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj,
+                                    anjay_iid_t iid,
+                                    anjay_rid_t rid,
+                                    anjay_dm_resource_kind_t kind,
+                                    anjay_dm_resource_presence_t presence,
+                                    void *data);
+
+int _anjay_dm_foreach_resource(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj,
+                               anjay_iid_t iid,
+                               anjay_dm_foreach_resource_handler_t *handler,
+                               void *data);
+
+/**
+ * Checks if the specific resource is supported and present, and what is its
+ * kind. This function internally calls @ref _anjay_dm_foreach_resource, so it
+ * is not optimal to use for multiple resources within the same Object Instance.
+ *
+ * NOTE: It is REQUIRED that the presence of the Object and Object Instance is
+ * checked beforehand, this function does not perform such checks.
+ *
+ * @param anjay        Anjay object to operate on
+ * @param obj_ptr      Definition of an Object in which the queried resource is
+ * @param iid          ID of Object Instance in which the queried resource is
+ * @param rid          ID of the queried Resource
+ * @param out_kind     Pointer to a variable in which the kind of the resource
+ *                     will be stored. May be NULL, in which case only the
+ *                     presence is checked.
+ * @param out_presence Pointer to a variable in which the presence information
+ *                     about the resource will be stored. May be NULL, in which
+ *                     case only the kind is checked.
+ *
+ * @returns 0 for success, or a non-zero error code in case of error.
+ *
+ * NOTE: Two scenarios are possible if the resource is not currently present in
+ * the object:
+ * - If the resource is not Supported (i.e., it has not been enumerated by the
+ *   list_resources handler at all), the function fails, returning
+ *   ANJAY_ERR_NOT_FOUND
+ * - If the resource is Supported, but not Present (i.e., it has been enumerated
+ *   by the list_resources handler with presence set to ANJAY_DM_RES_ABSENT),
+ *   the function succeeds (returns 0), but *out_presence is set to
+ *   ANJAY_DM_RES_ABSENT
+ */
+int _anjay_dm_resource_kind_and_presence(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_dm_resource_kind_t *out_kind,
+        anjay_dm_resource_presence_t *out_presence);
+
+typedef int anjay_dm_foreach_resource_instance_handler_t(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        void *data);
+
+int _anjay_dm_foreach_resource_instance(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_dm_foreach_resource_instance_handler_t *handler,
+        void *data);
+
+static inline bool _anjay_dm_res_kind_valid(anjay_dm_resource_kind_t kind) {
+    return kind == ANJAY_DM_RES_R || kind == ANJAY_DM_RES_W
+           || kind == ANJAY_DM_RES_RW || kind == ANJAY_DM_RES_RM
+           || kind == ANJAY_DM_RES_WM || kind == ANJAY_DM_RES_RWM
+           || kind == ANJAY_DM_RES_E || kind == ANJAY_DM_RES_BS_RW;
+}
+
+static inline bool
+_anjay_dm_res_kind_single_readable(anjay_dm_resource_kind_t kind) {
+    return kind == ANJAY_DM_RES_R || kind == ANJAY_DM_RES_RW;
+}
+
+static inline bool _anjay_dm_res_kind_readable(anjay_dm_resource_kind_t kind) {
+    return kind == ANJAY_DM_RES_R || kind == ANJAY_DM_RES_RW
+           || kind == ANJAY_DM_RES_RM || kind == ANJAY_DM_RES_RWM;
+}
+
+static inline bool _anjay_dm_res_kind_writable(anjay_dm_resource_kind_t kind) {
+    return kind == ANJAY_DM_RES_W || kind == ANJAY_DM_RES_RW
+           || kind == ANJAY_DM_RES_WM || kind == ANJAY_DM_RES_RWM;
+}
+
+static inline bool
+_anjay_dm_res_kind_executable(anjay_dm_resource_kind_t kind) {
+    return kind == ANJAY_DM_RES_E;
+}
+
+static inline bool _anjay_dm_res_kind_multiple(anjay_dm_resource_kind_t kind) {
+    return kind == ANJAY_DM_RES_RM || kind == ANJAY_DM_RES_WM
+           || kind == ANJAY_DM_RES_RWM;
+}
+
+static inline bool
+_anjay_dm_res_kind_bootstrappable(anjay_dm_resource_kind_t kind) {
+    return kind == ANJAY_DM_RES_BS_RW;
+}
+
+/**
+ * Writes to a resource whose location is determined by the path extracted
+ * from Input Context (@p in_ctx). Note that it does NOT check whether the
+ * resource is writable - it is enough that it represents a value (i.e. is not
+ * an executable resource).
+ */
+int _anjay_dm_write_resource(anjay_t *anjay,
+                             const anjay_dm_object_def_t *const *obj,
+                             anjay_input_ctx_t *in_ctx,
+                             anjay_notify_queue_t *notify_queue);
 
 /**
  * Checks whether a specific data model handler is implemented for a given
@@ -215,126 +436,116 @@ bool _anjay_dm_handler_implemented(anjay_t *anjay,
                                    const anjay_dm_module_t *current_module,
                                    size_t handler_offset);
 
-int _anjay_dm_object_read_default_attrs(
+int _anjay_dm_call_object_read_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        anjay_dm_internal_attrs_t *out,
+        anjay_dm_internal_oi_attrs_t *out,
         const anjay_dm_module_t *current_module);
-int _anjay_dm_object_write_default_attrs(
+int _anjay_dm_call_object_write_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_internal_oi_attrs_t *attrs,
         const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_it(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj_ptr,
-                          anjay_iid_t *out,
-                          void **cookie,
-                          const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_reset(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj_ptr,
-                             anjay_iid_t iid,
-                             const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_present(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t iid,
-                               const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_create(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_iid_t *inout_iid,
-                              anjay_ssid_t ssid,
-                              const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_remove(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_iid_t iid,
-                              const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_read_default_attrs(
+int _anjay_dm_call_list_instances(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_dm_list_ctx_t *ctx,
+                                  const anjay_dm_module_t *current_module);
+int _anjay_dm_call_instance_reset(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  const anjay_dm_module_t *current_module);
+int _anjay_dm_call_instance_create(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   const anjay_dm_module_t *current_module);
+int _anjay_dm_call_instance_remove(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   const anjay_dm_module_t *current_module);
+int _anjay_dm_call_instance_read_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        anjay_dm_internal_attrs_t *out,
+        anjay_dm_internal_oi_attrs_t *out,
         const anjay_dm_module_t *current_module);
-int _anjay_dm_instance_write_default_attrs(
+int _anjay_dm_call_instance_write_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_internal_oi_attrs_t *attrs,
         const anjay_dm_module_t *current_module);
-int _anjay_dm_resource_present(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t iid,
-                               anjay_rid_t rid,
-                               const anjay_dm_module_t *current_module);
+int _anjay_dm_call_list_resources(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_dm_resource_list_ctx_t *ctx,
+                                  const anjay_dm_module_t *current_module);
 
-bool _anjay_dm_resource_supported(const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_rid_t rid);
-int _anjay_dm_resource_supported_and_present(
+int _anjay_dm_call_resource_read(anjay_t *anjay,
+                                 const anjay_dm_object_def_t *const *obj_ptr,
+                                 anjay_iid_t iid,
+                                 anjay_rid_t rid,
+                                 anjay_riid_t riid,
+                                 anjay_output_ctx_t *ctx,
+                                 const anjay_dm_module_t *current_module);
+int _anjay_dm_call_resource_write(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid,
+                                  anjay_riid_t riid,
+                                  anjay_input_ctx_t *ctx,
+                                  const anjay_dm_module_t *current_module);
+int _anjay_dm_call_resource_execute(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid,
+                                    anjay_rid_t rid,
+                                    anjay_execute_ctx_t *execute_ctx,
+                                    const anjay_dm_module_t *current_module);
+int _anjay_dm_call_resource_reset(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid,
+                                  const anjay_dm_module_t *current_module);
+int _anjay_dm_call_list_resource_instances(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
+        anjay_dm_list_ctx_t *ctx,
+        const anjay_dm_module_t *current_module);
+int _anjay_dm_call_resource_read_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_ssid_t ssid,
+        anjay_dm_internal_r_attrs_t *out,
+        const anjay_dm_module_t *current_module);
+int _anjay_dm_call_resource_write_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_r_attrs_t *attrs,
         const anjay_dm_module_t *current_module);
 
-int _anjay_dm_resource_operations(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_rid_t rid,
-                                  anjay_dm_resource_op_mask_t *out,
-                                  const anjay_dm_module_t *current_module);
-
-int _anjay_dm_resource_read(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t iid,
-                            anjay_rid_t rid,
-                            anjay_output_ctx_t *ctx,
-                            const anjay_dm_module_t *current_module);
-int _anjay_dm_resource_write(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj_ptr,
-                             anjay_iid_t iid,
-                             anjay_rid_t rid,
-                             anjay_input_ctx_t *ctx,
-                             const anjay_dm_module_t *current_module);
-int _anjay_dm_resource_execute(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t iid,
-                               anjay_rid_t rid,
-                               anjay_execute_ctx_t *execute_ctx,
-                               const anjay_dm_module_t *current_module);
-int _anjay_dm_resource_dim(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj_ptr,
-                           anjay_iid_t iid,
-                           anjay_rid_t rid,
-                           const anjay_dm_module_t *current_module);
-int _anjay_dm_resource_read_attrs(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t iid,
-                                  anjay_rid_t rid,
-                                  anjay_ssid_t ssid,
-                                  anjay_dm_internal_res_attrs_t *out,
-                                  const anjay_dm_module_t *current_module);
-int _anjay_dm_resource_write_attrs(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                   anjay_iid_t iid,
-                                   anjay_rid_t rid,
-                                   anjay_ssid_t ssid,
-                                   const anjay_dm_internal_res_attrs_t *attrs,
-                                   const anjay_dm_module_t *current_module);
-
-int _anjay_dm_delegate_transaction_begin(
+int _anjay_dm_call_transaction_begin(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         const anjay_dm_module_t *current_module);
-int _anjay_dm_delegate_transaction_validate(
+int _anjay_dm_call_transaction_validate(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         const anjay_dm_module_t *current_module);
-int _anjay_dm_delegate_transaction_commit(
+int _anjay_dm_call_transaction_commit(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         const anjay_dm_module_t *current_module);
-int _anjay_dm_delegate_transaction_rollback(
+int _anjay_dm_call_transaction_rollback(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         const anjay_dm_module_t *current_module);
@@ -356,9 +567,9 @@ void _anjay_dm_transaction_begin(anjay_t *anjay);
  * <c>transaction_rollback</c> handler will be called on all objects included
  * in this way.
  *
- * This function is automatically called by @ref _anjay_dm_instance_reset,
- * @ref _anjay_dm_instance_create, @ref _anjay_dm_instance_remove and
- * @ref _anjay_dm_resource_write .
+ * This function is automatically called by @ref _anjay_dm_call_instance_reset,
+ * @ref _anjay_dm_call_instance_create, @ref _anjay_dm_call_instance_remove and
+ * @ref _anjay_dm_read_resource .
  *
  * NOTE: Attempting to call this function without a global transaction in place
  * will cause an assertion fail.
@@ -397,11 +608,35 @@ _anjay_dm_find_object_by_oid(anjay_t *anjay, anjay_oid_t oid);
 
 bool _anjay_dm_ssid_exists(anjay_t *anjay, anjay_ssid_t ssid);
 
-bool _anjay_dm_attributes_empty(const anjay_dm_internal_attrs_t *attrs);
-bool _anjay_dm_resource_attributes_empty(
-        const anjay_dm_internal_res_attrs_t *attrs);
+int _anjay_ssid_from_security_iid(anjay_t *anjay,
+                                  anjay_iid_t security_iid,
+                                  uint16_t *out_ssid);
 
-bool _anjay_dm_attributes_full(const anjay_dm_internal_attrs_t *attrs);
+bool _anjay_dm_attributes_empty(const anjay_dm_internal_oi_attrs_t *attrs);
+bool _anjay_dm_resource_attributes_empty(
+        const anjay_dm_internal_r_attrs_t *attrs);
+
+bool _anjay_dm_attributes_full(const anjay_dm_internal_oi_attrs_t *attrs);
+bool _anjay_dm_resource_attributes_full(
+        const anjay_dm_internal_r_attrs_t *attrs);
+
+int _anjay_dm_verify_resource_present(anjay_t *anjay,
+                                      const anjay_dm_object_def_t *const *obj,
+                                      anjay_iid_t iid,
+                                      anjay_rid_t rid,
+                                      anjay_dm_resource_kind_t *out_kind);
+
+int _anjay_dm_verify_resource_instance_present(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid);
+
+int _anjay_dm_verify_instance_present(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid);
 
 #define ANJAY_DM_OID_SECURITY 0
 #define ANJAY_DM_OID_SERVER 1

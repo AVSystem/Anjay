@@ -116,11 +116,11 @@ class CachedBlockResponse(br.BlockResponseTest,
                           test_suite.Lwm2mDmOperations):
     def setUp(self):
         super().setUp(bytes_size=2048,
-                      extra_cmdline_args=['--cache-size', '4096', '-O', '1024'])
+                      extra_cmdline_args=['--cache-size', '4096'])
 
     def runTest(self):
         # Induce a block transfer.
-        req = Lwm2mRead(ResPath.Test[1].ResBytes)
+        req = Lwm2mRead(ResPath.Test[0].ResBytes)
         self.serv.send(req)
 
         res0 = self.serv.recv()
@@ -132,4 +132,4 @@ class CachedBlockResponse(br.BlockResponseTest,
         self.assertMsgEqual(res0, res1)
 
         # Read everything till the end
-        self.read_blocks(iid=1)
+        self.read_blocks(iid=0, base_seq=1)

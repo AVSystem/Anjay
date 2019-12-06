@@ -23,7 +23,7 @@
  * NOTE: inner_mtu / mtu may be set to a negative value, in which case
  * they are not automatically handled by mocksock_get_opt()
  */
-void _anjay_mocksock_create(avs_net_abstract_socket_t **mocksock,
+void _anjay_mocksock_create(avs_net_socket_t **mocksock,
                             int inner_mtu,
                             int mtu);
 

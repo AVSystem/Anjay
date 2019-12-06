@@ -48,7 +48,7 @@ typedef struct {
  * Adds new Instance of Server Object and returns newly created Instance id
  * via @p inout_iid .
  *
- * Note: if @p *inout_iid is set to @ref ANJAY_IID_INVALID then the Instance id
+ * Note: if @p *inout_iid is set to @ref ANJAY_ID_INVALID then the Instance id
  * is generated automatically, otherwise value of @p *inout_iid is used as a
  * new Server Instance Id.
  *
@@ -58,7 +58,7 @@ typedef struct {
  *
  * @param anjay     Anjay instance with Server Object installed to operate on.
  * @param instance  Server Instance to insert.
- * @param inout_iid Server Instance id to use or @ref ANJAY_IID_INVALID .
+ * @param inout_iid Server Instance id to use or @ref ANJAY_ID_INVALID .
  *
  * @return 0 on success, negative value in case of an error or if the instance
  * of specified id already exists.
@@ -81,8 +81,8 @@ void anjay_server_object_purge(anjay_t *anjay);
  * @param out_stream    Stream to write to.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_server_object_persist(anjay_t *anjay,
-                                avs_stream_abstract_t *out_stream);
+avs_error_t anjay_server_object_persist(anjay_t *anjay,
+                                        avs_stream_t *out_stream);
 
 /**
  * Attempts to restore Server Object Instances from specified @p in_stream .
@@ -94,8 +94,8 @@ int anjay_server_object_persist(anjay_t *anjay,
  * @param in_stream Stream to read from.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_server_object_restore(anjay_t *anjay,
-                                avs_stream_abstract_t *in_stream);
+avs_error_t anjay_server_object_restore(anjay_t *anjay,
+                                        avs_stream_t *in_stream);
 
 /**
  * Checks whether the Server Object from Anjay instance has been modified since

@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
         .server_uri = "coap://127.0.0.1:5683",
-        .security_mode = ANJAY_UDP_SECURITY_NOSEC
+        .security_mode = ANJAY_SECURITY_NOSEC
     };
 
     const anjay_server_instance_t server_instance = {
@@ -39,8 +39,8 @@ int main(int argc, char *argv[]) {
         .binding = "U"
     };
 
-    anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
-    anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
+    anjay_iid_t security_instance_id = ANJAY_ID_INVALID;
+    anjay_iid_t server_instance_id = ANJAY_ID_INVALID;
     anjay_security_object_add_instance(anjay, &security_instance,
                                        &security_instance_id);
     anjay_server_object_add_instance(anjay, &server_instance,

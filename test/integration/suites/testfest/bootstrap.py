@@ -85,10 +85,10 @@ class Test0_ClientInitiatedBootstrap(DataModel.Test):
         link_list = self.test_discover('/', server=self.bootstrap_server)
         links = link_list.split(b',')
         self.assertIn(b'lwm2m="1.0"', links)
-        self.assertIn(b'</0/0>;ssid=1', links)
-        self.assertIn(b'</0/1>', links)
-        self.assertIn(b'</1/0>;ssid=1', links)
-        self.assertIn(b'</3/0>', links)
+        self.assertIn(b'</%d/0>;ssid=1' % (OID.Security,), links)
+        self.assertIn(b'</%d/1>' % (OID.Security,), links)
+        self.assertIn(b'</%d/0>;ssid=1' % (OID.Server,), links)
+        self.assertIn(b'</%d/0>' % (OID.Device,), links)
 
         # 4. The Bootstrap Server performs a BOOTSTRAP-FINISH
         #    operation (CoAP POST /bs) to end-up that BS phase

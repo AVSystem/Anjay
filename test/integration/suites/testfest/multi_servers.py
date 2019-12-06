@@ -82,15 +82,16 @@ class Test951_MultiServersAttributes(DataModel.Test):
         #    </3/0>;pmin=2;pmax=10,</3/0/0>,</3/0/1>,</3/0/2>,</3/0/3>,
         #    </3/0/11>,</3/0/16>
         link_list = self.test_discover('/%d/0' % OID.Device,
-                                       server=self.servers[0])
-        links = link_list.split(b',')
-        self.assertIn(b'</3/0>;pmin=2;pmax=10', links)
-        self.assertIn(b'</3/0/0>', links)
-        self.assertIn(b'</3/0/1>', links)
-        self.assertIn(b'</3/0/2>', links)
-        self.assertIn(b'</3/0/3>', links)
-        self.assertTrue(any(x.startswith(b'</3/0/11>') for x in links)) # Multiple Resource, with dim attribute
-        self.assertIn(b'</3/0/16>', links)
+                                       server=self.servers[0]).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d/0>;pmin=2;pmax=10' % (OID.Device,), links)
+        self.assertIn('<%s>' % (ResPath.Device.Manufacturer,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ModelNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SerialNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.FirmwareVersion,), links)
+        # Multiple Resource, with dim attribute
+        self.assertTrue(any(x.startswith('<%s>' % (ResPath.Device.ErrorCode,)) for x in links))
+        self.assertIn('<%s>' % (ResPath.Device.SupportedBindingAndModes,), links)
 
         # 4. The Server #2 send a DISCOVER command to the Client
         #
@@ -101,12 +102,13 @@ class Test951_MultiServersAttributes(DataModel.Test):
         #    </3/0>;pmin=15;pmax=50,</3/0/0>,</3/0/1>,</3/0/2>,</3/0/3>
         #    ,</3/0/11>,</3/0/16>
         link_list = self.test_discover('/%d/0' % OID.Device,
-                                       server=self.servers[1])
-        links = link_list.split(b',')
-        self.assertIn(b'</3/0>;pmin=15;pmax=50', links)
-        self.assertIn(b'</3/0/0>', links)
-        self.assertIn(b'</3/0/1>', links)
-        self.assertIn(b'</3/0/2>', links)
-        self.assertIn(b'</3/0/3>', links)
-        self.assertTrue(any(x.startswith(b'</3/0/11>') for x in links)) # Multiple Resource, with dim attribute
-        self.assertIn(b'</3/0/16>', links)
+                                       server=self.servers[1]).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d/0>;pmin=15;pmax=50' % (OID.Device,), links)
+        self.assertIn('<%s>' % (ResPath.Device.Manufacturer,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ModelNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SerialNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.FirmwareVersion,), links)
+        # Multiple Resource, with dim attribute
+        self.assertTrue(any(x.startswith('<%s>' % (ResPath.Device.ErrorCode,)) for x in links))
+        self.assertIn('<%s>' % (ResPath.Device.SupportedBindingAndModes,), links)

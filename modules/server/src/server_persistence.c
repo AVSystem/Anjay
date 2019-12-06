@@ -38,196 +38,238 @@ VISIBILITY_SOURCE_BEGIN
 
 #ifdef WITH_AVS_PERSISTENCE
 
-static const char MAGIC[] = { 'S', 'R', 'V', '\0' };
+typedef enum {
+    PERSISTENCE_VERSION_0,
+    PERSISTENCE_VERSION_1
+} server_persistence_version_t;
 
-static int handle_sized_fields(avs_persistence_context_t *ctx, void *element_) {
-    server_instance_t *element = (server_instance_t *) element_;
-    bool has_binding;
-    int retval = 0;
-    if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_STORE) {
-        has_binding = !!element->data.binding;
-    }
-    (void) ((retval = avs_persistence_u16(ctx, &element->iid))
-            || (retval = avs_persistence_bool(ctx, &element->has_ssid))
-            || (retval = avs_persistence_bool(ctx, &has_binding))
-            || (retval = avs_persistence_bool(ctx, &element->has_lifetime))
-            || (retval = avs_persistence_bool(
-                        ctx, &element->has_notification_storing))
-            || (retval = avs_persistence_u16(ctx, &element->data.ssid))
-            || (retval = avs_persistence_u32(
-                        ctx, (uint32_t *) &element->data.lifetime))
-            || (retval = avs_persistence_u32(
-                        ctx, (uint32_t *) &element->data.default_min_period))
-            || (retval = avs_persistence_u32(
-                        ctx, (uint32_t *) &element->data.default_max_period))
-            || (retval = avs_persistence_u32(
-                        ctx, (uint32_t *) &element->data.disable_timeout))
-            || (retval = avs_persistence_bool(
-                        ctx, &element->data.notification_storing)));
-    if (!retval && avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
+typedef char magic_t[4];
+static const magic_t MAGIC_V0 = { 'S', 'R', 'V', PERSISTENCE_VERSION_0 };
+static const magic_t MAGIC_V1 = { 'S', 'R', 'V', PERSISTENCE_VERSION_1 };
+
+static avs_error_t handle_sized_fields(avs_persistence_context_t *ctx,
+                                       server_instance_t *element) {
+    avs_error_t err;
+    bool has_binding = !!element->data.binding;
+    (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->iid)))
+            || avs_is_err((err = avs_persistence_bool(ctx, &element->has_ssid)))
+            || avs_is_err((err = avs_persistence_bool(ctx, &has_binding)))
+            || avs_is_err((
+                       err = avs_persistence_bool(ctx, &element->has_lifetime)))
+            || avs_is_err((err = avs_persistence_bool(
+                                   ctx, &element->has_notification_storing)))
+            || avs_is_err((err = avs_persistence_u16(ctx, &element->data.ssid)))
+            || avs_is_err((err = avs_persistence_u32(
+                                   ctx, (uint32_t *) &element->data.lifetime)))
+            || avs_is_err((
+                       err = avs_persistence_u32(
+                               ctx,
+                               (uint32_t *) &element->data.default_min_period)))
+            || avs_is_err((
+                       err = avs_persistence_u32(
+                               ctx,
+                               (uint32_t *) &element->data.default_max_period)))
+            || avs_is_err(
+                       (err = avs_persistence_u32(
+                                ctx,
+                                (uint32_t *) &element->data.disable_timeout)))
+            || avs_is_err((err = avs_persistence_bool(
+                                   ctx, &element->data.notification_storing))));
+    if (avs_is_ok(err)
+            && avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
         element->data.binding = has_binding ? element->binding_buf : NULL;
     }
-    return retval;
+    return err;
 }
 
-typedef enum {
-    LEGACY_BINDING_NONE,
-    LEGACY_BINDING_U,
-    LEGACY_BINDING_UQ,
-    LEGACY_BINDING_S,
-    LEGACY_BINDING_SQ,
-    LEGACY_BINDING_US,
-    LEGACY_BINDING_UQS
-} legacy_binding_mode_t;
-
-static int persist_instance(avs_persistence_context_t *ctx,
-                            void *element_,
-                            void *user_data) {
-    (void) user_data;
-    server_instance_t *element = (server_instance_t *) element_;
-    int retval = 0;
-    uint32_t binding;
-    if (!element->data.binding) {
-        binding = (uint32_t) LEGACY_BINDING_NONE;
-    } else if (strcmp(element->data.binding, "U") == 0) {
-        binding = (uint32_t) LEGACY_BINDING_U;
-    } else if (strcmp(element->data.binding, "UQ") == 0) {
-        binding = (uint32_t) LEGACY_BINDING_UQ;
-    } else if (strcmp(element->data.binding, "S") == 0) {
-        binding = (uint32_t) LEGACY_BINDING_S;
-    } else if (strcmp(element->data.binding, "SQ") == 0) {
-        binding = (uint32_t) LEGACY_BINDING_SQ;
-    } else if (strcmp(element->data.binding, "US") == 0) {
-        binding = (uint32_t) LEGACY_BINDING_US;
-    } else if (strcmp(element->data.binding, "UQS") == 0) {
-        binding = (uint32_t) LEGACY_BINDING_UQS;
-    } else {
-        return -1;
+static avs_error_t handle_binding_mode(avs_persistence_context_t *ctx,
+                                       server_instance_t *element) {
+    avs_error_t err = avs_persistence_bytes(ctx, element->binding_buf,
+                                            sizeof(element->binding_buf));
+    if (avs_is_err(err)) {
+        return err;
     }
-    (void) ((retval = handle_sized_fields(ctx, element_))
-            || (retval = avs_persistence_u32(ctx, &binding)));
-    return retval;
-}
-
-static int restore_instance(avs_persistence_context_t *ctx,
-                            void *element_,
-                            void *user_data) {
-    (void) user_data;
-    server_instance_t *element = (server_instance_t *) element_;
-    int retval = 0;
-    uint32_t binding;
-    (void) ((retval = handle_sized_fields(ctx, element_))
-            || (retval = avs_persistence_u32(ctx, &binding)));
-    if (!retval) {
-        const char *binding_str;
-        switch (binding) {
-        case LEGACY_BINDING_NONE:
-            binding_str = "";
-            break;
-        case LEGACY_BINDING_U:
-            binding_str = "U";
-            break;
-        case LEGACY_BINDING_UQ:
-            binding_str = "UQ";
-            break;
-        case LEGACY_BINDING_S:
-            binding_str = "S";
-            break;
-        case LEGACY_BINDING_SQ:
-            binding_str = "SQ";
-            break;
-        case LEGACY_BINDING_US:
-            binding_str = "US";
-            break;
-        case LEGACY_BINDING_UQS:
-            binding_str = "UQS";
-            break;
-        default:
-            persistence_log(ERROR, "Invalid binding mode: %" PRIu32, binding);
-            retval = -1;
-            break;
-        }
-        if (!retval
-                && avs_simple_snprintf(element->binding_buf,
-                                       sizeof(element->binding_buf), "%s",
-                                       binding_str)
-                               < 0) {
-            persistence_log(ERROR, "Could not restore binding: %s",
-                            binding_str);
-            retval = -1;
-        }
+    if (!memchr(element->binding_buf, '\0', sizeof(element->binding_buf))
+            || !anjay_binding_mode_valid(element->binding_buf)) {
+        return avs_errno(AVS_EBADMSG);
     }
-    return retval;
+    return AVS_OK;
 }
 
-int anjay_server_object_persist(anjay_t *anjay,
-                                avs_stream_abstract_t *out_stream) {
+static avs_error_t restore_legacy_binding_mode(avs_persistence_context_t *ctx,
+                                               server_instance_t *element) {
+    assert(avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE);
+    uint32_t binding;
+    avs_error_t err = avs_persistence_u32(ctx, &binding);
+    if (avs_is_err(err)) {
+        return err;
+    }
+
+    enum {
+        LEGACY_BINDING_NONE,
+        LEGACY_BINDING_U,
+        LEGACY_BINDING_UQ,
+        LEGACY_BINDING_S,
+        LEGACY_BINDING_SQ,
+        LEGACY_BINDING_US,
+        LEGACY_BINDING_UQS
+    };
+
+    const char *binding_str;
+    switch (binding) {
+    case LEGACY_BINDING_NONE:
+        binding_str = "";
+        break;
+    case LEGACY_BINDING_U:
+        binding_str = "U";
+        break;
+    case LEGACY_BINDING_UQ:
+        binding_str = "UQ";
+        break;
+    case LEGACY_BINDING_S:
+        binding_str = "S";
+        break;
+    case LEGACY_BINDING_SQ:
+        binding_str = "SQ";
+        break;
+    case LEGACY_BINDING_US:
+        binding_str = "US";
+        break;
+    case LEGACY_BINDING_UQS:
+        binding_str = "UQS";
+        break;
+    default:
+        persistence_log(WARNING, "Invalid binding mode: %" PRIu32, binding);
+        err = avs_errno(AVS_EBADMSG);
+        break;
+    }
+    if (avs_is_ok(err)
+            && avs_simple_snprintf(element->binding_buf,
+                                   sizeof(element->binding_buf), "%s",
+                                   binding_str)
+                           < 0) {
+        persistence_log(WARNING, "Could not restore binding: %s", binding_str);
+        err = avs_errno(AVS_EBADMSG);
+    }
+    return err;
+}
+
+static avs_error_t server_instance_persistence_handler(
+        avs_persistence_context_t *ctx, void *element_, void *version_) {
+    server_instance_t *element = (server_instance_t *) element_;
+    server_persistence_version_t *version =
+            (server_persistence_version_t *) version_;
+    AVS_ASSERT(avs_persistence_direction(ctx) != AVS_PERSISTENCE_STORE
+                       || *version == PERSISTENCE_VERSION_1,
+               "persistence storing is impossible in legacy mode");
+
+    avs_error_t err;
+    switch (*version) {
+    case PERSISTENCE_VERSION_0:
+        (void) (avs_is_err((err = handle_sized_fields(ctx, element)))
+                || avs_is_err(
+                           (err = restore_legacy_binding_mode(ctx, element))));
+        break;
+    case PERSISTENCE_VERSION_1:
+        (void) (avs_is_err((err = handle_sized_fields(ctx, element)))
+                || avs_is_err((err = handle_binding_mode(ctx, element))));
+        break;
+    default:
+        AVS_UNREACHABLE("invalid enum value");
+    }
+    return err;
+}
+
+avs_error_t anjay_server_object_persist(anjay_t *anjay,
+                                        avs_stream_t *out_stream) {
     assert(anjay);
 
     const anjay_dm_object_def_t *const *server_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
     server_repr_t *repr = _anjay_serv_get(server_obj);
     if (!repr) {
-        return -1;
+        return avs_errno(AVS_EBADF);
     }
-    int retval = avs_stream_write(out_stream, MAGIC, sizeof(MAGIC));
-    if (retval) {
-        return retval;
-    }
-    avs_persistence_context_t ctx =
+    avs_persistence_context_t persist_ctx =
             avs_persistence_store_context_create(out_stream);
-    retval = avs_persistence_list(&ctx, (AVS_LIST(void) *) &repr->instances,
-                                  sizeof(server_instance_t), persist_instance,
-                                  NULL, NULL);
-    if (!retval) {
+
+    avs_error_t err =
+            avs_persistence_bytes(&persist_ctx, (void *) (intptr_t) MAGIC_V1,
+                                  sizeof(MAGIC_V1));
+    if (avs_is_err(err)) {
+        return err;
+    }
+    server_persistence_version_t persistence_version = PERSISTENCE_VERSION_1;
+    err = avs_persistence_list(&persist_ctx,
+                               (AVS_LIST(void) *) &repr->instances,
+                               sizeof(server_instance_t),
+                               server_instance_persistence_handler,
+                               &persistence_version, NULL);
+    if (avs_is_ok(err)) {
         _anjay_serv_clear_modified(repr);
         persistence_log(INFO, "Server Object state persisted");
     }
-    return retval;
+    return err;
 }
 
-int anjay_server_object_restore(anjay_t *anjay,
-                                avs_stream_abstract_t *in_stream) {
+static int check_magic_header(magic_t magic_header,
+                              server_persistence_version_t *out_version) {
+    if (!memcmp(magic_header, MAGIC_V0, sizeof(magic_t))) {
+        *out_version = PERSISTENCE_VERSION_0;
+        return 0;
+    }
+    if (!memcmp(magic_header, MAGIC_V1, sizeof(magic_t))) {
+        *out_version = PERSISTENCE_VERSION_1;
+        return 0;
+    }
+    return -1;
+}
+
+avs_error_t anjay_server_object_restore(anjay_t *anjay,
+                                        avs_stream_t *in_stream) {
     assert(anjay);
 
     const anjay_dm_object_def_t *const *server_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
     server_repr_t *repr = _anjay_serv_get(server_obj);
     if (!repr) {
-        return -1;
+        return avs_errno(AVS_EBADF);
     }
     server_repr_t backup = *repr;
-
-    char magic_header[sizeof(MAGIC)];
-    int retval = avs_stream_read_reliably(in_stream, magic_header,
-                                          sizeof(magic_header));
-    if (retval) {
-        persistence_log(ERROR, "Could not read Server Object header");
-        return retval;
-    }
-
-    if (memcmp(magic_header, MAGIC, sizeof(MAGIC))) {
-        persistence_log(ERROR, "Header magic constant mismatch");
-        return -1;
-    }
     avs_persistence_context_t restore_ctx =
             avs_persistence_restore_context_create(in_stream);
+
+    magic_t magic_header;
+    avs_error_t err = avs_persistence_bytes(&restore_ctx, magic_header,
+                                            sizeof(magic_header));
+    if (avs_is_err(err)) {
+        persistence_log(WARNING, "Could not read Server Object header");
+        return err;
+    }
+    server_persistence_version_t persistence_version;
+    if (check_magic_header(magic_header, &persistence_version)) {
+        persistence_log(WARNING, "Header magic constant mismatch");
+        return avs_errno(AVS_EBADMSG);
+    }
+
     repr->instances = NULL;
-    retval = avs_persistence_list(&restore_ctx,
-                                  (AVS_LIST(void) *) &repr->instances,
-                                  sizeof(server_instance_t), restore_instance,
-                                  NULL, NULL);
-    if (retval || (retval = _anjay_serv_object_validate(repr))) {
+    err = avs_persistence_list(&restore_ctx,
+                               (AVS_LIST(void) *) &repr->instances,
+                               sizeof(server_instance_t),
+                               server_instance_persistence_handler,
+                               &persistence_version, NULL);
+    if (avs_is_ok(err) && _anjay_serv_object_validate(repr)) {
+        err = avs_errno(AVS_EBADMSG);
+    }
+    if (avs_is_err(err)) {
         _anjay_serv_destroy_instances(&repr->instances);
         repr->instances = backup.instances;
     } else {
         _anjay_serv_destroy_instances(&backup.instances);
-    }
-    if (!retval) {
         _anjay_serv_clear_modified(repr);
         persistence_log(INFO, "Server Object state restored");
     }
-    return retval;
+    return err;
 }
 
 #    ifdef ANJAY_TEST
@@ -236,20 +278,20 @@ int anjay_server_object_restore(anjay_t *anjay,
 
 #else // WITH_AVS_PERSISTENCE
 
-int anjay_server_object_persist(anjay_t *anjay,
-                                avs_stream_abstract_t *out_stream) {
+avs_error_t anjay_server_object_persist(anjay_t *anjay,
+                                        avs_stream_t *out_stream) {
     (void) anjay;
     (void) out_stream;
     persistence_log(ERROR, "Persistence not compiled in");
-    return -1;
+    return avs_errno(AVS_ENOTSUP);
 }
 
-int anjay_server_object_restore(anjay_t *anjay,
-                                avs_stream_abstract_t *in_stream) {
+avs_error_t anjay_server_object_restore(anjay_t *anjay,
+                                        avs_stream_t *in_stream) {
     (void) anjay;
     (void) in_stream;
     persistence_log(ERROR, "Persistence not compiled in");
-    return -1;
+    return avs_errno(AVS_ENOTSUP);
 }
 
 #endif // WITH_AVS_PERSISTENCE

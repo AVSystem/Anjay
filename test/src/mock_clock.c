@@ -29,9 +29,16 @@
 static avs_time_monotonic_t MOCK_CLOCK = { { 0, -1 } };
 
 void _anjay_mock_clock_start(const avs_time_monotonic_t t) {
+    const avs_time_monotonic_t last_value = MOCK_CLOCK;
     MOCK_CLOCK = AVS_TIME_MONOTONIC_INVALID;
+    AVS_UNIT_ASSERT_FALSE(avs_time_monotonic_valid(last_value));
     AVS_UNIT_ASSERT_TRUE(avs_time_monotonic_valid(t));
     MOCK_CLOCK = t;
+}
+
+void _anjay_mock_clock_reset(const avs_time_monotonic_t t) {
+    _anjay_mock_clock_finish();
+    _anjay_mock_clock_start(t);
 }
 
 void _anjay_mock_clock_advance(const avs_time_duration_t t) {
@@ -42,6 +49,7 @@ void _anjay_mock_clock_advance(const avs_time_duration_t t) {
 
 void _anjay_mock_clock_finish(void) {
     AVS_UNIT_ASSERT_TRUE(avs_time_monotonic_valid(MOCK_CLOCK));
+    MOCK_CLOCK = AVS_TIME_MONOTONIC_INVALID;
 }
 
 static int (*orig_clock_gettime)(clockid_t, struct timespec *);

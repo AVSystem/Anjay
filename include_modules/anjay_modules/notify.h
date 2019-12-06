@@ -23,13 +23,10 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-#define ANJAY_RID_EMPTY (-1)
-
 typedef struct {
     bool instance_set_changed;
-    // NOTE: known_{added,removed}_iids lists may not be exhaustive
+    // NOTE: known_added_iids list may not be exhaustive
     AVS_LIST(anjay_iid_t) known_added_iids;
-    AVS_LIST(anjay_iid_t) known_removed_iids;
 } anjay_notify_queue_instance_entry_t;
 
 typedef struct {
@@ -54,6 +51,13 @@ typedef AVS_LIST(anjay_notify_queue_object_entry_t) anjay_notify_queue_t;
  * @ref _anjay_dm_current_ssid will be called to determine it.
  */
 int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue);
+
+/**
+ * Works like @ref _anjay_notify_perform but doesn't call
+ * server_modified_notify().
+ */
+int _anjay_notify_perform_without_servers(anjay_t *anjay,
+                                          anjay_notify_queue_t queue);
 
 /**
  * Calls @ref _anjay_notify_perform and @ref _anjay_notify_clear_queue

@@ -14,15 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import concurrent.futures
 import socket
 import unittest
 
+from framework.lwm2m.coap.server import SecurityMode
+from framework.lwm2m.coap.transport import Transport
 from framework.lwm2m_test import *
+from suites.default import bootstrap_client
 
 
 class BlockRegister:
     class Test(unittest.TestCase):
-        def __call__(self, server, timeout_s=None):
+        def __call__(self, server, timeout_s=None, verify=True):
             register_content = b''
             while True:
                 if timeout_s is None:
@@ -37,39 +41,61 @@ class BlockRegister:
                     break
                 server.send(Lwm2mContinue.matching(pkt)(options=block1))
 
-            self.assertEquals(expected_content, register_content)
+            if verify:
+                self.assertEquals(expected_content(), register_content)
+
             server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo', options=block1))
 
 
 class Register:
-    class TestCase(test_suite.Lwm2mSingleServerTest):
+    class TestCase(test_suite.Lwm2mDmOperations):
         def setUp(self):
             # skip initial registration
             super().setUp(auto_register=False)
 
 
-# Security (/0) instances MUST not be a part of the list
-# see LwM2M spec, Register/Update operations description
-expected_content = (b'</1/1>,</2>,</3/0>,</4/0>,</5/0>,</6/0>,</7/0>,'
-                    + b'</10>;ver="1.1",</10/0>,</11>,</16>,</1337>,</11111/0>,'
-                    + b'</12359/0>,</12360>,</12361/0>')
+class RegisterUdp:
+    class TestCase(Register.TestCase, test_suite.Lwm2mSingleServerTest):
+        pass
 
 
-class RegisterTest(Register.TestCase):
+
+
+def expected_content():
+    result = []
+    for obj in ResPath.objects():
+        if obj.oid == OID.Security:
+            # Security (/0) instances MUST not be a part of the list
+            # see LwM2M spec, Register/Update operations description
+            continue
+
+        if obj.oid == OID.Server:
+            result.append('</%d/1>' % (obj.oid,))
+        elif obj.is_multi_instance or obj.version is not None:
+            entry = '</%d>' % (obj.oid,)
+            if obj.version is not None:
+                entry += ';ver="%s"' % (obj.version,)
+            result.append(entry)
+        if not obj.is_multi_instance:
+            result.append('</%d/0>' % (obj.oid,))
+    return ','.join(result).encode()
+
+
+class RegisterTest(RegisterUdp.TestCase):
     def runTest(self):
         # should send Register request at start
         pkt = self.serv.recv()
         self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                          content=expected_content),
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
+                          content=expected_content()),
             pkt)
 
         # should retry when no response is sent
         pkt = self.serv.recv(timeout_s=6)
 
         self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                          content=expected_content),
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
+                          content=expected_content()),
             pkt)
 
         # should ignore this message as Message ID does not match
@@ -81,8 +107,8 @@ class RegisterTest(Register.TestCase):
         pkt = self.serv.recv(timeout_s=12)
 
         self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                          content=expected_content),
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
+                          content=expected_content()),
             pkt)
 
         # should not retry after receiving valid response
@@ -92,13 +118,13 @@ class RegisterTest(Register.TestCase):
             print(self.serv.recv(timeout_s=6))
 
 
-class RegisterWithLostSeparateAck(Register.TestCase):
+class RegisterWithLostSeparateAck(RegisterUdp.TestCase):
     def runTest(self):
         # should send Register request at start
         pkt = self.serv.recv()
         self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                          content=expected_content),
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
+                          content=expected_content()),
             pkt)
 
         # Separate Response: Confirmable; msg_id does not match, but token does
@@ -127,46 +153,50 @@ class RegisterWithBlock(test_suite.Lwm2mSingleServerTest):
             print(self.serv.recv(timeout_s=6))
 
 
-class ConcurrentRequestWhileWaitingForResponse(Register.TestCase):
-    def runTest(self):
-        pkt = self.serv.recv()
-        self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME),
-                          content=expected_content),
-            pkt)
-
-        req = Lwm2mRead('/3/0/0')
-        self.serv.send(req)
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_SERVICE_UNAVAILABLE,
-                                                             options=ANY),
-                            self.serv.recv())
-
-        self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
+class ConcurrentRequestWhileWaitingForResponse:
+    class TestMixin:
+        def runTest(self):
+            pkt = self.serv.recv()
+            path = '/rd?lwm2m=1.0&ep=%s&lt=86400' % DEMO_ENDPOINT_NAME
+            self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
+            self.read_path(self.serv, ResPath.Device.Manufacturer)
+            self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
 
 
-class RegisterUri(Register.TestCase):
-    def make_demo_args(self, *args, **kwargs):
-        args = super().make_demo_args(*args, **kwargs)
-        for i in range(len(args)):
-            if args[i].startswith('coap'):
-                args[i] += '/i/am/crazy/and?lwm2m=i&ep=know&lt=it'
-        return args
+class ConcurrentRequestWhileWaitingForResponseUdp(
+    ConcurrentRequestWhileWaitingForResponse.TestMixin, RegisterUdp.TestCase):
+    pass
 
-    def runTest(self):
-        pkt = self.serv.recv()
-        self.assertMsgEqual(
-            Lwm2mRegister('/i/am/crazy/and/rd?lwm2m=i&ep=know&lt=it&lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION,
-                                                                                                DEMO_ENDPOINT_NAME),
-                          content=expected_content),
-            pkt)
-        self.serv.send(Lwm2mCreated.matching(pkt)(location='/some/weird/rd/point'))
 
-        # Update shall not contain the path and query from Server URI
-        self.communicate('send-update')
-        pkt = self.serv.recv()
-        self.assertMsgEqual(Lwm2mUpdate('/some/weird/rd/point', query=[], content=b''),
-                            pkt)
-        self.serv.send(Lwm2mChanged.matching(pkt)())
 
-    def tearDown(self):
-        self.teardown_demo_with_servers(path='/some/weird/rd/point')
+
+class RegisterUri:
+    class TestMixin:
+        def make_demo_args(self, *args, **kwargs):
+            args = super().make_demo_args(*args, **kwargs)
+            for i in range(len(args)):
+                if args[i].startswith('coap'):
+                    args[i] += '/i/am/crazy/and?lwm2m=i&ep=know&lt=it'
+            return args
+
+        def runTest(self):
+            pkt = self.serv.recv()
+            path = '/i/am/crazy/and/rd?lwm2m=i&ep=know&lt=it&lwm2m=1.0&ep=%s&lt=86400' % DEMO_ENDPOINT_NAME
+            self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
+            self.serv.send(Lwm2mCreated.matching(pkt)(location='/some/weird/rd/point'))
+
+            # Update shall not contain the path and query from Server URI
+            self.communicate('send-update')
+            pkt = self.serv.recv()
+            self.assertMsgEqual(Lwm2mUpdate('/some/weird/rd/point', query=[], content=b''),
+                                pkt)
+            self.serv.send(Lwm2mChanged.matching(pkt)())
+
+        def tearDown(self):
+            self.teardown_demo_with_servers(path='/some/weird/rd/point')
+
+
+class RegisterUriUdp(RegisterUri.TestMixin, RegisterUdp.TestCase):
+    pass
+
+

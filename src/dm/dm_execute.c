@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "../dm_core.h"
 #include "dm_execute.h"
 
 VISIBILITY_SOURCE_BEGIN
@@ -28,7 +29,7 @@ static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx, int ch);
 static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t *ctx,
                                                  int ch);
 
-static int next_char(anjay_execute_ctx_t *ctx) {
+static int get_next_char(anjay_execute_ctx_t *ctx) {
     if (ctx->end_of_message) {
         return EOF;
     }
@@ -71,10 +72,20 @@ static int try_reading_next_arg(anjay_execute_ctx_t *ctx) {
     }
     ctx->arg = -1;
     ctx->arg_has_value = false;
-    ctx->state = STATE_READ_ARGUMENT;
 
-    while (ctx->state == STATE_READ_ARGUMENT) {
-        ctx->state = state_read_argument(ctx, next_char(ctx));
+    // STATE_FINISHED_READING_ARGUMENT means that the last read character was
+    // arg separator. We reject payload with trailing separator.
+    int next_char = get_next_char(ctx);
+    if (ctx->state == STATE_FINISHED_READING_ARGUMENT && next_char == EOF) {
+        return -1;
+    }
+
+    while (true) {
+        ctx->state = state_read_argument(ctx, next_char);
+        if (ctx->state != STATE_READ_ARGUMENT) {
+            break;
+        }
+        next_char = get_next_char(ctx);
     }
 
     if (ctx->arg == -1 && ctx->state == STATE_EOF) {
@@ -104,7 +115,7 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
                                int *out_arg,
                                bool *out_has_value) {
     if (skip_value(ctx)) {
-        return -1;
+        return ANJAY_ERR_BAD_REQUEST;
     }
 
     if (ctx->state == STATE_EOF) {
@@ -114,10 +125,11 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
     }
 
     int result = try_reading_next_arg(ctx);
-    if (result >= 0) {
-        *out_arg = ctx->arg;
-        *out_has_value = ctx->arg_has_value;
+    if (result < 0) {
+        return ANJAY_ERR_BAD_REQUEST;
     }
+    *out_arg = ctx->arg;
+    *out_has_value = ctx->arg_has_value;
     return result;
 }
 
@@ -127,12 +139,15 @@ ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
     if (ctx->state != STATE_READ_VALUE) {
         return 0;
     } else if (buf_size < 2 || !out_buf) {
+        dm_log(ERROR,
+               "Invalid arguments passed to anjay_execute_get_arg_value(): "
+               "needs a buffer with at least 2 bytes size");
         return -1;
     }
 
-    ssize_t read_bytes = 0;
-    while ((size_t) read_bytes < buf_size - 1) {
-        int ch = next_char(ctx);
+    size_t read_bytes = 0;
+    while (read_bytes < buf_size - 1) {
+        int ch = get_next_char(ctx);
         ctx->state = state_read_value(ctx, ch);
 
         if (ctx->state == STATE_READ_VALUE) {
@@ -144,9 +159,9 @@ ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
     out_buf[read_bytes] = '\0';
 
     if (ctx->state == STATE_ERROR) {
-        return -1;
+        return ANJAY_ERR_BAD_REQUEST;
     }
-    return read_bytes;
+    return (ssize_t) read_bytes;
 }
 
 anjay_execute_ctx_t *_anjay_execute_ctx_create(anjay_input_ctx_t *ctx) {
@@ -183,7 +198,7 @@ static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx,
     if (is_value(ch)) {
         return STATE_READ_VALUE;
     } else if (is_value_delimiter(ch)) {
-        return expect_separator_or_eof(ctx, next_char(ctx));
+        return expect_separator_or_eof(ctx, get_next_char(ctx));
     }
     return STATE_ERROR;
 }
@@ -209,7 +224,7 @@ expect_separator_or_assignment_or_eof(anjay_execute_ctx_t *ctx, int ch) {
         return STATE_FINISHED_READING_ARGUMENT;
     } else if (is_value_assignment(ch)) {
         ctx->arg_has_value = true;
-        return expect_value(ctx, next_char(ctx));
+        return expect_value(ctx, get_next_char(ctx));
     } else if (ch == EOF && ctx->end_of_message) {
         return STATE_EOF;
     }
@@ -222,7 +237,7 @@ static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t *ctx,
 
     if (isdigit(ch)) {
         ctx->arg = ch - '0';
-        return expect_separator_or_assignment_or_eof(ctx, next_char(ctx));
+        return expect_separator_or_assignment_or_eof(ctx, get_next_char(ctx));
     } else if (ch == EOF) {
         return STATE_EOF;
     }

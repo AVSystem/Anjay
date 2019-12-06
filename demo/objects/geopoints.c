@@ -53,7 +53,7 @@ typedef struct {
 static inline geopoints_t *
 get_geopoints(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, geopoints_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, geopoints_t, def);
 }
 
 static geopoint_t *find_instance(const geopoints_t *repr, anjay_iid_t iid) {
@@ -69,53 +69,23 @@ static geopoint_t *find_instance(const geopoints_t *repr, anjay_iid_t iid) {
     return NULL;
 }
 
-static int geopoints_instance_it(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t *out,
-                                 void **cookie) {
+static int geopoints_list_instances(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
 
-    AVS_LIST(geopoint_t) inst = (AVS_LIST(geopoint_t)) *cookie;
-
-    if (!inst) {
-        inst = get_geopoints(obj_ptr)->instances;
-    } else {
-        inst = AVS_LIST_NEXT(inst);
-    }
-
-    *out = inst ? inst->iid : ANJAY_IID_INVALID;
-    *cookie = inst;
-    return 0;
-}
-
-static int
-geopoints_instance_present(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj_ptr,
-                           anjay_iid_t iid) {
-    (void) anjay;
-    return find_instance(get_geopoints(obj_ptr), iid) != NULL;
-}
-
-static anjay_iid_t get_new_iid(AVS_LIST(geopoint_t) instances) {
-    anjay_iid_t iid = 1;
     AVS_LIST(geopoint_t) it;
-    AVS_LIST_FOREACH(it, instances) {
-        if (it->iid == iid) {
-            ++iid;
-        } else if (it->iid > iid) {
-            break;
-        }
+    AVS_LIST_FOREACH(it, get_geopoints(obj_ptr)->instances) {
+        anjay_dm_emit(ctx, it->iid);
     }
-    return iid;
+    return 0;
 }
 
 static int
 geopoints_instance_create(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
-                          anjay_iid_t *inout_iid,
-                          anjay_ssid_t ssid) {
+                          anjay_iid_t iid) {
     (void) anjay;
-    (void) ssid;
     geopoints_t *repr = get_geopoints(obj_ptr);
 
     AVS_LIST(geopoint_t) created = AVS_LIST_NEW_ELEMENT(geopoint_t);
@@ -123,15 +93,7 @@ geopoints_instance_create(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
 
-    if (*inout_iid == ANJAY_IID_INVALID) {
-        *inout_iid = get_new_iid(repr->instances);
-        if (*inout_iid == ANJAY_IID_INVALID) {
-            AVS_LIST_CLEAR(&created);
-            return ANJAY_ERR_INTERNAL;
-        }
-    }
-
-    created->iid = *inout_iid;
+    created->iid = iid;
 
     AVS_LIST(geopoint_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -163,12 +125,36 @@ geopoints_instance_remove(anjay_t *anjay,
     return ANJAY_ERR_NOT_FOUND;
 }
 
+static int geopoints_list_resources(anjay_t *anjay,
+                                    const anjay_dm_object_def_t *const *obj_ptr,
+                                    anjay_iid_t iid,
+                                    anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+    anjay_dm_emit_res(ctx, GEOPOINTS_LATITUDE, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, GEOPOINTS_LONGITUDE, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, GEOPOINTS_RADIUS, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, GEOPOINTS_DESCRIPTION, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, GEOPOINTS_INSIDE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int geopoints_resource_read(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
+                                   anjay_riid_t riid,
                                    anjay_output_ctx_t *ctx) {
     (void) anjay;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
 
     geopoint_t *inst = find_instance(get_geopoints(obj_ptr), iid);
     assert(inst);
@@ -185,6 +171,7 @@ static int geopoints_resource_read(anjay_t *anjay,
     case GEOPOINTS_INSIDE:
         return anjay_ret_bool(ctx, inst->inside);
     default:
+        AVS_UNREACHABLE("Read called on unknown resource");
         return ANJAY_ERR_NOT_FOUND;
     }
 }
@@ -193,8 +180,11 @@ static int geopoints_resource_write(anjay_t *anjay,
                                     const anjay_dm_object_def_t *const *obj_ptr,
                                     anjay_iid_t iid,
                                     anjay_rid_t rid,
+                                    anjay_riid_t riid,
                                     anjay_input_ctx_t *ctx) {
     (void) anjay;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
 
     geopoint_t *inst = find_instance(get_geopoints(obj_ptr), iid);
     assert(inst);
@@ -244,6 +234,8 @@ static int geopoints_resource_write(anjay_t *anjay,
         }
     }
     default:
+        // Bootstrap Server may try to write to GEOPOINTS_INSIDE,
+        // so no AVS_UNREACHABLE() here
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
@@ -309,18 +301,12 @@ static int geopoints_instance_reset(anjay_t *anjay,
 
 static const anjay_dm_object_def_t GEOPOINTS = {
     .oid = DEMO_OID_GEOPOINTS,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(GEOPOINTS_LATITUDE,
-                                              GEOPOINTS_LONGITUDE,
-                                              GEOPOINTS_RADIUS,
-                                              GEOPOINTS_DESCRIPTION,
-                                              GEOPOINTS_INSIDE),
     .handlers = {
-        .instance_it = geopoints_instance_it,
-        .instance_present = geopoints_instance_present,
+        .list_instances = geopoints_list_instances,
         .instance_create = geopoints_instance_create,
         .instance_remove = geopoints_instance_remove,
         .instance_reset = geopoints_instance_reset,
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_resources = geopoints_list_resources,
         .resource_read = geopoints_resource_read,
         .resource_write = geopoints_resource_write,
         .transaction_begin = geopoints_transaction_begin,
@@ -349,6 +335,22 @@ void geopoints_object_release(const anjay_dm_object_def_t **def) {
         AVS_LIST_CLEAR(&geopoints->saved_instances);
         avs_free(geopoints);
     }
+}
+
+int geopoints_get_instances(const anjay_dm_object_def_t **def,
+                            AVS_LIST(anjay_iid_t) *out) {
+    geopoints_t *geopoints = get_geopoints(def);
+    assert(!*out);
+    AVS_LIST(geopoint_t) it;
+    AVS_LIST_FOREACH(it, geopoints->instances) {
+        if (!(*out = AVS_LIST_NEW_ELEMENT(anjay_iid_t))) {
+            demo_log(ERROR, "out of memory");
+            return -1;
+        }
+        **out = it->iid;
+        AVS_LIST_ADVANCE_PTR(&out);
+    }
+    return 0;
 }
 
 void geopoints_notify_time_dependent(anjay_t *anjay,

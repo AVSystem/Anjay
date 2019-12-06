@@ -32,66 +32,32 @@ static test_object_t *get_test_object(const anjay_dm_object_def_t *const *obj) {
     return AVS_CONTAINER_OF(obj, test_object_t, obj_def);
 }
 
-static int test_instance_present(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t iid) {
-    (void) anjay; // unused
+static int test_list_instances(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_dm_list_ctx_t *ctx) {
+    (void) anjay;   // unused
+    (void) obj_ptr; // unused
 
-    test_object_t *test = get_test_object(obj_ptr);
-
-    // return 1 (true) if `iid` is a valid index of `TEST_INSTANCES` array
-    return (size_t) iid < NUM_INSTANCES;
-}
-
-static int test_instance_it(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t *out,
-                            void **cookie) {
-    (void) anjay; // unused
-
-    anjay_iid_t curr = 0;
-    test_object_t *test = get_test_object(obj_ptr);
-
-    // if `*cookie == NULL`, then the iteration has just started,
-    // otherwise `*cookie` contains iterator value saved below
-    if (*cookie) {
-        curr = (anjay_iid_t) (intptr_t) *cookie;
+    for (anjay_iid_t iid = 0; iid < NUM_INSTANCES; ++iid) {
+        anjay_dm_emit(ctx, iid);
     }
 
-    if ((size_t) curr < NUM_INSTANCES) {
-        *out = curr;
-    } else {
-        // no more Object Instances available
-        *out = ANJAY_IID_INVALID;
-    }
-
-    // use `*cookie` to store the iterator
-    *cookie = (void *) (intptr_t) (curr + 1);
     return 0;
 }
 
-static int test_resource_operations(anjay_t *anjay,
-                                    const anjay_dm_object_def_t *const *obj_ptr,
-                                    anjay_rid_t rid,
-                                    anjay_dm_resource_op_mask_t *out) {
-    (void) anjay;
-    (void) obj_ptr;
-    *out = ANJAY_DM_RESOURCE_OP_NONE;
+static int test_list_resources(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid,
+                               anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;   // unused
+    (void) obj_ptr; // unused
+    (void) iid;     // unused
 
-    switch (rid) {
-    case 0:
-        // only allow reading Resource 0 by LwM2M Servers
-        // this will be ignored for LwM2M Bootstrap Server
-        *out = ANJAY_DM_RESOURCE_OP_BIT_R;
-        break;
-    case 1:
-        // Value Resource can be read/written by LwM2M Servers
-        *out = ANJAY_DM_RESOURCE_OP_BIT_R | ANJAY_DM_RESOURCE_OP_BIT_W;
-        break;
-    default:
-        break;
-    }
-
+    // only allow reading Resource 0 by LwM2M Servers
+    // this will be ignored for LwM2M Bootstrap Server
+    anjay_dm_emit_res(ctx, 0, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    // Value Resource can be read/written by LwM2M Servers
+    anjay_dm_emit_res(ctx, 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
     return 0;
 }
 
@@ -99,15 +65,21 @@ static int test_resource_read(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid,
                               anjay_rid_t rid,
+                              anjay_riid_t riid,
                               anjay_output_ctx_t *ctx) {
     (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
-    // IID validity was checked by the `anjay_dm_instance_present_t` handler.
+    // IID validity was checked by the `anjay_dm_list_instances_t` handler.
     // If the Object Instance set does not change, or can only be modifed
     // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
     assert((size_t) iid < NUM_INSTANCES);
+
+    // We have no Multiple-Instance Resources, so it is safe to assume
+    // that RIID is never set.
+    assert(riid == ANJAY_ID_INVALID);
+
     const struct test_instance *current_instance = &test->instances[iid];
 
     switch (rid) {
@@ -116,7 +88,7 @@ static int test_resource_read(anjay_t *anjay,
     case 1:
         return anjay_ret_i32(ctx, current_instance->value);
     default:
-        // control will never reach this part due to object's supported_rids
+        // control will never reach this part due to test_list_resources
         return ANJAY_ERR_INTERNAL;
     }
 }
@@ -125,16 +97,21 @@ static int test_resource_write(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
+                               anjay_riid_t riid,
                                anjay_input_ctx_t *ctx) {
     (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
-    // IID validity was checked by the `anjay_dm_instance_present_t` handler.
+    // IID validity was checked by the `anjay_dm_list_instances_t` handler.
     // If the Object Instance set does not change, or can only be modifed
     // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
     assert((size_t) iid < NUM_INSTANCES);
     struct test_instance *current_instance = &test->instances[iid];
+
+    // We have no Multiple-Instance Resources, so it is safe to assume
+    // that RIID is never set.
+    assert(riid == ANJAY_ID_INVALID);
 
     switch (rid) {
     case 0: {
@@ -161,7 +138,7 @@ static int test_resource_write(anjay_t *anjay,
         return anjay_get_i32(ctx, &current_instance->value);
 
     default:
-        // control will never reach this part due to object's supported_rids
+        // control will never reach this part due to test_list_resources
         return ANJAY_ERR_INTERNAL;
     }
 }
@@ -170,18 +147,10 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
     // Object ID
     .oid = 1234,
 
-    // List of supported Resource IDs
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
-
     .handlers = {
-        .instance_it = test_instance_it,
-        .instance_present = test_instance_present,
+        .list_instances = test_list_instances,
 
-        // if all supported Resources are always available, one can use
-        // a pre-implemented `resource_present` handler too:
-        .resource_present = anjay_dm_resource_present_TRUE,
-
-        .resource_operations = test_resource_operations,
+        .list_resources = test_list_resources,
         .resource_read = test_resource_read,
         .resource_write = test_resource_write,
 
@@ -197,7 +166,7 @@ static int setup_security_object(anjay_t *anjay) {
         .ssid = 1,
         .bootstrap_server = true,
         .server_uri = "coap://127.0.0.1:5683",
-        .security_mode = ANJAY_UDP_SECURITY_NOSEC
+        .security_mode = ANJAY_SECURITY_NOSEC
     };
 
     if (anjay_security_object_install(anjay)) {
@@ -205,7 +174,7 @@ static int setup_security_object(anjay_t *anjay) {
     }
 
     // let Anjay assign an Object Instance ID
-    anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
+    anjay_iid_t security_instance_id = ANJAY_ID_INVALID;
     if (anjay_security_object_add_instance(anjay, &security_instance,
                                            &security_instance_id)) {
         return -1;
@@ -223,14 +192,13 @@ static int setup_server_object(anjay_t *anjay) {
 int main_loop(anjay_t *anjay) {
     while (true) {
         // Obtain all network data sources
-        AVS_LIST(avs_net_abstract_socket_t *const) sockets =
-                anjay_get_sockets(anjay);
+        AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
 
         // Prepare to poll() on them
         size_t numsocks = AVS_LIST_SIZE(sockets);
         struct pollfd pollfds[numsocks];
         size_t i = 0;
-        AVS_LIST(avs_net_abstract_socket_t *const) sock;
+        AVS_LIST(avs_net_socket_t *const) sock;
         AVS_LIST_FOREACH(sock, sockets) {
             pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
             pollfds[i].events = POLLIN;
@@ -248,7 +216,7 @@ int main_loop(anjay_t *anjay) {
         // Wait for the events if necessary, and handle them.
         if (poll(pollfds, numsocks, wait_ms) > 0) {
             int socket_id = 0;
-            AVS_LIST(avs_net_abstract_socket_t *const) socket = NULL;
+            AVS_LIST(avs_net_socket_t *const) socket = NULL;
             AVS_LIST_FOREACH(socket, sockets) {
                 if (pollfds[socket_id].revents) {
                     anjay_serve(anjay, *socket);
@@ -257,9 +225,8 @@ int main_loop(anjay_t *anjay) {
             }
         }
 
-        // Finally run the scheduler (ignoring its return value, which
-        // is the number of tasks executed)
-        (void) anjay_sched_run(anjay);
+        // Finally run the scheduler
+        anjay_sched_run(anjay);
     }
     return 0;
 }

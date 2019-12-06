@@ -110,6 +110,7 @@ class Lwm2mMsg(coap.Packet):
             return ('(malformed TLV: %s)\n' % (exc,)
                     + Lwm2mMsg._decode_binary_content(content))
 
+
     def _decode_content(self):
         if self.content is ANY:
             return ''
@@ -194,12 +195,13 @@ class Lwm2mRequestBootstrap(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
         """Checks if the PKT is a LWM2M Request Bootstrap message."""
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_POST
                 and '/bs?ep=' in pkt.get_full_uri())
 
     def __init__(self,
                  endpoint_name: str,
+                 preferred_content_format: int = None,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
                  uri_path: str = '',
@@ -209,6 +211,8 @@ class Lwm2mRequestBootstrap(Lwm2mMsg):
         if not uri_query:
             uri_query = []
         uri_query = uri_query + ['ep=' + endpoint_name]
+        if preferred_content_format is not None:
+            uri_query = uri_query + ['pct=%d' % (preferred_content_format,)]
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_POST,
                          msg_id=msg_id,
@@ -228,7 +232,7 @@ class Lwm2mBootstrapFinish(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
         """Checks if the PKT is a LWM2M Bootstrap Finish message."""
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_POST
                 and pkt.get_full_uri().endswith('/bs'))
 
@@ -276,7 +280,7 @@ class Lwm2mRegister(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
         """Checks if the PKT is a LWM2M Register message."""
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_POST
                 and is_link_format(pkt)
                 and pkt.get_uri_path().endswith('/rd'))
@@ -313,7 +317,7 @@ class Lwm2mUpdate(Lwm2mMsg):
         # Update is very similar to Execute
         # assumption: Update will never be called on a path that resembles
         # /OID or /OID/IID or /OID/IID/RID
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_POST
                 and '/rd/' in pkt.get_uri_path()
                 and (is_link_format(pkt)
@@ -347,7 +351,7 @@ class Lwm2mUpdate(Lwm2mMsg):
 class Lwm2mDeregister(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_DELETE
                 and not is_lwm2m_nonempty_path(pkt.get_uri_path()))
 
@@ -371,10 +375,12 @@ class Lwm2mDeregister(Lwm2mMsg):
         return 'De-register ' + self.get_full_uri()
 
 
+
+
 class CoapGet(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_GET)
 
     def __init__(self,
@@ -407,7 +413,6 @@ class CoapGet(Lwm2mMsg):
             text += ': accept ' + ', '.join(map(coap.ContentFormat.to_str, accept_vals))
 
         return text
-
 
 
 class Lwm2mRead(CoapGet):
@@ -513,7 +518,7 @@ class Lwm2mDiscover(CoapGet):
 class Lwm2mWrite(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code in (coap.Code.REQ_PUT, coap.Code.REQ_POST)
                 and is_lwm2m_nonempty_path(pkt.get_uri_path())
                 and not is_link_format(pkt))
@@ -553,10 +558,12 @@ class Lwm2mWrite(Lwm2mMsg):
                    self.get_full_uri(), fmt, len(self.content)))
 
 
+
+
 class Lwm2mWriteAttributes(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_PUT
                 and is_lwm2m_nonempty_path(pkt.get_uri_path())
                 and pkt.get_content_format() is None)
@@ -568,6 +575,8 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
                  st: float = None,
                  pmin: int = None,
                  pmax: int = None,
+                 epmin: int = None,
+                 epmax: int = None,
                  query: List[str] = None,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
@@ -584,6 +593,10 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
             query.append('pmin=%d' % (pmin,))
         if pmax is not None:
             query.append('pmax=%d' % (pmax,))
+        if epmin is not None:
+            query.append('epmin=%d' % (epmin,))
+        if epmax is not None:
+            query.append('epmax=%d' % (epmax,))
 
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_PUT,
@@ -603,7 +616,7 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
 class Lwm2mExecute(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_POST
                 and is_lwm2m_nonempty_path(pkt.get_full_uri())
                 and pkt.get_content_format() is None)
@@ -633,7 +646,7 @@ class Lwm2mExecute(Lwm2mMsg):
 class Lwm2mCreate(Lwm2mMsg):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_POST
                 and is_lwm2m_nonempty_path(pkt.get_uri_path())
                 and pkt.get_content_format() == coap.ContentFormat.APPLICATION_LWM2M_TLV)
@@ -672,7 +685,7 @@ class Lwm2mDelete(Lwm2mMsg):
         # if REQ_DELETE is sent by server. it's Delete; otherwise - De-Register
         # assumption: De-Register will never be called on a path
         # that resembles /OID/IID
-        return (pkt.type == coap.Type.CONFIRMABLE
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
                 and pkt.code == coap.Code.REQ_DELETE
                 and is_lwm2m_path(pkt.get_uri_path()))
 
@@ -852,7 +865,7 @@ class Lwm2mChanged(Lwm2mResponse):
 class Lwm2mErrorResponse(Lwm2mResponse):
     @staticmethod
     def _pkt_matches(pkt: coap.Packet):
-        return (pkt.type == coap.Type.ACKNOWLEDGEMENT
+        return (pkt.type in (None, coap.Type.ACKNOWLEDGEMENT)
                 and pkt.code.cls in (4, 5))
 
     def __init__(self,

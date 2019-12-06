@@ -20,11 +20,10 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int
-output_buf_set_id(anjay_output_ctx_t *ctx, anjay_id_type_t type, uint16_t id) {
+static int output_buf_set_path(anjay_output_ctx_t *ctx,
+                               const anjay_uri_path_t *path) {
     (void) ctx;
-    (void) type;
-    (void) id;
+    (void) path;
     return 0;
 }
 
@@ -32,8 +31,10 @@ static int output_buf_ret_bytes(anjay_output_ctx_t *ctx_,
                                 const void *data,
                                 size_t data_size) {
     anjay_output_buf_ctx_t *ctx = (anjay_output_buf_ctx_t *) ctx_;
-    return avs_stream_write((avs_stream_abstract_t *) ctx->stream, data,
-                            data_size);
+    return avs_is_ok(avs_stream_write((avs_stream_t *) ctx->stream, data,
+                                      data_size))
+                   ? 0
+                   : -1;
 }
 
 static int output_buf_ret_string(anjay_output_ctx_t *ctx, const char *str) {
@@ -45,23 +46,17 @@ static int output_buf_ret_string(anjay_output_ctx_t *ctx, const char *str) {
         return output_buf_ret_bytes(ctx, &value, sizeof(value));              \
     }
 
-DEFINE_RET_HANDLER(i64, int64_t)   // output_buf_ret_i64
-DEFINE_RET_HANDLER(double, double) // output_buf_ret_double
-DEFINE_RET_HANDLER(bool, bool)     // output_buf_ret_bool
+DEFINE_RET_HANDLER(integer, int64_t) // output_buf_ret_integer
+DEFINE_RET_HANDLER(double, double)   // output_buf_ret_double
+DEFINE_RET_HANDLER(bool, bool)       // output_buf_ret_bool
 
-#define DEFINE_FORWARD_HANDLER(Suffix, Type, Backend)                         \
-    static int output_buf_ret_##Suffix(anjay_output_ctx_t *ctx, Type value) { \
-        return output_buf_ret_##Backend(ctx, value);                          \
-    }
-
-DEFINE_FORWARD_HANDLER(i32, int32_t, i64)    // output_buf_ret_i32
-DEFINE_FORWARD_HANDLER(float, float, double) // output_buf_ret_float
-
-static anjay_ret_bytes_ctx_t *
-output_buf_ret_bytes_begin(anjay_output_ctx_t *ctx, size_t length) {
+static int output_buf_ret_bytes_begin(anjay_output_ctx_t *ctx,
+                                      size_t length,
+                                      anjay_ret_bytes_ctx_t **out_bytes_ctx) {
     (void) length;
-    return (anjay_ret_bytes_ctx_t *) &((anjay_output_buf_ctx_t *) ctx)
-            ->ret_bytes_vtable;
+    *out_bytes_ctx = (anjay_ret_bytes_ctx_t *) &((anjay_output_buf_ctx_t *) ctx)
+                             ->ret_bytes_vtable;
+    return 0;
 }
 
 static int output_buf_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx,
@@ -73,24 +68,32 @@ static int output_buf_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx,
             data, size);
 }
 
+static int output_buf_ret_objlnk(anjay_output_ctx_t *ctx,
+                                 anjay_oid_t oid,
+                                 anjay_iid_t iid) {
+    const uint32_t objlnk_encoded = (uint32_t) (oid << 16) | iid;
+    return output_buf_ret_bytes(ctx, &objlnk_encoded, sizeof(objlnk_encoded));
+}
+
 static const anjay_output_ctx_vtable_t BUF_OUT_VTABLE = {
     .bytes_begin = output_buf_ret_bytes_begin,
     .string = output_buf_ret_string,
-    .i32 = output_buf_ret_i32,
-    .i64 = output_buf_ret_i64,
-    .f32 = output_buf_ret_float,
-    .f64 = output_buf_ret_double,
+    .integer = output_buf_ret_integer,
+    .floating = output_buf_ret_double,
     .boolean = output_buf_ret_bool,
-    .set_id = output_buf_set_id
+    .objlnk = output_buf_ret_objlnk,
+    .set_path = output_buf_set_path
 };
 
 static const anjay_ret_bytes_ctx_vtable_t BUF_BYTES_VTABLE = {
     .append = output_buf_ret_bytes_append
 };
 
-anjay_output_buf_ctx_t _anjay_output_buf_ctx_init(avs_stream_outbuf_t *stream) {
+anjay_output_buf_ctx_t _anjay_output_buf_ctx_init(avs_stream_t *stream) {
     return (anjay_output_buf_ctx_t) {
-        .vtable = &BUF_OUT_VTABLE,
+        .base = {
+            .vtable = &BUF_OUT_VTABLE
+        },
         .ret_bytes_vtable = &BUF_BYTES_VTABLE,
         .stream = stream
     };

@@ -44,9 +44,9 @@ INCLUDE_WHITELIST = {
     r'anjay_config_log\.h',
     r'anjay_config\.h',
     r'avsystem/commons/[^.]*\.h',
+    r'avsystem/coap/[^.]*\.h',
     r'anjay/[^.]*\.h',
-    r'anjay_modules/[^.]*\.h',
-    r'tuple'  # HACK: for C++ version of ANJAY_DM_SUPPORTED_RIDS() in dm.h
+    r'anjay_modules/[^.]*\.h'
 }
 
 if __name__ == '__main__':

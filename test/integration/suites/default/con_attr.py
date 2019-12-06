@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import socket
+
 from framework.lwm2m_test import *
 
 
@@ -21,15 +23,18 @@ class ConfirmableTest(test_suite.Lwm2mSingleServerTest,
                       test_suite.Lwm2mDmOperations):
     def runTest(self):
         # Create object
-        self.create_instance(self.serv, oid=1337, iid=0)
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
 
         # Write Attributes for Counter
-        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['con=1', 'pmax=1'])
+        self.write_attributes(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                              query=['con=1', 'pmax=1'])
 
         # Observe: Counter
-        counter_pkt = self.observe(self.serv, oid=1337, iid=0, rid=1, token=random_stuff(8))
+        counter_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                                   token=random_stuff(8))
         # Observe: Timestamp
-        timestamp_pkt = self.observe(self.serv, oid=1337, iid=0, rid=0, token=get_another_token(counter_pkt.token))
+        timestamp_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Timestamp,
+                                     token=get_another_token(counter_pkt.token))
 
         con_count = 0
         non_count = 0
@@ -49,11 +54,21 @@ class ConfirmableTest(test_suite.Lwm2mSingleServerTest,
         self.assertGreater(non_count, 0)
 
         # Cancel Observations
-        for _ in range(2):
-            pkt = self.serv.recv()
-            self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
-            self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
-            self.serv.send(Lwm2mReset.matching(pkt)())
+        # We don't wait for response to the first Cancel Observe before sending
+        # the other one because expected responses are small enough to not
+        # trigger a BLOCK transfer. In that case, Anjay is not expected to
+        # attempt to receive additional packets during request handling - they
+        # should be handled sequentially without any errors.
+        self.serv.send(Lwm2mObserve(ResPath.Test[0].Counter, token=counter_pkt.token, observe=1))
+        self.serv.send(Lwm2mObserve(ResPath.Test[0].Timestamp, token=timestamp_pkt.token, observe=1))
+
+        # flush any remaining notifications & Cancel Observe responses
+        try:
+            while True:
+                pkt = self.serv.recv(timeout_s=0.1)
+                self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
+        except socket.timeout:
+            pass
 
 
 class NonConfirmableTest(test_suite.Lwm2mSingleServerTest,
@@ -63,15 +78,18 @@ class NonConfirmableTest(test_suite.Lwm2mSingleServerTest,
 
     def runTest(self):
         # Create object
-        self.create_instance(self.serv, oid=1337, iid=0)
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
 
         # Write Attributes for Counter
-        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['con=0', 'pmax=1'])
+        self.write_attributes(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                              query=['con=0', 'pmax=1'])
 
         # Observe: Counter
-        counter_pkt = self.observe(self.serv, oid=1337, iid=0, rid=1, token=random_stuff(8))
+        counter_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                                   token=random_stuff(8))
         # Observe: Timestamp
-        timestamp_pkt = self.observe(self.serv, oid=1337, iid=0, rid=0, token=get_another_token(counter_pkt.token))
+        timestamp_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Timestamp,
+                                     token=get_another_token(counter_pkt.token))
 
         con_count = 0
         non_count = 0
@@ -91,8 +109,18 @@ class NonConfirmableTest(test_suite.Lwm2mSingleServerTest,
         self.assertGreater(non_count, 0)
 
         # Cancel Observations
-        for _ in range(2):
-            pkt = self.serv.recv()
-            self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
-            self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
-            self.serv.send(Lwm2mReset.matching(pkt)())
+        # We don't wait for response to the first Cancel Observe before sending
+        # the other one because expected responses are small enough to not
+        # trigger a BLOCK transfer. In that case, Anjay is not expected to
+        # attempt to receive additional packets during request handling - they
+        # should be handled sequentially without any errors.
+        self.serv.send(Lwm2mObserve(ResPath.Test[0].Counter, token=counter_pkt.token, observe=1))
+        self.serv.send(Lwm2mObserve(ResPath.Test[0].Timestamp, token=timestamp_pkt.token, observe=1))
+
+        # flush any remaining notifications & Cancel Observe responses
+        try:
+            while True:
+                pkt = self.serv.recv(timeout_s=0.1)
+                self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
+        except socket.timeout:
+            pass

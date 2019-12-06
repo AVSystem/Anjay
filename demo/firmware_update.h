@@ -47,7 +47,7 @@ int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
-                            const avs_coap_tx_params_t *tx_params,
+                            const avs_coap_udp_tx_params_t *tx_params,
                             anjay_fw_update_result_t delayed_result);
 
 void firmware_update_destroy(fw_update_logic_t *fw_update);

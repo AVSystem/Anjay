@@ -48,14 +48,10 @@ yield measurable performance benefits.
 Caching mechanism
 -----------------
 
-Anjay provides a built-in message cache (as an optional feature), that can be
-(and is, by default) enabled at a compile time (via
-``WITH_AVS_COAP_MESSAGE_CACHE`` CMake option).
-
-When the request is received, Anjay checks if there exists an appropriate
-response to it in the cache already. In case there is one, it is
-retransmitted. Otherwise Anjay processes the request as usual, in the end
-placing response in the cache for future use.
+Anjay provides a built-in message cache - when the request is received, Anjay
+checks if there exists an appropriate response to it in the cache already. In
+case there is one, it is retransmitted. Otherwise Anjay processes the request as
+usual, in the end placing response in the cache for future use.
 
 .. note::
     Cached response, matching a specific CoAP Request is identified by the
@@ -102,20 +98,22 @@ To provide custom retransmission policy, affecting CoAP layer across
 the library, one needs to set ``anjay_configuration_t::udp_tx_params``
 accordingly prior library instantiation with ``anjay_new()``.
 
-``anjay_configuration_t::udp_tx_params`` is a ``avs_coap_tx_params_t`` structure,
-defined as follows:
+``anjay_configuration_t::udp_tx_params`` is a ``avs_coap_udp_tx_params_t``
+structure, defined as follows:
 
 .. code-block:: c
 
-   /** CoAP transmission params object. */
-   typedef struct {
-       /** RFC 7252: ACK_TIMEOUT */
-       avs_time_duration_t ack_timeout;
-       /** RFC 7252: ACK_RANDOM_FACTOR */
-       double ack_random_factor;
-       /** RFC 7252: MAX_RETRANSMIT */
-       unsigned max_retransmit;
-   } avs_coap_tx_params_t;
+    /** CoAP transmission params object. */
+    typedef struct {
+        /** RFC 7252: ACK_TIMEOUT */
+        avs_time_duration_t ack_timeout;
+        /** RFC 7252: ACK_RANDOM_FACTOR */
+        double ack_random_factor;
+        /** RFC 7252: MAX_RETRANSMIT */
+        unsigned max_retransmit;
+        /** RFC 7252: NSTART */
+        size_t nstart;
+    } avs_coap_udp_tx_params_t;
 
 
 It should be noted that without any additional configuration,
@@ -123,15 +121,17 @@ Anjay uses default values as specified in the `Section 4.8 of RFC7252
 <https://tools.ietf.org/html/rfc7252#section-4.8>`_:
 
 
-+-----------------------+---------------+-------------------------------------------------+
-| Parameter             | Default value | Corresponding field in ``avs_coap_tx_params_t`` |
-+=======================+===============+=================================================+
-| ``ACK_TIMEOUT``       | 2 seconds     | ``ack_timeout``                                 |
-+-----------------------+---------------+-------------------------------------------------+
-| ``ACK_RANDOM_FACTOR`` | 1.5           | ``ack_random_factor``                           |
-+-----------------------+---------------+-------------------------------------------------+
-| ``MAX_RETRANSMIT``    | 4             | ``max_retransmit``                              |
-+-----------------------+---------------+-------------------------------------------------+
++-----------------------+---------------+-----------------------------------------------------+
+| Parameter             | Default value | Corresponding field in ``avs_coap_udp_tx_params_t`` |
++=======================+===============+=====================================================+
+| ``ACK_TIMEOUT``       | 2 seconds     | ``ack_timeout``                                     |
++-----------------------+---------------+-----------------------------------------------------+
+| ``ACK_RANDOM_FACTOR`` | 1.5           | ``ack_random_factor``                               |
++-----------------------+---------------+-----------------------------------------------------+
+| ``MAX_RETRANSMIT``    | 4             | ``max_retransmit``                                  |
++-----------------------+---------------+-----------------------------------------------------+
+| ``NSTART``            | 1             | ``nstart``                                          |
++-----------------------+---------------+-----------------------------------------------------+
 
 
 Meaning of each parameter, calculations of timeouts and the number of retransmissions
@@ -195,6 +195,18 @@ perform before giving up on message delivery.
    r`` seconds.
 
 
+``NSTART``
+^^^^^^^^^^
+
+Configures the maximum number of exchanges that may be ongoing at the same time
+with a given remote CoAP endpoint (i.e., an LwM2M server).
+
+In Anjay, it is mostly ignored. It is not recommended to set it to any other
+value than the default of 1.
+
+Higher values may be useful when writing applications using the low-level CoAP
+APIs.
+
 Exponential back-off
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -209,7 +221,7 @@ As an example, we may configure the library as follows:
 
 .. code-block:: c
 
-   avs_coap_tx_params_t udp_tx_params = {
+   avs_coap_udp_tx_params_t udp_tx_params = {
       // Wait at least 4 seconds for the initial response.
       .ack_timeout = avs_time_duration_from_scalar(4, AVS_TIME_S),
       // Do not randomize wait times for simplicity of the discussion,
@@ -217,7 +229,9 @@ As an example, we may configure the library as follows:
       // "exactly".
       .ack_random_factor = 1.0,
       // Allow up to 4 retransmissions.
-      .max_retransmit = 4
+      .max_retransmit = 4,
+      // leave the NSTART parameter at the default value of 1
+      .nstart = 1
    };
 
    anjay_configuration_t configuration = {
@@ -258,11 +272,12 @@ covers most cases, there are also means to configure:
   (``anjay_configuration_t::udp_dtls_hs_tx_params`` `docs
   <../api/structanjay__configuration.html#ab8ca076537138e7d78bd1ee5d5e2031a>`_),
 
-- SMS retransmission parameters (``anjay_configuration_t::sms_tx_params`` `docs
-  <../api/structanjay__configuration.html#a3358d949a97ff9e10c8838740dabab68>`_),
-
 - firmware update module retransmissions (by implementing
   custom ``anjay_fw_update_get_coap_tx_params_t`` handler `docs
-  <../api/fw__update_8h.html#ad0a274fbe4d73643df3aa62884d7decb>`_).
+  <../api/fw__update_8h.html#a50900e2aaff21e91df693795965136b2>`_),
+
+- in the commercial versions, there are also additional fields in
+  ``anjay_configuration_t`` that configure transmission parameters for non-UDP
+  transports.
 
 We recommend to refer to the doxygen documentation for more details.

@@ -423,6 +423,7 @@ class DataModel:
         def test_cancel_observe(self,
                                 path: Optional[Lwm2mPath] = None,
                                 msg_id: Optional[int] = None,
+                                token: bytes = None,
                                 server: Optional[Lwm2mServer] = None):
             server = server or self.serv
 
@@ -430,7 +431,8 @@ class DataModel:
                 raise ValueError('Either path or msg_id must be specified')
 
             if path is not None:
-                req = Lwm2mObserve(path, observe=1)
+                req = Lwm2mObserve(path, observe=1,
+                                   **({'token': token} if token is not None else {}))
                 server.send(req)
                 self.assertMsgEqual(Lwm2mContent.matching(req)(), server.recv())
             elif msg_id is not None:
@@ -479,7 +481,7 @@ class DataModel:
             elif cancel_observe == CancelObserveMethod.ObserveOption:
                 # Server sends Cancel Observe (COAP GET with Observe=1 option)
                 # to cancel the Observation relationship.
-                self.test_cancel_observe(path, server=server)
+                self.test_cancel_observe(path, token=req.token, server=server)
 
             if cancel_observe != CancelObserveMethod.DontCancel:
                 # Client stops reporting requested information and removes

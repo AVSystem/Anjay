@@ -15,9 +15,9 @@
 # limitations under the License.
 
 import socket
+import unittest
 
 from framework.lwm2m_test import *
-
 
 class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
     def setUp(self):
@@ -28,7 +28,7 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
         # receive Register
         req = self.serv.recv()
         self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,)),
             req)
 
         # Separate Response: empty ACK
@@ -62,13 +62,10 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
                                    token=get_another_token(req.token))
         invalid_req.type = coap.Type.CONFIRMABLE
 
+        # Anjay sees it as unknown message and responds with Reset
         self.serv.send(invalid_req)
-
-        # it should trigger a Service Not Available response
-        self.assertMsgEqual(
-                Lwm2mErrorResponse.matching(invalid_req)(code=coap.Code.RES_SERVICE_UNAVAILABLE,
-                                                         options=ANY),
-                self.serv.recv())
+        self.assertMsgEqual(Lwm2mReset.matching(invalid_req)(),
+                            self.serv.recv())
 
         # Separate Response: actual response
         req = Lwm2mChanged(msg_id=next(msg_id_generator),
@@ -81,4 +78,5 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
 
         # should not send more messages after receiving a correct response
         with self.assertRaises(socket.timeout, msg='unexpected message'):
-            print(self.serv.recv(timeout_s=6))
+            print(self.serv.recv(timeout_s=3))
+

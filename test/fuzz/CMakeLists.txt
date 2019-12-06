@@ -18,7 +18,7 @@ if(NOT WITH_FUZZ_TESTS)
 endif()
 
 if(NOT "${CMAKE_C_COMPILER}" MATCHES "^(.*/)?afl-gcc$")
-    message(FATAL_ERROR "AFL fuzz tests require compiling with afl-gcc, but CMAKE_C_COMPILER is set to ${CMAKE_C_COMPILER}")
+    message(WARNING "AFL fuzz tests require compiling with afl-gcc, but CMAKE_C_COMPILER is set to ${CMAKE_C_COMPILER}")
 endif()
 
 if(AFL_FUZZER_DIR)

@@ -37,11 +37,35 @@ typedef struct {
  * Restricted Objects in LwM2M 1.0 are:
  *  - Security Object (/0)
  *
- * NOTE: The instance ID may be @ref ANJAY_IID_INVALID only if the operation is
+ * NOTE: The instance ID may be @ref ANJAY_ID_INVALID only if the operation is
  * Create.
  */
 bool _anjay_instance_action_allowed(anjay_t *anjay,
                                     const anjay_action_info_t *info);
+
+/**
+ * Performs implicit creations and deletions of Access Control object instances
+ * according to data model changes.
+ *
+ * Specifically, it performs three steps:
+ *
+ * 1. Removes all Access Control object instances that refer to Object Instances
+ *    that have been removed from the data model.
+ * 2. If there were changes to the Security object, removes all ACL entries
+ *    (i.e., ACL Resource Instances) that refer to SSIDs of Servers who are no
+ *    longer repesented in the data model. This may cause changing the owner of
+ *    those Access Control object instances which have multiple ACL entries, or
+ *    removal of instances for which the ACL would be empty. In the latter case,
+ *    the referred Object Instances are removed as well (see LwM2M TS 1.0.2,
+ *    E.1.3 Unbootstrapping).
+ * 3. Creates new Access Control object instances that refer to all newly
+ *    created Object Instances. These will have the owner and the default ACL
+ *    referring to SSID == _anjay_dm_current_ssid(anjay).
+ *
+ * Please refer to comments inside the implementation for details.
+ */
+int _anjay_sync_access_control(anjay_t *anjay,
+                               anjay_notify_queue_t incoming_queue);
 
 VISIBILITY_PRIVATE_HEADER_END
 

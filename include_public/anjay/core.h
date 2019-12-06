@@ -20,17 +20,16 @@
 #include <stdint.h>
 #include <time.h>
 
-#include <avsystem/commons/coap/tx_params.h>
+#include <avsystem/coap/udp.h>
+
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/net.h>
+#include <avsystem/commons/stream.h>
 #include <avsystem/commons/time.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** LwM2M Enabler Version */
-#define ANJAY_SUPPORTED_ENABLER_VERSION "1.0"
 
 /** Short Server ID type. */
 typedef uint16_t anjay_ssid_t;
@@ -49,21 +48,6 @@ typedef uint16_t anjay_ssid_t;
 /** Anjay object containing all information required for LwM2M communication. */
 typedef struct anjay_struct anjay_t;
 
-/** Driver for communication over the SMS transport. Used only by the commercial
- * version of Anjay. */
-typedef struct anjay_smsdrv_struct anjay_smsdrv_t;
-
-/**
- * Cleans up all resources and releases an SMS driver object.
- *
- * NOTE: If an Anjay object has been using the SMS driver, the SMS driver shall
- * be cleaned up <strong>after</strong> freeing the Anjay object using
- * @ref anjay_delete.
- *
- * @param smsdrv_ptr Pointer to an SMS driver object to delete.
- */
-void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
-
 /**
  * Default transmission params recommended by the CoAP specification (RFC 7252).
  */
@@ -72,7 +56,8 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
     {                                    \
         /* .ack_timeout = */ { 2, 0 },   \
         /* .ack_random_factor = */ 1.5,  \
-        /* .max_retransmit = */ 4        \
+        /* .max_retransmit = */ 4,       \
+        /* .nstart = */ 1                \
     }
 // clang-format on
 
@@ -86,21 +71,6 @@ void anjay_smsdrv_cleanup(anjay_smsdrv_t **smsdrv_ptr);
     {                                       \
         /* .min = */ { 1, 0 },              \
         /* .max = */ { 60, 0 }              \
-    }
-// clang-format on
-
-/**
- * Default transmission params for SMS connections.
- *
- * This set of parameters ensures MAX_TRANSMIT_WAIT is equal to the default
- * (i.e. CoAP specified) MAX_TRANSMIT_WAIT, while disabling retransmissions.
- */
-// clang-format off
-#define ANJAY_COAP_DEFAULT_SMS_TX_PARAMS \
-    {                                    \
-        /* .ack_timeout = */ { 62, 0 },  \
-        /* .ack_random_factor = */ 1.5,  \
-        /* .max_retransmit = */ 0        \
     }
 // clang-format on
 
@@ -152,13 +122,13 @@ typedef struct anjay_configuration {
     size_t msg_cache_size;
 
     /**
-     * Socket configuration to use when creating UDP sockets.
+     * Socket configuration to use when creating TCP/UDP sockets.
      *
      * Note that:
      * - <c>reuse_addr</c> will be forced to true.
      * - Value pointed to by the <c>preferred_endpoint</c> will be ignored.
      */
-    avs_net_socket_configuration_t udp_socket_config;
+    avs_net_socket_configuration_t socket_config;
 
     /**
      * Configuration of the CoAP transmission params for UDP connection, as per
@@ -170,7 +140,7 @@ typedef struct anjay_configuration {
      * NOTE: Parameters are copied during @ref anjay_new() and cannot be
      * modified later on.
      */
-    const avs_coap_tx_params_t *udp_tx_params;
+    const avs_coap_udp_tx_params_t *udp_tx_params;
 
     /**
      * Configuration of the DTLS handshake retransmission timeouts for UDP
@@ -187,7 +157,7 @@ typedef struct anjay_configuration {
      * shall be initialized as `dtls_hs_params` is in the following code
      * snippet:
      * @code
-     *  const avs_coap_tx_params_t coap_tx_params = {
+     *  const avs_coap_udp_tx_params_t coap_tx_params = {
      *      // ... some initialization
      *  };
      *
@@ -209,53 +179,10 @@ typedef struct anjay_configuration {
     const avs_net_dtls_handshake_timeouts_t *udp_dtls_hs_tx_params;
 
     /**
-     * Configuration of the CoAP transmission params for SMS connection, as per
-     * RFC 7252.
-     *
-     * If NULL, the default configuration @ref ANJAY_COAP_DEFAULT_SMS_TX_PARAMS
-     * will be selected.
-     *
-     * NOTE: Parameters are copied during @ref anjay_new() and cannot be
-     * modified later on.
-     */
-    const avs_coap_tx_params_t *sms_tx_params;
-
-    /**
      * Controls whether Notify operations are conveyed using Confirmable CoAP
      * messages by default.
      */
     bool confirmable_notifications;
-
-    /**
-     * Specifies the cellular modem driver to use, enabling the SMS transport
-     * if not NULL.
-     *
-     * NOTE: in the Apache-licensed version of Anjay, this feature is not
-     * supported, this field exists only for API compatibility with the
-     * commercial version, and setting it to non-NULL will cause an error.
-     */
-    anjay_smsdrv_t *sms_driver;
-
-    /**
-     * Phone number at which the local device is reachable, formatted as an
-     * MSISDN (international number without neither the international dialing
-     * prefix nor the "+" sign).
-     *
-     * NOTE: Either both <c>sms_driver</c> and <c>local_msisdn</c> have to be
-     * <c>NULL</c>, or both have to be non-<c>NULL</c>.
-     */
-    const char *local_msisdn;
-
-    /**
-     * If set to true, Anjay will prefer using Concatenated SMS messages when
-     * seding large chunks of data over the SMS transport.
-     *
-     * NOTE: This is only a preference; even if set to true, Concatenated SMS
-     * may not be used e.g. when the SMS driver does not support it; even if set
-     * to false, Concatenated SMS may be used in cases when it is impossible to
-     * split the message in another way, e.g. during DTLS handshake.
-     */
-    bool prefer_multipart_sms;
 
     /**
      * If set to true, connection to the Bootstrap Server will be closed
@@ -263,11 +190,16 @@ typedef struct anjay_configuration {
      * Server and only opened again if (re)connection to a regular server is
      * rejected.
      *
-     * If set to false, Server-Initiated Bootstrap is possible, i.e. the
+     * If set to false, legacy Server-Initiated Bootstrap is possible, i.e. the
      * Bootstrap Server can reach the client at any time to re-initiate the
      * bootstrap sequence.
+     *
+     * NOTE: This parameter controls a legacy Server-Initiated Bootstrap
+     * mechanism based on an interpretation of LwM2M 1.0 TS that is not
+     * universally accepted. Server-Initiated Bootstrap as specified in LwM2M
+     * 1.1 TS is always supported, regardless of this setting.
      */
-    bool disable_server_initiated_bootstrap;
+    bool disable_legacy_server_initiated_bootstrap;
 
     /**
      * If "Notification Storing When Disabled or Offline" resource is set to
@@ -284,6 +216,36 @@ typedef struct anjay_configuration {
      * already full drops the oldest one to make room for new one.
      */
     size_t stored_notification_limit;
+
+    /**
+     * Sets the preference of the library for Content-Format used when
+     * responding to a request without Accept option.
+     *
+     * If set to true, the formats used would be:
+     *  - for LwM2M 1.0: TLV,
+     *  - for LwM2M 1.1: SenML CBOR, or if not compiled in, SenML JSON, or if
+     *    not compiled in TLV.
+     */
+    bool prefer_hierarchical_formats;
+
+    /**
+     * Enables support for DTLS connection_id extension for all DTLS
+     * connections.
+     */
+    bool use_connection_id;
+
+    /**
+     * (D)TLS ciphersuites to use if the "DTLS/TLS Ciphersuite" Resource
+     * (/0/x/16) is not available or empty.
+     *
+     * Passing a value with <c>num_ids == 0</c> (default) will cause defaults of
+     * the TLS backend library to be used.
+     *
+     * Contents of the <c>ids</c> array are copied, so it is safe to free the
+     * passed array after the call to @ref anjay_new.
+     */
+    avs_net_socket_tls_ciphersuites_t default_tls_ciphersuites;
+
 } anjay_configuration_t;
 
 /**
@@ -321,7 +283,7 @@ void anjay_delete(anjay_t *anjay);
  * struct pollfd poll_fd = { .events = POLLIN, .fd = -1 };
  *
  * while (true) {
- *     AVS_LIST(avs_net_abstract_socket_t*) sockets = anjay_get_sockets(anjay);
+ *     AVS_LIST(avs_net_socket_t*) sockets = anjay_get_sockets(anjay);
  *     if (sockets) {
  *         // assuming there is only one socket
  *         poll_fd.fd = *(const int*)avs_net_socket_get_system(*sockets);
@@ -344,12 +306,11 @@ void anjay_delete(anjay_t *anjay);
  * @returns A list of valid server sockets on success,
  *          NULL when the device is not connected to any server.
  */
-AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay);
+AVS_LIST(avs_net_socket_t *const) anjay_get_sockets(anjay_t *anjay);
 
 typedef enum {
     ANJAY_SOCKET_TRANSPORT_UDP,
-    ANJAY_SOCKET_TRANSPORT_TCP,
-    ANJAY_SOCKET_TRANSPORT_SMS
+    ANJAY_SOCKET_TRANSPORT_TCP
 } anjay_socket_transport_t;
 
 /**
@@ -362,7 +323,7 @@ typedef struct {
      * directly only for checking whether there is data ready, using mechanisms
      * such as <c>select()</c> or <c>poll()</c>.
      */
-    avs_net_abstract_socket_t *socket;
+    avs_net_socket_t *socket;
 
     /**
      * Transport layer used by <c>socket</c>.
@@ -419,7 +380,7 @@ AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay);
  * @returns 0 on success, a negative value in case of error. Note that it
  *          includes non-fatal errors, such as receiving a malformed packet.
  */
-int anjay_serve(anjay_t *anjay, avs_net_abstract_socket_t *ready_socket);
+int anjay_serve(anjay_t *anjay, avs_net_socket_t *ready_socket);
 
 /** Object ID */
 typedef uint16_t anjay_oid_t;
@@ -427,14 +388,17 @@ typedef uint16_t anjay_oid_t;
 /** Object Instance ID */
 typedef uint16_t anjay_iid_t;
 
-/** Object Instance ID value reserved by the LwM2M spec */
-#define ANJAY_IID_INVALID UINT16_MAX
-
 /** Resource ID */
 typedef uint16_t anjay_rid_t;
 
 /** Resource Instance ID */
 typedef uint16_t anjay_riid_t;
+
+/**
+ * Value reserved by the LwM2M spec for all kinds of IDs (Object IDs, Object
+ * Instance IDs, Resource IDs, Resource Instance IDs, Short Server IDs).
+ */
+#define ANJAY_ID_INVALID UINT16_MAX
 
 /** Helper macro used to define ANJAY_ERR_ constants.
  * Generated values are valid CoAP Status Codes encoded as a single byte. */
@@ -540,10 +504,8 @@ int anjay_sched_calculate_wait_time_ms(anjay_t *anjay, int limit_ms);
  * this function invocation.
  *
  * @param anjay Anjay object to operate on.
- *
- * @returns 0 on success, a negative value in case of error.
  */
-int anjay_sched_run(anjay_t *anjay);
+void anjay_sched_run(anjay_t *anjay);
 
 /**
  * Schedules sending an Update message to the server identified by given
@@ -554,13 +516,12 @@ int anjay_sched_run(anjay_t *anjay);
  * Note: This function will not schedule registration update if Anjay is in
  * offline mode.
  *
- * @param anjay              Anjay object to operate on.
- * @param ssid               Short Server ID of the server to send Update to or
- *                           @ref ANJAY_SSID_ANY to send Updates to all
- *                           connected servers.
- *                           NOTE: Since Updates are not useful for the
- *                           Bootstrap Server, this function does not send one
- *                           for @ref ANJAY_SSID_BOOTSTRAP @p ssid .
+ * @param anjay Anjay object to operate on.
+ * @param ssid  Short Server ID of the server to send Update to or
+ *              @ref ANJAY_SSID_ANY to send Updates to all connected servers.
+ *              NOTE: Since Updates are not useful for the Bootstrap Server,
+ *              this function does not send one for @ref ANJAY_SSID_BOOTSTRAP
+ *              @p ssid .
  *
  * @returns 0 on success, a negative value in case of error.
  */
@@ -614,7 +575,7 @@ int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid);
  *
  * The server will become disabled during next @ref anjay_sched_run call.
  *
- * NOTE: disabling a server with dual binding (UDP+SMS) closes both
+ * NOTE: disabling a server with dual binding (e.g. UDP+SMS trigger) closes both
  * communication channels. Shutting down only one of them requires changing
  * the Binding Resource in Server object.
  *
@@ -701,6 +662,22 @@ int anjay_exit_offline(anjay_t *anjay);
  * @returns 0 on success, a negative value in case of error.
  */
 bool anjay_all_connections_failed(anjay_t *anjay);
+
+typedef struct {
+    /**
+     * DTLS keys or certificates.
+     */
+    avs_net_security_info_t security_info;
+
+    /**
+     * TLS ciphersuites to use.
+     *
+     * A value with <c>num_ids == 0</c> (default) will cause defaults configured
+     * through <c>anjay_configuration_t::default_tls_ciphersuites</c>
+     * to be used.
+     */
+    avs_net_socket_tls_ciphersuites_t tls_ciphersuites;
+} anjay_security_config_t;
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -72,7 +72,7 @@ typedef struct {
 static inline apn_conn_profile_repr_t *
 get_apncp(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, apn_conn_profile_repr_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, apn_conn_profile_repr_t, def);
 }
 
 static apn_conn_profile_t *find_instance(const apn_conn_profile_repr_t *repr,
@@ -87,51 +87,22 @@ static apn_conn_profile_t *find_instance(const apn_conn_profile_repr_t *repr,
     return NULL;
 }
 
-static int apncp_instance_it(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj_ptr,
-                             anjay_iid_t *out,
-                             void **cookie) {
+static int apncp_list_instances(anjay_t *anjay,
+                                const anjay_dm_object_def_t *const *obj_ptr,
+                                anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
 
-    AVS_LIST(apn_conn_profile_t) inst = (AVS_LIST(apn_conn_profile_t)) *cookie;
-
-    if (!inst) {
-        inst = get_apncp(obj_ptr)->instances;
-    } else {
-        inst = AVS_LIST_NEXT(inst);
-    }
-
-    *out = inst ? inst->iid : ANJAY_IID_INVALID;
-    *cookie = inst;
-    return 0;
-}
-
-static int apncp_instance_present(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t iid) {
-    (void) anjay;
-    return find_instance(get_apncp(obj_ptr), iid) != NULL;
-}
-
-static anjay_iid_t get_new_iid(AVS_LIST(apn_conn_profile_t) instances) {
-    anjay_iid_t iid = 1;
     AVS_LIST(apn_conn_profile_t) it;
-    AVS_LIST_FOREACH(it, instances) {
-        if (it->iid == iid) {
-            ++iid;
-        } else if (it->iid > iid) {
-            break;
-        }
+    AVS_LIST_FOREACH(it, get_apncp(obj_ptr)->instances) {
+        anjay_dm_emit(ctx, it->iid);
     }
-    return iid;
+    return 0;
 }
 
 static int apncp_instance_create(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t *inout_iid,
-                                 anjay_ssid_t ssid) {
+                                 anjay_iid_t iid) {
     (void) anjay;
-    (void) ssid;
     apn_conn_profile_repr_t *repr = get_apncp(obj_ptr);
 
     AVS_LIST(apn_conn_profile_t) created =
@@ -140,15 +111,7 @@ static int apncp_instance_create(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
 
-    if (*inout_iid == ANJAY_IID_INVALID) {
-        *inout_iid = get_new_iid(repr->instances);
-        if (*inout_iid == ANJAY_IID_INVALID) {
-            AVS_LIST_CLEAR(&created);
-            return ANJAY_ERR_INTERNAL;
-        }
-    }
-
-    created->iid = *inout_iid;
+    created->iid = iid;
 
     AVS_LIST(apn_conn_profile_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -179,14 +142,33 @@ static int apncp_instance_remove(anjay_t *anjay,
     return ANJAY_ERR_NOT_FOUND;
 }
 
+static int apncp_list_resources(anjay_t *anjay,
+                                const anjay_dm_object_def_t *const *obj_ptr,
+                                anjay_iid_t iid,
+                                anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+    anjay_dm_emit_res(ctx, APNCP_RES_PROFILE_NAME, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, APNCP_RES_ENABLE_STATUS, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, APNCP_RES_AUTHENTICATION_TYPE, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int apncp_resource_read(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
+                               anjay_riid_t riid,
                                anjay_output_ctx_t *ctx) {
     (void) anjay;
     (void) obj_ptr;
-    (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
 
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
     assert(inst);
@@ -199,6 +181,7 @@ static int apncp_resource_read(anjay_t *anjay,
     case APNCP_RES_AUTHENTICATION_TYPE:
         return anjay_ret_i32(ctx, (int32_t) inst->auth_type);
     default:
+        AVS_UNREACHABLE("Read called on unknown resource");
         return ANJAY_ERR_NOT_FOUND;
     }
 }
@@ -207,10 +190,12 @@ static int apncp_resource_write(anjay_t *anjay,
                                 const anjay_dm_object_def_t *const *obj_ptr,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
+                                anjay_riid_t riid,
                                 anjay_input_ctx_t *ctx) {
     (void) anjay;
     (void) obj_ptr;
-    (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
 
     apn_conn_profile_t *inst = find_instance(get_apncp(obj_ptr), iid);
     assert(inst);
@@ -247,6 +232,7 @@ static int apncp_resource_write(anjay_t *anjay,
         return 0;
     }
     default:
+        AVS_UNREACHABLE("Write called on unknown resource");
         return ANJAY_ERR_NOT_FOUND;
     }
 }
@@ -313,16 +299,12 @@ static int apncp_instance_reset(anjay_t *anjay,
 
 static const anjay_dm_object_def_t apn_conn_profile = {
     .oid = DEMO_OID_APN_CONN_PROFILE,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(APNCP_RES_PROFILE_NAME,
-                                              APNCP_RES_ENABLE_STATUS,
-                                              APNCP_RES_AUTHENTICATION_TYPE),
     .handlers = {
-        .instance_it = apncp_instance_it,
-        .instance_present = apncp_instance_present,
+        .list_instances = apncp_list_instances,
         .instance_create = apncp_instance_create,
         .instance_remove = apncp_instance_remove,
         .instance_reset = apncp_instance_reset,
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_resources = apncp_list_resources,
         .resource_read = apncp_resource_read,
         .resource_write = apncp_resource_write,
         .transaction_begin = apncp_transaction_begin,
@@ -342,6 +324,22 @@ const anjay_dm_object_def_t **apn_conn_profile_object_create(void) {
     repr->def = &apn_conn_profile;
 
     return &repr->def;
+}
+
+int apn_conn_profile_get_instances(const anjay_dm_object_def_t **def,
+                                   AVS_LIST(anjay_iid_t) *out) {
+    apn_conn_profile_repr_t *apncp = get_apncp(def);
+    assert(!*out);
+    AVS_LIST(apn_conn_profile_t) it;
+    AVS_LIST_FOREACH(it, apncp->instances) {
+        if (!(*out = AVS_LIST_NEW_ELEMENT(anjay_iid_t))) {
+            demo_log(ERROR, "out of memory");
+            return -1;
+        }
+        **out = it->iid;
+        AVS_LIST_ADVANCE_PTR(&out);
+    }
+    return 0;
 }
 
 void apn_conn_profile_object_release(const anjay_dm_object_def_t **def) {

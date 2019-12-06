@@ -23,10 +23,6 @@
 #include <anjay/io.h>
 
 #ifdef __cplusplus
-#    if __cplusplus >= 201103L
-#        include <tuple> // for ANJAY_DM_SUPPORTED_RIDS
-#    endif
-
 extern "C" {
 #endif
 
@@ -34,21 +30,27 @@ typedef struct anjay_dm_object_def_struct anjay_dm_object_def_t;
 
 /** Object/Object Instance Attributes */
 typedef struct {
-    int32_t min_period; //< Minimum Period as defined by LwM2M spec
-    int32_t max_period; //< Maximum Period as defined by LwM2M spec
-} anjay_dm_attributes_t;
+    /** Minimum Period as defined by LwM2M spec */
+    int32_t min_period;
+    /** Maximum Period as defined by LwM2M spec */
+    int32_t max_period;
+    /** Minimum Evaluation Period as defined by LwM2M spec */
+    int32_t min_eval_period;
+    /** Maximum Evaluation Period as defined by LwM2M spec */
+    int32_t max_eval_period;
+} anjay_dm_oi_attributes_t;
 
 /** Resource attributes. */
 typedef struct {
     /** Attributes shared with Objects/Object Instances */
-    anjay_dm_attributes_t common;
+    anjay_dm_oi_attributes_t common;
     /** Greater Than attribute as defined by LwM2M spec */
     double greater_than;
     /** Less Than attribute as defined by LwM2M spec */
     double less_than;
     /** Step attribute as defined by LwM2M spec */
     double step;
-} anjay_dm_resource_attributes_t;
+} anjay_dm_r_attributes_t;
 
 /** A value indicating that the Min/Max Period attribute is not set */
 #define ANJAY_ATTRIB_PERIOD_NONE (-1)
@@ -59,11 +61,11 @@ typedef struct {
 
 /** Convenience Object/Object Instance attributes constant, filled with
  * "attribute not set" values */
-extern const anjay_dm_attributes_t ANJAY_DM_ATTRIBS_EMPTY;
+extern const anjay_dm_oi_attributes_t ANJAY_DM_OI_ATTRIBUTES_EMPTY;
 
 /** Convenience Resource attributes constant, filled with
  * "attribute not set" values */
-extern const anjay_dm_resource_attributes_t ANJAY_RES_ATTRIBS_EMPTY;
+extern const anjay_dm_r_attributes_t ANJAY_DM_R_ATTRIBUTES_EMPTY;
 
 /**
  * A handler that returns default attribute values set for the Object.
@@ -85,7 +87,7 @@ typedef int anjay_dm_object_read_default_attrs_t(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out);
+        anjay_dm_oi_attributes_t *out);
 
 /**
  * A handler that sets default attribute values for the Object.
@@ -107,51 +109,26 @@ typedef int anjay_dm_object_write_default_attrs_t(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        const anjay_dm_attributes_t *attrs);
+        const anjay_dm_oi_attributes_t *attrs);
 
 /**
  * A handler that enumerates all Object Instances for the Object.
  *
- * Example usage:
- * @code
- * static int instance_it_handler(anjay_t *anjay,
- *                                const anjay_dm_object_def_t *const *obj_ptr,
- *                                anjay_iid_t *out,
- *                                void **cookie) {
- *     // assuming there are NUM_INSTANCES Object Instances with consecutive
- *     // Instance IDs, starting with 0
+ * The library will not attempt to call @ref anjay_dm_instance_remove_t or
+ * @ref anjay_dm_instance_create_t handlers inside the @ref anjay_dm_emit calls
+ * performed from this handler, so the implementation is free to use iteration
+ * state that would be invalidated by such calls.
  *
- *     int curr_iid = (int)(intptr_t)*cookie;
- *     if (curr_iid >= NUM_INSTANCES) {
- *         *out = ANJAY_IID_INVALID;
- *     } else {
- *         *out = (anjay_iid_t)curr_iid;
- *         *cookie = (void*)(intptr_t)(curr_iid + 1);
- *     }
- *     return 0;
- * }
- * @endcode
+ * @param anjay   Anjay object to operate on.
+ * @param obj_ptr Object definition pointer, as passed to
+ *                @ref anjay_register_object .
+ * @param ctx     Context through which the Instance IDs shall be returned, see
+ *                @ref anjay_dm_emit .
  *
- * @param        anjay   Anjay object to operate on.
- * @param        obj_ptr Object definition pointer, as passed to
- *                       @ref anjay_register_object .
- * @param[out]   out     Instance ID of the next valid Object Instance
- *                       or ANJAY_IID_INVALID when there are no more instances.
- * @param[inout] cookie  Opaque pointer that may be used to store iteration
- *                       state. At first call to the handler it is set to NULL.
- *                       Since the iteration may be stopped at any point, the
- *                       value stored in @p cookie must not require cleanup.
- *                       The implementation is free to invalidate any such
- *                       cookies during a call to
- *                       @ref anjay_dm_instance_remove_t or
- *                       @ref anjay_dm_instance_create_t - so it is legal to use
- *                       the cookie to store e.g. an array index cast to a
- *                       pointer type.
- *
- * During the same call to Anjay library from top-level user code (e.g.
- * @ref anjay_sched_run or @ref anjay_serve), subsequent or concurrent
- * iterations on the same Object MUST return the Instance IDs in the same order,
- * provided that the set of existing Instances did not change in between.
+ * Instance listing handlers MUST always return Instance IDs in a strictly
+ * ascending, sorted order. Failure to do so will result in an error being sent
+ * to the LwM2M server or passed down to internal routines that called this
+ * handler.
  *
  * @returns This handler should return:
  * - 0 on success,
@@ -160,53 +137,20 @@ typedef int anjay_dm_object_write_default_attrs_t(
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_instance_it_t(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                   anjay_iid_t *out,
-                                   void **cookie);
+typedef int
+anjay_dm_list_instances_t(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_dm_list_ctx_t *ctx);
 
 /**
- * Convenience function to use as the instance_it handler in Single Instance
+ * Convenience function to use as the list_instances handler in Single Instance
  * objects.
  *
  * Implements a valid iteration that returns a single Instance ID: 0.
  */
-int anjay_dm_instance_it_SINGLE(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
-                                anjay_iid_t *out,
-                                void **cookie);
-
-/**
- * A handler that checks if an Object Instance with given Instance ID exists.
- *
- * @param anjay   Anjay object to operate on.
- * @param obj_ptr Object definition pointer, as passed to
- *                @ref anjay_register_object .
- * @param iid     Checked Object Instance ID.
- *
- * @returns This handler should return:
- * - 1 if the Object Instance exists,
- * - 0 if the Object Instance does not exist,
- * - a negative value in case of error. If it returns one of ANJAY_ERR_
- *   constants, the response message will have an appropriate CoAP response
- *   code. Otherwise, the device will respond with an unspecified (but valid)
- *   error code.
- */
-typedef int
-anjay_dm_instance_present_t(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t iid);
-
-/**
- * Convenience function to use as the instance_present handler in Single
- * Instance objects.
- *
- * @returns 1 (true) if <c>iid == 0</c>, 0 (false) otherwise.
- */
-int anjay_dm_instance_present_SINGLE(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj_ptr,
-        anjay_iid_t iid);
+int anjay_dm_list_instances_SINGLE(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_dm_list_ctx_t *ctx);
 
 /**
  * A handler that shall reset Object Instance to its default (after creational)
@@ -235,10 +179,6 @@ anjay_dm_instance_reset_t(anjay_t *anjay,
 /**
  * A handler that removes an Object Instance with given Instance ID.
  *
- * The library will not attempt to interleave calls to
- * @ref anjay_dm_instance_it_t with deleting instances, so the implementation
- * is free to invalidate any iteration cookies during instance removal.
- *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
  *                @ref anjay_register_object .
@@ -259,20 +199,13 @@ anjay_dm_instance_remove_t(anjay_t *anjay,
 /**
  * A handler that creates an Object Instance.
  *
- * The library will not attempt to interleave calls to
- * @ref anjay_dm_instance_it_t with creating instances, so the implementation
- * is free to invalidate any iteration cookies during instance creation.
- *
- * @param        anjay     Anjay object to operate on.
- * @param        obj_ptr   Object definition pointer, as passed to
- *                         @ref anjay_register_object .
- * @param[inout] inout_iid Instance ID to create if it was specified by the
- *                         server or @ref ANJAY_IID_INVALID otherwise.
- *                         The handler should set this value to an ID of the
- *                         created Object Instance.
- * @param        ssid      Short Server ID of the Object Instance creator.
- *                         @ref ANJAY_SSID_BOOTSTRAP may be used when an
- *                         instance is created by the Bootstrap Write request.
+ * @param anjay   Anjay object to operate on.
+ * @param obj_ptr Object definition pointer, as passed to
+ *                @ref anjay_register_object .
+ * @param iid     Instance ID to create, chosen either by the server or the
+ *                library. An ID that has been previously checked (using
+ *                @ref anjay_dm_list_instances_t) to not be PRESENT is
+ *                guaranteed to be passed.
  *
  * @returns This handler should return:
  * - 0 on success,
@@ -284,8 +217,7 @@ anjay_dm_instance_remove_t(anjay_t *anjay,
 typedef int
 anjay_dm_instance_create_t(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
-                           anjay_iid_t *inout_iid,
-                           anjay_ssid_t ssid);
+                           anjay_iid_t iid);
 
 /**
  * A handler that returns default attributes set for the Object Instance.
@@ -309,7 +241,7 @@ typedef int anjay_dm_instance_read_default_attrs_t(
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out);
+        anjay_dm_oi_attributes_t *out);
 
 /**
  * A handler that sets default attributes for the Object Instance.
@@ -333,93 +265,61 @@ typedef int anjay_dm_instance_write_default_attrs_t(
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        const anjay_dm_attributes_t *attrs);
+        const anjay_dm_oi_attributes_t *attrs);
 
 /**
- * A handler that checks if a Resource has been instantiated in Object Instance,
- * called only if Resource is SUPPORTED (see @ref anjay_dm_supported_rids_t).
+ * A handler that enumerates SUPPORTED Resources for an Object Instance, called
+ * only if the Object Instance is PRESENT (has recently been returned via
+ * @ref anjay_dm_list_instances_t).
  *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
  *                @ref anjay_register_object .
- * @param iid     Checked Instance ID.
- * @param rid     Checked Resource ID.
+ * @param iid     Object Instance ID.
+ * @param ctx     Context through which the Resource IDs shall be returned, see
+ *                @ref anjay_dm_emit_res .
+ *
+ * Resource listing handlers MUST always return Resource IDs in a strictly
+ * ascending, sorted order. Failure to do so will result in an error being sent
+ * to the LwM2M server or passed down to internal routines that called this
+ * handler.
  *
  * @returns This handler should return:
- * - 1 if the Resource is present,
- * - 0 if the Resource is not present,
+ * - 0 on success,
  * - a negative value in case of error. If it returns one of ANJAY_ERR_
  *   constants, the response message will have an appropriate CoAP response
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
 typedef int
-anjay_dm_resource_present_t(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t iid,
-                            anjay_rid_t rid);
+anjay_dm_list_resources_t(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid,
+                          anjay_dm_resource_list_ctx_t *ctx);
 
 /**
- * Convenience function to use as the resource_present handler in objects that
- * implement all possible Resources.
- *
- * @returns Always 1.
- */
-int anjay_dm_resource_present_TRUE(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                   anjay_iid_t iid,
-                                   anjay_rid_t rid);
-
-typedef enum {
-    ANJAY_DM_RESOURCE_OP_BIT_R = (1 << 0),
-    ANJAY_DM_RESOURCE_OP_BIT_W = (1 << 1),
-    ANJAY_DM_RESOURCE_OP_BIT_E = (1 << 2)
-} anjay_dm_resource_op_bit_t;
-
-typedef uint16_t anjay_dm_resource_op_mask_t;
-
-#define ANJAY_DM_RESOURCE_OP_NONE ((anjay_dm_resource_op_mask_t) 0)
-
-/**
- * A handler that returns supported non-Bootstrap operations by the client's
- * implementation for a specified Resource.
- *
- * Note: If not implemented, all operations on resource are supported.
- *
- * @param anjay     Anjay object to operate on.
- * @param obj_ptr   Object definition pointer, as passed to
- *                  @ref anjay_register_object .
- * @param rid       Resource being queried.
- * @param out       Combination of @ref anjay_dm_resource_op_bit_t or
- *                  @ref ANJAY_DM_RESOURCE_OP_NONE if no operation is supported.
- * @return This handler should return:
- * - 0 if it can be queried
- * - a negative value if for some reason resource cannot be queried. If it
- *   returns one of ANJAY_ERR_* constants, the response message will have an
- *   appropriate CoAP response code. Otherwise, the device will respond with
- *   an unspecified (but valid) error code.
- */
-typedef int
-anjay_dm_resource_operations_t(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_rid_t rid,
-                               anjay_dm_resource_op_mask_t *out);
-
-/**
- * A handler that reads the Resource value, called only if the Resource is
- * PRESENT (see @ref anjay_dm_resource_present_t).
+ * A handler that reads the Resource or Resource Instance value, called only if
+ * the Resource is PRESENT and is one of the @ref ANJAY_DM_RES_R,
+ * @ref ANJAY_DM_RES_RW, @ref ANJAY_DM_RES_RM or @ref ANJAY_DM_RES_RWM kinds (as
+ * returned by @ref anjay_dm_list_resources_t).
  *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
  *                @ref anjay_register_object .
  * @param iid     Object Instance ID.
  * @param rid     Resource ID.
+ * @param riid    Resource Instance ID, or @ref ANJAY_ID_INVALID in case of a
+ *                Single Resource.
  * @param ctx     Output context to write the resource value to using the
  *                <c>anjay_ret_*</c> function family.
  *
  * NOTE: One of the <c>anjay_ret_*</c> functions <strong>MUST</strong> be called
  * in this handler before returning successfully. Failure to do so will result
  * in 5.00 Internal Server Error being sent to the server.
+ *
+ * NOTE: This handler will only be called with @p riid set to a valid value if
+ * the Resource Instance is PRESENT (has recently been returned via
+ * @ref anjay_dm_list_resource_instances_t).
  *
  * @returns This handler should return:
  * - 0 on success,
@@ -439,18 +339,28 @@ anjay_dm_resource_read_t(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj_ptr,
                          anjay_iid_t iid,
                          anjay_rid_t rid,
+                         anjay_riid_t riid,
                          anjay_output_ctx_t *ctx);
 
 /**
- * A handler that writes the Resource value.
+ * A handler that writes the Resource value, called only if the Resource is
+ * SUPPORTED and not of the @ref ANJAY_DM_RES_E kind (as returned by
+ * @ref anjay_dm_list_resources_t). Note that it may be called on nominally
+ * read-only Resources if the write is performed by the Bootstrap Server.
  *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
  *                @ref anjay_register_object .
  * @param iid     Object Instance ID.
  * @param rid     Resource ID.
+ * @param riid    Resource Instance ID, or @ref ANJAY_ID_INVALID in case of a
+ *                Single Resource.
  * @param ctx     Input context to read the resource value from using the
  *                anjay_get_* function family.
+ *
+ * NOTE: This handler will only be called with @p riid set to a valid value if
+ * the Resource has been verified to be a Multiple Resource (as returned by
+ * @ref anjay_dm_list_resources_t).
  *
  * @returns This handler should return:
  * - 0 on success,
@@ -464,10 +374,13 @@ anjay_dm_resource_write_t(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t iid,
                           anjay_rid_t rid,
+                          anjay_riid_t riid,
                           anjay_input_ctx_t *ctx);
 
 /**
- * A handler that performs the Execute action on given Resource.
+ * A handler that performs the Execute action on given Resource, called only if
+ * the Resource is PRESENT and of the @ref ANJAY_DM_RES_E kind (as returned by
+ * @ref anjay_dm_list_resources_t).
  *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
@@ -491,31 +404,76 @@ anjay_dm_resource_execute_t(anjay_t *anjay,
                             anjay_rid_t rid,
                             anjay_execute_ctx_t *ctx);
 
-#define ANJAY_DM_DIM_INVALID ANJAY_ERR_NOT_IMPLEMENTED
-
 /**
- * A handler that returns number of instances in a Multiple Resource.
+ * A handler that shall reset a Resource to its default (after creational)
+ * state. In particular, for any writeable optional resource, it shall remove
+ * it; for any writeable mandatory Multiple Resource, it shall remove all its
+ * instances.
  *
- * @param      anjay   Anjay object to operate on.
- * @param      obj_ptr Object definition pointer, as passed to
- *                     @ref anjay_register_object .
- * @param      iid     Object Instance ID.
- * @param      rid     Resource ID.
+ * NOTE: If this handler is not implemented for a Multiple Resource, then
+ * non-partial write on it will not succeed.
  *
- * @returns This handler should return:
+ * NOTE: In the current version of Anjay, this handler is only ever called on
+ * Multiple Resources. It is REQUIRED so that after calling this handler, any
+ * Multiple Resource is either not PRESENT, or PRESENT, but contain zero
+ * Resource Instances.
  *
- * - @ref ANJAY_DM_DIM_INVALID if the queried Resource is not a
- *   Multiple Resource, or querying its size is not supported,
- * - a non-negative value equal to the number of instances on success,
- * - a negative value in case of a fatal error. If it returns one of ANJAY_ERR_
+ * @param anjay     Anjay Object to operate on.
+ * @param obj_ptr   Object definition pointer, as passed to
+ *                  @ref anjay_register_object .
+ * @param iid       Object Instance ID.
+ * @param rid       ID of the Resource to reset.
+ *
+ * @return This handler should return:
+ * - 0 on success,
+ * - a negative value in case of error. If it returns one of ANJAY_ERR_
  *   constants, the response message will have an appropriate CoAP response
  *   code. Otherwise, the device will respond with an unspecified (but valid)
  *   error code.
  */
-typedef int anjay_dm_resource_dim_t(anjay_t *anjay,
-                                    const anjay_dm_object_def_t *const *obj_ptr,
-                                    anjay_iid_t iid,
-                                    anjay_rid_t rid);
+typedef int
+anjay_dm_resource_reset_t(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid,
+                          anjay_rid_t rid);
+
+/**
+ * A handler that enumerates all Resource Instances of a Multiple Resource,
+ * called only if the Resource is PRESENT and is of either @ref ANJAY_DM_RES_RM,
+ * @ref ANJAY_DM_RES_WM or @ref ANJAY_DM_RES_RWM kind (as returned by
+ * @ref anjay_dm_list_resources_t).
+ *
+ * The library will not attempt to call @ref anjay_dm_resource_write_t or
+ * @ref anjay_dm_resource_reset_t handlers inside the @ref anjay_dm_emit calls
+ * performed from this handler, so the implementation is free to use iteration
+ * state that would be invalidated by such calls.
+ *
+ * @param anjay   Anjay object to operate on.
+ * @param obj_ptr Object definition pointer, as passed to
+ *                @ref anjay_register_object .
+ * @param iid     Object Instance ID.
+ * @param rid     Resource ID.
+ * @param ctx     Context through which the Resource Instance IDs shall be
+ *                returned, see @ref anjay_dm_emit .
+ *
+ * Resource instance listing handlers MUST always return Resource Instance IDs
+ * in a strictly ascending, sorted order. Failure to do so will result in an
+ * error being sent to the LwM2M server or passed down to internal routines that
+ * called this handler.
+ *
+ * @returns This handler should return:
+ * - 0 on success,
+ * - a negative value in case of error. If it returns one of ANJAY_ERR_
+ *   constants, the response message will have an appropriate CoAP response
+ *   code. Otherwise, the device will respond with an unspecified (but valid)
+ *   error code.
+ */
+typedef int
+anjay_dm_list_resource_instances_t(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid,
+                                   anjay_dm_list_ctx_t *ctx);
 
 /**
  * A handler that returns Resource attributes.
@@ -541,7 +499,7 @@ anjay_dm_resource_read_attrs_t(anjay_t *anjay,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
                                anjay_ssid_t ssid,
-                               anjay_dm_resource_attributes_t *out);
+                               anjay_dm_r_attributes_t *out);
 
 /**
  * A handler that sets attributes for given Resource.
@@ -567,7 +525,7 @@ anjay_dm_resource_write_attrs_t(anjay_t *anjay,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
                                 anjay_ssid_t ssid,
-                                const anjay_dm_resource_attributes_t *attrs);
+                                const anjay_dm_r_attributes_t *attrs);
 
 /**
  * A handler that is called when there is a request that might modify an Object
@@ -581,6 +539,7 @@ anjay_dm_resource_write_attrs_t(anjay_t *anjay,
  *  - @ref anjay_dm_instance_remove_t
  *  - @ref anjay_dm_instance_reset_t
  *  - @ref anjay_dm_resource_write_t
+ *  - @ref anjay_dm_resource_reset_t
  *  - @ref anjay_dm_transaction_commit_t
  *  - @ref anjay_dm_transaction_rollback_t
  *
@@ -691,10 +650,8 @@ typedef struct {
      */
     anjay_dm_object_write_default_attrs_t *object_write_default_attrs;
 
-    /** Enumerate available Object Instances, @ref anjay_dm_instance_it_t */
-    anjay_dm_instance_it_t *instance_it;
-    /** Check if an Object Instance exists, @ref anjay_dm_instance_present_t */
-    anjay_dm_instance_present_t *instance_present;
+    /** Enumerate available Object Instances, @ref anjay_dm_list_instances_t */
+    anjay_dm_list_instances_t *list_instances;
 
     /** Resets an Object Instance, @ref anjay_dm_instance_reset_t */
     anjay_dm_instance_reset_t *instance_reset;
@@ -715,15 +672,10 @@ typedef struct {
     anjay_dm_instance_write_default_attrs_t *instance_write_default_attrs;
 
     /**
-     * Check if a Resource is present in given Object Instance,
-     * @ref anjay_dm_resource_present_t
+     * Enumerate PRESENT Resources in a given Object Instance,
+     * @ref anjay_dm_list_resources_t
      */
-    anjay_dm_resource_present_t *resource_present;
-    /**
-     * Returns a mask of supported operations on a given Resource,
-     * @ref anjay_dm_resource_operations_t
-     */
-    anjay_dm_resource_operations_t *resource_operations;
+    anjay_dm_list_resources_t *list_resources;
 
     /** Get Resource value, @ref anjay_dm_resource_read_t */
     anjay_dm_resource_read_t *resource_read;
@@ -735,9 +687,16 @@ typedef struct {
     anjay_dm_resource_execute_t *resource_execute;
 
     /**
-     * Get number of Multiple Resource instances, @ref anjay_dm_resource_dim_t
+     * Remove all Resource Instances from a Multiple Resource,
+     * @ref anjay_dm_resource_reset_t
      */
-    anjay_dm_resource_dim_t *resource_dim;
+    anjay_dm_resource_reset_t *resource_reset;
+    /**
+     * Enumerate available Resource Instances,
+     * @ref anjay_dm_list_resource_instances_t
+     */
+    anjay_dm_list_resource_instances_t *list_resource_instances;
+
     /** Get Resource attributes, @ref anjay_dm_resource_read_attrs_t */
     anjay_dm_resource_read_attrs_t *resource_read_attrs;
     /** Set Resource attributes, @ref anjay_dm_resource_write_attrs_t */
@@ -759,53 +718,12 @@ typedef struct {
      * @ref anjay_dm_transaction_rollback_t
      */
     anjay_dm_transaction_rollback_t *transaction_rollback;
+
 } anjay_dm_handlers_t;
-
-/** A simple array-plus-size container for a list of supported Resource IDs. */
-typedef struct {
-    /** Number of element in the array */
-    size_t count;
-    /**
-     * Pointer to an array of Resource IDs supported by the object. A Resource
-     * is considered SUPPORTED if it may ever be present within the Object. The
-     * array MUST be exactly <c>count</c> elements long and sorted in strictly
-     * ascending order.
-     */
-    const uint16_t *rids;
-} anjay_dm_supported_rids_t;
-
-#if defined(__cplusplus) && __cplusplus >= 201103L
-#    define ANJAY_DM_SUPPORTED_RIDS(...)                                \
-        {                                                               \
-            ::std::tuple_size<decltype(                                 \
-                    ::std::make_tuple(__VA_ARGS__))>::value,            \
-                    []() -> const uint16_t * {                          \
-                        static const uint16_t rids[] = { __VA_ARGS__ }; \
-                        return rids;                                    \
-                    }()                                                 \
-        }
-#else // __cplusplus
-/**
- * Convenience macro for initializing @ref anjay_dm_supported_rids_t objects.
- *
- * The parameters shall compose a properly sorted list of supported Resource
- * IDs. The result of the macro is an initializer list suitable for initializing
- * an object of type <c>anjay_dm_supported_rids_t</c>, like for example the
- * <c>supported_rids</c> field of @ref anjay_dm_object_def_t. The <c>count</c>
- * field will be automatically calculated.
- */
-#    define ANJAY_DM_SUPPORTED_RIDS(...)                                   \
-        {                                                                  \
-            sizeof((const uint16_t[]) { __VA_ARGS__ }) / sizeof(uint16_t), \
-                    (const uint16_t[]) {                                   \
-                __VA_ARGS__                                                \
-            }                                                              \
-        }
-#endif // __cplusplus
 
 /** A struct defining an LwM2M Object. */
 struct anjay_dm_object_def_struct {
-    /** Object ID */
+    /** Object ID; MUST not be <c>ANJAY_ID_INVALID</c> (65535) */
     anjay_oid_t oid;
 
     /**
@@ -815,13 +733,6 @@ struct anjay_dm_object_def_struct {
      * and Discover messages, which implies version 1.0.
      */
     const char *version;
-
-    /**
-     * List of Resource IDs supported by the object. The
-     * @ref ANJAY_DM_SUPPORTED_RIDS macro is the preferred way of initializing
-     * it.
-     */
-    anjay_dm_supported_rids_t supported_rids;
 
     /** Handler callbacks for this object. */
     anjay_dm_handlers_t handlers;
@@ -920,11 +831,11 @@ bool anjay_binding_mode_valid(const char *binding_mode);
  * Object definition.
  */
 typedef enum {
-    ANJAY_UDP_SECURITY_PSK = 0,         //< Pre-Shared Key mode
-    ANJAY_UDP_SECURITY_RPK = 1,         //< Raw Public Key mode
-    ANJAY_UDP_SECURITY_CERTIFICATE = 2, //< Certificate mode
-    ANJAY_UDP_SECURITY_NOSEC = 3        //< NoSec mode
-} anjay_udp_security_mode_t;
+    ANJAY_SECURITY_PSK = 0,         //< Pre-Shared Key mode
+    ANJAY_SECURITY_RPK = 1,         //< Raw Public Key mode
+    ANJAY_SECURITY_CERTIFICATE = 2, //< Certificate mode
+    ANJAY_SECURITY_NOSEC = 3        //< NoSec mode
+} anjay_security_mode_t;
 
 /**
  * Possible values of the SMS Security Mode Resource, as described in the

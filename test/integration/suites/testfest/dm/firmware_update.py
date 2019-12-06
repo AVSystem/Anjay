@@ -45,7 +45,7 @@ class FirmwareUpdate:
         def tearDown(self):
             # reset the state machine
             # Write /5/0/1 (Firmware URI)
-            req = Lwm2mWrite('/5/0/1', '')
+            req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, '')
             self.serv.send(req)
             self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
             super().tearDown()
@@ -146,7 +146,7 @@ class Test751_FirmwareUpdate_QueryingTheReadableResources(FirmwareUpdate.Test):
                            resource_validators={
                                RID.FirmwareUpdate.State:                         VV.from_raw_int(0),
                                RID.FirmwareUpdate.UpdateResult:                  VV.from_raw_int(0),
-                               RID.FirmwareUpdate.FirmwareUpdateProtocolSupport: VV.multiple_resource(VV.from_values(b'\x00', b'\x01', b'\x02', b'\x03')),
+                               RID.FirmwareUpdate.FirmwareUpdateProtocolSupport: VV.multiple_resource(VV.from_values(b'\x00', b'\x01', b'\x02', b'\x03', b'\x04', b'\x05')),
                                RID.FirmwareUpdate.FirmwareUpdateDeliveryMethod:  VV.from_raw_int(2),
                            },
                            ignore_extra=True))
@@ -1035,7 +1035,7 @@ class Test778_FirmwareUpdate_ErrorCase_InvalidURI(FirmwareUpdate.Test):
         # B. In test step 2., the Server receives the status code "2.04" (Changed)
         #    for the WRITE command setting the Package URI Resource
         self.test_write(ResPath.FirmwareUpdate.PackageURI,
-                        'http://?/')
+                        'http://mylovelyfwserver/')
 
         # 3. The Server sends repeated READs or OBSERVE on State and Update
         #    Result Resources (CoAP GET /5/0) of the FW Update Object

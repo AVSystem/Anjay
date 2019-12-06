@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(SOURCES
-    src/fw_dm_security.c
-    src/fw_update.c)
-set(PUBLIC_HEADERS
-    include_public/anjay/fw_update.h)
+target_sources(anjay PRIVATE
+               ${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/fw_update.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/fw_dm_security.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/fw_update.c)
+target_include_directories(anjay PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_public>)
 
-set(TEST_SOURCES
-    ${SOURCES}
-    ${PUBLIC_HEADERS})
-
-include(../module_common.cmake)
+install(DIRECTORY include_public/anjay
+        DESTINATION include
+        FILES_MATCHING REGEX "[.]h$")

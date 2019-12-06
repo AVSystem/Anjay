@@ -23,46 +23,42 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-typedef int *(*anjay_output_ctx_errno_ptr_t)(anjay_output_ctx_t *);
-typedef anjay_ret_bytes_ctx_t *(*anjay_output_ctx_bytes_begin_t)(
-        anjay_output_ctx_t *, size_t);
+typedef void (*anjay_dm_list_ctx_emit_t)(anjay_dm_list_ctx_t *, uint16_t id);
+
+typedef struct {
+    anjay_dm_list_ctx_emit_t emit;
+} anjay_dm_list_ctx_vtable_t;
+
+typedef int (*anjay_output_ctx_bytes_begin_t)(anjay_output_ctx_t *,
+                                              size_t,
+                                              anjay_ret_bytes_ctx_t **);
 typedef int (*anjay_output_ctx_string_t)(anjay_output_ctx_t *, const char *);
-typedef int (*anjay_output_ctx_i32_t)(anjay_output_ctx_t *, int32_t);
-typedef int (*anjay_output_ctx_i64_t)(anjay_output_ctx_t *, int64_t);
-typedef int (*anjay_output_ctx_f32_t)(anjay_output_ctx_t *, float);
-typedef int (*anjay_output_ctx_f64_t)(anjay_output_ctx_t *, double);
+typedef int (*anjay_output_ctx_integer_t)(anjay_output_ctx_t *, int64_t);
+typedef int (*anjay_output_ctx_floating_t)(anjay_output_ctx_t *, double);
 typedef int (*anjay_output_ctx_boolean_t)(anjay_output_ctx_t *, bool);
 typedef int (*anjay_output_ctx_objlnk_t)(anjay_output_ctx_t *,
                                          anjay_oid_t,
                                          anjay_iid_t);
-typedef anjay_output_ctx_t *(*anjay_output_ctx_array_start_t)(
-        anjay_output_ctx_t *);
-typedef int (*anjay_output_ctx_array_finish_t)(anjay_output_ctx_t *);
-typedef anjay_output_ctx_t *(*anjay_output_ctx_object_start_t)(
-        anjay_output_ctx_t *);
-typedef int (*anjay_output_ctx_object_finish_t)(anjay_output_ctx_t *);
-typedef int (*anjay_output_ctx_set_id_t)(anjay_output_ctx_t *,
-                                         anjay_id_type_t,
-                                         uint16_t);
+typedef int (*anjay_output_ctx_start_aggregate_t)(anjay_output_ctx_t *);
+typedef int (*anjay_output_ctx_set_path_t)(anjay_output_ctx_t *,
+                                           const anjay_uri_path_t *);
+typedef int (*anjay_output_ctx_clear_path_t)(anjay_output_ctx_t *);
+typedef int (*anjay_output_ctx_set_time_t)(anjay_output_ctx_t *, double);
 typedef int (*anjay_output_ctx_close_t)(anjay_output_ctx_t *);
 
-typedef struct {
-    anjay_output_ctx_errno_ptr_t errno_ptr;
+struct anjay_output_ctx_vtable_struct {
     anjay_output_ctx_bytes_begin_t bytes_begin;
     anjay_output_ctx_string_t string;
-    anjay_output_ctx_i32_t i32;
-    anjay_output_ctx_i64_t i64;
-    anjay_output_ctx_f32_t f32;
-    anjay_output_ctx_f64_t f64;
+    anjay_output_ctx_integer_t integer;
+    anjay_output_ctx_floating_t floating;
     anjay_output_ctx_boolean_t boolean;
     anjay_output_ctx_objlnk_t objlnk;
-    anjay_output_ctx_array_start_t array_start;
-    anjay_output_ctx_array_finish_t array_finish;
-    anjay_output_ctx_object_start_t object_start;
-    anjay_output_ctx_object_finish_t object_finish;
-    anjay_output_ctx_set_id_t set_id;
+    anjay_output_ctx_start_aggregate_t start_aggregate;
+    anjay_output_ctx_set_path_t set_path;
+    anjay_output_ctx_clear_path_t clear_path;
+    anjay_output_ctx_set_time_t set_time;
     anjay_output_ctx_close_t close;
-} anjay_output_ctx_vtable_t;
+};
 
 typedef int (*anjay_ret_bytes_ctx_append_t)(anjay_ret_bytes_ctx_t *,
                                             const void *,
@@ -75,34 +71,31 @@ typedef struct {
 typedef int (*anjay_input_ctx_bytes_t)(
         anjay_input_ctx_t *, size_t *, bool *, void *, size_t);
 typedef int (*anjay_input_ctx_string_t)(anjay_input_ctx_t *, char *, size_t);
-typedef int (*anjay_input_ctx_i32_t)(anjay_input_ctx_t *, int32_t *);
-typedef int (*anjay_input_ctx_i64_t)(anjay_input_ctx_t *, int64_t *);
-typedef int (*anjay_input_ctx_f32_t)(anjay_input_ctx_t *, float *);
-typedef int (*anjay_input_ctx_f64_t)(anjay_input_ctx_t *, double *);
+typedef int (*anjay_input_ctx_integer_t)(anjay_input_ctx_t *, int64_t *);
+typedef int (*anjay_input_ctx_floating_t)(anjay_input_ctx_t *, double *);
 typedef int (*anjay_input_ctx_boolean_t)(anjay_input_ctx_t *, bool *);
 typedef int (*anjay_input_ctx_objlnk_t)(anjay_input_ctx_t *,
                                         anjay_oid_t *,
                                         anjay_iid_t *);
-typedef int (*anjay_input_ctx_attach_child_t)(anjay_input_ctx_t *,
-                                              anjay_input_ctx_t *);
-typedef int (*anjay_input_ctx_get_id_t)(anjay_input_ctx_t *,
-                                        anjay_id_type_t *,
-                                        uint16_t *);
 typedef int (*anjay_input_ctx_next_entry_t)(anjay_input_ctx_t *);
 typedef int (*anjay_input_ctx_close_t)(anjay_input_ctx_t *);
+
+typedef int (*anjay_input_ctx_get_path_t)(anjay_input_ctx_t *,
+                                          anjay_uri_path_t *,
+                                          bool *);
+typedef int (*anjay_input_ctx_update_root_path_t)(anjay_input_ctx_t *,
+                                                  const anjay_uri_path_t *);
 
 typedef struct {
     anjay_input_ctx_bytes_t some_bytes;
     anjay_input_ctx_string_t string;
-    anjay_input_ctx_i32_t i32;
-    anjay_input_ctx_i64_t i64;
-    anjay_input_ctx_f32_t f32;
-    anjay_input_ctx_f64_t f64;
+    anjay_input_ctx_integer_t integer;
+    anjay_input_ctx_floating_t floating;
     anjay_input_ctx_boolean_t boolean;
     anjay_input_ctx_objlnk_t objlnk;
-    anjay_input_ctx_attach_child_t attach_child;
-    anjay_input_ctx_get_id_t get_id;
+    anjay_input_ctx_get_path_t get_path;
     anjay_input_ctx_next_entry_t next_entry;
+    anjay_input_ctx_update_root_path_t update_root_path;
     anjay_input_ctx_close_t close;
 } anjay_input_ctx_vtable_t;
 

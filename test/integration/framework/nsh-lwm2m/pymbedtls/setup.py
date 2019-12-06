@@ -44,6 +44,14 @@ for key, value in cfg_vars.items():
     if type(value) == str:
         cfg_vars[key] = value.replace("-Wstrict-prototypes", "")
 
+library_dirs = []
+include_dirs = [os.path.join(SCRIPT_DIR, 'src/pybind11/include/')]
+
+if 'MBEDTLS_ROOT_DIR' in os.environ:
+    root = os.getenv('MBEDTLS_ROOT_DIR')
+    library_dirs += [ os.path.join(root, 'lib') ]
+    include_dirs += [ os.path.join(root, 'include') ]
+
 extensions = [
     Extension('pymbedtls',
               sources=[os.path.join(SCRIPT_DIR, 'src/pymbedtls.cpp'),
@@ -51,9 +59,10 @@ extensions = [
                        os.path.join(SCRIPT_DIR, 'src/common.cpp'),
                        os.path.join(SCRIPT_DIR, 'src/context.cpp'),
                        os.path.join(SCRIPT_DIR, 'src/security.cpp')],
+              library_dirs=library_dirs,
               libraries=['mbedtls', 'mbedcrypto', 'mbedx509'],
-              include_dirs=[os.path.join(SCRIPT_DIR, 'src/pybind11/include/')],
-              extra_compile_args=['-std=c++11', '-isystem', '/usr/local/include'])
+              include_dirs=include_dirs,
+              extra_compile_args=['-std=c++1y', '-isystem', '/usr/local/include'])
 ]
 
 setup(
@@ -62,6 +71,6 @@ setup(
     description='''DTLS-PSK socket classes''',
     author='AVSystem',
     author_email='avsystem@avsystem.com',
-    license='Apache License, Version 2.0',
+    license='Commercial',
     ext_modules=extensions
 )

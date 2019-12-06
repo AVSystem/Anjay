@@ -36,9 +36,9 @@ def as_json(pkt):
 
 class JsonEncodingBnResource(JsonEncodingTest.Test):
     def runTest(self):
-        res = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID, rid=0,
+        res = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID, rid=RID.Test.Timestamp,
                                          accept=coap.ContentFormat.APPLICATION_LWM2M_JSON))
-        self.assertEqual('/%d/1/0' % OID.Test, res['bn'])
+        self.assertEqual(ResPath.Test[1].Timestamp, res['bn'])
 
 
 class JsonEncodingBnInstance(JsonEncodingTest.Test):
@@ -68,7 +68,7 @@ class JsonEncodingAllNamesAreSlashPrefixed(JsonEncodingTest.Test):
             for resource in response['e']:
                 self.assertEqual('/', resource['n'][0])
 
-        resource = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID, rid=0,
+        resource = as_json(self.read_resource(self.serv, oid=OID.Test, iid=IID, rid=RID.Test.Timestamp,
                                               accept=coap.ContentFormat.APPLICATION_LWM2M_JSON))
         # Resource path is in 'bn', therefore no 'n' parameter is specified by the client
         self.assertFalse('n' in resource['e'])

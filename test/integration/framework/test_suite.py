@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import enum
 import inspect
 import os
 import re
@@ -22,10 +23,12 @@ import subprocess
 import threading
 import time
 import unittest
+import logging
 from typing import TypeVar
 
 from .asserts import Lwm2mAsserts
 from .lwm2m_test import *
+from framework.lwm2m.coap.transport import Transport
 
 try:
     import dpkt
@@ -35,6 +38,19 @@ except ImportError:
     _DPKT_AVAILABLE = False
 
 T = TypeVar('T')
+
+
+class LogType(enum.Enum):
+    Console = 'console'
+    Valgrind = 'valgrind'
+    Pcap = 'pcap'
+
+    def extension(self):
+        if self == LogType.Pcap:
+            return '.pcapng'
+        else:
+            return '.log'
+
 
 def read_some_with_timeout(fd, timeout_s):
     import select
@@ -71,18 +87,60 @@ def read_until_match(fd, regex, timeout_s):
             return match
 
 
-def test_case_name(test_filepath):
-    import re
-    test_file_name = os.path.basename(test_filepath)
-    return re.sub(r'\.py$', '', test_file_name)
-
-
 def ensure_dir(dir_path):
     try:
         os.makedirs(dir_path)
     except OSError:
         if not os.path.isdir(dir_path):
             raise
+
+
+class CleanupList(list):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, _traceback):
+        def merge_exceptions(old, new):
+            """
+            Adds the "old" exception as a context of the "new" one and returns
+            the "new" one.
+
+            If the "new" exception already has a context, the "old" one is added
+            at the end of the chain, as the context of the innermost exception
+            that does not have a context.
+
+            When the returned exception is rethrown, it will be logged by the
+            standard Python exception formatter as something like:
+
+                Exception: old exception
+
+                During handling of the above exception, another exception occurred:
+
+                Traceback (most recent call last):
+                  ...
+                Exception: new exception
+
+            :param old: "old" exception
+            :param new: "new" exception
+            :return: "new" exception with updated context information
+            """
+            tmp = new
+            while tmp.__context__ is not None:
+                if tmp.__context__ is old:
+                    return new
+                tmp = tmp.__context__
+            tmp.__context__ = old
+            return new
+
+        exc = None
+        for cleanup_func in self:
+            try:
+                cleanup_func()
+            except Exception as e:
+                exc = merge_exceptions(exc, e)
+
+        if exc is not None:
+            raise exc
 
 
 class Lwm2mDmOperations(Lwm2mAsserts):
@@ -110,38 +168,46 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             raise ValueError("IID cannot be None")
 
         req = Lwm2mCreate(path='/%d' % oid, content=payload, format=format)
-        expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mCreated, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def create_instance_with_payload(self, server, oid, iid=None, payload=b'', expect_error_code=None, **kwargs):
         if iid is None:
             raise ValueError("IID cannot be None")
 
-        instance_tlv = TLV.make_instance(instance_id=iid, content=payload).serialize()
+        instance_tlv = TLV.make_instance(
+            instance_id=iid, content=payload).serialize()
         return self.create_instance_with_arbitrary_payload(server=server, oid=oid, iid=iid,
                                                            payload=instance_tlv, expect_error_code=expect_error_code,
                                                            **kwargs)
 
     def create_instance(self, server, oid, iid=None, expect_error_code=None, **kwargs):
-        instance_tlv = None if iid is None else TLV.make_instance(instance_id=iid).serialize()
+        instance_tlv = None if iid is None else TLV.make_instance(
+            instance_id=iid).serialize()
         req = Lwm2mCreate('/%d' % oid, instance_tlv)
-        expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mCreated, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def create(self, server, path, expect_error_code=None, **kwargs):
         req = Lwm2mCreate(Lwm2mPath(path), None)
-        expected_res = self._make_expected_res(req, Lwm2mCreated, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mCreated, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def delete_instance(self, server, oid, iid, expect_error_code=None, **kwargs):
         req = Lwm2mDelete('/%d/%d' % (oid, iid))
-        expected_res = self._make_expected_res(req, Lwm2mDeleted, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mDeleted, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def read_path(self, server, path, expect_error_code=None, accept=None, **kwargs):
         req = Lwm2mRead(path, accept=accept)
-        expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
+
 
     def read_resource(self, server, oid, iid, rid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d/%d/%d' % (oid, iid, rid), expect_error_code,
@@ -154,12 +220,21 @@ class Lwm2mDmOperations(Lwm2mAsserts):
     def read_object(self, server, oid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d' % oid, expect_error_code, accept=accept, **kwargs)
 
+
+    def write_object(self, server, oid, content=b'', expect_error_code=None,
+                     format=coap.ContentFormat.APPLICATION_LWM2M_TLV, **kwargs):
+        req = Lwm2mWrite('/%d' % (oid,), content, format=format)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
     def write_instance(self, server, oid, iid, content=b'', partial=False, expect_error_code=None,
                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV, **kwargs):
         req = Lwm2mWrite('/%d/%d' % (oid, iid), content,
                          format=format,
                          update=partial)
-        expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
     def write_resource(self, server, oid, iid, rid, content=b'', partial=False,
@@ -167,19 +242,23 @@ class Lwm2mDmOperations(Lwm2mAsserts):
                        expect_error_code=None, **kwargs):
         req = Lwm2mWrite('/%d/%d/%d' % (oid, iid, rid), content, format=format,
                          update=partial)
-        expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
+
 
     def execute_resource(self, server, oid, iid, rid, content=b'', expect_error_code=None, **kwargs):
         req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid), content=content)
-        expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
     @staticmethod
     def make_path(*args):
         def ensure_valid_path(args):
             import itertools
-            valid_args = list(itertools.takewhile(lambda x: x is not None, list(args)))
+            valid_args = list(itertools.takewhile(
+                lambda x: x is not None, list(args)))
             if not all(x is None for x in args[len(valid_args):]):
                 raise AttributeError
             return valid_args
@@ -188,17 +267,22 @@ class Lwm2mDmOperations(Lwm2mAsserts):
 
     def discover(self, server, oid=None, iid=None, rid=None, expect_error_code=None, **kwargs):
         req = Lwm2mDiscover(self.make_path(oid, iid, rid))
-        expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_code)
+        expected_res = self._make_expected_res(
+            req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
-    def observe(self, server, oid=None, iid=None, rid=None, expect_error_code=None, **kwargs):
-        req = Lwm2mObserve(Lwm2mDmOperations.make_path(oid, iid, rid), **kwargs)
-        expected_res = self._make_expected_res(req, Lwm2mContent, expect_error_code)
+    def observe(self, server, oid=None, iid=None, rid=None, riid=None, expect_error_code=None, **kwargs):
+        req = Lwm2mObserve(
+            Lwm2mDmOperations.make_path(oid, iid, rid, riid), **kwargs)
+        expected_res = self._make_expected_res(
+            req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
     def write_attributes(self, server, oid=None, iid=None, rid=None, query=[], expect_error_code=None, **kwargs):
-        req = Lwm2mWriteAttributes(Lwm2mDmOperations.make_path(oid, iid, rid), query=query)
-        expected_res = self._make_expected_res(req, Lwm2mChanged, expect_error_code)
+        req = Lwm2mWriteAttributes(
+            Lwm2mDmOperations.make_path(oid, iid, rid), query=query)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
 
@@ -232,7 +316,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         return self.__class__.__name__
 
     def suite_name(self):
-        test_root = self.config.suite_root_path or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        test_root = self.config.suite_root_path or os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))
         name = os.path.abspath(inspect.getfile(type(self)))
 
         if name.endswith('.py'):
@@ -241,13 +326,16 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         name = name.lstrip('/')
         return name.replace('/', '.')
 
-    def make_demo_args(self, servers, fw_updated_marker_path):
+    def make_demo_args(self,
+                       servers,
+                       fw_updated_marker_path):
         """
         Helper method for easy generation of demo executable arguments.
         """
         security_modes = set(serv.security_mode() for serv in servers)
 
-        self.assertLessEqual(len(security_modes), 1, 'Attempted to mix security modes')
+        self.assertLessEqual(len(security_modes), 1,
+                             'Attempted to mix security modes')
 
         security_mode = next(iter(security_modes), 'nosec')
         if security_mode == 'nosec':
@@ -255,18 +343,26 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         else:
             protocol = 'coaps'
 
-        args = ['--fw-updated-marker-path', fw_updated_marker_path, '--security-mode', security_mode]
+        # 0xC030 = TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 - used by TLS (over TCP, including HTTPS) in tests
+        # Default ciphersuites mandated by LwM2M:
+        # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
+        # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
+        args = ['--ciphersuites', '0xC030,0xC0A8,0xC0AE',
+                '--fw-updated-marker-path', fw_updated_marker_path, '--security-mode', security_mode]
 
         for serv in servers:
-            args += ['--server-uri', '%s://127.0.0.1:%d' % (protocol, serv.get_listen_port(),)]
+            args += ['--server-uri', '%s://127.0.0.1:%d' %
+                     (protocol, serv.get_listen_port(),)]
 
         return args
 
-    def logs_path(self, log_type, log_root=None, extension='.log', **kwargs):
-        dir_path = os.path.join(log_root or self.config.logs_path, log_type.lower())
-        log_path = os.path.join(dir_path, self.log_filename(**kwargs))
-        log_path, _ = os.path.splitext(log_path)
-        log_path += extension
+    def logs_path(self, log_type, log_root=None, **kwargs):
+        assert type(log_type) == LogType
+
+        dir_path = os.path.join(
+            log_root or self.config.logs_path, log_type.value)
+        log_path = os.path.join(dir_path, self.log_filename(
+            **kwargs, extension=log_type.extension()))
         ensure_dir(os.path.dirname(log_path))
         return log_path
 
@@ -276,7 +372,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         valgrind_list = []
         if 'VALGRIND' in os.environ and os.environ['VALGRIND']:
             valgrind_list = shlex.split(os.environ['VALGRIND'])
-            valgrind_list += ['--log-file=' + self.logs_path('valgrind')]
+            valgrind_list += ['--log-file=' + self.logs_path(LogType.Valgrind)]
 
         return valgrind_list
 
@@ -284,13 +380,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         """
         Starts the demo executable with given CMDLINE_ARGS.
         """
-        demo_executable = os.path.join(self.config.demo_path, self.config.demo_cmd)
+        demo_executable = os.path.join(
+            self.config.demo_path, self.config.demo_cmd)
 
         args_prefix = []
         if (os.environ.get('RR')
                 or ('RRR' in os.environ
                     and test_or_suite_matches_query_regex(self, os.environ['RRR']))):
-            print('*** rr-recording enabled ***', file=sys.stderr)
+            logging.info('*** rr-recording enabled ***')
             # ignore valgrind if rr was requested
             args_prefix = ['rr', 'record']
         else:
@@ -299,11 +396,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         demo_args = args_prefix + [demo_executable] + cmdline_args
 
         import shlex
-        console_log_path = self.logs_path('console')
+        console_log_path = self.logs_path(LogType.Console)
         console = open(console_log_path, 'wb')
-        console.write((' '.join(map(shlex.quote, demo_args)) + '\n\n').encode('utf-8'))
+        console.write(
+            (' '.join(map(shlex.quote, demo_args)) + '\n\n').encode('utf-8'))
         console.flush()
 
+        logging.debug('starting demo: %s', ' '.join(
+            '"%s"' % arg for arg in demo_args))
         import subprocess
         self.demo_process = subprocess.Popen(demo_args,
                                              stdin=subprocess.PIPE,
@@ -312,14 +412,17 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                              bufsize=1)
         self.demo_process.log_file_write = console
         self.demo_process.log_file_path = console_log_path
-        self.demo_process.log_file = open(console_log_path, mode='rb', buffering=0)
+        self.demo_process.log_file = open(
+            console_log_path, mode='rb', buffering=0)
 
         if timeout_s is not None:
             # wait until demo process starts
             if read_until_match(self.demo_process.log_file,
-                                regex=re.escape(b'*** ANJAY DEMO STARTUP FINISHED ***'),
+                                regex=re.escape(
+                                    b'*** ANJAY DEMO STARTUP FINISHED ***'),
                                 timeout_s=timeout_s) is None:
-                raise self.failureException('demo executable did not start in time')
+                raise self.failureException(
+                    'demo executable did not start in time')
 
     DUMPCAP_COMMAND = 'dumpcap'
 
@@ -348,7 +451,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 return ''
 
             # filter expression for "source or destination UDP port is any of udp_ports"
-            udp_filter = ' or '.join('(udp port %s)' % (port,) for port in udp_ports)
+            udp_filter = ' or '.join('(udp port %s)' % (port,)
+                                     for port in udp_ports)
 
             # below is the generation of filter expression for the ICMP messages
             #
@@ -365,8 +469,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 '(icmp[28:2] = 0x%04x) or (icmp[30:2] = 0x%04x)' % (port, port) for port in udp_ports)
             return '%s or ((icmp[0] = 3) and (icmp[1] = 3) and (icmp[17] = 17) and (%s))' % (udp_filter, icmp_pu_filter)
 
-        self.dumpcap_file_path = self.logs_path('pcap', extension='.pcapng')
-        dumpcap_command = [self.DUMPCAP_COMMAND, '-w', self.dumpcap_file_path, '-i', 'lo', '-f', _filter_expr()]
+        self.dumpcap_file_path = self.logs_path(LogType.Pcap)
+        dumpcap_command = [self.DUMPCAP_COMMAND, '-w',
+                           self.dumpcap_file_path, '-i', 'lo', '-f', _filter_expr()]
         self.dumpcap_process = subprocess.Popen(dumpcap_command,
                                                 stdin=subprocess.DEVNULL,
                                                 stdout=subprocess.DEVNULL,
@@ -379,12 +484,19 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         # full initialization of dumpcap - it would then essentially ignore the SIGTERM and our test would hang waiting
         # for dumpcap's termination that would never come.
         dumpcap_stderr = bytearray(b'')
-        while True:
-            dumpcap_stderr += read_some_with_timeout(self.dumpcap_process.stderr, 1)
+        MAX_DUMCAP_STARTUP_WAIT_S = 30
+        deadline = time.time() + MAX_DUMCAP_STARTUP_WAIT_S
+        while time.time() < deadline:
+            dumpcap_stderr += read_some_with_timeout(
+                self.dumpcap_process.stderr, 1)
             if b'File:' in dumpcap_stderr:
                 break
             if self.dumpcap_process.poll() is not None:
-                raise ChildProcessError('Could not start %r\n' % (dumpcap_command,))
+                raise ChildProcessError(
+                    'Could not start %r\n' % (dumpcap_command,))
+        else:
+            raise ChildProcessError(
+                'Could not start %r\n' % (dumpcap_command,))
 
         def _reader_func():
             try:
@@ -395,17 +507,17 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             except:
                 pass
 
-        self.dumpcap_stderr_reader_thread = threading.Thread(target=_reader_func)
+        self.dumpcap_stderr_reader_thread = threading.Thread(
+            target=_reader_func)
         self.dumpcap_stderr_reader_thread.start()
 
     def setup_demo_with_servers(self,
                                 servers=1,
                                 num_servers_passed=None,
                                 bootstrap_server=False,
-                                server_initiated_bootstrap_allowed=True,
+                                legacy_server_initiated_bootstrap_allowed=True,
                                 extra_cmdline_args=[],
                                 auto_register=True,
-                                version=DEMO_LWM2M_VERSION,
                                 lifetime=None,
                                 fw_updated_marker_path=None):
         """
@@ -460,7 +572,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             self.bootstrap_server = None
 
         if self.bootstrap_server is not None:
-            demo_args += ['--bootstrap' if server_initiated_bootstrap_allowed else '--bootstrap=client-initiated-only']
+            demo_args += ['--bootstrap' if legacy_server_initiated_bootstrap_allowed else '--bootstrap=client-initiated-only']
             all_servers = [self.bootstrap_server] + self.servers
             all_servers_passed = [self.bootstrap_server] + servers_passed
         else:
@@ -468,24 +580,35 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             all_servers_passed = servers_passed
 
         if fw_updated_marker_path is None:
-            fw_updated_marker_path = generate_temp_filename(dir='/tmp', prefix='anjay-fw-updated-')
+            fw_updated_marker_path = generate_temp_filename(
+                dir='/tmp', prefix='anjay-fw-updated-')
 
-        self._start_dumpcap(server.get_listen_port() for server in all_servers)
-
-        demo_args += self.make_demo_args(all_servers_passed, fw_updated_marker_path)
+        demo_args += self.make_demo_args(all_servers_passed,
+                                         fw_updated_marker_path)
         demo_args += extra_cmdline_args
         if lifetime is not None:
             demo_args += ['--lifetime', str(lifetime)]
 
-        self._start_demo(demo_args)
+        try:
+            self._start_dumpcap(server.get_listen_port()
+                                for server in all_servers)
 
-        if auto_register:
-            for serv in servers_passed:
-                self.assertDemoRegisters(serv, version=version, lifetime=lifetime)
+            self._start_demo(demo_args)
+
+            if auto_register:
+                for serv in servers_passed:
+                    self.assertDemoRegisters(serv,
+                                             lifetime=lifetime)
+        except Exception:
+            try:
+                self.teardown_demo_with_servers(auto_deregister=False)
+            finally:
+                raise
 
     def teardown_demo_with_servers(self,
                                    auto_deregister=True,
                                    shutdown_timeout_s=5.0,
+                                   force_kill=False,
                                    *args,
                                    **kwargs):
         """
@@ -503,6 +626,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         Number of seconds to wait after each attempted method of shutting down the demo process before moving to the
         next one (close input -> SIGTERM -> SIGKILL).
 
+        :param force_kill:
+        If set to True, demo will be forcefully terminated, and its exit code will be ignored.
+
         :param deregister_servers:
         If auto_deregister is true, specifies the list of servers to call self.assertDemoDeregisters() on, overriding
         the default self.servers.
@@ -518,20 +644,25 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         if auto_deregister and not 'deregister_servers' in kwargs:
             kwargs = kwargs.copy()
             kwargs['deregister_servers'] = self.servers
-        try:
-            self.request_demo_shutdown(*args, **kwargs)
-        finally:
-            self._terminate_demo(timeout_s=shutdown_timeout_s)
+
+        with CleanupList() as cleanup_funcs:
+            if not force_kill:
+                cleanup_funcs.append(
+                    lambda: self.request_demo_shutdown(*args, **kwargs))
+
+            cleanup_funcs.append(lambda: self._terminate_demo(
+                timeout_s=shutdown_timeout_s, force_kill=force_kill))
             for serv in self.servers:
-                serv.close()
+                cleanup_funcs.append(serv.close)
 
             if self.bootstrap_server:
-                self.bootstrap_server.close()
+                cleanup_funcs.append(self.bootstrap_server.close)
 
-            self._terminate_dumpcap()
+            cleanup_funcs.append(self._terminate_dumpcap)
 
     def seek_demo_log_to_end(self):
-        self.demo_process.log_file.seek(os.fstat(self.demo_process.log_file.fileno()).st_size)
+        self.demo_process.log_file.seek(
+            os.fstat(self.demo_process.log_file.fileno()).st_size)
 
     def communicate(self, cmd, timeout=-1, match_regex=re.escape('(DEMO)>')):
         """
@@ -546,25 +677,20 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.demo_process.stdin.flush()
 
         if match_regex:
-            result = read_until_match(self.demo_process.log_file, match_regex.encode(), timeout_s=timeout)
+            result = read_until_match(
+                self.demo_process.log_file, match_regex.encode(), timeout_s=timeout)
             if result is not None:
                 # we need to convert bytes-based match object to string-based one...
                 return re.search(match_regex, result.group(0).decode(errors='replace'))
 
         return None
 
-    def read_logs_for(self, timeout_s):
-        deadline = time.time() + timeout_s
-        out = bytearray()
-        self.seek_demo_log_to_end()
-        while True:
-            partial_timeout = deadline - time.time()
-            if partial_timeout < 0:
-                break
-            out += read_some_with_timeout(self.demo_process.log_file, partial_timeout)
-        return out.decode(errors='replace')
+    def _terminate_demo_impl(self, demo, timeout_s, force_kill):
+        if force_kill:
+            demo.kill()
+            demo.wait(timeout_s)
+            return 0
 
-    def _terminate_demo_impl(self, demo, timeout_s):
         cleanup_actions = [
             (timeout_s, lambda _: None),  # check if the demo already stopped
             (timeout_s, lambda demo: demo.terminate()),
@@ -581,35 +707,48 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 break
         return -1
 
-    def _terminate_demo(self, timeout_s=5.0):
+    def _terminate_demo(self, timeout_s=5.0, force_kill=False):
         if self.demo_process is None:
             return
 
         exc = sys.exc_info()
         try:
-            return_value = self._terminate_demo_impl(self.demo_process, timeout_s)
-            self.assertEqual(return_value, 0, 'demo terminated with nonzero exit code')
+            return_value = self._terminate_demo_impl(
+                self.demo_process, timeout_s, force_kill)
+            self.assertEqual(
+                return_value, 0, 'demo terminated with nonzero exit code')
         except:
-            if not exc[1]: raise
+            if not exc[1]:
+                raise
         finally:
             self.demo_process.log_file.close()
             self.demo_process.log_file_write.close()
 
     def _terminate_dumpcap(self):
         if self.dumpcap_process is None:
+            logging.debug('dumpcap not started, skipping')
             return
 
         # wait until all packets are written
         last_size = -1
         size = 0
-        while size != last_size:
+
+        MAX_DUMCAP_SHUTDOWN_WAIT_S = 30
+        deadline = time.time() + MAX_DUMCAP_SHUTDOWN_WAIT_S
+        while time.time() < deadline:
+            if size != last_size:
+                break
             time.sleep(0.5)
             last_size = size
             size = os.stat(self.dumpcap_file_path).st_size
+        else:
+            logging.warn(
+                'dumpcap did not shut down on time, terminating anyway')
 
         self.dumpcap_process.terminate()
         self.dumpcap_process.wait()
         self.dumpcap_stderr_reader_thread.join()
+        logging.debug('dumpcap terminated')
 
     def request_demo_shutdown(self, deregister_servers=[], *args, **kwargs):
         """
@@ -618,13 +757,17 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         If DEREGISTER_SERVERS is a non-empty list, the function waits until
         demo deregisters from each server from the list.
         """
+        logging.debug('requesting clean demo shutdown')
         if self.demo_process is None:
+            logging.debug('demo not started, skipping')
             return
 
         self.demo_process.stdin.close()
 
         for serv in deregister_servers:
-            self.assertDemoDeregisters(serv, *args, **kwargs)
+            self.assertDemoDeregisters(serv, reset=False, *args, **kwargs)
+
+        logging.debug('demo terminated')
 
     def get_socket_count(self):
         return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
@@ -651,6 +794,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def get_all_connections_failed(self):
         return bool(int(self.communicate('get-all-connections-failed', match_regex='ALL_CONNECTIONS_FAILED==([0-9])\n').group(1)))
 
+
 class SingleServerAccessor:
     @property
     def serv(self) -> Lwm2mServer:
@@ -665,6 +809,8 @@ class SingleServerAccessor:
         del self.servers[0]
 
 
+
+
 class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
     def runTest(self):
         pass
@@ -675,14 +821,17 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         if psk_identity:
             extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
                            '--key', str(binascii.hexlify(psk_key), 'ascii')]
-            coap_server = coap.DtlsServer(psk_identity=psk_identity, psk_key=psk_key)
+            coap_server = coap.DtlsServer(
+                psk_identity=psk_identity, psk_key=psk_key)
         else:
             coap_server = coap.Server()
         if extra_cmdline_args is not None:
             extra_args += extra_cmdline_args
 
-        self.setup_demo_with_servers(servers=[Lwm2mServer(coap_server)],
-                                     extra_cmdline_args=extra_args,
+        if 'servers' not in kwargs:
+            kwargs['servers'] = [Lwm2mServer(coap_server)]
+
+        self.setup_demo_with_servers(extra_cmdline_args=extra_args,
                                      *args,
                                      **kwargs)
 
@@ -732,7 +881,8 @@ class PcapEnabledTest(Lwm2mTest):
             if condition(self.read_pcap()):
                 return
             if time.time() >= deadline:
-                raise TimeoutError('Condition was not true in specified time interval')
+                raise TimeoutError(
+                    'Condition was not true in specified time interval')
             time.sleep(step_s)
 
     def _count_packets(self, condition: lambda pkts: True):
@@ -745,8 +895,8 @@ class PcapEnabledTest(Lwm2mTest):
     @staticmethod
     def is_icmp_unreachable(pkt):
         return isinstance(pkt, dpkt.ip.IP) \
-                and isinstance(pkt.data, dpkt.icmp.ICMP) \
-                and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
+            and isinstance(pkt.data, dpkt.icmp.ICMP) \
+            and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
 
     @staticmethod
     def is_dtls_client_hello(pkt):
@@ -768,17 +918,10 @@ class PcapEnabledTest(Lwm2mTest):
         def count_of_icmps_is_expected(pkts):
             return self.count_icmp_unreachable_packets() >= value
         try:
-            self._wait_until_condition(timeout_s=timeout_s, step_s=step_s, condition=count_of_icmps_is_expected)
+            self._wait_until_condition(
+                timeout_s=timeout_s, step_s=step_s, condition=count_of_icmps_is_expected)
         except TimeoutError:
             raise TimeoutError('ICMP Unreachable packet not generated')
-
-    def wait_until_dtls_client_hello_count(self, value, timeout_s=None, step_s=0.1):
-        def count_of_dtls_client_hello_is_expected(pkts):
-            return self.count_dtls_client_hello_packets() >= value
-        try:
-            self._wait_until_condition(timeout_s=timeout_s, step_s=step_s, condition=count_of_dtls_client_hello_is_expected)
-        except TimeoutError:
-            raise TimeoutError('DTLS Client Hello packets were not captured in time')
 
 
 def get_test_name(test):
@@ -806,7 +949,6 @@ def get_suite_name(suite):
     suite_names = set(suite_names)
     assert len(suite_names) == 1
 
-    suite_name = next(iter(suite_names))
     return next(iter(suite_names)).replace('/', '.')
 
 

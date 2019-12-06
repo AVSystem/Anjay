@@ -42,7 +42,7 @@ static int ssid_cmp(const void *a, const void *b, size_t size) {
         }                                                           \
         snprintf(&buffer[offset], sizeof(buffer) - (size_t) offset, \
                  __VA_ARGS__);                                      \
-        server_log(ERROR, "%s", buffer);                            \
+        server_log(WARNING, "%s", buffer);                          \
     } while (0)
 
 static int validate_instance(server_instance_t *it) {

@@ -26,7 +26,8 @@ class Tests:
     OBJECT_PATH =   '/1'
     INSTANCE_PATH = '/1/2'
     RESOURCE_PATH = '/1/2/3'
-    EXTENDED_PATH = '/1/2/3/4'
+    RESOURCE_INSTANCE_PATH = '/1/2/3/4'
+    EXTENDED_PATH = '/1/2/3/4/5'
 
     def action(test, server, path, code, expect_error_code):
         path = CoapPath(path)
@@ -50,6 +51,34 @@ class Tests:
         def test(self, path, code, expect_error_code):
             self.assertDemoRequestsBootstrap()
             Tests.action(self, self.bootstrap_server, path, code, expect_error_code)
+
+
+'''
+Request to operation mapping:
+
+Device Management & Service Enablement Interface
+┌────────┬──────┬──────────────────┬──────────────────────────┬──────────────────────────┬──────────────────────────┬───────────────┐
+│        │ Root │      Object      │         Instance         │         Resource         │    Resource Instance     │ Extended path │
+├────────┼──────┼──────────────────┼──────────────────────────┼──────────────────────────┼──────────────────────────┼───────────────┤
+│ GET    │ ---  │ Read / Discover  │ Read / Discover          │ Read / Discover          │ Read                     │ ---           │
+│ PUT    │ ---  │ Write-Attributes │ Write / Write-Attributes │ Write / Write-Attributes │ Write / Write-Attributes │ ---           │
+│ POST   │ ---  │ Create           │ Write                    │ Execute                  │ Write                    │ ---           │
+│ DELETE │ ---  │ ---              │ Delete                   │ ---                      │ ---                      │ ---           │
+└────────┴──────┴──────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────┴───────────────┘
+
+Bootstrap Interface
+┌────────┬──────────┬─────────────────┬──────────┬──────────┬───────────────────┬───────────────┐
+│        │   Root   │     Object      │ Instance │ Resource │ Resource Instance │ Extended path │
+├────────┼──────────┼─────────────────┼──────────┼──────────┼───────────────────┼───────────────┤
+│ GET    │ Discover │ Read / Discover │ Read     │ ---      │ ---               │ ---           │
+│ PUT    │ ---      │ Write           │ Write    │ Write    │ ---               │ ---           │
+│ POST   │ ---      │ ---             │ ---      │ ---      │ ---               │ ---           │
+│ DELETE │ Delete   │ Delete          │ Delete   │ ---      │ ---               │ ---           │
+└────────┴──────────┴─────────────────┴──────────┴──────────┴───────────────────┴───────────────┘
+
+* Discover requires Accept: application/link-format
+** Write-Attributes has not Content-Format specified
+'''
 
 
 class GetOnRootPath(Tests.CoapTest):
@@ -90,6 +119,13 @@ class DeleteOnObjectPath(Tests.CoapTest):
 class DeleteOnResourcePath(Tests.CoapTest):
     def runTest(self):
         self.test(path=Tests.RESOURCE_PATH,
+                  code=coap.Code.REQ_DELETE,
+                  expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
+
+
+class DeleteOnResourceInstancePath(Tests.CoapTest):
+    def runTest(self):
+        self.test(path=Tests.RESOURCE_INSTANCE_PATH,
                   code=coap.Code.REQ_DELETE,
                   expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
 
@@ -143,24 +179,10 @@ class BootstrapPostOnRootPath(Tests.BootstrapTest):
                   expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
 
 
-class BootstrapGetOnObjectPath(Tests.BootstrapTest):
-    def runTest(self):
-        self.test(path=Tests.OBJECT_PATH,
-                  code=coap.Code.REQ_GET,
-                  expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
-
-
 class BootstrapPostOnObjectPath(Tests.BootstrapTest):
     def runTest(self):
         self.test(path=Tests.OBJECT_PATH,
                   code=coap.Code.REQ_POST,
-                  expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
-
-
-class BootstrapGetOnInstancePath(Tests.BootstrapTest):
-    def runTest(self):
-        self.test(path=Tests.INSTANCE_PATH,
-                  code=coap.Code.REQ_GET,
                   expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
 
 
@@ -187,6 +209,34 @@ class BootstrapPostOnResourcePath(Tests.BootstrapTest):
 class BootstrapDeleteOnResourcePath(Tests.BootstrapTest):
     def runTest(self):
         self.test(path=Tests.RESOURCE_PATH,
+                  code=coap.Code.REQ_DELETE,
+                  expect_error_code=coap.Code.RES_BAD_REQUEST)
+
+
+class BootstrapGetOnResourceInstancePath(Tests.BootstrapTest):
+    def runTest(self):
+        self.test(path=Tests.RESOURCE_INSTANCE_PATH,
+                  code=coap.Code.REQ_GET,
+                  expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
+
+
+class BootstrapPutOnResourceInstancePath(Tests.BootstrapTest):
+    def runTest(self):
+        self.test(path=Tests.RESOURCE_INSTANCE_PATH,
+                  code=coap.Code.REQ_PUT,
+                  expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
+
+
+class BootstrapPostOnResourceInstancePath(Tests.BootstrapTest):
+    def runTest(self):
+        self.test(path=Tests.RESOURCE_INSTANCE_PATH,
+                  code=coap.Code.REQ_POST,
+                  expect_error_code=coap.Code.RES_METHOD_NOT_ALLOWED)
+
+
+class BootstrapDeleteOnResourceInstancePath(Tests.BootstrapTest):
+    def runTest(self):
+        self.test(path=Tests.RESOURCE_INSTANCE_PATH,
                   code=coap.Code.REQ_DELETE,
                   expect_error_code=coap.Code.RES_BAD_REQUEST)
 

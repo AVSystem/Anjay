@@ -96,16 +96,15 @@ These two functions can be used for this purpose:
 .. snippet-source:: modules/attr_storage/include_public/anjay/attr_storage.h
 
     // ...
-    int anjay_attr_storage_persist(anjay_t *anjay,
-                                   avs_stream_abstract_t *out_stream);
+    avs_error_t anjay_attr_storage_persist(anjay_t *anjay,
+                                           avs_stream_t *out_stream);
 
     // ...
-    int anjay_attr_storage_restore(anjay_t *anjay,
-                                   avs_stream_abstract_t *in_stream);
+    avs_error_t anjay_attr_storage_restore(anjay_t *anjay, avs_stream_t *in_stream);
 
 
 The data are read or written to and from objects of the
-``avs_stream_abstract_t`` type. Please refer to documentation of
+``avs_stream_t`` type. Please refer to documentation of
 `AVSystem Commons <https://github.com/AVSystem/avs_commons>`_ for information on
 what it is and how to create one.
 

@@ -59,7 +59,7 @@ typedef struct {
 static download_diag_repr_t *
 get_diag(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, download_diag_repr_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, download_diag_repr_t, def);
 }
 
 static void set_state(anjay_t *anjay,
@@ -85,27 +85,29 @@ static void update_times(download_diag_repr_t *repr) {
     repr->stats.end = now;
 }
 
-static int dl_block_callback(anjay_t *anjay,
-                             const uint8_t *data,
-                             size_t data_size,
-                             const anjay_etag_t *etag,
-                             void *user_data) {
+static avs_error_t dl_block_callback(anjay_t *anjay,
+                                     const uint8_t *data,
+                                     size_t data_size,
+                                     const anjay_etag_t *etag,
+                                     void *user_data) {
     (void) anjay;
     (void) data;
     (void) etag;
     download_diag_repr_t *repr = (download_diag_repr_t *) user_data;
     repr->stats.bytes_received += data_size;
     update_times(repr);
-    return 0;
+    return AVS_OK;
 }
 
-static void dl_finish_callback(anjay_t *anjay, int result, void *user_data) {
+static void dl_finish_callback(anjay_t *anjay,
+                               anjay_download_status_t status,
+                               void *user_data) {
     download_diag_repr_t *repr = (download_diag_repr_t *) user_data;
     update_times(repr);
-    if (result) {
-        set_state(anjay, repr, DIAG_STATE_TRANSFER_FAILED);
-    } else {
+    if (status.result == ANJAY_DOWNLOAD_FINISHED) {
         set_state(anjay, repr, DIAG_STATE_COMPLETED);
+    } else {
+        set_state(anjay, repr, DIAG_STATE_TRANSFER_FAILED);
     }
 }
 
@@ -121,7 +123,7 @@ static int diag_download_run(anjay_t *anjay, download_diag_repr_t *repr) {
         .on_download_finished = dl_finish_callback,
         .user_data = repr
     };
-    if (!(repr->dl_handle = anjay_download(anjay, &config))) {
+    if (avs_is_err(anjay_download(anjay, &config, &repr->dl_handle))) {
         set_state(anjay, repr, DIAG_STATE_TRANSFER_FAILED);
         demo_log(ERROR, "cannot schedule download diagnostic");
         return -1;
@@ -140,14 +142,10 @@ static int diag_resource_execute(anjay_t *anjay,
                                  anjay_execute_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) rid;
     (void) ctx;
-    switch ((download_diag_res_t) rid) {
-    case DOWNLOAD_DIAG_RUN:
-        return diag_download_run(anjay, get_diag(obj_ptr));
-    default:
-        return ANJAY_ERR_METHOD_NOT_ALLOWED;
-    }
-    return ANJAY_ERR_NOT_FOUND;
+    assert(rid == DOWNLOAD_DIAG_RUN);
+    return diag_download_run(anjay, get_diag(obj_ptr));
 }
 
 static int read_stats_resource(anjay_rid_t rid,
@@ -181,27 +179,31 @@ static int read_stats_resource(anjay_rid_t rid,
     }
 }
 
-static int diag_resource_present(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t iid,
-                                 anjay_rid_t rid) {
+static int diag_list_resources(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid,
+                               anjay_dm_resource_list_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
 
-    switch (rid) {
-    case DOWNLOAD_DIAG_STATE:
-    case DOWNLOAD_DIAG_URL:
-        return 1;
-    case DOWNLOAD_DIAG_ROM_TIME_US:
-    case DOWNLOAD_DIAG_BOM_TIME_US:
-    case DOWNLOAD_DIAG_EOM_TIME_US:
-    case DOWNLOAD_DIAG_TOTAL_BYTES:
-        // diagnostic results do not exist when diagnostic is not complete
-        return get_diag(obj_ptr)->state == DIAG_STATE_COMPLETED;
-    case DOWNLOAD_DIAG_RUN:
-        return 1;
-    }
-
+    anjay_dm_emit_res(ctx, DOWNLOAD_DIAG_STATE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DOWNLOAD_DIAG_URL, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_resource_presence_t diag_stat_presence =
+            (get_diag(obj_ptr)->state == DIAG_STATE_COMPLETED)
+                    ? ANJAY_DM_RES_PRESENT
+                    : ANJAY_DM_RES_ABSENT;
+    anjay_dm_emit_res(ctx, DOWNLOAD_DIAG_ROM_TIME_US, ANJAY_DM_RES_R,
+                      diag_stat_presence);
+    anjay_dm_emit_res(ctx, DOWNLOAD_DIAG_BOM_TIME_US, ANJAY_DM_RES_R,
+                      diag_stat_presence);
+    anjay_dm_emit_res(ctx, DOWNLOAD_DIAG_EOM_TIME_US, ANJAY_DM_RES_R,
+                      diag_stat_presence);
+    anjay_dm_emit_res(ctx, DOWNLOAD_DIAG_TOTAL_BYTES, ANJAY_DM_RES_R,
+                      diag_stat_presence);
+    anjay_dm_emit_res(ctx, DOWNLOAD_DIAG_RUN, ANJAY_DM_RES_E,
+                      ANJAY_DM_RES_PRESENT);
     return 0;
 }
 
@@ -209,9 +211,12 @@ static int diag_resource_read(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid,
                               anjay_rid_t rid,
+                              anjay_riid_t riid,
                               anjay_output_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     download_diag_repr_t *repr = get_diag(obj_ptr);
     switch ((download_diag_res_t) rid) {
     case DOWNLOAD_DIAG_STATE:
@@ -223,21 +228,24 @@ static int diag_resource_read(anjay_t *anjay,
     case DOWNLOAD_DIAG_EOM_TIME_US:
     case DOWNLOAD_DIAG_TOTAL_BYTES:
         return read_stats_resource(rid, repr, ctx);
-    case DOWNLOAD_DIAG_RUN:
+    default:
+        AVS_UNREACHABLE(
+                "Read handler called on unknown or non-readable resource");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-    return ANJAY_ERR_NOT_FOUND;
 }
 
 static int diag_resource_write(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
+                               anjay_riid_t riid,
                                anjay_input_ctx_t *ctx) {
     (void) anjay;
     (void) obj_ptr;
     (void) iid;
-    (void) ctx;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     download_diag_repr_t *repr = get_diag(obj_ptr);
     switch ((download_diag_res_t) rid) {
     case DOWNLOAD_DIAG_URL: {
@@ -256,24 +264,17 @@ static int diag_resource_write(anjay_t *anjay,
         return result;
     }
     default:
+        // Bootstrap Server may try to write to other resources,
+        // so no AVS_UNREACHABLE() here
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-    return ANJAY_ERR_NOT_FOUND;
 }
 
 static const anjay_dm_object_def_t DOWNLOAD_DIAG = {
     .oid = DEMO_OID_DOWNLOAD_DIAG,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(DOWNLOAD_DIAG_STATE,
-                                              DOWNLOAD_DIAG_URL,
-                                              DOWNLOAD_DIAG_ROM_TIME_US,
-                                              DOWNLOAD_DIAG_BOM_TIME_US,
-                                              DOWNLOAD_DIAG_EOM_TIME_US,
-                                              DOWNLOAD_DIAG_TOTAL_BYTES,
-                                              DOWNLOAD_DIAG_RUN),
     .handlers = {
-        .instance_it = anjay_dm_instance_it_SINGLE,
-        .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = diag_resource_present,
+        .list_instances = anjay_dm_list_instances_SINGLE,
+        .list_resources = diag_list_resources,
         .resource_execute = diag_resource_execute,
         .resource_read = diag_resource_read,
         .resource_write = diag_resource_write,

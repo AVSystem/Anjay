@@ -25,23 +25,18 @@ int _anjay_find_server_iid(anjay_t *anjay,
                            anjay_ssid_t ssid,
                            anjay_iid_t *out_iid);
 
-int _anjay_find_security_iid(anjay_t *anjay,
-                             anjay_ssid_t ssid,
-                             anjay_iid_t *out_iid);
-
 int _anjay_ssid_from_server_iid(anjay_t *anjay,
                                 anjay_iid_t server_iid,
                                 anjay_ssid_t *out_ssid);
 
-int _anjay_ssid_from_security_iid(anjay_t *anjay,
-                                  anjay_iid_t security_iid,
-                                  uint16_t *out_ssid);
-
 #ifdef WITH_BOOTSTRAP
 bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
                                            anjay_iid_t security_iid);
+
+anjay_iid_t _anjay_find_bootstrap_security_iid(anjay_t *anjay);
 #else
 #    define _anjay_is_bootstrap_security_instance(...) (false)
+#    define _anjay_find_bootstrap_security_iid(...) ANJAY_ID_INVALID
 #endif
 
 avs_time_duration_t

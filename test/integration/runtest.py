@@ -27,10 +27,11 @@ import time
 import tempfile
 import textwrap
 import shutil
+import logging
 
 from framework.pretty_test_runner import PrettyTestRunner
 from framework.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREEN, COLOR_RED
-from framework.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, test_or_suite_matches_query_regex
+from framework.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, test_or_suite_matches_query_regex, LogType
 
 if sys.version_info[0] >= 3:
     sys.stderr = os.fdopen(2, 'w', 1)  # force line buffering
@@ -73,8 +74,6 @@ def list_tests(suite, header='Available tests:'):
 
 
 def run_tests(suites, config):
-    has_error = False
-
     test_runner = PrettyTestRunner(config)
 
     start_time = time.time()
@@ -87,9 +86,7 @@ def run_tests(suites, config):
         log_filename = os.path.join(log_dir, '%s.log' % (get_suite_name(suite),))
 
         with open(log_filename, 'w') as logfile:
-            res = test_runner.run(suite, logfile)
-            if not res.wasSuccessful():
-                has_error = True
+            test_runner.run(suite, logfile)
 
     seconds_elapsed = time.time() - start_time
     all_tests = sum(r.testsRun for r in test_runner.results)
@@ -103,11 +100,7 @@ def run_tests(suites, config):
              COLOR_RED if errors else COLOR_GREEN, errors, all_tests, COLOR_DEFAULT,
              COLOR_RED if failures else COLOR_GREEN, failures, all_tests, COLOR_DEFAULT))
 
-    if has_error:
-        for r in test_runner.results:
-            print(r.errorSummary(log_root=config.target_logs_path))
-
-        raise SystemError("Some tests failed, inspect log for details")
+    return test_runner.results
 
 
 def filter_tests(suite, query_regex):
@@ -132,6 +125,9 @@ def filter_tests(suite, query_regex):
 
 
 def merge_directory(src, dst):
+    """
+    Move all contents of SRC into DST, preserving directory structure.
+    """
     for item in os.listdir(src):
         src_item = os.path.join(src, item)
         dst_item = os.path.join(dst, item)
@@ -140,10 +136,31 @@ def merge_directory(src, dst):
             merge_directory(src_item, dst_item)
         else:
             ensure_dir(os.path.dirname(dst_item))
-            shutil.copy2(src_item, dst_item)
+            shutil.move(src_item, dst_item)
+
+
+def remove_tests_logs(tests):
+    for test in tests:
+        for log_type in LogType:
+            try:
+                os.remove(test.logs_path(log_type))
+            except FileNotFoundError:
+                pass
+
+
+def is_file_executable(file_path):
+    file_path = os.path.abspath(file_path)
+    return os.path.isfile(file_path) and os.access(file_path, os.X_OK)
 
 
 if __name__ == "__main__":
+    LOG_LEVEL = os.getenv('LOGLEVEL', 'info').upper()
+    try:
+        import coloredlogs
+        coloredlogs.install(level=LOG_LEVEL)
+    except ImportError:
+        logging.basicConfig(level=LOG_LEVEL)
+
     parser = argparse.ArgumentParser(description=textwrap.dedent('''
         Runs Anjay demo client against Python integration tests.
 
@@ -180,11 +197,19 @@ if __name__ == "__main__":
     parser.add_argument('--client', '-c',
                         type=str, required=True,
                         help='path to the demo application to use')
+    parser.add_argument('--keep-success-logs',
+                        action='store_true',
+                        help='keep logs from all tests, including ones that passed')
     parser.add_argument('query_regex',
                         type=str, default=DEFAULT_SUITE_REGEX, nargs='?',
                         help='regex used to filter test cases. See REGEX MATCH RULES for details.')
 
     cmdline_args = parser.parse_args(sys.argv[1:])
+
+    if not is_file_executable(cmdline_args.client):
+        parser.print_usage(file=sys.stderr)
+        print('error: client must be an existing executable file', file=sys.stderr)
+        sys.exit(-1)
 
     with tempfile.TemporaryDirectory() as tmp_log_dir:
         class TestConfig:
@@ -219,7 +244,15 @@ if __name__ == "__main__":
             sys.stderr.write('%s\n\n' % config_to_string(TestConfig))
 
             try:
-                run_tests(test_suites, TestConfig)
+                results = run_tests(test_suites, TestConfig)
+                for r in results:
+                    if r.errors or r.failures:
+                        print(r.errorSummary(log_root=TestConfig.target_logs_path))
+                    if not cmdline_args.keep_success_logs:
+                        remove_tests_logs(r.successes)
+
+                if any(r.errors or r.failures for r in results):
+                    raise SystemError("Some tests failed, inspect log for details")
             finally:
                 # calculate logs path based on executable path to prevent it
                 # from creating files in source directory if building out of source

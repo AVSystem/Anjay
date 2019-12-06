@@ -18,6 +18,9 @@
 #define ANJAY_DM_DISCOVER_H
 
 #include <anjay/dm.h>
+
+#include <anjay_modules/dm_utils.h>
+
 #include <avsystem/commons/stream.h>
 #include <avsystem/commons/stream_v_table.h>
 
@@ -25,65 +28,51 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #ifdef WITH_DISCOVER
 /**
- * Performs LwM2M Discover operation on specified Object:
+ * Performs LwM2M Discover operation.
+ *
+ * If path refers to an Object:
  *  - lists all attributes assigned to the Object (for specified Server)
  *  - lists all Object Instances,
  *  - lists all present Resources for each Object Instance.
  *
- * @param anjay     ANJAY object to operate on.
- * @param obj       Object on which Discover shall be performed.
- * @return 0 on success, negative value in case of an error.
- */
-int _anjay_discover_object(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj);
-
-/**
- * Performs LwM2M Discover operation on Object Instance:
+ * If path refers to an Instance:
  *  - lists all attributes assigned to the Object Instance
  *  - lists all present Resources and their attributes for the specified Server
  *    (these are not inherited from upper levels).
  *
- * @param anjay     ANJAY object to operate on.
- * @param obj       Object whose instance is being queried.
- * @param iid       Instance on which Discover shall be performed.
- * @return 0 on success, negative value in case of an error.
- */
-int _anjay_discover_instance(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj,
-                             anjay_iid_t iid);
-
-/**
- * Performs LwM2M Discover operation on Resource:
+ * If path refers to a Resource:
  *  - lists all attributes assigned to this Resource
  *
- * @param anjay     ANJAY object to operate on.
- * @param obj       Object whose resource is being queried.
- * @param iid       Instance whose resource is being queried.
- * @param rid       Resource on which Discover shall be performed.
+ * @param anjay  ANJAY object to operate on.
+ * @param stream Stream where result of Discover shall be written.
+ * @param obj    Object on which Discover shall be performed.
+ * @param iid    ID of the Object Instance on which Discover shall be performed,
+ *               or ANJAY_ID_INVALID if it is to be performed on the Object.
+ * @param rid    ID of the Resource on which Discover shall be performed, or
+ *               ANJAY_ID_INVALID if it is to be performed on the Object or
+ *               Object Instance.
  * @return 0 on success, negative value in case of an error.
  */
-int _anjay_discover_resource(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj,
-                             anjay_iid_t iid,
-                             anjay_rid_t rid);
+int _anjay_discover(anjay_t *anjay,
+                    avs_stream_t *stream,
+                    const anjay_dm_object_def_t *const *obj,
+                    anjay_iid_t iid,
+                    anjay_rid_t rid);
 
 #    ifdef WITH_BOOTSTRAP
 /**
- * Performs LwM2M Bootstrap Discover operation on the specified Object @p obj.
+ * Performs LwM2M Bootstrap Discover operation.
  *
- * @param anjay     ANJAY object to operate on.
- * @param obj       Object on which Discover is issued.
- * @retrurn 0 on success, negative value in case of an error.
+ * @param anjay  ANJAY object to operate on.
+ * @param stream Stream where result of Bootstrap Discover shall be written.
+ * @param oid    ID of the Object on which to perform the operation - may also
+ *               be ANJAY_ID_INVALID, in which case it will be interpreted as a
+ *               Discover on the root path.
+ * @return 0 on success, negative value in case of an error.
  */
-int _anjay_bootstrap_discover_object(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj);
-/**
- * Performs LwM2M Bootstrap Discover operation on the entire data model.
- *
- * @param anjay     ANJAY object to operate on.
- * @retrurn 0 on success, negative value in case of an error.
- */
-int _anjay_bootstrap_discover(anjay_t *anjay);
+int _anjay_bootstrap_discover(anjay_t *anjay,
+                              avs_stream_t *stream,
+                              anjay_oid_t oid);
 #    endif // WITH_BOOTSTRAP
 
 #endif // WITH_DISCOVER

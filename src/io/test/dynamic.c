@@ -16,237 +16,199 @@
 
 #include <anjay_config.h>
 
+#include <avsystem/commons/stream.h>
+#include <avsystem/commons/stream/stream_membuf.h>
 #include <avsystem/commons/stream_v_table.h>
 
+#include <avsystem/coap/code.h>
+
+#define AVS_UNIT_ENABLE_SHORT_ASSERTS
 #include <avsystem/commons/unit/mocksock.h>
 #include <avsystem/commons/unit/test.h>
 
-#include <anjay_test/coap/socket.h>
-#include <anjay_test/coap/stream.h>
-
 #include <anjay/core.h>
+
+#include <anjay_test/dm.h>
+
+#include "../../anjay_core.h"
+#include "../../coap/test/utils.h"
 
 /////////////////////////////////////////////////////////////////////// ENCODING
 
-static int32_t COAP_FORMAT;
+#define TEST_ENV(Size, Format, Uri)                                           \
+    char buf[Size];                                                           \
+    avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;        \
+    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf));                  \
+    anjay_output_ctx_t *out = NULL;                                           \
+    ASSERT_OK(_anjay_output_dynamic_construct(&out, (avs_stream_t *) &outbuf, \
+                                              (Uri), (Format),                \
+                                              ANJAY_ACTION_READ));
 
-static int test_setup_for_sending(avs_stream_abstract_t *stream,
-                                  const anjay_msg_details_t *details) {
-    (void) stream;
-    AVS_UNIT_ASSERT_TRUE(COAP_FORMAT < 0);
-    COAP_FORMAT = details->format;
-    return 0;
-}
+#define PATH_HIERARCHICAL true
+#define PATH_SIMPLE false
 
-static const anjay_coap_stream_ext_t COAPIZATION = {
-    .setup_response = test_setup_for_sending,
-};
-
-static const avs_stream_v_table_extension_t COAPIZED_VTABLE_EXT[] = {
-    { ANJAY_COAP_STREAM_EXTENSION, &COAPIZATION },
-    AVS_STREAM_V_TABLE_EXTENSION_NULL
-};
-
-static avs_stream_v_table_t COAPIZED_VTABLE;
-
-AVS_UNIT_SUITE_INIT(dynamic_out, verbose) {
-    (void) verbose;
-    memcpy(&COAPIZED_VTABLE, AVS_STREAM_OUTBUF_STATIC_INITIALIZER.vtable,
-           sizeof(COAPIZED_VTABLE));
-
-    COAPIZED_VTABLE.extension_list = COAPIZED_VTABLE_EXT;
-}
-
-#define DETAILS_TEMPLATE(Format)                  \
-    {                                             \
-        .msg_type = AVS_COAP_MSG_NON_CONFIRMABLE, \
-        .format = Format                          \
-    }
-
-static const avs_stream_outbuf_t COAPIZED_OUTBUF = { &COAPIZED_VTABLE, NULL, 0,
-                                                     0, 0 };
-
-#define TEST_ENV_WITH_FORMAT(Size, Format)                                  \
-    char buf[Size];                                                         \
-    anjay_msg_details_t details = DETAILS_TEMPLATE(Format);                 \
-    avs_stream_outbuf_t outbuf = COAPIZED_OUTBUF;                           \
-    avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf));                \
-    COAP_FORMAT = -1;                                                       \
-    int outctx_errno = 0;                                                   \
-    anjay_uri_path_t no_uri;                                                \
-    memset(&no_uri, 0, sizeof(no_uri));                                     \
-    anjay_output_ctx_t *out =                                               \
-            _anjay_output_dynamic_create((avs_stream_abstract_t *) &outbuf, \
-                                         &outctx_errno, &details, &no_uri)
-
-#define TEST_ENV(Size) TEST_ENV_WITH_FORMAT(Size, AVS_COAP_FORMAT_NONE)
-
-#define VERIFY_BYTES(Data)                                       \
-    do {                                                         \
-        AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&outbuf), \
-                              sizeof(Data) - 1);                 \
-        AVS_UNIT_ASSERT_EQUAL_BYTES(buf, Data);                  \
+#define VERIFY_BYTES(Data)                                              \
+    do {                                                                \
+        ASSERT_EQ(avs_stream_outbuf_offset(&outbuf), sizeof(Data) - 1); \
+        ASSERT_EQ_BYTES(buf, Data);                                     \
     } while (0)
 
 AVS_UNIT_TEST(dynamic_out, bytes) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bytes(out, "1234567890", 10));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_bytes(out, "0987654321", 10));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_bytes(out, "1234567890", 10));
+    ASSERT_FAIL(anjay_ret_bytes(out, "0987654321", 10));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
-    VERIFY_BYTES("1234567890");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_OPAQUE);
+    VERIFY_BYTES("MTIzNDU2Nzg5MA==");
 }
 
 AVS_UNIT_TEST(dynamic_out, string) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, "0987654321"));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_string(out, "1234567890"));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_string(out, "0987654321"));
+    ASSERT_FAIL(anjay_ret_string(out, "1234567890"));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("0987654321");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
 AVS_UNIT_TEST(dynamic_out, i32) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(out, 514));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_i32(out, 69));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_i32(out, 514));
+    ASSERT_FAIL(anjay_ret_i32(out, 69));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("514");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
 AVS_UNIT_TEST(dynamic_out, i64) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i64(out, 424242424242LL));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_i64(out, 69));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_i64(out, 424242424242LL));
+    ASSERT_FAIL(anjay_ret_i64(out, 69));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("424242424242");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
 AVS_UNIT_TEST(dynamic_out, f32) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_float(out, 2.15625));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_float(out, 3.14f));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_float(out, 2.15625));
+    ASSERT_FAIL(anjay_ret_float(out, 3.14f));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("2.15625");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
 AVS_UNIT_TEST(dynamic_out, f64) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_double(out, 4053.125267029));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_double(out, 3.14));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_double(out, 4053.125267029));
+    ASSERT_FAIL(anjay_ret_double(out, 3.14));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("4053.125267029");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
 AVS_UNIT_TEST(dynamic_out, boolean) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bool(out, false));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_bool(out, true));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_bool(out, false));
+    ASSERT_FAIL(anjay_ret_bool(out, true));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("0");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
 AVS_UNIT_TEST(dynamic_out, objlnk) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_objlnk(out, 514, 69));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_objlnk(out, 66, 77));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_objlnk(out, 514, 69));
+    ASSERT_FAIL(anjay_ret_objlnk(out, 66, 77));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("514:69");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
-AVS_UNIT_TEST(dynamic_out, array) {
-    TEST_ENV(512);
+AVS_UNIT_TEST(dynamic_out, array_from_instance) {
+    TEST_ENV(512, AVS_COAP_FORMAT_OMA_LWM2M_TLV, &MAKE_INSTANCE_PATH(0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    anjay_output_ctx_t *array = anjay_ret_array_start(out);
-    AVS_UNIT_ASSERT_NOT_NULL(array);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_array_index(array, 5));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(array, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_array_index(array, 69));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(array, "Hello, world!"));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_array_finish(array));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
+                                                                       5)));
+    ASSERT_OK(anjay_ret_i32(out, 42));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
+                                                                       69)));
+    ASSERT_OK(anjay_ret_string(out, "Hello, world!"));
+    ASSERT_OK(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("\x88\x2A\x13" // array
                  "\x41\x05\x2A" // first entry
                  "\x48\x45\x0D"
                  "Hello, world!" // second entry
     );
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_TLV);
+}
+
+AVS_UNIT_TEST(dynamic_out, array_from_resource) {
+    TEST_ENV(512, AVS_COAP_FORMAT_OMA_LWM2M_TLV, &MAKE_RESOURCE_PATH(0, 0, 42));
+
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
+                                                                       5)));
+    ASSERT_OK(anjay_ret_i32(out, 42));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
+                                                                       69)));
+    ASSERT_OK(anjay_ret_string(out, "Hello, world!"));
+    ASSERT_OK(_anjay_output_ctx_destroy(&out));
+
+    VERIFY_BYTES("\x88\x2A\x13" // array
+                 "\x41\x05\x2A" // first entry
+                 "\x48\x45\x0D"
+                 "Hello, world!" // second entry
+    );
 }
 
 AVS_UNIT_TEST(dynamic_out, object) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_OMA_LWM2M_TLV, &MAKE_OBJECT_PATH(0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_IID, 42));
-    anjay_output_ctx_t *obj = _anjay_output_object_start(out);
-    AVS_UNIT_ASSERT_NOT_NULL(obj);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(obj, ANJAY_ID_RID, 69));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(obj, 514));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_object_finish(obj));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 42, 69)));
+    ASSERT_OK(anjay_ret_i32(out, 514));
+    ASSERT_OK(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("\x04\x2A"         // object
                  "\xC2\x45\x02\x02" // entry
     );
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_TLV);
 }
 
 AVS_UNIT_TEST(dynamic_out, method_not_implemented) {
-    TEST_ENV(512);
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 42));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(out, 514));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_i32(out, 69));
-    AVS_UNIT_ASSERT_EQUAL(outctx_errno, 0);
-    AVS_UNIT_ASSERT_NULL(anjay_ret_array_start(out));
-    AVS_UNIT_ASSERT_EQUAL(outctx_errno, ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(anjay_ret_i32(out, 514));
+    ASSERT_EQ(anjay_ret_i32(out, 69), -1);
+    ASSERT_EQ(_anjay_output_start_aggregate(out),
+              ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED);
+    ASSERT_EQ(_anjay_output_ctx_destroy(&out), -1);
 
     VERIFY_BYTES("514");
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_PLAINTEXT);
 }
 
 AVS_UNIT_TEST(dynamic_out, format_mismatch) {
-    TEST_ENV_WITH_FORMAT(512, ANJAY_COAP_FORMAT_OPAQUE);
+    TEST_ENV(512, AVS_COAP_FORMAT_OCTET_STREAM, &MAKE_RESOURCE_PATH(0, 0, 0));
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_id(out, ANJAY_ID_RID, 42));
-    AVS_UNIT_ASSERT_EQUAL(outctx_errno, 0);
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_string(out, "data"));
-    AVS_UNIT_ASSERT_EQUAL(outctx_errno, ANJAY_OUTCTXERR_FORMAT_MISMATCH);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
-
-    AVS_UNIT_ASSERT_EQUAL(COAP_FORMAT, ANJAY_COAP_FORMAT_OPAQUE);
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_FAIL(anjay_ret_string(out, "data"));
+    ASSERT_EQ(_anjay_output_ctx_destroy(&out),
+              ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED);
 }
 
 #undef VERIFY_BYTES
@@ -254,106 +216,147 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
 
 /////////////////////////////////////////////////////////////////////// DECODING
 
-#define TEST_ENV_COMMON(Data)                                          \
-    avs_net_abstract_socket_t *mocksock;                               \
-    _anjay_mocksock_create(&mocksock, 1252, 1252);                     \
-    avs_unit_mocksock_expect_connect(mocksock, "", "");                \
-    AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(mocksock, "", "")); \
-    avs_stream_abstract_t *coap = NULL;                                \
-    SCOPED_MOCK_COAP_STREAM(mock_coap_stream_ctx) =                    \
-            _anjay_mock_coap_stream_create(&coap, mocksock, 256, 256); \
-    avs_unit_mocksock_input(mocksock, Data, sizeof(Data) - 1)
+typedef struct {
+    anjay_request_t request;
+    anjay_input_ctx_t *input;
+} dynamic_test_env_t;
 
-#define TEST_ENV(Data)                                                       \
-    TEST_ENV_COMMON(Data);                                                   \
-    anjay_input_ctx_t *ctx;                                                  \
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_dynamic_create(&ctx, &coap, true)); \
-    AVS_UNIT_ASSERT_NOT_NULL(ctx)
+typedef struct {
+    const void *payload;
+    size_t size;
+} payload_view_t;
 
-#define TEST_TEARDOWN _anjay_input_ctx_destroy(&ctx)
+#define PAYLOAD_BYTES(Payload)  \
+    (payload_view_t) {          \
+        .payload = (Payload),   \
+        .size = sizeof(Payload) \
+    }
 
-#define COAP_HEADER(ContentFormatFirstOpt) \
-    "\x50\x01\x00\x00" ContentFormatFirstOpt "\xFF"
+#define PAYLOAD_STRING(Payload)     \
+    (payload_view_t) {              \
+        .payload = (Payload),       \
+        .size = sizeof(Payload) - 1 \
+    }
 
-#define LITERAL_COAP_FORMAT_FIRSTOPT_PLAINTEXT "\xC0"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_TLV "\xC2\x2d\x16"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_JSON "\xC2\x2d\x17"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_OPAQUE "\xC1\x2A"
-#define LITERAL_COAP_FORMAT_FIRSTOPT_UNKNOWN "\xC2\x69\x69"
+typedef struct {
+    uint16_t content_format;
+    payload_view_t payload_view;
+    anjay_request_action_t action;
+    anjay_uri_path_t uri;
+    int expected_error;
+} dynamic_test_def_t;
+
+static dynamic_test_env_t dynamic_test_env(const dynamic_test_def_t def) {
+    dynamic_test_env_t env;
+    memset(&env, 0, sizeof(env));
+
+    avs_stream_t *payload_stream = avs_stream_membuf_create();
+    ASSERT_NOT_NULL(payload_stream);
+    ASSERT_OK(avs_stream_write(payload_stream, def.payload_view.payload,
+                               def.payload_view.size));
+
+    env.request.payload_stream = payload_stream;
+    env.request.action = def.action;
+    env.request.content_format = def.content_format;
+    env.request.requested_format = AVS_COAP_FORMAT_NONE;
+    env.request.request_code = AVS_COAP_CODE_POST;
+    env.request.uri = def.uri;
+
+    int result = _anjay_input_dynamic_construct(
+            &env.input, env.request.payload_stream, &env.request);
+    ASSERT_EQ(result, def.expected_error);
+    if (!def.expected_error) {
+        ASSERT_NOT_NULL(env.input);
+    }
+
+    return env;
+}
+
+static void dynamic_test_delete(dynamic_test_env_t *env) {
+    avs_stream_cleanup(&env->request.payload_stream);
+    _anjay_input_ctx_destroy(&env->input);
+}
 
 AVS_UNIT_TEST(dynamic_in, plain) {
-    TEST_ENV(COAP_HEADER(LITERAL_COAP_FORMAT_FIRSTOPT_PLAINTEXT) "NDI=");
+    dynamic_test_env_t env __attribute__((cleanup(dynamic_test_delete))) =
+            dynamic_test_env((dynamic_test_def_t) {
+                .content_format = AVS_COAP_FORMAT_PLAINTEXT,
+                .payload_view = PAYLOAD_STRING("NDI="),
+                .action = ANJAY_ACTION_WRITE
+            });
 
     size_t bytes_read;
     bool message_finished;
     char buf[16];
     int32_t value;
-    anjay_id_type_t type;
-    uint16_t id;
     memset(buf, 0, sizeof(buf));
-    AVS_UNIT_ASSERT_FAILED(_anjay_input_get_id(ctx, &type, &id));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_get_bytes(ctx, &bytes_read, &message_finished,
-                                            buf, sizeof(buf)));
+    ASSERT_OK(_anjay_input_get_path(env.input, NULL, NULL));
+    ASSERT_OK(anjay_get_bytes(env.input, &bytes_read, &message_finished, buf,
+                              sizeof(buf)));
     // It fails, because text context is in byte mode.
-    AVS_UNIT_ASSERT_FAILED(anjay_get_i32(ctx, &value));
-    AVS_UNIT_ASSERT_EQUAL_STRING(buf, "42");
-
-    TEST_TEARDOWN;
+    ASSERT_FAIL(anjay_get_i32(env.input, &value));
+    ASSERT_EQ_STR(buf, "42");
 }
 
 AVS_UNIT_TEST(dynamic_in, no_content_format) {
-    TEST_ENV_COMMON("\x50\x01\x00\x00\xFF"
-                    "514");
-    anjay_input_ctx_t *ctx;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_dynamic_create(&ctx, &coap, true));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_ctx_destroy(&ctx));
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&coap));
+    dynamic_test_env_t env __attribute__((cleanup(dynamic_test_delete))) =
+            dynamic_test_env((dynamic_test_def_t) {
+                .content_format = AVS_COAP_FORMAT_NONE,
+                .payload_view = PAYLOAD_STRING("514"),
+                .action = ANJAY_ACTION_WRITE
+            });
 }
 
 AVS_UNIT_TEST(dynamic_in, tlv) {
-    TEST_ENV(COAP_HEADER(LITERAL_COAP_FORMAT_FIRSTOPT_TLV) "\xC1\x2A\x45");
+    dynamic_test_env_t env __attribute__((cleanup(dynamic_test_delete))) =
+            dynamic_test_env((dynamic_test_def_t) {
+                .content_format = AVS_COAP_FORMAT_OMA_LWM2M_TLV,
+                .payload_view = PAYLOAD_BYTES("\xC1\x2A\x45"),
+                .action = ANJAY_ACTION_WRITE,
+                .uri = MAKE_RESOURCE_PATH(1, 2, 42),
+                // NOTE: gcc complains if the last structure field is not
+                // explicitlyinitialized
+                .expected_error = 0
+            });
 
     int32_t value;
-    anjay_id_type_t type;
-    uint16_t id;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(ctx, &type, &id));
-    AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_RID);
-    AVS_UNIT_ASSERT_EQUAL(id, 42);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
-    AVS_UNIT_ASSERT_EQUAL(value, 69);
-
-    TEST_TEARDOWN;
+    anjay_uri_path_t path;
+    ASSERT_OK(_anjay_input_get_path(env.input, &path, NULL));
+    ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(1, 2, 42)));
+    ASSERT_OK(anjay_get_i32(env.input, &value));
+    ASSERT_EQ(value, 69);
 }
 
 AVS_UNIT_TEST(dynamic_in, opaque) {
 #define HELLO_WORLD "Hello, world!"
-    TEST_ENV(COAP_HEADER(LITERAL_COAP_FORMAT_FIRSTOPT_OPAQUE) HELLO_WORLD);
+    dynamic_test_env_t env __attribute__((cleanup(dynamic_test_delete))) =
+            dynamic_test_env((dynamic_test_def_t) {
+                .content_format = AVS_COAP_FORMAT_OCTET_STREAM,
+                .payload_view = PAYLOAD_STRING(HELLO_WORLD),
+                .action = ANJAY_ACTION_WRITE
+            });
 
     size_t bytes_read;
     bool message_finished;
     char buf[32];
-    anjay_id_type_t type;
-    uint16_t id;
-    AVS_UNIT_ASSERT_FAILED(_anjay_input_get_id(ctx, &type, &id));
-    AVS_UNIT_ASSERT_FAILED(anjay_get_string(ctx, buf, sizeof(buf)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_get_bytes(ctx, &bytes_read, &message_finished,
-                                            buf, sizeof(buf)));
-    AVS_UNIT_ASSERT_TRUE(message_finished);
-    AVS_UNIT_ASSERT_EQUAL(bytes_read, sizeof(HELLO_WORLD) - 1);
-    AVS_UNIT_ASSERT_EQUAL_BYTES(buf, HELLO_WORLD);
+    ASSERT_OK(_anjay_input_get_path(env.input, NULL, NULL));
+    ASSERT_FAIL(anjay_get_string(env.input, buf, sizeof(buf)));
+    ASSERT_OK(anjay_get_bytes(env.input, &bytes_read, &message_finished, buf,
+                              sizeof(buf)));
+    ASSERT_TRUE(message_finished);
+    ASSERT_EQ(bytes_read, sizeof(HELLO_WORLD) - 1);
+    ASSERT_EQ_BYTES(buf, HELLO_WORLD);
 
-    TEST_TEARDOWN;
 #undef HELLO_WORLD
 }
 
 AVS_UNIT_TEST(dynamic_in, unrecognized) {
-    TEST_ENV_COMMON(COAP_HEADER(LITERAL_COAP_FORMAT_FIRSTOPT_UNKNOWN) "514");
-    anjay_input_ctx_t *ctx;
-    AVS_UNIT_ASSERT_EQUAL(_anjay_input_dynamic_create(&ctx, &coap, true),
-                          ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT);
-    AVS_UNIT_ASSERT_SUCCESS(avs_stream_cleanup(&coap));
+    dynamic_test_env_t env __attribute__((cleanup(dynamic_test_delete))) =
+            dynamic_test_env((dynamic_test_def_t) {
+                .content_format = 0x6969,
+                .payload_view = PAYLOAD_STRING("514"),
+                .action = ANJAY_ACTION_WRITE,
+                .uri = MAKE_RESOURCE_PATH(1, 2, 42),
+                .expected_error = ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT
+            });
 }
-
-#undef COAP_HEADER
-#undef TEST_TEARDOWN
-#undef TEST_ENV

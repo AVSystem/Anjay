@@ -26,8 +26,7 @@ typedef struct test_object {
     AVS_LIST(test_instance_t) backup_instances;
 } test_object_t;
 
-static test_object_t *
-get_test_object(const anjay_dm_object_def_t *const *obj) {
+static test_object_t *get_test_object(const anjay_dm_object_def_t *const *obj) {
     assert(obj);
 
     // use the container_of pattern to retrieve test_object_t pointer
@@ -35,8 +34,8 @@ get_test_object(const anjay_dm_object_def_t *const *obj) {
     return AVS_CONTAINER_OF(obj, test_object_t, obj_def);
 }
 
-static AVS_LIST(test_instance_t)
-get_instance(test_object_t *repr, anjay_iid_t iid) {
+static AVS_LIST(test_instance_t) get_instance(test_object_t *repr,
+                                              anjay_iid_t iid) {
     AVS_LIST(test_instance_t) it;
     AVS_LIST_FOREACH(it, repr->instances) {
         if (it->iid == iid) {
@@ -51,83 +50,26 @@ get_instance(test_object_t *repr, anjay_iid_t iid) {
     return NULL;
 }
 
-static int assign_new_iid(test_object_t *repr, anjay_iid_t *out_iid) {
-    anjay_iid_t preferred_iid = 0;
+static int test_list_instances(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_dm_list_ctx_t *ctx) {
+    (void) anjay; // unused
+
+    // iterate over all instances and return their IDs
     AVS_LIST(test_instance_t) it;
-    AVS_LIST_FOREACH(it, repr->instances) {
-        if (it->iid == preferred_iid) {
-            ++preferred_iid;
-        } else if (it->iid > preferred_iid) {
-            // found a hole
-            break;
-        }
+    AVS_LIST_FOREACH(it, get_test_object(obj_ptr)->instances) {
+        anjay_dm_emit(ctx, it->iid);
     }
 
-    // all valid Instance IDs are already reserved
-    if (preferred_iid == ANJAY_IID_INVALID) {
-        return -1;
-    }
-    *out_iid = preferred_iid;
-    return 0;
-}
-
-static int test_instance_present(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t iid) {
-    (void) anjay;   // unused
-
-    return get_instance(get_test_object(obj_ptr), iid) != NULL;
-}
-
-static int test_instance_it(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t *out,
-                            void **cookie) {
-    (void) anjay;   // unused
-
-    AVS_LIST(test_instance_t) curr = NULL;
-
-    // if `*cookie == NULL`, then the iteration has just started,
-    // otherwise `*cookie` contains iterator value saved below
-    if (*cookie) {
-        curr = (AVS_LIST(test_instance_t)) *cookie;
-        // get the next element
-        curr = AVS_LIST_NEXT(curr);
-    } else {
-        // first instance is also a list head
-        curr = get_test_object(obj_ptr)->instances;
-    }
-
-    if (curr) {
-        *out = curr->iid;
-    } else {
-        // when last element is reached curr is NULL
-        *out = ANJAY_IID_INVALID;
-    }
-
-    // use `*cookie` to store the iterator
-    *cookie = (void *) curr;
     return 0;
 }
 
 static int test_instance_create(anjay_t *anjay,
                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                anjay_iid_t *inout_iid,
-                                anjay_ssid_t ssid) {
+                                anjay_iid_t iid) {
     (void) anjay; // unused
-    (void) ssid; // unused
 
     test_object_t *repr = get_test_object(obj_ptr);
-
-    if (*inout_iid == ANJAY_IID_INVALID) {
-        // Create request did not contain preferred Instance ID,
-        // therefore we assign one on our own if possible
-        if (assign_new_iid(repr, inout_iid)) {
-            // unfortunately assigning new iid failed, nothing
-            // we can do about it
-            return -1;
-        }
-    }
 
     AVS_LIST(test_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(test_instance_t);
@@ -137,7 +79,7 @@ static int test_instance_create(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
 
-    new_instance->iid = *inout_iid;
+    new_instance->iid = iid;
 
     // find a place where instance should be inserted,
     // insert it and claim a victory
@@ -181,15 +123,32 @@ static int test_instance_reset(anjay_t *anjay,
     return 0;
 }
 
+static int test_list_resources(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid,
+                               anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;   // unused
+    (void) obj_ptr; // unused
+    (void) iid;     // unused
+
+    anjay_dm_emit_res(ctx, 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int test_resource_read(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid,
                               anjay_rid_t rid,
+                              anjay_riid_t riid,
                               anjay_output_ctx_t *ctx) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     const test_instance_t *current_instance =
-            (const test_instance_t *) get_instance(get_test_object(obj_ptr), iid);
+            (const test_instance_t *) get_instance(get_test_object(obj_ptr),
+                                                   iid);
+
+    assert(riid == ANJAY_ID_INVALID);
 
     switch (rid) {
     case 0:
@@ -197,40 +156,43 @@ static int test_resource_read(anjay_t *anjay,
     case 1:
         return anjay_ret_i32(ctx, current_instance->value);
     default:
-        // control will never reach this part due to object's supported_rids
+        // control will never reach this part due to test_list_resources
         return ANJAY_ERR_INTERNAL;
     }
 }
 
 static int test_resource_write(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_iid_t iid,
-                              anjay_rid_t rid,
-                              anjay_input_ctx_t *ctx) {
-    (void) anjay;   // unused
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid,
+                               anjay_rid_t rid,
+                               anjay_riid_t riid,
+                               anjay_input_ctx_t *ctx) {
+    (void) anjay; // unused
 
     test_instance_t *current_instance =
             (test_instance_t *) get_instance(get_test_object(obj_ptr), iid);
 
+    assert(riid == ANJAY_ID_INVALID);
+
     switch (rid) {
     case 0: {
-            // `anjay_get_string` may return a chunk of data instead of the
-            // whole value - we need to make sure the client is able to hold
-            // the entire value
-            char buffer[sizeof(current_instance->label)];
-            int result = anjay_get_string(ctx, buffer, sizeof(buffer));
+        // `anjay_get_string` may return a chunk of data instead of the
+        // whole value - we need to make sure the client is able to hold
+        // the entire value
+        char buffer[sizeof(current_instance->label)];
+        int result = anjay_get_string(ctx, buffer, sizeof(buffer));
 
-            if (result == 0) {
-                // value OK - save it
-                memcpy(current_instance->label, buffer, sizeof(buffer));
-                current_instance->has_label = true;
-            } else if (result == ANJAY_BUFFER_TOO_SHORT) {
-                // the value is too long to store in the buffer
-                result = ANJAY_ERR_BAD_REQUEST;
-            }
-
-            return result;
+        if (result == 0) {
+            // value OK - save it
+            memcpy(current_instance->label, buffer, sizeof(buffer));
+            current_instance->has_label = true;
+        } else if (result == ANJAY_BUFFER_TOO_SHORT) {
+            // the value is too long to store in the buffer
+            result = ANJAY_ERR_BAD_REQUEST;
         }
+
+        return result;
+    }
 
     case 1: {
         // reading primitive values can be done directly - the value will only
@@ -243,15 +205,14 @@ static int test_resource_write(anjay_t *anjay,
     }
 
     default:
-        // control will never reach this part due to object's supported_rids
+        // control will never reach this part due to test_list_resources
         return ANJAY_ERR_INTERNAL;
     }
 }
 
-static int
-test_transaction_begin(anjay_t *anjay,
-                       const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;   // unused
+static int test_transaction_begin(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr) {
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
@@ -267,7 +228,7 @@ test_transaction_begin(anjay_t *anjay,
 static int
 test_transaction_validate(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
@@ -300,7 +261,7 @@ test_transaction_commit(anjay_t *anjay,
 static int
 test_transaction_rollback(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr) {
-    (void) anjay;   // unused
+    (void) anjay; // unused
 
     test_object_t *test = get_test_object(obj_ptr);
 
@@ -315,20 +276,13 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
     // Object ID
     .oid = 1234,
 
-    // List of supported Resource IDs
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
-
     .handlers = {
-        .instance_it = test_instance_it,
-        .instance_present = test_instance_present,
+        .list_instances = test_list_instances,
         .instance_create = test_instance_create,
         .instance_remove = test_instance_remove,
         .instance_reset = test_instance_reset,
 
-        // if all supported Resources are always available, one can use
-        // a pre-implemented `resource_present` handler too:
-        .resource_present = anjay_dm_resource_present_TRUE,
-
+        .list_resources = test_list_resources,
         .resource_read = test_resource_read,
         .resource_write = test_resource_write,
 
@@ -340,7 +294,8 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
 };
 
 const anjay_dm_object_def_t **create_test_object(void) {
-    test_object_t *repr = (test_object_t *) avs_calloc(1, sizeof(test_object_t));
+    test_object_t *repr =
+            (test_object_t *) avs_calloc(1, sizeof(test_object_t));
     if (repr) {
         repr->obj_def = &OBJECT_DEF;
         return &repr->obj_def;

@@ -32,12 +32,12 @@ sec_repr_t *_anjay_sec_get(const anjay_dm_object_def_t *const *obj_ptr);
 
 /**
  * Fetches UDP Security Mode from @p ctx, performs validation and in case of
- * success sets @p *out to one of @p anjay_udp_security_mode_t enum value.
+ * success sets @p *out to one of @p anjay_security_mode_t enum value.
  */
-int _anjay_sec_fetch_udp_security_mode(anjay_input_ctx_t *ctx,
-                                       anjay_udp_security_mode_t *out);
+int _anjay_sec_fetch_security_mode(anjay_input_ctx_t *ctx,
+                                   anjay_security_mode_t *out);
 
-int _anjay_sec_validate_udp_security_mode(int32_t security_mode);
+int _anjay_sec_validate_security_mode(int32_t security_mode);
 
 /**
  * Fetches SMS Security Mode from @p ctx, performs validation and in case of

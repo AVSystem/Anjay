@@ -48,13 +48,13 @@ class Test1201_QueryingReadableResourcesOfCellularConnectivityObjectInVersion1_1
         # A. In test step 1, the Server – along with the success message 2.05 –
         #    received the information related to Object ID:10 including
         #    </10>;ver="1.1",</10/0/6>,</10/0/11>, </10/0/13>, </10/0/14>
-        link_list = self.test_discover('/%d' % OID.CellularConnectivity)
-        links = link_list.split(b',')
-        self.assertIn(b'</10>;ver="1.1"', links)
-        self.assertIn(b'</10/0/6>', links)
-        self.assertIn(b'</10/0/11>', links)
-        self.assertIn(b'</10/0/13>', links)
-        self.assertIn(b'</10/0/14>', links)
+        link_list = self.test_discover('/%d' % OID.CellularConnectivity).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d>;ver="1.1"' % (OID.CellularConnectivity,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ServingPLMNRateControl,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ActivatedProfileNames,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.PowerSavingModes,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ActivePowerSavingModes), links)
 
         # 2. READ (CoAP GET /10/0) operation on the Instance of the Object
         #    ID:10 is received by the Client and its answer is sent back to the
@@ -85,13 +85,13 @@ class Test1210_SettingPowerSavingModeResourceOfCellularConnectivityObject(DataMo
         # A. In test step 1, the Server – along with the success message 2.05 –
         #    received the information related to Object ID:10 including
         #    </10>;ver="1.1",</10/0/6>,</10/0/11>, </10/0/13>, </10/0/14>
-        link_list = self.test_discover('/%d' % OID.CellularConnectivity)
-        links = link_list.split(b',')
-        self.assertIn(b'</10>;ver="1.1"', links)
-        self.assertIn(b'</10/0/6>', links)
-        self.assertIn(b'</10/0/11>', links)
-        self.assertIn(b'</10/0/13>', links)
-        self.assertIn(b'</10/0/14>', links)
+        link_list = self.test_discover('/%d' % OID.CellularConnectivity).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d>;ver="1.1"' % (OID.CellularConnectivity,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ServingPLMNRateControl,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ActivatedProfileNames,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.PowerSavingModes,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ActivePowerSavingModes), links)
 
         # 2. A READ (CoAP GET /10/0/13) operation on the Instance 0 of the
         #    Object ID:10 is performed by the Server
@@ -128,13 +128,13 @@ class Test1230_ObservationAndNotificationOnCellularConnectivityObjectRelatedToPo
         # A. In test step 1, the Server – along with the success message 2.05 –
         #    received the information related to Object ID:10 including
         #    </10>;ver="1.1",</10/0/6>,</10/0/11>, </10/0/13>, </10/0/14>
-        link_list = self.test_discover('/%d' % OID.CellularConnectivity)
-        links = link_list.split(b',')
-        self.assertIn(b'</10>;ver="1.1"', links)
-        self.assertIn(b'</10/0/6>', links)
-        self.assertIn(b'</10/0/11>', links)
-        self.assertIn(b'</10/0/13>', links)
-        self.assertIn(b'</10/0/14>', links)
+        link_list = self.test_discover('/%d' % OID.CellularConnectivity).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d>;ver="1.1"' % (OID.CellularConnectivity,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ServingPLMNRateControl,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ActivatedProfileNames,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.PowerSavingModes,), links)
+        self.assertIn('<%s>' % (ResPath.CellularConnectivity.ActivePowerSavingModes), links)
 
         # 2. Server communicates with the Object ID:10 in version 1.1 via
         #    WRITE-ATTRIBUTE (CoAP PUT) operations, to set the pmin &
@@ -201,7 +201,7 @@ class Test1250_ApnConfiguration(DataModel.Test):
         self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT), pkt)
         self.serv.send(Lwm2mChanged.matching(pkt)())
 
-        self.assertIn(b'</11/%d>' % new_iid, pkt.content)
+        self.assertIn(b'</%d/%d>' % (OID.ApnConnectionProfile, new_iid), pkt.content)
 
         # 4. Server activates the new APN Connection Profile in changing
         #    Enable status to True by WRITE operation (COAP PUT /11/1/3)

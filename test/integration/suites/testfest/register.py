@@ -28,7 +28,7 @@ class Test101_InitialRegistration(test_suite.Lwm2mSingleServerTest):
         # 1. Registration message (CoAP POST) is sent from Client to Server.
         pkt = self.serv.recv()
         self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=86400' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME)),
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,)),
             pkt)
 
         # A. In test step 1. , the Server receives the REGISTER command
@@ -42,7 +42,7 @@ class Test101_InitialRegistration(test_suite.Lwm2mSingleServerTest):
         #   object instances) ; possibly with Version of Objects
         #    - Objects and Object instances (mandatory and optional
         #      objects/object instances)
-        self.assertLinkListValid(pkt.content)
+        self.assertLinkListValid(pkt.content.decode())
 
         # B. In test step 1. , Client received "Success" message from Server
         #    (2.01 Created) related to the REGISTER command.

@@ -79,7 +79,7 @@ def get_object_definition(urn_or_oid, version):
         oid = int(urn)
 
     try:
-        registry = Lwm2mObjectRegistry()
+        registry = Lwm2mObjectRegistry() 
         objects = registry.objects[oid]
         available_versions_message = 'Available versions for object with ID %d: %s' % (
             oid, ', '.join(str(obj.Ver) for obj in objects))

@@ -101,18 +101,23 @@ They will greatly simplify parsing process, as you will see in the next section.
 Implementation
 ~~~~~~~~~~~~~~
 
-We start with adding our Resource to a supported list of Resources:
+We start with adding our Resource to the list of supported Resources:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/read-only-with-executable/src/main.c
 
-    static const anjay_dm_object_def_t OBJECT_DEF = {
+    static int test_list_resources(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_dm_resource_list_ctx_t *ctx) {
         // ...
-
-        .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1, 2),
-
-        // ...
+        anjay_dm_emit_res(ctx, 2, ANJAY_DM_RES_E, ANJAY_DM_RES_PRESENT);
+        return 0;
     }
+
+
+Note that the ``kind`` argument is set to ``ANJAY_DM_RES_E`` to signify an
+executable resource.
 
 We can now implement ``resource_execute`` handler. Since our new resource will
 be used to sum integers we have to store the addition result somewhere. For
@@ -218,6 +223,7 @@ So, here is how it could look like:
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
+                                  anjay_riid_t riid,
                                   anjay_output_ctx_t *ctx) {
         // ...
         switch (rid) {
@@ -227,7 +233,7 @@ So, here is how it could look like:
         case 2:
             return ANJAY_ERR_METHOD_NOT_ALLOWED;
         default:
-            // control will never reach this part due to object's supported_rids
+            // control will never reach this part due to test_list_resources
             return 0;
         }
     }

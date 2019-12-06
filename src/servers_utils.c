@@ -20,28 +20,28 @@
 
 #include <anjay_modules/dm_utils.h>
 
+#include "anjay_core.h"
 #include "servers.h"
 #include "servers_utils.h"
 
 #include "dm/query.h"
 
-#include "interface/register.h"
-
 VISIBILITY_SOURCE_BEGIN
 
 typedef struct {
-    avs_net_abstract_socket_t *socket;
+    avs_net_socket_t *socket;
     anjay_server_info_t *out;
-} find_by_udp_socket_args_t;
+} find_by_primary_socket_args_t;
 
-static int find_by_udp_socket_clb(anjay_t *anjay,
-                                  anjay_server_info_t *server,
-                                  void *args_) {
+static int find_by_primary_socket_clb(anjay_t *anjay,
+                                      anjay_server_info_t *server,
+                                      void *args_) {
     (void) anjay;
-    find_by_udp_socket_args_t *args = (find_by_udp_socket_args_t *) args_;
+    find_by_primary_socket_args_t *args =
+            (find_by_primary_socket_args_t *) args_;
     const anjay_connection_ref_t ref = {
         .server = server,
-        .conn_type = ANJAY_CONNECTION_UDP
+        .conn_type = ANJAY_CONNECTION_PRIMARY
     };
     if (_anjay_connection_get_online_socket(ref) == args->socket) {
         args->out = server;
@@ -51,14 +51,15 @@ static int find_by_udp_socket_clb(anjay_t *anjay,
 }
 
 anjay_server_info_t *
-_anjay_servers_find_by_udp_socket(anjay_t *anjay,
-                                  avs_net_abstract_socket_t *socket) {
+_anjay_servers_find_by_primary_socket(anjay_t *anjay,
+                                      avs_net_socket_t *socket) {
     assert(socket);
-    find_by_udp_socket_args_t arg = {
+    find_by_primary_socket_args_t arg = {
         .socket = socket,
         .out = NULL
     };
-    if (_anjay_servers_foreach_active(anjay, find_by_udp_socket_clb, &arg)) {
+    if (_anjay_servers_foreach_active(anjay, find_by_primary_socket_clb,
+                                      &arg)) {
         return NULL;
     }
     return arg.out;
@@ -92,6 +93,53 @@ anjay_server_info_t *_anjay_servers_find_active(anjay_t *anjay,
     return arg.out;
 }
 
+typedef struct {
+    anjay_iid_t security_iid;
+    anjay_server_info_t *out;
+} find_active_by_security_iid_args_t;
+
+static int find_active_by_security_iid_clb(anjay_t *anjay,
+                                           anjay_server_info_t *server,
+                                           void *args_) {
+    (void) anjay;
+    find_active_by_security_iid_args_t *args =
+            (find_active_by_security_iid_args_t *) args_;
+    if (_anjay_server_last_used_security_iid(server) == args->security_iid) {
+        args->out = server;
+        return ANJAY_FOREACH_BREAK;
+    }
+    return ANJAY_FOREACH_CONTINUE;
+}
+
+anjay_server_info_t *
+_anjay_servers_find_active_by_security_iid(anjay_t *anjay,
+                                           anjay_iid_t security_iid) {
+    find_active_by_security_iid_args_t arg = {
+        .security_iid = security_iid,
+        .out = NULL
+    };
+    if (_anjay_servers_foreach_active(anjay, find_active_by_security_iid_clb,
+                                      &arg)) {
+        return NULL;
+    }
+    return arg.out;
+}
+
+anjay_connection_ref_t
+_anjay_servers_find_active_primary_connection(anjay_t *anjay,
+                                              anjay_ssid_t ssid) {
+    anjay_connection_ref_t ref = {
+        .server = _anjay_servers_find_active(anjay, ssid),
+        .conn_type = ANJAY_CONNECTION_PRIMARY
+    };
+    return ref;
+}
+
+avs_time_duration_t
+_anjay_register_time_remaining(const anjay_registration_info_t *info) {
+    return avs_time_real_diff(info->expire_time, avs_time_real_now());
+}
+
 bool _anjay_server_registration_expired(anjay_server_info_t *server) {
     const anjay_registration_info_t *registration_info =
             _anjay_server_registration_info(server);
@@ -121,22 +169,22 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server) {
 }
 
 int _anjay_schedule_socket_update(anjay_t *anjay, anjay_iid_t security_iid) {
-    anjay_ssid_t ssid;
     anjay_server_info_t *server;
-    if (!_anjay_ssid_from_security_iid(anjay, security_iid, &ssid)
-            && (server = _anjay_servers_find_active(anjay, ssid))) {
+    if ((server = _anjay_servers_find_active_by_security_iid(anjay,
+                                                             security_iid))) {
         // mark the registration as expired; prevents superfluous Deregister
         _anjay_server_update_registration_info(server, NULL,
+                                               ANJAY_LWM2M_VERSION_1_0, false,
                                                &(anjay_update_parameters_t) {
                                                    .lifetime_s = -1
                                                });
-        return anjay_disable_server_with_timeout(anjay, ssid,
-                                                 AVS_TIME_DURATION_ZERO);
+        return anjay_disable_server_with_timeout(
+                anjay, _anjay_server_ssid(server), AVS_TIME_DURATION_ZERO);
     }
     return 0;
 }
 
-AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
+AVS_LIST(avs_net_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
     // We rely on the fact that the "socket" field is first in
     // anjay_socket_entry_t, which means that both "entry" and "&entry->socket"
     // point to exactly the same memory location. The "next" pointer location in
@@ -145,46 +193,4 @@ AVS_LIST(avs_net_abstract_socket_t *const) anjay_get_sockets(anjay_t *anjay) {
     AVS_STATIC_ASSERT(offsetof(anjay_socket_entry_t, socket) == 0,
                       entry_socket_is_first_field);
     return &anjay_get_socket_entries(anjay)->socket;
-}
-
-static const char CONN_TYPE_LETTERS[] = {
-    [ANJAY_CONNECTION_UDP] = 'U'
-};
-
-anjay_server_connection_mode_t
-_anjay_get_connection_mode(const char *binding_mode,
-                           anjay_connection_type_t conn_type) {
-    const char *type_letter_ptr =
-            strchr(binding_mode, CONN_TYPE_LETTERS[conn_type]);
-    if (!type_letter_ptr) {
-        return ANJAY_CONNECTION_DISABLED;
-    }
-    if (type_letter_ptr[1] == 'Q') {
-        return ANJAY_CONNECTION_QUEUE;
-    } else {
-        return ANJAY_CONNECTION_ONLINE;
-    }
-}
-
-void _anjay_server_actual_binding_mode(anjay_binding_mode_t *out_binding_mode,
-                                       anjay_server_info_t *server) {
-    AVS_STATIC_ASSERT(sizeof(*out_binding_mode)
-                              > (sizeof("xQ") - 1) * ANJAY_CONNECTION_LIMIT_,
-                      anjay_binding_mode_t_size);
-
-    char *ptr = *out_binding_mode;
-    anjay_connection_ref_t ref = {
-        .server = server
-    };
-    ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
-        anjay_server_connection_mode_t mode =
-                _anjay_connection_current_mode(ref);
-        if (mode != ANJAY_CONNECTION_DISABLED) {
-            *ptr++ = CONN_TYPE_LETTERS[ref.conn_type];
-            if (mode == ANJAY_CONNECTION_QUEUE) {
-                *ptr++ = 'Q';
-            }
-        }
-    }
-    *ptr = '\0';
 }

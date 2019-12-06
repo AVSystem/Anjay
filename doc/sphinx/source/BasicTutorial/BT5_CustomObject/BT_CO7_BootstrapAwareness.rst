@@ -16,11 +16,8 @@
 Bootstrap awareness
 ===================
 
-In this tutorial you will learn:
-
-- how to use ``resource_operations`` handler to prevent Anjay from calling
-  some handlers in non-bootstrap context,
-- how to setup Resources writable only by the LwM2M Bootstrap Server.
+In this tutorial you will learn how to setup Resources writable only by the
+LwM2M Bootstrap Server.
 
 
 Handling LwM2M Bootstrap Server
@@ -33,9 +30,10 @@ normal operation of the device - DTLS keys or certificates, for example.
 
 Whenever an LwM2M Bootstrap Server sends a Bootstrap Write request, Anjay uses
 the same ``instance_create`` and ``resource_write`` handlers as for "regular"
-LwM2M Server operations. The only difference is that Anjay *does not call*
-``resource_operations`` *handler* for bootstrap requests, allowing Bootstrap
-Server to do anything it wants.
+LwM2M Server operations. The only difference is that Anjay *ignores the
+operations declared through the* ``kind`` *argument to* ``avs_dm_emit_res()``
+*calls inside the* ``list_resources`` *handler* for bootstrap requests, allowing
+Bootstrap Server to do anything it wants.
 
 If a device has to implement a Resource that must only be writable by the LwM2M
 Bootstrap Server, its handlers should be implemented like so:
@@ -43,10 +41,10 @@ Bootstrap Server, its handlers should be implemented like so:
 - ``resource_write`` handler must be able to set the value of a Resource,
   as if it was a writable one,
 
-- ``resource_operations`` handler should not set the
-  ``ANJAY_DM_RESOURCE_OP_BIT_W`` in returned access flags. That will prevent
-  Anjay from calling the ``resource_write`` handler for this particular Resource
-  when the request is issued by a non-bootstrap server.
+- ``list_resources`` handler should pass a ``kind`` argument that does not allow
+  writing to ``avs_dm_emit_res()``. That will prevent Anjay from calling the
+  ``resource_write`` handler for this particular Resource when the request is
+  issued by a non-bootstrap server.
 
 
 Example: bootstrap-writable Resource
@@ -73,49 +71,25 @@ Each Object Instance has two Resources:
 +-------+-------------+------------+-----------+-----------+---------+
 
 
-To achieve that, ``anjay_dm_resource_operations_t`` handler is required:
+To achieve that, we need to update the ``test_list_resources`` handler so that
+it disallows writing to Resource 0:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/bootstrap-awareness/src/main.c
 
-    static int test_resource_operations(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj_ptr,
-                                        anjay_rid_t rid,
-                                        anjay_dm_resource_op_mask_t *out) {
-        (void) anjay;
-        (void) obj_ptr;
-        *out = ANJAY_DM_RESOURCE_OP_NONE;
+    static int test_list_resources(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_dm_resource_list_ctx_t *ctx) {
+        // ...
 
-        switch (rid) {
-        case 0:
-            // only allow reading Resource 0 by LwM2M Servers
-            // this will be ignored for LwM2M Bootstrap Server
-            *out = ANJAY_DM_RESOURCE_OP_BIT_R;
-            break;
-        case 1:
-            // Value Resource can be read/written by LwM2M Servers
-            *out = ANJAY_DM_RESOURCE_OP_BIT_R | ANJAY_DM_RESOURCE_OP_BIT_W;
-            break;
-        default:
-            break;
-        }
-
+        // only allow reading Resource 0 by LwM2M Servers
+        // this will be ignored for LwM2M Bootstrap Server
+        anjay_dm_emit_res(ctx, 0, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+        // Value Resource can be read/written by LwM2M Servers
+        anjay_dm_emit_res(ctx, 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
         return 0;
     }
-
-    // ...
-
-    static const anjay_dm_object_def_t OBJECT_DEF = {
-        // Object ID
-        .oid = 1234,
-        // ...
-        .handlers = {
-            // ... other handlers
-
-            .resource_operations = test_resource_operations,
-            // ... other handlers
-        }
-    };
 
 
 That leaves one more issue with the example project: it has a pre-configured
@@ -129,7 +103,7 @@ Server is a matter of setting ``bootstrap_server = true`` on
         .ssid = 1,
         .bootstrap_server = true,
         .server_uri = "coap://127.0.0.1:5683",
-        .security_mode = ANJAY_UDP_SECURITY_NOSEC
+        .security_mode = ANJAY_SECURITY_NOSEC
     };
 
 

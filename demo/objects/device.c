@@ -87,7 +87,7 @@ typedef struct {
 
 static inline dev_repr_t *get_dev(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, dev_repr_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, dev_repr_t, def);
 }
 
 static int32_t randint_from_range(int32_t min_value, int32_t max_value) {
@@ -106,10 +106,66 @@ static int32_t get_dc_current_ma(void) {
     return randint_from_range(10 - 1, 10 + 1);
 }
 
+static int dev_resources(anjay_t *anjay,
+                         const anjay_dm_object_def_t *const *obj_ptr,
+                         anjay_iid_t iid,
+                         anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+    anjay_dm_emit_res(ctx, DEV_RES_MANUFACTURER, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_MODEL_NUMBER, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_SERIAL_NUMBER, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_FIRMWARE_VERSION, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_REBOOT, ANJAY_DM_RES_E,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_FACTORY_RESET, ANJAY_DM_RES_E,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_AVAILABLE_POWER_SOURCES, ANJAY_DM_RES_RM,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_POWER_SOURCE_VOLTAGE, ANJAY_DM_RES_RM,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_POWER_SOURCE_CURRENT, ANJAY_DM_RES_RM,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_BATTERY_LEVEL, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_MEMORY_FREE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_ERROR_CODE, ANJAY_DM_RES_RM,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_CURRENT_TIME, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_UTC_OFFSET, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_TIMEZONE, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_SUPPORTED_BINDING_AND_MODES, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_DEVICE_TYPE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_HARDWARE_VERSION, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_SOFTWARE_VERSION, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_BATTERY_STATUS, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_MEMORY_TOTAL, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, DEV_RES_EXTDEVINFO, ANJAY_DM_RES_RM,
+                      ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int dev_read(anjay_t *anjay,
                     const anjay_dm_object_def_t *const *obj_ptr,
                     anjay_iid_t iid,
                     anjay_rid_t rid,
+                    anjay_riid_t riid,
                     anjay_output_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
@@ -118,78 +174,64 @@ static int dev_read(anjay_t *anjay,
 
     switch (rid) {
     case DEV_RES_MANUFACTURER:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, dev->manufacturer);
     case DEV_RES_MODEL_NUMBER:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, "demo-client");
     case DEV_RES_SERIAL_NUMBER:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, dev->serial_number);
     case DEV_RES_FIRMWARE_VERSION:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, anjay_get_version());
-    case DEV_RES_AVAILABLE_POWER_SOURCES: {
-        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-        if (!array || anjay_ret_array_index(array, 0)
-                || anjay_ret_i32(array, (int32_t) POWER_SOURCE_DC)) {
-            return ANJAY_ERR_INTERNAL;
-        }
-        return anjay_ret_array_finish(array);
-    }
-    case DEV_RES_POWER_SOURCE_VOLTAGE: {
-        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-        if (!array || anjay_ret_array_index(array, 0)
-                || anjay_ret_i32(array, get_dc_voltage_mv())) {
-            return ANJAY_ERR_INTERNAL;
-        }
-        return anjay_ret_array_finish(array);
-    }
-    case DEV_RES_POWER_SOURCE_CURRENT: {
-        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-        if (!array || anjay_ret_array_index(array, 0)
-                || anjay_ret_i32(array, get_dc_current_ma())) {
-            return ANJAY_ERR_INTERNAL;
-        }
-        return anjay_ret_array_finish(array);
-    }
+    case DEV_RES_AVAILABLE_POWER_SOURCES:
+        assert(riid == 0);
+        return anjay_ret_i32(ctx, (int32_t) POWER_SOURCE_DC);
+    case DEV_RES_POWER_SOURCE_VOLTAGE:
+        assert(riid == 0);
+        return anjay_ret_i32(ctx, get_dc_voltage_mv());
+    case DEV_RES_POWER_SOURCE_CURRENT:
+        assert(riid == 0);
+        return anjay_ret_i32(ctx, get_dc_current_ma());
     case DEV_RES_BATTERY_LEVEL:
     case DEV_RES_MEMORY_FREE:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i32(ctx, 0);
-    case DEV_RES_ERROR_CODE: {
-        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-        if (!array || anjay_ret_array_index(array, 0)
-                || anjay_ret_i32(array, (int32_t) dev->last_error)) {
-            return ANJAY_ERR_INTERNAL;
-        }
-        return anjay_ret_array_finish(array);
-    }
+    case DEV_RES_ERROR_CODE:
+        assert(riid == 0);
+        return anjay_ret_i32(ctx, (int32_t) dev->last_error);
     case DEV_RES_CURRENT_TIME:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds
                                           + dev->current_time_offset);
     case DEV_RES_UTC_OFFSET:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, dev->utc_offset);
     case DEV_RES_TIMEZONE:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, dev->timezone);
     case DEV_RES_DEVICE_TYPE:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, "");
     case DEV_RES_SUPPORTED_BINDING_AND_MODES:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, "UQ");
-    case DEV_RES_EXTDEVINFO: {
-        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-        if (!array || anjay_ret_array_index(array, 0)
-                || anjay_ret_objlnk(array, DEMO_OID_EXT_DEV_INFO, 0)) {
-            return ANJAY_ERR_INTERNAL;
-        }
-        return anjay_ret_array_finish(array);
-    }
+    case DEV_RES_EXTDEVINFO:
+        assert(riid == 0);
+        return anjay_ret_objlnk(ctx, DEMO_OID_EXT_DEV_INFO, 0);
     case DEV_RES_HARDWARE_VERSION:
     case DEV_RES_SOFTWARE_VERSION:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_string(ctx, "");
     case DEV_RES_BATTERY_STATUS:
     case DEV_RES_MEMORY_TOTAL:
+        assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i32(ctx, 0);
-    case DEV_RES_REBOOT:
-    case DEV_RES_FACTORY_RESET:
-        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     default:
-        return ANJAY_ERR_NOT_FOUND;
+        AVS_UNREACHABLE(
+                "Read handler called on unknown or non-readable resource");
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
 
@@ -220,14 +262,17 @@ static int dev_write(anjay_t *anjay,
                      const anjay_dm_object_def_t *const *obj_ptr,
                      anjay_iid_t iid,
                      anjay_rid_t rid,
+                     anjay_riid_t riid,
                      anjay_input_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) riid;
 
     dev_repr_t *dev = get_dev(obj_ptr);
 
     switch (rid) {
     case DEV_RES_CURRENT_TIME: {
+        assert(riid == ANJAY_ID_INVALID);
         int64_t new_time;
         int result = anjay_get_i64(ctx, &new_time);
         if (result) {
@@ -239,10 +284,14 @@ static int dev_write(anjay_t *anjay,
         return 0;
     }
     case DEV_RES_UTC_OFFSET:
+        assert(riid == ANJAY_ID_INVALID);
         return read_string(ctx, dev->utc_offset, sizeof(dev->utc_offset));
     case DEV_RES_TIMEZONE:
+        assert(riid == ANJAY_ID_INVALID);
         return read_string(ctx, dev->timezone, sizeof(dev->timezone));
     default:
+        // Bootstrap Server may try to write to other resources,
+        // so no AVS_UNREACHABLE() here
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
@@ -304,14 +353,17 @@ static int dev_execute(anjay_t *anjay,
 
         return 0;
     default:
+        AVS_UNREACHABLE("Executable handler called on unknown or "
+                        "non-executable resource");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
 
-static int dev_dim(anjay_t *anjay,
-                   const anjay_dm_object_def_t *const *obj_ptr,
-                   anjay_iid_t iid,
-                   anjay_rid_t rid) {
+static int dev_resource_instances(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid,
+                                  anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
     (void) obj_ptr;
     (void) iid;
@@ -322,46 +374,25 @@ static int dev_dim(anjay_t *anjay,
     case DEV_RES_POWER_SOURCE_CURRENT:
     case DEV_RES_ERROR_CODE:
     case DEV_RES_EXTDEVINFO:
-        return 1;
+        anjay_dm_emit(ctx, 0);
+        return 0;
     default:
-        return ANJAY_DM_DIM_INVALID;
+        AVS_UNREACHABLE(
+                "Attempted to list instances in a single-instance resource");
+        return ANJAY_ERR_INTERNAL;
     }
 }
 
 static const anjay_dm_object_def_t DEVICE = {
     .oid = DEMO_OID_DEVICE,
-    .supported_rids =
-            ANJAY_DM_SUPPORTED_RIDS(DEV_RES_MANUFACTURER,
-                                    DEV_RES_MODEL_NUMBER,
-                                    DEV_RES_SERIAL_NUMBER,
-                                    DEV_RES_FIRMWARE_VERSION,
-                                    DEV_RES_REBOOT,
-                                    DEV_RES_FACTORY_RESET,
-                                    DEV_RES_AVAILABLE_POWER_SOURCES,
-                                    DEV_RES_POWER_SOURCE_VOLTAGE,
-                                    DEV_RES_POWER_SOURCE_CURRENT,
-                                    DEV_RES_BATTERY_LEVEL,
-                                    DEV_RES_MEMORY_FREE,
-                                    DEV_RES_ERROR_CODE,
-                                    DEV_RES_CURRENT_TIME,
-                                    DEV_RES_UTC_OFFSET,
-                                    DEV_RES_TIMEZONE,
-                                    DEV_RES_SUPPORTED_BINDING_AND_MODES,
-                                    DEV_RES_DEVICE_TYPE,
-                                    DEV_RES_HARDWARE_VERSION,
-                                    DEV_RES_SOFTWARE_VERSION,
-                                    DEV_RES_BATTERY_STATUS,
-                                    DEV_RES_MEMORY_TOTAL,
-                                    DEV_RES_EXTDEVINFO),
     .handlers = {
-        .instance_it = anjay_dm_instance_it_SINGLE,
-        .instance_present = anjay_dm_instance_present_SINGLE,
+        .list_instances = anjay_dm_list_instances_SINGLE,
         .instance_reset = dev_instance_reset,
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_resources = dev_resources,
         .resource_read = dev_read,
         .resource_write = dev_write,
         .resource_execute = dev_execute,
-        .resource_dim = dev_dim,
+        .list_resource_instances = dev_resource_instances,
         .transaction_begin = anjay_dm_transaction_NOOP,
         .transaction_validate = anjay_dm_transaction_NOOP,
         .transaction_commit = anjay_dm_transaction_NOOP,
@@ -437,4 +468,11 @@ void device_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
         avs_free(get_dev(def));
     }
+}
+
+void device_notify_time_dependent(anjay_t *anjay,
+                                  const anjay_dm_object_def_t **def) {
+    anjay_notify_changed(anjay, (*def)->oid, 0, DEV_RES_POWER_SOURCE_VOLTAGE);
+    anjay_notify_changed(anjay, (*def)->oid, 0, DEV_RES_POWER_SOURCE_CURRENT);
+    anjay_notify_changed(anjay, (*def)->oid, 0, DEV_RES_CURRENT_TIME);
 }

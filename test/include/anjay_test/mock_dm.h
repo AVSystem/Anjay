@@ -28,12 +28,8 @@ typedef enum {
     MOCK_DATA_INT,
     MOCK_DATA_FLOAT,
     MOCK_DATA_BOOL,
-    MOCK_DATA_OBJLNK,
-    MOCK_DATA_ARRAY,
-    MOCK_DATA_ARRAY_NOFINISH
+    MOCK_DATA_OBJLNK
 } anjay_mock_dm_data_type_t;
-
-typedef struct anjay_mock_dm_data_array_struct anjay_mock_dm_data_array_t;
 
 typedef union {
     struct {
@@ -48,7 +44,6 @@ typedef union {
         anjay_oid_t oid;
         anjay_iid_t iid;
     } objlnk;
-    const anjay_mock_dm_data_array_t *const *array;
 } anjay_mock_dm_data_value_t;
 
 typedef struct {
@@ -56,11 +51,6 @@ typedef struct {
     anjay_mock_dm_data_value_t data;
     int expected_retval;
 } anjay_mock_dm_data_t;
-
-struct anjay_mock_dm_data_array_struct {
-    anjay_riid_t index;
-    anjay_mock_dm_data_t value;
-};
 
 #define ANJAY_MOCK_DM_NONE           \
     (&(const anjay_mock_dm_data_t) { \
@@ -129,67 +119,52 @@ struct anjay_mock_dm_data_array_struct {
         .expected_retval = Retval              \
     })
 
-#define ANJAY_MOCK_DM_ARRAY_REST__(Arg, ...) __VA_ARGS__
-
-#define ANJAY_MOCK_DM_ARRAY_COMMON__(Type, ...)                                \
-    (&(const anjay_mock_dm_data_t) {                                           \
-        .type = Type,                                                          \
-        .data = {                                                              \
-            .array =                                                           \
-                    &(const anjay_mock_dm_data_array_t *const[]) {             \
-                            ANJAY_MOCK_DM_ARRAY_REST__(__VA_ARGS__, NULL) }[0] \
-        },                                                                     \
-        .expected_retval = AVS_VARARG0(__VA_ARGS__)                            \
-    })
-
-#define ANJAY_MOCK_DM_ARRAY(...) \
-    ANJAY_MOCK_DM_ARRAY_COMMON__(MOCK_DATA_ARRAY, __VA_ARGS__)
-#define ANJAY_MOCK_DM_ARRAY_NOFINISH(...) \
-    ANJAY_MOCK_DM_ARRAY_COMMON__(MOCK_DATA_ARRAY, __VA_ARGS__)
-
-#define ANJAY_MOCK_DM_ARRAY_ENTRY(...)                    \
-    (&(const anjay_mock_dm_data_array_t) {                \
-        .index = AVS_VARARG0(__VA_ARGS__),                \
-        .value = *ANJAY_MOCK_DM_ARRAY_REST__(__VA_ARGS__) \
-    })
-
 void _anjay_mock_dm_assert_common_attributes_equal(
-        const anjay_dm_internal_attrs_t *a, const anjay_dm_internal_attrs_t *b);
+        const anjay_dm_internal_oi_attrs_t *a,
+        const anjay_dm_internal_oi_attrs_t *b);
 
 void _anjay_mock_dm_assert_attributes_equal(
-        const anjay_dm_internal_res_attrs_t *a,
-        const anjay_dm_internal_res_attrs_t *b);
+        const anjay_dm_internal_r_attrs_t *a,
+        const anjay_dm_internal_r_attrs_t *b);
+
+typedef struct {
+    anjay_rid_t rid;
+    anjay_dm_resource_kind_t kind;
+    anjay_dm_resource_presence_t presence;
+} anjay_mock_dm_res_entry_t;
+
+#define ANJAY_MOCK_DM_RES_END \
+    { ANJAY_ID_INVALID, ANJAY_DM_RES_R, ANJAY_DM_RES_ABSENT }
 
 anjay_dm_object_read_default_attrs_t _anjay_mock_dm_object_read_default_attrs;
 anjay_dm_object_write_default_attrs_t _anjay_mock_dm_object_write_default_attrs;
 anjay_dm_instance_reset_t _anjay_mock_dm_instance_reset;
-anjay_dm_instance_it_t _anjay_mock_dm_instance_it;
-anjay_dm_instance_present_t _anjay_mock_dm_instance_present;
+anjay_dm_list_instances_t _anjay_mock_dm_list_instances;
 anjay_dm_instance_create_t _anjay_mock_dm_instance_create;
 anjay_dm_instance_remove_t _anjay_mock_dm_instance_remove;
 anjay_dm_instance_read_default_attrs_t
         _anjay_mock_dm_instance_read_default_attrs;
 anjay_dm_instance_write_default_attrs_t
         _anjay_mock_dm_instance_write_default_attrs;
-anjay_dm_resource_present_t _anjay_mock_dm_resource_present;
+anjay_dm_list_resources_t _anjay_mock_dm_list_resources;
 anjay_dm_resource_read_t _anjay_mock_dm_resource_read;
 anjay_dm_resource_write_t _anjay_mock_dm_resource_write;
 anjay_dm_resource_execute_t _anjay_mock_dm_resource_execute;
-anjay_dm_resource_dim_t _anjay_mock_dm_resource_dim;
+anjay_dm_resource_reset_t _anjay_mock_dm_resource_reset;
+anjay_dm_list_resource_instances_t _anjay_mock_dm_list_resource_instances;
 anjay_dm_resource_read_attrs_t _anjay_mock_dm_resource_read_attrs;
 anjay_dm_resource_write_attrs_t _anjay_mock_dm_resource_write_attrs;
-anjay_dm_resource_operations_t _anjay_mock_dm_resource_operations;
 
 #define ANJAY_MOCK_DM_HANDLERS_NOATTRS                   \
-    .instance_it = _anjay_mock_dm_instance_it,           \
-    .instance_present = _anjay_mock_dm_instance_present, \
+    .list_instances = _anjay_mock_dm_list_instances,     \
     .instance_create = _anjay_mock_dm_instance_create,   \
     .instance_remove = _anjay_mock_dm_instance_remove,   \
-    .resource_present = _anjay_mock_dm_resource_present, \
+    .list_resources = _anjay_mock_dm_list_resources,     \
     .resource_read = _anjay_mock_dm_resource_read,       \
     .resource_write = _anjay_mock_dm_resource_write,     \
     .resource_execute = _anjay_mock_dm_resource_execute, \
-    .resource_dim = _anjay_mock_dm_resource_dim
+    .resource_reset = _anjay_mock_dm_resource_reset,     \
+    .list_resource_instances = _anjay_mock_dm_list_resource_instances
 
 #define ANJAY_MOCK_DM_HANDLERS                                           \
     ANJAY_MOCK_DM_HANDLERS_NOATTRS,                                      \
@@ -213,36 +188,28 @@ void _anjay_mock_dm_expect_object_read_default_attrs(
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
         int retval,
-        const anjay_dm_internal_attrs_t *attrs);
+        const anjay_dm_internal_oi_attrs_t *attrs);
 void _anjay_mock_dm_expect_object_write_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_internal_oi_attrs_t *attrs,
         int retval);
 void _anjay_mock_dm_expect_instance_reset(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         int retval);
-void _anjay_mock_dm_expect_instance_it(
+void _anjay_mock_dm_expect_list_instances(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
-        uintptr_t iteration,
         int retval,
-        anjay_iid_t out);
-void _anjay_mock_dm_expect_instance_present(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj_ptr,
-        anjay_iid_t iid,
-        int retval);
+        const anjay_iid_t *iid_array);
 void _anjay_mock_dm_expect_instance_create(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
-        anjay_ssid_t ssid,
-        int retval,
-        anjay_iid_t out_iid);
+        int retval);
 void _anjay_mock_dm_expect_instance_remove(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
@@ -254,31 +221,26 @@ void _anjay_mock_dm_expect_instance_read_default_attrs(
         anjay_iid_t iid,
         anjay_ssid_t ssid,
         int retval,
-        const anjay_dm_internal_attrs_t *attrs);
+        const anjay_dm_internal_oi_attrs_t *attrs);
 void _anjay_mock_dm_expect_instance_write_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_internal_oi_attrs_t *attrs,
         int retval);
-void _anjay_mock_dm_expect_resource_present(
+void _anjay_mock_dm_expect_list_resources(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
-        anjay_rid_t rid,
-        int retval);
-void _anjay_mock_dm_expect_resource_operations(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj_ptr,
-        anjay_rid_t rid,
-        anjay_dm_resource_op_mask_t mask,
-        int retval);
+        int retval,
+        const anjay_mock_dm_res_entry_t *res_array);
 void _anjay_mock_dm_expect_resource_read(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
+        anjay_riid_t riid,
         int retval,
         const anjay_mock_dm_data_t *data);
 void _anjay_mock_dm_expect_resource_write(
@@ -286,6 +248,7 @@ void _anjay_mock_dm_expect_resource_write(
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
+        anjay_riid_t riid,
         const anjay_mock_dm_data_t *data,
         int retval);
 void _anjay_mock_dm_expect_resource_execute(
@@ -295,12 +258,19 @@ void _anjay_mock_dm_expect_resource_execute(
         anjay_rid_t rid,
         const anjay_mock_dm_data_t *data,
         int retval);
-void _anjay_mock_dm_expect_resource_dim(
+void _anjay_mock_dm_expect_resource_reset(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
         int retval);
+void _anjay_mock_dm_expect_list_resource_instances(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        int retval,
+        const anjay_riid_t *riid_array);
 void _anjay_mock_dm_expect_resource_read_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
@@ -308,14 +278,32 @@ void _anjay_mock_dm_expect_resource_read_attrs(
         anjay_rid_t rid,
         anjay_ssid_t ssid,
         int retval,
-        const anjay_dm_internal_res_attrs_t *attrs);
+        const anjay_dm_internal_r_attrs_t *attrs);
 void _anjay_mock_dm_expect_resource_write_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_res_attrs_t *attrs,
+        const anjay_dm_internal_r_attrs_t *attrs,
+        int retval);
+void _anjay_mock_dm_expect_resource_instance_read_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        int retval,
+        const anjay_dm_internal_r_attrs_t *attrs);
+void _anjay_mock_dm_expect_resource_instance_write_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_r_attrs_t *attrs,
         int retval);
 void _anjay_mock_dm_expect_clean(void);
 void _anjay_mock_dm_expected_commands_clear(void);

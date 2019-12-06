@@ -22,10 +22,19 @@ using namespace std;
 
 namespace ssl {
 
-Context::Context(std::shared_ptr<SecurityInfo> security, bool debug)
-        : security_(security), debug_(debug) {
+Context::Context(std::shared_ptr<SecurityInfo> security,
+                 bool debug,
+                 std::string connection_id)
+        : security_(security), debug_(debug), connection_id_(connection_id) {
     memset(&session_cache_, 0, sizeof(session_cache_));
     mbedtls_ssl_cache_init(&session_cache_);
+
+#if !defined(MBEDTLS_SSL_DTLS_CONNECTION_ID)
+    if (connection_id.size() > 0) {
+        throw runtime_error(
+                "connection_id is not supported in this version of pymbedtls");
+    }
+#endif // !MBEDTLS_SSL_DTLS_CONNECTION_ID
 }
 
 Context::~Context() {

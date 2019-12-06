@@ -23,6 +23,109 @@
 extern "C" {
 #endif
 
+/**
+ * Type used to return Object Instance or Resource Instance lists.
+ */
+typedef struct anjay_dm_list_ctx_struct anjay_dm_list_ctx_t;
+
+/**
+ * Used to return entries from @ref anjay_dm_list_instances_t or
+ * @ref anjay_dm_list_resource_instances_t .
+ *
+ * @param ctx Context passed to the iteration handler.
+ * @param id  ID of the returned Object Instance or Resource Instance. MUST NOT
+ *            be <c>ANJAY_ID_INVALID</c> / <c>ANJAY_ID_INVALID</c> (65535).
+ *
+ * This function returns no value. Any errors that may occur are handled
+ * internally by the library after the calling handler returns.
+ */
+void anjay_dm_emit(anjay_dm_list_ctx_t *ctx, uint16_t id);
+
+/**
+ * Type used to return Resource lists.
+ */
+typedef struct anjay_dm_resource_list_ctx_struct anjay_dm_resource_list_ctx_t;
+
+/**
+ * Kind of a Resource.
+ */
+typedef enum {
+    /**
+     * Read-only Single-Instance Resource. Bootstrap Server might attempt to
+     * write to it anyway.
+     */
+    ANJAY_DM_RES_R,
+
+    /**
+     * Write-only Single-Instance Resource.
+     */
+    ANJAY_DM_RES_W,
+
+    /**
+     * Read/Write Single-Instance Resource.
+     */
+    ANJAY_DM_RES_RW,
+
+    /**
+     * Read-only Multiple Instance Resource. Bootstrap Server might attempt to
+     * write to it anyway.
+     */
+    ANJAY_DM_RES_RM,
+
+    /**
+     * Write-only Multiple Instance Resource.
+     */
+    ANJAY_DM_RES_WM,
+
+    /**
+     * Read/Write Multiple Instance Resource.
+     */
+    ANJAY_DM_RES_RWM,
+
+    /**
+     * Executable Resource.
+     */
+    ANJAY_DM_RES_E,
+
+    /**
+     * Resource that can be read/written only by Bootstrap server.
+     */
+    ANJAY_DM_RES_BS_RW
+} anjay_dm_resource_kind_t;
+
+/**
+ * Resource presentness flag.
+ */
+typedef enum {
+    /**
+     * Resource that is absent (not yet instantiable, but might be instantiated
+     * e.g. using a Write operation).
+     */
+    ANJAY_DM_RES_ABSENT = 0,
+
+    /**
+     * Resource that is present.
+     */
+    ANJAY_DM_RES_PRESENT = 1
+} anjay_dm_resource_presence_t;
+
+/**
+ * Used to return Resource entries from @ref anjay_dm_list_resources_t .
+ *
+ * @param ctx      Context passed to the iteration handler.
+ * @param rid      ID of the returned Resource. MUST NOT be
+ *                 <c>ANJAY_ID_INVALID</c> (65535).
+ * @param kind     Kind of the returned Resource.
+ * @param presence Flag that indicates whether the Resource is PRESENT.
+ *
+ * This function returns no value. Any errors that may occur are handled
+ * internally by the library after the calling handler returns.
+ */
+void anjay_dm_emit_res(anjay_dm_resource_list_ctx_t *ctx,
+                       anjay_rid_t rid,
+                       anjay_dm_resource_kind_t kind,
+                       anjay_dm_resource_presence_t presence);
+
 /** Type used to return some content in response to a RPC. */
 typedef struct anjay_output_ctx_struct anjay_output_ctx_t;
 
@@ -114,20 +217,6 @@ int anjay_ret_bytes(anjay_output_ctx_t *ctx, const void *data, size_t length);
 int anjay_ret_string(anjay_output_ctx_t *ctx, const char *value);
 
 /**
- * Returns a 32-bit signed integer from the data model handler.
- *
- * Note: the only difference between @p anjay_ret_i32 and @p anjay_ret_i64 is
- * the size of the @p value parameter. Actual number of bytes sent on the wire
- * depends on the @p value.
- *
- * @param ctx   Output context to operate on.
- * @param value The value to return.
- *
- * @returns 0 on success, a negative value in case of error.
- */
-int anjay_ret_i32(anjay_output_ctx_t *ctx, int32_t value);
-
-/**
  * Returns a 64-bit signed integer from the data model handler.
  *
  * Note: the only difference between @p anjay_ret_i32 and @p anjay_ret_i64 is
@@ -142,16 +231,22 @@ int anjay_ret_i32(anjay_output_ctx_t *ctx, int32_t value);
 int anjay_ret_i64(anjay_output_ctx_t *ctx, int64_t value);
 
 /**
- * Returns a 32-bit floating-point value from the data model handler.
+ * Returns a 32-bit signed integer from the data model handler.
+ *
+ * Note: the only difference between @p anjay_ret_i32 and @p anjay_ret_i64 is
+ * the size of the @p value parameter. Actual number of bytes sent on the wire
+ * depends on the @p value.
  *
  * @param ctx   Output context to operate on.
  * @param value The value to return.
  *
  * @returns 0 on success, a negative value in case of error.
  */
-int anjay_ret_float(anjay_output_ctx_t *ctx, float value);
+static inline int anjay_ret_i32(anjay_output_ctx_t *ctx, int32_t value) {
+    return anjay_ret_i64(ctx, value);
+}
 
-/**
+/*
  * Returns a 64-bit floating-point value from the data model handler.
  *
  * Note: the @p value will be sent as a 32-bit floating-point value if it is
@@ -163,6 +258,18 @@ int anjay_ret_float(anjay_output_ctx_t *ctx, float value);
  * @returns 0 on success, a negative value in case of error.
  */
 int anjay_ret_double(anjay_output_ctx_t *ctx, double value);
+
+/**
+ * Returns a 32-bit floating-point value from the data model handler.
+ *
+ * @param ctx   Output context to operate on.
+ * @param value The value to return.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+static inline int anjay_ret_float(anjay_output_ctx_t *ctx, float value) {
+    return anjay_ret_double(ctx, value);
+}
 
 /**
  * Returns a boolean value from the data model handler.
@@ -186,59 +293,6 @@ int anjay_ret_bool(anjay_output_ctx_t *ctx, bool value);
  */
 int anjay_ret_objlnk(anjay_output_ctx_t *ctx, anjay_oid_t oid, anjay_iid_t iid);
 
-/**
- * Begins returing an array of values from the data model handler.
- *
- * A single array may contain values of multiple types.
- *
- * Example usage:
- * @code
- * anjay_output_ctx_t *array_ctx = anjay_ret_array_start(ctx);
- * if (!array_ctx
- *         || anjay_ret_array_index(array_ctx, 0)
- *         || anjay_ret_i32(array_ctx, 42)
- *         || anjay_ret_array_index(array_ctx, 1)
- *         || anjay_ret_string(array_ctx, "foo")
- *         || anjay_ret_array_finish(array_ctx)) {
- *     return ANJAY_ERR_INTERNAL;
- * }
- * @endcode
- *
- * Note: the handler does not need to call @p anjay_ret_array_finish on
- * the context returned by this function if any anjay_ret_* call on the array
- * context returns an error value. In that case the library will automatically
- * free all resources allocated by @ref anjay_ret_array_start after the data
- * model handler finishes.
- *
- * @param ctx Output context to operate on.
- *
- * @returns Created array context on success, NULL in case of error.
- */
-anjay_output_ctx_t *anjay_ret_array_start(anjay_output_ctx_t *ctx);
-
-/**
- * Assigns an index to the next value returned using one of the
- * anjay_ret_* functions.
- *
- * For an example usage, see @ref anjay_ret_array_start .
- *
- * @param array_ctx Array context to operate on.
- * @param index     Array index to assign.
- *
- * @returns 0 on success, a negative value in case of error.
- */
-int anjay_ret_array_index(anjay_output_ctx_t *array_ctx, anjay_riid_t index);
-
-/**
- * Finished an array of values returned from the data model and cleans up
- * the @p array_ctx .
- *
- * @param array_ctx Array context to clean up.
- *
- * @returns 0 on success, a negative value in case of error.
- */
-int anjay_ret_array_finish(anjay_output_ctx_t *array_ctx);
-
 /** Type used to retrieve RPC content. */
 typedef struct anjay_input_ctx_struct anjay_input_ctx_t;
 
@@ -249,9 +303,12 @@ typedef struct anjay_execute_ctx_struct anjay_execute_ctx_t;
 /**
  * Reads next argument from execute request content.
  *
- * Negative return value indicate an error, which can be caused either by
- * internal error in anjay, or by malformed message. In case of an error all
- * data read up to the point when an error occurs should be considered invalid.
+ * Returns @ref ANJAY_ERR_BAD_REQUEST to indicate the message is malformed and
+ * user should forward this code as the return value of @ref
+ * anjay_dm_resource_execute_t . Arguments are parsed sequentially so not
+ * necessarily the first call of this function will return an error. In case of
+ * an error all data read up to the point when an error occurs should be
+ * considered invalid.
  *
  * User not interested in argument value (or interested in ignoring the value
  * after reading some part of it), can safely call this function to skip tail of
@@ -261,9 +318,10 @@ typedef struct anjay_execute_ctx_struct anjay_execute_ctx_t;
  * @param out_arg       Obtained argument id
  * @param out_has_value true if argument has a value, false otherwise
  *
- * @returns 0 on success, negative value in case of an error (described above),
- *          ANJAY_EXECUTE_GET_ARG_END in case of end of message
- *          (in which case out_arg is set to -1, and out_has_value to false)
+ * @returns 0 on success, @ref ANJAY_ERR_BAD_REQUEST in case of malformed
+ *          message, @ref ANJAY_EXECUTE_GET_ARG_END in case of end of message
+ *          (in which case @p out_arg is set to -1, and @p out_has_value to
+ *          @c false)
  */
 int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
                                int *out_arg,
@@ -273,17 +331,21 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
  * Attempts to read currently processed argument's value (or part of it).
  * Read data is written as null-terminated string into @p out_buf.
  *
+ * Returns @ref ANJAY_ERR_BAD_REQUEST to indicate the message is malformed and
+ * user should forward this code as the return value of @ref
+ * anjay_dm_resource_execute_t .
+ *
  * Function might return 0 when there is nothing more to read or because
  * argument does not have associated value with it, or because the value has
  * already been read / skipped entirely.
  *
  * If the function returns buf_size-1, then there might be more data to read.
  *
- * Error is reported (as -1 return value) in the following cases:
- * 1. buf_size < 2
- * 2. out_buf is NULL
- * 3. In case of malformed message or when an internal error occurs.
- *    In such cases all data read up to this point should be considered invalid.
+ * In case of an error following values are returned:
+ * - -1 if buf_size < 2 or out_buf is NULL
+ * - @ref ANJAY_ERR_BAD_REQUEST in case of malformed message
+ *
+ * In such cases all data read up to this point should be considered invalid.
  *
  * @param ctx       Execute context
  * @param out_buf   Buffer where read bytes will be stored
@@ -429,70 +491,6 @@ int anjay_get_bool(anjay_input_ctx_t *ctx, bool *out);
 int anjay_get_objlnk(anjay_input_ctx_t *ctx,
                      anjay_oid_t *out_oid,
                      anjay_iid_t *out_iid);
-
-/**
- * Begins reading an array of values (also known as Multiple Resource Instances)
- * from the RPC request content.
- *
- * Example usage:
- * @code
- * anjay_input_ctx_t *array_ctx = anjay_get_array(ctx);
- * if (!array_ctx) {
- *     return ANJAY_ERR_INTERNAL;
- * }
- *
- * anjay_riid_t index;
- * int32_t value;
- * if (anjay_get_array_index(array_ctx, &index)
- *         || anjay_get_i32(array_ctx, &value)) {
- *     return ANJAY_ERR_BAD_REQUEST;
- * }
- *
- * char buffer[256];
- * if (anjay_get_array_index(array_ctx, &index)
- *         || anjay_get_string(array_ctx, buffer, sizeof(buffer))) {
- *     return ANJAY_ERR_BAD_REQUEST;
- * }
- *
- * if (anjay_get_array_index(array_ctx, &index)
- *         || index != ANJAY_GET_INDEX_END) {
- *     return ANJAY_ERR_BAD_REQUEST;
- * }
- *
- * // continue processing the original ctx
- * @endcode
- *
- * WARNING: An RPC request content may contain Resource Instances with repeating
- * identifiers. LwM2M Specification requires Resource Instance ID to uniquely
- * identify the Resource Instance, but it does not specify however, what action
- * should be taken upon receiving such request. Therefore it is up to the user,
- * to decide whether such RPC shall be rejected or accepted in any way.
- *
- * Note: created context does not need to be released.
- *
- * @param ctx Input context to operate on.
- *
- * @returns Created array context on success, NULL in case of error.
- */
-anjay_input_ctx_t *anjay_get_array(anjay_input_ctx_t *ctx);
-
-/** A value returned from @ref anjay_get_array_index to indicate end of
- * the array. */
-#define ANJAY_GET_INDEX_END 1
-
-/**
- * Reads an index of the next array entry.
- *
- * @param      array_ctx Array context to operate on.
- * @param[out] out_index Index of the next array entry.
- *
- * @returns:
- * - 0 on success,
- * - ANJAY_GET_INDEX_END when there are no more entries in the array,
- * - a negative value in case of error.
- */
-int anjay_get_array_index(anjay_input_ctx_t *array_ctx,
-                          anjay_riid_t *out_index);
 
 #ifdef __cplusplus
 } /* extern "C" */

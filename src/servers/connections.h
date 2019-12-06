@@ -20,6 +20,10 @@
 #include "../anjay_core.h"
 #include "../utils_core.h"
 
+#include <avsystem/commons/url.h>
+
+#include <avsystem/coap/ctx.h>
+
 #if !defined(ANJAY_SERVERS_INTERNALS) && !defined(ANJAY_TEST)
 #    error "Headers from servers/ are not meant to be included from outside"
 #endif
@@ -70,8 +74,7 @@ typedef enum {
 
 /**
  * State of a specific connection to an LwM2M server. One server entry may have
- * multiple connections, if multiple binding is used (e.g. US binding mode,
- * signifying UDP+SMS).
+ * up to 2 connections, if the SMS trigger feature is used.
  */
 typedef struct {
     /**
@@ -79,6 +82,13 @@ typedef struct {
      * by _anjay_connection_uri().
      */
     anjay_url_t uri;
+
+    /**
+     * CoAP transport layer type (UDP/TCP/SMS etc.). Initialized during socket
+     * refresh, Used to select an appropriate connection_def and CoAP context
+     * type.
+     */
+    anjay_socket_transport_t transport;
 
     /**
      * Socket used for communication with the given server. Aside from being
@@ -123,11 +133,13 @@ typedef struct {
      * - The socket may exist and be online (ready for communication) - this is
      *   the normal, fully active state.
      */
-    avs_net_abstract_socket_t *conn_socket_;
+    avs_net_socket_t *conn_socket_;
 #if defined(__GNUC__) && !defined(__CC_ARM) \
         && !(defined(ANJAY_SERVERS_CONNECTION_SOURCE) || defined(ANJAY_TEST))
 #    pragma GCC poison conn_socket_
 #endif
+
+    avs_coap_ctx_t *coap_ctx;
 
     /**
      * Token that changes to a new unique value every time the CoAP endpoint
@@ -174,16 +186,10 @@ typedef struct {
     anjay_server_connection_nontransient_state_t nontransient_state;
 
     /**
-     * Cached value of the connection mode, according to the Binding value most
-     * recently read in _anjay_active_server_refresh().
-     */
-    anjay_server_connection_mode_t mode;
-
-    /**
      * Handle to scheduled queue_mode_close_socket() scheduler job. Scheduled
      * by _anjay_connection_schedule_queue_mode_close().
      */
-    anjay_sched_handle_t queue_mode_close_socket_clb;
+    avs_sched_handle_t queue_mode_close_socket_clb;
 } anjay_server_connection_t;
 
 typedef struct {
@@ -192,14 +198,6 @@ typedef struct {
      * anjay_server_connection_t for details.
      */
     anjay_server_connection_t connections_[ANJAY_CONNECTION_LIMIT_];
-
-    /**
-     * Information about which connection is currently the "primary" one. The
-     * "primary" connection is the one on which the autonomous outgoing messages
-     * (i.e. Register/Update or Bootstrap Request) are sent. See the docs in
-     * server.h for details (Ctrl+F the word "primary").
-     */
-    anjay_connection_type_t primary_connection;
 } anjay_connections_t;
 
 static inline anjay_server_connection_t *
@@ -214,32 +212,62 @@ _anjay_connection_get(anjay_connections_t *connections,
 #    pragma GCC poison connections_
 #endif
 
-avs_net_abstract_socket_t *_anjay_connection_internal_get_socket(
+avs_net_socket_t *_anjay_connection_internal_get_socket(
         const anjay_server_connection_t *connection);
 
 void _anjay_connection_internal_clean_socket(
-        const anjay_t *anjay, anjay_server_connection_t *connection);
-
-anjay_connection_type_t
-_anjay_connections_get_primary(anjay_connections_t *connections);
+        anjay_t *anjay, anjay_server_connection_t *connection);
 
 anjay_conn_session_token_t
 _anjay_connections_get_primary_session_token(anjay_connections_t *connections);
 
 bool _anjay_connection_is_online(anjay_server_connection_t *connection);
 
-void _anjay_connection_internal_bring_online(anjay_t *anjay,
-                                             anjay_connections_t *connections,
-                                             anjay_connection_type_t conn_type);
+avs_error_t _anjay_server_connection_internal_bring_online(
+        anjay_server_info_t *server,
+        anjay_connection_type_t conn_type,
+        const anjay_iid_t *security_iid);
 
-void _anjay_connections_close(const anjay_t *anjay,
-                              anjay_connections_t *connections);
+void _anjay_connections_close(anjay_t *anjay, anjay_connections_t *connections);
 
-void _anjay_connections_refresh(anjay_t *anjay,
-                                anjay_connections_t *connections,
-                                anjay_iid_t security_iid,
-                                const anjay_url_t *uri,
-                                const char *binding_mode);
+typedef struct {
+    char sni[256];
+} anjay_server_name_indication_t;
+
+/**
+ * Makes sure that socket connections for a given server are up-to-date with the
+ * current configuration; (re)connects any sockets and schedules Register/Update
+ * operations as necessary.
+ *
+ * Any errors are reported by calling _anjay_connections_on_refreshed().
+ *
+ * @param server            Server information object to operate on.
+ *
+ * @param security_iid      Security Object Instance ID related to the server
+ *                          being refreshed.
+ *
+ * @param move_uri          Pointer to a server URL to connect to. This function
+ *                          will take ownership of data allocated inside that
+ *                          object.
+ *
+ * @param trigger_requested True if SMS Trigger connection is supposed to be
+ *                          used in addition to the primary connection. In the
+ *                          current version, the value of this argument will be
+ *                          ignored if the primary connection uses SMS
+ *                          transport.
+ *
+ * @param sni               Server Name Identification value to be used for
+ *                          certificate validation during TLS handshake.
+ */
+void _anjay_server_connections_refresh(
+        anjay_server_info_t *server,
+        anjay_iid_t security_iid,
+        avs_url_t **move_uri,
+        bool trigger_requested,
+        const anjay_server_name_indication_t *sni);
+
+bool _anjay_socket_transport_supported(anjay_t *anjay,
+                                       anjay_socket_transport_t type);
 
 VISIBILITY_PRIVATE_HEADER_END
 

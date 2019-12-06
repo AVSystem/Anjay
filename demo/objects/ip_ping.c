@@ -97,16 +97,53 @@ typedef struct {
 static inline ip_ping_t *
 get_ip_ping(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, ip_ping_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, ip_ping_t, def);
+}
+
+static int ip_ping_list_resources(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+    anjay_dm_emit_res(ctx, IP_PING_HOSTNAME, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_REPETITIONS, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_TIMEOUT_MS, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_BLOCK_SIZE, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_DSCP, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_RUN, ANJAY_DM_RES_E, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_STATE, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_SUCCESS_COUNT, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_ERROR_COUNT, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_AVG_TIME_MS, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_MIN_TIME_MS, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_MAX_TIME_MS, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, IP_PING_TIME_STDEV_US, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    return 0;
 }
 
 static int ip_ping_resource_read(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
+                                 anjay_riid_t riid,
                                  anjay_output_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     ip_ping_t *ping = get_ip_ping(obj_ptr);
 
     switch (rid) {
@@ -134,10 +171,10 @@ static int ip_ping_resource_read(anjay_t *anjay,
         return anjay_ret_i64(ctx, ping->stats.max_response_time);
     case IP_PING_TIME_STDEV_US:
         return anjay_ret_i64(ctx, ping->stats.response_time_stdev_us);
-    case IP_PING_RUN:
-        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     default:
-        return ANJAY_ERR_NOT_FOUND;
+        AVS_UNREACHABLE(
+                "Read handler called on unknown or non-readable resource");
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
 
@@ -175,9 +212,12 @@ static int ip_ping_resource_write(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
+                                  anjay_riid_t riid,
                                   anjay_input_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     ip_ping_t *ping = get_ip_ping(obj_ptr);
     int result;
 
@@ -208,6 +248,8 @@ static int ip_ping_resource_write(anjay_t *anjay,
                 || (result = get_uint8(ctx, &ping->configuration.dscp, 0, 63)));
         return result;
     default:
+        // Bootstrap Server may try to write to other resources,
+        // so no AVS_UNREACHABLE() here
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
@@ -364,20 +406,17 @@ static int ip_ping_resource_execute(anjay_t *anjay,
                                     anjay_rid_t rid,
                                     anjay_execute_ctx_t *arg_ctx) {
     (void) arg_ctx;
+    (void) rid;
     ip_ping_t *ping = get_ip_ping(obj_ptr);
     int result;
 
-    switch (rid) {
-    case IP_PING_RUN:
-        if ((result = ip_ping_reset_diagnostic_state(anjay, ping))) {
-            return result;
-        }
-        ping->stats.state = start_ip_ping(anjay, ping);
-        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, IP_PING_STATE);
-        return 0;
-    default:
-        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    assert(rid == IP_PING_RUN);
+    if ((result = ip_ping_reset_diagnostic_state(anjay, ping))) {
+        return result;
     }
+    ping->stats.state = start_ip_ping(anjay, ping);
+    anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, IP_PING_STATE);
+    return 0;
 }
 
 static int
@@ -400,23 +439,9 @@ ip_ping_transaction_rollback(anjay_t *anjay,
 
 static const anjay_dm_object_def_t IP_PING = {
     .oid = DEMO_OID_IP_PING,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(IP_PING_HOSTNAME,
-                                              IP_PING_REPETITIONS,
-                                              IP_PING_TIMEOUT_MS,
-                                              IP_PING_BLOCK_SIZE,
-                                              IP_PING_DSCP,
-                                              IP_PING_RUN,
-                                              IP_PING_STATE,
-                                              IP_PING_SUCCESS_COUNT,
-                                              IP_PING_ERROR_COUNT,
-                                              IP_PING_AVG_TIME_MS,
-                                              IP_PING_MIN_TIME_MS,
-                                              IP_PING_MAX_TIME_MS,
-                                              IP_PING_TIME_STDEV_US),
     .handlers = {
-        .instance_it = anjay_dm_instance_it_SINGLE,
-        .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_instances = anjay_dm_list_instances_SINGLE,
+        .list_resources = ip_ping_list_resources,
         .resource_read = ip_ping_resource_read,
         .resource_write = ip_ping_resource_write,
         .resource_execute = ip_ping_resource_execute,

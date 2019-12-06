@@ -19,21 +19,25 @@
 
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/net.h>
+#include <avsystem/commons/shared_buffer.h>
 #include <avsystem/commons/stream.h>
+
+#include <avsystem/coap/udp.h>
 
 #include "dm_core.h"
 #include "observe/observe_core.h"
 
+#include "bootstrap_core.h"
 #include "downloader.h"
-#include "interface/bootstrap_core.h"
 #include "servers.h"
+#include "stats.h"
 #include "utils_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {
     anjay_notify_queue_t queue;
-    anjay_sched_handle_t handle;
+    avs_sched_handle_t handle;
 } anjay_scheduled_notify_t;
 
 typedef struct {
@@ -43,64 +47,68 @@ typedef struct {
 
 struct anjay_struct {
     bool offline;
+    avs_sched_handle_t enter_offline_job_handle;
+
     avs_net_ssl_version_t dtls_version;
-    avs_net_socket_configuration_t udp_socket_config;
-    anjay_sched_t *sched;
+    avs_net_socket_configuration_t socket_config;
+    avs_sched_t *sched;
     anjay_dm_t dm;
     uint16_t udp_listen_port;
     anjay_servers_t *servers;
-    anjay_sched_handle_t reload_servers_sched_job_handle;
+    avs_sched_handle_t reload_servers_sched_job_handle;
 #ifdef WITH_OBSERVE
     anjay_observe_state_t observe;
 #endif
 #ifdef WITH_BOOTSTRAP
     anjay_bootstrap_t bootstrap;
 #endif
-    avs_coap_tx_params_t udp_tx_params;
+#ifdef WITH_AVS_COAP_UDP
+    avs_coap_udp_response_cache_t *udp_response_cache;
+    avs_coap_udp_tx_params_t udp_tx_params;
+#endif
     avs_net_dtls_handshake_timeouts_t udp_dtls_hs_tx_params;
-    avs_coap_ctx_t *coap_ctx;
-    avs_stream_abstract_t *comm_stream;
+    avs_net_socket_tls_ciphersuites_t default_tls_ciphersuites;
+
     anjay_connection_ref_t current_connection;
     anjay_scheduled_notify_t scheduled_notify;
 
     const char *endpoint_name;
     anjay_transaction_state_t transaction_state;
 
-    uint8_t *in_buffer;
-    size_t in_buffer_size;
-    uint8_t *out_buffer;
-    size_t out_buffer_size;
+    avs_shared_buffer_t *in_shared_buffer;
+    avs_shared_buffer_t *out_shared_buffer;
 
 #ifdef WITH_DOWNLOADER
     anjay_downloader_t downloader;
 #endif // WITH_DOWNLOADER
+#ifdef WITH_ACCESS_CONTROL
+    bool access_control_sync_in_progress;
+#endif // WITH_ACCESS_CONTROL
+    bool prefer_hierarchical_formats;
+#ifdef WITH_NET_STATS
+    closed_connections_stats_t closed_connections_stats;
+#endif // WITH_NET_STATS
+    bool use_connection_id;
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1
 
-#    define _anjay_sms_router(Anjay) NULL
-#    define _anjay_local_msisdn(Anjay) NULL
-#    define _anjay_sms_poll_socket(Anjay) NULL
-
 uint8_t _anjay_make_error_response_code(int handler_result);
 
-const avs_coap_tx_params_t *
-_anjay_tx_params_for_conn_type(anjay_t *anjay,
-                               anjay_connection_type_t conn_type);
+avs_time_duration_t
+_anjay_max_transmit_wait_for_transport(anjay_t *anjay,
+                                       anjay_socket_transport_t transport);
 
-int _anjay_bind_server_stream(anjay_t *anjay, anjay_connection_ref_t ref);
+avs_time_duration_t
+_anjay_exchange_lifetime_for_transport(anjay_t *anjay,
+                                       anjay_socket_transport_t transport);
 
-void _anjay_release_server_stream_without_scheduling_queue(anjay_t *anjay);
+int _anjay_bind_connection(anjay_t *anjay, anjay_connection_ref_t ref);
 
-void _anjay_release_server_stream(anjay_t *anjay);
+void _anjay_release_connection(anjay_t *anjay);
 
-/**
- * @param anjay Pointer to the Anjay object, passed to scheduled jobs. Not
- *              dereferenced by the scheduler object.
- *
- * @returns Created scheduler object, or NULL if there is not enough memory.
- */
-anjay_sched_t *_anjay_sched_new(anjay_t *anjay);
+int _anjay_parse_request(const avs_coap_request_header_t *hdr,
+                         anjay_request_t *out_request);
 
 VISIBILITY_PRIVATE_HEADER_END
 

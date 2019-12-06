@@ -47,20 +47,66 @@ typedef struct {
 static inline extdev_repr_t *
 get_extdev(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, extdev_repr_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, extdev_repr_t, def);
 }
 
 static int generate_fake_rssi_value(void) {
     return 50 + (int) (time_to_rand() % 20);
 }
 
+static int dev_resources(anjay_t *anjay,
+                         const anjay_dm_object_def_t *const *obj_ptr,
+                         anjay_iid_t iid,
+                         anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_OBU_ID, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_PLATE_NUMBER, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_IMEI, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_IMSI, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_ICCID, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_GPRS_RSSI, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_GPRS_PLMN, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_GPRS_ULMODULATION, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_GPRS_DLMODULATION, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_GPRS_ULFREQUENCY, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_GPRS_DLFREQUENCY, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_RX_BYTES, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_TX_BYTES, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS,
+                      ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS,
+                      ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, EXT_DEV_RES_UPTIME, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int dev_read(anjay_t *anjay,
                     const anjay_dm_object_def_t *const *obj_ptr,
                     anjay_iid_t iid,
                     anjay_rid_t rid,
+                    anjay_riid_t riid,
                     anjay_output_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
 
     switch (rid) {
     case EXT_DEV_RES_OBU_ID:
@@ -104,33 +150,16 @@ static int dev_read(anjay_t *anjay,
                                              + (double) diff.nanoseconds / 1e9);
     }
     default:
-        return ANJAY_ERR_NOT_FOUND;
+        AVS_UNREACHABLE("Read handler called on unknown resource");
+        return ANJAY_ERR_NOT_IMPLEMENTED;
     }
 }
 
 static const anjay_dm_object_def_t EXT_DEV_INFO = {
     .oid = DEMO_OID_EXT_DEV_INFO,
-    .supported_rids =
-            ANJAY_DM_SUPPORTED_RIDS(EXT_DEV_RES_OBU_ID,
-                                    EXT_DEV_RES_PLATE_NUMBER,
-                                    EXT_DEV_RES_IMEI,
-                                    EXT_DEV_RES_IMSI,
-                                    EXT_DEV_RES_ICCID,
-                                    EXT_DEV_RES_GPRS_RSSI,
-                                    EXT_DEV_RES_GPRS_PLMN,
-                                    EXT_DEV_RES_GPRS_ULMODULATION,
-                                    EXT_DEV_RES_GPRS_DLMODULATION,
-                                    EXT_DEV_RES_GPRS_ULFREQUENCY,
-                                    EXT_DEV_RES_GPRS_DLFREQUENCY,
-                                    EXT_DEV_RES_RX_BYTES,
-                                    EXT_DEV_RES_TX_BYTES,
-                                    EXT_DEV_RES_NUM_INCOMING_RETRANSMISSIONS,
-                                    EXT_DEV_RES_NUM_OUTGOING_RETRANSMISSIONS,
-                                    EXT_DEV_RES_UPTIME),
     .handlers = {
-        .instance_it = anjay_dm_instance_it_SINGLE,
-        .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_instances = anjay_dm_list_instances_SINGLE,
+        .list_resources = dev_resources,
         .resource_read = dev_read
     }
 };

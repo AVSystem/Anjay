@@ -55,7 +55,7 @@ typedef struct {
 static inline location_t *
 get_location(const anjay_dm_object_def_t *const *obj_ptr) {
     assert(obj_ptr);
-    return container_of(obj_ptr, location_t, def);
+    return AVS_CONTAINER_OF(obj_ptr, location_t, def);
 }
 
 static int ret_velocity(anjay_output_ctx_t *ctx, const velocity_t *velocity) {
@@ -82,14 +82,40 @@ static int ret_velocity(anjay_output_ctx_t *ctx, const velocity_t *velocity) {
     return anjay_ret_bytes(ctx, data, sizeof(data));
 }
 
+static int location_list_resources(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+    anjay_dm_emit_res(ctx, LOCATION_LATITUDE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, LOCATION_LONGITUDE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, LOCATION_ALTITUDE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, LOCATION_RADIUS, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, LOCATION_VELOCITY, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, LOCATION_TIMESTAMP, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int location_resource_read(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
+                                  anjay_riid_t riid,
                                   anjay_output_ctx_t *ctx) {
     (void) anjay;
     (void) obj_ptr;
     (void) iid;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     location_t *location = get_location(obj_ptr);
 
     switch (rid) {
@@ -106,6 +132,7 @@ static int location_resource_read(anjay_t *anjay,
     case LOCATION_TIMESTAMP:
         return anjay_ret_i64(ctx, location->timestamp);
     default:
+        AVS_UNREACHABLE("Read called on unknown resource");
         return ANJAY_ERR_NOT_FOUND;
     }
 }
@@ -283,16 +310,9 @@ static bool update_location(location_t *location) {
 
 static const anjay_dm_object_def_t LOCATION = {
     .oid = DEMO_OID_LOCATION,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(LOCATION_LATITUDE,
-                                              LOCATION_LONGITUDE,
-                                              LOCATION_ALTITUDE,
-                                              LOCATION_RADIUS,
-                                              LOCATION_VELOCITY,
-                                              LOCATION_TIMESTAMP),
     .handlers = {
-        .instance_it = anjay_dm_instance_it_SINGLE,
-        .instance_present = anjay_dm_instance_present_SINGLE,
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_instances = anjay_dm_list_instances_SINGLE,
+        .list_resources = location_list_resources,
         .resource_read = location_resource_read
     }
 };

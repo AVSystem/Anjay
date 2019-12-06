@@ -16,14 +16,14 @@
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 rm -rf avs_commons/install
-rm -rf avs_commons/git/CMakeFiles
-rm -f avs_commons/git/CMakeCache.txt
+rm -rf deps/avs_commons/CMakeFiles
+rm -f deps/avs_commons/CMakeCache.txt
 
 if [[ -d '.git' ]]; then
     echo "Updating submodules" && git submodule update --init --recursive || exit 1
 fi
 
-C_FLAGS='-g -std=c99'
+C_FLAGS='-g -std=c99 -Werror=implicit-function-declaration'
 
 EXTRA_C_FLAGS=
 EXTRA_FLAGS=()

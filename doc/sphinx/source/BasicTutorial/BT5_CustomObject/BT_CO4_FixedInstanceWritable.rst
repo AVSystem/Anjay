@@ -70,50 +70,72 @@ Now the ``anjay_dm_resource_write_t`` handler implementation:
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/writable-multiple-fixed/src/main.c
 
-   static int test_resource_write(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t iid,
-                                  anjay_rid_t rid,
-                                  anjay_input_ctx_t *ctx) {
-       (void) anjay; // unused
+    static int test_resource_write(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid,
+                                   anjay_riid_t riid,
+                                   anjay_input_ctx_t *ctx) {
+        (void) anjay; // unused
 
-       test_object_t *test = get_test_object(obj_ptr);
+        test_object_t *test = get_test_object(obj_ptr);
 
-       // IID validity was checked by the `anjay_dm_instance_present_t` handler.
-       // If the Object Instance set does not change, or can only be modifed
-       // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
-       assert((size_t) iid < NUM_INSTANCES);
-       struct test_instance *current_instance = &test->instances[iid];
+        // IID validity was checked by the `anjay_dm_list_instances_t` handler.
+        // If the Object Instance set does not change, or can only be modifed
+        // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
+        assert((size_t) iid < NUM_INSTANCES);
+        struct test_instance *current_instance = &test->instances[iid];
 
-       switch (rid) {
-       case 0: {
-           // `anjay_get_string` may return a chunk of data instead of the
-           // whole value - we need to make sure the client is able to hold
-           // the entire value
-           char buffer[sizeof(current_instance->label)];
-           int result = anjay_get_string(ctx, buffer, sizeof(buffer));
+        // We have no Multiple-Instance Resources, so it is safe to assume
+        // that RIID is never set.
+        assert(riid == ANJAY_ID_INVALID);
 
-           if (result == 0) {
-               // value OK - save it
-               memcpy(current_instance->label, buffer, sizeof(buffer));
-           } else if (result == ANJAY_BUFFER_TOO_SHORT) {
-               // the value is too long to store in the buffer
-               result = ANJAY_ERR_BAD_REQUEST;
-           }
+        switch (rid) {
+        case 0: {
+            // `anjay_get_string` may return a chunk of data instead of the
+            // whole value - we need to make sure the client is able to hold
+            // the entire value
+            char buffer[sizeof(current_instance->label)];
+            int result = anjay_get_string(ctx, buffer, sizeof(buffer));
 
-           return result;
-       }
+            if (result == 0) {
+                // value OK - save it
+                memcpy(current_instance->label, buffer, sizeof(buffer));
+            } else if (result == ANJAY_BUFFER_TOO_SHORT) {
+                // the value is too long to store in the buffer
+                result = ANJAY_ERR_BAD_REQUEST;
+            }
 
-       case 1:
-           // reading primitive values can be done directly - the value will only
-           // be written to the output variable if everything went fine
-           return anjay_get_i32(ctx, &current_instance->value);
+            return result;
+        }
 
-       default:
-           // control will never reach this part due to object's supported_rids
-           return ANJAY_ERR_INTERNAL;
-       }
-   }
+        case 1:
+            // reading primitive values can be done directly - the value will only
+            // be written to the output variable if everything went fine
+            return anjay_get_i32(ctx, &current_instance->value);
+
+        default:
+            // control will never reach this part due to test_list_resources
+            return ANJAY_ERR_INTERNAL;
+        }
+    }
+
+
+We also need to update the ``test_list_resources`` handler with the information
+that the resources are writable:
+
+.. highlight:: c
+.. snippet-source:: examples/tutorial/custom-object/writable-multiple-fixed/src/main.c
+
+    static int test_list_resources(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_dm_resource_list_ctx_t *ctx) {
+        // ...
+        anjay_dm_emit_res(ctx, 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+        anjay_dm_emit_res(ctx, 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+        return 0;
+    }
 
 
 Everything that was left to do is plugging in handlers. There is a catch though:
@@ -271,7 +293,7 @@ mark Resources as set/unset:
 
         test_object_t *test = get_test_object(obj_ptr);
 
-        // IID validity was checked by the `anjay_dm_instance_present_t` handler.
+        // IID validity was checked by the `anjay_dm_list_instances_t` handler.
         // If the Object Instance set does not change, or can only be modifed
         // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
         assert((size_t) iid < NUM_INSTANCES);
@@ -285,22 +307,23 @@ mark Resources as set/unset:
     // ...
 
     static int test_resource_write(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t iid,
-                                  anjay_rid_t rid,
-                                  anjay_input_ctx_t *ctx) {
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid,
+                                   anjay_riid_t riid,
+                                   anjay_input_ctx_t *ctx) {
         // ...
 
         switch (rid) {
         case 0: {
-                    // ...
+                // ...
 
-                    // value OK - save it
-                    memcpy(current_instance->label, buffer, sizeof(buffer));
-                    current_instance->has_label = true;
+                // value OK - save it
+                memcpy(current_instance->label, buffer, sizeof(buffer));
+                current_instance->has_label = true;
 
-                    // ...
-            }
+                // ...
+        }
 
         case 1: {
             // reading primitive values can be done directly - the value will only

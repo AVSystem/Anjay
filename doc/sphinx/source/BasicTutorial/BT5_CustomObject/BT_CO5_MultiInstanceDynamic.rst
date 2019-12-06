@@ -124,7 +124,8 @@ going to introduce two functions, namely ``create_test_object``:
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
 
     const anjay_dm_object_def_t **create_test_object(void) {
-        test_object_t *repr = (test_object_t *) avs_calloc(1, sizeof(test_object_t));
+        test_object_t *repr =
+                (test_object_t *) avs_calloc(1, sizeof(test_object_t));
         if (repr) {
             repr->obj_def = &OBJECT_DEF;
             return &repr->obj_def;
@@ -172,8 +173,8 @@ Updating old, already implemented handlers to use ``AVS_LIST``
 
 To simplify matters, we have to agree upon one contract:
 
-#. We establish a natural Instace ordering on their Instance IDs, exploiting the
-   fact they MUST be unique.
+#. We establish a natural Instance ordering on their Instance IDs, exploiting
+   the fact they MUST be unique.
 
 #. We store Instaces of the Test object in an ordered (as above) list.
 
@@ -183,8 +184,8 @@ It will happen to be very useful in the next couple of subsections:
 
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
 
-    static AVS_LIST(test_instance_t)
-    get_instance(test_object_t *repr, anjay_iid_t iid) {
+    static AVS_LIST(test_instance_t) get_instance(test_object_t *repr,
+                                                  anjay_iid_t iid) {
         AVS_LIST(test_instance_t) it;
         AVS_LIST_FOREACH(it, repr->instances) {
             if (it->iid == iid) {
@@ -199,18 +200,6 @@ It will happen to be very useful in the next couple of subsections:
         return NULL;
     }
 
-Let's reimplement ``test_instance_present`` in terms of just defined ``get_instance``:
-
-.. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
-
-    static int test_instance_present(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                     anjay_iid_t iid) {
-        (void) anjay;   // unused
-
-        return get_instance(get_test_object(obj_ptr), iid) != NULL;
-    }
-
 And one more method, presenting another functionality of ``AVS_LISTs``
 before going into details of ``instance_create`` and ``instance_remove``
 and leaving the rest of the work of this kind as an exercise for the reader
@@ -218,81 +207,27 @@ and leaving the rest of the work of this kind as an exercise for the reader
 
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
 
-    static int test_instance_it(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
-                                anjay_iid_t *out,
-                                void **cookie) {
-        (void) anjay;   // unused
+    static int test_list_instances(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_dm_list_ctx_t *ctx) {
+        (void) anjay; // unused
 
-        AVS_LIST(test_instance_t) curr = NULL;
-
-        // if `*cookie == NULL`, then the iteration has just started,
-        // otherwise `*cookie` contains iterator value saved below
-        if (*cookie) {
-            curr = (AVS_LIST(test_instance_t)) *cookie;
-            // get the next element
-            curr = AVS_LIST_NEXT(curr);
-        } else {
-            // first instance is also a list head
-            curr = get_test_object(obj_ptr)->instances;
+        // iterate over all instances and return their IDs
+        AVS_LIST(test_instance_t) it;
+        AVS_LIST_FOREACH(it, get_test_object(obj_ptr)->instances) {
+            anjay_dm_emit(ctx, it->iid);
         }
 
-        if (curr) {
-            *out = curr->iid;
-        } else {
-            // when last element is reached curr is NULL
-            *out = ANJAY_IID_INVALID;
-        }
-
-        // use `*cookie` to store the iterator
-        *cookie = (void *) curr;
         return 0;
     }
+
+Note that as we keep the Instances in sorted order, this implementation
+satisfies the contract for this handler.
 
 That's all for this section. As noted above, implementation of other methods
 is as always available in the source code provided with the tutorial. We
 do however strongly recommend you to port the methods to use ``AVS_LISTs``
 on your own, especially **remember about updating transaction handlers**.
-
-Assigning Instance IDs
-----------------------
-
-LwM2M Create requests are not always equipped with preferred Instance ID, forcing
-the LwM2M Client to assign Instance ID by itself. In Anjay, this responsibility
-lies on the implementor of the Object being instantiated.
-
-We are going to take an easy approach for Instance ID assignation. Our algorithm
-will simply traverse Object Instance list, looking for any gaps in Instance IDs
-between consecutive Instances. If no gap is found, we'd take an upper bound of
-discovered Instance IDs during the iteration as a new Instance ID.
-
-.. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
-
-    static int assign_new_iid(test_object_t *repr, anjay_iid_t *out_iid) {
-        anjay_iid_t preferred_iid = 0;
-        AVS_LIST(test_instance_t) it;
-        AVS_LIST_FOREACH(it, repr->instances) {
-            if (it->iid == preferred_iid) {
-                ++preferred_iid;
-            } else if (it->iid > preferred_iid) {
-                // found a hole
-                break;
-            }
-        }
-
-        // all valid Instance IDs are already reserved
-        if (preferred_iid == ANJAY_IID_INVALID) {
-            return -1;
-        }
-        *out_iid = preferred_iid;
-        return 0;
-    }
-
-Our ``assign_new_iid`` is indeed simple, yet its pessimistic complexity is
-`O(n)` (where `n` stands for the number of Object Instances). This means
-that special care must be taken if good performance of instance creation
-is required (e.g. by using some kind of hash-map or tree-map for Instance
-storage).
 
 ``instance_create`` handler
 ---------------------------
@@ -304,43 +239,27 @@ Let's have a look on ``anjay_dm_instance_create_t`` handler type signature:
     typedef int
     anjay_dm_instance_create_t(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t *inout_iid,
-                               anjay_ssid_t ssid);
+                               anjay_iid_t iid);
 
-The ``inout_iid`` parameter is the most important for us at the moment, as
-if the instantiation succeeds we MUST tell the library the id of the newly
-created Instance by setting ``*inout_iid`` properly.
+The ``iid`` parameter is the most important for us at the moment, as this is the
+ID of the Instance we need to create.
 
-As we previously discussed, LwM2M Create requests do not necessarily have
-to contain preferred Instance ID. However if they do, then Anjay first makes
-sure no Object Instance with given Instance ID exists.
-
-To sum up, we are left with the situation when either ``*inout_iid`` is a
-valid Instance ID and we should use it, or it is unset, in which case we
-are going to assign Instance ID ourselves:
-
-.. note:: Unset Instance ID is represented by ``ANJAY_IID_INVALID`` constant.
+LwM2M Create requests do not necessarily have to contain preferred Instance ID.
+However, Anjay makes it transparent to the application - if the Instance ID is
+not specified by the server, it will iterate over existing instances using the
+``anjay_dm_list_instances_t`` handler, and find the lowest ID that is not
+already occupied. If the Instance ID is specified by the server, Anjay will call
+the ``anjay_dm_list_instances_t`` handler and ensure that there is no such
+Instance ID already existing.
 
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
 
     static int test_instance_create(anjay_t *anjay,
                                     const anjay_dm_object_def_t *const *obj_ptr,
-                                    anjay_iid_t *inout_iid,
-                                    anjay_ssid_t ssid) {
+                                    anjay_iid_t iid) {
         (void) anjay; // unused
-        (void) ssid; // unused
 
         test_object_t *repr = get_test_object(obj_ptr);
-
-        if (*inout_iid == ANJAY_IID_INVALID) {
-            // Create request did not contain preferred Instance ID,
-            // therefore we assign one on our own if possible
-            if (assign_new_iid(repr, inout_iid)) {
-                // unfortunately assigning new iid failed, nothing
-                // we can do about it
-                return -1;
-            }
-        }
 
         AVS_LIST(test_instance_t) new_instance =
                 AVS_LIST_NEW_ELEMENT(test_instance_t);
@@ -350,7 +269,7 @@ are going to assign Instance ID ourselves:
             return ANJAY_ERR_INTERNAL;
         }
 
-        new_instance->iid = *inout_iid;
+        new_instance->iid = iid;
 
         // find a place where instance should be inserted,
         // insert it and claim a victory
@@ -372,8 +291,8 @@ are going to assign Instance ID ourselves:
 ``instance_remove`` handler
 ---------------------------
 
-Fortunately ``instance_remove`` handler is much easier to implement as it does not
-have to perform anything other than removing the instance from our list.
+``instance_remove`` handler does not have to perform anything other than
+removing the instance from our list.
 
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-dynamic/src/test_object.c
 

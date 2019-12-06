@@ -33,7 +33,7 @@ typedef struct {
     /** Resource: Bootstrap Server */
     bool bootstrap_server;
     /** Resource: Security Mode */
-    anjay_udp_security_mode_t security_mode;
+    anjay_security_mode_t security_mode;
     /** Resource: Client Hold Off Time */
     int32_t client_holdoff_s;
     /** Resource: Bootstrap Server Account Timeout */
@@ -63,7 +63,7 @@ typedef struct {
  * Adds new Instance of Security Object and returns newly created Instance id
  * via @p inout_iid .
  *
- * Note: if @p *inout_iid is set to @ref ANJAY_IID_INVALID then the Instance id
+ * Note: if @p *inout_iid is set to @ref ANJAY_ID_INVALID then the Instance id
  * is generated automatically, otherwise value of @p *inout_iid is used as a
  * new Security Instance Id.
  *
@@ -76,7 +76,7 @@ typedef struct {
  *
  * @param anjay     Anjay instance with Security Object installed to operate on.
  * @param instance  Security Instance to insert.
- * @param inout_iid Security Instance id to use or @ref ANJAY_IID_INVALID .
+ * @param inout_iid Security Instance id to use or @ref ANJAY_ID_INVALID .
  *
  * @return 0 on success, negative value in case of an error or if the instance
  * of specified id already exists.
@@ -100,8 +100,8 @@ void anjay_security_object_purge(anjay_t *anjay);
  * @param out_stream    Stream to write to.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_security_object_persist(anjay_t *anjay,
-                                  avs_stream_abstract_t *out_stream);
+avs_error_t anjay_security_object_persist(anjay_t *anjay,
+                                          avs_stream_t *out_stream);
 
 /**
  * Attempts to restore Security Object Instances from specified @p in_stream.
@@ -113,8 +113,8 @@ int anjay_security_object_persist(anjay_t *anjay,
  * @param in_stream Stream to read from.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_security_object_restore(anjay_t *anjay,
-                                  avs_stream_abstract_t *in_stream);
+avs_error_t anjay_security_object_restore(anjay_t *anjay,
+                                          avs_stream_t *in_stream);
 
 /**
  * Checks whether the Security Object in Anjay instance has been modified since

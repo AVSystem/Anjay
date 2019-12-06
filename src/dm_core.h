@@ -19,15 +19,15 @@
 
 #include <limits.h>
 
-#include <avsystem/commons/coap/msg.h>
 #include <avsystem/commons/list.h>
 #include <avsystem/commons/stream.h>
 
 #include <anjay_modules/dm_utils.h>
 
-#include "coap/coap_stream.h"
+#include <avsystem/coap/streaming.h>
+
+#include "coap/msg_details.h"
 #include "dm/dm_attributes.h"
-#include "observe/observe_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -49,59 +49,18 @@ typedef struct {
     bool has_greater_than;
     bool has_less_than;
     bool has_step;
+    bool has_min_eval_period;
+    bool has_max_eval_period;
 #ifdef WITH_CUSTOM_ATTRIBUTES
     anjay_dm_custom_request_attribute_flags_t custom;
 #endif
-    anjay_dm_internal_res_attrs_t values;
+    anjay_dm_internal_r_attrs_t values;
 } anjay_request_attributes_t;
 
-static inline bool _anjay_double_attr_equal(double left, double right) {
-    return isnan(left) ? isnan(right) : (left == right);
-}
-
-static inline bool
-_anjay_request_attributes_equal(const anjay_request_attributes_t *left,
-                                const anjay_request_attributes_t *right) {
-    return (left->has_min_period
-                    ? (right->has_min_period
-                       && left->values.standard.common.min_period
-                                  == right->values.standard.common.min_period)
-                    : !right->has_min_period)
-           && (left->has_max_period
-                       ? (right->has_max_period
-                          && left->values.standard.common.max_period
-                                     == right->values.standard.common
-                                                .max_period)
-                       : !right->has_max_period)
-           && (left->has_greater_than
-                       ? (right->has_greater_than
-                          && _anjay_double_attr_equal(
-                                     left->values.standard.greater_than,
-                                     right->values.standard.greater_than))
-                       : !right->has_greater_than)
-           && (left->has_less_than
-                       ? (right->has_less_than
-                          && _anjay_double_attr_equal(
-                                     left->values.standard.less_than,
-                                     right->values.standard.less_than))
-                       : !right->has_less_than)
-           && (left->has_step ? (right->has_step
-                                 && _anjay_double_attr_equal(
-                                            left->values.standard.step,
-                                            right->values.standard.step))
-                              : !right->has_step)
-#ifdef WITH_CON_ATTR
-           && (left->custom.has_con
-                       ? (right->custom.has_con
-                          && left->values.custom.data.con
-                                     == right->values.custom.data.con)
-                       : !right->custom.has_con)
-#endif // WITH_CON_ATTR
-            ;
-}
-
 typedef struct {
-    avs_coap_msg_type_t msg_type;
+    avs_coap_streaming_request_ctx_t *ctx;
+    avs_stream_t *payload_stream;
+
     uint8_t request_code;
 
     bool is_bs_uri;
@@ -111,50 +70,17 @@ typedef struct {
     anjay_request_action_t action;
     uint16_t content_format;
     uint16_t requested_format;
-    anjay_coap_observe_t observe;
+    const avs_coap_observe_id_t *observe;
 
     anjay_request_attributes_t attributes;
 } anjay_request_t;
 
-static inline bool _anjay_request_equal(const anjay_request_t *left,
-                                        const anjay_request_t *right) {
-    return left->msg_type == right->msg_type
-           && left->request_code == right->request_code
-           && left->is_bs_uri == right->is_bs_uri
-           && _anjay_uri_path_equal(&left->uri, &right->uri)
-           && left->action == right->action
-           && left->content_format == right->content_format
-           && left->requested_format == right->requested_format
-           && left->observe == right->observe
-           && _anjay_request_attributes_equal(&left->attributes,
-                                              &right->attributes);
-}
-
-typedef struct {
-    anjay_ssid_t ssid;
-    uint16_t request_msg_id;
-
-    anjay_uri_path_t uri;
-
-    uint16_t requested_format;
-    bool observe_serial;
-} anjay_dm_read_args_t;
-
-#define REQUEST_TO_DM_READ_ARGS(Anjay, Request)                               \
-    (const anjay_dm_read_args_t) {                                            \
-        .ssid = _anjay_dm_current_ssid(Anjay),                                \
-        .uri = (Request)->uri,                                                \
-        .requested_format = (Request)->requested_format,                      \
-        .observe_serial = ((Request)->observe == ANJAY_COAP_OBSERVE_REGISTER) \
-    }
-
-#define REQUEST_TO_ACTION_INFO(Anjay, Request)                               \
-    (const anjay_action_info_t) {                                            \
-        .oid = (Request)->uri.oid,                                           \
-        .iid = _anjay_uri_path_has_iid(&(Request)->uri) ? (Request)->uri.iid \
-                                                        : ANJAY_IID_INVALID, \
-        .ssid = _anjay_dm_current_ssid(Anjay),                               \
-        .action = (Request)->action                                          \
+#define REQUEST_TO_ACTION_INFO(Anjay, Request)   \
+    (const anjay_action_info_t) {                \
+        .oid = (Request)->uri.ids[ANJAY_ID_OID], \
+        .iid = (Request)->uri.ids[ANJAY_ID_IID], \
+        .ssid = _anjay_dm_current_ssid(Anjay),   \
+        .action = (Request)->action              \
     }
 
 int _anjay_dm_transaction_validate(anjay_t *anjay);
@@ -165,29 +91,7 @@ static inline int _anjay_dm_transaction_rollback(anjay_t *anjay) {
     return (result == INT_MIN) ? 0 : result;
 }
 
-#ifdef WITH_OBSERVE
-ssize_t _anjay_dm_read_for_observe(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj,
-                                   const anjay_dm_read_args_t *details,
-                                   anjay_msg_details_t *out_details,
-                                   double *out_numeric,
-                                   char *buffer,
-                                   size_t size);
-#endif // WITH_OBSERVE
-
-int _anjay_dm_perform_action(anjay_t *anjay,
-                             const avs_coap_msg_identity_t *request_identity,
-                             const anjay_request_t *request);
-
-anjay_input_ctx_t *_anjay_dm_read_as_input_ctx(anjay_t *anjay,
-                                               const anjay_uri_path_t *path);
-
-const char *_anjay_debug_make_path__(char *buffer,
-                                     size_t buffer_size,
-                                     const anjay_uri_path_t *uri);
-
-#define ANJAY_DEBUG_MAKE_PATH(path) \
-    (_anjay_debug_make_path__(&(char[32]){ 0 }[0], 32, (path)))
+int _anjay_dm_perform_action(anjay_t *anjay, const anjay_request_t *request);
 
 static inline int _anjay_dm_map_present_result(int result) {
     if (!result) {
@@ -199,11 +103,35 @@ static inline int _anjay_dm_map_present_result(int result) {
     }
 }
 
-int _anjay_dm_check_if_tlv_rid_matches_uri_rid(anjay_input_ctx_t *in_ctx,
-                                               anjay_rid_t uri_rid);
-
 AVS_LIST(anjay_dm_installed_module_t) *
 _anjay_dm_module_find_ptr(anjay_t *anjay, const anjay_dm_module_t *module);
+
+int _anjay_dm_select_free_iid(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj,
+                              anjay_iid_t *new_iid_ptr);
+
+typedef struct {
+    anjay_uri_path_t uri;
+
+    // True if the entire path queried by @ref _anjay_dm_path_info() is present.
+    bool is_present;
+
+    // True if a leaf of the queried path is not a simple value.
+    bool is_hierarchical;
+    // True if the path points to a present resource or multiple resource.
+    bool has_resource;
+    // Only valid if has_resource == true.
+    anjay_dm_resource_kind_t kind;
+} anjay_dm_path_info_t;
+
+int _anjay_dm_path_info(anjay_t *anjay,
+                        const anjay_dm_object_def_t *const *obj,
+                        const anjay_uri_path_t *path,
+                        anjay_dm_path_info_t *out_info);
+
+uint8_t _anjay_dm_make_success_response_code(anjay_request_action_t action);
+
+#define dm_log(...) _anjay_log(anjay_dm, __VA_ARGS__)
 
 VISIBILITY_PRIVATE_HEADER_END
 

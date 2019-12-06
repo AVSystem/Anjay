@@ -54,8 +54,8 @@ typedef struct cmdline_args {
      */
     anjay_fw_update_result_t fw_update_delayed_result;
     const char *attr_storage_file;
-    bool disable_server_initiated_bootstrap;
-    avs_coap_tx_params_t tx_params;
+    bool disable_legacy_server_initiated_bootstrap;
+    avs_coap_udp_tx_params_t tx_params;
     avs_net_dtls_handshake_timeouts_t dtls_hs_tx_params;
     /**
      * This flag allows to enable callback providing tx_params for firmware
@@ -64,8 +64,14 @@ typedef struct cmdline_args {
      * Anjay.
      */
     bool fwu_tx_params_modified;
-    avs_coap_tx_params_t fwu_tx_params;
+    avs_coap_udp_tx_params_t fwu_tx_params;
     size_t stored_notification_limit;
+
+    bool prefer_hierarchical_formats;
+    bool use_connection_id;
+
+    uint32_t *default_ciphersuites;
+    size_t default_ciphersuites_count;
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

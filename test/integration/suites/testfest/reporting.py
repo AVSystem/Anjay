@@ -71,6 +71,7 @@ class Test302_CancelObservationsUsingResetOperation(DataModel.Test):
         #    Associated entries from the list of observers are removed.
         pass
 
+
 class Test303_CancelObservationsUsingCancelParameter(DataModel.Test):
     def runTest(self):
         VV = ValueValidator

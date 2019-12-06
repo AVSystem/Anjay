@@ -39,12 +39,13 @@ def equal_chunk_splitter(chunk_size):
     return split
 
 
-def packets_from_chunks(chunks, process_options=None, path='/5/0/0',
-                        format=coap.ContentFormat.APPLICATION_OCTET_STREAM):
+def packets_from_chunks(chunks, process_options=None, path=ResPath.FirmwareUpdate.Package,
+                        format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
+                        code=coap.Code.REQ_PUT):
     for idx, chunk in enumerate(chunks):
         has_more = (idx != len(chunks) - 1)
 
-        options = (uri_path_to_options(path)
+        options = ((uri_path_to_options(path) if path is not None else [])
                    + [coap.Option.CONTENT_FORMAT(format),
                       coap.Option.BLOCK1(seq_num=chunk.idx, has_more=has_more, block_size=chunk.size)])
 
@@ -52,7 +53,7 @@ def packets_from_chunks(chunks, process_options=None, path='/5/0/0',
             options = process_options(options, idx)
 
         yield coap.Packet(type=coap.Type.CONFIRMABLE,
-                          code=coap.Code.REQ_PUT,
+                          code=code,
                           token=random_stuff(size=5),
                           msg_id=next(msg_id_generator),
                           options=options,
@@ -126,10 +127,10 @@ class BlockIncompleteTest(Block.Test):
     def runTest(self):
         # incomplete BLOCK should be rejected
         chunks = list(equal_chunk_splitter(1024)(A_LOT_OF_STUFF))
-        self.assertGreater(len(chunks), 2)
+        self.assertGreater(len(chunks), 4)
 
-        packets = list(packets_from_chunks([chunks[0], chunks[1], chunks[-1]]))
-        self.assertEqual(len(packets), 3)
+        packets = list(packets_from_chunks([chunks[0], chunks[1], chunks[2], chunks[3]]))
+        self.assertEqual(len(packets), 4)
 
         # first packet with seq_num > 0 should be rejected
         req = packets[-1]
@@ -145,24 +146,31 @@ class BlockIncompleteTest(Block.Test):
 
         req = packets[-1]
         self.serv.send(req)
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
+        # there is no such exchange that this packet could be matched to - the client expects consecutive
+        # blocks
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_SERVICE_UNAVAILABLE),
                             self.serv.recv())
 
-        # consecutive packets received by the anjay with such seq_nums: (0, 1, 0)
-        req = packets[0]
+        # consecutive packets received by the anjay with such seq_nums: (1, 2, 1)
+        req = packets[1]
+        self.serv.send(req)
+        res = self.serv.recv()
+        self.assertIsSuccessResponse(res, req)
+
+        req = packets[2]
         self.serv.send(req)
         res = self.serv.recv()
         self.assertIsSuccessResponse(res, req)
 
         req = packets[1]
         self.serv.send(req)
-        res = self.serv.recv()
-        self.assertIsSuccessResponse(res, req)
-
-        req = packets[0]
-        self.serv.send(req)
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_SERVICE_UNAVAILABLE),
                             self.serv.recv())
+
+        # Finish blockwise transfer
+        req = packets[3]
+        self.serv.send(req)
+        self.assertIsSuccessResponse(self.serv.recv(), req)
 
 
 class BlockSizesTest(Block.Test):
@@ -323,7 +331,8 @@ class BlockBrokenStreamTest(Block.Test):
         res = self.serv.recv()
         self.assertMsgEqual(Lwm2mErrorResponse.matching(second_request)(coap.Code.RES_SERVICE_UNAVAILABLE),
                             res)
-        self.assertEqual(1, len(res.get_options(coap.Option.MAX_AGE)))
+        # TODO: T2327
+        # self.assertEqual(1, len(res.get_options(coap.Option.MAX_AGE)))
 
         # send the valid packet so that demo can terminate cleanly
         second_request.options = incrementer.last_orig_opts
@@ -335,14 +344,13 @@ def block2_adder(options, idx):
     return options + [coap.Option.BLOCK2(seq_num=0, has_more=0, block_size=16)]
 
 
-class BlockBidirectionalFailure(Block.Test):
+class BlockBidirectionalSuccess(Block.Test):
     def runTest(self):
         splitter = equal_chunk_splitter(1024)
         chunks = list(splitter(A_LOT_OF_STUFF))
         request = list(packets_from_chunks([chunks[0]], block2_adder))[0]
         self.serv.send(request)
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(request)(coap.Code.RES_BAD_OPTION),
-                            self.serv.recv())
+        self.assertMsgEqual(Lwm2mChanged.matching(request)(), self.serv.recv())
 
 
 class BlockMostlyUnidirectionalWithRandomlyInsertedBlock2(Block.Test):
@@ -373,17 +381,28 @@ class BlockMostlyUnidirectionalWithRandomlyInsertedBlock2(Block.Test):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_BAD_OPTION),
                             self.serv.recv())
 
+        # Finish blockwise transfer.
+        packets = list(packets_from_chunks([chunks[0], chunks[1],
+                                            chunks[2], chunks[3]]))
+        req = packets[2]
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mContinue.matching(req)(), self.serv.recv())
+
+        req = packets[3]
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
 
 class BlockDuplicate(Block.Test):
     def setUp(self):
         super().setUp(extra_cmdline_args=['--cache-size', '1024'])
 
     def runTest(self):
-        pkt1 = Lwm2mWrite('/5/0/0', b'x' * 16,
+        pkt1 = Lwm2mWrite(ResPath.FirmwareUpdate.Package, b'x' * 16,
                           format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
                           options=[coap.Option.BLOCK1(0, 1, 16)])
 
-        pkt2 = Lwm2mWrite('/5/0/0', b'x' * 16,
+        pkt2 = Lwm2mWrite(ResPath.FirmwareUpdate.Package, b'x' * 16,
                           format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
                           options=[coap.Option.BLOCK1(1, 0, 16)])
 
@@ -404,7 +423,7 @@ class BlockBadBlock1SizeInTheMiddleOfTransfer(Block.Test):
         num_correct_blocks = 4
         seq_num = 0
         for _ in range(num_correct_blocks):
-            pkt = Lwm2mWrite('/5/0/0', b'x' * 16,
+            pkt = Lwm2mWrite(ResPath.FirmwareUpdate.Package, b'x' * 16,
                              format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
                              options=[coap.Option.BLOCK1(seq_num, 1, 16)])
             self.serv.send(pkt)
@@ -412,15 +431,19 @@ class BlockBadBlock1SizeInTheMiddleOfTransfer(Block.Test):
 
             seq_num += 1
 
-        invalid_pkt = Lwm2mWrite('/5/0/0', b'x' * 16,
+        invalid_pkt = Lwm2mWrite(ResPath.FirmwareUpdate.Package, b'x' * 16,
                                  format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
                                  options=[coap.Option.BLOCK1(seq_num, 1, 2048)])
         self.serv.send(invalid_pkt)
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(invalid_pkt)(code=coap.Code.RES_BAD_REQUEST),
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(invalid_pkt)(code=coap.Code.RES_BAD_OPTION),
                             self.serv.recv())
 
-        # an invalid block aborts the block transfer; De-Register should work
-        # fine here
+        # finish the request
+        pkt = Lwm2mWrite(ResPath.FirmwareUpdate.Package, b'x' * 16,
+                                 format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
+                                 options=[coap.Option.BLOCK1(seq_num, 0, 16)])
+        self.serv.send(pkt)
+        self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.serv.recv())
 
 
 class ValueSplitIntoSeparateBlocks(Block.Test):
@@ -438,23 +461,22 @@ class ValueSplitIntoSeparateBlocks(Block.Test):
         self.fail('Data does not split an integer')
 
     def runTest(self):
-        oid, iid, rid = OID.Test, 1, RID.Test.IntArray
-        self.create_instance(self.serv, oid, iid)
+        self.create_instance(self.serv, OID.Test, 1)
 
         value = 0x123456
         array_content = enumerate([value] * 5)
-        content = TLV.make_multires(rid, array_content).serialize()
+        content = TLV.make_multires(RID.Test.IntArray, array_content).serialize()
         chunks = list(equal_chunk_splitter(16)(content))
         self.assertIntValueSplit(chunks, value)
 
-        packets = packets_from_chunks(chunks, path='/%d/%d/%d' % (oid, iid, rid),
+        packets = packets_from_chunks(chunks, path=ResPath.Test[1].IntArray,
                                       format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         for request in packets:
             self.serv.send(request)
             response = self.serv.recv()
             self.assertIsSuccessResponse(response, request)
 
-        client_content = self.read_resource(self.serv, oid, iid, rid).content
+        client_content = self.read_resource(self.serv, OID.Test, 1, RID.Test.IntArray).content
         self.assertEqual(content, client_content)
 
 
@@ -492,7 +514,7 @@ class CoAPPingInTheMiddleOfBlockTransfer(MessageInTheMiddleOfBlockTransfer.Test)
 
 class ConfirmableRequestInTheMiddleOfBlockTransfer(MessageInTheMiddleOfBlockTransfer.Test):
     def runTest(self):
-        req = Lwm2mRead('/3/0/0')
+        req = Lwm2mRead(ResPath.Device.Manufacturer)
         req.fill_placeholders()
         res = Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE)
         self.test_with_message(req, res)

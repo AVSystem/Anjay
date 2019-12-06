@@ -25,38 +25,40 @@
 
 #include <avsystem/commons/base64.h>
 #include <avsystem/commons/stream.h>
+#include <avsystem/commons/utils.h>
 
 #include <anjay/core.h>
 
 #include "../coap/content_format.h"
 #include "../utils_core.h"
 #include "base64_out.h"
+#include "common.h"
 #include "vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
 
 /////////////////////////////////////////////////////////////////////// ENCODING
 
+typedef enum { STATE_INITIAL, STATE_PATH_SET, STATE_FINISHED } text_out_state_t;
+
 typedef struct {
-    const anjay_output_ctx_vtable_t *vtable;
+    anjay_output_ctx_t base;
     anjay_ret_bytes_ctx_t *bytes;
-    int *errno_ptr;
-    avs_stream_abstract_t *stream;
-    bool finished;
+    avs_stream_t *stream;
+    text_out_state_t state;
 } text_out_t;
 
-static int *text_errno_ptr(anjay_output_ctx_t *ctx) {
-    return ((text_out_t *) ctx)->errno_ptr;
-}
-
-static anjay_ret_bytes_ctx_t *text_ret_bytes_begin(anjay_output_ctx_t *ctx_,
-                                                   size_t length) {
+static int text_ret_bytes_begin(anjay_output_ctx_t *ctx_,
+                                size_t length,
+                                anjay_ret_bytes_ctx_t **out_bytes_ctx) {
     text_out_t *ctx = (text_out_t *) ctx_;
-    if (ctx->bytes) {
-        return NULL;
+    if (ctx->bytes || ctx->state != STATE_PATH_SET) {
+        return -1;
     }
-    ctx->bytes = _anjay_base64_ret_bytes_ctx_new(ctx->stream, length);
-    return ctx->bytes;
+    ctx->bytes = _anjay_base64_ret_bytes_ctx_new(
+            ctx->stream, AVS_BASE64_DEFAULT_STRICT_CONFIG, length);
+    *out_bytes_ctx = ctx->bytes;
+    return *out_bytes_ctx ? 0 : -1;
 }
 
 static int text_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
@@ -65,71 +67,47 @@ static int text_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
         return -1;
     }
 
-    int retval = -1;
-    if (!ctx->finished
-            && !(retval =
-                         avs_stream_write(ctx->stream, value, strlen(value)))) {
-        ctx->finished = true;
+    if (ctx->state == STATE_PATH_SET
+            && avs_is_ok(avs_stream_write(ctx->stream, value, strlen(value)))) {
+        ctx->state = STATE_FINISHED;
+        return 0;
     }
-    return retval;
+    return -1;
 }
 
-static int text_ret_i32(anjay_output_ctx_t *ctx_, int32_t value) {
+static int text_ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
         return -1;
     }
 
-    int retval = -1;
-    if (!ctx->finished
-            && !(retval = avs_stream_write_f(ctx->stream, "%" PRId32, value))) {
-        ctx->finished = true;
+    if (ctx->state == STATE_PATH_SET
+            && avs_is_ok(avs_stream_write_f(ctx->stream, "%" PRId64, value))) {
+        ctx->state = STATE_FINISHED;
+        return 0;
     }
-    return retval;
+    return -1;
 }
 
-static int text_ret_i64(anjay_output_ctx_t *ctx_, int64_t value) {
+static int text_ret_double(anjay_output_ctx_t *ctx_, double value) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
         return -1;
     }
-
-    int retval = -1;
-    if (!ctx->finished
-            && !(retval = avs_stream_write_f(ctx->stream, "%" PRId64, value))) {
-        ctx->finished = true;
-    }
-    return retval;
-}
-
-static inline int
-text_ret_floating_point(text_out_t *ctx, double value, int precision) {
-    if (ctx->bytes) {
-        return -1;
-    }
-    int retval = -1;
     // FIXME: The spec calls for a "decimal" representation, which, in my
     // understanding, excludes exponential representation.
     // As printing floating-point numbers in C as pure decimal with sane
     // precision is tricky, let's take the spec a bit loosely for now.
-    if (!ctx->finished
-            && !(retval = avs_stream_write_f(ctx->stream, "%.*g", precision,
-                                             value))) {
-        ctx->finished = true;
+    if (ctx->state == STATE_PATH_SET
+            && avs_is_ok(avs_stream_write_f(ctx->stream, "%.17g", value))) {
+        ctx->state = STATE_FINISHED;
+        return 0;
     }
-    return retval;
-}
-
-static int text_ret_float(anjay_output_ctx_t *ctx, float value) {
-    return text_ret_floating_point((text_out_t *) ctx, value, 9);
-}
-
-static int text_ret_double(anjay_output_ctx_t *ctx, double value) {
-    return text_ret_floating_point((text_out_t *) ctx, value, 17);
+    return -1;
 }
 
 static int text_ret_bool(anjay_output_ctx_t *ctx, bool value) {
-    return text_ret_i32(ctx, value);
+    return text_ret_integer(ctx, value);
 }
 
 static int
@@ -138,13 +116,35 @@ text_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
     if (ctx->bytes) {
         return -1;
     }
-    int retval = -1;
-    if (!ctx->finished
-            && !(retval = avs_stream_write_f(
-                         ctx->stream, "%" PRIu16 ":%" PRIu16, oid, iid))) {
-        ctx->finished = true;
+    if (ctx->state == STATE_PATH_SET
+            && avs_is_ok(avs_stream_write_f(ctx->stream, "%" PRIu16 ":%" PRIu16,
+                                            oid, iid))) {
+        ctx->state = STATE_FINISHED;
+        return 0;
     }
-    return retval;
+    return -1;
+}
+
+static int text_set_path(anjay_output_ctx_t *ctx_,
+                         const anjay_uri_path_t *path) {
+    text_out_t *ctx = (text_out_t *) ctx_;
+    if (ctx->state == STATE_PATH_SET) {
+        return -1;
+    } else if (ctx->state != STATE_INITIAL || ctx->bytes
+               || !_anjay_uri_path_has(path, ANJAY_ID_RID)) {
+        return ANJAY_OUTCTXERR_FORMAT_MISMATCH;
+    }
+    ctx->state = STATE_PATH_SET;
+    return 0;
+}
+
+static int text_clear_path(anjay_output_ctx_t *ctx_) {
+    text_out_t *ctx = (text_out_t *) ctx_;
+    if (ctx->state != STATE_PATH_SET || ctx->bytes) {
+        return -1;
+    }
+    ctx->state = STATE_INITIAL;
+    return 0;
 }
 
 static int text_ret_close(anjay_output_ctx_t *ctx_) {
@@ -153,38 +153,28 @@ static int text_ret_close(anjay_output_ctx_t *ctx_) {
     if (ctx->bytes) {
         result = _anjay_base64_ret_bytes_ctx_close(ctx->bytes);
         _anjay_base64_ret_bytes_ctx_delete(&ctx->bytes);
+    } else if (ctx->state != STATE_FINISHED) {
+        result = ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED;
     }
     return result;
 }
 
 static const anjay_output_ctx_vtable_t TEXT_OUT_VTABLE = {
     .bytes_begin = text_ret_bytes_begin,
-    .errno_ptr = text_errno_ptr,
     .string = text_ret_string,
-    .i32 = text_ret_i32,
-    .i64 = text_ret_i64,
-    .f32 = text_ret_float,
-    .f64 = text_ret_double,
+    .integer = text_ret_integer,
+    .floating = text_ret_double,
     .boolean = text_ret_bool,
     .objlnk = text_ret_objlnk,
+    .set_path = text_set_path,
+    .clear_path = text_clear_path,
     .close = text_ret_close
 };
 
-anjay_output_ctx_t *
-_anjay_output_text_create(avs_stream_abstract_t *stream,
-                          int *errno_ptr,
-                          anjay_msg_details_t *inout_details) {
+anjay_output_ctx_t *_anjay_output_text_create(avs_stream_t *stream) {
     text_out_t *ctx = (text_out_t *) avs_calloc(1, sizeof(text_out_t));
-    if (ctx
-            && ((*errno_ptr = _anjay_handle_requested_format(
-                         &inout_details->format, ANJAY_COAP_FORMAT_PLAINTEXT))
-                || _anjay_coap_stream_setup_response(stream, inout_details))) {
-        avs_free(ctx);
-        return NULL;
-    }
     if (ctx) {
-        ctx->vtable = &TEXT_OUT_VTABLE;
-        ctx->errno_ptr = errno_ptr;
+        ctx->base.vtable = &TEXT_OUT_VTABLE;
         ctx->stream = stream;
     }
     return (anjay_output_ctx_t *) ctx;
@@ -194,14 +184,15 @@ _anjay_output_text_create(avs_stream_abstract_t *stream,
 
 typedef struct {
     const anjay_input_ctx_vtable_t *vtable;
-    avs_stream_abstract_t *stream;
-    bool autoclose;
+    avs_stream_t *stream;
     // if bytes_mode == true, then only raw bytes can be read from the context
     // and any other reading operation will fail
     bool bytes_mode;
     uint8_t bytes_cached[3];
     size_t num_bytes_cached;
-    char msg_finished;
+    bool msg_finished;
+
+    anjay_uri_path_t request_uri;
 } text_in_t;
 
 static int
@@ -239,12 +230,12 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
     // 4bytes + null terminator
     char encoded[5];
     size_t stream_bytes_read;
-    char stream_msg_finished = 0;
+    bool stream_msg_finished = false;
 
     while (buf_size > 0) {
-        if (avs_stream_read(ctx->stream, &stream_bytes_read,
-                            &stream_msg_finished, encoded,
-                            sizeof(encoded) - 1)) {
+        if (avs_is_err(avs_stream_read(ctx->stream, &stream_bytes_read,
+                                       &stream_msg_finished, encoded,
+                                       sizeof(encoded) - 1))) {
             return -1;
         }
         encoded[stream_bytes_read] = '\0';
@@ -252,7 +243,7 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
             return -1;
         }
         if (has_valid_padding(encoded, stream_bytes_read,
-                              !!stream_msg_finished)) {
+                              stream_msg_finished)) {
             return -1;
         }
         assert(ctx->num_bytes_cached == 0);
@@ -268,7 +259,7 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
             break;
         }
     }
-    ctx->msg_finished = !!stream_msg_finished;
+    ctx->msg_finished = stream_msg_finished;
     *out_msg_finished = ctx->msg_finished && !ctx->num_bytes_cached;
     *out_bytes_read = (size_t) (current - (uint8_t *) out_buf);
     return 0;
@@ -276,24 +267,23 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
 
 static int
 text_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
-    if (!buf_size || ((text_in_t *) ctx)->bytes_mode) {
+    text_in_t *in = (text_in_t *) ctx;
+    if (!buf_size || in->bytes_mode) {
         return -1;
     }
-    char message_finished = 0;
     char *ptr = out_buf;
     char *endptr = out_buf + (buf_size - 1);
     do {
         size_t bytes_read = 0;
-        int retval = avs_stream_read(((text_in_t *) ctx)->stream, &bytes_read,
-                                     &message_finished, ptr,
-                                     (size_t) (endptr - ptr));
-        if (retval) {
-            return retval;
+        if (avs_is_err(avs_stream_read(in->stream, &bytes_read,
+                                       &in->msg_finished, ptr,
+                                       (size_t) (endptr - ptr)))) {
+            return -1;
         }
         ptr += bytes_read;
-    } while (!message_finished && ptr < endptr);
+    } while (!in->msg_finished && ptr < endptr);
     *ptr = '\0';
-    return message_finished ? 0 : ANJAY_BUFFER_TOO_SHORT;
+    return in->msg_finished ? 0 : ANJAY_BUFFER_TOO_SHORT;
 }
 
 static int map_str_conversion_result(const char *input, const char *endptr) {
@@ -301,13 +291,6 @@ static int map_str_conversion_result(const char *input, const char *endptr) {
             || *endptr)
                    ? -1
                    : 0;
-}
-
-int _anjay_safe_strtof(const char *in, float *value) {
-    errno = 0;
-    char *endptr = NULL;
-    *value = strtof(in, &endptr);
-    return map_str_conversion_result(in, endptr);
 }
 
 int _anjay_safe_strtoll(const char *in, long long *value) {
@@ -335,9 +318,8 @@ static int map_get_string_error(int retval) {
     return retval;
 }
 
-#define MAX_LONG_LONG_BUF_SIZE 32
-static int text_get_i64(anjay_input_ctx_t *ctx, int64_t *value) {
-    char buf[MAX_LONG_LONG_BUF_SIZE];
+static int text_get_integer(anjay_input_ctx_t *ctx, int64_t *value) {
+    char buf[AVS_INT_STR_BUF_SIZE(long long)];
     int retval = anjay_get_string(ctx, buf, sizeof(buf));
     if (retval) {
         return map_get_string_error(retval);
@@ -353,24 +335,10 @@ static int text_get_i64(anjay_input_ctx_t *ctx, int64_t *value) {
     *value = (int64_t) ll;
     return 0;
 }
-#undef MAX_LONG_LONG_BUF_SIZE
-
-static int text_get_i32(anjay_input_ctx_t *ctx, int32_t *value) {
-    int64_t i64;
-    int retval = text_get_i64(ctx, &i64);
-    if (retval) {
-        return retval;
-    }
-    if (i64 < INT32_MIN || i64 > INT32_MAX) {
-        return ANJAY_ERR_BAD_REQUEST;
-    }
-    *value = (int32_t) i64;
-    return 0;
-}
 
 static int text_get_bool(anjay_input_ctx_t *ctx, bool *value) {
     int64_t i64;
-    int retval = text_get_i64(ctx, &i64);
+    int retval = text_get_integer(ctx, &i64);
     if (retval) {
         return retval;
     }
@@ -384,19 +352,7 @@ static int text_get_bool(anjay_input_ctx_t *ctx, bool *value) {
     return 0;
 }
 
-static int text_get_f(anjay_input_ctx_t *ctx, float *value) {
-    char buf[ANJAY_MAX_FLOAT_STRING_SIZE];
-    int retval = anjay_get_string(ctx, buf, sizeof(buf));
-    if (retval) {
-        return map_get_string_error(retval);
-    }
-    if (_anjay_safe_strtof(buf, value)) {
-        return ANJAY_ERR_BAD_REQUEST;
-    }
-    return 0;
-}
-
-static int text_get_d(anjay_input_ctx_t *ctx, double *value) {
+static int text_get_double(anjay_input_ctx_t *ctx, double *value) {
     char buf[ANJAY_MAX_DOUBLE_STRING_SIZE];
     int retval = anjay_get_string(ctx, buf, sizeof(buf));
     if (retval) {
@@ -411,50 +367,58 @@ static int text_get_d(anjay_input_ctx_t *ctx, double *value) {
 static int text_get_objlnk(anjay_input_ctx_t *ctx,
                            anjay_oid_t *out_oid,
                            anjay_iid_t *out_iid) {
-    char buf[sizeof("65535:65535")];
+    char buf[MAX_OBJLNK_STRING_SIZE];
     int retval = anjay_get_string(ctx, buf, sizeof(buf));
     if (retval) {
         return map_get_string_error(retval);
     }
-    char *colon = strchr(buf, ':');
-    if (!colon) {
+
+    if (_anjay_io_parse_objlnk(buf, out_oid, out_iid)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
-    *colon = '\0';
-    long long oid;
-    long long iid;
-    if (_anjay_safe_strtoll(buf, &oid) || _anjay_safe_strtoll(colon + 1, &iid)
-            || oid < 0 || oid > UINT16_MAX || iid < 0 || iid > UINT16_MAX) {
-        return ANJAY_ERR_BAD_REQUEST;
-    }
-    *out_oid = (anjay_oid_t) oid;
-    *out_iid = (anjay_iid_t) iid;
     return 0;
 }
 
 static int text_in_close(anjay_input_ctx_t *ctx_) {
-    text_in_t *ctx = (text_in_t *) ctx_;
-    if (ctx->autoclose) {
-        return avs_stream_cleanup(&ctx->stream);
+    (void) ctx_;
+    return 0;
+}
+
+static int text_get_path(anjay_input_ctx_t *ctx,
+                         anjay_uri_path_t *out_path,
+                         bool *out_is_array) {
+    text_in_t *in = (text_in_t *) ctx;
+    if (in->msg_finished) {
+        return ANJAY_GET_PATH_END;
     }
+    if (!_anjay_uri_path_has(&in->request_uri, ANJAY_ID_RID)) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    *out_is_array = false;
+    *out_path = in->request_uri;
+    return 0;
+}
+
+static int text_next_entry(anjay_input_ctx_t *ctx) {
+    (void) ctx;
     return 0;
 }
 
 static const anjay_input_ctx_vtable_t TEXT_IN_VTABLE = {
     .some_bytes = text_get_some_bytes,
     .string = text_get_string,
-    .i32 = text_get_i32,
-    .i64 = text_get_i64,
-    .f32 = text_get_f,
-    .f64 = text_get_d,
+    .integer = text_get_integer,
+    .floating = text_get_double,
     .boolean = text_get_bool,
     .objlnk = text_get_objlnk,
+    .get_path = text_get_path,
+    .next_entry = text_next_entry,
     .close = text_in_close
 };
 
 int _anjay_input_text_create(anjay_input_ctx_t **out,
-                             avs_stream_abstract_t **stream_ptr,
-                             bool autoclose) {
+                             avs_stream_t **stream_ptr,
+                             const anjay_uri_path_t *request_uri) {
     text_in_t *ctx = (text_in_t *) avs_calloc(1, sizeof(text_in_t));
     *out = (anjay_input_ctx_t *) ctx;
     if (!ctx) {
@@ -463,10 +427,8 @@ int _anjay_input_text_create(anjay_input_ctx_t **out,
 
     ctx->vtable = &TEXT_IN_VTABLE;
     ctx->stream = *stream_ptr;
-    if (autoclose) {
-        ctx->autoclose = true;
-        *stream_ptr = NULL;
-    }
+    ctx->request_uri = request_uri ? *request_uri : MAKE_ROOT_PATH();
+
     return 0;
 }
 

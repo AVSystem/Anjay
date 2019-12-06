@@ -22,7 +22,9 @@
 
 #include <avsystem/commons/stream.h>
 
+#include "../anjay_core.h"
 #include "../coap/content_format.h"
+#include "../dm_core.h"
 #include "../io_core.h"
 
 #include "vtable.h"
@@ -31,298 +33,147 @@ VISIBILITY_SOURCE_BEGIN
 
 /////////////////////////////////////////////////////////////////////// ENCODING
 
+static anjay_output_ctx_t *spawn_opaque(avs_stream_t *stream,
+                                        const anjay_uri_path_t *uri) {
+    (void) uri;
+    return _anjay_output_opaque_create(stream);
+}
+
+static anjay_output_ctx_t *spawn_text(avs_stream_t *stream,
+                                      const anjay_uri_path_t *uri) {
+    (void) uri;
+    return _anjay_output_text_create(stream);
+}
+
+static anjay_output_ctx_t *spawn_tlv(avs_stream_t *stream,
+                                     const anjay_uri_path_t *uri) {
+    return _anjay_output_tlv_create(stream, uri);
+}
+
+#ifdef WITH_LWM2M_JSON
+static anjay_output_ctx_t *spawn_json(avs_stream_t *stream,
+                                      const anjay_uri_path_t *uri) {
+    return _anjay_output_senml_like_create(stream, uri,
+                                           AVS_COAP_FORMAT_OMA_LWM2M_JSON);
+}
+#endif // WITH_LWM2M_JSON
+
 typedef struct {
-    const anjay_output_ctx_vtable_t *vtable;
-    int *errno_ptr;
-    bool past_first_call;
-    avs_stream_abstract_t *stream;
-    anjay_msg_details_t details;
-    anjay_id_type_t id_type;
-    int32_t id;
-    anjay_output_ctx_t *backend;
-    anjay_uri_path_t uri;
-} dynamic_out_t;
+    uint16_t format;
+    anjay_input_ctx_constructor_t *input_ctx_constructor;
+    anjay_output_ctx_t *(*output_ctx_spawn_func)(avs_stream_t *stream,
+                                                 const anjay_uri_path_t *uri);
+} dynamic_format_def_t;
 
-static int *dynamic_errno_ptr(anjay_output_ctx_t *ctx) {
-    return ((dynamic_out_t *) ctx)->errno_ptr;
-}
-
-static anjay_output_ctx_t *spawn_opaque(dynamic_out_t *ctx) {
-    return _anjay_output_opaque_create(ctx->stream, ctx->errno_ptr,
-                                       &ctx->details);
-}
-
-static anjay_output_ctx_t *spawn_text(dynamic_out_t *ctx) {
-    return _anjay_output_text_create(ctx->stream, ctx->errno_ptr,
-                                     &ctx->details);
-}
-
-static anjay_output_ctx_t *spawn_tlv(dynamic_out_t *ctx) {
-    anjay_output_ctx_t *result =
-            _anjay_output_tlv_create(ctx->stream, ctx->errno_ptr,
-                                     &ctx->details);
-    if (result && ctx->id >= 0
-            && _anjay_output_set_id(result, ctx->id_type, (uint16_t) ctx->id)) {
-        _anjay_output_ctx_destroy(&result);
-    }
-    return result;
-}
-
-#if defined(WITH_JSON) || defined(WITH_SENML_JSON)
-static anjay_output_ctx_t *spawn_json(dynamic_out_t *ctx, uint16_t format) {
-    anjay_output_ctx_t *result =
-            _anjay_output_json_create(ctx->stream, ctx->errno_ptr,
-                                      &ctx->details, &ctx->uri, format);
-    if (result && ctx->id >= 0
-            && _anjay_output_set_id(result, ctx->id_type, (uint16_t) ctx->id)) {
-        _anjay_output_ctx_destroy(&result);
-    }
-    return result;
-}
-#endif
-
-static anjay_output_ctx_t *spawn_backend(dynamic_out_t *ctx, uint16_t format) {
-    switch (_anjay_translate_legacy_content_format(format)) {
-    case ANJAY_COAP_FORMAT_OPAQUE:
-        return spawn_opaque(ctx);
-    case ANJAY_COAP_FORMAT_PLAINTEXT:
-        return spawn_text(ctx);
-    case ANJAY_COAP_FORMAT_TLV:
-        return spawn_tlv(ctx);
-#ifdef WITH_JSON
-    case ANJAY_COAP_FORMAT_JSON:
-        return spawn_json(ctx, ANJAY_COAP_FORMAT_JSON);
-#endif
-    default:
-        anjay_log(ERROR, "Unsupported output format: %" PRIu16, format);
-        *ctx->errno_ptr = -AVS_COAP_CODE_NOT_ACCEPTABLE;
-        return NULL;
-    }
-}
-
-static anjay_output_ctx_t *ensure_backend(dynamic_out_t *ctx, uint16_t format) {
-    if (!ctx->backend) {
-        ctx->backend = spawn_backend(ctx, format);
-    }
-    return ctx->backend;
-}
-
-static void adjust_errno(dynamic_out_t *ctx, const char *function) {
-    if (!ctx->past_first_call
-            && *ctx->errno_ptr == ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED) {
-        // When the first call is not implemented,
-        // it most likely means a format mismatch.
-        // Yes, this is hack-ish.
-        *ctx->errno_ptr = ANJAY_OUTCTXERR_FORMAT_MISMATCH;
-    }
-    switch (*ctx->errno_ptr) {
-    case ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED:
-        anjay_log(ERROR, "Output context method invalid in current context: %s",
-                  function);
-        break;
-    case ANJAY_OUTCTXERR_FORMAT_MISMATCH:
-        anjay_log(WARNING,
-                  "Output context method conflicts with Content-Format: %s",
-                  function);
-    default:;
-    }
-    ctx->past_first_call = true;
-}
-
-static inline int
-process_errno(dynamic_out_t *ctx, const char *function, int result) {
-    adjust_errno(ctx, function);
-    return result;
-}
-
-static anjay_ret_bytes_ctx_t *dynamic_ret_bytes(anjay_output_ctx_t *ctx_,
-                                                size_t length) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_OPAQUE)) {
-        anjay_ret_bytes_ctx_t *result =
-                anjay_ret_bytes_begin(ctx->backend, length);
-        adjust_errno(ctx, "ret_bytes");
-        return result;
-    }
-    return NULL;
-}
-
-static int dynamic_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
-        return process_errno(ctx, "ret_string",
-                             anjay_ret_string(ctx->backend, value));
-    }
-    return -1;
-}
-
-static int dynamic_ret_i32(anjay_output_ctx_t *ctx_, int32_t value) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
-        return process_errno(ctx, "ret_i32",
-                             anjay_ret_i32(ctx->backend, value));
-    }
-    return -1;
-}
-
-static int dynamic_ret_i64(anjay_output_ctx_t *ctx_, int64_t value) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
-        return process_errno(ctx, "ret_i64",
-                             anjay_ret_i64(ctx->backend, value));
-    }
-    return -1;
-}
-
-static int dynamic_ret_float(anjay_output_ctx_t *ctx_, float value) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
-        return process_errno(ctx, "ret_float",
-                             anjay_ret_float(ctx->backend, value));
-    }
-    return -1;
-}
-
-static int dynamic_ret_double(anjay_output_ctx_t *ctx_, double value) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
-        return process_errno(ctx, "ret_double",
-                             anjay_ret_double(ctx->backend, value));
-    }
-    return -1;
-}
-
-static int dynamic_ret_bool(anjay_output_ctx_t *ctx_, bool value) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
-        return process_errno(ctx, "ret_bool",
-                             anjay_ret_bool(ctx->backend, value));
-    }
-    return -1;
-}
-
-static int
-dynamic_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_PLAINTEXT)) {
-        return process_errno(ctx, "ret_objlnk",
-                             anjay_ret_objlnk(ctx->backend, oid, iid));
-    }
-    return -1;
-}
-
-static anjay_output_ctx_t *dynamic_ret_array_start(anjay_output_ctx_t *ctx_) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_TLV)) {
-        anjay_output_ctx_t *result = anjay_ret_array_start(ctx->backend);
-        adjust_errno(ctx, "ret_array_start");
-        return result;
-    }
-    return NULL;
-}
-
-static anjay_output_ctx_t *dynamic_ret_object_start(anjay_output_ctx_t *ctx_) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ensure_backend(ctx, ANJAY_COAP_FORMAT_TLV)) {
-        anjay_output_ctx_t *result = _anjay_output_object_start(ctx->backend);
-        adjust_errno(ctx, "ret_object_start");
-        return result;
-    }
-    return NULL;
-}
-
-static int
-dynamic_set_id(anjay_output_ctx_t *ctx_, anjay_id_type_t type, uint16_t id) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-    if (ctx->backend) {
-        int result = _anjay_output_set_id(ctx->backend, type, id);
-        if (result && !ctx->past_first_call
-                && *ctx->errno_ptr == ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED) {
-            // Ignore set_id fails before first ret_* call.
-            // Opaque and Text output contexts do not support set_id,
-            // but dm_read() calls it before each Resource.
-            *ctx->errno_ptr = 0;
-            return 0;
-        }
-        return result;
-    } else {
-        ctx->id_type = type;
-        ctx->id = id;
-        return 0;
-    }
-}
-
-static int dynamic_close(anjay_output_ctx_t *ctx_) {
-    dynamic_out_t *ctx = (dynamic_out_t *) ctx_;
-
-    if (!ctx->backend) {
-        return ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED;
-    }
-    return _anjay_output_ctx_destroy(&ctx->backend);
-}
-
-static const anjay_output_ctx_vtable_t DYNAMIC_OUT_VTABLE = {
-    .errno_ptr = dynamic_errno_ptr,
-    .bytes_begin = dynamic_ret_bytes,
-    .string = dynamic_ret_string,
-    .i32 = dynamic_ret_i32,
-    .i64 = dynamic_ret_i64,
-    .f32 = dynamic_ret_float,
-    .f64 = dynamic_ret_double,
-    .boolean = dynamic_ret_bool,
-    .objlnk = dynamic_ret_objlnk,
-    .array_start = dynamic_ret_array_start,
-    .object_start = dynamic_ret_object_start,
-    .set_id = dynamic_set_id,
-    .close = dynamic_close
+static const dynamic_format_def_t SUPPORTED_SIMPLE_FORMATS[] = {
+    { AVS_COAP_FORMAT_OCTET_STREAM, _anjay_input_opaque_create, spawn_opaque },
+    { AVS_COAP_FORMAT_PLAINTEXT, _anjay_input_text_create, spawn_text },
+    { AVS_COAP_FORMAT_NONE, NULL, NULL }
 };
 
-anjay_output_ctx_t *
-_anjay_output_dynamic_create(avs_stream_abstract_t *stream,
-                             int *errno_ptr,
-                             anjay_msg_details_t *details_template,
-                             const anjay_uri_path_t *uri) {
-    dynamic_out_t *ctx = (dynamic_out_t *) avs_calloc(1, sizeof(dynamic_out_t));
-    if (!ctx) {
-        return NULL;
+static const dynamic_format_def_t SUPPORTED_HIERARCHICAL_FORMATS[] = {
+    { AVS_COAP_FORMAT_OMA_LWM2M_TLV, _anjay_input_tlv_create, spawn_tlv },
+#ifdef WITH_LWM2M_JSON
+    { AVS_COAP_FORMAT_OMA_LWM2M_JSON, NULL, spawn_json },
+#endif // WITH_LWM2M_JSON
+    { AVS_COAP_FORMAT_NONE, NULL, NULL }
+};
+
+static const dynamic_format_def_t *
+find_format(const dynamic_format_def_t *supported_formats, uint16_t format) {
+    for (const dynamic_format_def_t *candidate = supported_formats;
+         candidate->format != AVS_COAP_FORMAT_NONE;
+         ++candidate) {
+        if (_anjay_translate_legacy_content_format(format)
+                == candidate->format) {
+            return candidate;
+        }
     }
-    ctx->vtable = &DYNAMIC_OUT_VTABLE;
-    ctx->errno_ptr = errno_ptr;
-    ctx->stream = stream;
-    ctx->details = *details_template;
-    ctx->id = -1;
-    ctx->uri = *uri;
-    if (ctx->details.format != AVS_COAP_FORMAT_NONE
-            && !ensure_backend(ctx, ctx->details.format)) {
-        avs_free(ctx);
-        return NULL;
+    return NULL;
+}
+
+uint16_t _anjay_default_hierarchical_format(anjay_lwm2m_version_t version) {
+    (void) version;
+    return AVS_COAP_FORMAT_OMA_LWM2M_TLV;
+}
+
+uint16_t _anjay_default_simple_format(anjay_t *anjay,
+                                      anjay_lwm2m_version_t version) {
+    if (anjay->prefer_hierarchical_formats) {
+        return _anjay_default_hierarchical_format(version);
     }
-    return (anjay_output_ctx_t *) ctx;
+
+    return AVS_COAP_FORMAT_PLAINTEXT;
+}
+
+int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,
+                                    avs_stream_t *stream,
+                                    const anjay_uri_path_t *uri,
+                                    uint16_t format,
+                                    anjay_request_action_t action) {
+    if (format == AVS_COAP_FORMAT_NONE) {
+        return -1;
+    }
+
+    const dynamic_format_def_t *def = NULL;
+    switch (action) {
+    case ANJAY_ACTION_READ:
+        (void) ((def = find_format(SUPPORTED_SIMPLE_FORMATS, format))
+                || (def = find_format(SUPPORTED_HIERARCHICAL_FORMATS, format)));
+        break;
+    default:
+        break;
+    }
+
+    if (!def || !def->output_ctx_spawn_func) {
+        anjay_log(DEBUG,
+                  "Could not find an appropriate output context for format: "
+                  "%" PRIu16,
+                  format);
+        return ANJAY_ERR_NOT_ACCEPTABLE;
+    }
+
+    if (!(*out_ctx = def->output_ctx_spawn_func(stream, uri))) {
+        return ANJAY_ERR_INTERNAL;
+    }
+    return 0;
 }
 
 /////////////////////////////////////////////////////////////////////// DECODING
 
-int _anjay_input_dynamic_create(anjay_input_ctx_t **out,
-                                avs_stream_abstract_t **stream_ptr,
-                                bool autoclose) {
-    const avs_coap_msg_t *msg;
-    uint16_t format;
-    int result;
-    if ((result = _anjay_coap_stream_get_incoming_msg(*stream_ptr, &msg))
-            || (result = avs_coap_msg_get_content_format(msg, &format))) {
-        return result;
+int _anjay_input_dynamic_construct(anjay_input_ctx_t **out,
+                                   avs_stream_t *stream,
+                                   const anjay_request_t *request) {
+    uint16_t format = request->content_format;
+    if (request->content_format == AVS_COAP_FORMAT_NONE) {
+        format = AVS_COAP_FORMAT_PLAINTEXT;
     }
-    switch (_anjay_translate_legacy_content_format(format)) {
-    case ANJAY_COAP_FORMAT_PLAINTEXT:
-    case AVS_COAP_FORMAT_NONE:
-        return _anjay_input_text_create(out, stream_ptr, autoclose);
-    case ANJAY_COAP_FORMAT_TLV:
-        return _anjay_input_tlv_create(out, stream_ptr, autoclose);
-    case ANJAY_COAP_FORMAT_OPAQUE:
-        return _anjay_input_opaque_create(out, stream_ptr, autoclose);
+    anjay_input_ctx_constructor_t *constructor = NULL;
+    const dynamic_format_def_t *def;
+    switch (request->action) {
+    case ANJAY_ACTION_WRITE:
+    case ANJAY_ACTION_WRITE_UPDATE:
+    case ANJAY_ACTION_CREATE: {
+        if ((def = find_format(SUPPORTED_SIMPLE_FORMATS, format))
+                || (def = find_format(SUPPORTED_HIERARCHICAL_FORMATS,
+                                      format))) {
+            constructor = def->input_ctx_constructor;
+        }
+        break;
+    }
+    case ANJAY_ACTION_EXECUTE:
+        if (format == AVS_COAP_FORMAT_PLAINTEXT) {
+            constructor = _anjay_input_text_create;
+        }
+        break;
     default:
-        return ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT;
+        // Nothing to prepare - the action does not need an input context.
+        return 0;
     }
+    if (constructor) {
+        return constructor(out, &stream, &request->uri);
+    }
+    return ANJAY_ERR_UNSUPPORTED_CONTENT_FORMAT;
 }
 
 #ifdef ANJAY_TEST

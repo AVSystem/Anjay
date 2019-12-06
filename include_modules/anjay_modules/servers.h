@@ -25,7 +25,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef enum {
     ANJAY_CONNECTION_UNSET = -1,
-    ANJAY_CONNECTION_UDP = 0,
+    ANJAY_CONNECTION_PRIMARY = 0,
     ANJAY_CONNECTION_LIMIT_
 } anjay_connection_type_t;
 
@@ -46,21 +46,15 @@ typedef struct {
  * Reads security information (security mode, keys etc.) for a given Security
  * object instance. This is part of the servers subsystem because it reuses some
  * private code that is also used when refreshing server connections - namely,
- * connection_type_definition_t instances (UDP_CONNECTION and - in the
- * commercial version - SMS_CONNECTION) that query the data model for security
- * information, abstracting away the fact that UDP and SMS security information
- * in stored in different resources.
+ * connection_type_definition_t instances that query the data model for security
+ * information, abstracting away the fact that UDP/TCP and SMS security
+ * information is stored in different resources.
  *
  * It's currently only used in the Firmware Update module, to allow deriving the
  * security information from the data model when it's not explicitly specified.
- * Incidentally, it always specifies UDP as the connection type, so the fact
- * that it's so generic is not actually used...
  */
-int _anjay_get_security_info(anjay_t *anjay,
-                             avs_net_security_info_t *out_net_info,
-                             anjay_server_dtls_keys_t *out_dtls_keys,
-                             anjay_iid_t security_iid,
-                             anjay_connection_type_t conn_type);
+anjay_security_config_t *_anjay_get_security_config(anjay_t *anjay,
+                                                    anjay_iid_t security_iid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -30,40 +30,64 @@ by allowing `Value` Resource to contain multiple values.
 API for Multiple Instance Resources management
 ----------------------------------------------
 
-Reading Multiple Instance Resources or writing some in a response requires
-special contexts to be instantiated by the user, i.e. ``anjay_input_ctx_t``
-and ``anjay_output_ctx_t`` out of contexts passed by Anjay to ``resource_write``
-and ``resource_read`` handlers.
-
-.. warning::
-    Trying to use original contexts to read / write Multiple Instance Resource
-    results in undefined behavior.
-
-.. warning::
-    Trying to use original contexts after special contexts were created on top of
-    them results in undefined behavior.
-
-To instantiate them one uses functions:
+Dealing with Multiple Instance Resources in the data model requires implementing
+additional handlers. The most important in the ``list_resource_instances``
+handler:
 
 .. highlight:: c
-.. snippet-source:: include_public/anjay/io.h
+.. snippet-source:: include_public/anjay/dm.h
 
-    anjay_input_ctx_t *anjay_get_array(anjay_input_ctx_t *ctx);
+    typedef int
+    anjay_dm_list_resource_instances_t(anjay_t *anjay,
+                                       const anjay_dm_object_def_t *const *obj_ptr,
+                                       anjay_iid_t iid,
+                                       anjay_rid_t rid,
+                                       anjay_dm_list_ctx_t *ctx);
 
-and
+This handler needs to be implemented for any Object that has some Multiple
+Instance Resource. It will only be called on Multiple Resources, as determined
+by the ``kind`` argument passed to ``anjay_dm_emit_res()`` in the
+``list_resources`` handler. It shall list (via the passed
+``anjay_dm_list_ctx_t``) all the currently existing instances of the resource.
 
-.. snippet-source:: include_public/anjay/io.h
+To allow writing to Multiple Instance Resources, the ``resource_reset`` handler
+needs to be implemented as well:
 
-    anjay_output_ctx_t *anjay_ret_array_start(anjay_output_ctx_t *ctx);
+.. snippet-source:: include_public/anjay/dm.h
 
-respectively.
+    typedef int
+    anjay_dm_resource_reset_t(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr,
+                              anjay_iid_t iid,
+                              anjay_rid_t rid);
 
-From now on, created contexts shall be used to receive or send Resource
-Instance ID (`index`) and the Resource Instance Value (`value`).
+This handler will only be called on Resources that has been determined to have
+multiple instances. It shall put the Resource in a state that it is present, but
+having zero instances.
+
+The actual reads and writes are performed using the usual ``resource_read`` and
+``resource_write`` handler. The ``riid`` argument that we have previously been
+ignoring, is used to determine the Resource Instance that is targeted.
 
 
 Preparing Test object for Multiple Instance Resources
 -----------------------------------------------------
+
+First of all, we need to update the List Resources handler so that the library
+knows that Resource 1 now has multiple instances:
+
+.. snippet-source:: examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
+
+    static int test_list_resources(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_dm_resource_list_ctx_t *ctx) {
+        // ...
+        anjay_dm_emit_res(ctx, 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+        anjay_dm_emit_res(ctx, 1, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT);
+        return 0;
+    }
+
 
 We define following structure to represent a single Instance of our Multiple
 Instance Resource:
@@ -100,94 +124,161 @@ We also edit ``test_instance_t`` structure definition:
     Instance Resource value, and Multiple Instance Resource containing
     zero Instances (i.e. lack of list presence vs an empty list).
 
-Handling Multiple Instance Resources in Write RPC
--------------------------------------------------
+
+Implementing the List Resource Instances handler
+------------------------------------------------
+
+Here is how the List Resource Instances is implemented for our test object:
+
+.. snippet-source:: examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
+
+    static int
+    test_list_resource_instances(anjay_t *anjay,
+                                 const anjay_dm_object_def_t *const *obj_ptr,
+                                 anjay_iid_t iid,
+                                 anjay_rid_t rid,
+                                 anjay_dm_list_ctx_t *ctx) {
+        (void) anjay; // unused
+        test_instance_t *current_instance =
+                (test_instance_t *) get_instance(get_test_object(obj_ptr), iid);
+
+        // this handler can only be called for Multiple-Instance Resources
+        assert(rid == 1);
+
+        AVS_LIST(test_value_instance_t) it;
+        AVS_LIST_FOREACH(it, current_instance->values) {
+            anjay_dm_emit(ctx, it->index);
+        }
+        return 0;
+    }
+
+As you can see, the ``anjay_dm_emit()`` function is used to pass all the
+existing Resource Instances to Anjay, similar to the ``list_instances`` and
+``list_resources`` handlers.
+
+Note that the resource instances MUST be returned in a strictly ascending,
+sorted order. We will keep the resource instances in sorted order, so this
+implementation satisfies this contract.
+
+Handling Multiple Instance Resources in Read RPC
+------------------------------------------------
+
+``resource_read`` handler is being called by Anjay for each Resource Instance
+referenced by the server, giving the control to the user. Thus, the read handler
+could look like this:
+
+.. snippet-source:: examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
+
+    static int test_resource_read(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid,
+                                  anjay_riid_t riid,
+                                  anjay_output_ctx_t *ctx) {
+        // ...
+        switch (rid) {
+        // ...
+        case 1: {
+            AVS_LIST(const test_value_instance_t) it;
+            AVS_LIST_FOREACH(it, current_instance->values) {
+                if (it->index == riid) {
+                    return anjay_ret_i32(ctx, it->value);
+                }
+            }
+            // Resource Instance not found
+            return ANJAY_ERR_NOT_FOUND;
+        }
+        // ...
+        }
+    }
+
+
+Implementing the Resource Reset handler
+---------------------------------------
 
 .. topic:: General flow of function calls when LwM2M Write operation was
            issued on Multiple Instance Resource.
 
-    1. ``resource_write`` handler is being called by Anjay, giving the control
-       to the user.
+    1. ``resource_reset`` handler is being called by Anjay, to clear the
+       Multiple Instance Resource.
 
-    2. User creates additional ``anjay_input_context_t`` out of provided (as an argument
-       to ``resource_write`` handler) input context by calling ``anjay_get_array``.
+    2. ``resource_write`` handler is being called by Anjay for each Resource
+       Instance referenced by the server, giving the control to the user. The
+       handler shall add or replace the Resource with the instance it is being
+       called for.
 
-    3. User calls ``anjay_get_array_index`` and ``anjay_get_*`` until either
-       the former fails, due to some kind of error, or finishes, indicating end
-       of a message by returning ``ANJAY_GET_INDEX_END``.
+The above means that the Resource Reset handler is rather simple to implement,
+as it only needs to clear the resource:
 
-OK, based on the above, we are ready to create helper function which is going
-to read whole sequence of `(index, value)` pairs and store them on the list.
+.. snippet-source:: examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
+
+    static int test_resource_reset(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid) {
+        (void) anjay; // unused
+
+        test_instance_t *current_instance =
+                (test_instance_t *) get_instance(get_test_object(obj_ptr), iid);
+
+        // this handler can only be called for Multiple-Instance Resources
+        assert(rid == 1);
+
+        // free memory associated with old values
+        AVS_LIST_CLEAR(&current_instance->values);
+        current_instance->has_values = true;
+        return 0;
+    }
+
+
+Handling Multiple Instance Resources in Write RPC
+-------------------------------------------------
+
+Now we are ready to actually implement the write operation. We will create a
+helper function for actually updating the Resource Instance list with a newly
+written value.
 
 .. snippet-source:: examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
 
     static int test_array_write(AVS_LIST(test_value_instance_t) *out_instances,
-                                anjay_input_ctx_t *input_array) {
-        int result;
-        test_value_instance_t instance;
-        AVS_ASSERT(*out_instances == NULL, "Nonempty list provided");
+                                anjay_riid_t index,
+                                anjay_input_ctx_t *input_ctx) {
+        test_value_instance_t instance = {
+            .index = index
+        };
 
-        while ((result = anjay_get_array_index(input_array, &instance.index))
-               == 0) {
-            if (anjay_get_i32(input_array, &instance.value)) {
-                // An error occurred during the read.
-                result = ANJAY_ERR_INTERNAL;
-                goto failure;
+        if (anjay_get_i32(input_ctx, &instance.value)) {
+            // An error occurred during the read.
+            return ANJAY_ERR_INTERNAL;
+        }
+
+        AVS_LIST(test_value_instance_t) *insert_it;
+
+        // Searching for the place to insert;
+        // note that it makes the whole function O(n).
+        AVS_LIST_FOREACH_PTR(insert_it, out_instances) {
+            if ((*insert_it)->index >= instance.index) {
+                break;
             }
+        }
 
-            AVS_LIST(test_value_instance_t) *insert_it;
-
-            // Duplicate detection, and searching for the place to insert
-            // note that it makes the whole function O(n^2).
-            AVS_LIST_FOREACH_PTR(insert_it, out_instances) {
-                if ((*insert_it)->index == instance.index) {
-                    // duplicate
-                    result = ANJAY_ERR_BAD_REQUEST;
-                    goto failure;
-                } else if ((*insert_it)->index > instance.index) {
-                    break;
-                }
-            }
-
+        if ((*insert_it)->index != instance.index) {
             AVS_LIST(test_value_instance_t) new_element =
                     AVS_LIST_NEW_ELEMENT(test_value_instance_t);
 
             if (!new_element) {
                 // out of memory
-                result = ANJAY_ERR_INTERNAL;
-                goto failure;
+                return ANJAY_ERR_INTERNAL;
             }
 
-            *new_element = instance;
             AVS_LIST_INSERT(insert_it, new_element);
         }
 
-        if (result && result != ANJAY_GET_INDEX_END) {
-            // malformed request
-            result = ANJAY_ERR_BAD_REQUEST;
-            goto failure;
-        }
+        assert((*insert_it)->index == instance.index);
+        **insert_it = instance;
 
         return 0;
-
-    failure:
-        AVS_LIST_CLEAR(out_instances);
-        return result;
     }
-
-On input, the function takes a pointer to the list where values shall be
-stored, and mentioned array input context. It is pretty dense, indeed,
-but this is the cost of being correct.
-
-.. note::
-
-    If you had looked at ``anjay_get_array`` documentation you've seen the
-    warning about possible interpretations of requests containing duplicated
-    Resource Instance IDs. Presented implementation returns an error on such
-    requests, but the LwM2M specification seem to not forbid implementations
-    from accepting it, as long as it does not break any invariants defined
-    within specification. We would however recommend to take approach
-    as shown in this tutorial.
 
 Last thing to do is to modify ``test_resource_write`` implementation to make use
 of our helper function:
@@ -198,24 +289,13 @@ of our helper function:
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_iid_t iid,
                                    anjay_rid_t rid,
+                                   anjay_riid_t riid,
                                    anjay_input_ctx_t *ctx) {
         // ...
         switch (rid) {
         // ...
         case 1: {
-            anjay_input_ctx_t *input_array = anjay_get_array(ctx);
-            if (!input_array) {
-                // could not create input context for some reason
-                return ANJAY_ERR_INTERNAL;
-            }
-
-            // free memory associated with old values
-            AVS_LIST_CLEAR(&current_instance->values);
-
-            // try to read new values from an RPC
-            int result = test_array_write(&current_instance->values,
-                                          input_array);
-
+            int result = test_array_write(&current_instance->values, riid, ctx);
             if (!result) {
                 current_instance->has_values = true;
             }
@@ -223,62 +303,6 @@ of our helper function:
             // either test_array_write succeeded and result is 0, or not
             // in which case result contains appropriate error code.
             return result;
-        }
-        // ...
-        }
-    }
-
-Handling Multiple Instance Resources in Read RPC
-------------------------------------------------
-
-.. topic:: General flow of function calls when LwM2M Read operation was
-           issued on Multiple Instance Resource.
-
-    1. ``resource_read`` handler is being called by Anjay, giving the control
-       to the user.
-
-    2. User creates additional ``anjay_output_context_t`` out of provided (as an argument
-       to ``resource_read`` handler) output context by calling ``anjay_ret_array_start``.
-
-    3. User calls ``anjay_ret_array_index`` and ``anjay_ret_*`` until they are done.
-
-    4. In the end, user calls ``anjay_ret_array_finish`` to tell Anjay that the
-       Multiple Instance Resource response is ready.
-
-In the end, the read handler could look like this:
-
-.. snippet-source:: examples/tutorial/custom-object/multi-instance-resources-dynamic/src/test_object.c
-
-    static int test_resource_read(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t iid,
-                                  anjay_rid_t rid,
-                                  anjay_output_ctx_t *ctx) {
-        // ...
-        switch (rid) {
-        // ...
-        case 1: {
-            anjay_output_ctx_t *array_output = anjay_ret_array_start(ctx);
-            if (!array_output) {
-                // cannot instantiate array output context
-                return ANJAY_ERR_INTERNAL;
-            }
-
-            AVS_LIST(const test_value_instance_t) it;
-            AVS_LIST_FOREACH(it, current_instance->values) {
-                int result = anjay_ret_array_index(array_output, it->index);
-                if (result) {
-                    // failed to return an index
-                    return result;
-                }
-
-                result = anjay_ret_i32(array_output, it->value);
-                if (result) {
-                    // failed to return value
-                    return result;
-                }
-            }
-            return anjay_ret_array_finish(array_output);
         }
         // ...
         }

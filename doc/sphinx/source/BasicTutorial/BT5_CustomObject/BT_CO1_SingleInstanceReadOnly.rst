@@ -56,12 +56,14 @@ The Read handler for our test object might be implemented as follows:
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
+                                  anjay_riid_t riid,
                                   anjay_output_ctx_t *ctx) {
         // These arguments may seem superfluous now, but they will come in handy
         // while defining more complex objects
         (void) anjay;   // unused
         (void) obj_ptr; // unused: the object holds no state
         (void) iid;     // unused: will always be 0 for single-instance Objects
+        (void) riid;    // unused: will always be ANJAY_ID_INVALID
 
         switch (rid) {
         case 0:
@@ -69,7 +71,7 @@ The Read handler for our test object might be implemented as follows:
         case 1:
             return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds);
         default:
-            // control will never reach this part due to object's supported_rids
+            // control will never reach this part due to test_list_resources
             return 0;
         }
     }
@@ -77,15 +79,73 @@ The Read handler for our test object might be implemented as follows:
 
 What happens here?
 
-- ``rid`` value is compared against all known Resource IDs to determine what value
-  should be returned to the library.
+- ``rid`` value is compared against all known Resource IDs to determine what
+  value should be returned to the library.
 - Resource value is passed to the library via one of ``anjay_ret_*`` functions,
   depending on the actual data type of a Resource. The value returned
   by an appropriate call is then forwarded up - this ensures correct error
   handling in case anything goes wrong.
 
 
-Having the Read handler implemented, one can initialize the
+The code above makes reference to a ``test_list_resources`` function - this is
+another handler, used by the library to determine which resources are supported
+and present in a given Object Instance. An LwM2M client may be able to handle a
+Resource that has no default value - in that case, the Resource is always
+*supported*, but becomes *present* only after an LwM2M Server sets its value
+first. Before that, it can be treated as non-existent - it will not be reported
+via the Discover RPC, for example. Examples include Default Minimum Period and
+Default Maximum Period Resources of the LwM2M Server object.
+
+In our case, Resources 0 and 1 are always present in the only Instance we have,
+so we can implement the ``test_resource_preset`` handler simply as:
+
+.. highlight:: c
+.. snippet-source:: examples/tutorial/custom-object/read-only/src/main.c
+
+    static int test_list_resources(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_dm_resource_list_ctx_t *ctx) {
+        (void) anjay;   // unused
+        (void) obj_ptr; // unused
+        (void) iid;     // unused
+
+        anjay_dm_emit_res(ctx, 0, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+        anjay_dm_emit_res(ctx, 1, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+        return 0;
+    }
+
+
+The ``anjay_dm_emit_res()`` function, used in the above snipped, is declared as:
+
+.. highlight:: c
+.. snippet-source:: include_public/anjay/io.h
+
+    void anjay_dm_emit_res(anjay_dm_resource_list_ctx_t *ctx,
+                           anjay_rid_t rid,
+                           anjay_dm_resource_kind_t kind,
+                           anjay_dm_resource_presence_t presence);
+
+It shall be called for all *supported* resources. The ``presence`` argument
+informs the library whether a given resource is *present* at the moment.
+
+The ``kind`` argument informs the library what kind of operations are legal to
+perform on the resource. Valid values are:
+
+   * ``ANJAY_DM_RES_R`` - read-only single instance resource
+   * ``ANJAY_DM_RES_W`` - write-only single instance resource
+   * ``ANJAY_DM_RES_RW`` - read/write single instance resource
+   * ``ANJAY_DM_RES_RM`` - read-only multiple instance resource
+   * ``ANJAY_DM_RES_WM`` - write-only multiple instance resource
+   * ``ANJAY_DM_RES_RWM`` - read/write multiple instance resource
+   * ``ANJAY_DM_RES_E`` - executable resource
+
+Note that when communicating with a Bootstrap Server may be able to ignore this
+information, see :doc:`BT_CO7_BootstrapAwareness` for more information.
+
+Note that the resources MUST be returned in a strictly ascending, sorted order.
+
+Having the Read and List Resources handlers implemented, one can initialize the
 ``anjay_dm_object_def_t`` structure:
 
 .. highlight:: c
@@ -95,18 +155,11 @@ Having the Read handler implemented, one can initialize the
         // Object ID
         .oid = 1234,
 
-        // List of supported Resource IDs
-        .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
-
         .handlers = {
-            // single-instance Objects can use these pre-implemented handlers:
-            .instance_it = anjay_dm_instance_it_SINGLE,
-            .instance_present = anjay_dm_instance_present_SINGLE,
+            // single-instance Objects can use this pre-implemented handler:
+            .list_instances = anjay_dm_list_instances_SINGLE,
 
-            // if all supported Resources are always available, one can use
-            // a pre-implemented `resource_present` handler too:
-            .resource_present = anjay_dm_resource_present_TRUE,
-
+            .list_resources = test_list_resources,
             .resource_read = test_resource_read
 
             // all other handlers can be left NULL if only Read operation is
@@ -125,7 +178,7 @@ Having the Read handler implemented, one can initialize the
    #. First, the library checks whether an Object with ID = 1 is registered.
       If not, a Not Found response is issued.
 
-   #. ``instance_present`` handler of Object 1 is called to determine whether
+   #. ``list_instances`` handler of Object 1 is called to determine whether
       Instance 2 exists. If not, a Not Found response is issued.
 
    #. If multiple LwM2M Servers are configured, the library inspects Access
@@ -136,22 +189,9 @@ Having the Read handler implemented, one can initialize the
 
           More info: :doc:`../../AdvancedTutorial/AT4`
 
-   #. Resource ID 3 is searched for in the ``supported_rids`` list defined for
-      the object. If it is not found, a Not Found response is issued.
-
-   #. ``resource_present`` handler is called to ensure that Resource 3
-      is instantiated for Object Instance 2. If the handler returns 0,
+   #. ``list_resources`` handler is called to ensure that Resource 3
+      is supported and present for Object Instance 2. If the handler returns 0,
       a Not Found response is issued.
-
-   #. ``resource_operations`` handler, if present, is used to determine whether
-      requested operation is valid for given target. In case it is not (e.g.
-      Execute request on a read-write Resource), Method Not Allowed response
-      is issued.
-
-      .. note::
-
-          ``resource_operations`` handler will be explained in detail in
-          further tutorials.
 
    #. Finally, if all other checks succeeded, a specific handler (e.g.
       ``resource_read`` for Read operation) is called.
@@ -160,15 +200,6 @@ Having the Read handler implemented, one can initialize the
    (see `ANJAY_ERR_* constants <../../api/core_8h.html>`_), aborting the
    sequence early and - if the Read was triggered by a server request - causing
    the library to respond with returned error code.
-
-
-.. topic:: Why both the `supported_rids` list and the `resource_present` handler
-           are necessary?
-
-   An LwM2M client may be able to handle a Resource that has no default value.
-   Such Resource is always *supported*, but becomes *present* only after
-   an LwM2M Server sets its value first. Examples include Default Minimum Period
-   and Default Maximum Period Resources of the LwM2M Server object.
 
 
 When the Object Definition is ready, the only thing left to do is registering

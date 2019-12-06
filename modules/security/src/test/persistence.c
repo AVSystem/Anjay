@@ -31,7 +31,7 @@ typedef struct {
     const anjay_dm_object_def_t *const *restored;
     sec_repr_t *stored_repr;
     sec_repr_t *restored_repr;
-    avs_stream_abstract_t *stream;
+    avs_stream_t *stream;
 } security_persistence_test_env_t;
 
 #define SCOPED_SECURITY_PERSISTENCE_TEST_ENV(Name)    \
@@ -89,7 +89,7 @@ static const anjay_security_instance_t BOOTSTRAP_INSTANCE = {
     .ssid = 0,
     .server_uri = "coap://at.ease/eating?well",
     .bootstrap_server = true,
-    .security_mode = ANJAY_UDP_SECURITY_NOSEC,
+    .security_mode = ANJAY_SECURITY_NOSEC,
     .client_holdoff_s = -1,
     .bootstrap_timeout_s = -1,
     .public_cert_or_psk_identity = (const uint8_t *) BUFFERS[0],
@@ -111,28 +111,29 @@ static void assert_instances_equal(const sec_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->iid, b->iid);
     AVS_UNIT_ASSERT_EQUAL_STRING(a->server_uri, b->server_uri);
     AVS_UNIT_ASSERT_EQUAL(a->is_bootstrap, b->is_bootstrap);
-    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->udp_security_mode,
-                          (uint32_t) b->udp_security_mode);
+    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->security_mode,
+                          (uint32_t) b->security_mode);
     assert_raw_buffers_equal(&a->public_cert_or_psk_identity,
                              &b->public_cert_or_psk_identity);
     assert_raw_buffers_equal(&a->private_cert_or_psk_key,
                              &b->private_cert_or_psk_key);
     assert_raw_buffers_equal(&a->server_public_key, &b->server_public_key);
-    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->sms_security_mode,
-                          (uint32_t) b->sms_security_mode);
-    assert_raw_buffers_equal(&a->sms_key_params, &b->sms_key_params);
-    assert_raw_buffers_equal(&a->sms_secret_key, &b->sms_secret_key);
-    AVS_UNIT_ASSERT_EQUAL_STRING(a->sms_number, b->sms_number);
     AVS_UNIT_ASSERT_EQUAL(a->ssid, b->ssid);
     AVS_UNIT_ASSERT_EQUAL(a->holdoff_s, b->holdoff_s);
     AVS_UNIT_ASSERT_EQUAL(a->bs_timeout_s, b->bs_timeout_s);
 
     AVS_UNIT_ASSERT_EQUAL(a->has_is_bootstrap, b->has_is_bootstrap);
-    AVS_UNIT_ASSERT_EQUAL(a->has_udp_security_mode, b->has_udp_security_mode);
+    AVS_UNIT_ASSERT_EQUAL(a->has_security_mode, b->has_security_mode);
+    AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
+    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->sms_security_mode,
+                          (uint32_t) b->sms_security_mode);
+    assert_raw_buffers_equal(&a->sms_key_params, &b->sms_key_params);
+    assert_raw_buffers_equal(&a->sms_secret_key, &b->sms_secret_key);
+    AVS_UNIT_ASSERT_EQUAL_STRING(a->sms_number, b->sms_number);
+
     AVS_UNIT_ASSERT_EQUAL(a->has_sms_security_mode, b->has_sms_security_mode);
     AVS_UNIT_ASSERT_EQUAL(a->has_sms_key_params, b->has_sms_key_params);
     AVS_UNIT_ASSERT_EQUAL(a->has_sms_secret_key, b->has_sms_secret_key);
-    AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
 }
 
 static void assert_objects_equal(const sec_repr_t *a, const sec_repr_t *b) {
@@ -151,7 +152,7 @@ static void assert_objects_equal(const sec_repr_t *a, const sec_repr_t *b) {
 
 AVS_UNIT_TEST(security_persistence, basic_store_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
-    anjay_iid_t iid = ANJAY_IID_INVALID;
+    anjay_iid_t iid = ANJAY_ID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
             env->anjay_stored, &BOOTSTRAP_INSTANCE, &iid));
     AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
@@ -166,7 +167,7 @@ AVS_UNIT_TEST(security_persistence, basic_store_restore) {
 
 AVS_UNIT_TEST(security_persistence, invalid_object_to_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
-    anjay_iid_t iid = ANJAY_IID_INVALID;
+    anjay_iid_t iid = ANJAY_ID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
             env->anjay_stored, &BOOTSTRAP_INSTANCE, &iid));
 
@@ -203,7 +204,7 @@ AVS_UNIT_TEST(security_persistence, modification_flag_add_instance) {
     /* At the beginning security object is not modified */
     AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
     /* Invalid instance does not change the modification flag */
-    anjay_iid_t iid = ANJAY_IID_INVALID;
+    anjay_iid_t iid = ANJAY_ID_INVALID;
     const anjay_security_instance_t invalid_instance = {
         .server_uri = ""
     };
@@ -229,7 +230,7 @@ AVS_UNIT_TEST(security_persistence, modification_flag_purge) {
     anjay_security_object_purge(env->anjay_stored);
     AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
 
-    anjay_iid_t iid = ANJAY_IID_INVALID;
+    anjay_iid_t iid = ANJAY_ID_INVALID;
     AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
             env->anjay_stored, &BOOTSTRAP_INSTANCE, &iid));
     AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));

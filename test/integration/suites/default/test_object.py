@@ -26,7 +26,7 @@ class TestObject:
 
             self.serv.set_timeout(timeout_s=1)
 
-            req = Lwm2mCreate('/1337')
+            req = Lwm2mCreate('/%d' % (OID.Test,))
             self.serv.send(req)
             self.assertMsgEqual(Lwm2mCreated.matching(req)(),
                                 self.serv.recv())
@@ -34,7 +34,7 @@ class TestObject:
 
 class TimestampTest(TestObject.TestCase):
     def runTest(self):
-        req = Lwm2mRead('/1337/1/1')
+        req = Lwm2mRead(ResPath.Test[0].Counter)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mContent.matching(req)(),
                             self.serv.recv())
@@ -43,19 +43,19 @@ class TimestampTest(TestObject.TestCase):
 class CounterTest(TestObject.TestCase):
     def runTest(self):
         # ensure the counter is zero initially
-        req = Lwm2mRead('/1337/1/1', accept=coap.ContentFormat.TEXT_PLAIN)
+        req = Lwm2mRead(ResPath.Test[0].Counter, accept=coap.ContentFormat.TEXT_PLAIN)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=b'0'),
                             self.serv.recv())
 
         # execute Increment Counter
-        req = Lwm2mExecute('/1337/1/2')
+        req = Lwm2mExecute(ResPath.Test[0].IncrementCounter)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
         # counter should be incremented by the execute
-        req = Lwm2mRead('/1337/1/1', accept=coap.ContentFormat.TEXT_PLAIN)
+        req = Lwm2mRead(ResPath.Test[0].Counter, accept=coap.ContentFormat.TEXT_PLAIN)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=b'1'),
                             self.serv.recv())
@@ -64,22 +64,22 @@ class CounterTest(TestObject.TestCase):
 class IntegerArrayTest(TestObject.TestCase):
     def runTest(self):
         # ensure the array is empty
-        req = Lwm2mRead('/1337/1/3')
+        req = Lwm2mRead(ResPath.Test[0].IntArray)
         self.serv.send(req)
 
-        empty_array_tlv = TLV.make_multires(resource_id=3, instances=[])
+        empty_array_tlv = TLV.make_multires(resource_id=RID.Test.IntArray, instances=[])
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=empty_array_tlv.serialize()),
                             self.serv.recv())
 
         # write something
         array_tlv = TLV.make_multires(
-            resource_id=3,
+            resource_id=RID.Test.IntArray,
             instances=[
                 # (1, (0).to_bytes(0, byteorder='big')),
                 (2, (12).to_bytes(1, byteorder='big')),
                 (4, (1234).to_bytes(2, byteorder='big')),
             ])
-        req = Lwm2mWrite('/1337/1/3',
+        req = Lwm2mWrite(ResPath.Test[0].IntArray,
                          array_tlv.serialize(),
                          format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.serv.send(req)
@@ -88,7 +88,7 @@ class IntegerArrayTest(TestObject.TestCase):
                             self.serv.recv())
 
         # check updated content
-        req = Lwm2mRead('/1337/1/3')
+        req = Lwm2mRead(ResPath.Test[0].IntArray)
         self.serv.send(req)
 
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=array_tlv.serialize(),
@@ -96,7 +96,53 @@ class IntegerArrayTest(TestObject.TestCase):
                             self.serv.recv())
 
 
+class AttemptToWriteSingleAsMultipleTest(TestObject.TestCase):
+    def runTest(self):
+        req = Lwm2mWrite(ResPath.Test[0].ResInt,
+                         TLV.make_instance(0, [TLV.make_multires(12, [(0, 42)])]).serialize(),
+                         format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_BAD_REQUEST),
+                            self.serv.recv())
+
+
 class ExecArgsArrayTest(TestObject.TestCase):
+    def runTest(self):
+        args = [
+            (7, None),
+            (1, b''),
+            (2, b'1'),
+            (3, b'12345'),
+            (9, b'0' * 512) # keep this value small, to avoid triggering blockwise transfers
+        ]
+
+        req = Lwm2mRead(ResPath.Test[0].LastExecArgsArray)
+        self.serv.send(req)
+
+        empty_array_tlv = TLV.make_multires(resource_id=RID.Test.LastExecArgsArray, instances=[])
+        self.assertMsgEqual(Lwm2mContent.matching(req)(content=empty_array_tlv.serialize()),
+                            self.serv.recv())
+
+        # perform the Execute with arguments
+        exec_content = b','.join(b'%d' % k if v is None else b"%d='%s'" % (k, v)
+                                 for k, v in args)
+        req = Lwm2mExecute(ResPath.Test[0].IncrementCounter, content=exec_content)
+        self.serv.send(req)
+
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # Execute args should now be saved in the Execute Arguments array
+        req = Lwm2mRead(ResPath.Test[0].LastExecArgsArray)
+        self.serv.send(req)
+
+        exec_args_tlv = TLV.make_multires(resource_id=RID.Test.LastExecArgsArray,
+                                          instances=sorted(dict((k, v or b'') for k, v in args).items()))
+        self.assertMsgEqual(Lwm2mContent.matching(req)(content=exec_args_tlv.serialize()),
+                            self.serv.recv())
+
+
+class ExecArgsDuplicateTest(TestObject.TestCase):
     def runTest(self):
         args = [
             (1, None),
@@ -106,93 +152,86 @@ class ExecArgsArrayTest(TestObject.TestCase):
             (9, b'0' * 1024)
         ]
 
-        req = Lwm2mRead('/1337/1/4')
-        self.serv.send(req)
-
-        empty_array_tlv = TLV.make_multires(resource_id=4, instances=[])
-        self.assertMsgEqual(Lwm2mContent.matching(req)(content=empty_array_tlv.serialize()),
-                            self.serv.recv())
-
         # perform the Execute with arguments
         exec_content = b','.join(b'%d' % k if v is None else b"%d='%s'" % (k, v)
                                  for k, v in args)
-        req = Lwm2mExecute('/1337/1/2', content=exec_content)
+        req = Lwm2mExecute(ResPath.Test[0].IncrementCounter, content=exec_content)
         self.serv.send(req)
 
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
 
-        # Exectue args should now be saved in the Execute Arguments array
-        req = Lwm2mRead('/1337/1/4')
+        # Execute Arguments array will now be unreadable due to duplicate Resource Instance IDs
+        req = Lwm2mRead(ResPath.Test[0].LastExecArgsArray)
         self.serv.send(req)
 
-        exec_args_tlv = TLV.make_multires(resource_id=4,
-                                          instances=((k, v or b'') for k, v in args))
-        self.assertMsgEqual(Lwm2mContent.matching(req)(content=exec_args_tlv.serialize()),
+        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_INTERNAL_SERVER_ERROR),
                             self.serv.recv())
 
 
 class EmptyBytesTest(TestObject.TestCase, test_suite.Lwm2mDmOperations):
     def runTest(self):
-        # By default, /1337/*/5 does NOT call anjay_ret_bytes_begin() if /1337/*/6 is zero. This results in
-        # 5.00 Internal Server Error being returned, and this is actually expected behaviour - we test that it does not
-        # segfault (as it used to) in a test called ObserveResourceWithEmptyHandler.
-        #
-        # There is now an additional resource (/1337/*/17) that makes /1337/*/5 always call anjay_ret_bytes_begin()
-        # if set to true.
-        self.write_resource(self.serv, OID.Test, 1, RID.Test.ResBytesZeroBegin, '1')
-
-        response = self.read_path(self.serv, ResPath.Test[1].ResBytes)
-        self.assertEqual(response.get_content_format(), coap.ContentFormat.APPLICATION_OCTET_STREAM)
-        self.assertEqual(response.content, b'')
-
-        response = self.read_path(self.serv, ResPath.Test[1].ResBytes, accept=coap.ContentFormat.TEXT_PLAIN)
+        response = self.read_path(self.serv, ResPath.Test[0].ResBytes)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.TEXT_PLAIN)
         self.assertEqual(response.content, b'')
 
-        response = self.read_path(self.serv, ResPath.Test[1].ResBytes, accept=coap.ContentFormat.APPLICATION_OCTET_STREAM)
+        response = self.read_path(self.serv, ResPath.Test[0].ResBytes, accept=coap.ContentFormat.TEXT_PLAIN)
+        self.assertEqual(response.get_content_format(), coap.ContentFormat.TEXT_PLAIN)
+        self.assertEqual(response.content, b'')
+
+        response = self.read_path(self.serv, ResPath.Test[0].ResBytes, accept=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.assertEqual(response.content, b'')
 
-        response = self.read_instance(self.serv, OID.Test, 1, accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        response = self.read_instance(self.serv, OID.Test, 0, accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.APPLICATION_LWM2M_TLV)
         tlv = TLV.parse(response.content)
-        self.assertGreaterEqual(len(tlv), 15)
         self.assertEqual(tlv[0].tlv_type, TLVType.RESOURCE)
-        self.assertEqual(tlv[0].identifier, 0)
-        self.assertEqual(tlv[1], TLV.make_resource(1, 0))
-        self.assertEqual(tlv[2], TLV.make_multires(3, {}))
-        self.assertEqual(tlv[3], TLV.make_multires(4, {}))
-        self.assertEqual(tlv[4], TLV.make_resource(5, b''))
-        self.assertEqual(tlv[5], TLV.make_resource(6, 0))
-        self.assertEqual(tlv[6], TLV.make_resource(7, 1000))
-        self.assertEqual(tlv[7], TLV.make_resource(10, b''))
-        self.assertEqual(tlv[8], TLV.make_multires(11, {}))
-        self.assertEqual(tlv[9], TLV.make_resource(12, 0))
-        self.assertEqual(tlv[10], TLV.make_resource(13, 0))
-        self.assertEqual(tlv[11], TLV.make_resource(14, 0.0))
-        self.assertEqual(tlv[12], TLV.make_resource(15, ''))
-        self.assertEqual(tlv[13], TLV.make_resource(16, b'\0\0\0\0'))
-        self.assertEqual(tlv[14], TLV.make_resource(17, 1))
+        self.assertEqual(tlv[0].identifier, RID.Test.Timestamp)
+        expected_rest = [
+            TLV.make_resource(RID.Test.Counter, 0),
+            TLV.make_multires(RID.Test.IntArray, {}),
+            TLV.make_multires(RID.Test.LastExecArgsArray, {}),
+            TLV.make_resource(RID.Test.ResBytes, b''),
+            TLV.make_resource(RID.Test.ResBytesSize, 0),
+            TLV.make_resource(RID.Test.ResBytesBurst, 1000),
+            TLV.make_resource(RID.Test.ResRawBytes, b''),
+            TLV.make_multires(RID.Test.ResOpaqueArray, {}),
+            TLV.make_resource(RID.Test.ResInt, 0),
+            TLV.make_resource(RID.Test.ResBool, 0),
+            TLV.make_resource(RID.Test.ResFloat, 0.0),
+            TLV.make_resource(RID.Test.ResString, ''),
+            TLV.make_resource(RID.Test.ResObjlnk, b'\0\0\0\0'),
+            TLV.make_resource(RID.Test.ResBytesZeroBegin, 1),
+            TLV.make_resource(RID.Test.ResDouble, 0.0),
+        ]
+        self.assertEqual(len(tlv), len(expected_rest) + 1)
+        for i in range(len(expected_rest)):
+            self.assertEqual(tlv[i + 1], expected_rest[i])
 
-        response = self.read_instance(self.serv, OID.Test, 1, accept=coap.ContentFormat.APPLICATION_LWM2M_JSON)
+        response = self.read_instance(self.serv, OID.Test, 0, accept=coap.ContentFormat.APPLICATION_LWM2M_JSON)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.APPLICATION_LWM2M_JSON)
         js = json.loads(response.content.decode('utf-8'))
         self.assertEqual(len(js), 2)
-        self.assertEqual(js['bn'], '/1337/1')
+        self.assertEqual(js['bn'], '/%d/0' % (OID.Test,))
         e = js['e']
-        self.assertGreaterEqual(len(e), 12)
         self.assertEqual(len(e[0]), 2)
-        self.assertEqual(e[0]['n'], '/0')
+        self.assertEqual(e[0]['n'], '/%d' % (RID.Test.Timestamp,))
         self.assertIsInstance(e[0]['v'], int)
-        self.assertEqual(e[1], {'n': '/1', 'v': 0})
-        self.assertEqual(e[2], {'n': '/5', 'sv': ''})
-        self.assertEqual(e[3], {'n': '/6', 'v': 0})
-        self.assertEqual(e[4], {'n': '/7', 'v': 1000})
-        self.assertEqual(e[5], {'n': '/10', 'sv': ''})
-        self.assertEqual(e[6], {'n': '/12', 'v': 0})
-        self.assertEqual(e[7], {'n': '/13', 'bv': False})
-        self.assertEqual(e[8], {'n': '/14', 'v': 0.0})
-        self.assertEqual(e[9], {'n': '/15', 'sv': ''})
-        self.assertEqual(e[10], {'n': '/16', 'ov': '0:0'})
-        self.assertEqual(e[11], {'n': '/17', 'bv': True})
+        expected_rest = [
+            {'n': '/%d' % (RID.Test.Counter,), 'v': 0},
+            {'n': '/%d' % (RID.Test.ResBytes,), 'sv': ''},
+            {'n': '/%d' % (RID.Test.ResBytesSize,), 'v': 0},
+            {'n': '/%d' % (RID.Test.ResBytesBurst,), 'v': 1000},
+            {'n': '/%d' % (RID.Test.ResRawBytes,), 'sv': ''},
+            {'n': '/%d' % (RID.Test.ResInt,), 'v': 0},
+            {'n': '/%d' % (RID.Test.ResBool,), 'bv': False},
+            {'n': '/%d' % (RID.Test.ResFloat,), 'v': 0.0},
+            {'n': '/%d' % (RID.Test.ResString,), 'sv': ''},
+            {'n': '/%s' % (RID.Test.ResObjlnk,), 'ov': '0:0'},
+            {'n': '/%s' % (RID.Test.ResBytesZeroBegin,), 'bv': True},
+            {'n': '/%s' % (RID.Test.ResDouble,), 'v': 0.0},
+        ]
+        self.assertEqual(len(e), len(expected_rest) + 1)
+        for i in range(len(expected_rest)):
+            self.assertEqual(e[i + 1], expected_rest[i])

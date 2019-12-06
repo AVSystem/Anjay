@@ -128,14 +128,14 @@ So, it could be written like this:
     int main_loop(anjay_t *anjay) {
         while (true) {
             // Obtain all network data sources
-            AVS_LIST(avs_net_abstract_socket_t *const) sockets =
+            AVS_LIST(avs_net_socket_t *const) sockets =
                     anjay_get_sockets(anjay);
 
             // Prepare to poll() on them
             size_t numsocks = AVS_LIST_SIZE(sockets);
             struct pollfd pollfds[numsocks];
             size_t i = 0;
-            AVS_LIST(avs_net_abstract_socket_t *const) sock;
+            AVS_LIST(avs_net_socket_t *const) sock;
             AVS_LIST_FOREACH(sock, sockets) {
                 pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
                 pollfds[i].events = POLLIN;
@@ -153,7 +153,7 @@ So, it could be written like this:
             // Wait for the events if necessary, and handle them.
             if (poll(pollfds, numsocks, wait_ms) > 0) {
                 int socket_id = 0;
-                AVS_LIST(avs_net_abstract_socket_t *const) socket = NULL;
+                AVS_LIST(avs_net_socket_t *const) socket = NULL;
                 AVS_LIST_FOREACH(socket, sockets) {
                     if (pollfds[socket_id].revents) {
                         if (anjay_serve(anjay, *socket)) {
@@ -164,9 +164,8 @@ So, it could be written like this:
                 }
             }
 
-            // Finally run the scheduler (ignoring its return value, which
-            // is the number of tasks executed)
-            (void) anjay_sched_run(anjay);
+            // Finally run the scheduler
+            anjay_sched_run(anjay);
         }
         return 0;
     }

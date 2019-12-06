@@ -330,6 +330,8 @@ Option.SIZE1           = OptionConstructor(IntOption, 60, lambda int32: struct.p
 Option.BLOCK1          = OptionConstructor(BlockOption, 27, pack_block)
 Option.BLOCK2          = OptionConstructor(BlockOption, 23, pack_block)
 
+Option.OSCORE          = OptionConstructor(StringOption, 9, lambda string: bytes(string, 'ascii'))
+
 
 def pack_content_format(fmt: ContentFormat):
     return struct.pack('!H', fmt)

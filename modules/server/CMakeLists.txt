@@ -12,21 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(SOURCES
-    src/mod_server.c
-    src/server_persistence.c
-    src/server_transaction.c
-    src/server_utils.c)
-set(PRIVATE_HEADERS
-    src/mod_server.h
-    src/server_transaction.h
-    src/server_utils.h)
-set(PUBLIC_HEADERS
-    include_public/anjay/server.h)
+target_sources(anjay PRIVATE
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_server.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/server_transaction.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/server_utils.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/server.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_server.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/server_persistence.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/server_transaction.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/server_utils.c)
+target_include_directories(anjay PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_public>)
 
-set(TEST_SOURCES
-    ${SOURCES}
-    ${PRIVATE_HEADERS}
-    ${PUBLIC_HEADERS})
-
-include(../module_common.cmake)
+install(DIRECTORY include_public/anjay
+        DESTINATION include
+        FILES_MATCHING REGEX "[.]h$")

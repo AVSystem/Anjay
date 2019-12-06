@@ -25,18 +25,14 @@
 
 #include "../mod_access_control.h"
 
-static int null_instance_it(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t *out,
-                            void **cookie) {
+static int null_list_instances(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
     (void) obj_ptr;
-    (void) cookie;
-    *out = ANJAY_IID_INVALID;
+    (void) ctx;
     return 0;
 }
-
-static const anjay_dm_supported_rids_t MOCK_SUPPORTED_RIDS = { 0, NULL };
 
 static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
     anjay_dm_object_def_t *obj =
@@ -44,8 +40,7 @@ static anjay_dm_object_def_t *make_mock_object(anjay_oid_t oid) {
                                                  sizeof(anjay_dm_object_def_t));
     if (obj) {
         obj->oid = oid;
-        obj->supported_rids = MOCK_SUPPORTED_RIDS;
-        obj->handlers.instance_it = null_instance_it;
+        obj->handlers.list_instances = null_list_instances;
     }
     return obj;
 }
@@ -121,12 +116,12 @@ AVS_UNIT_TEST(access_control_persistence, empty_aco) {
     init_context(&ctx);
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay1));
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay2));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_persist(
-            anjay1, (avs_stream_abstract_t *) &ctx.out));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_access_control_persist(anjay1, (avs_stream_t *) &ctx.out));
 
     ctx.in.buffer_size = avs_stream_outbuf_offset(&ctx.out);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_restore(
-            anjay2, (avs_stream_abstract_t *) &ctx.in));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_access_control_restore(anjay2, (avs_stream_t *) &ctx.in));
     AVS_UNIT_ASSERT_TRUE(aco_equal(_anjay_access_control_get(anjay1),
                                    _anjay_access_control_get(anjay2)));
     AVS_UNIT_ASSERT_NULL(_anjay_access_control_get(anjay1)->current.instances);
@@ -161,7 +156,7 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
                     ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj1->oid,
-                        .iid = ANJAY_IID_INVALID
+                        .iid = ANJAY_ID_INVALID
                     }),
             NULL));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
@@ -170,7 +165,7 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
                     ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj2->oid,
-                        .iid = ANJAY_IID_INVALID
+                        .iid = ANJAY_ID_INVALID
                     }),
             NULL));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
@@ -179,7 +174,7 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
                     ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj1->oid,
-                        .iid = ANJAY_IID_INVALID
+                        .iid = ANJAY_ID_INVALID
                     }),
             NULL));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
@@ -188,7 +183,7 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
                     ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj2->oid,
-                        .iid = ANJAY_IID_INVALID
+                        .iid = ANJAY_ID_INVALID
                     }),
             NULL));
     // There are now 2 bootstrap instances.
@@ -233,12 +228,12 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     AVS_LIST_APPEND(&ac1->current.instances, entry1);
     AVS_LIST_APPEND(&ac1->current.instances, entry2);
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac1->current.instances), 4);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_persist(
-            anjay1, (avs_stream_abstract_t *) &ctx.out));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_access_control_persist(anjay1, (avs_stream_t *) &ctx.out));
 
     ctx.in.buffer_size = avs_stream_outbuf_offset(&ctx.out);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_restore(
-            anjay2, (avs_stream_abstract_t *) &ctx.in));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_access_control_restore(anjay2, (avs_stream_t *) &ctx.in));
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac2->current.instances), 4);
     AVS_UNIT_ASSERT_TRUE(aco_equal(ac1, ac2));

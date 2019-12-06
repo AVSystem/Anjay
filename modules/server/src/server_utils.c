@@ -47,12 +47,21 @@ int _anjay_serv_fetch_binding(anjay_input_ctx_t *ctx,
     if ((retval = anjay_get_string(ctx, *out_binding, sizeof(*out_binding)))) {
         return retval;
     }
-    return anjay_binding_mode_valid(*out_binding) ? 0 : -1;
+    return anjay_binding_mode_valid(*out_binding) ? 0 : ANJAY_ERR_BAD_REQUEST;
 }
 
 AVS_LIST(server_instance_t)
 _anjay_serv_clone_instances(const server_repr_t *repr) {
-    return AVS_LIST_SIMPLE_CLONE(repr->instances);
+    AVS_LIST(server_instance_t) clone = AVS_LIST_SIMPLE_CLONE(repr->instances);
+    if (clone) {
+        AVS_LIST(server_instance_t) it;
+        AVS_LIST_FOREACH(it, clone) {
+            if (it->data.binding) {
+                it->data.binding = it->binding_buf;
+            }
+        }
+    }
+    return clone;
 }
 
 void _anjay_serv_destroy_instances(AVS_LIST(server_instance_t) *instances) {

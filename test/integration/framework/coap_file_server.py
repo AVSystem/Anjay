@@ -30,16 +30,14 @@ from .lwm2m.messages import *
 class CoapFileServer:
     Resource = NamedTuple('Resource', [('etag', bytes), ('data', bytes)])
 
-
     def __init__(self, coap_server: coap.Server):
         self._resources = {}
         self._server = coap_server
         self.requests = []
         self.should_ignore_request = lambda _: False
 
-
     def set_resource(self,
-                     path: CoapPath,
+                     path: str,
                      data: Optional[bytes],
                      etag: Optional[bytes] = None):
         if data is not None:
@@ -48,7 +46,6 @@ class CoapFileServer:
             self._resources[path] = self.Resource(etag=etag, data=data)
         else:
             del self._resources[path]
-
 
     def get_resource_uri(self, path: CoapPath):
         if path not in self._resources:
@@ -63,24 +60,17 @@ class CoapFileServer:
 
         return '%s://127.0.0.1:%d%s' % (proto, self._server.get_listen_port(), path)
 
-
-    def _recv_request(self):
+    def _recv_request(self, timeout_s):
         if self._server.get_remote_addr() is None:
             try:
-                self._server.listen(timeout_s=0.1)
+                self._server.listen(timeout_s=timeout_s)
             except socket.timeout:
                 pass
 
-        try:
-            return self._server.recv(timeout_s=0.1)
-        except:
-            pass
+        return self._server.recv(timeout_s=timeout_s)
 
-
-    def handle_request(self):
-        req = self._recv_request()
-        if req is None:
-            return
+    def handle_request(self, timeout_s=5.0):
+        req = self._recv_request(timeout_s=timeout_s)
 
         self.requests.append(req)
 
@@ -92,7 +82,8 @@ class CoapFileServer:
 
         if req.code.cls == 0:
             if req.code != coap.Code.REQ_GET:
-                self._server.send(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_METHOD_NOT_ALLOWED).fill_placeholders())
+                self._server.send(Lwm2mErrorResponse.matching(req)(
+                    code=coap.Code.RES_METHOD_NOT_ALLOWED).fill_placeholders())
                 return
         else:
             self._server.send(Lwm2mReset.matching(req).fill_placeholders())
@@ -101,7 +92,8 @@ class CoapFileServer:
         # Confirmable GET request
         path = req.get_uri_path()
         if path not in self._resources:
-            self._server.send(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_NOT_FOUND).fill_placeholders())
+            self._server.send(Lwm2mErrorResponse.matching(req)(
+                code=coap.Code.RES_NOT_FOUND).fill_placeholders())
             return
 
         # CON GET to a known path
@@ -109,7 +101,8 @@ class CoapFileServer:
         if block2:
             block2 = block2[0]
         else:
-            block2 = coap.Option.BLOCK2(seq_num=0, has_more=False, block_size=1024)
+            block2 = coap.Option.BLOCK2(
+                seq_num=0, has_more=False, block_size=1024)
 
         resource = self._resources[path]
         data_offset = block2.seq_num() * block2.block_size()
@@ -130,18 +123,18 @@ class CoapFileServerThread(threading.Thread):
         self._file_server = CoapFileServer(coap_server or coap.Server())
         self._shutdown = False
 
-
     def run(self):
         while not self._shutdown:
-            with self._mutex:
-                self._file_server.handle_request()
+            try:
+                with self._mutex:
+                    self._file_server.handle_request()
+            except socket.timeout:
+                pass
             time.sleep(0.01)  # yield to the scheduler
-
 
     def join(self):
         self._shutdown = True
         super().join()
-
 
     @property
     @contextlib.contextmanager

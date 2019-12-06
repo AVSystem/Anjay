@@ -21,6 +21,7 @@ import unittest
 
 from framework.lwm2m_test import *
 
+from .register import BlockRegister
 
 class BasicClientBlockRequest:
     @staticmethod
@@ -36,15 +37,15 @@ class BasicClientBlockRequest:
             def setUp(self):
                 super().setUp()
 
-                self.ac_object_instances_str = b','.join(b'</2/%d>' % x for x in range(self.A_LOT))
-                self.test_object_instances_str = b','.join(b'</1337/%d>' % x for x in range(1, self.A_LOT + 1))
+                self.ac_object_instances_str = b','.join(b'</%d/%d>' % (OID.AccessControl, x) for x in range(self.A_LOT))
+                self.test_object_instances_str = b','.join(b'</%d/%d>' % (OID.Test, x) for x in range(self.A_LOT))
                 self.expected_payload_size = (len(self.ac_object_instances_str)
                                               + len(self.test_object_instances_str)
                                               + 250)  # estimated size of other objects
                 self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
 
                 for _ in range(self.A_LOT):
-                    req = Lwm2mCreate('/1337')
+                    req = Lwm2mCreate('/%d' % (OID.Test,))
                     self.serv.send(req)
                     self.assertMsgEqual(Lwm2mCreated.matching(req)(),
                                         self.serv.recv())
@@ -129,10 +130,10 @@ class ClientBlockRequest:
 
                 # change something in the DM so that next Update includes the list
                 # of all instances
-                self.serv.send(Lwm2mCreate('/1337'))
-                iid = self.serv.recv().get_options(coap.Option.LOCATION_PATH)[-1].content_to_str()
+                self.serv.send(Lwm2mCreate('/%d' % (OID.Test,)))
+                iid = int(self.serv.recv().get_options(coap.Option.LOCATION_PATH)[-1].content_to_str())
 
-                self.expected_payload_size = len(complete_payload) + len(',</1337/%s>,</2/%s>' % (iid, iid))
+                self.expected_payload_size = len(complete_payload) + len(',</%d/%d>,</%d/%d>' % (OID.Test, iid, OID.AccessControl, iid))
                 self.expected_num_blocks = int(math.ceil(self.expected_payload_size / self.block_size))
 
             def tearDown(self, auto_deregister=False, **kwargs):
@@ -146,7 +147,7 @@ class HumongousUpdateTest(BasicClientBlockRequest.Test()):
         self.communicate('send-update')
         complete_payload = self.block_recv()
 
-        self.assertLinkListValid(complete_payload)
+        self.assertLinkListValid(complete_payload.decode())
         self.assertIn(self.ac_object_instances_str, complete_payload)
         self.assertIn(self.test_object_instances_str, complete_payload)
 
@@ -175,7 +176,7 @@ class HumongousUpdateWithSeparateResponseTest(BasicClientBlockRequest.Test()):
         self.communicate('send-update')
         complete_payload = self.block_recv(send_ack=self.send_separate_ack)
 
-        self.assertLinkListValid(complete_payload)
+        self.assertLinkListValid(complete_payload.decode())
         self.assertIn(self.ac_object_instances_str, complete_payload)
         self.assertIn(self.test_object_instances_str, complete_payload)
 
@@ -201,7 +202,7 @@ class HumongousUpdateWithNonConfirmableSeparateResponseTest(BasicClientBlockRequ
         self.communicate('send-update')
         complete_payload = self.block_recv(send_ack=self.send_separate_ack)
 
-        self.assertLinkListValid(complete_payload)
+        self.assertLinkListValid(complete_payload.decode())
         self.assertIn(self.ac_object_instances_str, complete_payload)
         self.assertIn(self.test_object_instances_str, complete_payload)
 
@@ -248,7 +249,11 @@ class CoapErrorResponseToFirstRequestBlock(ClientBlockRequest.Test()):
 
         req = self.block_recv_next(expected_seq_num=0)
         self.serv.send(Lwm2mErrorResponse.matching(req)(coap.Code.RES_INTERNAL_SERVER_ERROR))
-        # client should abort
+        # client should fall-back to registration
+        BlockRegister().Test()(self.serv, verify=False)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
 
 
 class CoapErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test()):
@@ -260,7 +265,11 @@ class CoapErrorResponseToIntermediateRequestBlock(ClientBlockRequest.Test()):
 
         req = self.block_recv_next(expected_seq_num=(self.expected_num_blocks // 2))
         self.serv.send(Lwm2mErrorResponse.matching(req)(coap.Code.RES_INTERNAL_SERVER_ERROR))
-        # client should abort
+        # client should fall-back to registration
+        BlockRegister().Test()(self.serv, verify=False)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
 
 
 class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test()):
@@ -272,7 +281,11 @@ class CoapErrorResponseToLastRequestBlock(ClientBlockRequest.Test()):
 
         req = self.block_recv_next(expected_seq_num=(self.expected_num_blocks - 1))
         self.serv.send(Lwm2mErrorResponse.matching(req)(coap.Code.RES_INTERNAL_SERVER_ERROR))
-        # client should abort
+        # client should fall-back to registration
+        BlockRegister().Test()(self.serv, verify=False)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
 
 
 # IcmpErrorResponse* tests flow looks like this:
@@ -432,26 +445,30 @@ class BlockSizeRenegotiationInTheMiddleOfTransfer(ClientBlockRequest.Test()):
     def runTest(self):
         # blocks 2+ should use reduced block size
         self.communicate('send-update')
+        total_bytes = 0
 
-        self.block_recv(seq_num_begin=0,
-                        seq_num_end=(self.expected_num_blocks // 2))
-
+        req = self.block_recv(seq_num_begin=0,
+                              seq_num_end=(self.expected_num_blocks // 2))
+        total_bytes += len(req)
         req = self.block_recv_next(expected_seq_num=(self.expected_num_blocks // 2))
-        block1 = req.get_options(coap.Option.BLOCK1)[0]
+        total_bytes += len(req.content)
 
         new_block_size = 16
-        self.assertNotEqual(new_block_size, block1.block_size)
+        self.set_block_size(new_block_size)
 
+        block1 = req.get_options(coap.Option.BLOCK1)[0]
+        self.assertNotEqual(new_block_size, block1.block_size)
         # request new block size in Continue message
-        block_opt = coap.Option.BLOCK1(seq_num=block1.seq_num(),
+        block_opt = coap.Option.BLOCK1(seq_num=total_bytes // new_block_size,
                                        has_more=1,
                                        block_size=new_block_size)
+
         self.serv.send(Lwm2mContinue.matching(req)(options=[block_opt]))
+        # client should accept the new block size, and continue
+        self.block_recv(seq_num_begin=total_bytes // new_block_size)
 
-        # client should get confused and abort the transfer
-        time.sleep(1)
-        self.assertEqual(self.get_socket_count(), 0)
-
+    def tearDown(self):
+        super().tearDown(auto_deregister=True)
 
 class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test()):
     def tearDown(self):
@@ -473,7 +490,8 @@ class MismatchedResetWhileBlockRequestInProgress(ClientBlockRequest.Test()):
         self.block_recv(seq_num_begin=(self.expected_num_blocks // 2 + 1))
 
 
-class UnexpectedServerRequestWhileBlockRequestInProgress(ClientBlockRequest.Test()):
+class UnexpectedServerRequestWhileBlockRequestInProgress(ClientBlockRequest.Test(),
+                                                         test_suite.Lwm2mDmOperations):
     def tearDown(self):
         super().tearDown(auto_deregister=True)
 
@@ -488,12 +506,7 @@ class UnexpectedServerRequestWhileBlockRequestInProgress(ClientBlockRequest.Test
         block_res = Lwm2mContinue.matching(block_req)(options=[block_opt])
 
         # send an unrelated request during a block-wise transfer
-        req = Lwm2mRead('/3/0/0')
-        self.serv.send(req)
-        res = self.serv.recv()
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_SERVICE_UNAVAILABLE),
-                            res)
-        self.assertEqual(1, len(res.get_options(coap.Option.MAX_AGE)))
+        self.read_path(self.serv, ResPath.Device.Manufacturer)
 
         # continue block-wise request
         self.serv.send(block_res)

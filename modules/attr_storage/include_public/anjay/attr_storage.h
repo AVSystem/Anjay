@@ -79,8 +79,8 @@ void anjay_attr_storage_purge(anjay_t *anjay);
  * @param out_stream    Stream to write to.
  * @return 0 in case of success, negative value in case of an error.
  */
-int anjay_attr_storage_persist(anjay_t *anjay,
-                               avs_stream_abstract_t *out_stream);
+avs_error_t anjay_attr_storage_persist(anjay_t *anjay,
+                                       avs_stream_t *out_stream);
 
 /**
  * Attempts to restore attribute storage from specified @p in_stream.
@@ -107,8 +107,7 @@ int anjay_attr_storage_persist(anjay_t *anjay,
  * valid. It is <strong>RECOMMENDED</strong> that any new code involving this
  * function is written to work properly with both semantics.
  */
-int anjay_attr_storage_restore(anjay_t *anjay,
-                               avs_stream_abstract_t *in_stream);
+avs_error_t anjay_attr_storage_restore(anjay_t *anjay, avs_stream_t *in_stream);
 
 /**
  * Sets Object level attributes for the specified @p ssid.
@@ -127,7 +126,7 @@ int anjay_attr_storage_restore(anjay_t *anjay,
 int anjay_attr_storage_set_object_attrs(anjay_t *anjay,
                                         anjay_ssid_t ssid,
                                         anjay_oid_t oid,
-                                        const anjay_dm_attributes_t *attrs);
+                                        const anjay_dm_oi_attributes_t *attrs);
 /**
  * Sets Instance level attributes for the specified @p ssid.
  *
@@ -143,11 +142,12 @@ int anjay_attr_storage_set_object_attrs(anjay_t *anjay,
  *
  * @returns 0 on success, negative value in case of an error.
  */
-int anjay_attr_storage_set_instance_attrs(anjay_t *anjay,
-                                          anjay_ssid_t ssid,
-                                          anjay_oid_t oid,
-                                          anjay_iid_t iid,
-                                          const anjay_dm_attributes_t *attrs);
+int anjay_attr_storage_set_instance_attrs(
+        anjay_t *anjay,
+        anjay_ssid_t ssid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        const anjay_dm_oi_attributes_t *attrs);
 
 /**
  * Sets Resource level attributes for the specified @p ssid.
@@ -165,13 +165,12 @@ int anjay_attr_storage_set_instance_attrs(anjay_t *anjay,
  *
  * @returns 0 on success, negative value in case of an error.
  */
-int anjay_attr_storage_set_resource_attrs(
-        anjay_t *anjay,
-        anjay_ssid_t ssid,
-        anjay_oid_t oid,
-        anjay_iid_t iid,
-        anjay_rid_t rid,
-        const anjay_dm_resource_attributes_t *attrs);
+int anjay_attr_storage_set_resource_attrs(anjay_t *anjay,
+                                          anjay_ssid_t ssid,
+                                          anjay_oid_t oid,
+                                          anjay_iid_t iid,
+                                          anjay_rid_t rid,
+                                          const anjay_dm_r_attributes_t *attrs);
 
 #ifdef __cplusplus
 }

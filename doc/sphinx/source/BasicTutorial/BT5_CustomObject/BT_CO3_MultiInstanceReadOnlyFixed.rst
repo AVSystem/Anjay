@@ -18,8 +18,7 @@ Multi-instance read-only object with fixed number of instances
 
 In this example you will learn:
 
-- how to implement ``instance_it`` and ``instance_present`` handlers
-  for a multi-instance LwM2M Object,
+- how to implement ``list_instances`` handler for a multi-instance LwM2M Object,
 - how to use ``container_of`` pattern to access registered object state.
 
 .. include:: Anjay_codegen_note.rst
@@ -73,109 +72,45 @@ state, initialize and register it:
     // initialize and register the test object
     const test_object_t test_object = {
         .obj_def = &OBJECT_DEF,
-        .instances = {
-            { "First", 1 },
-            { "Second", 2 }
-        }
+        .instances = { { "First", 1 }, { "Second", 2 } }
     };
 
     anjay_register_object(anjay, &test_object.obj_def);
 
 
 Now, to inform the library the Object contains two Instances with IDs 0 and 1,
-two more handlers are required:
+one additional handler is required:
 
-- ``instance_present`` - checking whether given Object Instance ID
-  exists - in this case, it needs to return 1 for Instance IDs 0 and 1
-  and 0 otherwise:
-
-  .. highlight:: c
-  .. snippet-source:: examples/tutorial/custom-object/read-only-multiple-fixed/src/main.c
-
-      static test_object_t *
-      get_test_object(const anjay_dm_object_def_t *const *obj) {
-          assert(obj);
-
-          // use the container_of pattern to retrieve test_object_t pointer
-          // AVS_CONTAINER_OF macro provided by avsystem/commons/defs.h
-          return AVS_CONTAINER_OF(obj, test_object_t, obj_def);
-      }
-
-      // ...
-
-      static int test_instance_present(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj_ptr,
-                                       anjay_iid_t iid) {
-          (void) anjay;   // unused
-
-          test_object_t *test = get_test_object(obj_ptr);
-
-          // return 1 (true) if `iid` is a valid index of `TEST_INSTANCES` array
-          return (size_t)iid < sizeof(test->instances) / sizeof(test->instances[0]);
-      }
-
-
-- ``instance_it`` - used by the library to enumerate all existing Object
+- ``list_instances`` - used by the library to enumerate all existing Object
   Instance IDs:
 
   .. highlight:: c
   .. snippet-source:: examples/tutorial/custom-object/read-only-multiple-fixed/src/main.c
 
-      static int test_instance_it(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t *out,
-                                  void **cookie) {
-          (void) anjay;   // unused
+        static int test_list_instances(anjay_t *anjay,
+                                       const anjay_dm_object_def_t *const *obj_ptr,
+                                       anjay_dm_list_ctx_t *ctx) {
+            (void) anjay; // unused
 
-          anjay_iid_t curr = 0;
-          test_object_t *test = get_test_object(obj_ptr);
+            test_object_t *test = get_test_object(obj_ptr);
 
-          // if `*cookie == NULL`, then the iteration has just started,
-          // otherwise `*cookie` contains iterator value saved below
-          if (*cookie) {
-              curr = (anjay_iid_t)(intptr_t)*cookie;
-          }
-
-          if ((size_t)curr < sizeof(test->instances) / sizeof(test->instances[0])) {
-              *out = curr;
-          } else {
-              // no more Object Instances available
-              *out = ANJAY_IID_INVALID;
-          }
-
-          // use `*cookie` to store the iterator
-          *cookie = (void*)(intptr_t)(curr + 1);
-          return 0;
-      }
-
-
-.. warning::
-
-    Any iterator data stored in `*cookie` **must not** require cleanup.
-    The `instance_it` handler is used by the library as follows::
-
-        int result = 0;
-        void *cookie = NULL;
-        anjay_iid_t iid;
-
-        while ((result = (*object)->instance_it(anjay, object, &iid, &cookie)) == 0
-                    && iid != ANJAY_IID_INVALID) {
-            if (some_operation(iid) == SHOULD_BREAK_ITERATION) {
-                // NOTE: the iteration may stop at any point before all
-                // available Object Instances are returned by the handler
-                break;
+            for (anjay_iid_t iid = 0;
+                 (size_t) iid < sizeof(test->instances) / sizeof(test->instances[0]);
+                 ++iid) {
+                anjay_dm_emit(ctx, iid);
             }
+
+            return 0;
         }
 
-    For more details see `anjay_dm_instance_it_t documentation
-    <../../api/dm_8h.html>`_.
-
+  Note that the instances MUST be returned in a strictly ascending, sorted
+  order.
 
 .. topic:: Why is enumerating Object Instances necessary?
 
    LwM2M does not require existing Object Instances to have consecutive IDs.
    It is perfectly fine to implement an Object that only contains Instances
-   3 and 40235. Without ``instance_it`` handler the library would need
+   3 and 40235. Without ``list_instances`` handler the library would need
    to iterate over all possible Instance IDs to be able to prepare a list
    of available Object Instances whenever the LwM2M Server requests one.
 
@@ -186,35 +121,40 @@ to correctly handle requests to different Object Instance IDs.
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/read-only-multiple-fixed/src/main.c
 
-   static int test_resource_read(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr,
-                                 anjay_iid_t iid,
-                                 anjay_rid_t rid,
-                                 anjay_output_ctx_t *ctx) {
-      (void) anjay;   // unused
+    static int test_resource_read(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid,
+                                  anjay_riid_t riid,
+                                  anjay_output_ctx_t *ctx) {
+        (void) anjay; // unused
 
-      test_object_t *test = get_test_object(obj_ptr);
+        test_object_t *test = get_test_object(obj_ptr);
 
-      // IID validity was checked by the `anjay_dm_instance_present_t` handler.
-      // If the Object Instance set does not change, or can only be modifed
-      // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
-      assert((size_t)iid < sizeof(test->instances) / sizeof(test->instances[0]));
-      const struct test_instance *current_instance = &test->instances[iid];
+        // IID validity was checked by the `anjay_dm_list_instances_t` handler.
+        // If the Object Instance set does not change, or can only be modifed
+        // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
+        assert((size_t) iid < sizeof(test->instances) / sizeof(test->instances[0]));
+        const struct test_instance *current_instance = &test->instances[iid];
 
-      switch (rid) {
-      case 0:
-          return anjay_ret_string(ctx, current_instance->label);
-      case 1:
-          return anjay_ret_i32(ctx, current_instance->value);
-      default:
-          // control will never reach this part due to object's supported_rids
-          return ANJAY_ERR_INTERNAL;
-      }
-   }
+        // We have no Multiple-Instance Resources, so it is safe to assume
+        // that RIID is never set.
+        assert(riid == ANJAY_ID_INVALID);
+
+        switch (rid) {
+        case 0:
+            return anjay_ret_string(ctx, current_instance->label);
+        case 1:
+            return anjay_ret_i32(ctx, current_instance->value);
+        default:
+            // control will never reach this part due to test_list_resources
+            return ANJAY_ERR_INTERNAL;
+        }
+    }
 
 
-The only thing left to do is plugging created handlers into the Object
-Definition struct:
+The only thing left to do is plugging created handler into the Object Definition
+struct:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/custom-object/read-only-multiple-fixed/src/main.c
@@ -223,12 +163,8 @@ Definition struct:
         // Object ID
         .oid = 1234,
 
-        // List of supported Resource IDs
-        .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
-
         .handlers = {
-            .instance_it = test_instance_it,
-            .instance_present = test_instance_present,
+            .list_instances = test_list_instances,
 
             // ... other handlers
         }

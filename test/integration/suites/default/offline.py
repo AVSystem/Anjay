@@ -15,16 +15,16 @@
 # limitations under the License.
 
 import socket
+import unittest
 
 from framework.lwm2m_test import *
 
 OFFLINE_INTERVAL = 4
 
-
 class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         # Create object
-        req = Lwm2mCreate('/1337', TLV.make_instance(instance_id=0).serialize())
+        req = Lwm2mCreate('/%d' % (OID.Test,), TLV.make_instance(instance_id=0).serialize())
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mCreated.matching(req)(), self.serv.recv())
 
@@ -33,7 +33,7 @@ class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
         self.assertDemoUpdatesRegistration(content=ANY)
 
         # Observe: Timestamp
-        observe_req = Lwm2mObserve('/1337/0/0')
+        observe_req = Lwm2mObserve(ResPath.Test[0].Timestamp)
         self.serv.send(observe_req)
 
         timestamp_pkt = self.serv.recv()
@@ -71,7 +71,7 @@ class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
         self.assertLessEqual(notifications, OFFLINE_INTERVAL + 1)
 
         # Cancel Observe
-        req = Lwm2mObserve('/1337/0/0', observe=1)
+        req = Lwm2mObserve(ResPath.Test[0].Timestamp, observe=1, token=observe_req.token)
         self.serv.send(req)
         timestamp_pkt = self.serv.recv()
         self.assertMsgEqual(Lwm2mContent.matching(req)(), timestamp_pkt)
@@ -105,7 +105,7 @@ class OfflineWithSecurityObjectChange(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
         self.communicate('enter-offline')
         # Notify anjay that Security Object Resource changed
-        self.communicate('notify /0/0/0')
+        self.communicate('notify %s' % (ResPath.Security[0].ServerURI,))
         # This should not reload sockets
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=1)

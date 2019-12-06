@@ -20,6 +20,7 @@
 #include <anjay_modules/time_defs.h>
 
 #include "connections.h"
+#include "register.h"
 
 #include "../anjay_core.h"
 #include "../utils_core.h"
@@ -34,9 +35,14 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  * This function is called as a "callback" whenever
  * @ref _anjay_active_server_refresh finishes its operation.
  *
- * @param anjay  Anjay object for which it is called
  * @param server Server object for which the refresh was performed
+ *
  * @param state  State of the server's primary connection after refresh
+ *
+ * @param err    If @p state is @ref ANJAY_SERVER_CONNECTION_ERROR, it shall be
+ *               set to the reason of the failure. Otherwise, it shall be
+ *               @ref AVS_OK. Currently it is only used to update the "TLS/DTLS
+ *               Alert Code" resource if applicable.
  *
  * It performs any operations necessary after the refresh. In particular:
  *
@@ -48,9 +54,13 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  * - In case of success on the Bootstrap server, Client-Initiated Bootstrap is
  *   scheduled to be performed if necessary.
  */
-void _anjay_server_on_refreshed(anjay_t *anjay,
-                                anjay_server_info_t *server,
-                                anjay_server_connection_state_t state);
+void _anjay_server_on_refreshed(anjay_server_info_t *server,
+                                anjay_server_connection_state_t state,
+                                avs_error_t err);
+
+void _anjay_server_on_updated_registration(anjay_server_info_t *server,
+                                           anjay_registration_result_t result,
+                                           avs_error_t err);
 
 /**
  * Schedules a @ref _anjay_server_activate execution after given @p delay.
@@ -61,8 +71,7 @@ void _anjay_server_on_refreshed(anjay_t *anjay,
  * After the activation succeeds, the scheduled job takes care of any required
  * Registration Updates.
  */
-int _anjay_server_sched_activate(anjay_t *anjay,
-                                 anjay_server_info_t *server,
+int _anjay_server_sched_activate(anjay_server_info_t *server,
                                  avs_time_duration_t reactivate_delay);
 
 int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay);
@@ -95,7 +104,8 @@ int _anjay_server_deactivate(anjay_t *anjay,
  *
  * Does not schedule the reactivate job for created entry.
  */
-AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_ssid_t ssid);
+AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_t *anjay,
+                                                             anjay_ssid_t ssid);
 
 /**
  * Checks whether now is a right moment to initiate Client Initiated Bootstrap

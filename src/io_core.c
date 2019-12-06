@@ -32,9 +32,14 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-struct anjay_output_ctx_struct {
-    const anjay_output_ctx_vtable_t *vtable;
+struct anjay_dm_list_ctx_struct {
+    const anjay_dm_list_ctx_vtable_t *vtable;
 };
+
+void anjay_dm_emit(anjay_dm_list_ctx_t *ctx, uint16_t id) {
+    assert(ctx->vtable && ctx->vtable->emit);
+    ctx->vtable->emit(ctx, id);
+}
 
 struct anjay_ret_bytes_ctx_struct {
     const anjay_ret_bytes_ctx_vtable_t *vtable;
@@ -49,19 +54,19 @@ uint16_t _anjay_translate_legacy_content_format(uint16_t format) {
     switch (format) {
     case ANJAY_COAP_FORMAT_LEGACY_PLAINTEXT:
         anjay_log(DEBUG, MSG_FMT, "text", ANJAY_COAP_FORMAT_LEGACY_PLAINTEXT);
-        return ANJAY_COAP_FORMAT_PLAINTEXT;
+        return AVS_COAP_FORMAT_PLAINTEXT;
 
     case ANJAY_COAP_FORMAT_LEGACY_TLV:
         anjay_log(DEBUG, MSG_FMT, "tlv", ANJAY_COAP_FORMAT_LEGACY_TLV);
-        return ANJAY_COAP_FORMAT_TLV;
+        return AVS_COAP_FORMAT_OMA_LWM2M_TLV;
 
     case ANJAY_COAP_FORMAT_LEGACY_JSON:
         anjay_log(DEBUG, MSG_FMT, "json", ANJAY_COAP_FORMAT_LEGACY_JSON);
-        return ANJAY_COAP_FORMAT_JSON;
+        return AVS_COAP_FORMAT_OMA_LWM2M_JSON;
 
     case ANJAY_COAP_FORMAT_LEGACY_OPAQUE:
         anjay_log(DEBUG, MSG_FMT, "opaque", ANJAY_COAP_FORMAT_LEGACY_OPAQUE);
-        return ANJAY_COAP_FORMAT_OPAQUE;
+        return AVS_COAP_FORMAT_OCTET_STREAM;
 
     default:
         return format;
@@ -70,37 +75,12 @@ uint16_t _anjay_translate_legacy_content_format(uint16_t format) {
 
 #endif // WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 
-int _anjay_handle_requested_format(uint16_t *out_ptr, uint16_t new_value) {
-    if (*out_ptr == AVS_COAP_FORMAT_NONE) {
-        *out_ptr = new_value;
-    } else if (_anjay_translate_legacy_content_format(*out_ptr) != new_value) {
-        return ANJAY_OUTCTXERR_FORMAT_MISMATCH;
-    }
-    return 0;
-}
-
-int *_anjay_output_ctx_errno_ptr(anjay_output_ctx_t *ctx) {
-    assert(ctx->vtable->errno_ptr);
-    return ctx->vtable->errno_ptr(ctx);
-}
-
-static inline void set_out_errno(anjay_output_ctx_t *ctx, int value) {
-    int *errno_ptr = _anjay_output_ctx_errno_ptr(ctx);
-    assert(errno_ptr);
-    *errno_ptr = value;
-}
-
-static inline void set_errno_not_implemented(anjay_output_ctx_t *ctx) {
-    set_out_errno(ctx, ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED);
-}
-
 anjay_ret_bytes_ctx_t *anjay_ret_bytes_begin(anjay_output_ctx_t *ctx,
                                              size_t length) {
-    if (!ctx->vtable->bytes_begin) {
-        set_errno_not_implemented(ctx);
-        return NULL;
-    }
-    return ctx->vtable->bytes_begin(ctx, length);
+    anjay_ret_bytes_ctx_t *bytes_ctx = NULL;
+    int result = _anjay_output_bytes_begin(ctx, length, &bytes_ctx);
+    assert(!result == !!bytes_ctx);
+    return bytes_ctx;
 }
 
 int anjay_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx,
@@ -120,120 +100,130 @@ int anjay_ret_bytes(anjay_output_ctx_t *ctx, const void *data, size_t length) {
 }
 
 int anjay_ret_string(anjay_output_ctx_t *ctx, const char *value) {
-    if (!ctx->vtable->string) {
-        set_errno_not_implemented(ctx);
-        return -1;
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->string) {
+        result = ctx->vtable->string(ctx, value);
     }
-    return ctx->vtable->string(ctx, value);
-}
-
-int anjay_ret_i32(anjay_output_ctx_t *ctx, int32_t value) {
-    if (!ctx->vtable->i32) {
-        set_errno_not_implemented(ctx);
-        return -1;
-    }
-    return ctx->vtable->i32(ctx, value);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
 int anjay_ret_i64(anjay_output_ctx_t *ctx, int64_t value) {
-    if (!ctx->vtable->i64) {
-        set_errno_not_implemented(ctx);
-        return -1;
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->integer) {
+        result = ctx->vtable->integer(ctx, value);
     }
-    return ctx->vtable->i64(ctx, value);
-}
-
-int anjay_ret_float(anjay_output_ctx_t *ctx, float value) {
-    if (!ctx->vtable->f32) {
-        set_errno_not_implemented(ctx);
-        return -1;
-    }
-    return ctx->vtable->f32(ctx, value);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
 int anjay_ret_double(anjay_output_ctx_t *ctx, double value) {
-    if (!ctx->vtable->f64) {
-        set_errno_not_implemented(ctx);
-        return -1;
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->floating) {
+        result = ctx->vtable->floating(ctx, value);
     }
-    return ctx->vtable->f64(ctx, value);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
 int anjay_ret_bool(anjay_output_ctx_t *ctx, bool value) {
-    if (!ctx->vtable->boolean) {
-        set_errno_not_implemented(ctx);
-        return -1;
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->boolean) {
+        result = ctx->vtable->boolean(ctx, value);
     }
-    return ctx->vtable->boolean(ctx, value);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
 int anjay_ret_objlnk(anjay_output_ctx_t *ctx,
                      anjay_oid_t oid,
                      anjay_iid_t iid) {
-    if (!ctx->vtable->objlnk) {
-        set_errno_not_implemented(ctx);
-        return -1;
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->objlnk) {
+        result = ctx->vtable->objlnk(ctx, oid, iid);
     }
-    return ctx->vtable->objlnk(ctx, oid, iid);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
-anjay_output_ctx_t *anjay_ret_array_start(anjay_output_ctx_t *ctx) {
-    if (!ctx->vtable->array_start) {
-        set_errno_not_implemented(ctx);
-        return NULL;
+int _anjay_output_bytes_begin(anjay_output_ctx_t *ctx,
+                              size_t length,
+                              anjay_ret_bytes_ctx_t **out_bytes_ctx) {
+    assert(out_bytes_ctx);
+    assert(!*out_bytes_ctx);
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->bytes_begin) {
+        result = ctx->vtable->bytes_begin(ctx, length, out_bytes_ctx);
     }
-    return ctx->vtable->array_start(ctx);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
-int anjay_ret_array_index(anjay_output_ctx_t *array_ctx, anjay_riid_t index) {
-    return _anjay_output_set_id(array_ctx, ANJAY_ID_RIID, index);
+int _anjay_output_start_aggregate(anjay_output_ctx_t *ctx) {
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->start_aggregate) {
+        result = ctx->vtable->start_aggregate(ctx);
+    }
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
-int anjay_ret_array_finish(anjay_output_ctx_t *array_ctx) {
-    if (!array_ctx->vtable->array_finish) {
-        set_errno_not_implemented(array_ctx);
-        return -1;
+int _anjay_output_set_path(anjay_output_ctx_t *ctx,
+                           const anjay_uri_path_t *path) {
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->set_path) {
+        result = ctx->vtable->set_path(ctx, path);
     }
-    return array_ctx->vtable->array_finish(array_ctx);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
-anjay_output_ctx_t *_anjay_output_object_start(anjay_output_ctx_t *ctx) {
-    if (!ctx->vtable->object_start) {
-        set_errno_not_implemented(ctx);
-        return NULL;
+int _anjay_output_clear_path(anjay_output_ctx_t *ctx) {
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->clear_path) {
+        result = ctx->vtable->clear_path(ctx);
     }
-    return ctx->vtable->object_start(ctx);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
-int _anjay_output_object_finish(anjay_output_ctx_t *ctx) {
-    if (!ctx->vtable->object_finish) {
-        set_errno_not_implemented(ctx);
-        return -1;
+int _anjay_output_set_time(anjay_output_ctx_t *ctx, double value) {
+    if (!ctx->vtable->set_time) {
+        // Deliberately ignore set_time fails - non-SenML formats will just omit
+        // the timestamps, this is fine.
+        return 0;
     }
-    return ctx->vtable->object_finish(ctx);
-}
-
-int _anjay_output_set_id(anjay_output_ctx_t *ctx,
-                         anjay_id_type_t type,
-                         uint16_t id) {
-    if (!ctx->vtable->set_id) {
-        set_errno_not_implemented(ctx);
-        return -1;
-    }
-    return ctx->vtable->set_id(ctx, type, id);
+    int result = ctx->vtable->set_time(ctx, value);
+    _anjay_update_ret(&ctx->error, result);
+    return result;
 }
 
 int _anjay_output_ctx_destroy(anjay_output_ctx_t **ctx_ptr) {
-    int retval = 0;
     anjay_output_ctx_t *ctx = *ctx_ptr;
+    int result = 0;
     if (ctx) {
+        result = ctx->error;
         if (ctx->vtable->close) {
-            retval = ctx->vtable->close(*ctx_ptr);
+            _anjay_update_ret(&result, ctx->vtable->close(ctx));
         }
         avs_free(ctx);
         *ctx_ptr = NULL;
     }
-    return retval;
+    return result;
+}
+
+int _anjay_output_ctx_destroy_and_process_result(
+        anjay_output_ctx_t **out_ctx_ptr, int result) {
+    int destroy_result = _anjay_output_ctx_destroy(out_ctx_ptr);
+    if (destroy_result != ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED) {
+        return destroy_result ? destroy_result : result;
+    } else if (result) {
+        return result;
+    } else {
+        anjay_log(ERROR, "unable to determine resource type: anjay_ret_* not "
+                         "called during successful resource_read handler call");
+        return ANJAY_ERR_INTERNAL;
+    }
 }
 
 struct anjay_input_ctx_struct {
@@ -272,66 +262,6 @@ int anjay_get_bytes(anjay_input_ctx_t *ctx,
     }
 }
 
-typedef struct {
-    const avs_stream_v_table_t *const vtable;
-    anjay_input_ctx_t *backend;
-} bytes_stream_t;
-
-static int unimplemented() {
-    return -1;
-}
-
-static int bytes_stream_read(avs_stream_abstract_t *stream,
-                             size_t *out_bytes_read,
-                             char *out_message_finished,
-                             void *buffer,
-                             size_t buffer_length) {
-    anjay_input_ctx_t **backend_ptr = &((bytes_stream_t *) stream)->backend;
-    if (*backend_ptr) {
-        bool message_finished;
-        int retval = anjay_get_bytes(*backend_ptr, out_bytes_read,
-                                     &message_finished, buffer, buffer_length);
-        if (!retval && (*out_message_finished = message_finished)) {
-            *backend_ptr = NULL;
-        }
-        return retval;
-    } else {
-        *out_bytes_read = 0;
-        *out_message_finished = 1;
-        return 0;
-    }
-}
-
-static int bytes_stream_close(avs_stream_abstract_t *stream) {
-    char buf[256];
-    size_t bytes_read;
-    char message_finished = 0;
-    while (!bytes_stream_read(stream, &bytes_read, &message_finished, buf,
-                              sizeof(buf))
-           && !message_finished)
-        ;
-    return 0;
-}
-
-avs_stream_abstract_t *_anjay_input_bytes_stream(anjay_input_ctx_t *ctx) {
-    static const avs_stream_v_table_t VTABLE = {
-        (avs_stream_write_some_t) unimplemented,
-        (avs_stream_finish_message_t) unimplemented,
-        bytes_stream_read,
-        (avs_stream_peek_t) unimplemented,
-        (avs_stream_reset_t) unimplemented,
-        bytes_stream_close,
-        (avs_stream_errno_t) unimplemented,
-        NULL
-    };
-    bytes_stream_t specimen = { &VTABLE, ctx };
-    bytes_stream_t *out = (bytes_stream_t *) avs_malloc(sizeof(bytes_stream_t));
-    if (out) {
-        memcpy(out, &specimen, sizeof(bytes_stream_t));
-    }
-    return (avs_stream_abstract_t *) out;
-}
-
 int anjay_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
     if (!ctx->vtable->string) {
         return -1;
@@ -340,31 +270,39 @@ int anjay_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
 }
 
 int anjay_get_i32(anjay_input_ctx_t *ctx, int32_t *out) {
-    if (!ctx->vtable->i32) {
-        return -1;
+    int64_t tmp;
+    int result = anjay_get_i64(ctx, &tmp);
+    if (!result) {
+        if (tmp < INT32_MIN || tmp > INT32_MAX) {
+            result = ANJAY_ERR_BAD_REQUEST;
+        } else {
+            *out = (int32_t) tmp;
+        }
     }
-    return ctx->vtable->i32(ctx, out);
+    return result;
 }
 
 int anjay_get_i64(anjay_input_ctx_t *ctx, int64_t *out) {
-    if (!ctx->vtable->i64) {
+    if (!ctx->vtable->integer) {
         return -1;
     }
-    return ctx->vtable->i64(ctx, out);
+    return ctx->vtable->integer(ctx, out);
 }
 
 int anjay_get_float(anjay_input_ctx_t *ctx, float *out) {
-    if (!ctx->vtable->f32) {
-        return -1;
+    double tmp;
+    int result = anjay_get_double(ctx, &tmp);
+    if (!result) {
+        *out = (float) tmp;
     }
-    return ctx->vtable->f32(ctx, out);
+    return result;
 }
 
 int anjay_get_double(anjay_input_ctx_t *ctx, double *out) {
-    if (!ctx->vtable->f64) {
+    if (!ctx->vtable->floating) {
         return -1;
     }
-    return ctx->vtable->f64(ctx, out);
+    return ctx->vtable->floating(ctx, out);
 }
 
 int anjay_get_bool(anjay_input_ctx_t *ctx, bool *out) {
@@ -383,42 +321,31 @@ int anjay_get_objlnk(anjay_input_ctx_t *ctx,
     return ctx->vtable->objlnk(ctx, out_oid, out_iid);
 }
 
-int _anjay_input_attach_child(anjay_input_ctx_t *ctx,
-                              anjay_input_ctx_t *child) {
-    if (!ctx->vtable->attach_child) {
-        return -1;
-    }
-    return ctx->vtable->attach_child(ctx, child);
-}
-
-anjay_input_ctx_t *_anjay_input_nested_ctx(anjay_input_ctx_t *ctx) {
-    anjay_input_ctx_t *retval = NULL;
-    avs_stream_abstract_t *stream = _anjay_input_bytes_stream(ctx);
-    if (stream && _anjay_input_tlv_create(&retval, &stream, true)) {
-        avs_stream_cleanup(&stream);
-    }
-    if (retval && _anjay_input_attach_child(ctx, retval)) {
-        _anjay_input_ctx_destroy(&retval);
-    }
-    return retval;
-}
-
-anjay_input_ctx_t *anjay_get_array(anjay_input_ctx_t *ctx) {
-    anjay_id_type_t type;
-    uint16_t id;
-    if (_anjay_input_get_id(ctx, &type, &id) || type != ANJAY_ID_RID) {
-        return NULL;
-    }
-    return _anjay_input_nested_ctx(ctx);
-}
-
-int _anjay_input_get_id(anjay_input_ctx_t *ctx,
-                        anjay_id_type_t *out_type,
-                        uint16_t *out_id) {
-    if (!ctx->vtable->get_id) {
+int _anjay_input_get_path(anjay_input_ctx_t *ctx,
+                          anjay_uri_path_t *out_path,
+                          bool *out_is_array) {
+    if (!ctx->vtable->get_path) {
         return ANJAY_ERR_BAD_REQUEST;
     }
-    return ctx->vtable->get_id(ctx, out_type, out_id);
+    bool ignored_is_array;
+    if (!out_is_array) {
+        out_is_array = &ignored_is_array;
+    }
+    anjay_uri_path_t ignored_path;
+    if (!out_path) {
+        out_path = &ignored_path;
+    }
+    (void) ignored_is_array;
+    (void) ignored_path;
+    return ctx->vtable->get_path(ctx, out_path, out_is_array);
+}
+
+int _anjay_input_update_root_path(anjay_input_ctx_t *ctx,
+                                  const anjay_uri_path_t *root_path) {
+    if (!ctx->vtable->update_root_path) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    return ctx->vtable->update_root_path(ctx, root_path);
 }
 
 int _anjay_input_next_entry(anjay_input_ctx_t *ctx) {
@@ -426,16 +353,6 @@ int _anjay_input_next_entry(anjay_input_ctx_t *ctx) {
         return -1;
     }
     return ctx->vtable->next_entry(ctx);
-}
-
-int anjay_get_array_index(anjay_input_ctx_t *ctx, anjay_riid_t *out_index) {
-    anjay_id_type_t type;
-    int retval;
-    if ((retval = _anjay_input_next_entry(ctx))
-            || (retval = _anjay_input_get_id(ctx, &type, out_index))) {
-        return retval;
-    }
-    return (type == ANJAY_ID_RIID) ? 0 : -1;
 }
 
 int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr) {

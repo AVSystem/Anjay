@@ -22,11 +22,12 @@ from framework.lwm2m_test import *
 
 class BootstrapServer:
     class Test(test_suite.Lwm2mTest):
-        def setUp(self):
+        def setUp(self, **kwargs):
             extra_args = ['--bootstrap-holdoff', '3']
             self.setup_demo_with_servers(servers=0,
                                          bootstrap_server=True,
-                                         extra_cmdline_args=extra_args)
+                                         extra_cmdline_args=extra_args,
+                                         **kwargs)
 
         def tearDown(self):
             self.teardown_demo_with_servers()
@@ -40,7 +41,7 @@ class BootstrapServer:
                 if self.get_socket_count() > 0:
                     break
             else:
-                self.fail("sockets not initialized in time");
+                self.fail("sockets not initialized in time")
 
             # send Bootstrap messages without request
             return super().get_demo_port(server_index)
@@ -49,7 +50,7 @@ class BootstrapServer:
 class BootstrapServerTest(BootstrapServer.Test):
     def runTest(self):
         self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
-        req = Lwm2mWrite('/1/42',
+        req = Lwm2mWrite('/%d/42' % (OID.Server,),
                          TLV.make_resource(RID.Server.Lifetime, 60).serialize()
                          + TLV.make_resource(RID.Server.Binding, "U").serialize()
                          + TLV.make_resource(RID.Server.ShortServerID, 42).serialize()
@@ -63,7 +64,7 @@ class BootstrapServerTest(BootstrapServer.Test):
         regular_serv_uri = 'coap://127.0.0.1:%d' % regular_serv.get_listen_port()
 
         # Create Security object
-        req = Lwm2mWrite('/0/42',
+        req = Lwm2mWrite('/%d/42' % (OID.Security,),
                          TLV.make_resource(RID.Security.ServerURI, regular_serv_uri).serialize()
                          + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
                          + TLV.make_resource(RID.Security.Mode, 3).serialize()
@@ -105,7 +106,8 @@ class BootstrapServerTest(BootstrapServer.Test):
                             self.bootstrap_server.recv())
 
         # the client will now start Client Initiated bootstrap, because it has no regular server connection
-        pkt = self.bootstrap_server.recv()
+        # this might happen after a backoff, if the Bootstrap Delete was handled before the response to Register
+        pkt = self.bootstrap_server.recv(timeout_s=20)
         self.assertIsInstance(pkt, Lwm2mRequestBootstrap)
         self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
 
@@ -118,7 +120,7 @@ class BootstrapEmptyResourcesDoesNotSegfault(BootstrapServer.Test):
     def runTest(self):
         self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
 
-        req = Lwm2mWrite('/0/42',
+        req = Lwm2mWrite('/%d/42' % (OID.Security,),
                          TLV.make_resource(RID.Security.ServerURI, 'coap://1.2.3.4:5678').serialize()
                          + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
                          + TLV.make_resource(RID.Security.Mode, 3).serialize()

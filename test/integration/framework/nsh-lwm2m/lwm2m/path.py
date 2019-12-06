@@ -41,8 +41,8 @@ class Lwm2mPath(CoapPath):
     def __init__(self, text):
         super().__init__(text)
 
-        if len(self.segments) > 3:
-            raise ValueError('LWM2M path must not have more than 3 segments')
+        if len(self.segments) > 4:
+            raise ValueError('LWM2M path must not have more than 4 segments')
 
         for segment in self.segments:
             try:
@@ -61,6 +61,10 @@ class Lwm2mPath(CoapPath):
     @property
     def resource_id(self):
         return int(self.segments[2]) if len(self.segments) > 2 else None
+
+    @property
+    def resource_instance_id(self):
+        return int(self.segments[3]) if len(self.segments) > 3 else None
 
 
 class Lwm2mNonemptyPath(Lwm2mPath):

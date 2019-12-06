@@ -239,26 +239,26 @@ class Test260_DiscoverCommand(DataModel.Test):
         # Even if it did, /3/0/11 is a Multiple Resource, so it should have
         # ;dim= attribute as well.
         # TODO: this needs to be clarified.
-        link_list = self.test_discover('/3')
-        links = link_list.split(b',')
-        self.assertIn(b'</3>', links)
-        self.assertIn(b'</3/0/1>', links)
-        self.assertIn(b'</3/0/2>', links)
-        self.assertIn(b'</3/0/3>', links)
-        self.assertIn(b'</3/0/4>', links)
-        self.assertIn(b'</3/0/6>', links)
-        self.assertIn(b'</3/0/7>', links)
-        self.assertIn(b'</3/0/8>', links)
-        self.assertIn(b'</3/0/9>', links)
-        self.assertIn(b'</3/0/11>', links)
-        self.assertIn(b'</3/0/16>', links)
+        link_list = self.test_discover('/%d' % (OID.Device,)).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d>' % (OID.Device,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ModelNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SerialNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.FirmwareVersion,), links)
+        self.assertIn('<%s>' % (ResPath.Device.Reboot,), links)
+        self.assertIn('<%s>' % (ResPath.Device.AvailablePowerSources,), links)
+        self.assertIn('<%s>' % (ResPath.Device.PowerSourceVoltage,), links)
+        self.assertIn('<%s>' % (ResPath.Device.PowerSourceCurrent,), links)
+        self.assertIn('<%s>' % (ResPath.Device.BatteryLevel,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ErrorCode,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SupportedBindingAndModes,), links)
 
         # 2. A WRITE-ATTRIBUTES operation set the pmin=10 & pmax=200
         #    <NOTIFICATION> Attributes at the Object Instance level
         #
         # B. In test step 2, a Success message is received by the Server ("2.04"
         #    Changed) related to the WRITE-ATTRIBUTES operation
-        self.test_write_attributes('/3/0', pmin=10, pmax=200)
+        self.test_write_attributes('/%d/0' % (OID.Device,), pmin=10, pmax=200)
 
         # 3. Same DISCOVER command as in test step 1., is performed
         #
@@ -270,19 +270,19 @@ class Test260_DiscoverCommand(DataModel.Test):
         #    </3/0/9>,</3/0/11>,</3/0/16>
         #
         # TODO: WTF? this should not show attributes as well
-        link_list = self.test_discover('/3')
-        links = link_list.split(b',')
-        self.assertIn(b'</3>', links)
-        self.assertIn(b'</3/0/1>', links)
-        self.assertIn(b'</3/0/2>', links)
-        self.assertIn(b'</3/0/3>', links)
-        self.assertIn(b'</3/0/4>', links)
-        self.assertIn(b'</3/0/6>', links)
-        self.assertIn(b'</3/0/7>', links)
-        self.assertIn(b'</3/0/8>', links)
-        self.assertIn(b'</3/0/9>', links)
-        self.assertIn(b'</3/0/11>', links)
-        self.assertIn(b'</3/0/16>', links)
+        link_list = self.test_discover('/%d' % (OID.Device,)).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d>' % (OID.Device,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ModelNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SerialNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.FirmwareVersion,), links)
+        self.assertIn('<%s>' % (ResPath.Device.Reboot,), links)
+        self.assertIn('<%s>' % (ResPath.Device.AvailablePowerSources,), links)
+        self.assertIn('<%s>' % (ResPath.Device.PowerSourceVoltage,), links)
+        self.assertIn('<%s>' % (ResPath.Device.PowerSourceCurrent,), links)
+        self.assertIn('<%s>' % (ResPath.Device.BatteryLevel,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ErrorCode,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SupportedBindingAndModes,), links)
 
         # 4. The WRITE-ATTRIBUTES operation set the lt=1, gt=6 et st=1
         #    <NOTIFICATION> Attributes of the Resource ID:7 (Power
@@ -290,7 +290,7 @@ class Test260_DiscoverCommand(DataModel.Test):
         #
         # D. In test step 4, a "Success" message is received by the Server
         # ("2.04" Changed) related to the WRITE-ATTRIBUTES operation
-        self.test_write_attributes('/3/0/7', lt=1, gt=6, st=1)
+        self.test_write_attributes(ResPath.Device.PowerSourceVoltage, lt=1, gt=6, st=1)
 
         # 5. Same DISCOVER command as in test step 1. is performed
         #
@@ -301,19 +301,19 @@ class Test260_DiscoverCommand(DataModel.Test):
         #    </3/0/4>, </3/0/6>;dim=2, </3/0/7>;dim=2, ;lt=1;
         #
         # TODO: WTF? this should not show attributes as well
-        link_list = self.test_discover('/3')
-        links = link_list.split(b',')
-        self.assertIn(b'</3>', links)
-        self.assertIn(b'</3/0/1>', links)
-        self.assertIn(b'</3/0/2>', links)
-        self.assertIn(b'</3/0/3>', links)
-        self.assertIn(b'</3/0/4>', links)
-        self.assertIn(b'</3/0/6>', links)
-        self.assertIn(b'</3/0/7>', links)
-        self.assertIn(b'</3/0/8>', links)
-        self.assertIn(b'</3/0/9>', links)
-        self.assertIn(b'</3/0/11>', links)
-        self.assertIn(b'</3/0/16>', links)
+        link_list = self.test_discover('/%d' % (OID.Device,)).decode()
+        links = link_list.split(',')
+        self.assertIn('</%d>' % (OID.Device,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ModelNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SerialNumber,), links)
+        self.assertIn('<%s>' % (ResPath.Device.FirmwareVersion,), links)
+        self.assertIn('<%s>' % (ResPath.Device.Reboot,), links)
+        self.assertIn('<%s>' % (ResPath.Device.AvailablePowerSources,), links)
+        self.assertIn('<%s>' % (ResPath.Device.PowerSourceVoltage,), links)
+        self.assertIn('<%s>' % (ResPath.Device.PowerSourceCurrent,), links)
+        self.assertIn('<%s>' % (ResPath.Device.BatteryLevel,), links)
+        self.assertIn('<%s>' % (ResPath.Device.ErrorCode,), links)
+        self.assertIn('<%s>' % (ResPath.Device.SupportedBindingAndModes,), links)
 
         # 6. DISCOVER operation is performed on Resource ID:7 of the
         #    Object Device Instance
@@ -322,7 +322,7 @@ class Test260_DiscoverCommand(DataModel.Test):
         #    the Server along with the payload related to the DISCOVER request
         #    and just containing :
         #    </3/0/7>;pmin=10;pmax=200;dim=2 ;lt=1;gt=6 ;st=1
-        link_list = self.test_discover('/3/0/7')
+        link_list = self.test_discover(ResPath.Device.PowerSourceVoltage)
         self.assertNotIn(b',', link_list)
         attrs = link_list.split(b';')
         self.assertIn(b'pmin=10', attrs)
@@ -331,3 +331,5 @@ class Test260_DiscoverCommand(DataModel.Test):
         self.assertIn(b'gt=6', attrs)
         self.assertIn(b'st=1', attrs)
         self.assertTrue(any(attr.startswith(b'dim=') for attr in attrs))
+
+

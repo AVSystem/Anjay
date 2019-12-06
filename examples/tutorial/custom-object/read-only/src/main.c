@@ -6,16 +6,31 @@
 
 #include <avsystem/commons/time.h>
 
+static int test_list_resources(anjay_t *anjay,
+                               const anjay_dm_object_def_t *const *obj_ptr,
+                               anjay_iid_t iid,
+                               anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;   // unused
+    (void) obj_ptr; // unused
+    (void) iid;     // unused
+
+    anjay_dm_emit_res(ctx, 0, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, 1, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int test_resource_read(anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj_ptr,
                               anjay_iid_t iid,
                               anjay_rid_t rid,
+                              anjay_riid_t riid,
                               anjay_output_ctx_t *ctx) {
     // These arguments may seem superfluous now, but they will come in handy
     // while defining more complex objects
     (void) anjay;   // unused
     (void) obj_ptr; // unused: the object holds no state
     (void) iid;     // unused: will always be 0 for single-instance Objects
+    (void) riid;    // unused: will always be ANJAY_ID_INVALID
 
     switch (rid) {
     case 0:
@@ -23,7 +38,7 @@ static int test_resource_read(anjay_t *anjay,
     case 1:
         return anjay_ret_i64(ctx, avs_time_real_now().since_real_epoch.seconds);
     default:
-        // control will never reach this part due to object's supported_rids
+        // control will never reach this part due to test_list_resources
         return 0;
     }
 }
@@ -32,18 +47,11 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
     // Object ID
     .oid = 1234,
 
-    // List of supported Resource IDs
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(0, 1),
-
     .handlers = {
-        // single-instance Objects can use these pre-implemented handlers:
-        .instance_it = anjay_dm_instance_it_SINGLE,
-        .instance_present = anjay_dm_instance_present_SINGLE,
+        // single-instance Objects can use this pre-implemented handler:
+        .list_instances = anjay_dm_list_instances_SINGLE,
 
-        // if all supported Resources are always available, one can use
-        // a pre-implemented `resource_present` handler too:
-        .resource_present = anjay_dm_resource_present_TRUE,
-
+        .list_resources = test_list_resources,
         .resource_read = test_resource_read
 
         // all other handlers can be left NULL if only Read operation is
@@ -55,7 +63,7 @@ static int setup_security_object(anjay_t *anjay) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
         .server_uri = "coap://127.0.0.1:5683",
-        .security_mode = ANJAY_UDP_SECURITY_NOSEC
+        .security_mode = ANJAY_SECURITY_NOSEC
     };
 
     if (anjay_security_object_install(anjay)) {
@@ -63,7 +71,7 @@ static int setup_security_object(anjay_t *anjay) {
     }
 
     // let Anjay assign an Object Instance ID
-    anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
+    anjay_iid_t security_instance_id = ANJAY_ID_INVALID;
     if (anjay_security_object_add_instance(anjay, &security_instance,
                                            &security_instance_id)) {
         return -1;
@@ -86,7 +94,7 @@ static int setup_server_object(anjay_t *anjay) {
         return -1;
     }
 
-    anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
+    anjay_iid_t server_instance_id = ANJAY_ID_INVALID;
     if (anjay_server_object_add_instance(anjay, &server_instance,
                                          &server_instance_id)) {
         return -1;
@@ -98,14 +106,13 @@ static int setup_server_object(anjay_t *anjay) {
 int main_loop(anjay_t *anjay) {
     while (true) {
         // Obtain all network data sources
-        AVS_LIST(avs_net_abstract_socket_t *const) sockets =
-                anjay_get_sockets(anjay);
+        AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
 
         // Prepare to poll() on them
         size_t numsocks = AVS_LIST_SIZE(sockets);
         struct pollfd pollfds[numsocks];
         size_t i = 0;
-        AVS_LIST(avs_net_abstract_socket_t *const) sock;
+        AVS_LIST(avs_net_socket_t *const) sock;
         AVS_LIST_FOREACH(sock, sockets) {
             pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
             pollfds[i].events = POLLIN;
@@ -123,7 +130,7 @@ int main_loop(anjay_t *anjay) {
         // Wait for the events if necessary, and handle them.
         if (poll(pollfds, numsocks, wait_ms) > 0) {
             int socket_id = 0;
-            AVS_LIST(avs_net_abstract_socket_t *const) socket = NULL;
+            AVS_LIST(avs_net_socket_t *const) socket = NULL;
             AVS_LIST_FOREACH(socket, sockets) {
                 if (pollfds[socket_id].revents) {
                     anjay_serve(anjay, *socket);
@@ -132,9 +139,8 @@ int main_loop(anjay_t *anjay) {
             }
         }
 
-        // Finally run the scheduler (ignoring its return value, which
-        // is the number of tasks executed)
-        (void) anjay_sched_run(anjay);
+        // Finally run the scheduler
+        anjay_sched_run(anjay);
     }
     return 0;
 }

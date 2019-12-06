@@ -16,13 +16,21 @@ set(ANJAY_VERSION "@ANJAY_VERSION@")
 
 get_filename_component(CURR_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
 
+if(NOT DEFINED avs_commons_DIR)
+    set(avs_commons_DIR "${CMAKE_CURRENT_LIST_DIR}/../avs_commons")
+endif()
 find_package(avs_commons REQUIRED COMPONENTS @AVS_COMMONS_COMPONENTS@)
+
+if(NOT DEFINED avs_coap_DIR)
+    set(avs_coap_DIR "${CMAKE_CURRENT_LIST_DIR}/../avs_coap")
+endif()
+find_package(avs_coap REQUIRED)
 
 include(${CURR_DIR}/@PROJECT_NAME@-targets.cmake)
 
 get_filename_component(ANJAY_INCLUDE_DIRS "${CURR_DIR}/../../@INCLUDE_INSTALL_DIR@" ABSOLUTE)
 set(ANJAY_INCLUDE_DIRS "${ANJAY_INCLUDE_DIRS}" "${AVS_COMMONS_INCLUDE_DIRS}")
 set(ANJAY_LIBRARIES @PROJECT_NAME@)
-set(ANJAY_LIBRARIES_STATIC @PROJECT_NAME@_static)
+set(ANJAY_LIBRARIES_STATIC @PROJECT_NAME@)
 
 unset(CURR_DIR)

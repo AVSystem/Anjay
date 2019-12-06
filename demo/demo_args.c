@@ -33,16 +33,16 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .endpoint_name = "urn:dev:os:0023C7-000001",
     .connection_args = {
         .servers[0] = {
-            .security_iid = ANJAY_IID_INVALID,
-            .server_iid = ANJAY_IID_INVALID,
+            .security_iid = ANJAY_ID_INVALID,
+            .server_iid = ANJAY_ID_INVALID,
             .id = 1,
-            .uri = "coap://127.0.0.1:5683"
+            .uri = "coap://127.0.0.1:5683",
+            .binding_mode = "U"
         },
         .bootstrap_holdoff_s = 0,
         .bootstrap_timeout_s = 0,
         .lifetime = 86400,
-        .binding_mode = "U",
-        .security_mode = ANJAY_UDP_SECURITY_NOSEC,
+        .security_mode = ANJAY_SECURITY_NOSEC
     },
     .location_csv = NULL,
     .location_update_frequency_s = 1,
@@ -54,32 +54,33 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
         .mode = (avs_net_security_mode_t) -1
     },
     .attr_storage_file = NULL,
-    .disable_server_initiated_bootstrap = false,
+    .disable_legacy_server_initiated_bootstrap = false,
     .tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
     .dtls_hs_tx_params = ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS,
     .fwu_tx_params_modified = false,
-    .fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS
+    .fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
+    .prefer_hierarchical_formats = false
 };
 
 static int parse_security_mode(const char *mode_string,
-                               anjay_udp_security_mode_t *out_mode) {
+                               anjay_security_mode_t *out_mode) {
     if (!mode_string) {
         return -1;
     }
 
     static const struct {
         const char *name;
-        anjay_udp_security_mode_t value;
+        anjay_security_mode_t value;
     } MODES[] = {
         // clang-format off
-        { "psk",   ANJAY_UDP_SECURITY_PSK         },
-        { "rpk",   ANJAY_UDP_SECURITY_RPK         },
-        { "cert",  ANJAY_UDP_SECURITY_CERTIFICATE },
-        { "nosec", ANJAY_UDP_SECURITY_NOSEC       },
+        { "psk",   ANJAY_SECURITY_PSK         },
+        { "rpk",   ANJAY_SECURITY_RPK         },
+        { "cert",  ANJAY_SECURITY_CERTIFICATE },
+        { "nosec", ANJAY_SECURITY_NOSEC       },
         // clang-format on
     };
 
-    for (size_t i = 0; i < ARRAY_SIZE(MODES); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(MODES); ++i) {
         if (!strcmp(mode_string, MODES[i].name)) {
             *out_mode = MODES[i].value;
             return 0;
@@ -88,7 +89,7 @@ static int parse_security_mode(const char *mode_string,
 
     char allowed_modes[64];
     size_t offset = 0;
-    for (size_t i = 0; i < ARRAY_SIZE(MODES); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(MODES); ++i) {
         ssize_t written =
                 snprintf(allowed_modes + offset, sizeof(allowed_modes) - offset,
                          " %s", MODES[i].name);
@@ -105,7 +106,6 @@ static int parse_security_mode(const char *mode_string,
              mode_string, allowed_modes);
     return -1;
 }
-
 
 static const char *help_arg_list(const struct option *opt) {
     switch (opt->has_arg) {
@@ -127,16 +127,15 @@ static void print_option_help(const struct option *opt) {
         const char *default_value;
         const char *help;
     } HELP_INFO[] = {
-        // clang-format off
         { 'a', "OBJECT_ID SHORT_SERVER_ID", NULL,
           "allow Short Server ID to instantiate Object ID." },
         { 'b', "client-initiated-only", NULL,
-          "treat first URI as Bootstrap Server. Unless the optional "
-          "\"client-initiated-only\" is specified, both Client-Initiated and "
-          "Server-Initiated bootstrap modes are available." },
+          "treat first URI as Bootstrap Server. If the optional "
+          "\"client-initiated-only\" option is specified, the legacy LwM2M "
+          "1.0-style Server-Initiated bootstrap mode is not available." },
         { 'H', "SECONDS", "0",
-          "number of seconds to wait before attempting "
-          "Client Initiated Bootstrap." },
+          "number of seconds to wait before attempting Client Initiated "
+          "Bootstrap." },
         { 'T', "SECONDS", "0",
           "number of seconds to keep the Bootstrap Server Account for after "
           "successful bootstrapping, or 0 for infinity." },
@@ -144,8 +143,9 @@ static void print_option_help(const struct option *opt) {
           "endpoint name to use." },
         { 'h', NULL, NULL, "show this message and exit." },
 #ifndef _WIN32
-        { 't', NULL, NULL, "disables standard input. Useful for running the "
-          "client as a daemon." },
+        { 't', NULL, NULL,
+          "disables standard input. Useful for running the client as a "
+          "daemon." },
 #endif // _WIN32
         { 'l', "SECONDS", "86400",
           "set registration lifetime. If SECONDS <= 0, use default value and "
@@ -159,53 +159,60 @@ static void print_option_help(const struct option *opt) {
         { 'i', "PSK identity (psk mode) or Public Certificate (cert mode)",
           NULL, "Both are specified as hexlified strings" },
         { 'C', "CLIENT_CERT_FILE", "$(dirname $0)/../certs/client.crt.der",
-          "DER-formatted client certificate file to load. "
-          "Mutually exclusive with -i" },
+          "DER-formatted client certificate file to load. Mutually exclusive "
+          "with -i" },
         { 'k', "PSK key (psk mode) or Private Certificate (cert mode)", NULL,
           "Both are specified as hexlified strings" },
         { 'K', "PRIVATE_KEY_FILE", "$(dirname $0)/../certs/client.key.der",
           "DER-formatted PKCS#8 private key complementary to the certificate "
           "specified with -C. Mutually exclusive with -k" },
-        { 'q', "BINDING_MODE=UQ", "U", "set the Binding Mode to use." },
+        { 'q', "BINDING_MODE=UQ", "U",
+          "set the Binding Mode to use for the currently configured server." },
         { 's', "MODE", NULL, "set security mode, one of: psk rpk cert nosec." },
         { 'u', "URI", DEFAULT_CMDLINE_ARGS.connection_args.servers[0].uri,
           "server URI to use. Note: coap:// URIs require --security-mode nosec "
           "to be set. N consecutive URIs will create N servers enumerated "
           "from 1 to N." },
-        { 'D', "IID", NULL, "enforce particular Security Instance IID for last "
-          "configured server." },
-        { 'd', "IID", NULL, "enforce particular Server Instance IID for last "
-          "configured server. Ignored if last configured server is an LwM2M "
-          "Bootstrap Server." },
-        { 'I', "SIZE", "4000", "Nonnegative integer representing maximum "
-                               "size of an incoming CoAP packet the client "
-                               "should be able to handle." },
-        { 'O', "SIZE", "4000", "Nonnegative integer representing maximum "
-                               "size of a non-BLOCK CoAP packet the client "
-                               "should be able to send." },
-        { '$', "SIZE", "0", "Size, in bytes, of a buffer reserved for caching "
-                            "sent responses to detect retransmissions. Setting "
-                            "it to 0 disables caching mechanism." },
+        { 'D', "IID", NULL,
+          "enforce particular Security Instance IID for last configured "
+          "server." },
+        { 'd', "IID", NULL,
+          "enforce particular Server Instance IID for last configured server. "
+          "Ignored if last configured server is an LwM2M Bootstrap Server." },
+        { 'I', "SIZE", "4000",
+          "Nonnegative integer representing maximum size of an incoming CoAP "
+          "packet the client should be able to handle." },
+        { 'O', "SIZE", "4000",
+          "Nonnegative integer representing maximum size of a non-BLOCK CoAP "
+          "packet the client should be able to send." },
+        { '$', "SIZE", "0",
+          "Size, in bytes, of a buffer reserved for caching sent responses to "
+          "detect retransmissions. Setting it to 0 disables caching "
+          "mechanism." },
         { 'N', NULL, NULL,
           "Send notifications as Confirmable messages by default" },
-        { 'r', "RESULT", NULL, "If specified and nonzero, initializes the "
-                               "Firmware Update object in UPDATING state, and "
-                               "sets the result to given value after a short "
-                               "while" },
+        { 'r', "RESULT", NULL,
+          "If specified and nonzero, initializes the Firmware Update object in "
+          "UPDATING state, and sets the result to given value after a short "
+          "while" },
         { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
-        { 2, "CERT_FILE", NULL, "Require certificate validation against "
-          "specified file when downloading firmware over encrypted channels" },
-        { 3, "CERT_DIR", NULL, "Require certificate validation against files "
-          "in specified path when downloading firmware over encrypted channels"
-          "; note that the TLS backend may impose specific requirements for "
-          "file names and formats" },
-        { 4, "PSK identity", NULL, "Download firmware over encrypted channels "
-          "using PSK-mode encryption with the specified identity (provided as "
-          "hexlified string); must be used together with --fw-psk-key" },
-        { 5, "PSK key", NULL, "Download firmware over encrypted channels using "
-          "PSK-mode encryption with the specified key (provided as hexlified "
-          "string); must be used together with --fw-psk-identity" },
+        { 2, "CERT_FILE", NULL,
+          "Require certificate validation against specified file when "
+          "downloading firmware over encrypted channels" },
+        { 3, "CERT_DIR", NULL,
+          "Require certificate validation against files in specified path when "
+          "downloading firmware over encrypted channels; note that the TLS "
+          "backend may impose specific requirements for file names and "
+          "formats" },
+        { 4, "PSK identity", NULL,
+          "Download firmware over encrypted channels using PSK-mode encryption "
+          "with the specified identity (provided as hexlified string); must be "
+          "used together with --fw-psk-key" },
+        { 5, "PSK key", NULL,
+          "Download firmware over encrypted channels using PSK-mode encryption "
+          "with the specified key (provided as hexlified string); must be used "
+          "together with --fw-psk-identity" },
         { 6, "PERSISTENCE_FILE", NULL,
           "File to load attribute storage data from at startup, and "
           "store it at shutdown" },
@@ -228,8 +235,15 @@ static void print_option_help(const struct option *opt) {
           "Configures ACK_TIMEOUT (defined in RFC7252) in seconds for firmware "
           "update" },
         { 19, "MAX_RETRANSMIT", "4",
-          "Configures MAX_RETRANSMIT (defined in RFC7252) for firmware update" },
-        // clang-format on
+          "Configures MAX_RETRANSMIT (defined in RFC7252) for firmware "
+          "update" },
+        { 20, NULL, NULL,
+          "Sets the library to use hierarchical content formats by default for "
+          "all responses." },
+        { 22, NULL, NULL, "Enables DTLS connection_id extension." },
+        { 23, "CIPHERSUITE[,CIPHERSUITE...]", "TLS library defaults",
+          "Sets the ciphersuites to be used by default for (D)TLS "
+          "connections." },
     };
 
     int description_offset = 25;
@@ -244,7 +258,7 @@ static void print_option_help(const struct option *opt) {
     fprintf(stderr, "--%s%n", opt->name, &chars_written);
 
     int padding = description_offset - chars_written - 1;
-    for (size_t i = 0; i < ARRAY_SIZE(HELP_INFO); ++i) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(HELP_INFO); ++i) {
         if (opt->val == HELP_INFO[i].opt_val) {
             const char *args = HELP_INFO[i].args ? HELP_INFO[i].args : "";
             const char *arg_prefix = "";
@@ -274,7 +288,9 @@ static int parse_i32(const char *str, int32_t *out_value) {
     long long_value;
     if (demo_parse_long(str, &long_value) || long_value < INT32_MIN
             || long_value > INT32_MAX) {
-        demo_log(ERROR, "value out of range: %s", str);
+        demo_log(ERROR,
+                 "value out of range: expected 32-bit signed value, got %s",
+                 str);
         return -1;
     }
 
@@ -282,11 +298,27 @@ static int parse_i32(const char *str, int32_t *out_value) {
     return 0;
 }
 
+static int parse_u32(const char *str, uint32_t *out_value) {
+    long long_value;
+    if (demo_parse_long(str, &long_value) || long_value < 0
+            || long_value > UINT32_MAX) {
+        demo_log(ERROR,
+                 "value out of range: expected 32-bit unsigned value, got %s",
+                 str);
+        return -1;
+    }
+
+    *out_value = (uint32_t) long_value;
+    return 0;
+}
+
 static int parse_u16(const char *str, uint16_t *out_value) {
     long long_value;
     if (demo_parse_long(str, &long_value) || long_value < 0
             || long_value > UINT16_MAX) {
-        demo_log(ERROR, "value out of range: %s", str);
+        demo_log(ERROR,
+                 "value out of range: expected 16-bit unsigned value, got %s",
+                 str);
         return -1;
     }
 
@@ -301,7 +333,9 @@ static int parse_size(const char *str, size_t *out_value) {
             || long_value > SIZE_MAX
 #endif
     ) {
-        demo_log(ERROR, "value out of range: %s", str);
+        demo_log(ERROR,
+                 "value out of range: expected %d-bit unsigned value, got %s",
+                 (int) (CHAR_BIT * sizeof(size_t)), str);
         return -1;
     }
 
@@ -447,7 +481,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "client-cert-file",              required_argument, 0, 'C' },
         { "key",                           required_argument, 0, 'k' },
         { "key-file",                      required_argument, 0, 'K' },
-        { "binding",                       optional_argument, 0, 'q' },
+        { "binding",                       required_argument, 0, 'q' },
         { "security-iid",                  required_argument, 0, 'D' },
         { "security-mode",                 required_argument, 0, 's' },
         { "server-iid",                    required_argument, 0, 'd' },
@@ -471,6 +505,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "fwu-ack-random-factor",         required_argument, 0, 17 },
         { "fwu-ack-timeout",               required_argument, 0, 18 },
         { "fwu-max-retransmit",            required_argument, 0, 19 },
+        { "prefer-hierarchical-formats",   no_argument,       0, 20 },
+        { "use-connection-id",             no_argument,       0, 22 },
+        { "ciphersuites",                  required_argument, 0, 23 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -497,7 +534,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     memcpy(default_key_path, argv[0], arg0_prefix_length);
     strcpy(default_key_path + arg0_prefix_length, DEFAULT_KEY_FILE);
 
-    char getopt_str[3 * ARRAY_SIZE(options)];
+    char getopt_str[3 * AVS_ARRAY_SIZE(options)];
     build_getopt_string(options, getopt_str, sizeof(getopt_str));
 
     while (true) {
@@ -540,7 +577,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->connection_args.servers[0].is_bootstrap = true;
             if (optarg && *optarg) {
                 if (strcmp(optarg, "client-initiated-only") == 0) {
-                    parsed_args->disable_server_initiated_bootstrap = true;
+                    parsed_args->disable_legacy_server_initiated_bootstrap =
+                            true;
                 } else {
                     demo_log(ERROR,
                              "Invalid bootstrap optional argument: \"%s\"; "
@@ -638,15 +676,11 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'K':
             key_path = optarg;
             break;
-        case 'q':
-            if (!optarg || !*optarg) {
-                // default to UQ if optional argument is not present
-                // for compatibility with legacy -q being --queue
-                parsed_args->connection_args.binding_mode = "UQ";
-            } else {
-                parsed_args->connection_args.binding_mode = optarg;
-            }
+        case 'q': {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            parsed_args->connection_args.servers[idx].binding_mode = optarg;
             break;
+        }
         case 'D': {
             int idx = num_servers == 0 ? 0 : num_servers - 1;
             if (parse_u16(optarg,
@@ -676,8 +710,16 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             server_entry_t *entry =
                     &parsed_args->connection_args.servers[num_servers++];
             entry->uri = optarg;
-            entry->security_iid = ANJAY_IID_INVALID;
-            entry->server_iid = ANJAY_IID_INVALID;
+            entry->security_iid = ANJAY_ID_INVALID;
+            entry->server_iid = ANJAY_ID_INVALID;
+            entry->binding_mode =
+                    parsed_args->connection_args.servers[num_servers - 1]
+                                    .binding_mode
+                            ? parsed_args->connection_args
+                                      .servers[num_servers - 1]
+                                      .binding_mode
+                            : DEFAULT_CMDLINE_ARGS.connection_args.servers[0]
+                                      .binding_mode;
             break;
         }
         case 'I':
@@ -707,7 +749,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     || result < (int) ANJAY_FW_UPDATE_RESULT_INITIAL
                     || result > (int) ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL) {
                 demo_log(ERROR, "invalid update result value: %s", optarg);
-                goto finish;
+                return -1;
             }
             parsed_args->fw_update_delayed_result =
                     (anjay_fw_update_result_t) result;
@@ -880,6 +922,37 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->fwu_tx_params_modified = true;
             break;
         }
+        case 20:
+            parsed_args->prefer_hierarchical_formats = true;
+            break;
+        case 22:
+            parsed_args->use_connection_id = true;
+            break;
+        case 23: {
+            char *saveptr = NULL;
+            char *str = optarg;
+            const char *token;
+            while ((token = avs_strtok(str, ",", &saveptr))) {
+                uint32_t *reallocated = (uint32_t *) avs_realloc(
+                        parsed_args->default_ciphersuites,
+                        sizeof(*parsed_args->default_ciphersuites)
+                                * ++parsed_args->default_ciphersuites_count);
+                if (!reallocated) {
+                    demo_log(ERROR, "Out of memory");
+                    goto finish;
+                }
+                parsed_args->default_ciphersuites = reallocated;
+                if (parse_u32(token,
+                              &parsed_args->default_ciphersuites
+                                       [parsed_args->default_ciphersuites_count
+                                        - 1])) {
+                    demo_log(ERROR, "Invalid ciphersuite ID: %s", token);
+                    goto finish;
+                }
+                str = NULL;
+            }
+            break;
+        }
         case 0:
             goto process;
         }
@@ -888,10 +961,10 @@ process:
     for (int i = 0; i < AVS_MAX(num_servers, 1); ++i) {
         server_entry_t *entry = &parsed_args->connection_args.servers[i];
         entry->id = (anjay_ssid_t) (i + 1);
-        if (entry->security_iid == ANJAY_IID_INVALID) {
+        if (entry->security_iid == ANJAY_ID_INVALID) {
             entry->security_iid = (anjay_iid_t) entry->id;
         }
-        if (entry->server_iid == ANJAY_IID_INVALID) {
+        if (entry->server_iid == ANJAY_ID_INVALID) {
             entry->server_iid = (anjay_iid_t) entry->id;
         }
     }
@@ -904,7 +977,7 @@ process:
                         "file and immediate hex data at the same time");
         goto finish;
     }
-    if (parsed_args->connection_args.security_mode == ANJAY_UDP_SECURITY_PSK) {
+    if (parsed_args->connection_args.security_mode == ANJAY_SECURITY_PSK) {
         if (!identity_set
                 && clone_buffer(&parsed_args->connection_args
                                          .public_cert_or_psk_identity,
@@ -923,7 +996,7 @@ process:
             goto finish;
         }
     } else if (parsed_args->connection_args.security_mode
-               == ANJAY_UDP_SECURITY_CERTIFICATE) {
+               == ANJAY_SECURITY_CERTIFICATE) {
         if (identity_set ^ key_set) {
             demo_log(ERROR, "Setting public cert but not private cert (and "
                             "other way around) makes little sense");
@@ -960,6 +1033,8 @@ process:
 finish:
     if (retval) {
         AVS_LIST_CLEAR(&parsed_args->access_entries);
+        avs_free(parsed_args->default_ciphersuites);
+        parsed_args->default_ciphersuites = NULL;
     }
     avs_free(default_cert_path);
     avs_free(default_key_path);

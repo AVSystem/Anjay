@@ -56,8 +56,8 @@ void anjay_access_control_purge(anjay_t *anjay);
  * @param out_stream    stream to write to
  * @return 0 in case of success, negative value in case of an error
  */
-int anjay_access_control_persist(anjay_t *anjay,
-                                 avs_stream_abstract_t *out_stream);
+avs_error_t anjay_access_control_persist(anjay_t *anjay,
+                                         avs_stream_t *out_stream);
 
 /**
  * Tries to restore Access Control Object Instances from given @p in_stream.
@@ -66,8 +66,8 @@ int anjay_access_control_persist(anjay_t *anjay,
  * @param in_stream     stream used for reading Access Control Object Instances
  * @return 0 in case of success, negative value in case of an error
  */
-int anjay_access_control_restore(anjay_t *anjay,
-                                 avs_stream_abstract_t *in_stream);
+avs_error_t anjay_access_control_restore(anjay_t *anjay,
+                                         avs_stream_t *in_stream);
 
 /**
  * Checks whether the Access Control Object from Anjay instance has been
@@ -81,7 +81,7 @@ bool anjay_access_control_is_modified(anjay_t *anjay);
  *
  * @param anjay       ANJAY object with the Access Control module installed
  * @param oid         Object ID of the target Instance.
- * @param iid         Target Object Instance ID, or <c>ANJAY_IID_INVALID</c>
+ * @param iid         Target Object Instance ID, or <c>ANJAY_ID_INVALID</c>
  *                    (i.e., MAX_ID==65535) to set an ACL referring to new
  *                    instance creation.
  * @param ssid        SSID of the server to grant permissions to.

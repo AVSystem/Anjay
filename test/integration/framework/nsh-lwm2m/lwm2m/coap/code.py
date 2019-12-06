@@ -80,6 +80,12 @@ class Code(object):
                 and self.cls == other.cls
                 and self.detail == other.detail)
 
+    def is_request(self):
+        return self.cls == 0 and self.detail != 0
+
+    def is_response(self):
+        return self.cls in (2, 4, 5)
+
 
 Code.EMPTY = Code(0, 0)
 
@@ -87,6 +93,8 @@ Code.REQ_GET =    Code(0, 1)
 Code.REQ_POST =   Code(0, 2)
 Code.REQ_PUT =    Code(0, 3)
 Code.REQ_DELETE = Code(0, 4)
+Code.REQ_FETCH  = Code(0, 5)
+Code.REQ_IPATCH = Code(0, 7)
 
 Code.RES_CREATED                    = Code(2,  1)
 Code.RES_DELETED                    = Code(2,  2)
@@ -111,3 +119,9 @@ Code.RES_BAD_GATEWAY                = Code(5,  2)
 Code.RES_SERVICE_UNAVAILABLE        = Code(5,  3)
 Code.RES_GATEWAY_TIMEOUT            = Code(5,  4)
 Code.RES_PROXYING_NOT_SUPPORTED     = Code(5,  5)
+
+Code.SIGNALING_CSM     = Code(7, 1)
+Code.SIGNALING_PING    = Code(7, 2)
+Code.SIGNALING_PONG    = Code(7, 3)
+Code.SIGNALING_RELEASE = Code(7, 4)
+Code.SIGNALING_ABORT   = Code(7, 5)

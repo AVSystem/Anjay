@@ -58,6 +58,17 @@ class Socket {
     py::object py_socket_;
     bool in_handshake_;
 
+    // Used to match incoming packets with a client we initially are
+    // connect()'ed to. It may change, if, for example connection_id extension
+    // is used and we received a packet from a different endpoint but the
+    // connection_id matched.
+    std::tuple<std::string, int> client_host_and_port_;
+    // Updated whenever we receive a packet from an endpoint we don't recognize.
+    // It must be there, because at the time of performing recv() we haven't
+    // parsed the packet as TLS record, and we cannot extract the connection_id
+    // (if any) to see if the packet is indeed valid and should be handled.
+    std::tuple<std::string, int> last_recv_host_and_port_;
+
     static int _send(void *self, const unsigned char *buf, size_t len);
     static int
     _recv(void *self, unsigned char *buf, size_t len, uint32_t timeout_ms);
@@ -71,7 +82,7 @@ public:
 
     ~Socket();
 
-    void connect(py::tuple address_port, py::object handshake_timeouts_s_);
+    void connect(py::tuple host_port, py::object handshake_timeouts_s_);
     void send(const std::string &data);
     py::bytes recv(int);
     void settimeout(py::object timeout_s_or_none);

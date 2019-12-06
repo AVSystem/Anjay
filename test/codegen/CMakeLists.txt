@@ -48,12 +48,12 @@ add_library(codegen_check OBJECT EXCLUDE_FROM_ALL ${CODEGEN_SOURCES})
 set_target_properties(codegen_check PROPERTIES
                       COMPILE_FLAGS "-Wno-missing-declarations -Wno-unused-variable -Wno-unused-parameter")
 target_include_directories(codegen_check PRIVATE
-                           $<TARGET_PROPERTY:anjay_static,INTERFACE_INCLUDE_DIRECTORIES>)
+                           $<TARGET_PROPERTY:anjay,INTERFACE_INCLUDE_DIRECTORIES>)
 
 add_library(codegen_check_cxx OBJECT EXCLUDE_FROM_ALL ${CODEGEN_CXX_SOURCES})
 set_target_properties(codegen_check_cxx PROPERTIES
                       COMPILE_FLAGS "-Wno-missing-declarations -Wno-unused-variable -Wno-unused-parameter")
 target_include_directories(codegen_check_cxx PRIVATE
-                           $<TARGET_PROPERTY:anjay_static,INTERFACE_INCLUDE_DIRECTORIES>)
+                           $<TARGET_PROPERTY:anjay,INTERFACE_INCLUDE_DIRECTORIES>)
 
 add_dependencies(check codegen_check codegen_check_cxx)

@@ -1,0 +1,41 @@
+0008 # in buf size
+0008 # out buf size
+00 # default tx params
+00 # no response cache
+00 # default mtu
+
+01 # send request
+07 # pass ID, writer, handler
+01 # code: GET
+0000 # options size
+0000 # options capacity
+00 # payload_writer: do nothing in do_stuff
+00 # payload_writer: do not fail
+0000 # payload_writer: payload size
+00 # mock_send: do not fail
+
+03 # handle incoming packet
+1800 # mock_recv: msg size = 24
+60 # mock_recv: ACK, empty token
+45 # mock_recv: code = Content
+0000 # mock_recv: msg id
+d10a08 # mock_recv: BLOCK2, seq_num 0, size 16, more 1
+ff # payload marker
+31323334353637383960616263646520 # "123456789abcdef "
+01 # mock_recv: override msd id/token with last sent
+00 # response_handler: do nothing in do_stuff
+
+# request for the next block
+00 # mock_send: do not fail
+
+03 # handle incoming packet
+2000 # mock_recv: msg size = 32
+68 # mock_recv: ACK, 8B token
+45 # mock_recv: code = Content
+0000 # mock_recv: msg id
+0000000000000000 # mock_recv: token
+d10a10 # mock_recv: BLOCK2, seq_num 1, size 16, more 0
+ff # payload marker
+31323334353637383960616263646520 # "123456789abcdef "
+01 # mock_recv: override msd id/token with last sent
+00 # response_handler: do nothing in do_stuff

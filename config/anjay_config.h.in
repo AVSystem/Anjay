@@ -32,23 +32,28 @@
 #define VISIBILITY_PRIVATE_HEADER_END
 #endif
 
-#cmakedefine AVS_LOG_WITH_TRACE
+#cmakedefine WITH_ANJAY_LOGS
+#cmakedefine WITH_ANJAY_TRACE_LOGS
+
+#ifdef WITH_ANJAY_TRACE_LOGS
+#    define AVS_LOG_WITH_TRACE
+#endif
 
 #cmakedefine WITH_ACCESS_CONTROL
 #cmakedefine WITH_AVS_LOG
-#cmakedefine WITH_BLOCK_DOWNLOAD
-#cmakedefine WITH_BLOCK_RECEIVE
-#cmakedefine WITH_BLOCK_SEND
+#cmakedefine WITH_COAP_DOWNLOAD
 #cmakedefine WITH_BOOTSTRAP
 #cmakedefine WITH_DISCOVER
 #cmakedefine WITH_DOWNLOADER
 #cmakedefine WITH_OBSERVE
 #cmakedefine WITH_HTTP_DOWNLOAD
-#cmakedefine WITH_JSON
+#cmakedefine WITH_LWM2M_JSON
 #cmakedefine WITH_CON_ATTR
 #cmakedefine WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 #cmakedefine WITH_NET_STATS
 #cmakedefine WITH_AVS_PERSISTENCE
+
+#cmakedefine WITH_SSL
 
 #define ANJAY_MAX_PK_OR_IDENTITY_SIZE @MAX_PK_OR_IDENTITY_SIZE@
 #define ANJAY_MAX_SERVER_PK_OR_IDENTITY_SIZE @MAX_SERVER_PK_OR_IDENTITY_SIZE@

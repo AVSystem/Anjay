@@ -30,6 +30,12 @@ Technical Specification, Version 1.0.2 - 9 Feb 2018*, document number
 ``OMA-TS-LightweightM2M-V1_0_2-20180209-A``. In case of ambiguities, existing
 implementations were considered as a reference.
 
+A version that includes support for version 1.1 of the specification
+(``OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A`` and
+``OMA-TS-LightweightM2M_Transport-V1_1_1-20190617-A``), including Composite
+operations, Send method, SenML JSON and CBOR data formats, TCP, SMS and NIDD
+bindings, is :doc:`available commercially <Commercial_support>`.
+
 The following features are **supported**:
 
 - Bootstrap - full support
@@ -53,8 +59,6 @@ The following features are **supported**:
 - Mechanism
 
   - Support for UDP Binding
-  - Support for SMS Binding (:doc:`commercial version <Commercial_support>`
-    only)
 
 The following features are **not implemented**:
 

@@ -30,11 +30,6 @@ from jinja2 import Environment
 C_OBJDEF_TEMPLATE = """\
 static const anjay_dm_object_def_t OBJ_DEF = {
     .oid = {{ oid }},
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(
-{% for res in resources %}
-                {{ res.name_upper }}{{ "" if loop.last else "," }}
-{% endfor %}
-            ),
     .handlers = {
 {% for handler in handlers %}
 {% if handler is string %}
@@ -50,17 +45,9 @@ static const anjay_dm_object_def_t OBJ_DEF = {
 CXX_OBJDEF_TEMPLATE = """\
 namespace {
 
-const uint16_t OBJ_SUPPORTED_RIDS[] = {
-{% for res in resources %}
-    {{ res.name_upper }}{{ "" if loop.last else "," }}
-{% endfor %}
-};
-
 struct ObjDef : public anjay_dm_object_def_t {
     ObjDef() : anjay_dm_object_def_t() {
         oid = {{ oid }};
-        supported_rids.count = AVS_ARRAY_SIZE(OBJ_SUPPORTED_RIDS);
-        supported_rids.rids = OBJ_SUPPORTED_RIDS;
 
 {% for handler in handlers %}
 {% if handler is string %}
@@ -143,46 +130,21 @@ static {{ obj_inst_type }} *find_instance(const {{ obj_repr_type }} *obj,
     return NULL;
 }
 
-static int instance_present(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t iid) {
-    (void) anjay;
-    return find_instance(get_obj(obj_ptr), iid) != NULL;
-}
-
-static int instance_it(anjay_t *anjay,
-                       const anjay_dm_object_def_t *const *obj_ptr,
-                       anjay_iid_t *out,
-                       void **cookie) {
+static int list_instances(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
 
-    AVS_LIST({{ obj_inst_type }}) curr = (AVS_LIST({{ obj_inst_type }}))*cookie;
-    if (!curr) {
-        curr = get_obj(obj_ptr)->instances;
-    } else {
-        curr = AVS_LIST_NEXT(curr);
+    AVS_LIST({{ obj_inst_type }}) it;
+    AVS_LIST_FOREACH(it, get_obj(obj_ptr)->instances) {
+        anjay_dm_emit(ctx, it->iid);
     }
 
-    *out = curr ? curr->iid : ANJAY_IID_INVALID;
-    *cookie = curr;
     return 0;
 }
 
-static anjay_iid_t get_new_iid(AVS_LIST({{ obj_inst_type }}) instances) {
-    anjay_iid_t iid = 1;
-    AVS_LIST({{ obj_inst_type }}) it;
-    AVS_LIST_FOREACH(it, instances) {
-        if (it->iid == iid) {
-            ++iid;
-        } else if (it->iid > iid) {
-            break;
-        }
-    }
-    return iid;
-}
-
 static int init_instance({{ obj_inst_type }} *inst, anjay_iid_t iid) {
-    assert(iid != ANJAY_IID_INVALID);
+    assert(iid != ANJAY_ID_INVALID);
 
     inst->iid = iid;
     // TODO: instance init
@@ -198,10 +160,8 @@ static void release_instance({{ obj_inst_type }} *inst) {
 
 static int instance_create(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
-                           anjay_iid_t *inout_iid,
-                           anjay_ssid_t ssid) {
+                           anjay_iid_t iid) {
     (void) anjay;
-    (void) ssid;
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
     assert(obj);
 
@@ -211,13 +171,8 @@ static int instance_create(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
 
-    if (*inout_iid == ANJAY_IID_INVALID) {
-        *inout_iid = get_new_iid(obj->instances);
-    }
-
-    int result = ANJAY_ERR_INTERNAL;
-    if (*inout_iid == ANJAY_IID_INVALID
-            || (result == init_instance(created, *inout_iid))) {
+    int result = init_instance(created, iid);
+    if (result) {
         AVS_LIST_CLEAR(&created);
         return result;
     }
@@ -276,11 +231,27 @@ static int instance_reset(anjay_t *anjay,
 }
 
 {% endif %}
+static int list_resources(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid,
+                          anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+
+{% for res in obj.resources %}
+    anjay_dm_emit_res(ctx, {{ res.name_upper }},
+                      {{ res.kind_enum }}, ANJAY_DM_RES_PRESENT);
+{% endfor %}
+    return 0;
+}
+
 {% if obj.has_any_readable_resources %}
 static int resource_read(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj_ptr,
                          anjay_iid_t iid,
                          anjay_rid_t rid,
+                         anjay_riid_t riid,
                          anjay_output_ctx_t *ctx) {
     (void) anjay;
 
@@ -311,6 +282,7 @@ static int resource_write(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t iid,
                           anjay_rid_t rid,
+                          anjay_riid_t riid,
                           anjay_input_ctx_t *ctx) {
     (void) anjay;
 
@@ -367,11 +339,42 @@ static int resource_execute(anjay_t *anjay,
 }
 
 {% endif %}
+{% if obj.has_any_multiple_writable_resources %}
+static int resource_reset(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid,
+                          anjay_rid_t rid) {
+    (void) anjay;
+
+    {{ obj_repr_type }} *obj = get_obj(obj_ptr);
+    assert(obj);
+{% if obj.multiple %}
+    {{ obj_inst_type }} *inst = find_instance(obj, iid);
+    assert(inst);
+{% else %}
+    assert(iid == 0);
+{% endif %}
+
+    switch (rid) {
+{% for res in obj.resources %}
+{% if res.multiple and 'W' in res.operations %}
+    case {{ res.name_upper }}:
+        return ANJAY_ERR_NOT_IMPLEMENTED; // TODO: remove all Resource Instances
+
+{% endif %}
+{% endfor %}
+    default:
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
+}
+
+{% endif %}
 {% if obj.has_any_multiple_resources %}
-static int resource_dim(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj_ptr,
-                        anjay_iid_t iid,
-                        anjay_rid_t rid) {
+static int list_resource_instances(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid,
+                                   anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
 
     {{ obj_repr_type }} *obj = get_obj(obj_ptr);
@@ -387,12 +390,13 @@ static int resource_dim(anjay_t *anjay,
 {% for res in obj.resources %}
 {% if res.multiple %}
     case {{ res.name_upper }}:
-        return 1; // TODO
+        // anjay_dm_emit(ctx, ...); // TODO
+        return 0;
 
 {% endif %}
 {% endfor %}
     default:
-        return ANJAY_DM_DIM_INVALID;
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
 
@@ -451,6 +455,17 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
         return _sanitize_macro_name('RID_' + self.name.upper())
 
     @property
+    def kind_enum(self) -> str:
+        if self.operations not in {'R', 'W', 'RW', 'E'}:
+            raise AssertionError('unexpected operations: ' + self.operations)
+        result = 'ANJAY_DM_RES_' + self.operations
+        if self.multiple:
+            if 'E' in self.operations:
+                raise AssertionError('multiple-instance executable resources are not supported')
+            result += 'M'
+        return result
+
+    @property
     def read_handler(self) -> Optional[str]:
         if 'R' not in self.operations:
             return None
@@ -473,18 +488,13 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                 raise AssertionError('unexpected type: ' + type)
 
         if not self.multiple:
-            return '\n    return %s; // TODO' % (get_ret_func(self.type) % ('ctx',))
+            return textwrap.indent(textwrap.dedent("""
+                    assert(riid == ANJAY_ID_INVALID);
+                    return %s; // TODO"""), '    ') % (get_ret_func(self.type) % ('ctx',))
         else:
-            return ' ' + textwrap.dedent("""\
-                    {
-                        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-                        int result = 0;
-                        if (!array || (result = anjay_ret_array_index(array, 0))
-                                || (result = %s)) {
-                            return result ? result : ANJAY_ERR_INTERNAL;
-                        }
-                        return anjay_ret_array_finish(array);
-                    }""") % (get_ret_func(self.type) % ('array',))
+            return textwrap.indent(textwrap.dedent("""
+                    // TODO: extract Resource Instance
+                    return %s; // TODO"""), '    ') % (get_ret_func(self.type) % ('ctx',))
 
 
     @property
@@ -502,15 +512,15 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                  '    bool finished;\n'
                  '    size_t bytes_read',
                  'anjay_get_bytes(%s,\n'
-                 '                &bytes_read,\n'
-                 '                &finished,\n'
-                 '                value,\n'
-                 '                sizeof(value))'),
+                 '                           &bytes_read,\n'
+                 '                           &finished,\n'
+                 '                           value,\n'
+                 '                           sizeof(value))'),
             (('time',),           'int64_t value',   'anjay_get_i64(%s, &value)'),
             (('objlnk',),
-                'anjay_oid_t oid;\n'
-                '    anjay_iid_t iid',
-                'anjay_get_objlnk(%s, &oid, &iid)'),
+                'anjay_oid_t objlnk_oid;\n'
+                '    anjay_iid_t objlnk_iid',
+                'anjay_get_objlnk(%s, &objlnk_oid, &objlnk_iid)'),
         ]
 
 
@@ -522,32 +532,21 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
                 raise AssertionError('unexpected type: ' + type)
 
         local_def, get_func = get_get_func(self.type.lower())
+        get_func %= ('ctx',)
         if not self.multiple:
-            get_func %= ('ctx',)
             return ' ' + textwrap.dedent("""\
                     {
+                        assert(riid == ANJAY_ID_INVALID);
                         %s; // TODO
                         return %s; // TODO
-                    }""") % (local_def, textwrap.indent(get_func, len('    return ') * ' ').strip())
+                    }""") % (local_def, get_func)
         else:
-            get_func %= ('array',)
             return ' ' + textwrap.dedent("""\
                     {
-                        anjay_input_ctx_t *array = anjay_get_array(ctx);
-                        if (!array) {
-                            return ANJAY_ERR_INTERNAL;
-                        }
-
-                        anjay_riid_t riid;
-                        int result = 0;
+                        // TODO: extract Resource Instance
                         %s; // TODO
-                        while (result == 0
-                               && (result = anjay_get_array_index(array, &riid)) == 0) {
-                            result = %s; // TODO
-                        }
-
-                        return result;
-                    }""") % (local_def, textwrap.indent(get_func, len('        result = ') * ' ').strip())
+                        return %s; // TODO
+                    }""") % (local_def, get_func)
 
     @classmethod
     def from_etree(cls, res: Element) -> 'ResourceDef':
@@ -593,6 +592,10 @@ class ObjectDef(collections.namedtuple('ObjectDef',
         return any(res.multiple for res in self.resources)
 
     @property
+    def has_any_multiple_writable_resources(self) -> bool:
+        return any((res.multiple and 'W' in res.operations) for res in self.resources)
+
+    @property
     def needs_instance_reset_handler(self) -> bool:
         return self.multiple or self.has_any_writable_resources
 
@@ -616,27 +619,27 @@ def generate_object_boilerplate(obj_ddf_xml: str, cxx: bool):
 
     handlers = []
     if obj.multiple:
-        handlers.append(('instance_it', 'instance_it'))
-        handlers.append(('instance_present', 'instance_present'))
+        handlers.append(('list_instances', 'list_instances'))
         handlers.append(('instance_create', 'instance_create'))
         handlers.append(('instance_remove', 'instance_remove'))
     else:
-        handlers.append(('instance_it', 'anjay_dm_instance_it_SINGLE'))
-        handlers.append(('instance_present', 'anjay_dm_instance_present_SINGLE'))
+        handlers.append(('list_instances', 'anjay_dm_list_instances_SINGLE'))
 
     if obj.needs_instance_reset_handler:
         handlers.append(('instance_reset', 'instance_reset'))
 
     handlers.append('')
-    handlers.append(('resource_present', 'anjay_dm_resource_present_TRUE'))
+    handlers.append(('list_resources', 'list_resources'))
     if obj.has_any_readable_resources:
         handlers.append(('resource_read', 'resource_read'))
     if obj.has_any_writable_resources:
         handlers.append(('resource_write', 'resource_write'))
     if obj.has_any_executable_resources:
         handlers.append(('resource_execute', 'resource_execute'))
+    if obj.has_any_multiple_writable_resources:
+        handlers.append(('resource_reset', 'resource_reset'))
     if obj.has_any_multiple_resources:
-        handlers.append(('resource_dim', 'resource_dim'))
+        handlers.append(('list_resource_instances', 'list_resource_instances'))
 
     handlers.append('')
     handlers.append('// TODO: implement these if transactional write/create is required')
@@ -661,7 +664,7 @@ def generate_object_boilerplate(obj_ddf_xml: str, cxx: bool):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Parses an LwM2M object definition XML and generates Anjay object skeleton')
+    parser = argparse.ArgumentParser(description='Parses an LwM2M object definition XML and generates Anjay object skeleton')
     parser.add_argument('-i', '--input', help='Input filename or - to read from stdin')
     parser.add_argument('-o', '--output', default='/dev/stdout', help='Output filename (default: stdout)')
     parser.add_argument('-x', '--c++', dest='cxx', action='store_true', help='Generate C++ code (default: C)')

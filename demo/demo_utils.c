@@ -101,7 +101,7 @@ int demo_parse_long(const char *str, long *out_value) {
     char *endptr = NULL;
 
     errno = 0;
-    long value = strtol(str, &endptr, 10);
+    long value = strtol(str, &endptr, 0);
 
     if ((errno == ERANGE && (value == LONG_MAX || value == LONG_MIN))
             || (errno != 0 && value == 0) || endptr == str || !endptr

@@ -238,7 +238,7 @@ static uint32_t crc32_for_byte(uint8_t value) {
 static void crc32(uint32_t *inout_crc, const uint8_t *data, size_t size) {
     static uint32_t LOOKUP_TABLE[256];
     if (!*LOOKUP_TABLE) {
-        for (size_t i = 0; i < ARRAY_SIZE(LOOKUP_TABLE); ++i) {
+        for (size_t i = 0; i < AVS_ARRAY_SIZE(LOOKUP_TABLE); ++i) {
             LOOKUP_TABLE[i] = crc32_for_byte((uint8_t) i);
         }
     }
@@ -333,12 +333,12 @@ static int store_etag(avs_persistence_context_t *ctx,
                       const anjay_etag_t *etag) {
     // UINT16_MAX is a magic value that means "there is no ETag"
     uint16_t size16 = (etag ? etag->size : UINT16_MAX);
-    int result = avs_persistence_u16(ctx, &size16);
-    if (!result && etag) {
-        result = avs_persistence_bytes(ctx, (uint8_t *) (intptr_t) etag->value,
-                                       etag->size);
+    avs_error_t err = avs_persistence_u16(ctx, &size16);
+    if (avs_is_ok(err) && etag) {
+        err = avs_persistence_bytes(ctx, (uint8_t *) (intptr_t) etag->value,
+                                    etag->size);
     }
-    return result;
+    return avs_is_ok(err) ? 0 : -1;
 }
 
 static int write_persistence_file(const char *path,
@@ -347,16 +347,18 @@ static int write_persistence_file(const char *path,
                                   char *download_file,
                                   bool filename_administratively_set,
                                   const anjay_etag_t *etag) {
-    avs_stream_abstract_t *stream = NULL;
-    avs_persistence_context_t ctx;
+    avs_stream_t *stream = avs_stream_file_create(path, AVS_STREAM_FILE_WRITE);
+    avs_persistence_context_t ctx =
+            avs_persistence_store_context_create(stream);
     int8_t result8 = (int8_t) result;
     int retval = 0;
-    if (!(stream = avs_stream_file_create(path, AVS_STREAM_FILE_WRITE))
-            || ((ctx = avs_persistence_store_context_create(stream)), 0)
-            || avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1)
-            || avs_persistence_string(&ctx, (char **) (intptr_t) &uri)
-            || avs_persistence_string(&ctx, &download_file)
-            || avs_persistence_bool(&ctx, &filename_administratively_set)
+    if (!stream
+            || avs_is_err(avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1))
+            || avs_is_err(
+                       avs_persistence_string(&ctx, (char **) (intptr_t) &uri))
+            || avs_is_err(avs_persistence_string(&ctx, &download_file))
+            || avs_is_err(avs_persistence_bool(&ctx,
+                                               &filename_administratively_set))
             || store_etag(&ctx, etag)) {
         demo_log(ERROR, "Could not write firmware state persistence file");
         retval = -1;
@@ -528,19 +530,20 @@ static int fw_perform_upgrade(void *fw_) {
     return -1;
 }
 
-static int fw_get_security_info(void *fw_,
-                                avs_net_security_info_t *out_security_info,
-                                const char *download_uri) {
+static int fw_get_security_config(void *fw_,
+                                  anjay_security_config_t *out_security_config,
+                                  const char *download_uri) {
     fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
     (void) download_uri;
-    memcpy(out_security_info, &fw->security_info, sizeof(fw->security_info));
+    memset(out_security_config, 0, sizeof(*out_security_config));
+    out_security_config->security_info = fw->security_info;
     return 0;
 }
 
-static avs_coap_tx_params_t g_tx_params;
+static avs_coap_udp_tx_params_t g_tx_params;
 
-static avs_coap_tx_params_t fw_get_coap_tx_params(void *user_ptr,
-                                                  const char *download_uri) {
+static avs_coap_udp_tx_params_t
+fw_get_coap_tx_params(void *user_ptr, const char *download_uri) {
     (void) user_ptr;
     (void) download_uri;
     return g_tx_params;
@@ -560,20 +563,21 @@ static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
 static int restore_etag(avs_persistence_context_t *ctx, anjay_etag_t **etag) {
     assert(etag && !*etag);
     uint16_t size16;
-    int result = avs_persistence_u16(ctx, &size16);
-    if (!result && size16 <= UINT8_MAX) {
+    avs_error_t err = avs_persistence_u16(ctx, &size16);
+    if (avs_is_ok(err) && size16 <= UINT8_MAX) {
         *etag = (anjay_etag_t *) avs_malloc(offsetof(anjay_etag_t, value)
                                             + size16);
         if (!*etag) {
             return -1;
         }
         (*etag)->size = (uint8_t) size16;
-        if ((result = avs_persistence_bytes(ctx, (*etag)->value, size16))) {
+        if (avs_is_err((err = avs_persistence_bytes(ctx, (*etag)->value,
+                                                    size16)))) {
             avs_free(*etag);
             *etag = NULL;
         }
     }
-    return result;
+    return avs_is_ok(err) ? 0 : -1;
 }
 
 static bool is_valid_result(int8_t result) {
@@ -601,19 +605,21 @@ typedef struct {
 static persistence_file_data_t read_persistence_file(const char *path) {
     persistence_file_data_t data;
     memset(&data, 0, sizeof(data));
-    avs_stream_abstract_t *stream = NULL;
-    avs_persistence_context_t ctx;
+    avs_stream_t *stream = NULL;
     int8_t result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_NEUTRAL;
     if ((stream = avs_stream_file_create(path, AVS_STREAM_FILE_READ))) {
         // invalid or empty but existing file still signifies success
         result8 = (int8_t) ANJAY_FW_UPDATE_INITIAL_SUCCESS;
     }
-    if (!stream || ((ctx = avs_persistence_restore_context_create(stream)), 0)
-            || avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1)
+    avs_persistence_context_t ctx =
+            avs_persistence_restore_context_create(stream);
+    if (!stream
+            || avs_is_err(avs_persistence_bytes(&ctx, (uint8_t *) &result8, 1))
             || !is_valid_result(result8)
-            || avs_persistence_string(&ctx, &data.uri)
-            || avs_persistence_string(&ctx, &data.download_file)
-            || avs_persistence_bool(&ctx, &data.filename_administratively_set)
+            || avs_is_err(avs_persistence_string(&ctx, &data.uri))
+            || avs_is_err(avs_persistence_string(&ctx, &data.download_file))
+            || avs_is_err(avs_persistence_bool(
+                       &ctx, &data.filename_administratively_set))
             || restore_etag(&ctx, &data.etag)) {
         demo_log(WARNING,
                  "Invalid data in the firmware state persistence file");
@@ -645,7 +651,7 @@ int firmware_update_install(anjay_t *anjay,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
-                            const avs_coap_tx_params_t *tx_params,
+                            const avs_coap_udp_tx_params_t *tx_params,
                             anjay_fw_update_result_t delayed_result) {
     int result = -1;
 
@@ -653,9 +659,9 @@ int firmware_update_install(anjay_t *anjay,
     fw->persistence_file = persistence_file;
     if (security_info) {
         memcpy(&fw->security_info, security_info, sizeof(fw->security_info));
-        FW_UPDATE_HANDLERS.get_security_info = fw_get_security_info;
+        FW_UPDATE_HANDLERS.get_security_config = fw_get_security_config;
     } else {
-        FW_UPDATE_HANDLERS.get_security_info = NULL;
+        FW_UPDATE_HANDLERS.get_security_config = NULL;
     }
 
     if (tx_params) {

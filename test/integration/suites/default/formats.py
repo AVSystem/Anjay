@@ -17,12 +17,14 @@
 from framework.lwm2m_test import *
 from framework.test_utils import *
 
+
 class WriteRequest:
     def __init__(self, value, instance=1, resource=None, error=coap.Code.RES_BAD_REQUEST):
         self.resource = resource
         self.instance = instance
         self.value = value
         self.error = error
+
 
 class FormatTest:
     # From RFC7252, section 12.3 "CoAP Content-Format Registry":
@@ -44,7 +46,7 @@ class FormatTest:
             super().setUp()
             self.create_instance(self.serv, oid=OID.Test, iid=1)
 
-        def run_write_scenario(self, format, extra_scenarios = []):
+        def run_write_scenario(self, format, extra_scenarios=[]):
             for scenario in FormatTest.COMMON_BAD_WRITE_SCENARIOS + extra_scenarios:
                 if scenario.resource is None:
                     self.write_instance(self.serv, oid=OID.Test, iid=scenario.instance,
@@ -76,10 +78,13 @@ class PlaintextWritesTest(FormatTest.Test):
         self.run_write_scenario(format=coap.ContentFormat.TEXT_PLAIN,
                                 extra_scenarios=[
                                     # Writing the string/bytes isn't really interesting. Let's at least try with an empty payload.
-                                    WriteRequest(resource=RID.Test.ResString, value=b'', error=None),
-                                    WriteRequest(resource=RID.Test.ResRawBytes, value=b'', error=None),
+                                    WriteRequest(
+                                        resource=RID.Test.ResString, value=b'', error=None),
+                                    WriteRequest(
+                                        resource=RID.Test.ResRawBytes, value=b'', error=None),
                                     # Internal buffer for storing objlnk is sizeof("65535:65535") bytes only, let's overflow it.
-                                    WriteRequest(resource=RID.Test.ResObjlnk, value=b'x'*32),
+                                    WriteRequest(
+                                        resource=RID.Test.ResObjlnk, value=b'x'*32),
                                     # Write on instance? This isn't the right format.
                                     WriteRequest(value=b'nothing really'),
                                     WriteRequest(value=b''),
@@ -88,14 +93,14 @@ class PlaintextWritesTest(FormatTest.Test):
 
 class OpaqueWritesTest(FormatTest.Test):
     def runTest(self):
-        # Almost nothing is supported for Opaque content format. We may only write
-        # to raw byte resources, but we don't in this test, because it is tested
-        # somewhere else.
+        # Almost nothing is supported for Opaque content format.
         self.run_write_scenario(format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
                                 extra_scenarios=[
-                                    WriteRequest(resource=RID.Test.ResString, value=b''),
+                                    WriteRequest(
+                                        resource=RID.Test.ResString, value=b''),
                                     # Basically the only thing that'd work with opaque contexts.
-                                    WriteRequest(resource=RID.Test.ResRawBytes, value=b'', error=None),
+                                    WriteRequest(
+                                        resource=RID.Test.ResRawBytes, value=b'', error=None),
                                     # Write on instance? This isn't the right format.
                                     WriteRequest(value=b'nothing really'),
                                     WriteRequest(value=b''),
@@ -106,12 +111,12 @@ class TlvWritesTest(FormatTest.Test):
     def runTest(self):
         self.run_write_scenario(format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
                                 extra_scenarios=[
-                                    WriteRequest(resource=RID.Test.ResString, value=b''),
-                                    WriteRequest(resource=RID.Test.ResRawBytes, value=b''),
+                                    WriteRequest(
+                                        resource=RID.Test.ResString, value=b''),
+                                    WriteRequest(
+                                        resource=RID.Test.ResRawBytes, value=b''),
                                     # Empty write on instance does nothing, but at least it succeeds for TLV contexts.
-                                    WriteRequest(value=b'', error=None),
-                                    # Bad instance content.
-                                    WriteRequest(value=b'bad-instance-data'),
+                                    WriteRequest(value=b'', error=None)
                                 ])
 
 
@@ -129,28 +134,24 @@ class UnsupportedFormatWritesTest(FormatTest.Test):
                                     expect_error_code=coap.Code.RES_UNSUPPORTED_CONTENT_FORMAT)
 
 
-class NonTlvAndNonJsonCreate(FormatTest.Test):
-    def runTest(self):
-        # Note: iid=1 is already taken away, by parent's setUp().
-        IID = 2
 
-        for known_format in coap.ContentFormat.iter_nonlegacy():
-            if known_format in (coap.ContentFormat.APPLICATION_LWM2M_TLV,
-                                coap.ContentFormat.APPLICATION_LWM2M_JSON,
-                                coap.ContentFormat.APPLICATION_LINK):
-                continue
-
-            self.create_instance_with_arbitrary_payload(self.serv, oid=OID.Test, iid=IID,
-                                                        format=known_format,
-                                                        expect_error_code=coap.Code.RES_BAD_REQUEST)
-
-        self.create_instance_with_arbitrary_payload(self.serv, oid=OID.Test, iid=IID,
-                                                    format=FormatTest.UNSUPPORTED_FORMAT,
-                                                    expect_error_code=coap.Code.RES_UNSUPPORTED_CONTENT_FORMAT)
 
 class TlvRIDIncompatibleWithPathRID(FormatTest.Test):
     def runTest(self):
         self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter,
                             format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
-                            content=TLV.make_resource(resource_id=RID.Test.ResBytesSize, content=123).serialize(),
+                            content=TLV.make_resource(
+                                resource_id=RID.Test.ResBytesSize, content=123).serialize(),
                             expect_error_code=coap.Code.RES_BAD_REQUEST)
+
+
+class PreferredHierarchicalContentFormat_1_0(test_suite.Lwm2mSingleServerTest,
+                                             test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--prefer-hierarchical-formats'])
+
+    def runTest(self):
+        self.assertEqual(coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                         self.read_instance(self.serv, oid=OID.Device, iid=0).get_content_format())
+
+

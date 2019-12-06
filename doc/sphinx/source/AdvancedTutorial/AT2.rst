@@ -20,7 +20,7 @@ Anjay's persistence in general
 ------------------------------
 
 Anjay supports persistence of data to ``avs_commons`` generic `stream`
-(``avs_stream_abstract_t``). Underlying implementation of a stream may
+(``avs_stream_t``). Underlying implementation of a stream may
 abstract any kind of storage access. ``avs_commons`` itself provides:
 
 - file streams,
@@ -46,31 +46,31 @@ support persistence:
 .. snippet-source:: modules/security/include_public/anjay/security.h
 
     // ...
-    int anjay_security_object_persist(anjay_t *anjay,
-                                      avs_stream_abstract_t *out_stream);
+    avs_error_t anjay_security_object_persist(anjay_t *anjay,
+                                              avs_stream_t *out_stream);
     // ...
-    int anjay_security_object_restore(anjay_t *anjay,
-                                      avs_stream_abstract_t *in_stream);
+    avs_error_t anjay_security_object_restore(anjay_t *anjay,
+                                              avs_stream_t *in_stream);
 
 
 .. snippet-source:: modules/server/include_public/anjay/server.h
 
     // ...
-    int anjay_server_object_persist(anjay_t *anjay,
-                                    avs_stream_abstract_t *out_stream);
+    avs_error_t anjay_server_object_persist(anjay_t *anjay,
+                                            avs_stream_t *out_stream);
     // ...
-    int anjay_server_object_restore(anjay_t *anjay,
-                                    avs_stream_abstract_t *in_stream);
+    avs_error_t anjay_server_object_restore(anjay_t *anjay,
+                                            avs_stream_t *in_stream);
 
 
 .. snippet-source:: modules/access_control/include_public/anjay/access_control.h
 
     // ...
-    int anjay_access_control_persist(anjay_t *anjay,
-                                     avs_stream_abstract_t *out_stream);
+    avs_error_t anjay_access_control_persist(anjay_t *anjay,
+                                             avs_stream_t *out_stream);
     // ...
-    int anjay_access_control_restore(anjay_t *anjay,
-                                     avs_stream_abstract_t *in_stream);
+    avs_error_t anjay_access_control_restore(anjay_t *anjay,
+                                             avs_stream_t *in_stream);
 
 .. note::
     All of the mentioned objects have complicated semantics, which is why you
@@ -91,7 +91,7 @@ startup (if a valid persistence file exists).
     int persist_objects(anjay_t *anjay) {
         avs_log(tutorial, INFO, "Persisting objects to %s", PERSISTENCE_FILENAME);
 
-        avs_stream_abstract_t *file_stream =
+        avs_stream_t *file_stream =
                 avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_WRITE);
 
         if (!file_stream) {
@@ -99,23 +99,24 @@ startup (if a valid persistence file exists).
             return -1;
         }
 
-        int result;
+        int result = -1;
 
-        if ((result = anjay_security_object_persist(anjay, file_stream))) {
+        if (avs_is_err(anjay_security_object_persist(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not persist Security Object");
             goto finish;
         }
 
-        if ((result = anjay_server_object_persist(anjay, file_stream))) {
+        if (avs_is_err(anjay_server_object_persist(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not persist Server Object");
             goto finish;
         }
 
-        if ((result = anjay_attr_storage_persist(anjay, file_stream))) {
+        if (avs_is_err(anjay_attr_storage_persist(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not persist LwM2M attribute storage");
             goto finish;
         }
 
+        result = 0;
     finish:
         avs_stream_cleanup(&file_stream);
         return result;
@@ -143,28 +144,31 @@ startup (if a valid persistence file exists).
             return result;
         }
 
-        avs_stream_abstract_t *file_stream =
+        avs_stream_t *file_stream =
                 avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_READ);
 
         if (!file_stream) {
             return -1;
         }
 
-        if ((result = anjay_security_object_restore(anjay, file_stream))) {
+        result = -1;
+
+        if (avs_is_err(anjay_security_object_restore(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not restore Security Object");
             goto finish;
         }
 
-        if ((result = anjay_server_object_restore(anjay, file_stream))) {
+        if (avs_is_err(anjay_server_object_restore(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not restore Server Object");
             goto finish;
         }
 
-        if ((result = anjay_attr_storage_restore(anjay, file_stream))) {
+        if (avs_is_err(anjay_attr_storage_restore(anjay, file_stream))) {
             avs_log(tutorial, ERROR, "Could not restore LwM2M attribute storage");
             goto finish;
         }
 
+        result = 0;
     finish:
         avs_stream_cleanup(&file_stream);
         return result;

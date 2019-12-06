@@ -29,9 +29,12 @@ class Context {
     mbedtls_ssl_cache_context session_cache_;
     std::shared_ptr<SecurityInfo> security_;
     bool debug_;
+    std::string connection_id_;
 
 public:
-    Context(std::shared_ptr<SecurityInfo> security, bool debug);
+    Context(std::shared_ptr<SecurityInfo> security,
+            bool debug,
+            std::string connection_id);
     ~Context();
 
     mbedtls_ssl_cache_context *session_cache() {
@@ -40,6 +43,10 @@ public:
 
     std::shared_ptr<SecurityInfo> security() const {
         return security_;
+    }
+
+    std::string connection_id() const {
+        return connection_id_;
     }
 
     bool debug() const {

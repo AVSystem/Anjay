@@ -61,7 +61,7 @@ static anjay_iid_t get_new_iid(AVS_LIST(sec_instance_t) instances) {
 
 static int assign_iid(sec_repr_t *repr, anjay_iid_t *inout_iid) {
     *inout_iid = get_new_iid(repr->instances);
-    if (*inout_iid == ANJAY_IID_INVALID) {
+    if (*inout_iid == ANJAY_ID_INVALID) {
         return -1;
     }
     return 0;
@@ -70,7 +70,7 @@ static int assign_iid(sec_repr_t *repr, anjay_iid_t *inout_iid) {
 static int add_instance(sec_repr_t *repr,
                         const anjay_security_instance_t *instance,
                         anjay_iid_t *inout_iid) {
-    if (*inout_iid == ANJAY_IID_INVALID) {
+    if (*inout_iid == ANJAY_ID_INVALID) {
         if (assign_iid(repr, inout_iid)) {
             return -1;
         }
@@ -80,7 +80,7 @@ static int add_instance(sec_repr_t *repr,
     AVS_LIST(sec_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(sec_instance_t);
     if (!new_instance) {
-        security_log(ERROR, "Out of memory");
+        security_log(ERROR, "out of memory");
         return -1;
     }
     new_instance->iid = *inout_iid;
@@ -89,7 +89,7 @@ static int add_instance(sec_repr_t *repr,
         goto error;
     }
     new_instance->is_bootstrap = instance->bootstrap_server;
-    new_instance->udp_security_mode = instance->security_mode;
+    new_instance->security_mode = instance->security_mode;
     new_instance->holdoff_s = instance->client_holdoff_s;
     new_instance->bs_timeout_s = instance->bootstrap_timeout_s;
     if (_anjay_raw_buffer_clone(
@@ -118,6 +118,16 @@ static int add_instance(sec_repr_t *repr,
                 })) {
         goto error;
     }
+
+    new_instance->has_is_bootstrap = true;
+    new_instance->has_security_mode = true;
+    if (new_instance->is_bootstrap) {
+        new_instance->has_ssid = false;
+    } else {
+        new_instance->ssid = instance->ssid;
+        new_instance->has_ssid = true;
+    }
+
     new_instance->sms_security_mode = instance->sms_security_mode;
     if (_anjay_raw_buffer_clone(
                 &new_instance->sms_key_params,
@@ -138,20 +148,11 @@ static int add_instance(sec_repr_t *repr,
     if (instance->server_sms_number) {
         new_instance->sms_number = avs_strdup(instance->server_sms_number);
     }
-    new_instance->has_is_bootstrap = true;
-    new_instance->has_udp_security_mode = true;
     new_instance->has_sms_security_mode =
             !_anjay_sec_validate_sms_security_mode(
                     (int32_t) instance->sms_security_mode);
     new_instance->has_sms_key_params = !!instance->sms_key_parameters;
     new_instance->has_sms_secret_key = !!instance->sms_secret_key;
-
-    if (new_instance->is_bootstrap) {
-        new_instance->has_ssid = false;
-    } else {
-        new_instance->ssid = instance->ssid;
-        new_instance->has_ssid = true;
-    }
 
     AVS_LIST(sec_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -192,53 +193,59 @@ static int del_instance(sec_repr_t *repr, anjay_iid_t iid) {
     return ANJAY_ERR_NOT_FOUND;
 }
 
-static int sec_resource_operations(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                   anjay_rid_t rid,
-                                   anjay_dm_resource_op_mask_t *out) {
+static int sec_list_resources(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr,
+                              anjay_iid_t iid,
+                              anjay_dm_resource_list_ctx_t *ctx) {
     (void) anjay;
-    (void) obj_ptr;
-    (void) rid;
-    *out = ANJAY_DM_RESOURCE_OP_NONE;
-    return 0;
-}
-
-static inline int
-sec_resource_present(anjay_t *anjay,
-                     const anjay_dm_object_def_t *const *obj_ptr,
-                     anjay_iid_t iid,
-                     anjay_rid_t rid) {
-    (void) anjay;
-    (void) iid;
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     assert(inst);
 
-    switch (rid) {
-    case SEC_RES_SMS_SECURITY_MODE:
-        return inst->has_sms_security_mode;
-    case SEC_RES_SMS_BINDING_KEY_PARAMS:
-        return inst->has_sms_key_params;
-    case SEC_RES_SMS_BINDING_SECRET_KEYS:
-        return inst->has_sms_secret_key;
-    case SEC_RES_SERVER_SMS_NUMBER:
-        return !!inst->sms_number;
-    case SEC_RES_SHORT_SERVER_ID:
-        return inst->has_ssid;
-    case SEC_RES_CLIENT_HOLD_OFF_TIME:
-        return inst->holdoff_s >= 0;
-    case SEC_RES_BOOTSTRAP_TIMEOUT:
-        return inst->bs_timeout_s >= 0;
-    default:
-        return 1;
-    }
+    anjay_dm_emit_res(ctx, SEC_RES_LWM2M_SERVER_URI, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, SEC_RES_BOOTSTRAP_SERVER, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SECURITY_MODE, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, SEC_RES_PK_OR_IDENTITY, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SERVER_PK, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SECRET_KEY, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SMS_SECURITY_MODE, ANJAY_DM_RES_R,
+                      inst->has_sms_security_mode ? ANJAY_DM_RES_PRESENT
+                                                  : ANJAY_DM_RES_ABSENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SMS_BINDING_KEY_PARAMS, ANJAY_DM_RES_R,
+                      inst->has_sms_key_params ? ANJAY_DM_RES_PRESENT
+                                               : ANJAY_DM_RES_ABSENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SMS_BINDING_SECRET_KEYS, ANJAY_DM_RES_R,
+                      inst->has_sms_secret_key ? ANJAY_DM_RES_PRESENT
+                                               : ANJAY_DM_RES_ABSENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SERVER_SMS_NUMBER, ANJAY_DM_RES_R,
+                      inst->sms_number ? ANJAY_DM_RES_PRESENT
+                                       : ANJAY_DM_RES_ABSENT);
+    anjay_dm_emit_res(ctx, SEC_RES_SHORT_SERVER_ID, ANJAY_DM_RES_R,
+                      inst->has_ssid ? ANJAY_DM_RES_PRESENT
+                                     : ANJAY_DM_RES_ABSENT);
+    anjay_dm_emit_res(ctx, SEC_RES_CLIENT_HOLD_OFF_TIME, ANJAY_DM_RES_R,
+                      inst->holdoff_s >= 0 ? ANJAY_DM_RES_PRESENT
+                                           : ANJAY_DM_RES_ABSENT);
+    anjay_dm_emit_res(ctx, SEC_RES_BOOTSTRAP_TIMEOUT, ANJAY_DM_RES_R,
+                      inst->bs_timeout_s >= 0 ? ANJAY_DM_RES_PRESENT
+                                              : ANJAY_DM_RES_ABSENT);
+    return 0;
 }
 
 static int sec_read(anjay_t *anjay,
                     const anjay_dm_object_def_t *const *obj_ptr,
                     anjay_iid_t iid,
                     anjay_rid_t rid,
+                    anjay_riid_t riid,
                     anjay_output_ctx_t *ctx) {
     (void) anjay;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
 
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     assert(inst);
@@ -248,8 +255,8 @@ static int sec_read(anjay_t *anjay,
         return anjay_ret_string(ctx, inst->server_uri);
     case SEC_RES_BOOTSTRAP_SERVER:
         return anjay_ret_bool(ctx, inst->is_bootstrap);
-    case SEC_RES_UDP_SECURITY_MODE:
-        return anjay_ret_i32(ctx, (int32_t) inst->udp_security_mode);
+    case SEC_RES_SECURITY_MODE:
+        return anjay_ret_i32(ctx, (int32_t) inst->security_mode);
     case SEC_RES_SERVER_PK:
         return anjay_ret_bytes(ctx, inst->server_public_key.data,
                                inst->server_public_key.size);
@@ -259,6 +266,12 @@ static int sec_read(anjay_t *anjay,
     case SEC_RES_SECRET_KEY:
         return anjay_ret_bytes(ctx, inst->private_cert_or_psk_key.data,
                                inst->private_cert_or_psk_key.size);
+    case SEC_RES_SHORT_SERVER_ID:
+        return anjay_ret_i32(ctx, (int32_t) inst->ssid);
+    case SEC_RES_CLIENT_HOLD_OFF_TIME:
+        return anjay_ret_i32(ctx, inst->holdoff_s);
+    case SEC_RES_BOOTSTRAP_TIMEOUT:
+        return anjay_ret_i32(ctx, inst->bs_timeout_s);
     case SEC_RES_SMS_SECURITY_MODE:
         return anjay_ret_i32(ctx, (int32_t) inst->sms_security_mode);
     case SEC_RES_SMS_BINDING_KEY_PARAMS:
@@ -269,14 +282,8 @@ static int sec_read(anjay_t *anjay,
                                inst->sms_secret_key.size);
     case SEC_RES_SERVER_SMS_NUMBER:
         return anjay_ret_string(ctx, inst->sms_number);
-    case SEC_RES_SHORT_SERVER_ID:
-        return anjay_ret_i32(ctx, (int32_t) inst->ssid);
-    case SEC_RES_CLIENT_HOLD_OFF_TIME:
-        return anjay_ret_i32(ctx, inst->holdoff_s);
-    case SEC_RES_BOOTSTRAP_TIMEOUT:
-        return anjay_ret_i32(ctx, inst->bs_timeout_s);
     default:
-        security_log(ERROR, "not implemented: get /0/%u/%u", iid, rid);
+        AVS_UNREACHABLE("Read handler called on unknown Security resource");
         return ANJAY_ERR_NOT_IMPLEMENTED;
     }
 }
@@ -285,8 +292,11 @@ static int sec_write(anjay_t *anjay,
                      const anjay_dm_object_def_t *const *obj_ptr,
                      anjay_iid_t iid,
                      anjay_rid_t rid,
+                     anjay_riid_t riid,
                      anjay_input_ctx_t *ctx) {
     (void) anjay;
+    (void) riid;
+    assert(riid == ANJAY_ID_INVALID);
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
     sec_instance_t *inst = find_instance(repr, iid);
     int retval;
@@ -302,10 +312,10 @@ static int sec_write(anjay_t *anjay,
             inst->has_is_bootstrap = true;
         }
         return retval;
-    case SEC_RES_UDP_SECURITY_MODE:
-        if (!(retval = _anjay_sec_fetch_udp_security_mode(
-                      ctx, &inst->udp_security_mode))) {
-            inst->has_udp_security_mode = true;
+    case SEC_RES_SECURITY_MODE:
+        if (!(retval = _anjay_sec_fetch_security_mode(ctx,
+                                                      &inst->security_mode))) {
+            inst->has_security_mode = true;
         }
         return retval;
     case SEC_RES_PK_OR_IDENTITY:
@@ -314,6 +324,15 @@ static int sec_write(anjay_t *anjay,
         return _anjay_io_fetch_bytes(ctx, &inst->server_public_key);
     case SEC_RES_SECRET_KEY:
         return _anjay_io_fetch_bytes(ctx, &inst->private_cert_or_psk_key);
+    case SEC_RES_SHORT_SERVER_ID:
+        if (!(retval = _anjay_sec_fetch_short_server_id(ctx, &inst->ssid))) {
+            inst->has_ssid = true;
+        }
+        return retval;
+    case SEC_RES_CLIENT_HOLD_OFF_TIME:
+        return anjay_get_i32(ctx, &inst->holdoff_s);
+    case SEC_RES_BOOTSTRAP_TIMEOUT:
+        return anjay_get_i32(ctx, &inst->bs_timeout_s);
     case SEC_RES_SMS_SECURITY_MODE:
         if (!(retval = _anjay_sec_fetch_sms_security_mode(
                       ctx, &inst->sms_security_mode))) {
@@ -332,65 +351,39 @@ static int sec_write(anjay_t *anjay,
         return retval;
     case SEC_RES_SERVER_SMS_NUMBER:
         return _anjay_io_fetch_string(ctx, &inst->sms_number);
-    case SEC_RES_SHORT_SERVER_ID:
-        if (!(retval = _anjay_sec_fetch_short_server_id(ctx, &inst->ssid))) {
-            inst->has_ssid = true;
-        }
-        return retval;
-    case SEC_RES_CLIENT_HOLD_OFF_TIME:
-        return anjay_get_i32(ctx, &inst->holdoff_s);
-    case SEC_RES_BOOTSTRAP_TIMEOUT:
-        return anjay_get_i32(ctx, &inst->bs_timeout_s);
     default:
+        AVS_UNREACHABLE("Write handler called on unknown Security resource");
         return ANJAY_ERR_NOT_FOUND;
     }
 }
 
-static int sec_instance_it(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj_ptr,
-                           anjay_iid_t *out,
-                           void **cookie) {
+static int sec_list_instances(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr,
+                              anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
 
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
-    AVS_LIST(sec_instance_t) curr = (AVS_LIST(sec_instance_t)) *cookie;
-
-    if (!curr) {
-        curr = repr->instances;
-    } else {
-        curr = AVS_LIST_NEXT(curr);
+    AVS_LIST(sec_instance_t) it;
+    AVS_LIST_FOREACH(it, repr->instances) {
+        anjay_dm_emit(ctx, it->iid);
     }
-
-    *out = (anjay_iid_t) (curr ? curr->iid : ANJAY_IID_INVALID);
-    *cookie = curr;
     return 0;
-}
-
-static int sec_instance_present(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
-                                anjay_iid_t iid) {
-    (void) anjay;
-    return find_instance(_anjay_sec_get(obj_ptr), iid) != NULL;
 }
 
 static int sec_instance_create(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t *inout_iid,
-                               anjay_ssid_t ssid) {
+                               anjay_iid_t iid) {
     (void) anjay;
-    (void) ssid;
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
-    if (*inout_iid == ANJAY_IID_INVALID && assign_iid(repr, inout_iid)) {
-        return ANJAY_ERR_INTERNAL;
-    }
+    assert(iid != ANJAY_ID_INVALID);
 
     AVS_LIST(sec_instance_t) created = AVS_LIST_NEW_ELEMENT(sec_instance_t);
     if (!created) {
         return ANJAY_ERR_INTERNAL;
     }
 
-    created->iid = *inout_iid;
-    created->ssid = *inout_iid;
+    created->iid = iid;
+    created->ssid = iid;
 
     AVS_LIST(sec_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -427,7 +420,7 @@ static int
 sec_transaction_validate(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj_ptr) {
     (void) anjay;
-    return _anjay_sec_transaction_validate_impl(_anjay_sec_get(obj_ptr));
+    return _anjay_sec_transaction_validate_impl(anjay, _anjay_sec_get(obj_ptr));
 }
 
 static int
@@ -452,27 +445,12 @@ static int sec_instance_reset(anjay_t *anjay,
 
 static const anjay_dm_object_def_t SECURITY = {
     .oid = ANJAY_DM_OID_SECURITY,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(SEC_RES_LWM2M_SERVER_URI,
-                                              SEC_RES_BOOTSTRAP_SERVER,
-                                              SEC_RES_UDP_SECURITY_MODE,
-                                              SEC_RES_PK_OR_IDENTITY,
-                                              SEC_RES_SERVER_PK,
-                                              SEC_RES_SECRET_KEY,
-                                              SEC_RES_SMS_SECURITY_MODE,
-                                              SEC_RES_SMS_BINDING_KEY_PARAMS,
-                                              SEC_RES_SMS_BINDING_SECRET_KEYS,
-                                              SEC_RES_SERVER_SMS_NUMBER,
-                                              SEC_RES_SHORT_SERVER_ID,
-                                              SEC_RES_CLIENT_HOLD_OFF_TIME,
-                                              SEC_RES_BOOTSTRAP_TIMEOUT),
     .handlers = {
-        .instance_it = sec_instance_it,
-        .instance_present = sec_instance_present,
+        .list_instances = sec_list_instances,
         .instance_create = sec_instance_create,
         .instance_remove = sec_instance_remove,
         .instance_reset = sec_instance_reset,
-        .resource_present = sec_resource_present,
-        .resource_operations = sec_resource_operations,
+        .list_resources = sec_list_resources,
         .resource_read = sec_read,
         .resource_write = sec_write,
         .transaction_begin = sec_transaction_begin,
@@ -504,7 +482,7 @@ int anjay_security_object_add_instance(
 
     const bool modified_since_persist = repr->modified_since_persist;
     int retval = add_instance(repr, instance, inout_iid);
-    if (!retval && (retval = _anjay_sec_object_validate(repr))) {
+    if (!retval && (retval = _anjay_sec_object_validate(anjay, repr))) {
         (void) del_instance(repr, *inout_iid);
         if (!modified_since_persist) {
             /* validation failed and so in the end no instace is added */
@@ -529,8 +507,7 @@ static void security_purge(sec_repr_t *repr) {
     _anjay_sec_destroy_instances(&repr->saved_instances);
 }
 
-static void security_delete(anjay_t *anjay, void *repr) {
-    (void) anjay;
+static void security_delete(void *repr) {
     security_purge((sec_repr_t *) repr);
     avs_free(repr);
 }
@@ -566,7 +543,7 @@ int anjay_security_object_install(anjay_t *anjay) {
 
     sec_repr_t *repr = (sec_repr_t *) avs_calloc(1, sizeof(sec_repr_t));
     if (!repr) {
-        security_log(ERROR, "Out of memory");
+        security_log(ERROR, "out of memory");
         return -1;
     }
 

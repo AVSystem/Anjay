@@ -18,11 +18,21 @@ import binascii
 import struct
 import tempfile
 import collections
+import sys
 
 from typing import Optional
 
 from .lwm2m import coap
 from .firmware_package import FirmwareUpdateForcedError, make_firmware_package
+
+if sys.version_info[0] == 3 and sys.version_info[1] < 7:
+    # based on https://stackoverflow.com/a/18348004/2339636
+    def namedtuple(*args, defaults=None, **kwargs):
+        cls = collections.namedtuple(*args, **kwargs)
+        cls.__new__.__defaults__ = defaults
+        return cls
+else:
+    namedtuple = collections.namedtuple
 
 
 class SequentialMsgIdGenerator:
@@ -71,11 +81,14 @@ class OID:
     CellularConnectivity = 10
     ApnConnectionProfile = 11
     Portfolio = 16
-    Test = 1337
-    ExtDevInfo = 11111
-    IpPing = 12359
-    Geopoints = 12360
-    DownloadDiagnostics = 12361
+    BinaryAppDataContainer = 19
+    EventLog = 20
+    Oscore = 21
+    Test = 33605
+    ExtDevInfo = 33606
+    IpPing = 33607
+    GeoPoints = 33608
+    DownloadDiagnostics = 33609
 
 
 class RID:
@@ -241,7 +254,6 @@ class RID:
         ResBytes = 5
         ResBytesSize = 6
         ResBytesBurst = 7
-        ResEmpty = 8
         ResInitIntArray = 9
         ResRawBytes = 10
         ResOpaqueArray = 11
@@ -251,6 +263,7 @@ class RID:
         ResString = 15
         ResObjlnk = 16
         ResBytesZeroBegin = 17
+        ResDouble = 18
 
     class Portfolio:
         Identity = 0
@@ -258,67 +271,161 @@ class RID:
         AuthData = 2
         AuthStatus = 3
 
+    class ExtDevInfo:
+        ObuId = 0
+        PlateNumber = 1
+        Imei = 2
+        Imsi = 3
+        Iccid = 4
+        GprsRssi = 5
+        GprsPlmn = 6
+        GprsUlModulation = 7
+        GprsDlModulation = 8
+        GprsUlFrequency = 9
+        GprsDlFrequency = 10
+        RxBytes = 11
+        TxBytes = 12
+        NumIncomingRetransmissions = 13
+        NumOutgoingRetransmissions = 14
+        Uptime = 15
+
+    class IpPing:
+        Hostname = 0
+        Repetitions = 1
+        TimeoutMs = 2
+        BlockSize = 3
+        Dscp = 4
+        Run = 5
+        State = 6
+        SuccessCount = 7
+        ErrorCount = 8
+        AvgTimeMs = 9
+        MinTimeMs = 10
+        MaxTimeMs = 11
+        TimeStdevUs = 12
+
+    class DownloadDiagnostics:
+        State = 0
+        Url = 1
+        RomTimeUs = 2
+        BomTimeUs = 3
+        EomTimeUs = 4
+        TotalBytes = 5
+        Run = 6
+
+    class Oscore:
+        MasterSecret = 0
+        SenderId = 1
+        RecipientId = 2
+        AeadAlgorithm = 3
+        HmacAlgorithm = 4
+        MasterSalt = 5
+
+    class BinaryAppDataContainer:
+        Data = 0
+        DataPriority = 1
+        DataCreationTime = 2
+        DataDescription = 3
+        DataFormat = 4
+        AppId = 5
+
+    class EventLog:
+        LogClass = 4010
+        LogStart = 4011
+        LogStop = 4012
+        LogStatus = 4013
+        LogData = 4014
+        LogDataFormat = 4015
+
 
 class _Lwm2mResourcePathHelper:
     @classmethod
-    def from_rid_object(cls, rid_obj, oid, multi_instance=False):
+    def from_rid_object(cls, rid_obj, oid, multi_instance=False, version=None):
         return cls(resources={k: v for k, v in rid_obj.__dict__.items() if isinstance(v, int)},
                    oid=oid,
-                   multi_instance=multi_instance)
+                   multi_instance=multi_instance,
+                   version=version)
 
-    def __init__(self, resources, oid, iid=None, multi_instance=False):
-        self._resources = resources
-        self._oid = oid
-        self._is_multi_instance = multi_instance
+    def __init__(self, resources, oid, iid=None, multi_instance=False, version=None):
+        self.resources = resources
+        self.oid = oid
+        self.is_multi_instance = multi_instance
+        self.version = version
 
         if iid is not None:
-            self._iid = iid
+            self.iid = iid
         else:
-            self._iid = 0 if not self._is_multi_instance else None
+            self.iid = 0 if not self.is_multi_instance else None
 
     def __getitem__(self, iid):
-        assert self._iid is None, "IID specified more than once"
-        assert self._is_multi_instance or self._iid == 0, "IID must be 0 on single-instance objects"
+        assert self.iid is None, "IID specified more than once"
+        assert self.is_multi_instance or self.iid == 0, "IID must be 0 on single-instance objects"
 
-        return type(self)(self._resources, oid=self._oid, iid=iid, multi_instance=True)
+        return type(self)(self.resources, oid=self.oid, iid=iid,
+                          multi_instance=True, version=self.version)
 
     def __getattr__(self, name):
-        if name in self._resources:
-            assert self._iid is not None, "IID not specified. Use ObjectName[IID].ResourceName"
-            return '/%d/%d/%d' % (self._oid, self._iid, self._resources[name])
+        if name in self.resources:
+            assert self.iid is not None, "IID not specified. Use ObjectName[IID].ResourceName"
+            return '/%d/%d/%d' % (self.oid, self.iid, self.resources[name])
         raise AttributeError
 
 
 class ResPath:
-    Security = _Lwm2mResourcePathHelper.from_rid_object(RID.Security, oid=OID.Security, multi_instance=True)
-    Server = _Lwm2mResourcePathHelper.from_rid_object(RID.Server, oid=OID.Server, multi_instance=True)
-    Device = _Lwm2mResourcePathHelper.from_rid_object(RID.Device, oid=OID.Device)
+    Security = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Security, oid=OID.Security, multi_instance=True)
+    Server = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Server, oid=OID.Server, multi_instance=True)
+    AccessControl = _Lwm2mResourcePathHelper.from_rid_object(RID.AccessControl,
+                                                             oid=OID.AccessControl,
+                                                             multi_instance=True)
+    Device = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Device, oid=OID.Device)
     ConnectivityMonitoring = _Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityMonitoring,
                                                                       oid=OID.ConnectivityMonitoring)
-    FirmwareUpdate = _Lwm2mResourcePathHelper.from_rid_object(RID.FirmwareUpdate, oid=OID.FirmwareUpdate)
-    Location = _Lwm2mResourcePathHelper.from_rid_object(RID.Location, oid=OID.Location)
+    FirmwareUpdate = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.FirmwareUpdate, oid=OID.FirmwareUpdate)
+    Location = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Location, oid=OID.Location)
     ConnectivityStatistics = _Lwm2mResourcePathHelper.from_rid_object(RID.ConnectivityStatistics,
                                                                       oid=OID.ConnectivityStatistics)
     CellularConnectivity = _Lwm2mResourcePathHelper.from_rid_object(RID.CellularConnectivity,
-                                                                    oid=OID.CellularConnectivity)
+                                                                    oid=OID.CellularConnectivity,
+                                                                    version='1.1')
     ApnConnectionProfile = _Lwm2mResourcePathHelper.from_rid_object(RID.ApnConnectionProfile,
                                                                     oid=OID.ApnConnectionProfile,
                                                                     multi_instance=True)
-    Test = _Lwm2mResourcePathHelper.from_rid_object(RID.Test, oid=OID.Test, multi_instance=True)
-    Portfolio = _Lwm2mResourcePathHelper.from_rid_object(RID.Portfolio, oid=OID.Portfolio, multi_instance=True)
+    Test = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Test, oid=OID.Test, multi_instance=True)
+    Portfolio = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Portfolio, oid=OID.Portfolio, multi_instance=True)
+    ExtDevInfo = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.ExtDevInfo, oid=OID.ExtDevInfo)
+    IpPing = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.IpPing, oid=OID.IpPing)
+    GeoPoints = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.GeoPoints, oid=OID.GeoPoints, multi_instance=True)
+    DownloadDiagnostics = _Lwm2mResourcePathHelper.from_rid_object(RID.DownloadDiagnostics,
+                                                                   oid=OID.DownloadDiagnostics)
+    BinaryAppDataContainer = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.BinaryAppDataContainer, oid=OID.BinaryAppDataContainer, multi_instance=True)
+    EventLog = _Lwm2mResourcePathHelper.from_rid_object(RID.EventLog, oid=OID.EventLog)
+
+    @classmethod
+    def objects(cls):
+        results = []
+        for _, field in cls.__dict__.items():
+            if isinstance(field, _Lwm2mResourcePathHelper):
+                results.append(field)
+        return sorted(results, key=lambda field: field.oid)
 
 
-class TxParams:
-    def __init__(self,
-                 ack_timeout=2.0,
-                 ack_random_factor=1.5,
-                 max_retransmit=4.0,
-                 max_latency=100.0):
-        self.ack_timeout = ack_timeout
-        self.ack_random_factor = ack_random_factor
-        self.max_retransmit = max_retransmit
-        self.max_latency = max_latency
-
+class TxParams(namedtuple('TxParams',
+                          ['ack_timeout',
+                           'ack_random_factor',
+                           'max_retransmit',
+                           'max_latency'],
+                          defaults=(2.0, 1.5, 4.0, 100.0))):
     def max_transmit_wait(self):
         return self.ack_timeout * self.ack_random_factor * (2**(self.max_retransmit + 1) - 1)
 
@@ -344,4 +451,3 @@ class TxParams:
 
 
 DEMO_ENDPOINT_NAME = 'urn:dev:os:0023C7-000001'
-DEMO_LWM2M_VERSION = '1.0'

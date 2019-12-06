@@ -23,13 +23,14 @@
 
 #include <anjay/io.h>
 
+#include <anjay_modules/dm_utils.h>
 #include <anjay_modules/raw_buffer.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef int anjay_input_ctx_constructor_t(anjay_input_ctx_t **out,
-                                          avs_stream_abstract_t **stream_ptr,
-                                          bool autoclose);
+                                          avs_stream_t **stream_ptr,
+                                          const anjay_uri_path_t *request_uri);
 
 anjay_input_ctx_constructor_t _anjay_input_tlv_create;
 

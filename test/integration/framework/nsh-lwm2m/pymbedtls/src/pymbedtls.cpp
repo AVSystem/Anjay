@@ -22,6 +22,8 @@
 
 #include "pybind11_interop.hpp"
 
+#include <mbedtls/config.h>
+
 using namespace std;
 
 namespace {
@@ -55,9 +57,17 @@ PYBIND11_MODULE(pymbedtls, m) {
                  py::arg("key_file"));
 
     py::class_<Context, shared_ptr<Context>>(m, "Context")
-            .def(py::init<shared_ptr<SecurityInfo>, bool>(),
+            .def(py::init<shared_ptr<SecurityInfo>, bool, std::string>(),
                  py::arg("security"),
-                 py::arg("debug") = false);
+                 py::arg("debug") = false,
+                 py::arg("connection_id") = "")
+            .def_static("supports_connection_id", []() -> bool {
+#if defined(MBEDTLS_SSL_DTLS_CONNECTION_ID)
+                return true;
+#else
+                    return false;
+#endif
+            });
 
     py::class_<ServerSocket>(m, "ServerSocket")
             .def(py::init<shared_ptr<Context>, py::object>(),
@@ -75,7 +85,7 @@ PYBIND11_MODULE(pymbedtls, m) {
                          py::arg("context"),
                          py::arg("socket"),
                          py::arg("socket_type"))
-                    .def("connect", &Socket::connect, py::arg("address_port"),
+                    .def("connect", &Socket::connect, py::arg("host_port"),
                          py::arg("handshake_timeouts_s") = py::none())
                     .def("send", &Socket::send)
                     .def("sendall", &Socket::send)

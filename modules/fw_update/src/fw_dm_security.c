@@ -34,7 +34,14 @@ VISIBILITY_SOURCE_BEGIN
 #define DEFAULT_COAPS_PORT "5684"
 
 static bool url_service_matches(const avs_url_t *left, const avs_url_t *right) {
-    if (strcmp(avs_url_protocol(left), avs_url_protocol(right)) != 0) {
+    const char *protocol_left = avs_url_protocol(left);
+    const char *protocol_right = avs_url_protocol(right);
+    // NULL protocol means that the URL is protocol-relative (e.g.
+    // //avsystem.com). In that case protocol is essentially undefined (i.e.,
+    // dependent on where such link is contained). We don't consider two
+    // undefined protocols as equivalent, similar to comparing NaNs.
+    if (!protocol_left || !protocol_right
+            || strcmp(protocol_left, protocol_right) != 0) {
         return false;
     }
     const char *port_left = avs_url_port(left);
@@ -48,13 +55,20 @@ static bool url_service_matches(const avs_url_t *left, const avs_url_t *right) {
     return strcmp(port_left, port_right) == 0;
 }
 
-typedef struct {
-    avs_net_security_info_t security_info;
-    anjay_server_dtls_keys_t dtls_keys;
-} result_buffer_t;
+static bool has_valid_keys(const avs_net_security_info_t *info) {
+    switch (info->mode) {
+    case AVS_NET_SECURITY_CERTIFICATE:
+        return info->data.cert.server_cert_validation
+               || info->data.cert.client_cert.desc.info.buffer.buffer_size > 0
+               || info->data.cert.client_key.desc.info.buffer.buffer_size > 0;
+    case AVS_NET_SECURITY_PSK:
+        return info->data.psk.identity_size > 0 || info->data.psk.psk_size > 0;
+    }
+    return false;
+}
 
 typedef struct {
-    avs_net_security_info_t *result;
+    anjay_security_config_t *result;
     const avs_url_t *url;
 } try_security_instance_args_t;
 
@@ -70,50 +84,40 @@ static int try_security_instance(anjay_t *anjay,
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
                                ANJAY_DM_RID_SECURITY_SERVER_URI);
 
-    if (_anjay_dm_res_read_string(anjay, &path, raw_server_url,
-                                  sizeof(raw_server_url))) {
-        fw_log(WARNING,
-               "could not read LwM2M server URI from /%" PRIu16 "/%" PRIu16
-               "/%" PRIu16,
-               path.oid, path.iid, path.rid);
+    if (_anjay_dm_read_resource_string(anjay, &path, raw_server_url,
+                                       sizeof(raw_server_url))) {
+        fw_log(WARNING, "could not read LwM2M server URI from %s",
+               ANJAY_DEBUG_MAKE_PATH(&path));
         return ANJAY_FOREACH_CONTINUE;
     }
 
-    avs_url_t *server_url = avs_url_parse(raw_server_url);
+    avs_url_t *server_url = avs_url_parse_lenient(raw_server_url);
     if (!server_url) {
-        fw_log(WARNING,
-               "Could not parse URL from /%" PRIu16 "/%" PRIu16 "/%" PRIu16
-               ": %s",
-               path.oid, path.iid, path.rid, raw_server_url);
+        fw_log(WARNING, "Could not parse URL from %s: %s",
+               ANJAY_DEBUG_MAKE_PATH(&path), raw_server_url);
         return ANJAY_FOREACH_CONTINUE;
     }
 
     int retval = ANJAY_FOREACH_CONTINUE;
-    if (strcmp(avs_url_host(server_url), avs_url_host(args->url)) == 0) {
+    if (avs_url_host(server_url)
+            && strcmp(avs_url_host(server_url), avs_url_host(args->url)) == 0) {
         bool service_matches = url_service_matches(server_url, args->url);
         if (!args->result || service_matches) {
-            result_buffer_t *new_result =
-                    (result_buffer_t *) avs_calloc(1, sizeof(result_buffer_t));
-            int get_result = _anjay_get_security_info(
-                    anjay, &new_result->security_info, &new_result->dtls_keys,
-                    security_iid, ANJAY_CONNECTION_UDP);
-            if (get_result) {
+            anjay_security_config_t *new_result =
+                    _anjay_get_security_config(anjay, security_iid);
+            if (!new_result) {
                 fw_log(WARNING,
                        "Could not read security information for server "
                        "/%" PRIu16 "/%" PRIu16,
                        ANJAY_DM_OID_SECURITY, security_iid);
-            } else if (!new_result->dtls_keys.pk_or_identity_size
-                       && !new_result->dtls_keys.server_pk_or_identity_size
-                       && !new_result->dtls_keys.secret_key_size) {
+            } else if (!has_valid_keys(&new_result->security_info)) {
                 fw_log(DEBUG,
                        "Server /%" PRIu16 "/%" PRIu16
                        " does not use encrypted connection, ignoring",
                        ANJAY_DM_OID_SECURITY, security_iid);
             } else {
                 avs_free(args->result);
-                AVS_STATIC_ASSERT(offsetof(result_buffer_t, security_info) == 0,
-                                  result_buffer_security_info_offset);
-                args->result = &new_result->security_info;
+                args->result = new_result;
                 new_result = NULL;
                 if (service_matches) {
                     retval = ANJAY_FOREACH_BREAK;
@@ -127,7 +131,7 @@ static int try_security_instance(anjay_t *anjay,
     return retval;
 }
 
-avs_net_security_info_t *
+anjay_security_config_t *
 anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
     assert(anjay);
 

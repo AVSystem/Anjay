@@ -22,7 +22,7 @@ class RequestTooLarge(test_suite.Lwm2mSingleServerTest):
         super().setUp(extra_cmdline_args=['-I', '1000'])
 
     def runTest(self):
-        req = Lwm2mWrite('/5/0/0', random_stuff(1200))
+        req = Lwm2mWrite(ResPath.FirmwareUpdate.Package, random_stuff(1200))
         self.serv.send(req)
         res = self.serv.recv()
         self.assertMsgEqual(

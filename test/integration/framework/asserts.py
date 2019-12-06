@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 from typing import Optional
 
 from .lwm2m.messages import *
-from .test_utils import DEMO_ENDPOINT_NAME, DEMO_LWM2M_VERSION
+from .test_utils import DEMO_ENDPOINT_NAME
+from framework.lwm2m.coap.transport import Transport
 
 
 class Lwm2mAsserts:
@@ -26,24 +28,20 @@ class Lwm2mAsserts:
         Convenience assert that checks if a byte-string PATH is in the form
         /0/1/2. The PATH may contain 1-3 16bit integer segments.
         """
-        self.assertEqual(b'/'[0], path[0],
-                         ('LwM2M path %s does not start with /'
-                          % (hexlify_nonprintable(path),)))
+        self.assertEqual('/', path[0],
+                         ('LwM2M path %r does not start with /' % (path,)))
 
-        segments = path[1:].split(b'/')
+        segments = path[1:].split('/')
         if len(segments) > 3:
-            self.fail(('LwM2M path too long (expected at most 3 segments): %s'
-                       % (hexlify_nonprintable(path),)))
+            self.fail('LwM2M path too long (expected at most 3 segments): %r' % (path,))
 
         for segment in segments:
             try:
-                self.assertTrue(0 <= int(segment.decode('ascii')) <= 2 ** 16 - 1,
+                self.assertTrue(0 <= int(segment) <= 2 ** 16 - 1,
                                 ('LwM2M path segment not in range [0, 65535] '
-                                 'in path %s' % (hexlify_nonprintable(path),)))
-            except (ValueError, UnicodeDecodeError):
-                self.fail('segment %s is not an integer in link: %s'
-                          % (hexlify_nonprintable(segment),
-                             hexlify_nonprintable(path)))
+                                 'in path %r' % (path,)))
+            except ValueError:
+                self.fail('segment rs is not an integer in link: %r' % (segment, path))
 
     def assertLinkListValid(self, link_list):
         """
@@ -51,16 +49,15 @@ class Lwm2mAsserts:
         Link format https://tools.ietf.org/html/rfc6690 and all links are
         valid LwM2M paths.
         """
-        if link_list == b'':
+        if link_list == '':
             self.fail('empty link list')
 
-        for obj in link_list.split(b','):
-            path, *query = obj.split(b';')
-            self.assertTrue((len(path) >= len(b'</0>')
-                             and path[0] == b'<'[0]
-                             and path[-1] == b'>'[0]),
-                            'invalid link: %s in %s' % (hexlify_nonprintable(obj),
-                                                        hexlify_nonprintable(link_list)))
+        for obj in link_list.split(','):
+            path, *query = obj.split(';')
+            self.assertTrue((len(path) >= len('</0>')
+                             and path[0] == '<'
+                             and path[-1] == '>'),
+                            'invalid link: %r in %r' % (obj, link_list))
             self.assertLwm2mPathValid(path[1:-1])
             # TODO: check query strings
 
@@ -76,14 +73,16 @@ class Lwm2mAsserts:
         msg_prefix = msg + ': ' if msg else ''
 
         try:
-            self.assertEqual(expected.version, actual.version,
-                             msg_prefix + 'unexpected CoAP version')
-            self.assertEqual(expected.type, actual.type,
-                             msg_prefix + 'unexpected CoAP type')
+            if actual.version is not None:
+                self.assertEqual(expected.version, actual.version,
+                                 msg_prefix + 'unexpected CoAP version')
+            if actual.type is not None:
+                self.assertEqual(expected.type, actual.type,
+                                 msg_prefix + 'unexpected CoAP type')
             self.assertEqual(expected.code, actual.code,
                              msg_prefix + 'unexpected CoAP code')
 
-            if expected.msg_id is not ANY and actual.msg_id is not ANY:
+            if expected.msg_id is not ANY and actual.msg_id is not ANY and actual.msg_id is not None:
                 self.assertEqual(expected.msg_id, actual.msg_id,
                                  msg_prefix + 'unexpected CoAP message ID')
             if expected.token is not ANY and actual.token is not ANY:
@@ -102,21 +101,53 @@ class Lwm2mAsserts:
 
     DEFAULT_REGISTER_ENDPOINT = '/rd/demo'
 
+    @staticmethod
+    def _expected_register_message(version, endpoint, lifetime, binding, lwm2m11_queue_mode):
+        # Note: the specific order of Uri-Query options does not matter, but
+        # our packet equality comparator does not distinguish betwen "ordered"
+        # and "unordered" options, so we expect a specific order of these
+        # query-strings. dict() does not guarantee the order of items until
+        # 3.7, so because we want to still work on 3.5, an explicitly ordered
+        # list is used instead.
+        query = [
+            'lwm2m=%s' % (version,),
+            'ep=%s' % (endpoint,),
+            'lt=%s' % (lifetime if lifetime is not None else 86400,)
+        ]
+        if binding is not None:
+            query.append('b=%s' % (binding,))
+        if lwm2m11_queue_mode:
+            query.append('Q')
+        return Lwm2mRegister('/rd?' + '&'.join(query))
+
     def assertDemoRegisters(self,
                             server=None,
-                            version=DEMO_LWM2M_VERSION,
+                            version='1.0',
                             location=DEFAULT_REGISTER_ENDPOINT,
+                            endpoint=DEMO_ENDPOINT_NAME,
                             lifetime=None,
                             timeout_s=2,
-                            respond=True):
+                            respond=True,
+                            binding=None,
+                            lwm2m11_queue_mode=False,
+                            reject=False):
+        # passing a float instead of an integer results in a disaster
+        # (serializes as e.g. lt=4.0 instead of lt=4), which makes the
+        # assertion fail
+        if lifetime is not None:
+            self.assertIsInstance(lifetime, int, msg="lifetime MUST be an integer")
+
         serv = server or self.serv
 
         pkt = serv.recv(timeout_s=timeout_s)
-        expected = Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (version, DEMO_ENDPOINT_NAME,
-                                                               lifetime if lifetime is not None else 86400))
-        self.assertMsgEqual(expected, pkt)
+        self.assertMsgEqual(self._expected_register_message(version, endpoint, lifetime, binding, lwm2m11_queue_mode), pkt)
+        self.assertIsNotNone(pkt.content)
+        self.assertGreater(len(pkt.content), 0)
         if respond:
-            serv.send(Lwm2mCreated(location=location, msg_id=pkt.msg_id, token=pkt.token))
+            if reject:
+                serv.send(Lwm2mErrorResponse(code=coap.Code.RES_UNAUTHORIZED, msg_id=pkt.msg_id, token=pkt.token))
+            else:
+                serv.send(Lwm2mCreated(location=location, msg_id=pkt.msg_id, token=pkt.token))
         return pkt
 
     def assertDemoUpdatesRegistration(self,
@@ -145,14 +176,16 @@ class Lwm2mAsserts:
             serv.send(Lwm2mChanged.matching(pkt)())
         return pkt
 
-    def assertDemoDeregisters(self, server=None, path=DEFAULT_REGISTER_ENDPOINT, timeout_s=1):
+    def assertDemoDeregisters(self, server=None, path=DEFAULT_REGISTER_ENDPOINT, timeout_s=1, reset=True):
         serv = server or self.serv
 
         pkt = serv.recv(timeout_s=timeout_s)
         self.assertMsgEqual(Lwm2mDeregister(path), pkt)
 
         serv.send(Lwm2mDeleted(msg_id=pkt.msg_id, token=pkt.token))
-        serv.reset()
+        if reset:
+            serv.reset()
+
 
     def assertDtlsReconnect(self, server=None, timeout_s=1):
         serv = server or self.serv
@@ -162,15 +195,18 @@ class Lwm2mAsserts:
         self.assertIn('0x6780', raised.exception.args[0])  # -0x6780 == MBEDTLS_ERR_SSL_CLIENT_RECONNECT
 
     def assertPktIsDtlsClientHello(self, pkt, seq_number=ANY):
-        header = b'\x16'  # Content Type: Handshake
-        header += b'\xfe\xfd'  # Version: DTLS 1.2
-        header += b'\x00\x00'  # Epoch: 0
+        if seq_number is not ANY and seq_number >= 2 ** 48:
+            raise RuntimeError(
+                "Sorry, encoding of sequence number greater than 2**48 - 1 is not supported")
 
-        if seq_number is not ANY:
-            if seq_number >= 2**48:
-                raise RuntimeError("Sorry, encoding of sequence number greater than 2**48 - 1 is not supported")
+        allowed_headers = set()
+        for version in (b'\xfe\xfd', b'\xfe\xff'):  # DTLS v1.0 or DTLS v1.2
+            header = b'\x16'  # Content Type: Handshake
+            header += version
+            header += b'\x00\x00'  # Epoch: 0
+            if seq_number is not ANY:
+                # Sequence number is 48bit in length.
+                header += seq_number.to_bytes(48 // 8, byteorder='big')
+            allowed_headers.add(header)
 
-            # Sequence number is 48bit in length.
-            header += seq_number.to_bytes(48 // 8, byteorder='big')
-
-        self.assertEqual(pkt[:len(header)], header)
+        self.assertIn(pkt[:len(next(iter(allowed_headers)))], allowed_headers)

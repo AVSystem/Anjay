@@ -23,7 +23,7 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-typedef void anjay_dm_module_deleter_t(anjay_t *anjay, void *arg);
+typedef void anjay_dm_module_deleter_t(void *arg);
 
 typedef struct {
     /**

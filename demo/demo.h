@@ -32,12 +32,15 @@ typedef struct {
     char data[1]; // actually a VLA, but struct cannot be empty
 } anjay_demo_string_t;
 
+typedef int anjay_demo_object_get_instances_t(const anjay_dm_object_def_t **,
+                                              AVS_LIST(anjay_iid_t) *);
 typedef void anjay_demo_object_deleter_t(const anjay_dm_object_def_t **);
 typedef void anjay_demo_object_notify_t(anjay_t *,
                                         const anjay_dm_object_def_t **);
 
 typedef struct {
     const anjay_dm_object_def_t **obj_ptr;
+    anjay_demo_object_get_instances_t *get_instances_func;
     anjay_demo_object_notify_t *time_dependent_notify_func;
     anjay_demo_object_deleter_t *release_func;
 } anjay_demo_object_t;

@@ -22,13 +22,16 @@
 #include <anjay/core.h>
 
 #define TEST_ENV(Data)                                                         \
-    avs_stream_abstract_t *stream = NULL;                                      \
+    avs_stream_t *stream = NULL;                                               \
     AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, sizeof(Data)));  \
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, Data, sizeof(Data) - 1)); \
     anjay_input_ctx_t *ctx;                                                    \
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_tlv_create(&ctx, &stream, true));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_tlv_create(                           \
+            &ctx, &stream, &MAKE_OBJECT_PATH(ANJAY_DM_OID_ACCESS_CONTROL)));
 
-#define TEST_TEARDOWN _anjay_input_ctx_destroy(&ctx)
+#define TEST_TEARDOWN               \
+    _anjay_input_ctx_destroy(&ctx); \
+    avs_stream_cleanup(&stream);
 
 AVS_UNIT_TEST(input_array, example) {
     TEST_ENV(              // example from spec 6.3.3.2
@@ -48,110 +51,80 @@ AVS_UNIT_TEST(input_array, example) {
             "\xC1\x03\x01" // Resource 3 - ACL owner == 1
     );
 
-    anjay_id_type_t type;
-    uint16_t id;
+    anjay_uri_path_t path;
     int32_t value;
 
-    // check IDs for the first object
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(ctx, &type, &id));
-    AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_IID);
-    AVS_UNIT_ASSERT_EQUAL(id, 0);
-
+    // check paths for the first object
     {
-        anjay_input_ctx_t *obj = _anjay_input_nested_ctx(ctx);
-        AVS_UNIT_ASSERT_NOT_NULL(obj);
-
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(obj, &type, &id));
-        AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_RID);
-        AVS_UNIT_ASSERT_EQUAL(id, 0);
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(obj, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
+        AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
+                &path, &MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, 0, 0)));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 3);
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
 
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(obj, &type, &id));
-        AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_RID);
-        AVS_UNIT_ASSERT_EQUAL(id, 1);
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(obj, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
+        AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
+                &path, &MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, 0, 1)));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 1);
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
 
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(obj, &type, &id));
-        AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_RID);
-        AVS_UNIT_ASSERT_EQUAL(id, 2);
-        {
-            anjay_input_ctx_t *array = anjay_get_array(obj);
-            AVS_UNIT_ASSERT_NOT_NULL(array);
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
+        AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
+                &path,
+                &MAKE_RESOURCE_INSTANCE_PATH(
+                        ANJAY_DM_OID_ACCESS_CONTROL, 0, 2, 1)));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_EQUAL(value, -32);
 
-            AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(array, &type, &id));
-            AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_RIID);
-            AVS_UNIT_ASSERT_EQUAL(id, 1);
-            AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(array, &value));
-            AVS_UNIT_ASSERT_EQUAL(value, -32);
-            AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(array));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
+        AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
+                &path,
+                &MAKE_RESOURCE_INSTANCE_PATH(
+                        ANJAY_DM_OID_ACCESS_CONTROL, 0, 2, 2)));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_EQUAL(value, -128);
 
-            AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(array, &type, &id));
-            AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_RIID);
-            AVS_UNIT_ASSERT_EQUAL(id, 2);
-            AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(array, &value));
-            AVS_UNIT_ASSERT_EQUAL(value, -128);
-            AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(array));
-
-            AVS_UNIT_ASSERT_EQUAL(_anjay_input_get_id(array, &type, &id),
-                                  ANJAY_GET_INDEX_END);
-        }
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
-
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_id(obj, &type, &id));
-        AVS_UNIT_ASSERT_EQUAL(type, ANJAY_ID_RID);
-        AVS_UNIT_ASSERT_EQUAL(id, 3);
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(obj, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
+        AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
+                &path, &MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, 0, 3)));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 1);
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
-
-        AVS_UNIT_ASSERT_EQUAL(_anjay_input_get_id(obj, &type, &id),
-                              ANJAY_GET_INDEX_END);
     }
     _anjay_input_next_entry(ctx);
 
     // do a half-assed job decoding the second one
     {
-        anjay_input_ctx_t *obj = _anjay_input_nested_ctx(ctx);
-        AVS_UNIT_ASSERT_NOT_NULL(obj);
-
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(obj, &value));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 4);
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
 
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(obj, &value));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 2);
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
 
-        {
-            anjay_input_ctx_t *array = anjay_get_array(obj);
-            AVS_UNIT_ASSERT_NOT_NULL(array);
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_EQUAL(value, -128);
 
-            AVS_UNIT_ASSERT_SUCCESS(anjay_get_array_index(array, &id));
-            AVS_UNIT_ASSERT_EQUAL(id, 1);
-            AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(array, &value));
-            AVS_UNIT_ASSERT_EQUAL(value, -128);
+        // value already consumed
+        AVS_UNIT_ASSERT_FAILED(anjay_get_i32(ctx, &value));
 
-            AVS_UNIT_ASSERT_FAILED(anjay_get_i32(obj, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_EQUAL(value, -128);
 
-            AVS_UNIT_ASSERT_SUCCESS(anjay_get_array_index(array, &id));
-            AVS_UNIT_ASSERT_EQUAL(id, 2);
-            AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(array, &value));
-            AVS_UNIT_ASSERT_EQUAL(value, -128);
-        }
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
 
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(obj, &value));
+        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 1);
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(obj));
     }
     _anjay_input_next_entry(ctx);
 
-    AVS_UNIT_ASSERT_EQUAL(_anjay_input_get_id(ctx, &type, &id),
-                          ANJAY_GET_INDEX_END);
+    AVS_UNIT_ASSERT_EQUAL(_anjay_input_get_path(ctx, &path, NULL),
+                          ANJAY_GET_PATH_END);
 
     TEST_TEARDOWN;
 }

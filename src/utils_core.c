@@ -42,17 +42,18 @@ static int url_parse_chunks(const char **url,
                             char parser_terminator,
                             url_parse_chunks_hint_t hint,
                             AVS_LIST(const anjay_string_t) *out_chunks) {
-    const char *ptr = *url;
-    do {
-        if ((*ptr == '\0' || *ptr == delimiter || *ptr == parser_terminator)
-                && ptr != *url) {
-            const size_t chunk_len = (size_t) (ptr - *url - 1);
+    const char *chunk_begin = *url;
+    const char *chunk_end = *url;
+    while (true) {
+        if (*chunk_end == '\0' || *chunk_end == delimiter
+                || *chunk_end == parser_terminator) {
+            const size_t chunk_len = (size_t) (chunk_end - chunk_begin);
 
             if (hint == URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR
-                    && (*ptr == '\0' || *ptr == parser_terminator)
+                    && (*chunk_end == '\0' || *chunk_end == parser_terminator)
                     && !chunk_len) {
                 // trailing separator, ignoring
-                *url = ptr;
+                *url = chunk_end;
                 return 0;
             }
 
@@ -66,8 +67,7 @@ static int url_parse_chunks(const char **url,
                 AVS_LIST_APPEND(out_chunks, chunk);
 
                 if (chunk_len) {
-                    // skip separator
-                    memcpy(chunk, *url + 1, chunk_len);
+                    memcpy(chunk, chunk_begin, chunk_len);
 
                     if (avs_url_percent_decode(chunk->c_str,
                                                &(size_t[]){ 0 }[0])) {
@@ -75,21 +75,24 @@ static int url_parse_chunks(const char **url,
                     }
                 }
             }
-            *url = ptr;
+
+            if (*chunk_end == delimiter) {
+                chunk_begin = chunk_end + 1;
+            } else {
+                *url = chunk_end;
+                return 0;
+            }
         }
 
-        if (*ptr == parser_terminator) {
-            *url = ptr;
-            break;
-        }
-        ++ptr;
-    } while (**url);
-    return 0;
+        ++chunk_end;
+    }
 }
 
-static int copy_string(char *out, size_t out_size, const char *in) {
+static int copy_nullable_string(char *out, size_t out_size, const char *in) {
+    assert(out_size > 0);
     if (!in) {
-        return -1;
+        out[0] = '\0';
+        return 0;
     }
     size_t len = strlen(in);
     if (len >= out_size) {
@@ -99,125 +102,86 @@ static int copy_string(char *out, size_t out_size, const char *in) {
     return 0;
 }
 
-static int copy_nullable_string(char *out, size_t out_size, const char *in) {
-    assert(out_size > 0);
-    if (!in) {
-        out[0] = '\0';
-        return 0;
-    } else {
-        return copy_string(out, out_size, in);
+int _anjay_url_parse_path_and_query(const char *path,
+                                    AVS_LIST(const anjay_string_t) *out_path,
+                                    AVS_LIST(const anjay_string_t) *out_query) {
+    assert(out_path);
+    assert(!*out_path);
+    assert(out_query);
+    assert(!*out_query);
+    int result = 0;
+    if (path) {
+        if (avs_url_validate_relative_path(path)) {
+            return -1;
+        }
+        if (*path == '/') {
+            ++path;
+        }
+        result = url_parse_chunks(&path, '/', '?',
+                                  URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR,
+                                  out_path);
+        if (!result && *path == '?') {
+            ++path;
+            result = url_parse_chunks(&path, '&', '\0', URL_PARSE_HINT_NONE,
+                                      out_query);
+        }
     }
+    if (result) {
+        AVS_LIST_CLEAR(out_path);
+        AVS_LIST_CLEAR(out_query);
+    }
+    return result;
 }
 
-int _anjay_url_parse(const char *raw_url, anjay_url_t *out_parsed_url) {
-    assert(!out_parsed_url->uri_path);
-    assert(!out_parsed_url->uri_query);
-    avs_url_t *avs_url = avs_url_parse(raw_url);
+int _anjay_url_from_avs_url(const avs_url_t *avs_url,
+                            anjay_url_t *out_parsed_url) {
     if (!avs_url) {
         return -1;
     }
     int result = (avs_url_user(avs_url) || avs_url_password(avs_url)) ? -1 : 0;
     if (!result) {
+        const char *host = avs_url_host(avs_url);
+        const char *port = avs_url_port(avs_url);
+        const char *path = avs_url_path(avs_url);
+        (void) ((result = copy_nullable_string(out_parsed_url->host,
+                                               sizeof(out_parsed_url->host),
+                                               host))
+                || (result = (port && !*port) ? -1 : 0)
+                || (result = copy_nullable_string(out_parsed_url->port,
+                                                  sizeof(out_parsed_url->port),
+                                                  avs_url_port(avs_url))));
+        if (!result) {
+            result =
+                    _anjay_url_parse_path_and_query(path,
+                                                    &out_parsed_url->uri_path,
+                                                    &out_parsed_url->uri_query);
+        }
+    }
+    if (!result && !out_parsed_url->port[0]) {
+        const anjay_transport_info_t *transport_info = NULL;
         const char *protocol = avs_url_protocol(avs_url);
-        if (avs_strcasecmp(protocol, "coap") == 0) {
-            out_parsed_url->protocol = ANJAY_URL_PROTOCOL_COAP;
-        } else if (avs_strcasecmp(protocol, "coaps") == 0) {
-            out_parsed_url->protocol = ANJAY_URL_PROTOCOL_COAPS;
-        } else {
-            anjay_log(ERROR, "Unknown or unsupported protocol: %s", protocol);
-            result = -1;
+        if (protocol) {
+            transport_info = _anjay_transport_info_by_uri_scheme(protocol);
+        }
+        if (transport_info && transport_info->default_port) {
+            assert(strlen(transport_info->default_port)
+                   < sizeof(out_parsed_url->port));
+            strcpy(out_parsed_url->port, transport_info->default_port);
         }
     }
-    (void) (result
-            || (result = copy_string(out_parsed_url->host,
-                                     sizeof(out_parsed_url->host),
-                                     avs_url_host(avs_url)))
-            || (result = copy_nullable_string(out_parsed_url->port,
-                                              sizeof(out_parsed_url->port),
-                                              avs_url_port(avs_url))));
-    if (!result) {
-        const char *path_ptr = avs_url_path(avs_url);
-        if (path_ptr) {
-            result = url_parse_chunks(&path_ptr, '/', '?',
-                                      URL_PARSE_HINT_SKIP_TRAILING_SEPARATOR,
-                                      &out_parsed_url->uri_path);
-            if (!result && *path_ptr == '?') {
-                result = url_parse_chunks(&path_ptr, '&', '\0',
-                                          URL_PARSE_HINT_NONE,
-                                          &out_parsed_url->uri_query);
-            }
-        }
-    }
-    if (result) {
-        _anjay_url_cleanup(out_parsed_url);
-    }
-    avs_url_free(avs_url);
     return result;
 }
 
-int _anjay_url_copy(anjay_url_t *out_copy, const anjay_url_t *source) {
-    out_copy->protocol = source->protocol;
-    memcpy(out_copy->host, source->host, sizeof(out_copy->host));
-    memcpy(out_copy->port, source->port, sizeof(out_copy->port));
-    if (_anjay_copy_string_list(&out_copy->uri_path, source->uri_path)
-            || _anjay_copy_string_list(&out_copy->uri_query,
-                                       source->uri_query)) {
-        return -1;
-    }
-    return 0;
+int _anjay_url_parse(const char *raw_url, anjay_url_t *out_parsed_url) {
+    avs_url_t *avs_url = avs_url_parse_lenient(raw_url);
+    int result = _anjay_url_from_avs_url(avs_url, out_parsed_url);
+    avs_url_free(avs_url);
+    return result;
 }
 
 void _anjay_url_cleanup(anjay_url_t *url) {
     AVS_LIST_CLEAR(&url->uri_path);
     AVS_LIST_CLEAR(&url->uri_query);
-}
-
-#ifdef ANJAY_TEST
-
-uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
-    // simple deterministic generator for testing purposes
-    return (*seed = 1103515245u * *seed + 12345u);
-}
-
-#else
-
-#    if AVS_RAND_MAX >= UINT32_MAX
-#        define RAND32_ITERATIONS 1
-#    elif AVS_RAND_MAX >= UINT16_MAX
-#        define RAND32_ITERATIONS 2
-#    else
-/* standard guarantees RAND_MAX to be at least 32767 */
-#        define RAND32_ITERATIONS 3
-#    endif
-
-uint32_t _anjay_rand32(anjay_rand_seed_t *seed) {
-    uint32_t result = 0;
-    int i;
-    for (i = 0; i < RAND32_ITERATIONS; ++i) {
-        result *= (uint32_t) AVS_RAND_MAX + 1;
-        result += (uint32_t) avs_rand_r(seed);
-    }
-    return result;
-}
-#endif
-
-int _anjay_copy_string_list(AVS_LIST(const anjay_string_t) *outptr,
-                            AVS_LIST(const anjay_string_t) input) {
-    assert(!*outptr);
-    AVS_LIST(const anjay_string_t) *endptr = outptr;
-
-    AVS_LIST_ITERATE(input) {
-        size_t len = strlen(input->c_str) + 1;
-        if (!(*endptr = (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(len))) {
-            anjay_log(ERROR, "out of memory");
-            AVS_LIST_CLEAR(outptr);
-            return -1;
-        }
-
-        memcpy((char *) (intptr_t) (*endptr)->c_str, input->c_str, len);
-        AVS_LIST_ADVANCE_PTR(&endptr);
-    }
-    return 0;
 }
 
 AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
@@ -247,7 +211,7 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
     return strings_list;
 }
 
-bool anjay_binding_mode_valid(const char *binding_mode) {
+static bool is_valid_lwm2m_1_0_binding_mode(const char *binding_mode) {
     static const char *const VALID_BINDINGS[] = { "U",  "UQ", "S",
                                                   "SQ", "US", "UQS" };
     for (size_t i = 0; i < AVS_ARRAY_SIZE(VALID_BINDINGS); ++i) {
@@ -255,70 +219,161 @@ bool anjay_binding_mode_valid(const char *binding_mode) {
             return true;
         }
     }
+
     return false;
 }
 
-static int append_string_query_arg(AVS_LIST(const anjay_string_t) *list,
-                                   const char *name,
-                                   const char *value) {
-    const size_t size = strlen(name) + sizeof("=") + strlen(value);
-    AVS_LIST(anjay_string_t) arg =
-            (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(size);
+static const anjay_binding_info_t BINDING_INFOS[] = {
+    { 'U', ANJAY_SOCKET_TRANSPORT_UDP },
+};
 
-    if (!arg
-            || avs_simple_snprintf(arg->c_str, size, "%s=%s", name, value)
-                           < 0) {
-        AVS_LIST_CLEAR(&arg);
-    } else {
-        AVS_LIST_APPEND(list, arg);
+const anjay_binding_info_t *
+_anjay_binding_info_by_transport(anjay_socket_transport_t transport) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_INFOS); ++i) {
+        if (BINDING_INFOS[i].transport == transport) {
+            return &BINDING_INFOS[i];
+        }
     }
 
-    return !arg ? -1 : 0;
+    AVS_UNREACHABLE("anjay_socket_transport_t value missing in BINDING_INFOS");
+    return NULL;
 }
 
-AVS_LIST(const anjay_string_t)
-_anjay_make_query_string_list(const char *version,
-                              const char *endpoint_name,
-                              const int64_t *lifetime,
-                              const char *binding_mode,
-                              const char *sms_msisdn) {
-    AVS_LIST(const anjay_string_t) list = NULL;
+bool anjay_binding_mode_valid(const char *binding_mode) {
+    return is_valid_lwm2m_1_0_binding_mode(binding_mode);
+}
 
-    if (version && append_string_query_arg(&list, "lwm2m", version)) {
-        goto fail;
+avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
+                                          const anjay_lwm2m_version_t *version,
+                                          const char *endpoint_name,
+                                          const int64_t *lifetime,
+                                          const char *binding_mode,
+                                          bool lwm2m11_queue_mode,
+                                          const char *sms_msisdn) {
+    avs_error_t err;
+    if (version
+            && avs_is_err(
+                       (err = avs_coap_options_add_string_f(
+                                opts, AVS_COAP_OPTION_URI_QUERY, "lwm2m=%s",
+                                _anjay_lwm2m_version_as_string(*version))))) {
+        return err;
     }
 
-    if (endpoint_name && append_string_query_arg(&list, "ep", endpoint_name)) {
-        goto fail;
+    if (endpoint_name
+            && avs_is_err((err = avs_coap_options_add_string_f(
+                                   opts, AVS_COAP_OPTION_URI_QUERY, "ep=%s",
+                                   endpoint_name)))) {
+        return err;
     }
 
-    if (lifetime) {
-        assert(*lifetime > 0);
-        size_t lt_size = sizeof("lt=") + 16;
-        AVS_LIST(anjay_string_t) lt =
-                (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(lt_size);
-        if (!lt
-                || avs_simple_snprintf(lt->c_str, lt_size, "lt=%" PRId64,
-                                       *lifetime)
-                               < 0) {
-            goto fail;
+    assert(lifetime == NULL || *lifetime > 0);
+    if (lifetime
+            && avs_is_err((err = avs_coap_options_add_string_f(
+                                   opts, AVS_COAP_OPTION_URI_QUERY,
+                                   "lt=%" PRId64, *lifetime)))) {
+        return err;
+    }
+
+    if (binding_mode
+            && avs_is_err((err = avs_coap_options_add_string_f(
+                                   opts, AVS_COAP_OPTION_URI_QUERY, "b=%s",
+                                   binding_mode)))) {
+        return err;
+    }
+
+    (void) lwm2m11_queue_mode;
+
+    if (sms_msisdn
+            && avs_is_err((err = avs_coap_options_add_string_f(
+                                   opts, AVS_COAP_OPTION_URI_QUERY, "sms=%s",
+                                   sms_msisdn)))) {
+        return err;
+    }
+
+    return AVS_OK;
+}
+
+avs_error_t
+_anjay_coap_add_string_options(avs_coap_options_t *opts,
+                               AVS_LIST(const anjay_string_t) strings,
+                               uint16_t opt_number) {
+    AVS_LIST(const anjay_string_t) it;
+    AVS_LIST_FOREACH(it, strings) {
+        avs_error_t err =
+                avs_coap_options_add_string(opts, opt_number, it->c_str);
+        if (avs_is_err(err)) {
+            return err;
         }
-        AVS_LIST_APPEND(&list, lt);
+    }
+    return AVS_OK;
+}
+
+static const anjay_transport_info_t TRANSPORTS[] = {
+    {
+        .transport = ANJAY_SOCKET_TRANSPORT_UDP,
+        .socket_type = &(const avs_net_socket_type_t) { AVS_NET_UDP_SOCKET },
+        .uri_scheme = "coap",
+        .default_port = "5683",
+        .security = ANJAY_TRANSPORT_NOSEC
+    },
+    {
+        .transport = ANJAY_SOCKET_TRANSPORT_UDP,
+        .socket_type = &(const avs_net_socket_type_t) { AVS_NET_DTLS_SOCKET },
+        .uri_scheme = "coaps",
+        .default_port = "5684",
+        .security = ANJAY_TRANSPORT_ENCRYPTED
+    },
+    {
+        .transport = ANJAY_SOCKET_TRANSPORT_TCP,
+        .socket_type = &(const avs_net_socket_type_t) { AVS_NET_TCP_SOCKET },
+        .uri_scheme = "coap+tcp",
+        .default_port = "5683",
+        .security = ANJAY_TRANSPORT_NOSEC
+    },
+    {
+        .transport = ANJAY_SOCKET_TRANSPORT_TCP,
+        .socket_type = &(const avs_net_socket_type_t) { AVS_NET_SSL_SOCKET },
+        .uri_scheme = "coaps+tcp",
+        .default_port = "5684",
+        .security = ANJAY_TRANSPORT_ENCRYPTED
+    },
+};
+
+const anjay_transport_info_t *
+_anjay_transport_info_by_uri_scheme(const char *uri_or_scheme) {
+    if (!uri_or_scheme) {
+        anjay_log(ERROR, "URL scheme not specified");
+        return NULL;
     }
 
-    if (binding_mode && append_string_query_arg(&list, "b", binding_mode)) {
-        goto fail;
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(TRANSPORTS); ++i) {
+        size_t scheme_size = strlen(TRANSPORTS[i].uri_scheme);
+        if (avs_strncasecmp(uri_or_scheme, TRANSPORTS[i].uri_scheme,
+                            scheme_size)
+                        == 0
+                && (uri_or_scheme[scheme_size] == '\0'
+                    || uri_or_scheme[scheme_size] == ':')) {
+            return &TRANSPORTS[i];
+        }
     }
 
-    if (sms_msisdn && append_string_query_arg(&list, "sms", sms_msisdn)) {
-        goto fail;
-    }
-
-    return list;
-
-fail:
-    AVS_LIST_CLEAR(&list);
+    anjay_log(WARNING, "unsupported URI scheme: %s", uri_or_scheme);
     return NULL;
+}
+
+int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,
+                                 const avs_net_socket_tls_ciphersuites_t *src) {
+    assert(!dest->ids);
+    if (src->num_ids) {
+        if (!(dest->ids = (uint32_t *) avs_calloc(src->num_ids,
+                                                  sizeof(*dest->ids)))) {
+            anjay_log(ERROR, "out of memory");
+            return -1;
+        }
+        memcpy(dest->ids, src->ids, src->num_ids * sizeof(*src->ids));
+    }
+    dest->num_ids = src->num_ids;
+    return 0;
 }
 
 #ifdef ANJAY_TEST

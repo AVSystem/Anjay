@@ -21,14 +21,13 @@ void signal_handler(int signum) {
 int main_loop(anjay_t *anjay) {
     while (g_running) {
         // Obtain all network data sources
-        AVS_LIST(avs_net_abstract_socket_t *const) sockets =
-                anjay_get_sockets(anjay);
+        AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
 
         // Prepare to poll() on them
         size_t numsocks = AVS_LIST_SIZE(sockets);
         struct pollfd pollfds[numsocks];
         size_t i = 0;
-        AVS_LIST(avs_net_abstract_socket_t *const) sock;
+        AVS_LIST(avs_net_socket_t *const) sock;
         AVS_LIST_FOREACH(sock, sockets) {
             pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
             pollfds[i].events = POLLIN;
@@ -46,7 +45,7 @@ int main_loop(anjay_t *anjay) {
         // Wait for the events if necessary, and handle them.
         if (poll(pollfds, numsocks, wait_ms) > 0) {
             int socket_id = 0;
-            AVS_LIST(avs_net_abstract_socket_t *const) socket = NULL;
+            AVS_LIST(avs_net_socket_t *const) socket = NULL;
             AVS_LIST_FOREACH(socket, sockets) {
                 if (pollfds[socket_id].revents) {
                     if (anjay_serve(anjay, *socket)) {
@@ -57,9 +56,8 @@ int main_loop(anjay_t *anjay) {
             }
         }
 
-        // Finally run the scheduler (ignoring its return value, which
-        // is the number of tasks executed)
-        (void) anjay_sched_run(anjay);
+        // Finally run the scheduler
+        anjay_sched_run(anjay);
     }
     return 0;
 }
@@ -69,7 +67,7 @@ int main_loop(anjay_t *anjay) {
 int persist_objects(anjay_t *anjay) {
     avs_log(tutorial, INFO, "Persisting objects to %s", PERSISTENCE_FILENAME);
 
-    avs_stream_abstract_t *file_stream =
+    avs_stream_t *file_stream =
             avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_WRITE);
 
     if (!file_stream) {
@@ -77,23 +75,24 @@ int persist_objects(anjay_t *anjay) {
         return -1;
     }
 
-    int result;
+    int result = -1;
 
-    if ((result = anjay_security_object_persist(anjay, file_stream))) {
+    if (avs_is_err(anjay_security_object_persist(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not persist Security Object");
         goto finish;
     }
 
-    if ((result = anjay_server_object_persist(anjay, file_stream))) {
+    if (avs_is_err(anjay_server_object_persist(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not persist Server Object");
         goto finish;
     }
 
-    if ((result = anjay_attr_storage_persist(anjay, file_stream))) {
+    if (avs_is_err(anjay_attr_storage_persist(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not persist LwM2M attribute storage");
         goto finish;
     }
 
+    result = 0;
 finish:
     avs_stream_cleanup(&file_stream);
     return result;
@@ -119,28 +118,31 @@ int restore_objects_if_possible(anjay_t *anjay) {
         return result;
     }
 
-    avs_stream_abstract_t *file_stream =
+    avs_stream_t *file_stream =
             avs_stream_file_create(PERSISTENCE_FILENAME, AVS_STREAM_FILE_READ);
 
     if (!file_stream) {
         return -1;
     }
 
-    if ((result = anjay_security_object_restore(anjay, file_stream))) {
+    result = -1;
+
+    if (avs_is_err(anjay_security_object_restore(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not restore Security Object");
         goto finish;
     }
 
-    if ((result = anjay_server_object_restore(anjay, file_stream))) {
+    if (avs_is_err(anjay_server_object_restore(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not restore Server Object");
         goto finish;
     }
 
-    if ((result = anjay_attr_storage_restore(anjay, file_stream))) {
+    if (avs_is_err(anjay_attr_storage_restore(anjay, file_stream))) {
         avs_log(tutorial, ERROR, "Could not restore LwM2M attribute storage");
         goto finish;
     }
 
+    result = 0;
 finish:
     avs_stream_cleanup(&file_stream);
     return result;
@@ -150,7 +152,7 @@ void initialize_objects_with_default_settings(anjay_t *anjay) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
         .server_uri = "coap://127.0.0.1:5683",
-        .security_mode = ANJAY_UDP_SECURITY_NOSEC
+        .security_mode = ANJAY_SECURITY_NOSEC
     };
 
     const anjay_server_instance_t server_instance = {
@@ -162,8 +164,8 @@ void initialize_objects_with_default_settings(anjay_t *anjay) {
         .binding = "U"
     };
 
-    anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
-    anjay_iid_t server_instance_id = ANJAY_IID_INVALID;
+    anjay_iid_t security_instance_id = ANJAY_ID_INVALID;
+    anjay_iid_t server_instance_id = ANJAY_ID_INVALID;
     anjay_security_object_add_instance(anjay, &security_instance,
                                        &security_instance_id);
     anjay_server_object_add_instance(anjay, &server_instance,

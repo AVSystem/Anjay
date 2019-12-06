@@ -30,33 +30,33 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
                                                          '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
                                      auto_register=False)
 
-        self.bootstrap_server.listen()
         self.assertDemoRegisters(self.serv)
+        self.bootstrap_server.listen()
 
     def runTest(self):
-        req = Lwm2mCreate('/1337')
+        req = Lwm2mCreate('/%d' % (OID.Test,))
         self.serv.send(req)
         res = self.serv.recv()
         self.assertMsgEqual(Lwm2mCreated.matching(req)(), res)
-        self.assertEqual('/1337/1', res.get_location_path())
+        self.assertEqual('/%d/0' % (OID.Test,), res.get_location_path())
 
         # force an Update so that change to the data model does not get notified later
         self.communicate('send-update')
         self.assertDemoUpdatesRegistration(content=ANY)
 
-        req = Lwm2mRead('/1337/1/1')
+        req = Lwm2mRead(ResPath.Test[0].Counter)
         self.serv.send(req)
         res = self.serv.recv()
         self.assertMsgEqual(Lwm2mContent.matching(req)(), res)
         self.assertEqual(b'0', res.content)
 
-        # "spurious" Server Initiated Bootstrap
-        req = Lwm2mWrite('/1337/1/1', b'42')
+        # 1.0-style "spurious" Server Initiated Bootstrap
+        req = Lwm2mWrite(ResPath.Test[0].Counter, b'42')
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.bootstrap_server.recv())
 
         # now regular server shall not be able to communicate with the client
-        req = Lwm2mExecute('/1337/1/2')
+        req = Lwm2mExecute(ResPath.Test[0].IncrementCounter)
         self.serv.send(req)
         with self.assertRaises(OSError):
             self.serv.recv(timeout_s=5)
@@ -71,13 +71,13 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
         self.assertDtlsReconnect()
 
         # now we shall be able to do that Execute
-        req = Lwm2mExecute('/1337/1/2')
+        req = Lwm2mExecute(ResPath.Test[0].IncrementCounter)
         self.serv.send(req)
         res = self.serv.recv()
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), res)
 
         # verify that Execute was performed just once
-        req = Lwm2mRead('/1337/1/1')
+        req = Lwm2mRead(ResPath.Test[0].Counter)
         self.serv.send(req)
         res = self.serv.recv()
         self.assertMsgEqual(Lwm2mContent.matching(req)(), res)

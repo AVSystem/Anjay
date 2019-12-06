@@ -12,21 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(SOURCES
-    src/mod_security.c
-    src/security_persistence.c
-    src/security_transaction.c
-    src/security_utils.c)
-set(PRIVATE_HEADERS
-    src/mod_security.h
-    src/security_transaction.h
-    src/security_utils.h)
-set(PUBLIC_HEADERS
-    include_public/anjay/security.h)
+target_sources(anjay PRIVATE
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_security.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/security_transaction.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/security_utils.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/security.h
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/mod_security.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/security_persistence.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/security_transaction.c
+               ${CMAKE_CURRENT_SOURCE_DIR}/src/security_utils.c)
+target_include_directories(anjay PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_public>)
 
-set(TEST_SOURCES
-    ${SOURCES}
-    ${PRIVATE_HEADERS}
-    ${PUBLIC_HEADERS})
-
-include(../module_common.cmake)
+install(DIRECTORY include_public/anjay
+        DESTINATION include
+        FILES_MATCHING REGEX "[.]h$")

@@ -158,7 +158,7 @@ Anjay's ``security`` module, you can simply fill them in the
     anjay_security_instance_t security_instance = {
         .ssid = 1,
         .server_uri = "coaps://localhost:5684",
-        .security_mode = ANJAY_UDP_SECURITY_PSK,
+        .security_mode = ANJAY_SECURITY_PSK,
         .public_cert_or_psk_identity = (const uint8_t *) PSK_IDENTITY,
         .public_cert_or_psk_identity_size = strlen(PSK_IDENTITY),
         .private_cert_or_psk_key = (const uint8_t *) PSK_KEY,
@@ -169,7 +169,7 @@ Now the only thing left is to add the new Security object instance:
 
 .. snippet-source:: examples/tutorial/AT3-psk/src/main.c
 
-    anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
+    anjay_iid_t security_instance_id = ANJAY_ID_INVALID;
     if (anjay_security_object_add_instance(anjay, &security_instance,
                                            &security_instance_id)) {
         return -1;
@@ -237,7 +237,7 @@ This function can then be used to fill the relevant fields in the
     anjay_security_instance_t security_instance = {
         .ssid = 1,
         .server_uri = "coaps://localhost:5684",
-        .security_mode = ANJAY_UDP_SECURITY_CERTIFICATE
+        .security_mode = ANJAY_SECURITY_CERTIFICATE
     };
 
     int result = 0;
@@ -262,7 +262,7 @@ Now the only thing left is to add the new Security object instance:
 
 .. snippet-source:: examples/tutorial/AT3-cert/src/main.c
 
-    anjay_iid_t security_instance_id = ANJAY_IID_INVALID;
+    anjay_iid_t security_instance_id = ANJAY_ID_INVALID;
     if (anjay_security_object_add_instance(anjay, &security_instance,
                                            &security_instance_id)) {
         result = -1;

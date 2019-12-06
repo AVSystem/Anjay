@@ -30,28 +30,29 @@ typedef enum {
     MOCK_DM_OBJECT_READ_DEFAULT_ATTRS,
     MOCK_DM_OBJECT_WRITE_DEFAULT_ATTRS,
     MOCK_DM_INSTANCE_RESET,
-    MOCK_DM_INSTANCE_IT,
-    MOCK_DM_INSTANCE_PRESENT,
+    MOCK_DM_LIST_INSTANCES,
     MOCK_DM_INSTANCE_CREATE,
     MOCK_DM_INSTANCE_REMOVE,
     MOCK_DM_INSTANCE_READ_DEFAULT_ATTRS,
     MOCK_DM_INSTANCE_WRITE_DEFAULT_ATTRS,
-    MOCK_DM_RESOURCE_PRESENT,
-    MOCK_DM_RESOURCE_OPERATIONS,
+    MOCK_DM_LIST_RESOURCES,
     MOCK_DM_RESOURCE_READ,
     MOCK_DM_RESOURCE_WRITE,
     MOCK_DM_RESOURCE_EXECUTE,
-    MOCK_DM_RESOURCE_DIM,
+    MOCK_DM_RESOURCE_RESET,
+    MOCK_DM_LIST_RESOURCE_INSTANCES,
     MOCK_DM_RESOURCE_READ_ATTRS,
-    MOCK_DM_RESOURCE_WRITE_ATTRS
+    MOCK_DM_RESOURCE_WRITE_ATTRS,
+    MOCK_DM_RESOURCE_INSTANCE_READ_ATTRS,
+    MOCK_DM_RESOURCE_INSTANCE_WRITE_ATTRS
 } anjay_mock_dm_expected_command_type_t;
 
 typedef struct {
     anjay_mock_dm_expected_command_type_t command;
+    const char *command_str;
     anjay_t *anjay;
     const anjay_dm_object_def_t *const *obj_ptr;
     union {
-        uintptr_t iteration;
         anjay_iid_t iid;
         anjay_rid_t rid;
         anjay_ssid_t ssid;
@@ -59,6 +60,11 @@ typedef struct {
             anjay_iid_t iid;
             anjay_rid_t rid;
         } iid_and_rid;
+        struct {
+            anjay_iid_t iid;
+            anjay_rid_t rid;
+            anjay_riid_t riid;
+        } iid_rid_riid;
         struct {
             anjay_ssid_t ssid;
             anjay_iid_t iid;
@@ -68,25 +74,32 @@ typedef struct {
             anjay_iid_t iid;
             anjay_rid_t rid;
         } ssid_iid_rid;
+        struct {
+            anjay_ssid_t ssid;
+            anjay_iid_t iid;
+            anjay_rid_t rid;
+            anjay_riid_t riid;
+        } ssid_iid_rid_riid;
     } input;
     union {
-        anjay_iid_t output_iid;
+        uint16_t *id_array;
+        anjay_mock_dm_res_entry_t *res_array;
         anjay_mock_dm_data_t data;
-        anjay_dm_internal_attrs_t common_attributes;
-        anjay_dm_internal_res_attrs_t resource_attributes;
-        anjay_dm_resource_op_mask_t mask;
+        anjay_dm_internal_oi_attrs_t common_attributes;
+        anjay_dm_internal_r_attrs_t resource_attributes;
     } value;
     int retval;
 } anjay_mock_dm_expected_command_t;
 
 static AVS_LIST(anjay_mock_dm_expected_command_t) EXPECTED_COMMANDS;
 
-#define DM_ACTION_COMMON(UName)                                              \
-    do {                                                                     \
-        AVS_UNIT_ASSERT_NOT_NULL(EXPECTED_COMMANDS);                         \
-        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->command == MOCK_DM_##UName); \
-        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->anjay == anjay);             \
-        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->obj_ptr == obj_ptr);         \
+#define DM_ACTION_COMMON(UName)                                         \
+    do {                                                                \
+        AVS_UNIT_ASSERT_NOT_NULL(EXPECTED_COMMANDS);                    \
+        AVS_UNIT_ASSERT_EQUAL_STRING(EXPECTED_COMMANDS->command_str,    \
+                                     AVS_QUOTE_MACRO(MOCK_DM_##UName)); \
+        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->anjay == anjay);        \
+        AVS_UNIT_ASSERT_TRUE(EXPECTED_COMMANDS->obj_ptr == obj_ptr);    \
     } while (0)
 
 #define DM_ACTION_RETURN                        \
@@ -97,21 +110,23 @@ static AVS_LIST(anjay_mock_dm_expected_command_t) EXPECTED_COMMANDS;
     } while (0)
 
 void _anjay_mock_dm_assert_common_attributes_equal(
-        const anjay_dm_internal_attrs_t *a,
-        const anjay_dm_internal_attrs_t *b) {
+        const anjay_dm_internal_oi_attrs_t *a,
+        const anjay_dm_internal_oi_attrs_t *b) {
 #ifdef WITH_CUSTOM_ATTRIBUTES
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, custom.data.con);
 #endif // WITH_CUSTOM_ATTRIBUTES
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.min_period);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.max_period);
+    AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.min_eval_period);
+    AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.max_eval_period);
 }
 
 void _anjay_mock_dm_assert_attributes_equal(
-        const anjay_dm_internal_res_attrs_t *a,
-        const anjay_dm_internal_res_attrs_t *b) {
+        const anjay_dm_internal_r_attrs_t *a,
+        const anjay_dm_internal_r_attrs_t *b) {
     _anjay_mock_dm_assert_common_attributes_equal(
-            _anjay_dm_get_internal_attrs_const(&a->standard.common),
-            _anjay_dm_get_internal_attrs_const(&b->standard.common));
+            _anjay_dm_get_internal_oi_attrs_const(&a->standard.common),
+            _anjay_dm_get_internal_oi_attrs_const(&b->standard.common));
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.greater_than);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.less_than);
     AVS_UNIT_ASSERT_FIELD_EQUAL(a, b, standard.step);
@@ -121,10 +136,10 @@ int _anjay_mock_dm_object_read_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out) {
+        anjay_dm_oi_attributes_t *out) {
     DM_ACTION_COMMON(OBJECT_READ_DEFAULT_ATTRS);
     EXPECTED_COMMANDS->input.ssid = ssid;
-    *_anjay_dm_get_internal_attrs(out) =
+    *_anjay_dm_get_internal_oi_attrs(out) =
             EXPECTED_COMMANDS->value.common_attributes;
     DM_ACTION_RETURN;
 }
@@ -133,32 +148,32 @@ int _anjay_mock_dm_object_write_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        const anjay_dm_attributes_t *attrs) {
+        const anjay_dm_oi_attributes_t *attrs) {
     DM_ACTION_COMMON(OBJECT_WRITE_DEFAULT_ATTRS);
     EXPECTED_COMMANDS->input.ssid = ssid;
     _anjay_mock_dm_assert_common_attributes_equal(
-            _anjay_dm_get_internal_attrs_const(attrs),
+            _anjay_dm_get_internal_oi_attrs_const(attrs),
             &EXPECTED_COMMANDS->value.common_attributes);
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_instance_reset(anjay_t *anjay,
+int _anjay_mock_dm_list_instances(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                  anjay_iid_t iid) {
-    DM_ACTION_COMMON(INSTANCE_RESET);
-    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid);
-    DM_ACTION_RETURN;
-}
-
-int _anjay_mock_dm_instance_it(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_iid_t *out,
-                               void **cookie) {
-    DM_ACTION_COMMON(INSTANCE_IT);
-    AVS_UNIT_ASSERT_EQUAL((*(uintptr_t *) cookie)++,
-                          EXPECTED_COMMANDS->input.iteration);
-    *out = EXPECTED_COMMANDS->value.output_iid;
-    DM_ACTION_RETURN;
+                                  anjay_dm_list_ctx_t *ctx) {
+    DM_ACTION_COMMON(LIST_INSTANCES);
+    // avs_dm_emit() may call other handlers,
+    // so pop the command from the queue early
+    AVS_LIST(anjay_mock_dm_expected_command_t) command =
+            AVS_LIST_DETACH(&EXPECTED_COMMANDS);
+    for (const anjay_iid_t *iid = command->value.id_array;
+         *iid != ANJAY_ID_INVALID;
+         ++iid) {
+        anjay_dm_emit(ctx, *iid);
+    }
+    avs_free(command->value.id_array);
+    int retval = command->retval;
+    AVS_LIST_DELETE(&command);
+    return retval;
 }
 
 #define INSTANCE_ACTION(LName, UName)                                    \
@@ -170,31 +185,20 @@ int _anjay_mock_dm_instance_it(anjay_t *anjay,
         DM_ACTION_RETURN;                                                \
     }
 
-INSTANCE_ACTION(present, PRESENT)
+INSTANCE_ACTION(reset, RESET)
 INSTANCE_ACTION(remove, REMOVE)
-
-int _anjay_mock_dm_instance_create(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj_ptr,
-                                   anjay_iid_t *inout_iid,
-                                   anjay_ssid_t ssid) {
-    DM_ACTION_COMMON(INSTANCE_CREATE);
-    AVS_UNIT_ASSERT_EQUAL(*inout_iid,
-                          EXPECTED_COMMANDS->input.ssid_and_iid.iid);
-    AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_and_iid.ssid);
-    *inout_iid = EXPECTED_COMMANDS->value.output_iid;
-    DM_ACTION_RETURN;
-}
+INSTANCE_ACTION(create, CREATE)
 
 int _anjay_mock_dm_instance_read_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        anjay_dm_attributes_t *out) {
+        anjay_dm_oi_attributes_t *out) {
     DM_ACTION_COMMON(INSTANCE_READ_DEFAULT_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_and_iid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_and_iid.iid);
-    *_anjay_dm_get_internal_attrs(out) =
+    *_anjay_dm_get_internal_oi_attrs(out) =
             EXPECTED_COMMANDS->value.common_attributes;
     DM_ACTION_RETURN;
 }
@@ -204,40 +208,38 @@ int _anjay_mock_dm_instance_write_default_attrs(
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        const anjay_dm_attributes_t *attrs) {
+        const anjay_dm_oi_attributes_t *attrs) {
     DM_ACTION_COMMON(INSTANCE_WRITE_DEFAULT_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_and_iid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_and_iid.iid);
     _anjay_mock_dm_assert_common_attributes_equal(
-            _anjay_dm_get_internal_attrs_const(attrs),
+            _anjay_dm_get_internal_oi_attrs_const(attrs),
             &EXPECTED_COMMANDS->value.common_attributes);
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_resource_present(anjay_t *anjay,
-                                    const anjay_dm_object_def_t *const *obj_ptr,
-                                    anjay_iid_t iid,
-                                    anjay_rid_t rid) {
-    DM_ACTION_COMMON(RESOURCE_PRESENT);
-    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_and_rid.iid);
-    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_and_rid.rid);
-    DM_ACTION_RETURN;
+int _anjay_mock_dm_list_resources(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_dm_resource_list_ctx_t *ctx) {
+    DM_ACTION_COMMON(LIST_RESOURCES);
+    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid);
+    // avs_dm_emit_res() may call other handlers,
+    // so pop the command from the queue early
+    AVS_LIST(anjay_mock_dm_expected_command_t) command =
+            AVS_LIST_DETACH(&EXPECTED_COMMANDS);
+    if (command->value.res_array) {
+        for (const anjay_mock_dm_res_entry_t *res = command->value.res_array;
+             res->rid != ANJAY_ID_INVALID;
+             ++res) {
+            anjay_dm_emit_res(ctx, res->rid, res->kind, res->presence);
+        }
+        avs_free(command->value.id_array);
+    }
+    int retval = command->retval;
+    AVS_LIST_DELETE(&command);
+    return retval;
 }
-
-int _anjay_mock_dm_resource_operations(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj_ptr,
-        anjay_rid_t rid,
-        anjay_dm_resource_op_mask_t *out) {
-    DM_ACTION_COMMON(RESOURCE_OPERATIONS);
-    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.rid);
-    *out = EXPECTED_COMMANDS->value.mask;
-    DM_ACTION_RETURN;
-}
-
-static int output_array(anjay_output_ctx_t *ctx,
-                        const anjay_mock_dm_data_array_t *const *array,
-                        bool finish);
 
 static void perform_output(anjay_output_ctx_t *ctx,
                            const anjay_mock_dm_data_t *output) {
@@ -265,55 +267,23 @@ static void perform_output(anjay_output_ctx_t *ctx,
         retval = anjay_ret_objlnk(ctx, output->data.objlnk.oid,
                                   output->data.objlnk.iid);
         break;
-    case MOCK_DATA_ARRAY:
-        retval = output_array(ctx, output->data.array, true);
-        break;
-    case MOCK_DATA_ARRAY_NOFINISH:
-        retval = output_array(ctx, output->data.array, false);
-        break;
     }
     AVS_UNIT_ASSERT_EQUAL(retval, output->expected_retval);
-}
-
-static int output_array(anjay_output_ctx_t *ctx,
-                        const anjay_mock_dm_data_array_t *const *array,
-                        bool finish) {
-    anjay_output_ctx_t *array_ctx = anjay_ret_array_start(ctx);
-    if (!array_ctx) {
-        AVS_UNIT_ASSERT_FALSE(array && *array);
-        AVS_UNIT_ASSERT_FALSE(finish);
-        return -1;
-    }
-    for (const anjay_mock_dm_data_array_t *const *entry = array;
-         entry && *entry;
-         ++entry) {
-        int retval = anjay_ret_array_index(array_ctx, (*entry)->index);
-        if (retval) {
-            return retval;
-        }
-        perform_output(array_ctx, &(*entry)->value);
-    }
-    if (finish) {
-        return anjay_ret_array_finish(array_ctx);
-    } else {
-        return 0;
-    }
 }
 
 int _anjay_mock_dm_resource_read(anjay_t *anjay,
                                  const anjay_dm_object_def_t *const *obj_ptr,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
+                                 anjay_riid_t riid,
                                  anjay_output_ctx_t *ctx) {
     DM_ACTION_COMMON(RESOURCE_READ);
-    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_and_rid.iid);
-    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_and_rid.rid);
+    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_rid_riid.iid);
+    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_rid_riid.rid);
+    AVS_UNIT_ASSERT_EQUAL(riid, EXPECTED_COMMANDS->input.iid_rid_riid.riid);
     perform_output(ctx, &EXPECTED_COMMANDS->value.data);
     DM_ACTION_RETURN;
 }
-
-static int input_array(anjay_input_ctx_t *ctx,
-                       const anjay_mock_dm_data_array_t *const *array);
 
 static void perform_input(anjay_input_ctx_t *ctx,
                           const anjay_mock_dm_data_t *input) {
@@ -377,37 +347,22 @@ static void perform_input(anjay_input_ctx_t *ctx,
         }
         break;
     }
-    case MOCK_DATA_ARRAY:
-        retval = input_array(ctx, input->data.array);
-        break;
     default:
         AVS_UNIT_ASSERT_NOT_EQUAL(input->type, input->type);
     }
     AVS_UNIT_ASSERT_EQUAL(retval, input->expected_retval);
 }
 
-static int input_array(anjay_input_ctx_t *ctx,
-                       const anjay_mock_dm_data_array_t *const *array) {
-    anjay_input_ctx_t *array_ctx = anjay_get_array(ctx);
-    if (!array_ctx) {
-        return -1;
-    }
-    for (const anjay_mock_dm_data_array_t *const *entry = array;
-         entry && *entry;
-         ++entry) {
-        perform_input(array_ctx, &(*entry)->value);
-    }
-    return 0;
-}
-
 int _anjay_mock_dm_resource_write(anjay_t *anjay,
                                   const anjay_dm_object_def_t *const *obj_ptr,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
+                                  anjay_riid_t riid,
                                   anjay_input_ctx_t *ctx) {
     DM_ACTION_COMMON(RESOURCE_WRITE);
-    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_and_rid.iid);
-    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_and_rid.rid);
+    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_rid_riid.iid);
+    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_rid_riid.rid);
+    AVS_UNIT_ASSERT_EQUAL(riid, EXPECTED_COMMANDS->input.iid_rid_riid.riid);
     perform_input(ctx, &EXPECTED_COMMANDS->value.data);
     DM_ACTION_RETURN;
 }
@@ -424,14 +379,40 @@ int _anjay_mock_dm_resource_execute(anjay_t *anjay,
     DM_ACTION_RETURN;
 }
 
-int _anjay_mock_dm_resource_dim(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
-                                anjay_iid_t iid,
-                                anjay_rid_t rid) {
-    DM_ACTION_COMMON(RESOURCE_DIM);
+int _anjay_mock_dm_resource_reset(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj_ptr,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid) {
+    DM_ACTION_COMMON(RESOURCE_RESET);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_and_rid.iid);
     AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_and_rid.rid);
     DM_ACTION_RETURN;
+}
+
+int _anjay_mock_dm_list_resource_instances(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_dm_list_ctx_t *ctx) {
+    DM_ACTION_COMMON(LIST_RESOURCE_INSTANCES);
+    AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.iid_and_rid.iid);
+    AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.iid_and_rid.rid);
+    // avs_dm_emit() may call other handlers,
+    // so pop the command from the queue early
+    AVS_LIST(anjay_mock_dm_expected_command_t) command =
+            AVS_LIST_DETACH(&EXPECTED_COMMANDS);
+    if (command->value.id_array) {
+        for (const anjay_riid_t *riid = command->value.id_array;
+             *riid != ANJAY_ID_INVALID;
+             ++riid) {
+            anjay_dm_emit(ctx, *riid);
+        }
+        avs_free(command->value.id_array);
+    }
+    int retval = command->retval;
+    AVS_LIST_DELETE(&command);
+    return retval;
 }
 
 int _anjay_mock_dm_resource_read_attrs(
@@ -440,12 +421,12 @@ int _anjay_mock_dm_resource_read_attrs(
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        anjay_dm_resource_attributes_t *out) {
+        anjay_dm_r_attributes_t *out) {
     DM_ACTION_COMMON(RESOURCE_READ_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_iid_rid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_iid_rid.iid);
     AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.ssid_iid_rid.rid);
-    *_anjay_dm_get_internal_res_attrs(out) =
+    *_anjay_dm_get_internal_r_attrs(out) =
             EXPECTED_COMMANDS->value.resource_attributes;
     DM_ACTION_RETURN;
 }
@@ -456,33 +437,40 @@ int _anjay_mock_dm_resource_write_attrs(
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        const anjay_dm_resource_attributes_t *attrs) {
+        const anjay_dm_r_attributes_t *attrs) {
     DM_ACTION_COMMON(RESOURCE_WRITE_ATTRS);
     AVS_UNIT_ASSERT_EQUAL(ssid, EXPECTED_COMMANDS->input.ssid_iid_rid.ssid);
     AVS_UNIT_ASSERT_EQUAL(iid, EXPECTED_COMMANDS->input.ssid_iid_rid.iid);
     AVS_UNIT_ASSERT_EQUAL(rid, EXPECTED_COMMANDS->input.ssid_iid_rid.rid);
     _anjay_mock_dm_assert_attributes_equal(
-            _anjay_dm_get_internal_res_attrs_const(attrs),
+            _anjay_dm_get_internal_r_attrs_const(attrs),
             &EXPECTED_COMMANDS->value.resource_attributes);
     DM_ACTION_RETURN;
 }
 
-static anjay_mock_dm_expected_command_t *new_expected_command(void) {
+static anjay_mock_dm_expected_command_t *
+new_expected_command_impl(anjay_mock_dm_expected_command_type_t type,
+                          const char *type_str) {
     anjay_mock_dm_expected_command_t *new_command =
             AVS_LIST_NEW_ELEMENT(anjay_mock_dm_expected_command_t);
     AVS_UNIT_ASSERT_NOT_NULL(new_command);
+    new_command->command = type;
+    new_command->command_str = type_str;
     AVS_LIST_APPEND(&EXPECTED_COMMANDS, new_command);
     return new_command;
 }
+
+#define NEW_EXPECTED_COMMAND(Type) \
+    (new_expected_command_impl((Type), AVS_QUOTE_MACRO(Type)))
 
 void _anjay_mock_dm_expect_object_read_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
         int retval,
-        const anjay_dm_internal_attrs_t *attrs) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_OBJECT_READ_DEFAULT_ATTRS;
+        const anjay_dm_internal_oi_attrs_t *attrs) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_OBJECT_READ_DEFAULT_ATTRS);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
     command->input.ssid = ssid;
@@ -498,10 +486,10 @@ void _anjay_mock_dm_expect_object_write_default_attrs(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_internal_oi_attrs_t *attrs,
         int retval) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_OBJECT_WRITE_DEFAULT_ATTRS;
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_OBJECT_WRITE_DEFAULT_ATTRS);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
     command->input.ssid = ssid;
@@ -509,65 +497,41 @@ void _anjay_mock_dm_expect_object_write_default_attrs(
     command->value.common_attributes = *attrs;
 }
 
-void _anjay_mock_dm_expect_instance_reset(
+void _anjay_mock_dm_expect_list_instances(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
-        anjay_iid_t iid,
-        int retval) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_INSTANCE_RESET;
-    command->anjay = anjay;
-    command->obj_ptr = obj_ptr;
-    command->input.iid = iid;
-    command->retval = retval;
-}
-
-void _anjay_mock_dm_expect_instance_it(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj_ptr,
-        uintptr_t iteration,
         int retval,
-        anjay_iid_t out) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_INSTANCE_IT;
+        const anjay_iid_t *iid_array) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_LIST_INSTANCES);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
-    command->input.iteration = iteration;
-    command->value.output_iid = out;
+    size_t array_size = 1;
+    while (iid_array[array_size - 1] != ANJAY_ID_INVALID) {
+        ++array_size;
+    }
+    command->value.id_array = avs_malloc(array_size * sizeof(anjay_iid_t));
+    AVS_UNIT_ASSERT_NOT_NULL(command->value.id_array);
+    memcpy(command->value.id_array, iid_array,
+           array_size * sizeof(anjay_iid_t));
     command->retval = retval;
 }
 
-#define EXPECT_INSTANCE_ACTION(LName, UName)                                \
-    void _anjay_mock_dm_expect_instance_##LName(                            \
-            anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr,    \
-            anjay_iid_t iid, int retval) {                                  \
-        anjay_mock_dm_expected_command_t *command = new_expected_command(); \
-        command->command = MOCK_DM_INSTANCE_##UName;                        \
-        command->anjay = anjay;                                             \
-        command->obj_ptr = obj_ptr;                                         \
-        command->input.iid = iid;                                           \
-        command->retval = retval;                                           \
+#define EXPECT_INSTANCE_ACTION(LName, UName)                             \
+    void _anjay_mock_dm_expect_instance_##LName(                         \
+            anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr, \
+            anjay_iid_t iid, int retval) {                               \
+        anjay_mock_dm_expected_command_t *command =                      \
+                NEW_EXPECTED_COMMAND(MOCK_DM_INSTANCE_##UName);          \
+        command->anjay = anjay;                                          \
+        command->obj_ptr = obj_ptr;                                      \
+        command->input.iid = iid;                                        \
+        command->retval = retval;                                        \
     }
 
-EXPECT_INSTANCE_ACTION(present, PRESENT)
+EXPECT_INSTANCE_ACTION(reset, RESET)
 EXPECT_INSTANCE_ACTION(remove, REMOVE)
-
-void _anjay_mock_dm_expect_instance_create(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj_ptr,
-        anjay_iid_t iid,
-        anjay_ssid_t ssid,
-        int retval,
-        anjay_iid_t out_iid) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_INSTANCE_CREATE;
-    command->anjay = anjay;
-    command->obj_ptr = obj_ptr;
-    command->input.ssid_and_iid.iid = iid;
-    command->input.ssid_and_iid.ssid = ssid;
-    command->retval = retval;
-    command->value.output_iid = out_iid;
-}
+EXPECT_INSTANCE_ACTION(create, CREATE)
 
 void _anjay_mock_dm_expect_instance_read_default_attrs(
         anjay_t *anjay,
@@ -575,9 +539,9 @@ void _anjay_mock_dm_expect_instance_read_default_attrs(
         anjay_iid_t iid,
         anjay_ssid_t ssid,
         int retval,
-        const anjay_dm_internal_attrs_t *attrs) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_INSTANCE_READ_DEFAULT_ATTRS;
+        const anjay_dm_internal_oi_attrs_t *attrs) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_INSTANCE_READ_DEFAULT_ATTRS);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
     command->input.ssid_and_iid.ssid = ssid;
@@ -595,10 +559,10 @@ void _anjay_mock_dm_expect_instance_write_default_attrs(
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_attrs_t *attrs,
+        const anjay_dm_internal_oi_attrs_t *attrs,
         int retval) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_INSTANCE_WRITE_DEFAULT_ATTRS;
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_INSTANCE_WRITE_DEFAULT_ATTRS);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
     command->input.ssid_and_iid.ssid = ssid;
@@ -607,47 +571,56 @@ void _anjay_mock_dm_expect_instance_write_default_attrs(
     command->value.common_attributes = *attrs;
 }
 
-#define EXPECT_RESOURCE_ACTION_COMMON(UName)                            \
-    anjay_mock_dm_expected_command_t *command = new_expected_command(); \
-    command->command = MOCK_DM_RESOURCE_##UName;                        \
-    command->anjay = anjay;                                             \
-    command->obj_ptr = obj_ptr;                                         \
-    command->input.iid_and_rid.iid = iid;                               \
-    command->input.iid_and_rid.rid = rid;                               \
-    command->retval = retval;
-
-void _anjay_mock_dm_expect_resource_present(
+void _anjay_mock_dm_expect_list_resources(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
-        anjay_rid_t rid,
-        int retval) {
-    EXPECT_RESOURCE_ACTION_COMMON(PRESENT);
-}
-
-void _anjay_mock_dm_expect_resource_operations(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *obj_ptr,
-        anjay_rid_t rid,
-        anjay_dm_resource_op_mask_t mask,
-        int retval) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_RESOURCE_OPERATIONS;
+        int retval,
+        const anjay_mock_dm_res_entry_t *res_array) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_LIST_RESOURCES);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
-    command->input.rid = rid;
+    command->input.iid = iid;
+    if (res_array) {
+        size_t array_size = 1;
+        while (res_array[array_size - 1].rid != ANJAY_ID_INVALID) {
+            ++array_size;
+        }
+        command->value.res_array =
+                avs_malloc(array_size * sizeof(anjay_mock_dm_res_entry_t));
+        AVS_UNIT_ASSERT_NOT_NULL(command->value.id_array);
+        memcpy(command->value.res_array, res_array,
+               array_size * sizeof(anjay_mock_dm_res_entry_t));
+    }
     command->retval = retval;
-    command->value.mask = mask;
 }
+
+#define EXPECT_RESOURCE_ACTION_COMMON(UName)                \
+    anjay_mock_dm_expected_command_t *command =             \
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_##UName); \
+    command->anjay = anjay;                                 \
+    command->obj_ptr = obj_ptr;                             \
+    command->input.iid_and_rid.iid = iid;                   \
+    command->input.iid_and_rid.rid = rid;                   \
+    command->retval = retval;
 
 void _anjay_mock_dm_expect_resource_read(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
+        anjay_riid_t riid,
         int retval,
         const anjay_mock_dm_data_t *data) {
-    EXPECT_RESOURCE_ACTION_COMMON(READ);
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_READ);
+    command->anjay = anjay;
+    command->obj_ptr = obj_ptr;
+    command->input.iid_rid_riid.iid = iid;
+    command->input.iid_rid_riid.rid = rid;
+    command->input.iid_rid_riid.riid = riid;
+    command->retval = retval;
     command->value.data = *data;
 }
 
@@ -656,9 +629,17 @@ void _anjay_mock_dm_expect_resource_write(
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
+        anjay_rid_t riid,
         const anjay_mock_dm_data_t *data,
         int retval) {
-    EXPECT_RESOURCE_ACTION_COMMON(WRITE);
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_WRITE);
+    command->anjay = anjay;
+    command->obj_ptr = obj_ptr;
+    command->input.iid_rid_riid.iid = iid;
+    command->input.iid_rid_riid.rid = rid;
+    command->input.iid_rid_riid.riid = riid;
+    command->retval = retval;
     command->value.data = *data;
 }
 
@@ -673,13 +654,39 @@ void _anjay_mock_dm_expect_resource_execute(
     command->value.data = *data;
 }
 
-void _anjay_mock_dm_expect_resource_dim(
+void _anjay_mock_dm_expect_resource_reset(
         anjay_t *anjay,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
         int retval) {
-    EXPECT_RESOURCE_ACTION_COMMON(DIM);
+    EXPECT_RESOURCE_ACTION_COMMON(RESET);
+}
+
+void _anjay_mock_dm_expect_list_resource_instances(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        int retval,
+        const anjay_riid_t *riid_array) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_LIST_RESOURCE_INSTANCES);
+    command->anjay = anjay;
+    command->obj_ptr = obj_ptr;
+    command->input.iid_and_rid.iid = iid;
+    command->input.iid_and_rid.rid = rid;
+    command->retval = retval;
+    if (riid_array) {
+        size_t array_size = 1;
+        while (riid_array[array_size - 1] != ANJAY_ID_INVALID) {
+            ++array_size;
+        }
+        command->value.id_array = avs_malloc(array_size * sizeof(anjay_riid_t));
+        AVS_UNIT_ASSERT_NOT_NULL(command->value.id_array);
+        memcpy(command->value.id_array, riid_array,
+               array_size * sizeof(anjay_riid_t));
+    }
 }
 
 void _anjay_mock_dm_expect_resource_read_attrs(
@@ -689,9 +696,9 @@ void _anjay_mock_dm_expect_resource_read_attrs(
         anjay_rid_t rid,
         anjay_ssid_t ssid,
         int retval,
-        const anjay_dm_internal_res_attrs_t *attrs) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_RESOURCE_READ_ATTRS;
+        const anjay_dm_internal_r_attrs_t *attrs) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_READ_ATTRS);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
     command->input.ssid_iid_rid.ssid = ssid;
@@ -711,15 +718,61 @@ void _anjay_mock_dm_expect_resource_write_attrs(
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_res_attrs_t *attrs,
+        const anjay_dm_internal_r_attrs_t *attrs,
         int retval) {
-    anjay_mock_dm_expected_command_t *command = new_expected_command();
-    command->command = MOCK_DM_RESOURCE_WRITE_ATTRS;
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_WRITE_ATTRS);
     command->anjay = anjay;
     command->obj_ptr = obj_ptr;
     command->input.ssid_iid_rid.ssid = ssid;
     command->input.ssid_iid_rid.iid = iid;
     command->input.ssid_iid_rid.rid = rid;
+    command->retval = retval;
+    command->value.resource_attributes = *attrs;
+}
+
+void _anjay_mock_dm_expect_resource_instance_read_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        int retval,
+        const anjay_dm_internal_r_attrs_t *attrs) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_INSTANCE_READ_ATTRS);
+    command->anjay = anjay;
+    command->obj_ptr = obj_ptr;
+    command->input.ssid_iid_rid_riid.ssid = ssid;
+    command->input.ssid_iid_rid_riid.iid = iid;
+    command->input.ssid_iid_rid_riid.rid = rid;
+    command->input.ssid_iid_rid_riid.riid = riid;
+    command->retval = retval;
+    if (attrs) {
+        command->value.resource_attributes = *attrs;
+    } else {
+        AVS_UNIT_ASSERT_FAILED(retval);
+    }
+}
+
+void _anjay_mock_dm_expect_resource_instance_write_attrs(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        const anjay_dm_internal_r_attrs_t *attrs,
+        int retval) {
+    anjay_mock_dm_expected_command_t *command =
+            NEW_EXPECTED_COMMAND(MOCK_DM_RESOURCE_INSTANCE_WRITE_ATTRS);
+    command->anjay = anjay;
+    command->obj_ptr = obj_ptr;
+    command->input.ssid_iid_rid_riid.ssid = ssid;
+    command->input.ssid_iid_rid_riid.iid = iid;
+    command->input.ssid_iid_rid_riid.rid = rid;
+    command->input.ssid_iid_rid_riid.riid = riid;
     command->retval = retval;
     command->value.resource_attributes = *attrs;
 }

@@ -15,8 +15,10 @@
 # limitations under the License.
 
 import socket
+import unittest
 
 from framework.lwm2m_test import *
+from suites.default.retransmissions import RetransmissionTest
 
 
 class BufferSizeTest:
@@ -30,7 +32,7 @@ class BufferSizeTest:
             if endpoint is not None:
                 kwargs['extra_cmdline_args'] += ['-e', endpoint]
 
-            self.setup_demo_with_servers(**kwargs)
+            super().setUp(**kwargs)
 
 
 class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
@@ -38,27 +40,29 @@ class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
         super().setUp(inbuf_size=48)
 
     def runTest(self):
-        self.create_instance(self.serv, oid=1337, iid=1)
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
 
-        pkt = Lwm2mWrite('/1337/1/6',
+        pkt = Lwm2mWrite(ResPath.Test[1].ResBytesSize,
                          options=[coap.Option.URI_QUERY('lt=0.' + '0' * 128),
                                   coap.Option.URI_QUERY('gt=9.' + '0' * 128),
                                   coap.Option.URI_QUERY('st=1.' + '0' * 128)],
-                         content=b'32')
+                         content=b'3')
         self.serv.send(pkt)
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_REQUEST_ENTITY_TOO_LARGE),
-                            self.serv.recv())
+        self.assertMsgEqual(
+            Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_REQUEST_ENTITY_TOO_LARGE),
+            self.serv.recv())
 
         # When options do not dominate message size everything works fine.
-        pkt = Lwm2mWrite('/1337/1/6',
+        pkt = Lwm2mWrite(ResPath.Test[1].ResBytesSize,
                          options=[coap.Option.URI_QUERY('lt=0.0'),
                                   coap.Option.URI_QUERY('gt=9.0'),
                                   coap.Option.URI_QUERY('st=1.0')],
-                         content=b'32')
+                         content=b'3')
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.serv.recv())
 
 
+@unittest.skip('TODO: this calculation does not apply to CoAP2')
 class OutputBufferTooSmallButDemoDoesntCrash(BufferSizeTest.Base):
     def setUp(self):
         super().setUp(outbuf_size=8, auto_register=False)
@@ -72,6 +76,7 @@ class OutputBufferTooSmallButDemoDoesntCrash(BufferSizeTest.Base):
             self.serv.recv(timeout_s=3)
 
 
+@unittest.skip('TODO: this calculation does not apply to CoAP2')
 class OutputBufferTooSmallToHoldEndpoint(BufferSizeTest.Base):
     def setUp(self):
         super().setUp(outbuf_size=128, auto_register=False, endpoint="F" * 125)
@@ -84,6 +89,7 @@ class OutputBufferTooSmallToHoldEndpoint(BufferSizeTest.Base):
             self.serv.recv(timeout_s=3)
 
 
+@unittest.skip('TODO: this calculation does not apply to CoAP2')
 class OutputBufferCannotHoldPayloadMarker(BufferSizeTest.Base):
     def setUp(self):
         # +------+---------------------------------------------+
@@ -127,6 +133,7 @@ class OutputBufferCannotHoldPayloadMarker(BufferSizeTest.Base):
             print(self.serv.recv(timeout_s=6))
 
 
+@unittest.skip('TODO: this calculation does not apply to CoAP2')
 class OutputBufferAbleToHoldPayloadMarkerBeginsBlockTransfer(BufferSizeTest.Base):
     def setUp(self):
         super().setUp(endpoint="F" * 128, outbuf_size=170, auto_register=False)
@@ -141,6 +148,7 @@ class OutputBufferAbleToHoldPayloadMarkerBeginsBlockTransfer(BufferSizeTest.Base
             print(self.serv.recv(timeout_s=6))
 
 
+@unittest.skip('TODO: this calculation does not apply to CoAP2')
 class ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize(BufferSizeTest.Base):
     def setUp(self):
         # +------+---------------------------------------------+
@@ -167,24 +175,3 @@ class ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize(BufferSizeTest.Ba
         self.assertDemoRegisters(location='/rd')
 
 
-class InputBufferSizeTooSmallToHoldRegisterResponse(BufferSizeTest.Base):
-    def setUp(self):
-        # see calculation in ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize
-        # the buffer is 1B too short to hold Register response
-        super().setUp(inbuf_size=14, auto_register=False, bootstrap_server=True)
-
-    def tearDown(self):
-        super().tearDown(auto_deregister=False)
-
-    def runTest(self):
-        req = self.serv.recv()
-        self.assertMsgEqual(
-            Lwm2mRegister('/rd?lwm2m=%s&ep=%s&lt=%d' % (DEMO_LWM2M_VERSION, DEMO_ENDPOINT_NAME, 86400)),
-            req)
-        self.serv.send(Lwm2mCreated.matching(req)(location='/rd'))
-
-        # client should not be able to read the whole packet, falling back to Bootstrap
-        # registration unsuccessful and retrying after reconnecting
-        req = self.bootstrap_server.recv(timeout_s=5)
-        self.assertIsInstance(req, Lwm2mRequestBootstrap)
-        self.bootstrap_server.send(Lwm2mChanged.matching(req)())

@@ -20,6 +20,7 @@
 #include <avsystem/commons/time.h>
 
 void _anjay_mock_clock_start(const avs_time_monotonic_t t);
+void _anjay_mock_clock_reset(const avs_time_monotonic_t t);
 void _anjay_mock_clock_advance(const avs_time_duration_t t);
 void _anjay_mock_clock_finish(void);
 

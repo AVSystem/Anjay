@@ -16,11 +16,18 @@
 
 import operator
 import struct
+import logging
+import textwrap
 
 from .code import Code
 from .option import Option
 from .type import Type
 from .utils import hexlify, hexlify_nonprintable
+from .transport import Transport
+
+from collections import namedtuple
+
+Header = namedtuple('Header', ('code', 'version', 'type', 'id', 'token_length'))
 
 
 class Placeholder:
@@ -76,8 +83,25 @@ class RandomTokenGenerator:
 _TOKEN_GENERATOR = RandomTokenGenerator()
 
 
+def _parse_udp_header(packet):
+    if len(packet) < 4:
+        raise ValueError("invalid CoAP message: %s" % hexlify(packet))
+    version_type_token_length, code, msg_id = struct.unpack('!BBH', packet[:4])
+
+    code = Code.from_byte(code)
+    version = (version_type_token_length >> 6) & 0x03
+    type = Type((version_type_token_length >> 4) & 0x03)
+    token_length = version_type_token_length & 0x0F
+
+    if version != 1:
+        raise ValueError("invalid CoAP version: %d, expected 1" % version)
+
+    at = 4
+
+    return Header(code, version, type, msg_id, token_length), at
+
 class Packet(object):
-    def __init__(self, type, code, msg_id, token, options=None, content=b'', version=1):
+    def __init__(self, type=None, code=1, msg_id=0, token=b'', options=None, content=b'', version=1):
         self.version = version
         self.type = type
         self.code = code
@@ -105,45 +129,75 @@ class Packet(object):
                    repr(self.content),
                    self.version))
 
+    def _size_breakdown(self, header):
+        serialized_opt_sizes = []
+        prev_opt_number = 0
+        for o in self.options:
+            serialized_opt_sizes.append(len(o.serialize(prev_opt_number)))
+            prev_opt_number = o.number
+
+        sizes = {
+            'header_size': 4,
+            'token_size': len(self.token) if self.token else 0,
+            'options_size': sum(serialized_opt_sizes),
+            'marker_size': (1 if self.content else 0),
+            'payload_size': len(self.content) if self.content else 0
+        }
+
+        options_breakdown = [
+            '- %d for %s' % (size, opt) for size, opt in zip(serialized_opt_sizes, self.options)
+        ]
+        return textwrap.dedent('''\
+            {header}
+            - header:         {header_size:>5}
+            - token:          {token_size:>5}
+            - options:        {options_size:>5}
+            {options_breakdown}
+            - payload marker: {marker_size:>5}
+            - payload:        {payload_size:>5}
+                              -----
+            TOTAL             {packet_size:>5}''').format(
+                header=header,
+                packet_size=sum(sizes.values()),
+                options_breakdown=textwrap.indent('\n'.join(options_breakdown), prefix='  '),
+                **sizes)
+
     @staticmethod
-    def parse(packet):
-        packet = memoryview(packet)
-        if len(packet) < 4:
-            raise ValueError("invalid CoAP message: %s" % hexlify(packet))
-        version_type_token_length, code, msg_id = struct.unpack('!BBH', packet[:4])
+    def parse(self, transport=Transport.UDP):
+        packet = memoryview(self)
+        if transport == Transport.UDP:
+            header, offset = _parse_udp_header(packet)
+        else:
+            raise ValueError("Invalid transport: %r" % (transport,))
 
-        code = Code.from_byte(code)
-        version = (version_type_token_length >> 6) & 0x03
-        type = Type((version_type_token_length >> 4) & 0x03)
-        token_length = version_type_token_length & 0x0F
+        if header.token_length > 8:
+            raise ValueError("invalid CoAP token length: %d, expected <= 8" % header.token_length)
 
-        if version != 1:
-            raise ValueError("invalid CoAP version: %d, expected 1" % version)
-        if token_length > 8:
-            raise ValueError("invalid CoAP token length: %d, expected <= 8" % token_length)
-
-        at = 4
-        token = packet[at:at + token_length]
-        at += token_length
+        token = packet[offset:offset+header.token_length]
+        offset += header.token_length
 
         options = []
         content = b''
 
-        while at < len(packet):
-            if packet[at] == 0xFF:
-                content = packet[at + 1:]
+        while offset < len(packet):
+            if packet[offset] == 0xFF:
+                content = packet[offset + 1:]
                 if not content:
                     raise ValueError('payload marker at end of packet is invalid')
-                at = len(packet)
+                offset = len(packet)
             else:
-                opt, bytes_parsed = Option.parse(packet[at:], options[-1].number if options else 0)
+                opt, bytes_parsed = Option.parse(packet[offset:], options[-1].number if options else 0)
                 options.append(opt)
-                at += bytes_parsed
+                offset += bytes_parsed
 
-        if at != len(packet):
-            raise ValueError("CoAP packet malformed starting at offset %d: %s" % (at, hexlify(packet[at:])))
+        if offset != len(packet):
+            raise ValueError("CoAP packet malformed starting at offset %d: %s" % (offset, hexlify(packet[offset:])))
 
-        return Packet(type, code, msg_id, token, options, content, version)
+        pkt = Packet(header.type, header.code, header.id, token, options, content, header.version)
+        if transport == Transport.UDP:
+            # TODO: add log for TCP
+            logging.debug('%s', pkt._size_breakdown('received'))
+        return pkt
 
     def fill_placeholders(self):
         if self.msg_id is ANY:
@@ -157,7 +211,14 @@ class Packet(object):
 
         return self
 
-    def serialize(self):
+
+    def _serialize_udp_header(self):
+        return struct.pack('!BBH',
+                        (self.version << 6) | (self.type.value << 4) | (len(self.token) & 0xF),
+                        self.code.as_byte(),
+                        self.msg_id)
+
+    def serialize(self, transport=Transport.UDP):
         if any(x is ANY for x in (self.msg_id, self.token, self.options, self.content)):
             raise ValueError('cannot serialize CoAP packet: placeholder values present')
 
@@ -169,13 +230,13 @@ class Packet(object):
             serialized_opts.append(o.serialize(prev_opt_number))
             prev_opt_number = o.number
 
-        return (
-            struct.pack('!BBH', (self.version << 6) | (self.type.value << 4) | (len(self.token) & 0xF),
-                        self.code.as_byte(),
-                        self.msg_id)
-            + self.token
-            + b''.join(serialized_opts)
-            + content)
+        if transport == Transport.UDP:
+            logging.debug('%s', self._size_breakdown('sent'))
+            data = self._serialize_udp_header()
+        else:
+            raise ValueError("Invalid transport: %r" % (transport,))
+
+        return (data + self.token + b''.join(serialized_opts) + content)
 
     def get_options(self, type):
         return [o for o in self.options if o.number == type.number]
@@ -228,7 +289,7 @@ class Packet(object):
             options_str = '\n    ' + '\n    '.join(str(o) for o in self.options)
 
         return (
-            'version: %d\n'
+            'version: %s\n'
             'type: %s\n'
             'code: %s\n'
             'msg_id: %s\n'

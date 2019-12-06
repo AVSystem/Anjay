@@ -123,51 +123,22 @@ static portfolio_instance_t *find_instance(const portfolio_t *obj,
     return NULL;
 }
 
-static int instance_present(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *obj_ptr,
-                            anjay_iid_t iid) {
-    (void) anjay;
-    return find_instance(get_obj(obj_ptr), iid) != NULL;
-}
-
-static int instance_it(anjay_t *anjay,
-                       const anjay_dm_object_def_t *const *obj_ptr,
-                       anjay_iid_t *out,
-                       void **cookie) {
+static int list_instances(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
 
-    AVS_LIST(portfolio_instance_t) curr =
-            (AVS_LIST(portfolio_instance_t)) *cookie;
-    if (!curr) {
-        curr = get_obj(obj_ptr)->instances;
-    } else {
-        curr = AVS_LIST_NEXT(curr);
-    }
-
-    *out = curr ? curr->iid : ANJAY_IID_INVALID;
-    *cookie = curr;
-    return 0;
-}
-
-static anjay_iid_t get_new_iid(AVS_LIST(portfolio_instance_t) instances) {
-    anjay_iid_t iid = 1;
     AVS_LIST(portfolio_instance_t) it;
-    AVS_LIST_FOREACH(it, instances) {
-        if (it->iid == iid) {
-            ++iid;
-        } else if (it->iid > iid) {
-            break;
-        }
+    AVS_LIST_FOREACH(it, get_obj(obj_ptr)->instances) {
+        anjay_dm_emit(ctx, it->iid);
     }
-    return iid;
+    return 0;
 }
 
 static int instance_create(anjay_t *anjay,
                            const anjay_dm_object_def_t *const *obj_ptr,
-                           anjay_iid_t *inout_iid,
-                           anjay_ssid_t ssid) {
+                           anjay_iid_t iid) {
     (void) anjay;
-    (void) ssid;
     portfolio_t *obj = get_obj(obj_ptr);
     assert(obj);
 
@@ -177,16 +148,7 @@ static int instance_create(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
 
-    if (*inout_iid == ANJAY_IID_INVALID) {
-        *inout_iid = get_new_iid(obj->instances);
-    }
-
-    int result = ANJAY_ERR_INTERNAL;
-    if (*inout_iid == ANJAY_IID_INVALID) {
-        AVS_LIST_CLEAR(&created);
-        return result;
-    }
-    created->iid = *inout_iid;
+    created->iid = iid;
 
     AVS_LIST(portfolio_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &obj->instances) {
@@ -233,10 +195,23 @@ static int instance_reset(anjay_t *anjay,
     return 0;
 }
 
+static int list_resources(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid,
+                          anjay_dm_resource_list_ctx_t *ctx) {
+    (void) anjay;
+    (void) obj_ptr;
+    (void) iid;
+    anjay_dm_emit_res(
+            ctx, RID_IDENTITY, ANJAY_DM_RES_RWM, ANJAY_DM_RES_PRESENT);
+    return 0;
+}
+
 static int resource_read(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj_ptr,
                          anjay_iid_t iid,
                          anjay_rid_t rid,
+                         anjay_riid_t riid,
                          anjay_output_ctx_t *ctx) {
     (void) anjay;
 
@@ -246,29 +221,12 @@ static int resource_read(anjay_t *anjay,
     assert(inst);
 
     switch (rid) {
-    case RID_IDENTITY: {
-        anjay_output_ctx_t *array = anjay_ret_array_start(ctx);
-        if (!array) {
-            return ANJAY_ERR_INTERNAL;
-        }
-        int result = 0;
-
-        AVS_STATIC_ASSERT(_MAX_IDENTITY_TYPE <= UINT16_MAX,
-                          identity_type_too_big);
-        for (int32_t i = 0; i < _MAX_IDENTITY_TYPE; ++i) {
-            if (!inst->has_identity[i]) {
-                continue;
-            }
-
-            if ((result = anjay_ret_array_index(array, (anjay_riid_t) i))
-                    || (result = anjay_ret_string(array,
-                                                  inst->identity_value[i]))) {
-                return result;
-            }
-        }
-        return anjay_ret_array_finish(array);
-    }
+    case RID_IDENTITY:
+        assert(riid < _MAX_IDENTITY_TYPE);
+        assert(inst->has_identity[riid]);
+        return anjay_ret_string(ctx, inst->identity_value[riid]);
     default:
+        AVS_UNREACHABLE("Read called on unknown resource");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
@@ -277,6 +235,7 @@ static int resource_write(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t iid,
                           anjay_rid_t rid,
+                          anjay_riid_t riid,
                           anjay_input_ctx_t *ctx) {
     (void) anjay;
 
@@ -287,40 +246,45 @@ static int resource_write(anjay_t *anjay,
 
     switch (rid) {
     case RID_IDENTITY: {
-        anjay_input_ctx_t *array = anjay_get_array(ctx);
-        if (!array) {
-            return ANJAY_ERR_INTERNAL;
+        if (riid >= _MAX_IDENTITY_TYPE) {
+            return ANJAY_ERR_BAD_REQUEST;
         }
-
-        anjay_riid_t riid;
-        int result = 0;
         char value[MAX_IDENTITY_VALUE_SIZE];
-        memset(inst->has_identity, 0, sizeof(inst->has_identity));
-        while (!result && !(result = anjay_get_array_index(array, &riid))) {
-            result = anjay_get_string(array, value, sizeof(value));
-
-            if (riid >= _MAX_IDENTITY_TYPE) {
-                return ANJAY_ERR_BAD_REQUEST;
-            }
-
+        int result = anjay_get_string(ctx, value, sizeof(value));
+        if (!result) {
             inst->has_identity[riid] = true;
             strcpy(inst->identity_value[riid], value);
         }
-        if (result && result != ANJAY_GET_INDEX_END) {
-            return ANJAY_ERR_BAD_REQUEST;
-        }
-        return 0;
+        return result;
     }
 
     default:
+        AVS_UNREACHABLE("Write called on unknown resource");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
 
-static int resource_dim(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj_ptr,
-                        anjay_iid_t iid,
-                        anjay_rid_t rid) {
+static int resource_reset(anjay_t *anjay,
+                          const anjay_dm_object_def_t *const *obj_ptr,
+                          anjay_iid_t iid,
+                          anjay_rid_t rid) {
+    (void) anjay;
+
+    portfolio_t *obj = get_obj(obj_ptr);
+    assert(obj);
+    portfolio_instance_t *inst = find_instance(obj, iid);
+    assert(inst);
+
+    assert(rid == RID_IDENTITY);
+    memset(inst->has_identity, 0, sizeof(inst->has_identity));
+    return 0;
+}
+
+static int list_resource_instances(anjay_t *anjay,
+                                   const anjay_dm_object_def_t *const *obj_ptr,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid,
+                                   anjay_dm_list_ctx_t *ctx) {
     (void) anjay;
 
     portfolio_t *obj = get_obj(obj_ptr);
@@ -330,14 +294,17 @@ static int resource_dim(anjay_t *anjay,
 
     switch (rid) {
     case RID_IDENTITY: {
-        int dim = 0;
-        for (int32_t i = 0; i < _MAX_IDENTITY_TYPE; ++i) {
-            dim += !!inst->has_identity[i];
+        for (anjay_riid_t i = 0; i < _MAX_IDENTITY_TYPE; ++i) {
+            if (inst->has_identity[i]) {
+                anjay_dm_emit(ctx, i);
+            }
         }
-        return dim;
+        return 0;
     }
     default:
-        return ANJAY_DM_DIM_INVALID;
+        AVS_UNREACHABLE(
+                "Attempted to list instances in a single-instance resource");
+        return ANJAY_ERR_INTERNAL;
     }
 }
 
@@ -376,18 +343,17 @@ static int transaction_rollback(anjay_t *anjay,
 
 static const anjay_dm_object_def_t OBJ_DEF = {
     .oid = 16,
-    .supported_rids = ANJAY_DM_SUPPORTED_RIDS(RID_IDENTITY, ),
     .handlers = {
-        .instance_it = instance_it,
-        .instance_present = instance_present,
+        .list_instances = list_instances,
         .instance_create = instance_create,
         .instance_remove = instance_remove,
         .instance_reset = instance_reset,
 
-        .resource_present = anjay_dm_resource_present_TRUE,
+        .list_resources = list_resources,
         .resource_read = resource_read,
         .resource_write = resource_write,
-        .resource_dim = resource_dim,
+        .resource_reset = resource_reset,
+        .list_resource_instances = list_resource_instances,
 
         .transaction_begin = transaction_begin,
         .transaction_validate = anjay_dm_transaction_NOOP,
@@ -411,4 +377,20 @@ void portfolio_object_release(const anjay_dm_object_def_t **def) {
         AVS_LIST_CLEAR(&obj->instances);
         avs_free(obj);
     }
+}
+
+int portfolio_get_instances(const anjay_dm_object_def_t **def,
+                            AVS_LIST(anjay_iid_t) *out) {
+    portfolio_t *obj = get_obj(def);
+    assert(!*out);
+    AVS_LIST(portfolio_instance_t) it;
+    AVS_LIST_FOREACH(it, obj->instances) {
+        if (!(*out = AVS_LIST_NEW_ELEMENT(anjay_iid_t))) {
+            demo_log(ERROR, "out of memory");
+            return -1;
+        }
+        **out = it->iid;
+        AVS_LIST_ADVANCE_PTR(&out);
+    }
+    return 0;
 }

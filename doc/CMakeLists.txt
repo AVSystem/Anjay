@@ -70,21 +70,24 @@ endif()
 if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
     find_package(Doxygen)
 
-    set(DOXYGEN_INPUT_PATHS ${PUBLIC_INCLUDE_DIRS})
+    get_target_property(DOXYGEN_INPUT_PATHS anjay INTERFACE_INCLUDE_DIRECTORIES)
     # doxygen expects whitespace-separated list, cmake stores them as
     # semicolon-separated strings
     string(REPLACE ";" " " DOXYGEN_INPUT_PATHS "${DOXYGEN_INPUT_PATHS}")
 
     set(DOXYGEN_OUTPUT_DIR ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen)
 
+    # configure_file does not expand CMake generator expressions; file(GENERATE) does
     configure_file(${ANJAY_SOURCE_DIR}/Doxyfile.in
-                   ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen/Doxyfile
+                   ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile.with-cmake-generator-expressions
                    @ONLY)
+    file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
+         INPUT ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile.with-cmake-generator-expressions)
 
     add_custom_target(doc_doxygen
-                      COMMAND ${DOXYGEN_EXECUTABLE} ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen/Doxyfile
-                      WORKING_DIRECTORY ${ANJAY_SOURCE_DIR})
-
+                      COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
+                      WORKING_DIRECTORY ${ANJAY_SOURCE_DIR}
+                      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile)
 
     if(TARGET doc_sphinx)
         add_dependencies(doc_sphinx doc_doxygen)

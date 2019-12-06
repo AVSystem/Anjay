@@ -48,7 +48,7 @@ static const anjay_security_instance_t instance1 = {
     .ssid = 0,
     .server_uri = "coap://1.2.3.4",
     .bootstrap_server = false,
-    .security_mode = ANJAY_UDP_SECURITY_NOSEC,
+    .security_mode = ANJAY_SECURITY_NOSEC,
     .client_holdoff_s = -1,
     .bootstrap_timeout_s = -1
 };
@@ -57,7 +57,7 @@ static const anjay_security_instance_t instance2 = {
     .ssid = 1,
     .server_uri = "coap://1.2.3.4",
     .bootstrap_server = false,
-    .security_mode = ANJAY_UDP_SECURITY_NOSEC,
+    .security_mode = ANJAY_SECURITY_NOSEC,
     .client_holdoff_s = -1,
     .bootstrap_timeout_s = -1
 };

@@ -16,6 +16,7 @@
 
 import socket
 import time
+import unittest
 
 from framework.lwm2m_test import *
 
@@ -26,28 +27,30 @@ class ObserveAttributesTest(test_suite.Lwm2mSingleServerTest,
                             test_suite.Lwm2mDmOperations):
     def runTest(self):
         # Create object
-        self.create_instance(self.serv, oid=1337, iid=0)
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
         # Observe: Counter
-        counter_pkt = self.observe(self.serv, oid=1337, iid=0, rid=1)
+        counter_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter)
 
         # no message should arrive here
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=5)
 
         # Attribute invariants
-        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['st=-1'],
+        self.write_attributes(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter, query=['st=-1'],
                               expect_error_code=coap.Code.RES_BAD_REQUEST)
-        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['lt=9', 'gt=4'],
-                              expect_error_code=coap.Code.RES_BAD_REQUEST)
-        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['lt=4', 'gt=9', 'st=3'],
+        self.write_attributes(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                              query=['lt=9', 'gt=4'], expect_error_code=coap.Code.RES_BAD_REQUEST)
+        self.write_attributes(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                              query=['lt=4', 'gt=9', 'st=3'],
                               expect_error_code=coap.Code.RES_BAD_REQUEST)
 
         # unparsable attributes
-        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['lt=invalid'],
-                              expect_error_code=coap.Code.RES_BAD_OPTION)
+        self.write_attributes(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                              query=['lt=invalid'], expect_error_code=coap.Code.RES_BAD_OPTION)
 
         # Write Attributes
-        self.write_attributes(self.serv, oid=1337, iid=0, rid=1, query=['pmax=2'])
+        self.write_attributes(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                              query=['pmax=2'])
 
         # now we should get notifications, even though nothing changed
         pkt = self.serv.recv(timeout_s=3)
@@ -64,13 +67,13 @@ class ObserveResourceInvalidPmax(test_suite.Lwm2mSingleServerTest,
                                  test_suite.Lwm2mDmOperations):
     def runTest(self):
         # Create object
-        self.create_instance(self.serv, oid=1337, iid=1)
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
 
         # Set invalid pmax (smaller than pmin)
         self.write_attributes(
-            self.serv, oid=1337, iid=1, rid=1, query=['pmin=2', 'pmax=1'])
+            self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter, query=['pmin=2', 'pmax=1'])
 
-        self.observe(self.serv, oid=1337, iid=1, rid=1)
+        self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter)
 
         # No notification should arrive
         with self.assertRaises(socket.timeout):
@@ -81,13 +84,13 @@ class ObserveResourceZeroPmax(test_suite.Lwm2mSingleServerTest,
                               test_suite.Lwm2mDmOperations):
     def runTest(self):
         # Create object
-        self.create_instance(self.serv, oid=1337, iid=1)
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
 
         # Set invalid pmax (equal to 0)
         self.write_attributes(
-            self.serv, oid=1337, iid=1, rid=1, query=['pmax=0'])
+            self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter, query=['pmax=0'])
 
-        self.observe(self.serv, oid=1337, iid=1, rid=1)
+        self.observe(self.serv, oid=OID.Test, iid=1, rid=RID.Test.Counter)
 
         # No notification should arrive
         with self.assertRaises(socket.timeout):
@@ -101,56 +104,60 @@ class ObserveResourceWithEmptyHandler(test_suite.Lwm2mSingleServerTest,
         # used to cause segfault when observed.
 
         # Create object
-        self.create_instance(self.serv, oid=1337, iid=0)
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
+
+        self.write_resource(self.serv, oid=OID.Test, iid=0, rid=RID.Test.ResBytesZeroBegin,
+                            content='0')
 
         # Observe: Empty
-        self.observe(self.serv, oid=1337, iid=0, rid=5,
+        self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.ResBytes,
                      expect_error_code=coap.Code.RES_INTERNAL_SERVER_ERROR)
         # hopefully that does not segfault
 
 
 class ObserveWithMultipleServers(ac.AccessControl.Test):
     def runTest(self):
-        self.create_instance(server=self.servers[1], oid=1337, iid=0)
-        self.update_access(server=self.servers[1], oid=1337, iid=0,
-                           acl=[ac.make_acl_entry(1, ac.ACCESS_MASK_READ | ac.ACCESS_MASK_EXECUTE),
-                                ac.make_acl_entry(2, ac.ACCESS_MASK_OWNER)])
+        self.create_instance(server=self.servers[1], oid=OID.Test, iid=0)
+        self.update_access(server=self.servers[1], oid=OID.Test, iid=0,
+                           acl=[ac.make_acl_entry(1, ac.AccessMask.READ | ac.AccessMask.EXECUTE),
+                                ac.make_acl_entry(2, ac.AccessMask.OWNER)])
         # Observe: Counter
-        self.observe(self.servers[1], oid=1337, iid=0, rid=1)
+        self.observe(self.servers[1], oid=OID.Test, iid=0, rid=RID.Test.Counter)
         # Expecting silence
         with self.assertRaises(socket.timeout):
             self.servers[1].recv(timeout_s=2)
 
-        self.write_attributes(self.servers[1], oid=1337, iid=0, rid=1, query=['gt=1'])
+        self.write_attributes(self.servers[1], oid=OID.Test, iid=0, rid=RID.Test.Counter,
+                              query=['gt=1'])
         with self.assertRaises(socket.timeout):
             self.servers[1].recv(timeout_s=2)
 
-        self.execute_resource(self.servers[0], oid=1337, iid=0, rid=2)  # ++counter
-        self.execute_resource(self.servers[0], oid=1337, iid=0, rid=2)  # ++counter
+        self.execute_resource(self.servers[0], oid=OID.Test, iid=0, rid=RID.Test.IncrementCounter)
+        self.execute_resource(self.servers[0], oid=OID.Test, iid=0, rid=RID.Test.IncrementCounter)
         pkt = self.servers[1].recv()
         self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
         self.assertEqual(pkt.content, b'2')
+
 
 class ObserveWithDefaultAttributesTest(test_suite.Lwm2mSingleServerTest,
                                        test_suite.Lwm2mDmOperations):
     def runTest(self):
         # Create object
-        self.create_instance(self.serv, oid=1337, iid=0)
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
         # Observe: Counter
-        counter_pkt = self.observe(self.serv, oid=1337, iid=0, rid=1)
+        counter_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.Counter)
         # no message should arrive here
         with self.assertRaises(socket.timeout):
             self.serv.recv(timeout_s=5)
 
         # Attributes set via public API
-        self.communicate('set-attrs /1337/0/1 1 pmax=1 pmin=1')
+        self.communicate('set-attrs %s 1 pmax=1 pmin=1' % (ResPath.Test[0].Counter,))
         # And should now start arriving each second
         pkt = self.serv.recv(timeout_s=2)
         self.assertEqual(pkt.code, coap.Code.RES_CONTENT)
         self.assertEqual(pkt.content, counter_pkt.content)
         # Up until they're reset
-        self.communicate('set-attrs /1337/0/1 1')
-
+        self.communicate('set-attrs %s 1' % (ResPath.Test[0].Counter,))
 
 class ObserveOfflineWithStoredNotificationLimit(test_suite.Lwm2mSingleServerTest,
                                                 test_suite.Lwm2mDmOperations):
@@ -238,8 +245,7 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
 
         self.communicate('exit-offline')
 
-        # TODO: why does Anjay reconnect in reverse order? It doesn't really matter, but... why?
-        for serv in reversed(self.servers):
+        for serv in self.servers:
             self.assertDemoRegisters(serv)
 
         remaining_notifications = self.QUEUE_SIZE
@@ -259,6 +265,8 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
             except socket.timeout:
                 pass
 
+        self.assertEqual(remaining_notifications, 0)
+
         for serv in self.servers:
             with self.assertRaises(socket.timeout):
                 serv.recv(PMAX_S * 2)
@@ -266,3 +274,12 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
         # make sure the oldest values were dropped
         for idx in range(SKIP_NOTIFICATIONS):
             self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'), seen_values)
+
+
+class ResetWithoutMatchingObservation(test_suite.Lwm2mSingleServerTest):
+    # T2359 - receiving a Reset message that cannot be matched to any existing
+    # observation used to crash the application.
+    def runTest(self):
+        self.serv.send(Lwm2mReset(msg_id=0))
+
+

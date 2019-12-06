@@ -19,39 +19,50 @@
 #include <inttypes.h>
 
 #include <avsystem/commons/errno.h>
+#include <avsystem/commons/stream/stream_inbuf.h>
 #include <avsystem/commons/utils.h>
 
+#include <avsystem/coap/udp.h>
+
+#include "../anjay_core.h"
+#include "../io_core.h"
 #include "../servers_utils.h"
+
+#include "../dm/query.h"
 
 #define ANJAY_SERVERS_CONNECTION_SOURCE
 #define ANJAY_SERVERS_INTERNALS
 
+#include "activate.h"
 #include "connections_internal.h"
 #include "reload.h"
+#include "security.h"
 #include "server_connections.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-avs_net_abstract_socket_t *_anjay_connection_internal_get_socket(
+avs_net_socket_t *_anjay_connection_internal_get_socket(
         const anjay_server_connection_t *connection) {
     return connection->conn_socket_;
 }
 
 void _anjay_connection_internal_clean_socket(
-        const anjay_t *anjay, anjay_server_connection_t *connection) {
-    avs_net_socket_cleanup(&connection->conn_socket_);
-    _anjay_sched_del(anjay->sched, &connection->queue_mode_close_socket_clb);
+        anjay_t *anjay, anjay_server_connection_t *connection) {
+    _anjay_coap_ctx_cleanup(anjay, &connection->coap_ctx);
+    _anjay_socket_cleanup(anjay, &connection->conn_socket_);
+    avs_sched_del(&connection->queue_mode_close_socket_clb);
 }
 
 bool _anjay_connection_is_online(anjay_server_connection_t *connection) {
-    avs_net_abstract_socket_t *socket =
+    avs_net_socket_t *socket =
             _anjay_connection_internal_get_socket(connection);
     if (!socket) {
         return false;
     }
     avs_net_socket_opt_value_t opt;
-    if (avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_STATE, &opt)) {
-        anjay_log(ERROR, "Could not get socket state");
+    if (avs_is_err(avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_STATE,
+                                          &opt))) {
+        anjay_log(DEBUG, "Could not get socket state");
         return false;
     }
     return opt.state == AVS_NET_SOCKET_STATE_CONNECTED;
@@ -68,110 +79,73 @@ int _anjay_connection_init_psk_security(avs_net_security_info_t *security,
     return 0;
 }
 
-static bool has_error(anjay_connections_t *connections) {
-    anjay_connection_type_t conn_type;
-    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
-        anjay_server_connection_t *connection =
-                _anjay_connection_get(connections, conn_type);
-        if (connection->mode != ANJAY_CONNECTION_DISABLED
-                && connection->state == ANJAY_SERVER_CONNECTION_ERROR) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static void on_connection_refreshed(anjay_t *anjay,
-                                    anjay_connections_t *connections) {
-    bool state_is_stable = true;
-    connections->primary_connection = ANJAY_CONNECTION_UNSET;
-    anjay_connection_type_t conn_type;
-    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
-        anjay_server_connection_t *connection =
-                _anjay_connection_get(connections, conn_type);
-        if (connection->state == ANJAY_SERVER_CONNECTION_IN_PROGRESS) {
-            state_is_stable = false;
-        } else if (connection->mode != ANJAY_CONNECTION_DISABLED
-                   && connection->state != ANJAY_SERVER_CONNECTION_ERROR
-                   && connections->primary_connection
-                              == ANJAY_CONNECTION_UNSET) {
-            connections->primary_connection = conn_type;
-        }
-    }
-    if (state_is_stable) {
-        anjay_server_connection_state_t state = ANJAY_SERVER_CONNECTION_ERROR;
-        if (connections->primary_connection != ANJAY_CONNECTION_UNSET) {
-            if (has_error(connections)) {
-                // some connection is available, but some other failed
-                _anjay_schedule_delayed_reload_servers(anjay);
-            }
-            state = _anjay_connection_get(connections,
-                                          connections->primary_connection)
-                            ->state;
-        }
-
-        _anjay_connections_on_refreshed(anjay, connections, state);
-        _anjay_connections_flush_notifications(anjay, connections);
-    }
-}
-
 static const anjay_connection_type_definition_t *
-get_connection_type_def(anjay_connection_type_t type) {
+get_connection_type_def(anjay_socket_transport_t type) {
     switch (type) {
-    case ANJAY_CONNECTION_UDP:
+#ifdef WITH_AVS_COAP_UDP
+    case ANJAY_SOCKET_TRANSPORT_UDP:
         return &ANJAY_CONNECTION_DEF_UDP;
+#endif // WITH_AVS_COAP_UDP
     default:
-        AVS_UNREACHABLE("unknown connection type");
         return NULL;
     }
 }
 
-void _anjay_connection_internal_bring_online(
-        anjay_t *anjay,
-        anjay_connections_t *connections,
-        anjay_connection_type_t conn_type) {
-    assert(connections);
+avs_error_t _anjay_server_connection_internal_bring_online(
+        anjay_server_info_t *server,
+        anjay_connection_type_t conn_type,
+        const anjay_iid_t *security_iid) {
+    assert(server);
     anjay_server_connection_t *connection =
-            _anjay_connection_get(connections, conn_type);
+            _anjay_connection_get(&server->connections, conn_type);
     assert(connection);
     assert(connection->conn_socket_);
     assert(!connection->queue_mode_close_socket_clb);
 
+    const anjay_connection_type_definition_t *def =
+            get_connection_type_def(connection->transport);
+    assert(def);
+
+    (void) security_iid;
+
     if (_anjay_connection_is_online(connection)) {
-        anjay_log(INFO, "socket already connected");
+        anjay_log(DEBUG, "socket already connected");
         connection->state = ANJAY_SERVER_CONNECTION_STABLE;
         connection->needs_observe_flush = true;
-    } else if (get_connection_type_def(conn_type)->connect_socket(anjay,
-                                                                  connection)) {
+        return AVS_OK;
+    }
+
+    avs_error_t err = avs_errno(AVS_ENOMEM);
+    if (def->ensure_coap_context(server->anjay, connection)
+            || avs_is_err((
+                       err = def->connect_socket(server->anjay, connection)))) {
         connection->state = ANJAY_SERVER_CONNECTION_ERROR;
-        if (avs_net_socket_close(connection->conn_socket_)) {
+        _anjay_coap_ctx_cleanup(server->anjay, &connection->coap_ctx);
+
+        if (avs_is_err(avs_net_socket_close(connection->conn_socket_))) {
             anjay_log(ERROR, "Could not close the socket (?!)");
         }
-    } else {
-        avs_net_socket_opt_value_t session_resumed;
-        if (avs_net_socket_get_opt(connection->conn_socket_,
-                                   AVS_NET_SOCKET_OPT_SESSION_RESUMED,
-                                   &session_resumed)) {
-            session_resumed.flag = false;
-        }
-        if (!session_resumed.flag) {
-            _anjay_conn_session_token_reset(&connection->session_token);
-        }
-        anjay_log(INFO,
-                  session_resumed.flag ? "resumed connection" : "reconnected");
-        connection->state = ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED;
-        connection->needs_observe_flush = true;
+        return err;
     }
-    on_connection_refreshed(anjay, connections);
+
+    const bool session_resumed =
+            _anjay_was_session_resumed(connection->conn_socket_);
+    if (!session_resumed) {
+        _anjay_conn_session_token_reset(&connection->session_token);
+    }
+    anjay_log(INFO, session_resumed ? "resumed connection" : "reconnected");
+    connection->state = ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED;
+    connection->needs_observe_flush = true;
+    return AVS_OK;
 }
 
-static void connection_cleanup(const anjay_t *anjay,
+static void connection_cleanup(anjay_t *anjay,
                                anjay_server_connection_t *connection) {
     _anjay_connection_internal_clean_socket(anjay, connection);
     _anjay_url_cleanup(&connection->uri);
 }
 
-void _anjay_connections_close(const anjay_t *anjay,
+void _anjay_connections_close(anjay_t *anjay,
                               anjay_connections_t *connections) {
     anjay_connection_type_t conn_type;
     ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
@@ -180,42 +154,22 @@ void _anjay_connections_close(const anjay_t *anjay,
     }
 }
 
-anjay_connection_type_t
-_anjay_connections_get_primary(anjay_connections_t *connections) {
-    return connections->primary_connection;
-}
-
 anjay_conn_session_token_t
 _anjay_connections_get_primary_session_token(anjay_connections_t *connections) {
-    anjay_connection_type_t conn_type =
-            _anjay_connections_get_primary(connections);
-    if (conn_type == ANJAY_CONNECTION_UNSET) {
-        anjay_conn_session_token_t result;
-        _anjay_conn_session_token_reset(&result);
-        return result;
-    }
-    return _anjay_connection_get(connections, conn_type)->session_token;
+    return _anjay_connection_get(connections, ANJAY_CONNECTION_PRIMARY)
+            ->session_token;
 }
 
-static int recreate_socket(anjay_t *anjay,
-                           const anjay_connection_type_definition_t *def,
-                           anjay_server_connection_t *connection,
-                           anjay_connection_info_t *inout_info) {
-    anjay_server_dtls_keys_t dtls_keys;
-    memset(&dtls_keys, 0, sizeof(dtls_keys));
-
-    // At this point, inout_info has "global" settings filled,
-    // but transport-specific (i.e. UDP or SMS) fields are not
-    if (def->get_connection_info(anjay, inout_info, &dtls_keys)) {
-        anjay_log(DEBUG, "could not get %s connection info for server /%u/%u",
-                  def->name, ANJAY_DM_OID_SECURITY, inout_info->security_iid);
-        return -1;
-    }
-    assert(!_anjay_connection_internal_get_socket(connection));
-
+static avs_error_t
+recreate_socket(anjay_t *anjay,
+                const anjay_connection_type_definition_t *def,
+                anjay_server_connection_t *connection,
+                anjay_connection_info_t *inout_info) {
     avs_net_ssl_configuration_t socket_config;
     memset(&socket_config, 0, sizeof(socket_config));
-    socket_config.backend_configuration = anjay->udp_socket_config;
+
+    assert(!_anjay_connection_internal_get_socket(connection));
+    socket_config.backend_configuration = anjay->socket_config;
     socket_config.backend_configuration.reuse_addr = 1;
     socket_config.backend_configuration.preferred_endpoint =
             &connection->nontransient_state.preferred_endpoint;
@@ -226,103 +180,170 @@ static int recreate_socket(anjay_t *anjay,
             sizeof(connection->nontransient_state.dtls_session_buffer);
     socket_config.dtls_handshake_timeouts =
             def->get_dtls_handshake_timeouts(anjay);
+    socket_config.server_name_indication = inout_info->sni.sni;
+    socket_config.use_connection_id = anjay->use_connection_id;
 
-    int result;
-    (void) ((result = def->get_net_security_info(&socket_config.security,
-                                                 inout_info, &dtls_keys))
-            || (result = def->prepare_connection(anjay, connection,
-                                                 &socket_config, inout_info)));
-    if (result && connection->conn_socket_) {
+    // At this point, inout_info has "global" settings filled,
+    // but transport-specific (i.e. UDP or SMS) fields are not
+    anjay_security_config_t *security_config;
+    {
+        security_config =
+                _anjay_connection_security_generic_get_config(anjay,
+                                                              inout_info);
+    }
+    if (!security_config) {
+        anjay_log(DEBUG, "could not get %s security config for server /%u/%u",
+                  def->name, ANJAY_DM_OID_SECURITY, inout_info->security_iid);
+        return avs_errno(AVS_EPROTO);
+    }
+    socket_config.security = security_config->security_info;
+    socket_config.ciphersuites = security_config->tls_ciphersuites;
+    avs_error_t err = def->prepare_connection(anjay, connection, &socket_config,
+                                              inout_info);
+    if (avs_is_err(err) && connection->conn_socket_) {
+        avs_net_socket_shutdown(connection->conn_socket_);
         avs_net_socket_close(connection->conn_socket_);
     }
-    return result;
+    avs_free(security_config);
+    return err;
 }
 
-static void ensure_socket_connected(anjay_t *anjay,
-                                    anjay_connections_t *connections,
-                                    anjay_connection_type_t conn_type,
-                                    anjay_connection_info_t *inout_info) {
+static avs_error_t
+ensure_socket_connected(anjay_server_info_t *server,
+                        anjay_connection_type_t conn_type,
+                        anjay_connection_info_t *inout_info) {
     anjay_server_connection_t *connection =
-            _anjay_connection_get(connections, conn_type);
+            _anjay_connection_get(&server->connections, conn_type);
     assert(connection);
     const anjay_connection_type_definition_t *def =
-            get_connection_type_def(conn_type);
+            get_connection_type_def(connection->transport);
     assert(def);
-    avs_net_abstract_socket_t *existing_socket =
+    avs_net_socket_t *existing_socket =
             _anjay_connection_internal_get_socket(connection);
 
-    if (existing_socket == NULL
-            && recreate_socket(anjay, def, connection, inout_info)) {
-        connection->state = ANJAY_SERVER_CONNECTION_ERROR;
-        on_connection_refreshed(anjay, connections);
-        return;
+    if (existing_socket == NULL) {
+        avs_error_t err =
+                recreate_socket(server->anjay, def, connection, inout_info);
+        if (avs_is_err(err)) {
+            connection->state = ANJAY_SERVER_CONNECTION_ERROR;
+            return err;
+        }
     }
-    _anjay_connection_internal_bring_online(anjay, connections, conn_type);
+
+    return _anjay_server_connection_internal_bring_online(
+            server, conn_type, &inout_info->security_iid);
 }
 
-static void refresh_connection(anjay_t *anjay,
-                               anjay_connections_t *connections,
-                               anjay_connection_type_t conn_type,
-                               anjay_connection_info_t *inout_info) {
+static avs_error_t refresh_connection(anjay_server_info_t *server,
+                                      anjay_connection_type_t conn_type,
+                                      bool enabled,
+                                      anjay_connection_info_t *inout_info) {
     anjay_server_connection_t *out_connection =
-            _anjay_connection_get(connections, conn_type);
+            _anjay_connection_get(&server->connections, conn_type);
     assert(out_connection);
 
     _anjay_url_cleanup(&out_connection->uri);
-    out_connection->mode =
-            _anjay_get_connection_mode(inout_info->binding_mode, conn_type);
-    if (out_connection->mode == ANJAY_CONNECTION_DISABLED) {
-        _anjay_connection_internal_clean_socket(anjay, out_connection);
-        out_connection->state = ANJAY_SERVER_CONNECTION_STABLE;
+
+    if (!enabled) {
+        _anjay_connection_internal_clean_socket(server->anjay, out_connection);
+        if (conn_type == ANJAY_CONNECTION_PRIMARY) {
+            // Primary connection may have mode set to DISABLED only if the
+            // required binding mode is unsupported (see the call to
+            // select_primary_transport() from _anjay_connection_refresh()).
+            // This is an error, so mark it as such, so that
+            // on_connection_refreshed() won't try to register via an invalid
+            // socket but properly treat it as an error.
+            out_connection->state = ANJAY_SERVER_CONNECTION_ERROR;
+        } else {
+            // Disabled trigger connection is OK.
+            out_connection->state = ANJAY_SERVER_CONNECTION_STABLE;
+        }
         out_connection->needs_observe_flush = false;
-        on_connection_refreshed(anjay, connections);
+        return AVS_OK;
     } else {
-        ensure_socket_connected(anjay, connections, conn_type, inout_info);
+        return ensure_socket_connected(server, conn_type, inout_info);
     }
 }
 
-void _anjay_connections_refresh(anjay_t *anjay,
-                                anjay_connections_t *connections,
-                                anjay_iid_t security_iid,
-                                const anjay_url_t *uri,
-                                const char *binding_mode) {
+void _anjay_server_connections_refresh(
+        anjay_server_info_t *server,
+        anjay_iid_t security_iid,
+        avs_url_t **move_uri,
+        bool trigger_requested,
+        const anjay_server_name_indication_t *sni) {
     anjay_connection_info_t server_info = {
         .security_iid = security_iid,
-        .uri = uri,
-        .binding_mode = binding_mode
+        .uri = *move_uri,
+        .transport_info =
+                _anjay_transport_info_by_uri_scheme(avs_url_protocol(*move_uri))
     };
+    *move_uri = NULL;
+    memcpy(&server_info.sni, sni, sizeof(*sni));
 
-    connections->primary_connection = ANJAY_CONNECTION_UNSET;
+    server->last_used_security_iid = security_iid;
+    anjay_server_connection_t *primary_conn =
+            _anjay_connection_get(&server->connections,
+                                  ANJAY_CONNECTION_PRIMARY);
+    if (server_info.transport_info
+            && !_anjay_socket_transport_supported(
+                       server->anjay, server_info.transport_info->transport)) {
+        anjay_log(WARNING, "support for protocol %s not enabled",
+                  server_info.transport_info->uri_scheme);
+        server_info.transport_info = NULL;
+    }
+    if (server_info.transport_info
+            && primary_conn->transport
+                           != server_info.transport_info->transport) {
+        const char *host = avs_url_host(server_info.uri);
+        const char *port = avs_url_port(server_info.uri);
+        anjay_log(INFO, "server /0/%u: transport change %c -> %c (uri: %s:%s)",
+                  security_iid,
+                  _anjay_binding_info_by_transport(primary_conn->transport)
+                          ->letter,
+                  _anjay_binding_info_by_transport(
+                          server_info.transport_info->transport)
+                          ->letter,
+                  host ? host : "", port ? port : "");
+        // change in transport binding requries creating a different type of
+        // socket and possibly CoAP context
+        connection_cleanup(server->anjay, primary_conn);
+        primary_conn->transport = server_info.transport_info->transport;
+        server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
+    }
 
     anjay_connection_type_t conn_type;
     ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
         anjay_server_connection_t *connection =
-                _anjay_connection_get(connections, conn_type);
+                _anjay_connection_get(&server->connections, conn_type);
         connection->state = ANJAY_SERVER_CONNECTION_IN_PROGRESS;
-        _anjay_sched_del(anjay->sched,
-                         &connection->queue_mode_close_socket_clb);
+        avs_sched_del(&connection->queue_mode_close_socket_clb);
     }
-    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
-        refresh_connection(anjay, connections, conn_type, &server_info);
-    }
+    avs_error_t err =
+            refresh_connection(server, ANJAY_CONNECTION_PRIMARY,
+                               !!server_info.transport_info, &server_info);
+    (void) trigger_requested;
+
+    // TODO T2391: fall back to another transport if connection failed
+    _anjay_server_on_refreshed(server, primary_conn->state, err);
+    _anjay_connection_info_cleanup(&server_info);
 }
 
-int _anjay_get_security_info(anjay_t *anjay,
-                             avs_net_security_info_t *out_net_info,
-                             anjay_server_dtls_keys_t *out_dtls_keys,
-                             anjay_iid_t security_iid,
-                             anjay_connection_type_t conn_type) {
-    const anjay_connection_type_definition_t *conn_def =
-            get_connection_type_def(conn_type);
+anjay_security_config_t *_anjay_get_security_config(anjay_t *anjay,
+                                                    anjay_iid_t security_iid) {
     anjay_connection_info_t info = {
         .security_iid = security_iid
     };
-
-    memset(out_dtls_keys, 0, sizeof(*out_dtls_keys));
-    int result;
-    (void) ((result =
-                     conn_def->get_connection_info(anjay, &info, out_dtls_keys))
-            || (result = conn_def->get_net_security_info(out_net_info, &info,
-                                                         out_dtls_keys)));
+    anjay_security_config_t *result =
+            _anjay_connection_security_generic_get_config(anjay, &info);
+    _anjay_connection_info_cleanup(&info);
     return result;
+}
+
+bool _anjay_socket_transport_supported(anjay_t *anjay,
+                                       anjay_socket_transport_t type) {
+    if (get_connection_type_def(type) == NULL) {
+        return false;
+    }
+    (void) anjay;
+    return true;
 }

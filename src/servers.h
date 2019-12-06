@@ -22,9 +22,11 @@
 #include <anjay_modules/sched.h>
 #include <anjay_modules/servers.h>
 
+#include <avsystem/commons/persistence.h>
 #include <avsystem/commons/time.h>
 
-#include "coap/coap_stream.h"
+#include <avsystem/coap/ctx.h>
+
 #include "utils_core.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -85,7 +87,7 @@ _anjay_conn_session_tokens_equal(anjay_conn_session_token_t left,
     return avs_time_monotonic_equal(left.value, right.value);
 }
 
-// copied from avs_commons/git/http/src/headers.h
+// copied from deps/avs_commons/http/src/headers.h
 // see description there for rationale; TODO: move this to public Commons API?
 // note that this _includes_ the terminating null byte
 #define ANJAY_UINT_STR_BUF_SIZE(type) ((12 * sizeof(type)) / 5 + 2)
@@ -104,13 +106,15 @@ typedef struct {
 
 typedef struct {
     int64_t lifetime_s;
-    AVS_LIST(anjay_dm_cache_object_t) dm;
+    char *dm;
     anjay_binding_mode_t binding_mode;
 } anjay_update_parameters_t;
 
 typedef struct {
     anjay_conn_session_token_t session_token;
     AVS_LIST(const anjay_string_t) endpoint_path;
+    anjay_lwm2m_version_t lwm2m_version;
+    bool queue_mode;
     avs_time_real_t expire_time;
 
     /**
@@ -123,12 +127,6 @@ typedef struct {
     anjay_update_parameters_t last_update_params;
 } anjay_registration_info_t;
 
-typedef enum {
-    ANJAY_CONNECTION_DISABLED,
-    ANJAY_CONNECTION_ONLINE,
-    ANJAY_CONNECTION_QUEUE
-} anjay_server_connection_mode_t;
-
 // inactive servers include administratively disabled ones
 // as well as those which were unreachable at connect attempt
 struct anjay_server_info_struct;
@@ -136,11 +134,6 @@ typedef struct anjay_server_info_struct anjay_server_info_t;
 
 struct anjay_servers_struct;
 typedef struct anjay_servers_struct anjay_servers_t;
-
-typedef struct {
-    anjay_ssid_t ssid;
-    anjay_connection_type_t type;
-} anjay_connection_key_t;
 
 typedef struct {
     anjay_server_info_t *server;
@@ -161,9 +154,9 @@ anjay_servers_t *_anjay_servers_create(void);
  * Deregisters from every active server. It is currently only ever called from
  * anjay_delete_impl(), because there are two flavours of anjay_delete() - the
  * regular anjay_delete() is supposed to deregister from all servers on exit,
- * but anjay_delete_with_registration_and_observe_persistence() (present only in
- * the commercial version) shall not deregister from anywhere, because it would
- * defeat its purpose.
+ * but anjay_delete_with_core_persistence() (present only in the commercial
+ * version) shall not deregister from anywhere, because it would defeat its
+ * purpose.
  *
  * We could have _anjay_servers_cleanup() with a flag, but we decided that
  * having a separate function for de-registration is more elegant.
@@ -276,13 +269,13 @@ int _anjay_servers_foreach_active(anjay_t *anjay,
  *        than described in 1.2.2 - consider reload a success.
  * 1.2.4. If we're here, it means that the server has not previously existed.
  *        Create a new inactive server entry and schedule its activation
- *        immediately (unless it's the Bootstrap Server and Server-Initiated
- *        Bootstrap is disabled - Client-Initiated Bootstrap will be handled
- *        later).
+ *        immediately (unless it's the Bootstrap Server and legacy
+ *        Server-Initiated Bootstrap is disabled - Client-Initiated Bootstrap
+ *        will be handled later).
  * 2. If stage 1 was a success, and if the result is that we have only one
  *    server in the data model, which is the Bootstrap Server, that is inactive
  *    and not scheduled for activation - schedule its activation immediately.
- *    This compensates for step 1.2.4 for Client-Initiated Bootstrap when
+ *    This compensates for step 1.2.4 for Client-Initiated Bootstrap when legacy
  *    Server-Initiated Bootstrap is disabled.
  * 3. If the reload in stage 1 was unsuccessful (which may happen in the case of
  *    some REALLY FATAL error, such as failure to iterate over the data model or
@@ -374,16 +367,6 @@ int _anjay_servers_foreach_active(anjay_t *anjay,
  */
 int _anjay_schedule_reload_servers(anjay_t *anjay);
 
-/**
- * Checks whether it is possible to connect to a non-Bootstrap Server before
- * initiating Client Initiated Bootstrap.
- *
- * It checks whether there are any inactive non-bootstrap servers that have not
- * reached the ICMP failure limit (see the activation flow described in
- * _anjay_schedule_reload_servers() docs for details).
- */
-bool _anjay_can_retry_with_normal_server(anjay_t *anjay);
-
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON ACTIVE SERVERS ///////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -393,26 +376,13 @@ bool _anjay_can_retry_with_normal_server(anjay_t *anjay);
  */
 anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server);
 
+anjay_iid_t _anjay_server_last_used_security_iid(anjay_server_info_t *server);
+
 /**
- * Gets the type of the server's current "primary" connection. The "primary"
- * connection is the one on which the autonomous outgoing messages (i.e.
- * Register/Update or Bootstrap Request) are sent. It is normally the first
- * connection mentioned in the binding string (UDP for U, UQ, US and UQS, and
- * SMS for S and SQ), but it may be NONE if a successful connection could not
- * yet be established, or SMS for US or UQS if there is connectivity on the SMS
- * channel, but no connectivity on the UDP channel.
- *
- * Note that this function automatically recalculates the primary connection
- * type if it's not set. Basically the lowest-numbered anjay_connection_type_t
- * value that has a valid connected socket associated with it is assigned to
- * primary_conn_type.
- *
- * Called from bootstrap_core.c :: request_bootstrap() and
- * register.c :: bind_server_stream(), to determine which connection to use for
- * sending the aforementioned messages.
+ * Gets the administratively configured binding mode of the server in question.
  */
-anjay_connection_type_t
-_anjay_server_primary_conn_type(anjay_server_info_t *server);
+const anjay_binding_mode_t *
+_anjay_server_binding_mode(anjay_server_info_t *server);
 
 /**
  * Gets the token uniquely identifying the CoAP endpoint association (i.e., DTLS
@@ -450,6 +420,8 @@ _anjay_server_registration_info(anjay_server_info_t *server);
 void _anjay_server_update_registration_info(
         anjay_server_info_t *server,
         AVS_LIST(const anjay_string_t) *move_endpoint_path,
+        anjay_lwm2m_version_t lwm2m_version,
+        bool queue_mode,
         anjay_update_parameters_t *move_params);
 
 /**
@@ -457,13 +429,12 @@ void _anjay_server_update_registration_info(
  * primary connection of the server. Effectively disables the server, and might
  * schedule Client-Initiated Bootstrap if applicable.
  */
-void _anjay_server_on_failure(anjay_t *anjay,
-                              anjay_server_info_t *server,
+void _anjay_server_on_failure(anjay_server_info_t *server,
                               const char *debug_msg);
 
-/** Alias for @ref _anjay_server_on_failure(). */
-void _anjay_server_on_server_communication_error(anjay_t *anjay,
-                                                 anjay_server_info_t *server);
+/** Calls @ref _anjay_server_on_failure() through the scheduler. */
+void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
+                                                 avs_error_t err);
 
 /**
  * Handles a network timeout during Registration (or Request Bootstrap) on the
@@ -471,8 +442,9 @@ void _anjay_server_on_server_communication_error(anjay_t *anjay,
  * was stable (i.e. not just freshly connected and not stateless), or calls
  * @ref _anjay_server_on_server_communication_error otherwise.
  */
-void _anjay_server_on_registration_timeout(anjay_t *anjay,
-                                           anjay_server_info_t *server);
+void _anjay_server_on_registration_timeout(anjay_server_info_t *server);
+
+void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref);
 
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON SERVER CONNECTIONS ///////////////////////////////////////////////
@@ -488,33 +460,26 @@ void _anjay_server_on_registration_timeout(anjay_t *anjay,
 const anjay_url_t *_anjay_connection_uri(anjay_connection_ref_t ref);
 
 /**
- * Returns the mode (disabled, online or queue) of a specified connection.
- *
- * Aside from _anjay_server_actual_binding_mode(), it is called from
- * observe_core.c :: ensure_conn_online() - that function checks if the
- * connection is in queue mode, and only reconnects it if so.
- */
-anjay_server_connection_mode_t
-_anjay_connection_current_mode(anjay_connection_ref_t ref);
-
-/**
- * This function is called from _anjay_release_server_stream() - if the
+ * This function is called from _anjay_release_connection() - if the
  * connection is in queue mode, it schedules closing of the socket (suspending
  * the connection) after MAX_TRANSMIT_WAIT passes.
  */
-void _anjay_connection_schedule_queue_mode_close(anjay_t *anjay,
-                                                 anjay_connection_ref_t ref);
+void _anjay_connection_schedule_queue_mode_close(anjay_connection_ref_t ref);
 
 /**
  * Returns the socket associated with a given connection, if it exists and is in
  * online state, ready for communication.
  *
- * It's used in _anjay_bind_server_stream(), get_online_connection_socket() and
- * find_by_udp_socket_clb() to actually get the sockets, but also in various
+ * It's used in _anjay_bind_connection(), get_online_connection_socket()
+ * and find_by_udp_socket_clb() to actually get the sockets, but also in various
  * places to just check whether the connection is online.
  */
-avs_net_abstract_socket_t *
+avs_net_socket_t *
 _anjay_connection_get_online_socket(anjay_connection_ref_t ref);
+
+bool _anjay_connection_ready_for_outgoing_message(anjay_connection_ref_t ref);
+
+avs_coap_ctx_t *_anjay_connection_get_coap(anjay_connection_ref_t ref);
 
 /**
  * This function only makes sense when the connection is online. It marks the
@@ -533,7 +498,7 @@ void _anjay_connection_mark_stable(anjay_connection_ref_t ref);
  *
  * It is called from observe_core.c :: ensure_conn_online().
  */
-void _anjay_connection_bring_online(anjay_t *anjay, anjay_connection_ref_t ref);
+void _anjay_connection_bring_online(anjay_connection_ref_t ref);
 
 /**
  * Suspends the specified connection (or all connections in the server if
@@ -543,6 +508,8 @@ void _anjay_connection_bring_online(anjay_t *anjay, anjay_connection_ref_t ref);
  */
 void _anjay_connection_suspend(anjay_connection_ref_t conn_ref);
 
+anjay_socket_transport_t
+_anjay_connection_transport(anjay_connection_ref_t conn_ref);
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 2.8.1)
+cmake_minimum_required(VERSION 3.1)
 project(lwm2m_demo C)
 
 set(SOURCES
@@ -23,11 +23,13 @@ set(SOURCES
     firmware_update.c
     iosched.c
     objects/apn_conn_profile.c
+    objects/binary_app_data_container.c
     objects/cell_connectivity.c
     objects/conn_monitoring.c
     objects/conn_statistics.c
     objects/device.c
     objects/download_diagnostics.c
+    objects/event_log.c
     objects/ext_dev_info.c
     objects/geopoints.c
     objects/location.c
@@ -49,20 +51,12 @@ set(HEADERS
 
 set(ALL_SOURCES ${SOURCES} ${HEADERS})
 
-if(NOT ANJAY_INCLUDE_DIRS AND NOT ANJAY_LIBRARIES)
+if(NOT TARGET anjay)
     find_package(anjay REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/..")
 endif()
 
-if(TARGET ${ANJAY_LIBRARIES_STATIC})
-    set(DEMO_ANJAY_TARGET "${ANJAY_LIBRARIES_STATIC}")
-else()
-    set(DEMO_ANJAY_TARGET "${ANJAY_LIBRARIES}")
-endif()
-
-include_directories(${ANJAY_INCLUDE_DIRS})
-
 add_executable(demo ${ALL_SOURCES})
-target_link_libraries(demo ${DEMO_ANJAY_TARGET} m)
+target_link_libraries(demo PRIVATE anjay m)
 
 add_custom_target(demo_firmware
                   COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../test/integration/framework/firmware_package.py

@@ -33,9 +33,10 @@ static void text_out_destroy(anjay_ret_bytes_ctx_t ***ctx) {
 #define TEST_ENV(Size)                                                 \
     char buf[Size];                                                    \
     avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER; \
-    int outctx_errno;                                                  \
-    text_out_t out = { &TEXT_OUT_VTABLE, NULL, &outctx_errno,          \
-                       (avs_stream_abstract_t *) &outbuf, false };     \
+    text_out_t out = { { &TEXT_OUT_VTABLE, 0 },                        \
+                       NULL,                                           \
+                       (avs_stream_t *) &outbuf,                       \
+                       STATE_PATH_SET };                               \
     SCOPED_PTR(anjay_ret_bytes_ctx_t *, text_out_destroy)              \
     _ret_bytes = &out.bytes;                                           \
     (void) _ret_bytes;                                                 \
@@ -43,8 +44,7 @@ static void text_out_destroy(anjay_ret_bytes_ctx_t ***ctx) {
 
 static void stringify_buf(avs_stream_outbuf_t *outbuf) {
     outbuf->message_finished = 0;
-    AVS_UNIT_ASSERT_SUCCESS(
-            avs_stream_write((avs_stream_abstract_t *) outbuf, "", 1));
+    AVS_UNIT_ASSERT_SUCCESS(avs_stream_write((avs_stream_t *) outbuf, "", 1));
 }
 
 AVS_UNIT_TEST(text_out, string) {
@@ -114,7 +114,7 @@ AVS_UNIT_TEST(text_out, f32) {
     TEST_FLOAT(1);
     TEST_FLOAT(1.3125);
     TEST_FLOAT(10000.5);
-    TEST_FLOAT(4.223e+37);
+    TEST_FLOAT(4.2229999965160742e+37);
 }
 
 #undef TEST_FLOAT
@@ -181,10 +181,9 @@ AVS_UNIT_TEST(text_out, unimplemented) {
     TEST_ENV(512);
     AVS_UNIT_ASSERT_NOT_NULL(
             anjay_ret_bytes_begin((anjay_output_ctx_t *) &out, 3));
-    AVS_UNIT_ASSERT_NULL(anjay_ret_array_start((anjay_output_ctx_t *) &out));
     AVS_UNIT_ASSERT_FAILED(
-            anjay_ret_array_index((anjay_output_ctx_t *) &out, 1));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_array_finish((anjay_output_ctx_t *) &out));
+            _anjay_output_set_path((anjay_output_ctx_t *) &out,
+                                   &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 0, 1)));
 }
 
 #undef TEST_ENV
@@ -192,10 +191,10 @@ AVS_UNIT_TEST(text_out, unimplemented) {
 /////////////////////////////////////////////////////////////////////// DECODING
 
 #define TEST_ENV(Size)                                                \
-    avs_stream_abstract_t *stream = NULL;                             \
+    avs_stream_t *stream = NULL;                                      \
     AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, Size)); \
     anjay_input_ctx_t *in;                                            \
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_text_create(&in, &stream, false));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_input_text_create(&in, &stream, NULL));
 
 #define TEST_TEARDOWN                                           \
     do {                                                        \
@@ -362,15 +361,16 @@ AVS_UNIT_TEST(text_in, boolean) {
         TEST_TEARDOWN;                                           \
     } while (false)
 
-#define TEST_OBJLNK(Oid, Iid)                                          \
-    TEST_OBJLNK_COMMON(                                                \
-            #Oid ":" #Iid,                                             \
-            AVS_UNIT_ASSERT_SUCCESS(anjay_get_objlnk(in, &oid, &iid)); \
-            AVS_UNIT_ASSERT_EQUAL(oid, Oid); AVS_UNIT_ASSERT_EQUAL(iid, Iid))
+#define TEST_OBJLNK(Oid, Iid)                                     \
+    TEST_OBJLNK_COMMON(#Oid ":" #Iid,                             \
+                       AVS_UNIT_ASSERT_SUCCESS(                   \
+                               anjay_get_objlnk(in, &oid, &iid)); \
+                       AVS_UNIT_ASSERT_EQUAL(oid, Oid);           \
+                       AVS_UNIT_ASSERT_EQUAL(iid, Iid))
 
-#define TEST_OBJLNK_FAIL(Str)                       \
-    TEST_OBJLNK_COMMON(Str, AVS_UNIT_ASSERT_FAILED( \
-                                    anjay_get_objlnk(in, &oid, &iid)))
+#define TEST_OBJLNK_FAIL(Str) \
+    TEST_OBJLNK_COMMON(       \
+            Str, AVS_UNIT_ASSERT_FAILED(anjay_get_objlnk(in, &oid, &iid)))
 
 AVS_UNIT_TEST(text_in, objlnk) {
     TEST_OBJLNK(0, 0);

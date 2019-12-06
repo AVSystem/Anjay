@@ -48,6 +48,12 @@ struct anjay_servers_struct {
     AVS_LIST(anjay_socket_entry_t) public_sockets;
 };
 
+typedef struct {
+    avs_coap_exchange_id_t exchange_id;
+    anjay_lwm2m_version_t attempted_version;
+    anjay_update_parameters_t new_params;
+} anjay_registration_async_exchange_state_t;
+
 /**
  * Information about a known LwM2M server.
  *
@@ -74,7 +80,11 @@ struct anjay_servers_struct {
  * activation and deactivation flow.
  */
 struct anjay_server_info_struct {
+    anjay_t *anjay;
+
     anjay_ssid_t ssid; // or ANJAY_SSID_BOOTSTRAP
+
+    anjay_iid_t last_used_security_iid;
 
     /**
      * Scheduler jobs that shall be executed for the given server are scheduled
@@ -92,7 +102,12 @@ struct anjay_server_info_struct {
      *   delayed by "lifetime minus eta", scheduled after a successful Register
      *   or Update operation.
      */
-    anjay_sched_handle_t next_action_handle;
+    avs_sched_handle_t next_action_handle;
+
+    /**
+     * Administratively configured binding mode, cached from the data model.
+     */
+    anjay_binding_mode_t binding_mode;
 
     /**
      * State of all connections to remote servers possible for a given server.
@@ -115,6 +130,8 @@ struct anjay_server_info_struct {
      * _anjay_server_update_registration_info() for details.
      */
     anjay_registration_info_t registration_info;
+
+    anjay_registration_async_exchange_state_t registration_exchange_state;
 
     /**
      * When a reactivate job is scheduled (and its handle stored in
@@ -145,20 +162,16 @@ struct anjay_server_info_struct {
     bool refresh_failed;
 };
 
-void _anjay_servers_internal_deregister(anjay_t *anjay,
-                                        anjay_servers_t *servers);
+void _anjay_servers_internal_deregister(anjay_servers_t *servers);
 
-void _anjay_servers_internal_cleanup(anjay_t *anjay, anjay_servers_t *servers);
+void _anjay_servers_internal_cleanup(anjay_servers_t *servers);
 
-void _anjay_server_clean_active_data(const anjay_t *anjay,
-                                     anjay_server_info_t *server);
+void _anjay_server_clean_active_data(anjay_server_info_t *server);
 
 /**
  * Cleans up server data. Does not send De-Register message.
  */
-void _anjay_server_cleanup(const anjay_t *anjay, anjay_server_info_t *server);
-
-bool _anjay_server_active(anjay_server_info_t *server);
+void _anjay_server_cleanup(anjay_server_info_t *server);
 
 AVS_LIST(anjay_server_info_t) *
 _anjay_servers_find_insert_ptr(anjay_servers_t *servers, anjay_ssid_t ssid);

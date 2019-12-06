@@ -28,7 +28,7 @@ VISIBILITY_SOURCE_BEGIN
 
 typedef struct {
     const anjay_ret_bytes_ctx_vtable_t *vtable;
-    avs_stream_abstract_t *stream;
+    avs_stream_t *stream;
     size_t bytes_left;
 } opaque_bytes_t;
 
@@ -36,63 +36,85 @@ static int opaque_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
                                    const void *data,
                                    size_t length) {
     opaque_bytes_t *ctx = (opaque_bytes_t *) ctx_;
-    int retval = 0;
-    if (length) {
-        if (length > ctx->bytes_left) {
-            retval = -1;
-        } else if (!(retval = avs_stream_write(ctx->stream, data, length))) {
-            ctx->bytes_left -= length;
-        }
+    if (!length) {
+        return 0;
     }
-    return retval;
+    if (length <= ctx->bytes_left
+            && avs_is_ok(avs_stream_write(ctx->stream, data, length))) {
+        ctx->bytes_left -= length;
+        return 0;
+    }
+    return -1;
 }
 
 static const anjay_ret_bytes_ctx_vtable_t OPAQUE_BYTES_VTABLE = {
     .append = opaque_ret_bytes_append
 };
 
+typedef enum {
+    STATE_INITIAL,
+    STATE_PATH_SET,
+    STATE_RETURNING
+} opaque_out_state_t;
+
 typedef struct {
-    const anjay_output_ctx_vtable_t *vtable;
-    int *errno_ptr;
-    bool initialized;
+    anjay_output_ctx_t base;
+    opaque_out_state_t state;
     opaque_bytes_t bytes;
 } opaque_out_t;
 
-static int *opaque_errno_ptr(anjay_output_ctx_t *ctx) {
-    return ((opaque_out_t *) ctx)->errno_ptr;
+static int opaque_ret_bytes(anjay_output_ctx_t *ctx_,
+                            size_t length,
+                            anjay_ret_bytes_ctx_t **out_bytes_ctx) {
+    opaque_out_t *ctx = (opaque_out_t *) ctx_;
+    if (ctx->state == STATE_PATH_SET) {
+        ctx->state = STATE_RETURNING;
+        ctx->bytes.bytes_left = length;
+        *out_bytes_ctx = (anjay_ret_bytes_ctx_t *) &ctx->bytes;
+        return 0;
+    }
+    return -1;
 }
 
-static anjay_ret_bytes_ctx_t *opaque_ret_bytes(anjay_output_ctx_t *ctx_,
-                                               size_t length) {
+static int opaque_set_path(anjay_output_ctx_t *ctx_,
+                           const anjay_uri_path_t *path) {
     opaque_out_t *ctx = (opaque_out_t *) ctx_;
-    if (!ctx->initialized) {
-        ctx->initialized = true;
-        ctx->bytes.bytes_left = length;
-        return (anjay_ret_bytes_ctx_t *) &ctx->bytes;
+    if (ctx->state == STATE_PATH_SET) {
+        return -1;
+    } else if (ctx->state != STATE_INITIAL
+               || !_anjay_uri_path_has(path, ANJAY_ID_RID)) {
+        return ANJAY_OUTCTXERR_FORMAT_MISMATCH;
     }
-    return NULL;
+    ctx->state = STATE_PATH_SET;
+    return 0;
+}
+
+static int opaque_clear_path(anjay_output_ctx_t *ctx_) {
+    opaque_out_t *ctx = (opaque_out_t *) ctx_;
+    if (ctx->state != STATE_PATH_SET) {
+        return -1;
+    }
+    ctx->state = STATE_INITIAL;
+    return 0;
+}
+
+static int opaque_ret_close(anjay_output_ctx_t *ctx_) {
+    opaque_out_t *ctx = (opaque_out_t *) ctx_;
+    return ctx->state == STATE_RETURNING ? 0
+                                         : ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED;
 }
 
 static const anjay_output_ctx_vtable_t OPAQUE_OUT_VTABLE = {
-    .errno_ptr = opaque_errno_ptr,
-    .bytes_begin = opaque_ret_bytes
+    .bytes_begin = opaque_ret_bytes,
+    .set_path = opaque_set_path,
+    .clear_path = opaque_clear_path,
+    .close = opaque_ret_close
 };
 
-anjay_output_ctx_t *
-_anjay_output_opaque_create(avs_stream_abstract_t *stream,
-                            int *errno_ptr,
-                            anjay_msg_details_t *inout_details) {
+anjay_output_ctx_t *_anjay_output_opaque_create(avs_stream_t *stream) {
     opaque_out_t *ctx = (opaque_out_t *) avs_calloc(1, sizeof(opaque_out_t));
-    if (ctx
-            && ((*errno_ptr = _anjay_handle_requested_format(
-                         &inout_details->format, ANJAY_COAP_FORMAT_OPAQUE))
-                || _anjay_coap_stream_setup_response(stream, inout_details))) {
-        avs_free(ctx);
-        return NULL;
-    }
     if (ctx) {
-        ctx->vtable = &OPAQUE_OUT_VTABLE;
-        ctx->errno_ptr = errno_ptr;
+        ctx->base.vtable = &OPAQUE_OUT_VTABLE;
         ctx->bytes.vtable = &OPAQUE_BYTES_VTABLE;
         ctx->bytes.stream = stream;
     }
@@ -101,8 +123,10 @@ _anjay_output_opaque_create(avs_stream_abstract_t *stream,
 
 typedef struct {
     const anjay_input_ctx_vtable_t *vtable;
-    avs_stream_abstract_t *stream;
-    bool autoclose;
+    avs_stream_t *stream;
+    bool msg_finished;
+
+    anjay_uri_path_t request_uri;
 } opaque_in_t;
 
 static int opaque_get_some_bytes(anjay_input_ctx_t *ctx,
@@ -110,18 +134,35 @@ static int opaque_get_some_bytes(anjay_input_ctx_t *ctx,
                                  bool *out_message_finished,
                                  void *out_buf,
                                  size_t buf_size) {
-    char message_finished;
-    int retval = avs_stream_read(((opaque_in_t *) ctx)->stream, out_bytes_read,
-                                 &message_finished, out_buf, buf_size);
-    *out_message_finished = message_finished;
-    return retval;
+    avs_error_t err =
+            avs_stream_read(((opaque_in_t *) ctx)->stream, out_bytes_read,
+                            out_message_finished, out_buf, buf_size);
+    ((opaque_in_t *) ctx)->msg_finished = *out_message_finished;
+    return avs_is_ok(err) ? 0 : -1;
 }
 
 static int opaque_in_close(anjay_input_ctx_t *ctx_) {
+    (void) ctx_;
+    return 0;
+}
+
+static int opaque_in_get_path(anjay_input_ctx_t *ctx_,
+                              anjay_uri_path_t *out_path,
+                              bool *out_is_array) {
     opaque_in_t *ctx = (opaque_in_t *) ctx_;
-    if (ctx->autoclose) {
-        return avs_stream_cleanup(&ctx->stream);
+    if (ctx->msg_finished) {
+        return ANJAY_GET_PATH_END;
     }
+    if (!_anjay_uri_path_has(&ctx->request_uri, ANJAY_ID_RID)) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    *out_is_array = false;
+    *out_path = ctx->request_uri;
+    return 0;
+}
+
+static int opaque_in_next_entry(anjay_input_ctx_t *ctx) {
+    (void) ctx;
     return 0;
 }
 
@@ -133,17 +174,18 @@ static const anjay_input_ctx_vtable_t OPAQUE_IN_VTABLE = {
     .some_bytes = opaque_get_some_bytes,
     .close = opaque_in_close,
     .string = (anjay_input_ctx_string_t) bad_request,
-    .i32 = (anjay_input_ctx_i32_t) bad_request,
-    .i64 = (anjay_input_ctx_i64_t) bad_request,
-    .f32 = (anjay_input_ctx_f32_t) bad_request,
-    .f64 = (anjay_input_ctx_f64_t) bad_request,
+    .integer = (anjay_input_ctx_integer_t) bad_request,
+    .floating = (anjay_input_ctx_floating_t) bad_request,
     .boolean = (anjay_input_ctx_boolean_t) bad_request,
     .objlnk = (anjay_input_ctx_objlnk_t) bad_request,
+    .get_path = opaque_in_get_path,
+    .update_root_path = (anjay_input_ctx_update_root_path_t) bad_request,
+    .next_entry = opaque_in_next_entry
 };
 
 int _anjay_input_opaque_create(anjay_input_ctx_t **out,
-                               avs_stream_abstract_t **stream_ptr,
-                               bool autoclose) {
+                               avs_stream_t **stream_ptr,
+                               const anjay_uri_path_t *request_uri) {
     opaque_in_t *ctx = (opaque_in_t *) avs_calloc(1, sizeof(opaque_in_t));
     *out = (anjay_input_ctx_t *) ctx;
     if (!ctx) {
@@ -152,9 +194,7 @@ int _anjay_input_opaque_create(anjay_input_ctx_t **out,
 
     ctx->vtable = &OPAQUE_IN_VTABLE;
     ctx->stream = *stream_ptr;
-    if (autoclose) {
-        ctx->autoclose = true;
-        *stream_ptr = NULL;
-    }
+    ctx->request_uri = request_uri ? *request_uri : MAKE_ROOT_PATH();
+
     return 0;
 }

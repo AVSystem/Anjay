@@ -31,7 +31,7 @@ typedef struct {
     const anjay_dm_object_def_t *const *restored;
     server_repr_t *stored_repr;
     server_repr_t *restored_repr;
-    avs_stream_abstract_t *stream;
+    avs_stream_t *stream;
 } server_persistence_test_env_t;
 
 #define SCOPED_SERVER_PERSISTENCE_TEST_ENV(Name)    \
@@ -111,7 +111,7 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .default_min_period = -1,
         .default_max_period = -1,
         .disable_timeout = -1,
-        .binding = "U",
+        .binding = "UQ",
         .notification_storing = true
     };
     anjay_iid_t iid = 1;
@@ -138,7 +138,7 @@ AVS_UNIT_TEST(server_persistence, modification_flag_add_instance) {
     /* At the beginning server object is not modified */
     AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->anjay_stored));
     /* Invalid instance does not change the modification flag */
-    anjay_iid_t iid = ANJAY_IID_INVALID;
+    anjay_iid_t iid = ANJAY_ID_INVALID;
     const anjay_server_instance_t invalid_instance = {
         .ssid = 0
     };
@@ -173,7 +173,7 @@ AVS_UNIT_TEST(server_persistence, modification_flag_purge) {
     anjay_server_object_purge(env->anjay_stored);
     AVS_UNIT_ASSERT_FALSE(anjay_server_object_is_modified(env->anjay_stored));
 
-    anjay_iid_t iid = ANJAY_IID_INVALID;
+    anjay_iid_t iid = ANJAY_ID_INVALID;
     const anjay_server_instance_t instance = {
         .ssid = 42,
         .lifetime = 9001,

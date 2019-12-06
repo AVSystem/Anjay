@@ -20,8 +20,11 @@ import errno
 from typing import Tuple, Optional
 
 from .packet import Packet
+from .transport import Transport
+from .code import Code
 
 import enum
+
 
 class SecurityMode(enum.Enum):
     PreSharedKey = 0
@@ -30,11 +33,11 @@ class SecurityMode(enum.Enum):
     NoSec = 3
 
     def __str__(self):
-        if self.value == SecurityMode.PreSharedKey:
+        if self == SecurityMode.PreSharedKey:
             return 'psk'
-        elif self.value == SecurityMode.RawPublicKey:
+        elif self == SecurityMode.RawPublicKey:
             return 'rpk'
-        elif self.value == SecurityMode.Certificate:
+        elif self == SecurityMode.Certificate:
             return 'cert'
         else:
             return 'nosec'
@@ -87,8 +90,10 @@ def _disconnect_socket(old_sock, family):
     """
     new_sock = socket.socket(family, socket.SOCK_DGRAM, 0)
 
-    orig_reuse_addr = old_sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR)
-    orig_reuse_port = old_sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT)
+    orig_reuse_addr = old_sock.getsockopt(
+        socket.SOL_SOCKET, socket.SO_REUSEADDR)
+    orig_reuse_port = old_sock.getsockopt(
+        socket.SOL_SOCKET, socket.SO_REUSEPORT)
 
     # temporarily set REUSEADDR and REUSEPORT to allow new socket to bind
     # to the same port
@@ -108,28 +113,34 @@ def _disconnect_socket(old_sock, family):
 
 
 class Server(object):
-    def __init__(self, listen_port=0, use_ipv6=False, reuse_port=False):
+    def __init__(self, listen_port=0, use_ipv6=False, reuse_port=False, transport=Transport.UDP):
         self._prev_remote_endpoint = None
         self.socket_timeout = None
         self.socket = None
         self.family = socket.AF_INET6 if use_ipv6 else socket.AF_INET
+        self.transport = transport
         self.reuse_port = reuse_port
+        self.accepted_connection = False
 
         self.reset(listen_port)
 
     def listen(self, timeout_s=-1):
-        assert self.get_remote_addr() is None
-        with _override_timeout(self.socket, timeout_s):
-            _, remote_addr_port = self.socket.recvfrom(1, socket.MSG_PEEK)
+        if self.transport == Transport.UDP:
+            assert self.get_remote_addr() is None
+            with _override_timeout(self.socket, timeout_s):
+                _, remote_addr_port = self.socket.recvfrom(1, socket.MSG_PEEK)
 
-        self.connect_to_client(remote_addr_port)
+            self.connect_to_client(remote_addr_port)
+        else:
+            raise ValueError("Invalid transport: %r" % (self.transport,))
 
     def connect_to_client(self, remote_addr: Tuple[str, int]) -> None:
         """
-        This may be used e.g. for Server-Initiated Bootstrap over NoSec, when there is absolutely no initial traffic
-        from the client.
+        This may be used e.g. for 1.0-style Server-Initiated Bootstrap over NoSec, when there is
+        absolutely no initial traffic from the client.
         """
         self.socket.connect(remote_addr)
+        self.accepted_connection = True
 
     @property
     def _raw_udp_socket(self) -> None:
@@ -165,7 +176,8 @@ class Server(object):
             self._raw_udp_socket.connect(self._prev_remote_endpoint)
             self._prev_remote_endpoint = None
         else:
-            self._raw_udp_socket = _disconnect_socket(self._raw_udp_socket, self.family)
+            self._raw_udp_socket = _disconnect_socket(
+                self._raw_udp_socket, self.family)
 
     def _flush_recv_queue(self) -> None:
         with _override_timeout(self._raw_udp_socket, 0):
@@ -197,22 +209,29 @@ class Server(object):
             listen_port = self.get_listen_port() if self.socket else 0
 
         self.close()
-        self.socket = socket.socket(self.family, socket.SOCK_DGRAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
+        self.socket = socket.socket(self.family, socket.SOCK_STREAM if self.transport == Transport.TCP else socket.SOCK_DGRAM)
+        self.socket.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
         self.socket.bind(('', listen_port))
+        self.accepted_connection = False
 
     def send(self, coap_packet: Packet) -> None:
-        self.socket.send(coap_packet.serialize())
+        self.socket.send(coap_packet.serialize(transport=self.transport))
 
     def recv_raw(self, timeout_s: float = -1):
-        if not self.get_remote_addr():
+        # NOTE: get_remote_addr() can sometimes return None, if someone
+        # decided to "unconnect" the socket from a certain client. It is
+        # only done for testing connection_id.
+        if not self.get_remote_addr() and not self.accepted_connection:
             self.listen(timeout_s=timeout_s)
+
+        self.accepted_connection = True
 
         with _override_timeout(self.socket, timeout_s):
             return self.socket.recv(65536)
 
     def recv(self, timeout_s: float = -1) -> Packet:
-        return Packet.parse(self.recv_raw(timeout_s))
+        return Packet.parse(self.recv_raw(timeout_s), transport=self.transport)
 
     def set_timeout(self, timeout_s: float) -> None:
         self.socket_timeout = timeout_s
@@ -227,6 +246,9 @@ class Server(object):
     def get_listen_port(self) -> int:
         return self.socket.getsockname()[1]
 
+    def get_local_addr(self) -> Optional[Tuple[str, int]]:
+        return self.socket.getsockname()
+
     def get_remote_addr(self) -> Optional[Tuple[str, int]]:
         if not self.socket:
             return None
@@ -239,14 +261,16 @@ class Server(object):
     def security_mode(self):
         return 'nosec'
 
+
 class DtlsServer(Server):
     def __init__(self, psk_identity=None, psk_key=None, ca_path=None, ca_file=None,
                  crt_file=None, key_file=None, listen_port=0, debug=False, use_ipv6=False,
-                 reuse_port=False):
+                 reuse_port=False, connection_id=''):
         use_psk = (psk_identity and psk_key)
         use_certs = any((ca_path, ca_file, crt_file, key_file))
         if use_psk and use_certs:
-            raise ValueError("Cannot use PSK and Certificates at the same time")
+            raise ValueError(
+                "Cannot use PSK and Certificates at the same time")
 
         try:
             from pymbedtls import PskSecurity, CertSecurity, Context
@@ -261,15 +285,17 @@ class DtlsServer(Server):
         elif use_certs:
             security = CertSecurity(ca_path, ca_file, crt_file, key_file)
         else:
-            raise ValueError("Neither PSK nor Certificates were configured for use with DTLS")
+            raise ValueError(
+                "Neither PSK nor Certificates were configured for use with DTLS")
 
-        self._pymbedtls_context = Context(security, debug)
+        self._pymbedtls_context = Context(security, debug, connection_id)
         self._security_mode = security.name()
 
         super().__init__(listen_port, use_ipv6, reuse_port=reuse_port)
 
     def connect_to_client(self, remote_addr: Tuple[str, int]) -> None:
-        raise NotImplementedError('connect_to_client() not supported for DTLS servers')
+        raise NotImplementedError(
+            'connect_to_client() not supported for DTLS servers')
 
     @property
     def _raw_udp_socket(self) -> None:

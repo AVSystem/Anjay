@@ -31,17 +31,15 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 static inline anjay_server_connection_t *
 _anjay_get_server_connection(anjay_connection_ref_t ref) {
+    assert(ref.server);
     return _anjay_connection_get(&ref.server->connections, ref.conn_type);
 }
 
-void _anjay_active_server_refresh(anjay_t *anjay, anjay_server_info_t *server);
+bool _anjay_connections_is_trigger_requested(const char *binding_mode);
 
-void _anjay_connections_on_refreshed(anjay_t *anjay,
-                                     anjay_connections_t *connections,
-                                     anjay_server_connection_state_t state);
+void _anjay_active_server_refresh(anjay_server_info_t *server);
 
-void _anjay_connections_flush_notifications(anjay_t *anjay,
-                                            anjay_connections_t *connections);
+void _anjay_connections_flush_notifications(anjay_connections_t *connections);
 
 VISIBILITY_PRIVATE_HEADER_END
 

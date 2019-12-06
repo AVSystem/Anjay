@@ -32,6 +32,8 @@ The project has been created and is actively maintained by [AVSystem](https://ww
 
 ## Supported features
 
+This version includes full support for OMA LwM2M TS 1.0 features. Version that supports TS 1.1 is [available commercially](#commercial-support).
+
 - LwM2M Bootstrap Interface:
     - Request
     - Finish
@@ -69,11 +71,11 @@ The project has been created and is actively maintained by [AVSystem](https://ww
     - tinydtls
 
 - Supported platforms:
-    - any Unix-like operating system, such as Linux (including Android), mac OS and *BSD
+    - any Unix-like operating system, such as Linux (including Android), macOS and BSD family
     - Microsoft Windows (preliminary support, see [README.Windows.md](README.Windows.md) for details)
     - any embedded platform (e.g. FreeRTOS, ThreadX) with lwIP networking stack
     - porting is possible for any other platform that has ISO C99 compiler available, see [Porting guide for non-POSIX platforms](https://avsystem.github.io/Anjay-doc/PortingGuideForNonPOSIXPlatforms.html) for details
-        - preimplemented integration layer for ARM mbed OS is available commercially
+        - preimplemented integration layer for Arm Mbed OS is available commercially
 
 - CoAP data formats:
     - TLV
@@ -225,7 +227,9 @@ See [LICENSE](LICENSE) file.
 ### Commercial support
 
 Anjay LwM2M library comes with the option of [full commercial support, provided by AVSystem](https://www.avsystem.com/products/anjay/).
-The commercial version supports the latest LwM2M 1.1 release. 
+
+The commercial version supports the latest LwM2M 1.1 release, including Composite operations, Send method, SenML JSON and CBOR data formats, TCP, SMS and NIDD bindings.
+
 If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem, which also focuses on LwM2M along with its latest 1.1 specification.
 
 ## Contributing

@@ -80,8 +80,7 @@ library about that fact:
     // second, and this part of the code is executed roughly every second.
     anjay_notify_changed(anjay, 1234, 0, 1);
 
-    // Finally run the scheduler (ignoring its return value, which
-    // is the number of tasks executed)
+    // Finally run the scheduler
 
 One more thing to consider is setting up LwM2M attribute handlers - we'll leave
 that to the Attribute Storage module:

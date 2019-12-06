@@ -169,8 +169,7 @@ static void cmd_get_port(anjay_demo_t *demo, const char *args_string) {
         return;
     }
 
-    AVS_LIST(avs_net_abstract_socket_t *const) sockets =
-            anjay_get_sockets(demo->anjay);
+    AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(demo->anjay);
     int num_sockets = (int) AVS_LIST_SIZE(sockets);
     if (index < 0) {
         index = num_sockets + index;
@@ -180,7 +179,7 @@ static void cmd_get_port(anjay_demo_t *demo, const char *args_string) {
                  num_sockets);
     }
     char port[16] = "0";
-    AVS_LIST(avs_net_abstract_socket_t *const) socket =
+    AVS_LIST(avs_net_socket_t *const) socket =
             AVS_LIST_NTH(sockets, (size_t) index);
     if (socket && *socket) {
         avs_net_socket_get_local_port(*socket, port, sizeof(port));
@@ -214,9 +213,6 @@ static void cmd_get_transport(anjay_demo_t *demo, const char *args_string) {
     case ANJAY_SOCKET_TRANSPORT_TCP:
         puts("TRANSPORT==TCP");
         break;
-    case ANJAY_SOCKET_TRANSPORT_SMS:
-        puts("TRANSPORT==SMS");
-        break;
     default:
         printf("TRANSPORT==%d\n", (int) entry->transport);
     }
@@ -229,8 +225,7 @@ static void cmd_non_lwm2m_socket_count(anjay_demo_t *demo,
             anjay_get_socket_entries(demo->anjay);
     unsigned long non_lwm2m_sockets = 0;
     AVS_LIST_ITERATE(entry) {
-        if (entry->ssid == ANJAY_SSID_ANY
-                && entry->transport != ANJAY_SOCKET_TRANSPORT_SMS) {
+        if (entry->ssid == ANJAY_SSID_ANY) {
             ++non_lwm2m_sockets;
         }
     }
@@ -253,9 +248,11 @@ static void cmd_notify(anjay_demo_t *demo, const char *args_string) {
     anjay_oid_t oid;
     anjay_iid_t iid;
     anjay_rid_t rid;
-    if (sscanf(args_string, " /%hu/%hu/%hu", &oid, &iid, &rid) == 3) {
+    if (sscanf(args_string, " /%" SCNu16 "/%" SCNu16 "/%" SCNu16, &oid, &iid,
+               &rid)
+            == 3) {
         (void) anjay_notify_changed(demo->anjay, oid, iid, rid);
-    } else if (sscanf(args_string, " /%hu", &oid) == 1) {
+    } else if (sscanf(args_string, " /%" SCNu16, &oid) == 1) {
         (void) anjay_notify_instances_changed(demo->anjay, oid);
     } else {
         demo_log(WARNING, "notify usage:\n"
@@ -280,8 +277,6 @@ static void cmd_unregister_object(anjay_demo_t *demo, const char *args_string) {
                 demo_log(ERROR, "Could not unregister object %d", oid);
                 return;
             }
-            (*object_entry_ptr)->release_func((*object_entry_ptr)->obj_ptr);
-            AVS_LIST_DELETE(object_entry_ptr);
             return;
         }
     }
@@ -289,27 +284,50 @@ static void cmd_unregister_object(anjay_demo_t *demo, const char *args_string) {
     demo_log(ERROR, "No such object to unregister: %d", oid);
 }
 
-static int dl_write_next_block(anjay_t *anjay,
-                               const uint8_t *data,
-                               size_t data_size,
-                               const anjay_etag_t *etag,
-                               void *user_data) {
+static void cmd_reregister_object(anjay_demo_t *demo, const char *args_string) {
+    int oid;
+    if (sscanf(args_string, "%d", &oid) != 1 || oid < 0 || oid > UINT16_MAX) {
+        demo_log(ERROR, "Invalid OID: %s", args_string);
+        return;
+    }
+
+    AVS_LIST(anjay_demo_object_t) *object_entry_ptr;
+    AVS_LIST_FOREACH_PTR(object_entry_ptr, &demo->objects) {
+        if ((*(*object_entry_ptr)->obj_ptr)->oid == oid) {
+            if (anjay_register_object(demo->anjay,
+                                      (*object_entry_ptr)->obj_ptr)) {
+                demo_log(ERROR, "Could not re-register object %d", oid);
+                return;
+            }
+            return;
+        }
+    }
+
+    demo_log(ERROR, "No such object to register: %d", oid);
+}
+
+static avs_error_t dl_write_next_block(anjay_t *anjay,
+                                       const uint8_t *data,
+                                       size_t data_size,
+                                       const anjay_etag_t *etag,
+                                       void *user_data) {
     (void) anjay;
     (void) etag;
 
     FILE *f = (FILE *) user_data;
     if (fwrite(data, data_size, 1, f) != 1) {
         demo_log(ERROR, "fwrite() failed");
-        return -1;
+        return avs_errno(AVS_UNKNOWN_ERROR);
     }
 
-    return 0;
+    return AVS_OK;
 }
 
-static void dl_finished(anjay_t *anjay, int result, void *user_data) {
+static void
+dl_finished(anjay_t *anjay, anjay_download_status_t status, void *user_data) {
     (void) anjay;
     fclose((FILE *) user_data);
-    demo_log(INFO, "download finished, result == %d", result);
+    demo_log(INFO, "download finished, result == %d", (int) status.result);
 }
 
 static void cmd_download(anjay_demo_t *demo, const char *args_string) {
@@ -342,10 +360,13 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
         .on_next_block = dl_write_next_block,
         .on_download_finished = dl_finished,
         .user_data = f,
-        .security_info = avs_net_security_info_from_psk(psk)
+        .security_config = {
+            .security_info = avs_net_security_info_from_psk(psk)
+        }
     };
 
-    if (anjay_download(demo->anjay, &cfg) == NULL) {
+    if (avs_is_err(anjay_download(demo->anjay, &cfg,
+                                  &(anjay_download_handle_t) { NULL }))) {
         demo_log(ERROR, "could not schedule download");
         fclose(f);
     }
@@ -359,8 +380,8 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     }
     int path_len = 0;
     const char *args = NULL, *pmin = NULL, *pmax = NULL, *lt = NULL, *gt = NULL,
-               *st = NULL;
-    anjay_dm_resource_attributes_t attrs;
+               *st = NULL, *epmin = NULL, *epmax = NULL;
+    anjay_dm_r_attributes_t attrs;
     int ssid;
 
     if (sscanf(args_string, "%s %d%n", path, &ssid, &path_len) != 2) {
@@ -374,9 +395,11 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     }
 
     args = args_string + path_len;
-    attrs = ANJAY_RES_ATTRIBS_EMPTY;
+    attrs = ANJAY_DM_R_ATTRIBUTES_EMPTY;
     pmin = strstr(args, "pmin=");
     pmax = strstr(args, "pmax=");
+    epmin = strstr(args, "epmin=");
+    epmax = strstr(args, "epmax=");
     lt = strstr(args, "lt=");
     gt = strstr(args, "gt=");
     st = strstr(args, "st=");
@@ -385,6 +408,12 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     }
     if (pmax) {
         (void) sscanf(pmax, "pmax=%" PRId32, &attrs.common.max_period);
+    }
+    if (epmin) {
+        (void) sscanf(epmin, "epmin=%" PRId32, &attrs.common.min_eval_period);
+    }
+    if (epmax) {
+        (void) sscanf(epmax, "epmax=%" PRId32, &attrs.common.max_eval_period);
     }
     if (lt) {
         (void) sscanf(lt, "lt=%lf", &attrs.less_than);
@@ -397,7 +426,8 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     }
 
     int oid, iid, rid;
-    switch (sscanf(path, "/%d/%d/%d", &oid, &iid, &rid)) {
+    switch (sscanf(path, "/%d/%d/%d", &oid, &iid, &rid //
+                   )) {
     case 3:
         if (anjay_attr_storage_set_resource_attrs(
                     demo->anjay, (anjay_ssid_t) ssid, (anjay_oid_t) oid,
@@ -426,6 +456,27 @@ finish:
     avs_free(path);
 }
 
+static void cmd_disable_server(anjay_demo_t *demo, const char *args_string) {
+    unsigned ssid;
+    int timeout_s;
+    if (sscanf(args_string, "%u %d", &ssid, &timeout_s) < 2
+            || ssid > UINT16_MAX) {
+        demo_log(ERROR, "invalid arguments");
+        return;
+    }
+
+    avs_time_duration_t timeout = AVS_TIME_DURATION_INVALID;
+    if (timeout_s >= 0) {
+        timeout = avs_time_duration_from_scalar(timeout_s, AVS_TIME_S);
+    }
+
+    if (anjay_disable_server_with_timeout(demo->anjay, (anjay_ssid_t) ssid,
+                                          timeout)) {
+        demo_log(ERROR, "could not disable server with SSID %u", ssid);
+        return;
+    }
+}
+
 static void cmd_enable_server(anjay_demo_t *demo, const char *args_string) {
     anjay_ssid_t ssid = ANJAY_SSID_ANY;
     if (*args_string && parse_ssid(args_string, &ssid)) {
@@ -449,6 +500,39 @@ static void cmd_schedule_update_on_exit(anjay_demo_t *demo,
                                         const char *unused_args) {
     (void) unused_args;
     demo->schedule_update_on_exit = true;
+}
+
+static void cmd_badc_write(anjay_demo_t *demo, const char *args_string) {
+    anjay_iid_t iid;
+    anjay_riid_t riid;
+    int length;
+    if (sscanf(args_string, " %" SCNu16 " %" SCNu16 " %n", &iid, &riid, &length)
+            < 2) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+    binary_app_data_container_write(demo->anjay, demo_find_object(demo, 19),
+                                    iid, riid, &args_string[length]);
+}
+
+static void cmd_set_event_log_data(anjay_demo_t *demo,
+                                   const char *args_string) {
+    const anjay_dm_object_def_t **obj_def =
+            demo_find_object(demo, DEMO_OID_EVENT_LOG);
+    if (!obj_def) {
+        demo_log(ERROR, "failed to find Event Log object");
+    }
+    size_t data_size = strlen(args_string);
+    const char *data_ptr = args_string;
+    if (data_size) {
+        // Discard the space character
+        ++data_ptr;
+        --data_size;
+    }
+
+    if (event_log_write_data(demo->anjay, obj_def, data_ptr, data_size)) {
+        demo_log(ERROR, "failed to write Event Log data");
+    }
 }
 
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
@@ -497,12 +581,17 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Executes anjay_notify_* on a specified path"),
     CMD_HANDLER("unregister-object", "oid", cmd_unregister_object,
                 "Unregister an LwM2M Object"),
+    CMD_HANDLER("reregister-object", "oid", cmd_reregister_object,
+                "Re-register a previously unregistered LwM2M Object"),
     CMD_HANDLER("download", "url target_file [psk_identity psk_key]",
                 cmd_download,
                 "Download a file from given CoAP URL to target_file."),
-    CMD_HANDLER("set-attrs", "", cmd_set_attrs,
-                "Syntax [/x [/y [/z] ] ] [pmin,pmax,lt,gt,st] - e.g. "
-                "/x/y pmin=3,pmax=4"),
+    CMD_HANDLER("set-attrs", "", cmd_set_attrs, "Syntax [/a [/b [/c [/d] ] ] ] "
+                "ssid [pmin,pmax,lt,gt,st,epmin,epmax] "
+                "- e.g. /a/b 1 pmin=3,pmax=4"),
+    CMD_HANDLER("disable-server", "ssid reactivate_timeout", cmd_disable_server,
+                "Disables a server with given SSID for a given time "
+                "(use -1 to disable idefinitely)."),
     CMD_HANDLER("enable-server", "ssid", cmd_enable_server,
                 "Enables a server with given SSID."),
     CMD_HANDLER("get-all-connections-failed", "", cmd_all_connections_failed,
@@ -510,6 +599,10 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("schedule-update-on-exit", "", cmd_schedule_update_on_exit,
                 "Ensure Registration Update is scheduled for immediate "
                 "execution at the point of calling anjay_delete()"),
+    CMD_HANDLER("badc-write", "IID RIID value", cmd_badc_write,
+                "Writes new value to Binary App Data Container object"),
+    CMD_HANDLER("set-event-log-data", "data", cmd_set_event_log_data,
+                "Sets LogData resource in Log Event object"),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };
@@ -563,7 +656,7 @@ static void cmd_help(anjay_demo_t *demo, const char *args_string) {
     puts("---");
     puts("LwM2M Demo client");
     puts("Available commands:");
-    for (size_t idx = 0; idx < ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
+    for (size_t idx = 0; idx < AVS_ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
         const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[idx];
         printf("\n%s %s\n", cmd->cmd_name, cmd->help_args);
         print_with_indent(cmd->help_descr);
@@ -572,14 +665,10 @@ static void cmd_help(anjay_demo_t *demo, const char *args_string) {
 }
 
 static void handle_command(anjay_demo_t *demo, const char *buf) {
-    size_t cmdIdx = 0;
-    static const size_t num_command_handlers =
-            sizeof(COMMAND_HANDLERS) / sizeof(COMMAND_HANDLERS[0]);
-
     demo_log(INFO, "command: %s", buf);
 
-    for (cmdIdx = 0; cmdIdx < num_command_handlers; ++cmdIdx) {
-        const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[cmdIdx];
+    for (size_t idx = 0; idx < AVS_ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
+        const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[idx];
 
         if (strncmp(buf, cmd->cmd_name, cmd->cmd_name_length) == 0) {
             cmd->handler(demo, buf + cmd->cmd_name_length);

@@ -28,7 +28,8 @@ VISIBILITY_SOURCE_BEGIN
 
 typedef struct base64_ret_bytes_ctx {
     const anjay_ret_bytes_ctx_vtable_t *vtable;
-    avs_stream_abstract_t *stream;
+    avs_stream_t *stream;
+    avs_base64_config_t config;
     uint8_t bytes_cached[2];
     size_t num_bytes_cached;
     size_t num_bytes_left;
@@ -44,13 +45,22 @@ static int base64_ret_encode_and_write(base64_ret_bytes_ctx_t *ctx,
         return 0;
     }
     char encoded[4 * (TEXT_CHUNK_SIZE / 3) + 1];
-    size_t encoded_size = avs_base64_encoded_size(buffer_size);
+    size_t encoded_size;
+    if (ctx->config.padding_char) {
+        encoded_size = avs_base64_encoded_size(buffer_size);
+    } else {
+        encoded_size = avs_base64_encoded_size_without_padding(buffer_size);
+    }
     assert(encoded_size <= sizeof(encoded));
-    int retval = avs_base64_encode(encoded, encoded_size, buffer, buffer_size);
+    int retval = avs_base64_encode_custom(encoded, encoded_size, buffer,
+                                          buffer_size, ctx->config);
     if (retval) {
         return retval;
     }
-    return avs_stream_write(ctx->stream, encoded, encoded_size - 1);
+    if (avs_is_err(avs_stream_write(ctx->stream, encoded, encoded_size - 1))) {
+        return -1;
+    }
+    return 0;
 }
 
 static int base64_ret_bytes_flush(base64_ret_bytes_ctx_t *ctx,
@@ -109,13 +119,14 @@ static const anjay_ret_bytes_ctx_vtable_t BASE64_OUT_BYTES_VTABLE = {
     .append = base64_ret_bytes_append
 };
 
-anjay_ret_bytes_ctx_t *
-_anjay_base64_ret_bytes_ctx_new(avs_stream_abstract_t *stream, size_t length) {
+anjay_ret_bytes_ctx_t *_anjay_base64_ret_bytes_ctx_new(
+        avs_stream_t *stream, avs_base64_config_t config, size_t length) {
     base64_ret_bytes_ctx_t *ctx = (base64_ret_bytes_ctx_t *) avs_calloc(
             1, sizeof(base64_ret_bytes_ctx_t));
     if (ctx) {
         ctx->vtable = &BASE64_OUT_BYTES_VTABLE;
         ctx->stream = stream;
+        ctx->config = config;
         ctx->num_bytes_left = length;
     }
     return (anjay_ret_bytes_ctx_t *) ctx;
@@ -125,7 +136,7 @@ int _anjay_base64_ret_bytes_ctx_close(anjay_ret_bytes_ctx_t *ctx_) {
     base64_ret_bytes_ctx_t *ctx = (base64_ret_bytes_ctx_t *) ctx_;
     if (ctx->num_bytes_left != 0) {
         /* Some bytes were not written as we have expected */
-        return -1;
+        return 0;
     }
     return base64_ret_encode_and_write(ctx, ctx->bytes_cached,
                                        ctx->num_bytes_cached);

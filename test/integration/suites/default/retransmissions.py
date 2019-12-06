@@ -54,8 +54,8 @@ class RetransmissionTest:
         def last_retransmission_timeout(self):
             return self.tx_params().last_retransmission_timeout()
 
-        def wait_for_retransmission_response_timeout(self):
-            time.sleep(self.last_retransmission_timeout())
+        def wait_for_retransmission_response_timeout(self, margin_s=1.0):
+            time.sleep(self.last_retransmission_timeout() + margin_s)
 
         def max_transmit_wait(self):
             return self.tx_params().max_transmit_wait()
@@ -386,8 +386,8 @@ class DtlsRequestBootstrapTimeoutFallbacksToHsTest(RetransmissionTest.TestMixin,
     def setUp(self):
         super().setUp(bootstrap_server=Lwm2mServer(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY)),
                       auto_register=False)
-        self.bootstrap_server.listen()
         self.assertDemoRegisters(self.serv)
+        self.bootstrap_server.listen()
 
     def tearDown(self):
         super().teardown_demo_with_servers(auto_deregister=False)
@@ -462,8 +462,8 @@ class DtlsRequestBootstrapFailsOnIcmpTest(test_suite.PcapEnabledTest,
         super().teardown_demo_with_servers(auto_deregister=False)
 
     def runTest(self):
-        self.bootstrap_server.listen()
         pkt = self.assertDemoRegisters(respond=False)
+        self.bootstrap_server.listen()
         # Give dumpcap a little bit of time to write to dump file.
         time.sleep(self.ACK_TIMEOUT / 2)
         num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()
@@ -622,6 +622,7 @@ class NotificationTimeoutIsIgnored:
             self.serv.send(Lwm2mReset.matching(pkt)())
 
 
+
 class NotificationDtlsTimeoutIsIgnoredTest(NotificationTimeoutIsIgnored.TestMixin,
                                            test_suite.Lwm2mDtlsSingleServerTest):
     pass
@@ -652,9 +653,10 @@ class ReplacedBootstrapServerReconnectTest(RetransmissionTest.TestMixin,
         self.assertIsInstance(pkt, Lwm2mRequestBootstrap)
         self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
 
-        pkt = Lwm2mDiscover('/0')
+        pkt = Lwm2mDiscover('/%d' % (OID.Security,))
         self.bootstrap_server.send(pkt)
-        self.assertMsgEqual(Lwm2mContent.matching(pkt)(content=b'</0>,</0/1>'), self.bootstrap_server.recv())
+        self.assertMsgEqual(Lwm2mContent.matching(pkt)(content=b'lwm2m="1.0",</%d>,</%d/1>' % (OID.Security, OID.Security)),
+                            self.bootstrap_server.recv())
 
         # replace the existing instance
         self.write_instance(self.bootstrap_server, oid=OID.Security, iid=1,
@@ -687,7 +689,7 @@ class ReplacedBootstrapServerReconnectTest(RetransmissionTest.TestMixin,
         self.assertDtlsReconnect(self.bootstrap_server)
 
         # ...and Register with the regular server
-        self.assertDemoRegisters(lifetime=lifetime)
+        self.assertDemoRegisters(lifetime=int(lifetime))
 
         # let the Update fail
         self.assertIsInstance(self.serv.recv(timeout_s=lifetime), Lwm2mUpdate)

@@ -14,16 +14,194 @@
  * limitations under the License.
  */
 
-#include <anjay/download.h>
+#ifndef ANJAY_COAP_TEST_UTILS_H
+#define ANJAY_COAP_TEST_UTILS_H
+
+#include <avsystem/commons/unit/mocksock.h>
 #include <avsystem/commons/unit/test.h>
 
-#include <avsystem/commons/coap/msg.h>
-#include <avsystem/commons/coap/msg_builder.h>
+#include <avsystem/commons/defs.h>
+#include <avsystem/commons/utils.h>
+
+#include <avsystem/coap/code.h>
+#include <avsystem/coap/ctx.h>
+
+#include <anjay/download.h>
+#include <anjay_modules/utils_core.h>
+
+avs_coap_token_t nth_token(uint64_t k);
+avs_coap_token_t current_token(void);
+void reset_token_generator(void);
+
+typedef enum {
+    COAP_TEST_MSG_CONFIRMABLE,
+    COAP_TEST_MSG_NON_CONFIRMABLE,
+    COAP_TEST_MSG_ACKNOWLEDGEMENT,
+    COAP_TEST_MSG_RESET,
+
+    _COAP_TEST_MSG_FIRST = COAP_TEST_MSG_CONFIRMABLE,
+    _COAP_TEST_MSG_LAST = COAP_TEST_MSG_RESET
+} coap_test_msg_type_t;
+
+typedef struct {
+    uint16_t msg_id;
+    avs_coap_token_t token;
+} coap_test_msg_identity_t;
+
+typedef struct {
+    /**
+     * Length of the whole message (header + content). Does not include the
+     * length field itself.
+     */
+    uint32_t length; // whole message (header + content)
+
+    /**
+     * A FAM containing whole CoAP message: header + token + options + payload.
+     */
+    uint8_t content[];
+} coap_test_msg_t;
+
+/** Serialized CoAP message header. */
+typedef struct coap_header {
+    uint8_t version_type_token_length;
+    uint8_t code;
+    uint8_t message_id[2];
+} coap_test_header_t;
+
+AVS_STATIC_ASSERT(AVS_ALIGNOF(coap_test_header_t) == 1,
+                  coap_header_must_always_be_properly_aligned_t);
+
+/** @{
+ * Sanity checks that ensure no padding is inserted anywhere inside
+ * @ref coap_test_header_t .
+ */
+AVS_STATIC_ASSERT(offsetof(coap_test_header_t, version_type_token_length) == 0,
+                  vttl_field_is_at_start_of_coap_test_header_t);
+AVS_STATIC_ASSERT(offsetof(coap_test_header_t, code) == 1,
+                  no_padding_before_code_field_of_coap_test_header_t);
+AVS_STATIC_ASSERT(offsetof(coap_test_header_t, message_id) == 2,
+                  no_padding_before_message_id_field_of_coap_test_header_t);
+AVS_STATIC_ASSERT(sizeof(coap_test_header_t) == 4,
+                  no_padding_in_coap_test_header_t);
+/** @} */
+
+#define COAP_TEST_HEADER_SIZE sizeof(coap_test_header_t)
+
+static inline const uint8_t *
+coap_test_header_end_const(const coap_test_msg_t *msg) {
+    return msg->content + COAP_TEST_HEADER_SIZE;
+}
+
+static inline uint8_t *coap_test_header_end(coap_test_msg_t *msg) {
+    return msg->content + COAP_TEST_HEADER_SIZE;
+}
+
+#define COAP_TEST_FIELD_GET(field, mask, shift) (((field) & (mask)) >> (shift))
+#define COAP_TEST_FIELD_SET(field, mask, shift, value) \
+    ((field) = (uint8_t) (((field) & ~(mask))          \
+                          | (uint8_t) (((value) << (shift)) & (mask))))
+
+static inline uint16_t extract_u16(const uint8_t *data) {
+    uint16_t result;
+    memcpy(&result, data, sizeof(uint16_t));
+    return avs_convert_be16(result);
+}
+
+#define COAP_TEST_HEADER_VERSION_MASK 0xC0
+#define COAP_TEST_HEADER_VERSION_SHIFT 6
+
+static inline uint8_t coap_test_header_get_version(const coap_test_msg_t *msg) {
+    const coap_test_header_t *hdr = (const coap_test_header_t *) msg->content;
+    int val = COAP_TEST_FIELD_GET(hdr->version_type_token_length,
+                                  COAP_TEST_HEADER_VERSION_MASK,
+                                  COAP_TEST_HEADER_VERSION_SHIFT);
+    assert(val >= 0 && val <= 3);
+    return (uint8_t) val;
+}
+
+static inline void coap_test_header_set_version(coap_test_msg_t *msg,
+                                                uint8_t version) {
+    assert(version <= 3);
+    coap_test_header_t *hdr = (coap_test_header_t *) msg->content;
+    COAP_TEST_FIELD_SET(hdr->version_type_token_length,
+                        COAP_TEST_HEADER_VERSION_MASK,
+                        COAP_TEST_HEADER_VERSION_SHIFT, version);
+}
+
+#define COAP_TEST_HEADER_TOKEN_LENGTH_MASK 0x0F
+#define COAP_TEST_HEADER_TOKEN_LENGTH_SHIFT 0
+
+static inline uint8_t
+coap_test_header_get_token_length(const coap_test_msg_t *msg) {
+    const coap_test_header_t *hdr = (const coap_test_header_t *) msg->content;
+    int val = COAP_TEST_FIELD_GET(hdr->version_type_token_length,
+                                  COAP_TEST_HEADER_TOKEN_LENGTH_MASK,
+                                  COAP_TEST_HEADER_TOKEN_LENGTH_SHIFT);
+    assert(val >= 0 && val <= COAP_TEST_HEADER_TOKEN_LENGTH_MASK);
+    return (uint8_t) val;
+}
+
+static inline void coap_test_header_set_token_length(coap_test_msg_t *msg,
+                                                     uint8_t token_length) {
+    assert(token_length <= AVS_COAP_MAX_TOKEN_LENGTH);
+    coap_test_header_t *hdr = (coap_test_header_t *) msg->content;
+    COAP_TEST_FIELD_SET(hdr->version_type_token_length,
+                        COAP_TEST_HEADER_TOKEN_LENGTH_MASK,
+                        COAP_TEST_HEADER_TOKEN_LENGTH_SHIFT, token_length);
+}
+
+/** @{
+ * Used for retrieving CoAP message type from @ref coap_msg_header_t .
+ */
+#define COAP_TEST_HEADER_TYPE_MASK 0x30
+#define COAP_TEST_HEADER_TYPE_SHIFT 4
+/** @} */
+
+static inline coap_test_msg_type_t
+coap_test_header_get_type(const coap_test_msg_t *msg) {
+    const coap_test_header_t *hdr = (const coap_test_header_t *) msg->content;
+    int val = COAP_TEST_FIELD_GET(hdr->version_type_token_length,
+                                  COAP_TEST_HEADER_TYPE_MASK,
+                                  COAP_TEST_HEADER_TYPE_SHIFT);
+    assert(val >= _COAP_TEST_MSG_FIRST && val <= _COAP_TEST_MSG_LAST);
+    return (coap_test_msg_type_t) val;
+}
+
+static inline void coap_test_header_set_type(coap_test_msg_t *msg,
+                                             coap_test_msg_type_t type) {
+    coap_test_header_t *hdr = (coap_test_header_t *) msg->content;
+    COAP_TEST_FIELD_SET(hdr->version_type_token_length,
+                        COAP_TEST_HEADER_TYPE_MASK, COAP_TEST_HEADER_TYPE_SHIFT,
+                        type);
+}
+
+static inline uint8_t coap_test_header_get_code(const coap_test_msg_t *msg) {
+    return msg->content[offsetof(coap_test_header_t, code)];
+}
+
+static inline void coap_test_header_set_code(coap_test_msg_t *msg,
+                                             uint8_t code) {
+    msg->content[offsetof(coap_test_header_t, code)] = code;
+}
+
+static inline uint16_t coap_test_header_get_id(const coap_test_msg_t *msg) {
+    return extract_u16(&msg->content[offsetof(coap_test_header_t, message_id)]);
+}
+
+static inline void coap_test_header_set_id(coap_test_msg_t *msg,
+                                           uint16_t msg_id) {
+    uint16_t msg_id_nbo = avs_convert_be16(msg_id);
+    memcpy(&msg->content[offsetof(coap_test_header_t, message_id)], &msg_id_nbo,
+           sizeof(msg_id_nbo));
+}
 
 struct coap_msg_args {
-    avs_coap_msg_type_t type;
+    coap_test_msg_type_t type;
     uint8_t code;
-    avs_coap_msg_identity_t id;
+    coap_test_msg_identity_t id;
+
+    bool has_raw_token;
+    avs_coap_token_t token;
 
     // The array is needed to set token with maximum length by convenient ID
     // macro without invalid writing null-byte outside id.token.bytes[] array.
@@ -33,9 +211,12 @@ struct coap_msg_args {
     const uint16_t *accept;
     const uint32_t *observe;
 
-    const anjay_etag_t *etag;
-    const avs_coap_block_info_t block1;
-    const avs_coap_block_info_t block2;
+    const avs_coap_etag_t etag;
+    const bool has_etag;
+    const avs_coap_option_block_t block1;
+    const bool has_block1;
+    const avs_coap_option_block_t block2;
+    const bool has_block2;
 
     const void *payload;
     size_t payload_size;
@@ -45,98 +226,135 @@ struct coap_msg_args {
     AVS_LIST(const anjay_string_t) uri_query;
 };
 
-static int add_string_options(avs_coap_msg_info_t *info,
-                              uint16_t option_number,
-                              AVS_LIST(const anjay_string_t) values) {
+static void add_string_options(avs_coap_options_t *options,
+                               uint16_t option_number,
+                               AVS_LIST(const anjay_string_t) values) {
     AVS_LIST(const anjay_string_t) it;
     AVS_LIST_FOREACH(it, values) {
-        if (avs_coap_msg_info_opt_string(info, option_number, it->c_str)) {
-            return -1;
-        }
+        AVS_UNIT_ASSERT_SUCCESS(
+                avs_coap_options_add_string(options, option_number, it->c_str));
     }
-
-    return 0;
 }
 
-static inline const avs_coap_msg_t *
-coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
+static uint8_t *msg_end_ptr(coap_test_msg_t *msg) {
+    return &msg->content[msg->length];
+}
+
+static size_t bytes_remaining(const coap_test_msg_t *msg, size_t max_size) {
+    return max_size - msg->length - offsetof(coap_test_msg_t, content);
+}
+
+static void append_data(coap_test_msg_t *msg,
+                        const size_t max_size,
+                        const void *data,
+                        size_t data_size) {
+    AVS_UNIT_ASSERT_TRUE(data_size <= bytes_remaining(msg, max_size));
+    memcpy(msg_end_ptr(msg), data, data_size);
+    msg->length += (uint32_t) data_size;
+}
+
+typedef struct aligned_buffer aligned_buffer_t;
+
+static inline aligned_buffer_t *ensure_aligned_buffer(void *buffer) {
+    AVS_ASSERT((uintptr_t) buffer % AVS_ALIGNOF(coap_test_msg_t) == 0,
+               "Buffer alignment must be the same as of coap_test_msg_t");
+    return (aligned_buffer_t *) buffer;
+}
+
+static inline const coap_test_msg_t *
+coap_msg__(aligned_buffer_t *buf,
            size_t buf_size,
            const struct coap_msg_args *args) {
-    avs_coap_msg_builder_t builder;
-    avs_coap_msg_info_t info = {
-        .type = args->type,
-        .code = args->code,
-        .identity = args->id,
+    coap_test_msg_t *msg = (coap_test_msg_t *) buf;
+
+    coap_test_header_set_type(msg, args->type);
+    coap_test_header_set_version(msg, 1);
+    coap_test_header_set_code(msg, args->code);
+    coap_test_header_set_token_length(msg, args->id.token.size);
+    coap_test_header_set_id(msg, args->id.msg_id);
+    msg->length = (uint32_t) COAP_TEST_HEADER_SIZE;
+
+    avs_coap_token_t token = {
+        .bytes = { 0 },
+        .size = args->id.token.size
     };
+    memcpy(token.bytes, args->id.token.bytes, args->id.token.size);
+    if (!args->has_raw_token) {
+        memcpy(token.bytes, args->token_as_string__, args->id.token.size);
+    }
+    append_data(msg, buf_size, token.bytes, token.size);
 
-    memcpy(info.identity.token.bytes, args->token_as_string__,
-           args->id.token.size);
+    uint8_t options_buffer[1024];
+    avs_coap_options_t options =
+            avs_coap_options_create_empty(options_buffer,
+                                          sizeof(options_buffer));
 
-    if (args->block1.valid) {
+    if (args->has_block1) {
         AVS_UNIT_ASSERT_SUCCESS(
-                avs_coap_msg_info_opt_block(&info, &args->block1));
+                avs_coap_options_add_block(&options, &args->block1));
     }
-    if (args->block2.valid) {
+    if (args->has_block2) {
         AVS_UNIT_ASSERT_SUCCESS(
-                avs_coap_msg_info_opt_block(&info, &args->block2));
+                avs_coap_options_add_block(&options, &args->block2));
     }
-    if (args->etag) {
-        AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_info_opt_opaque(
-                &info, AVS_COAP_OPT_ETAG, args->etag->value, args->etag->size));
+    if (args->has_etag) {
+        AVS_UNIT_ASSERT_SUCCESS(
+                avs_coap_options_add_etag(&options, &args->etag));
     }
 
-    AVS_UNIT_ASSERT_SUCCESS(add_string_options(
-            &info, AVS_COAP_OPT_LOCATION_PATH, args->location_path));
-    AVS_UNIT_ASSERT_SUCCESS(
-            add_string_options(&info, AVS_COAP_OPT_URI_PATH, args->uri_path));
-    AVS_UNIT_ASSERT_SUCCESS(
-            add_string_options(&info, AVS_COAP_OPT_URI_QUERY, args->uri_query));
+    add_string_options(&options, AVS_COAP_OPTION_LOCATION_PATH,
+                       args->location_path);
+    add_string_options(&options, AVS_COAP_OPTION_URI_PATH, args->uri_path);
+    add_string_options(&options, AVS_COAP_OPTION_URI_QUERY, args->uri_query);
+
     if (args->content_format) {
-        AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_info_opt_u16(
-                &info, AVS_COAP_OPT_CONTENT_FORMAT, *args->content_format));
+        AVS_UNIT_ASSERT_SUCCESS(
+                avs_coap_options_add_u16(&options,
+                                         AVS_COAP_OPTION_CONTENT_FORMAT,
+                                         *args->content_format));
     }
     if (args->accept) {
-        AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_info_opt_u16(
-                &info, AVS_COAP_OPT_ACCEPT, *args->accept));
+        AVS_UNIT_ASSERT_SUCCESS(avs_coap_options_add_u16(
+                &options, AVS_COAP_OPTION_ACCEPT, *args->accept));
     }
     if (args->observe) {
-        AVS_UNIT_ASSERT_SUCCESS(avs_coap_msg_info_opt_u32(
-                &info, AVS_COAP_OPT_OBSERVE, *args->observe));
+        AVS_UNIT_ASSERT_SUCCESS(avs_coap_options_add_u32(
+                &options, AVS_COAP_OPTION_OBSERVE, *args->observe));
     }
 
-    AVS_UNIT_ASSERT_SUCCESS(
-            avs_coap_msg_builder_init(&builder, buf, buf_size, &info));
+    append_data(msg, buf_size, options.begin, options.size);
 
-    AVS_UNIT_ASSERT_EQUAL(args->payload_size,
-                          avs_coap_msg_builder_payload(&builder, args->payload,
-                                                       args->payload_size));
+    if (args->payload_size) {
+        // payload marker
+        append_data(msg, buf_size, &(const uint8_t) { 0xFF }, 1);
+        append_data(msg, buf_size, args->payload, args->payload_size);
+    }
 
     AVS_LIST_CLEAR(
             (AVS_LIST(anjay_string_t) *) (intptr_t) &args->location_path);
     AVS_LIST_CLEAR((AVS_LIST(anjay_string_t) *) (intptr_t) &args->uri_path);
     AVS_LIST_CLEAR((AVS_LIST(anjay_string_t) *) (intptr_t) &args->uri_query);
-    avs_coap_msg_info_reset(&info);
-    return avs_coap_msg_builder_get_msg(&builder);
+    return msg;
 }
 
 /* Convenience macros for use in COAP_MSG */
-#define CON AVS_COAP_MSG_CONFIRMABLE
-#define NON AVS_COAP_MSG_NON_CONFIRMABLE
-#define ACK AVS_COAP_MSG_ACKNOWLEDGEMENT
-#define RST AVS_COAP_MSG_RESET
+#define CON COAP_TEST_MSG_CONFIRMABLE
+#define NON COAP_TEST_MSG_NON_CONFIRMABLE
+#define ACK COAP_TEST_MSG_ACKNOWLEDGEMENT
+#define RST COAP_TEST_MSG_RESET
 
 /* Convenience macro for use in COAP_MSG, to allow skipping AVS_COAP_CODE_
  * prefix */
 #define CODE__(x) AVS_COAP_CODE_##x
 
-/* Convenience macro for use in COAP_MSG, to allow skipping ANJAY_COAP_FORMAT_
- * prefix */
-#define FORMAT__(x) ANJAY_COAP_FORMAT_##x
+/* Convenience macro for use in COAP_MSG, to allow skipping
+ * AVS_COAP_FORMAT_ prefix */
+#define FORMAT__(x) AVS_COAP_FORMAT_##x
 
 /* Allocates a 64k buffer on the stack, constructs a message inside it and
  * returns the message pointer.
  *
- * @p Type    - one of AVS_COAP_MSG_* constants or CON, NON, ACK, RST.
+ * @p Type    - one of COAP_TEST_MSG_* constants or CON, NON, ACK, RST.
  * @p Code    - suffix of one of AVS_COAP_CODE_* constants, e.g. GET
  *              or BAD_REQUEST.
  * @p Id      - message identity specified with the ID() macro.
@@ -145,36 +363,44 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
  *
  * Example usage:
  * @code
- * const avs_coap_msg_t *msg = COAP_MSG(CON, GET, ID(0), NO_PAYLOAD);
- * const avs_coap_msg_t *msg = COAP_MSG(ACK, CONTENT, ID(0),
- *                                      BLOCK2(0, 16, "full_payload"));
+ * const coap_test_msg_t *msg = COAP_MSG(CON, GET, ID(0), NO_PAYLOAD);
+ * const coap_test_msg_t *msg = COAP_MSG(ACK, CONTENT, ID(0),
+ *                                       BLOCK2(0, 16, "full_payload"));
  * @endcode
  */
-#define COAP_MSG(Type, Code, Id, ... /* Payload, Opts... */)                  \
-    coap_msg__(avs_coap_ensure_aligned_buffer(&(uint8_t[65536]){ 0 }), 65536, \
-               &(struct coap_msg_args) {                                      \
-                   .type = (Type),                                            \
-                   .code = CODE__(Code),                                      \
-                   Id,                                                        \
-                   __VA_ARGS__                                                \
+#define COAP_MSG(Type, Code, Id, ... /* Payload, Opts... */)         \
+    coap_msg__(ensure_aligned_buffer(&(uint8_t[65536]){ 0 }), 65536, \
+               &(struct coap_msg_args) {                             \
+                   .type = (Type),                                   \
+                   .code = CODE__(Code),                             \
+                   Id,                                               \
+                   __VA_ARGS__                                       \
                })
 
 /* Used in COAP_MSG() to define message identity. */
-#define ID_TOKEN(MsgId, Token)                                                \
-    .id = (avs_coap_msg_identity_t) { (uint16_t) (MsgId),                     \
-                                      (avs_coap_token_t) { sizeof(Token) - 1, \
-                                                           "" } },            \
+#define ID_TOKEN(MsgId, Token)                                                 \
+    .id = (coap_test_msg_identity_t) { (uint16_t) (MsgId),                     \
+                                       (avs_coap_token_t) { sizeof(Token) - 1, \
+                                                            "" } },            \
     .token_as_string__ = Token
 
 /* Used in COAP_MSG() to define message identity with empty token. */
 #define ID(MsgId) ID_TOKEN((MsgId), "")
 
-/* Used in COAP_MSG() to specify ETag option value. */
-#define ETAG(Tag)                                         \
-    .etag = (const anjay_etag_t *) &(anjay_coap_etag_t) { \
-        .size = sizeof(Tag) - 1,                          \
-        .value = Tag                                      \
+/* Used in COAP_MSG() to pass message token. */
+#define ID_TOKEN_RAW(MsgId, Token)     \
+    .has_raw_token = true,             \
+    .id = (coap_test_msg_identity_t) { \
+        (uint16_t)(MsgId), (Token)     \
     }
+
+/* Used in COAP_MSG() to specify ETag option value. */
+#define ETAG(Tag)                \
+    .etag = (avs_coap_etag_t) {  \
+        .size = sizeof(Tag) - 1, \
+        .bytes = Tag             \
+    },                           \
+    .has_etag = true
 
 /* Used in COAP_MSG() to specify a list of Location-Path options. */
 #define LOCATION_PATH(... /* Segments */) \
@@ -242,11 +468,11 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
     .block1 = { 0 },                                                       \
     .block2 = {                                                            \
         .type = AVS_COAP_BLOCK2,                                           \
-        .valid = true,                                                     \
         .seq_num = (assert((Seq) < (1 << 23)), (uint32_t) (Seq)),          \
         .size = (assert((Size) < (1 << 15)), (uint16_t) (Size)),           \
         .has_more = ((Seq + 1) * (Size) + 1 < sizeof("" __VA_ARGS__))      \
     },                                                                     \
+    .has_block2 = true,                                                    \
     .payload = ((const uint8_t *) ("" __VA_ARGS__)) + (Seq) * (Size),      \
     .payload_size =                                                        \
             sizeof("" __VA_ARGS__) == sizeof("")                           \
@@ -255,3 +481,9 @@ coap_msg__(avs_coap_aligned_msg_buffer_t *buf,
                                ? (Size)                                    \
                                : (sizeof("" __VA_ARGS__) - 1               \
                                   - (Seq) * (Size)))
+
+static inline void expect_timeout(avs_net_socket_t *mocksock) {
+    avs_unit_mocksock_input_fail(mocksock, avs_errno(AVS_ETIMEDOUT));
+}
+
+#endif // ANJAY_COAP_TEST_UTILS_H

@@ -41,15 +41,18 @@ typedef struct anjay_demo_struct anjay_demo_t;
 #define DEMO_OID_CONN_STATISTICS 7
 #define DEMO_OID_CELL_CONNECTIVITY 10
 #define DEMO_OID_APN_CONN_PROFILE 11
-#define DEMO_OID_TEST 1337
-#define DEMO_OID_EXT_DEV_INFO 11111
-#define DEMO_OID_IP_PING 12359
-#define DEMO_OID_GEOPOINTS 12360
-#define DEMO_OID_DOWNLOAD_DIAG 12361
+#define DEMO_OID_EVENT_LOG 20
+#define DEMO_OID_TEST 33605
+#define DEMO_OID_EXT_DEV_INFO 33606
+#define DEMO_OID_IP_PING 33607
+#define DEMO_OID_GEOPOINTS 33608
+#define DEMO_OID_DOWNLOAD_DIAG 33609
 
 const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
                                                    const char *endpoint_name);
 void device_object_release(const anjay_dm_object_def_t **def);
+void device_notify_time_dependent(anjay_t *anjay,
+                                  const anjay_dm_object_def_t **def);
 
 #define MAX_SERVERS 1024
 
@@ -59,6 +62,7 @@ typedef struct {
     anjay_ssid_t id;
     bool is_bootstrap;
     const char *uri;
+    const char *binding_mode;
 } server_entry_t;
 
 typedef struct {
@@ -66,8 +70,7 @@ typedef struct {
     int32_t bootstrap_holdoff_s;
     int32_t bootstrap_timeout_s;
     int32_t lifetime;
-    const char *binding_mode;
-    anjay_udp_security_mode_t security_mode;
+    anjay_security_mode_t security_mode;
     uint8_t *public_cert_or_psk_identity;
     size_t public_cert_or_psk_identity_size;
 
@@ -87,6 +90,8 @@ typedef struct {
 
 const anjay_dm_object_def_t **test_object_create(void);
 void test_object_release(const anjay_dm_object_def_t **def);
+int test_get_instances(const anjay_dm_object_def_t **def,
+                       AVS_LIST(anjay_iid_t) *iids);
 void test_notify_time_dependent(anjay_t *anjay,
                                 const anjay_dm_object_def_t **def);
 
@@ -110,6 +115,8 @@ const anjay_dm_object_def_t **ip_ping_object_create(iosched_t *iosched);
 void ip_ping_object_release(const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **apn_conn_profile_object_create(void);
+int apn_conn_profile_get_instances(const anjay_dm_object_def_t **def,
+                                   AVS_LIST(anjay_iid_t) *out);
 void apn_conn_profile_object_release(const anjay_dm_object_def_t **def);
 
 AVS_LIST(anjay_iid_t)
@@ -132,10 +139,33 @@ int location_open_csv(const anjay_dm_object_def_t **def,
 
 const anjay_dm_object_def_t **geopoints_object_create(anjay_demo_t *demo);
 void geopoints_object_release(const anjay_dm_object_def_t **def);
+int geopoints_get_instances(const anjay_dm_object_def_t **def,
+                            AVS_LIST(anjay_iid_t) *out);
 void geopoints_notify_time_dependent(anjay_t *anjay,
                                      const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **portfolio_object_create(void);
 void portfolio_object_release(const anjay_dm_object_def_t **def);
+int portfolio_get_instances(const anjay_dm_object_def_t **def,
+                            AVS_LIST(anjay_iid_t) *out);
+
+const anjay_dm_object_def_t **binary_app_data_container_object_create(void);
+void binary_app_data_container_object_release(
+        const anjay_dm_object_def_t **def);
+int binary_app_data_container_get_instances(const anjay_dm_object_def_t **def,
+                                            AVS_LIST(anjay_iid_t) *out);
+int binary_app_data_container_write(anjay_t *anjay,
+                                    const anjay_dm_object_def_t **def,
+                                    anjay_iid_t iid,
+                                    anjay_riid_t riid,
+                                    const char *value);
+
+const anjay_dm_object_def_t **event_log_object_create(void);
+void event_log_object_release(const anjay_dm_object_def_t **def);
+avs_sched_t *event_log_get_sched(const anjay_dm_object_def_t *const *obj_ptr);
+int event_log_write_data(anjay_t *anjay,
+                         const anjay_dm_object_def_t *const *obj_ptr,
+                         const void *data,
+                         size_t data_size);
 
 #endif // DEMO_OBJECTS_H
