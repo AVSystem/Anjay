@@ -223,31 +223,6 @@ _avs_coap_find_server_exchange_by_id(avs_coap_ctx_t *ctx,
     return NULL;
 }
 
-static inline AVS_LIST(struct avs_coap_exchange) *
-_avs_coap_find_client_exchange_ptr_by_token(avs_coap_ctx_t *ctx,
-                                            const avs_coap_token_t *token) {
-    return _avs_coap_find_exchange_ptr_by_token(
-            &_avs_coap_get_base(ctx)->client_exchanges, token);
-}
-
-static inline AVS_LIST(struct avs_coap_exchange) *
-_avs_coap_find_server_exchange_ptr_by_token(avs_coap_ctx_t *ctx,
-                                            const avs_coap_token_t *token) {
-    return _avs_coap_find_exchange_ptr_by_token(
-            &_avs_coap_get_base(ctx)->server_exchanges, token);
-}
-
-static inline AVS_LIST(struct avs_coap_exchange)
-_avs_coap_find_server_exchange_by_token(avs_coap_ctx_t *ctx,
-                                        const avs_coap_token_t *token) {
-    AVS_LIST(struct avs_coap_exchange) *ptr =
-            _avs_coap_find_server_exchange_ptr_by_token(ctx, token);
-    if (ptr) {
-        return *ptr;
-    }
-    return NULL;
-}
-
 #ifdef WITH_AVS_COAP_OBSERVE
 static inline bool _avs_coap_is_observe(avs_coap_ctx_t *ctx,
                                         const avs_coap_token_t *token) {

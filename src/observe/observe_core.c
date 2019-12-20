@@ -1479,11 +1479,12 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
                 goto finish;
             }
         } else {
-            anjay_log(DEBUG,
-                      "epmin == %d set for path %s caused holding from reading "
-                      "a new value",
-                      attrs.standard.common.min_eval_period,
-                      ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
+            anjay_log(
+                    DEBUG,
+                    "epmin == %" PRId32
+                    " set for path %s caused holding from reading a new value",
+                    attrs.standard.common.min_eval_period,
+                    ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
             // Do not even call read_handler, just copy previous value
             batches[i] =
                     _anjay_batch_acquire(newest_value(observation)->values[i]);

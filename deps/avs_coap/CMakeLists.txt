@@ -179,6 +179,7 @@ if(WITH_TEST)
 
     add_coap_library(NAME avs_coap_for_tests
                      PRIVATE_DEFINITIONS AVS_UNIT_TESTING)
+    set_target_properties(avs_coap_for_tests PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
     set(TEST_SOURCES
         src/test/socket.c
@@ -304,6 +305,8 @@ if(WITH_TEST)
         add_library("${HWC_TARGET}" OBJECT "${source_file}")
         target_include_directories("${HWC_TARGET}" PRIVATE $<TARGET_PROPERTY:avs_coap,INTERFACE_INCLUDE_DIRECTORIES>)
         target_compile_options("${HWC_TARGET}" PRIVATE -std=c++11 -Wall -Wextra -pedantic -Werror)
+        set_target_properties("${HWC_TARGET}" PROPERTIES EXCLUDE_FROM_ALL TRUE)
+        add_dependencies(avs_coap_check "${HWC_TARGET}")
     endfunction()
 
     enable_language(CXX)

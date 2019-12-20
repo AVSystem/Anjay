@@ -312,6 +312,7 @@ static int ac_resource_reset(anjay_t *anjay,
     }
 
     assert(rid == ANJAY_DM_RID_ACCESS_CONTROL_ACL);
+    (void) rid;
     AVS_LIST_CLEAR(&inst->acl);
     inst->has_acl = true;
     access_control->needs_validation = true;

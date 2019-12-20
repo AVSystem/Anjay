@@ -58,96 +58,6 @@ static inline state_with_error_t failure_state(avs_error_t error) {
     };
 }
 
-static AVS_LIST(avs_coap_exchange_t) client_exchange_create(
-        uint8_t code,
-        const avs_coap_options_t *options,
-        avs_coap_payload_writer_t *payload_writer,
-        void *payload_writer_arg,
-        avs_coap_client_async_response_handler_t *response_handler,
-        void *response_handler_arg,
-        avs_coap_send_result_handler_t *send_result_handler,
-        void *send_result_handler_arg) {
-    assert(avs_coap_code_is_request(code));
-
-    // Add a few extra bytes for BLOCK1 option in case the request turns out
-    // to be large
-    size_t options_capacity = options->capacity + AVS_COAP_OPT_BLOCK_MAX_SIZE;
-
-    AVS_LIST(avs_coap_exchange_t) exchange =
-            (AVS_LIST(avs_coap_exchange_t)) AVS_LIST_NEW_BUFFER(
-                    sizeof(avs_coap_exchange_t) + options_capacity);
-    if (!exchange) {
-        return NULL;
-    }
-
-    size_t next_response_payload_offset = 0;
-#ifdef WITH_AVS_COAP_BLOCK
-    avs_coap_option_block_t block2;
-    if (avs_coap_options_get_block(options, AVS_COAP_BLOCK2, &block2) == 0) {
-        next_response_payload_offset = block2.seq_num * block2.size;
-    }
-#endif // WITH_AVS_COAP_BLOCK
-
-    *exchange = (avs_coap_exchange_t) {
-        .id = AVS_COAP_EXCHANGE_ID_INVALID,
-        .write_payload = payload_writer,
-        .write_payload_arg = payload_writer_arg,
-        .code = code,
-        .eof_cache = {
-            .empty = true
-        },
-        .by_type = {
-            .client = {
-                .handle_response = response_handler,
-                .handle_response_arg = response_handler_arg,
-                .send_result_handler = send_result_handler,
-                .send_result_handler_arg = send_result_handler_arg,
-                .next_response_payload_offset = next_response_payload_offset
-            }
-        },
-        .options_buffer_size = options_capacity
-    };
-
-    // T2393 [COMPOUND-LITERAL-FAM-ASSIGNMENT-TRAP]
-    //
-    // Putting this initializer within the compound literal above makes some
-    // compilers overwrite initial bytes of exchange->options_buffer with
-    // nullbytes *after* options are copied, resulting in overwriting options
-    // data.
-    //
-    // This is caused by combination of a few facts:
-    // - FAM may be inserted in place of existing padding at the end of the
-    //   struct,
-    // - value of padding bytes is indeterminate,
-    // - assignment of a compound literal is split into two parts:
-    //   initialization of the compound literal itself, and copying it to actual
-    //   destination.
-    //
-    // In particular, this means that the assignment above may include:
-    //
-    // 1. initializing the compound literal:
-    //
-    //    a. invoking any side-effects of expressions used for initialization
-    //       of struct members,
-    //    b. optionally filling padding bytes in the struct with zeros
-    //
-    // 2. copying the compound literal, including all padding bytes, to the
-    //    target destination.
-    //
-    // Now, exchange->options_buffer is filled with usable data in step 1a.
-    // If the exchange->options_buffer happens to be a FAM that overlaps with
-    // padding bytes at the end of *exchange, and the compiler decides to do
-    // step 1b, usable data will get overwritten with zeros in step 2.
-    //
-    // This behavior was observed on 32-bit armv7 (GCC 8.2 and Clang 7.0).
-    // x86_64 miraculously works, even when compiling with -m32.
-    exchange->options =
-            _avs_coap_options_copy(options, exchange->options_buffer,
-                                   options_capacity);
-
-    return exchange;
-}
-
 static avs_error_t
 client_exchange_send_next_chunk(avs_coap_ctx_t *ctx,
                                 avs_coap_exchange_t *exchange) {
@@ -753,23 +663,21 @@ handle_failure(avs_coap_ctx_t *ctx,
 #endif // WITH_AVS_COAP_BLOCK
 
 static avs_coap_send_result_handler_result_t
-on_request_delivery_finished(avs_coap_token_t token,
+on_request_delivery_finished(avs_coap_ctx_t *ctx,
                              avs_coap_send_result_t result,
                              avs_error_t fail_err,
                              const avs_coap_borrowed_msg_t *response,
-                             void *ctx_) {
+                             void *exchange) {
     assert(!response || avs_coap_code_is_response(response->code));
 
-    avs_coap_ctx_t *ctx = (avs_coap_ctx_t *) ctx_;
-
+    avs_coap_exchange_id_t exchange_id = ((avs_coap_exchange_t *) exchange)->id;
     AVS_LIST(avs_coap_exchange_t) *exchange_ptr =
-            _avs_coap_find_client_exchange_ptr_by_token(ctx, &token);
+            _avs_coap_find_client_exchange_ptr_by_id(ctx, exchange_id);
     if (!exchange_ptr) {
         assert(result == AVS_COAP_SEND_RESULT_CANCEL);
         return AVS_COAP_RESPONSE_ACCEPTED;
     }
-
-    avs_coap_exchange_id_t exchange_id = (*exchange_ptr)->id;
+    assert(*exchange_ptr == exchange);
 
     if (response) {
         (*exchange_ptr)->by_type.client.next_response_payload_offset +=
@@ -840,11 +748,100 @@ on_request_delivery_finished(avs_coap_token_t token,
 
     if (exchange_ptr
             && request_state.state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
-        AVS_LIST(avs_coap_exchange_t) exchange = AVS_LIST_DETACH(exchange_ptr);
-        cleanup_exchange(ctx, exchange, response, request_state);
+        cleanup_exchange(ctx, AVS_LIST_DETACH(exchange_ptr), response,
+                         request_state);
     }
 
     return AVS_COAP_RESPONSE_ACCEPTED;
+}
+
+static AVS_LIST(avs_coap_exchange_t) client_exchange_create(
+        uint8_t code,
+        const avs_coap_options_t *options,
+        avs_coap_payload_writer_t *payload_writer,
+        void *payload_writer_arg,
+        avs_coap_client_async_response_handler_t *response_handler,
+        void *response_handler_arg) {
+    assert(avs_coap_code_is_request(code));
+
+    // Add a few extra bytes for BLOCK1 option in case the request turns out
+    // to be large
+    size_t options_capacity = options->capacity + AVS_COAP_OPT_BLOCK_MAX_SIZE;
+
+    AVS_LIST(avs_coap_exchange_t) exchange =
+            (AVS_LIST(avs_coap_exchange_t)) AVS_LIST_NEW_BUFFER(
+                    sizeof(avs_coap_exchange_t) + options_capacity);
+    if (!exchange) {
+        return NULL;
+    }
+
+    size_t next_response_payload_offset = 0;
+#ifdef WITH_AVS_COAP_BLOCK
+    avs_coap_option_block_t block2;
+    if (avs_coap_options_get_block(options, AVS_COAP_BLOCK2, &block2) == 0) {
+        next_response_payload_offset = block2.seq_num * block2.size;
+    }
+#endif // WITH_AVS_COAP_BLOCK
+
+    *exchange = (avs_coap_exchange_t) {
+        .id = AVS_COAP_EXCHANGE_ID_INVALID,
+        .write_payload = payload_writer,
+        .write_payload_arg = payload_writer_arg,
+        .code = code,
+        .eof_cache = {
+            .empty = true
+        },
+        .by_type = {
+            .client = {
+                .handle_response = response_handler,
+                .handle_response_arg = response_handler_arg,
+                .send_result_handler =
+                        response_handler ? on_request_delivery_finished : NULL,
+                .send_result_handler_arg = exchange,
+                .next_response_payload_offset = next_response_payload_offset
+            }
+        },
+        .options_buffer_size = options_capacity
+    };
+
+    // T2393 [COMPOUND-LITERAL-FAM-ASSIGNMENT-TRAP]
+    //
+    // Putting this initializer within the compound literal above makes some
+    // compilers overwrite initial bytes of exchange->options_buffer with
+    // nullbytes *after* options are copied, resulting in overwriting options
+    // data.
+    //
+    // This is caused by combination of a few facts:
+    // - FAM may be inserted in place of existing padding at the end of the
+    //   struct,
+    // - value of padding bytes is indeterminate,
+    // - assignment of a compound literal is split into two parts:
+    //   initialization of the compound literal itself, and copying it to actual
+    //   destination.
+    //
+    // In particular, this means that the assignment above may include:
+    //
+    // 1. initializing the compound literal:
+    //
+    //    a. invoking any side-effects of expressions used for initialization
+    //       of struct members,
+    //    b. optionally filling padding bytes in the struct with zeros
+    //
+    // 2. copying the compound literal, including all padding bytes, to the
+    //    target destination.
+    //
+    // Now, exchange->options_buffer is filled with usable data in step 1a.
+    // If the exchange->options_buffer happens to be a FAM that overlaps with
+    // padding bytes at the end of *exchange, and the compiler decides to do
+    // step 1b, usable data will get overwritten with zeros in step 2.
+    //
+    // This behavior was observed on 32-bit armv7 (GCC 8.2 and Clang 7.0).
+    // x86_64 miraculously works, even when compiling with -m32.
+    exchange->options =
+            _avs_coap_options_copy(options, exchange->options_buffer,
+                                   options_capacity);
+
+    return exchange;
 }
 
 avs_error_t avs_coap_client_send_async_request(
@@ -863,11 +860,10 @@ avs_error_t avs_coap_client_send_async_request(
         return avs_errno(AVS_EINVAL);
     }
 
-    AVS_LIST(avs_coap_exchange_t) exchange = client_exchange_create(
-            req->code, &req->options, request_writer, request_writer_arg,
-            response_handler, response_handler_arg,
-            response_handler ? on_request_delivery_finished : NULL,
-            response_handler ? ctx : NULL);
+    AVS_LIST(avs_coap_exchange_t) exchange =
+            client_exchange_create(req->code, &req->options, request_writer,
+                                   request_writer_arg, response_handler,
+                                   response_handler_arg);
     if (!exchange) {
         return avs_errno(AVS_ENOMEM);
     }

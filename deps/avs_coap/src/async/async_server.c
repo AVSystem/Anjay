@@ -248,20 +248,19 @@ static void cancel_notification_on_error(avs_coap_ctx_t *ctx,
 }
 
 static avs_coap_send_result_handler_result_t
-send_result_handler(avs_coap_token_t token,
+send_result_handler(avs_coap_ctx_t *ctx,
                     avs_coap_send_result_t send_result,
                     avs_error_t fail_err,
                     const avs_coap_borrowed_msg_t *response,
-                    void *arg) {
+                    void *exchange_) {
     AVS_ASSERT(response == NULL, "response to a response makes no sense; this "
                                  "should be detected by lower layers");
     (void) response;
 
-    avs_coap_ctx_t *ctx = (avs_coap_ctx_t *) arg;
-    avs_coap_exchange_t *exchange =
-            _avs_coap_find_server_exchange_by_token(ctx, &token);
+    avs_coap_exchange_t *exchange = (avs_coap_exchange_t *) exchange_;
+    avs_coap_exchange_id_t exchange_id = exchange->id;
 
-    if (!exchange) {
+    if (!_avs_coap_find_server_exchange_ptr_by_id(ctx, exchange_id)) {
         // This might happen if we sent a notification, the observation got
         // already cancelled and only now is the transport layer giving up on
         // transmissions.
@@ -295,13 +294,13 @@ send_result_handler(avs_coap_token_t token,
     if (avs_is_ok(fail_err)) {
         cancel_notification_on_error(ctx,
                                      (avs_coap_observe_id_t) {
-                                         .token = token
+                                         .token = exchange->token
                                      },
                                      exchange->code);
     }
 
     // exchange may have been canceled by user handler
-    if (!_avs_coap_find_server_exchange_ptr_by_token(ctx, &token)) {
+    if (!_avs_coap_find_server_exchange_ptr_by_id(ctx, exchange_id)) {
         return AVS_COAP_RESPONSE_ACCEPTED;
     }
 
@@ -309,7 +308,7 @@ send_result_handler(avs_coap_token_t token,
 
     // delivery status handler might have canceled the exchange as well
     AVS_LIST(avs_coap_exchange_t) *exchange_ptr =
-            _avs_coap_find_server_exchange_ptr_by_token(ctx, &token);
+            _avs_coap_find_server_exchange_ptr_by_id(ctx, exchange_id);
     if (!exchange_ptr) {
         return AVS_COAP_RESPONSE_ACCEPTED;
     }
@@ -338,8 +337,9 @@ server_exchange_send_next_chunk(avs_coap_ctx_t *ctx,
     }
 
     // token not changed: responses MUST echo token of the request
-    avs_error_t err = _avs_coap_exchange_send_next_chunk(ctx, *exchange_ptr,
-                                                         handler, ctx);
+    avs_error_t err =
+            _avs_coap_exchange_send_next_chunk(ctx, *exchange_ptr, handler,
+                                               *exchange_ptr);
     if (avs_is_err(err)) {
         return err;
     }

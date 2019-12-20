@@ -181,6 +181,7 @@ static void cache_put_entry(avs_coap_udp_response_cache_t *cache,
             msg, (uint8_t *) avs_buffer_raw_insert_ptr(cache->buffer),
             avs_buffer_space_left(cache->buffer), &written);
     assert(avs_is_ok(err));
+    (void) err;
     res = avs_buffer_advance_ptr(cache->buffer, written);
     assert(!res);
     res = avs_buffer_fill_bytes(cache->buffer, '\xDD',

@@ -111,7 +111,7 @@ typedef enum {
  * attacks trying to make the CoAP client unusable.
  */
 typedef avs_coap_send_result_handler_result_t
-avs_coap_send_result_handler_t(avs_coap_token_t token,
+avs_coap_send_result_handler_t(avs_coap_ctx_t *ctx,
                                avs_coap_send_result_t result,
                                avs_error_t fail_err,
                                const avs_coap_borrowed_msg_t *response,

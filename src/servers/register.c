@@ -341,6 +341,21 @@ static void update_parameters_cleanup(anjay_update_parameters_t *params) {
     params->dm = NULL;
 }
 
+static void
+get_binding_mode_for_version(anjay_server_info_t *server,
+                             anjay_lwm2m_version_t lwm2m_version,
+                             anjay_binding_mode_t *out_binding_mode) {
+    const anjay_binding_mode_t *server_binding_mode =
+            _anjay_server_binding_mode(server);
+    size_t out_ptr = 0;
+    for (size_t in_ptr = 0; in_ptr < sizeof(*server_binding_mode) - 1
+                            && (*server_binding_mode)[in_ptr];
+         ++in_ptr) {
+        (void) lwm2m_version;
+        (*out_binding_mode)[out_ptr++] = (*server_binding_mode)[in_ptr];
+    }
+}
+
 static int update_parameters_init(anjay_server_info_t *server,
                                   anjay_update_parameters_t *out_params) {
     memset(out_params, 0, sizeof(*out_params));
@@ -351,11 +366,9 @@ static int update_parameters_init(anjay_server_info_t *server,
                             &out_params->lifetime_s)) {
         goto error;
     }
-    AVS_STATIC_ASSERT(sizeof(out_params->binding_mode)
-                              == sizeof(*_anjay_server_binding_mode(server)),
-                      binding_mode_size_equal);
-    memcpy(&out_params->binding_mode, _anjay_server_binding_mode(server),
-           sizeof(out_params->binding_mode));
+    get_binding_mode_for_version(server,
+                                 server->registration_info.lwm2m_version,
+                                 &out_params->binding_mode);
     return 0;
 error:
     update_parameters_cleanup(out_params);
@@ -381,12 +394,11 @@ void _anjay_registration_exchange_state_cleanup(
     update_parameters_cleanup(&state->new_params);
 }
 
-static bool should_use_queue_mode(anjay_t *anjay,
-                                  anjay_lwm2m_version_t lwm2m_version,
-                                  const char *binding_mode) {
-    (void) anjay;
+static bool should_use_queue_mode(anjay_server_info_t *server,
+                                  anjay_lwm2m_version_t lwm2m_version) {
+    (void) server;
     (void) lwm2m_version;
-    return !!strchr(binding_mode, 'Q');
+    return !!strchr(*_anjay_server_binding_mode(server), 'Q');
 }
 
 static int get_endpoint_path(AVS_LIST(const anjay_string_t) *out_path,
@@ -535,9 +547,7 @@ handle_register_response(anjay_server_info_t *server,
     } else {
         _anjay_server_update_registration_info(
                 server, move_endpoint_path, attempted_version,
-                should_use_queue_mode(server->anjay, attempted_version,
-                                      move_params->binding_mode),
-                move_params);
+                should_use_queue_mode(server, attempted_version), move_params);
         assert(!*move_endpoint_path);
     }
 
@@ -560,7 +570,7 @@ receive_register_response(avs_coap_ctx_t *coap,
                           void *state_) {
     anjay_registration_async_exchange_state_t *state =
             (anjay_registration_async_exchange_state_t *) state_;
-    anjay_registration_result_t result;
+    anjay_registration_result_t result = ANJAY_REGISTRATION_ERROR_OTHER;
     AVS_LIST(const anjay_string_t) endpoint_path = NULL;
     if (request_state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
         state->exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;
@@ -627,6 +637,9 @@ static void send_register(anjay_server_info_t *server,
     avs_coap_request_header_t request = {
         .code = AVS_COAP_CODE_POST
     };
+
+    get_binding_mode_for_version(server, lwm2m_version,
+                                 &move_params->binding_mode);
 
     avs_error_t err;
     if (avs_is_err((err = avs_coap_options_dynamic_init(&request.options)))
@@ -799,8 +812,7 @@ on_registration_update_result(anjay_server_info_t *server,
                 _anjay_server_registration_info(server);
         _anjay_server_update_registration_info(
                 server, NULL, old_info->lwm2m_version,
-                should_use_queue_mode(server->anjay, old_info->lwm2m_version,
-                                      move_params->binding_mode),
+                should_use_queue_mode(server, old_info->lwm2m_version),
                 move_params);
         update_parameters_cleanup(move_params);
         _anjay_server_on_updated_registration(server, result, err);
@@ -826,7 +838,7 @@ receive_update_response(avs_coap_ctx_t *coap,
                         void *state_) {
     anjay_registration_async_exchange_state_t *state =
             (anjay_registration_async_exchange_state_t *) state_;
-    anjay_registration_result_t result;
+    anjay_registration_result_t result = ANJAY_REGISTRATION_ERROR_OTHER;
     if (request_state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
         state->exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;
     }

@@ -119,18 +119,6 @@ _avs_coap_find_exchange_ptr_by_id(AVS_LIST(avs_coap_exchange_t) *list_ptr,
     return NULL;
 }
 
-AVS_LIST(avs_coap_exchange_t) *
-_avs_coap_find_exchange_ptr_by_token(AVS_LIST(avs_coap_exchange_t) *list_ptr,
-                                     const avs_coap_token_t *token) {
-    AVS_LIST(avs_coap_exchange_t) *it;
-    AVS_LIST_FOREACH_PTR(it, list_ptr) {
-        if (avs_coap_token_equal(token, &(*it)->token)) {
-            return it;
-        }
-    }
-    return NULL;
-}
-
 void avs_coap_exchange_cancel(avs_coap_ctx_t *ctx, avs_coap_exchange_id_t id) {
     if (!avs_coap_exchange_id_valid(id)) {
         return;

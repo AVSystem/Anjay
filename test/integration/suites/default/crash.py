@@ -70,3 +70,27 @@ class CrashAfterRequestWithTokenFollowedByNoToken(test_suite.Lwm2mSingleServerTe
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mContent.matching(req)(),
                             self.serv.recv())
+
+
+class ObserveCancelCrash(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        req = Lwm2mWriteAttributes(ResPath.Device.PowerSourceVoltage, pmax=1,
+                                   options=[coap.Option.URI_QUERY('con=1')])
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        req = Lwm2mObserve(ResPath.Device.PowerSourceVoltage)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mContent.matching(req)(), self.serv.recv())
+
+        notif = self.serv.recv(timeout_s=1.5)
+        self.assertIsInstance(notif, Lwm2mNotify)
+        self.assertEqual(notif.type, coap.Type.CONFIRMABLE)
+
+        # send Cancel Observe before the ACK
+        req = Lwm2mObserve(ResPath.Device.PowerSourceVoltage, observe=1, token=notif.token)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mContent.matching(req)(), self.serv.recv())
+
+        # send the ACK
+        self.serv.send(Lwm2mEmpty.matching(notif)())

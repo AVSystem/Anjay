@@ -477,7 +477,7 @@ call_send_result_handler(avs_coap_udp_ctx_t *ctx,
     }
 
     return unconfirmed->send_result_handler(
-            unconfirmed->msg.token, result, fail_err, response,
+            (avs_coap_ctx_t *) ctx, result, fail_err, response,
             unconfirmed->send_result_handler_arg);
 }
 
@@ -585,10 +585,7 @@ static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
     }
 }
 
-static void finish_unconfirmed(avs_coap_udp_ctx_t *ctx,
-                               avs_coap_udp_unconfirmed_msg_t *msg) {
-    AVS_ASSERT(AVS_LIST_NEXT(msg) == NULL, "msg must be detached");
-
+static void finish_unconfirmed(avs_coap_udp_ctx_t *ctx) {
     // In some cases user-defined handler may end up freeing more than one
     // NSTART "slots" and we may resume more than just one unconfirmed message.
     resume_unconfirmed_messages(ctx);
@@ -620,7 +617,7 @@ static void try_cleanup_unconfirmed(avs_coap_udp_ctx_t *ctx,
         AVS_LIST_INSERT(find_unconfirmed_insert_ptr(ctx, unconfirmed),
                         unconfirmed);
     } else {
-        finish_unconfirmed(ctx, unconfirmed);
+        finish_unconfirmed(ctx);
         AVS_LIST_DELETE(&unconfirmed);
     }
 }

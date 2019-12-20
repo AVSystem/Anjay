@@ -80,6 +80,7 @@ anjay_ret_bytes_ctx_t *anjay_ret_bytes_begin(anjay_output_ctx_t *ctx,
     anjay_ret_bytes_ctx_t *bytes_ctx = NULL;
     int result = _anjay_output_bytes_begin(ctx, length, &bytes_ctx);
     assert(!result == !!bytes_ctx);
+    (void) result;
     return bytes_ctx;
 }
 
