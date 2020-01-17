@@ -1,4 +1,4 @@
-# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.2.2" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.2.3" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -248,6 +248,7 @@ option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_LWM2M_JSON "Enable support for LwM2M 1.0 JSON (output only)" ON)
 
+cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
 
 cmake_dependent_option(WITH_ANJAY_LOGS "Enable logging support" ON WITH_AVS_LOG OFF)

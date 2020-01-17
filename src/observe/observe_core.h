@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,6 +78,13 @@ int _anjay_observe_notify(anjay_t *anjay,
                           anjay_ssid_t ssid,
                           bool invert_ssid_match);
 
+#    ifdef WITH_OBSERVATION_STATUS
+anjay_resource_observation_status_t _anjay_observe_status(anjay_t *anjay,
+                                                          anjay_oid_t oid,
+                                                          anjay_iid_t iid,
+                                                          anjay_rid_t rid);
+#    endif // WITH_OBSERVATION_STATUS
+
 #else // WITH_OBSERVE
 
 #    define _anjay_observe_init(...) ((void) 0)
@@ -85,6 +92,14 @@ int _anjay_observe_notify(anjay_t *anjay,
 #    define _anjay_observe_gc(...) ((void) 0)
 #    define _anjay_observe_interrupt(...) ((void) 0)
 #    define _anjay_observe_sched_flush(...) 0
+
+#    ifdef WITH_OBSERVATION_STATUS
+#        define _anjay_observe_status(...)         \
+            ((anjay_resource_observation_status) { \
+                .is_observed = false,              \
+                .min_period = -1                   \
+            })
+#    endif // WITH_OBSERVATION_STATUS
 
 #endif // WITH_OBSERVE
 

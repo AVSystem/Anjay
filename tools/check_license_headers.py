@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ from argparse import ArgumentParser
 from io import StringIO
 
 
-EXPECTED_COPYRIGHT_HEADER = 'Copyright 2017-2019 AVSystem <avsystem@avsystem.com>'
+EXPECTED_COPYRIGHT_HEADER = 'Copyright 2017-2020 AVSystem <avsystem@avsystem.com>'
 
 ALLOWED_LICENSES = {
     (

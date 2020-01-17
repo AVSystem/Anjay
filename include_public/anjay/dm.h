@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -778,6 +778,78 @@ int anjay_notify_changed(anjay_t *anjay,
  * @returns 0 on success, a negative value in case of error.
  */
 int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid);
+
+/**
+ * Structure representing an observation state of a Resource.
+ */
+typedef struct {
+    /**
+     * Informs whether a given Resource is observed (by any server) or not.
+     */
+    bool is_observed;
+    /**
+     * The minimum effective value (in seconds) of the <c>pmin</c> attribute for
+     * a given Resource. The value of this field equals 0 if <c>pmin</c> wasn't
+     * set for any server or <c>is_observed</c> is false.
+     */
+    int32_t min_period;
+    /**
+     * The minimum effective value (in seconds) of the <c>epmax</c> attribute
+     * for a given Resource. The value of this field equals @ref
+     * ANJAY_ATTRIB_PERIOD_NONE if <c>epmax</c> wasn't set for any server or
+     * <c>is_observed</c> is false.
+     */
+    int32_t max_eval_period;
+} anjay_resource_observation_status_t;
+
+/**
+ * Gets information whether and how a given Resource is observed. See
+ * @ref anjay_resource_observation_status_t for details.
+ *
+ * NOTE: This API is a companion to @ref anjay_notify_changed. There is no
+ * analogous API that would be a companion to
+ * @ref anjay_notify_instances_changed. Any changes to set of instances of any
+ * LwM2M Object MUST be considered observed at all times and notified as soon as
+ * possible.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param oid   Object ID of the Resource to check.
+ * @param iid   Object Instance ID of the Resource to check.
+ * @param rid   Resource ID of the Resource to check.
+ *
+ * @returns Observation status of a given Resource. If the arguments do not
+ *          specify a valid Resource path, data equivalent to a non-observed
+ *          Resource will be returned.
+ *
+ * NOTE: This function may be used to implement notifications for Resources that
+ * require active polling by the client application. A naive implementation
+ * could look more or less like this (pseudocode):
+ *
+ * <code>
+ * status = anjay_resource_observation_status(anjay, oid, iid, rid);
+ * if (status.is_observed
+ *         && current_time >= last_check_time + status.min_period) {
+ *     new_value = read_resource_value();
+ *     if (new_value != old_value) {
+ *         anjay_notify_changed(anjay, oid, iid, rid);
+ *     }
+ *     last_check_time = current_time;
+ * }
+ * </code>
+ *
+ * However, please note that such implementation may not be strictly conformant
+ * to the LwM2M specification. For example, in the following case:
+ *
+ * [time] --|--------|-*------|-->     | - intervals between resource reads
+ *          |<------>|                 * - point in time when underlying state
+ *          min_period                     actually changes
+ *
+ * the specification would require the notification to be sent exactly at the
+ * time of the (*) event, but with this naive implementation, will be delayed
+ * until the next (|).
+ */
+anjay_resource_observation_status_t anjay_resource_observation_status(
+        anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid, anjay_rid_t rid);
 
 /**
  * Registers the Object in the data model, making it available for RPC calls.

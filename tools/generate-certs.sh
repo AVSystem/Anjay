@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,6 +50,19 @@ fi
 mkdir -p "$CERTS_DIR"
 pushd "$CERTS_DIR" >/dev/null 2>&1
 
+echo "* generating self signed certs"
+mkdir self-signed
+cd self-signed
+"$OPENSSL" ecparam -name prime256v1 -genkey -out server.key
+"$OPENSSL" ecparam -name prime256v1 -genkey -out client.key
+"$OPENSSL" req -batch -new -subj '/CN=127.0.0.1' -key server.key -x509 -sha256 -days 9999 -out server.crt
+"$OPENSSL" req -batch -new -key client.key -x509 -sha256 -days 9999 -out client.crt
+"$OPENSSL" x509 -in server.crt -outform der > server.crt.der
+"$OPENSSL" x509 -in client.crt -outform der > client.crt.der
+"$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der -nocrypt > client.key.der
+cd ..
+echo "* generating self signed certs - done"
+
 echo "* generating root cert"
 "$OPENSSL" ecparam -name prime256v1 -genkey -out root.key
 "$OPENSSL" req -batch -new -key root.key -x509 -sha256 -days 9999 -out root.crt
@@ -63,11 +76,11 @@ for NAME in client server; do
     "$OPENSSL" x509 -sha256 -req -in "${NAME}.csr" -CA root.crt -CAkey root.key -out "${NAME}.crt" -days 9999 -CAcreateserial
     cat "${NAME}.crt" root.crt > "${NAME}-and-root.crt"
     echo "* generating $NAME cert - done"
+    "$OPENSSL" x509 -in "${NAME}.crt" -outform der > "${NAME}.crt.der"
 done
 
 "$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der \
     -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client.key.der
-"$OPENSSL" x509 -in client.crt -outform der > client.crt.der
 
 if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ] || ! "$KEYTOOL" -help >/dev/null 2>/dev/null; then
     echo ''

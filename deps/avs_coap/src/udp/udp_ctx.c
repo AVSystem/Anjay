@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -984,12 +984,13 @@ static avs_coap_udp_type_t choose_msg_type(const avs_coap_udp_ctx_t *ctx,
 static uint16_t assign_id(avs_coap_udp_ctx_t *ctx,
                           const avs_coap_borrowed_msg_t *msg,
                           const avs_coap_udp_type_t type) {
-    if (ctx->current_request.exists
-            && (type == AVS_COAP_UDP_TYPE_ACKNOWLEDGEMENT
-                || type == AVS_COAP_UDP_TYPE_RESET)
-            && avs_coap_code_is_response(msg->code)
+    if (ctx->current_request.exists && avs_coap_code_is_response(msg->code)
             && avs_coap_token_equal(&msg->token, &ctx->current_request.token)) {
-        return ctx->current_request.msg_id;
+        ctx->current_request.exists = false;
+        if ((type == AVS_COAP_UDP_TYPE_ACKNOWLEDGEMENT
+             || type == AVS_COAP_UDP_TYPE_RESET)) {
+            return ctx->current_request.msg_id;
+        }
     }
 
     return generate_id(ctx);
@@ -1015,7 +1016,6 @@ coap_udp_send_message(avs_coap_ctx_t *ctx_,
         .payload = msg->payload,
         .payload_size = msg->payload_size
     };
-    ctx->current_request.exists = false;
 
     size_t shared_buffer_msg_size;
     avs_error_t err =
@@ -1082,6 +1082,7 @@ static avs_error_t try_send_cached_response(avs_coap_udp_ctx_t *ctx,
                                             const avs_coap_udp_msg_t *msg,
                                             bool *out_cache_hit) {
     assert(avs_coap_code_is_request(msg->header.code));
+    assert(ctx->current_request.exists);
     if (!ctx->response_cache) {
         *out_cache_hit = false;
         return AVS_OK;
@@ -1103,6 +1104,7 @@ static avs_error_t try_send_cached_response(avs_coap_udp_ctx_t *ctx,
     if (avs_is_ok(_avs_coap_udp_response_cache_get(
                 ctx->response_cache, addr, port, msg_id, &cached_response))) {
         *out_cache_hit = true;
+        ctx->current_request.exists = false;
         return coap_udp_send_serialized_msg(ctx, &cached_response.msg,
                                             cached_response.packet,
                                             cached_response.packet_size);
@@ -1410,7 +1412,6 @@ coap_udp_receive_message(avs_coap_ctx_t *ctx_,
                          size_t in_buffer_capacity,
                          avs_coap_borrowed_msg_t *out_request) {
     avs_coap_udp_ctx_t *ctx = (avs_coap_udp_ctx_t *) ctx_;
-    ctx->current_request.exists = false;
 
     avs_coap_udp_msg_t msg;
     memset(&msg.header, 0, sizeof(msg.header));

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1732,6 +1732,55 @@ int _anjay_observe_notify(anjay_t *anjay,
     return observe_notify_impl(anjay, path, ssid, invert_ssid_match,
                                notify_path_changed);
 }
+
+#ifdef WITH_OBSERVATION_STATUS
+static int get_observe_status(anjay_observe_connection_entry_t *connection,
+                              anjay_observe_path_entry_t *entry,
+                              void *out_status_) {
+    anjay_resource_observation_status_t *out_status =
+            (anjay_resource_observation_status_t *) out_status_;
+    anjay_dm_oi_attributes_t attrs = get_oi_attributes(connection, entry);
+    out_status->is_observed = true;
+    if (attrs.min_period != ANJAY_ATTRIB_PERIOD_NONE
+            && (attrs.min_period < out_status->min_period
+                || out_status->min_period == ANJAY_ATTRIB_PERIOD_NONE)) {
+        out_status->min_period = attrs.min_period;
+    }
+    if (attrs.max_eval_period != ANJAY_ATTRIB_PERIOD_NONE
+            && (attrs.max_eval_period < out_status->max_eval_period
+                || out_status->max_eval_period == ANJAY_ATTRIB_PERIOD_NONE)) {
+        out_status->max_eval_period = attrs.max_eval_period;
+    }
+    return 0;
+}
+
+anjay_resource_observation_status_t _anjay_observe_status(anjay_t *anjay,
+                                                          anjay_oid_t oid,
+                                                          anjay_iid_t iid,
+                                                          anjay_rid_t rid) {
+    assert(oid != ANJAY_ID_INVALID);
+    assert(iid != ANJAY_ID_INVALID);
+    assert(rid != ANJAY_ID_INVALID);
+
+    anjay_resource_observation_status_t result = {
+        .is_observed = false,
+        .min_period = ANJAY_ATTRIB_PERIOD_NONE,
+        .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
+    };
+    AVS_LIST(anjay_observe_connection_entry_t) connection;
+    AVS_LIST_FOREACH(connection, anjay->observe.connection_entries) {
+        int retval =
+                observe_for_each_matching(connection,
+                                          &MAKE_RESOURCE_PATH(oid, iid, rid),
+                                          get_observe_status, &result);
+        assert(!retval);
+        (void) retval;
+    }
+    result.min_period = AVS_MAX(result.min_period, 0);
+
+    return result;
+}
+#endif // WITH_OBSERVATION_STATUS
 
 #ifdef ANJAY_TEST
 #    include "test/observe.c"

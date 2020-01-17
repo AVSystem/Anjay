@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -815,7 +815,8 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
     def runTest(self):
         pass
 
-    def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None, *args, **kwargs):
+    def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None,
+              server_crt_file=None, server_key_file=None, *args, **kwargs):
         assert((psk_identity is None) == (psk_key is None))
         extra_args = []
         if psk_identity:
@@ -823,6 +824,8 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
                            '--key', str(binascii.hexlify(psk_key), 'ascii')]
             coap_server = coap.DtlsServer(
                 psk_identity=psk_identity, psk_key=psk_key)
+        elif server_crt_file:
+            coap_server = coap.DtlsServer(crt_file=server_crt_file, key_file=server_key_file)
         else:
             coap_server = coap.Server()
         if extra_cmdline_args is not None:

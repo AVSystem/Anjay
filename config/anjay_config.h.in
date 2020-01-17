@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@
 #cmakedefine WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 #cmakedefine WITH_NET_STATS
 #cmakedefine WITH_AVS_PERSISTENCE
+#cmakedefine WITH_OBSERVATION_STATUS
 
 #cmakedefine WITH_SSL
 

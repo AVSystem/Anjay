@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import concurrent.futures
+import os
 import socket
 import unittest
 
@@ -22,6 +23,60 @@ from framework.lwm2m.coap.server import SecurityMode
 from framework.lwm2m.coap.transport import Transport
 from framework.lwm2m_test import *
 from suites.default import bootstrap_client
+
+
+class CertificatesTest:
+    class Test(test_suite.Lwm2mSingleServerTest):
+        def setUp(self, server_crt=None, server_key=None, client_crt_der=None, client_key_der=None, server_crt_der=None):
+            # demo_path = 'anjay/output/bin'
+            certs_dir = os.path.join(os.path.dirname(self.config.demo_path), 'certs')
+            extra_cmdline_args = []
+            if server_crt is not None:
+                server_crt = os.path.join(certs_dir, server_crt)
+            if server_key is not None:
+                server_key = os.path.join(certs_dir, server_key)
+            if (client_crt_der is not None):
+                extra_cmdline_args += ['-C' + os.path.join(certs_dir, client_crt_der)]
+            if (client_key_der is not None):
+                extra_cmdline_args += ['-K' + os.path.join(certs_dir, client_key_der)]
+            if (server_crt_der is not None):
+                extra_cmdline_args += ['-P' + os.path.join(certs_dir, server_crt_der)]
+            super().setUp(server_crt_file=server_crt,
+                          server_key_file=server_key,
+                          extra_cmdline_args=extra_cmdline_args)
+
+
+class RegisterWithCertificates(CertificatesTest.Test):
+    def setUp(self):
+        super().setUp(server_crt='server.crt', server_key='server.key')
+
+
+class RegisterWithSelfSignedCertificatesAndServerPublicKey(CertificatesTest.Test):
+    def setUp(self):
+        super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
+                      client_crt_der='self-signed/client.crt.der', client_key_der='self-signed/client.key.der',
+                      server_crt_der='self-signed/server.crt.der')
+
+
+class RegisterWithMismatchedServerPublicKey(CertificatesTest.Test):
+    def setUp(self):
+        with self.assertRaises(RuntimeError) as raised:
+            super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
+                          client_crt_der='self-signed/client.crt.der', client_key_der='self-signed/client.key.der',
+                          # Use server.crt.der generated from different server.crt (not self-signed/server.crt)
+                          server_crt_der='server.crt.der')
+        # -0x7780 == MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE
+        self.assertIn('0x7780', raised.exception.args[0])
+
+    def tearDown(self):
+        pass
+
+
+@unittest.skip("TODO: broken due to T1083")
+class RegisterWithCertificatesAndServerPublicKey(CertificatesTest.Test):
+    def setUp(self):
+        super().setUp(server_crt='server.crt', server_key='server.key',
+                      client_crt_der=None, client_key_der=None, server_crt_der='server.crt.der')
 
 
 class BlockRegister:
@@ -164,7 +219,7 @@ class ConcurrentRequestWhileWaitingForResponse:
 
 
 class ConcurrentRequestWhileWaitingForResponseUdp(
-    ConcurrentRequestWhileWaitingForResponse.TestMixin, RegisterUdp.TestCase):
+        ConcurrentRequestWhileWaitingForResponse.TestMixin, RegisterUdp.TestCase):
     pass
 
 

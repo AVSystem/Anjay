@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -350,3 +350,49 @@ int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid) {
             || (retval = reschedule_notify(anjay)));
     return retval;
 }
+
+#ifdef WITH_OBSERVATION_STATUS
+anjay_resource_observation_status_t anjay_resource_observation_status(
+        anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid, anjay_rid_t rid) {
+    if (oid == ANJAY_ID_INVALID || iid == ANJAY_ID_INVALID
+            || rid == ANJAY_ID_INVALID) {
+        return (anjay_resource_observation_status_t) {
+            .is_observed = false,
+            .min_period = 0,
+            .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
+        };
+    }
+
+    if (oid == ANJAY_DM_OID_SECURITY
+            && _anjay_servers_find_active_by_security_iid(anjay, iid)) {
+        // All resources in active Security instances are always considered
+        // observed, as server connections need to be refreshed if they changed;
+        // compare with _anjay_notify_perform()
+        return (anjay_resource_observation_status_t) {
+            .is_observed = true,
+            .min_period = 0,
+            .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
+        };
+    }
+
+    if (oid == ANJAY_DM_OID_SERVER
+            && (rid == ANJAY_DM_RID_SERVER_LIFETIME
+                || rid == ANJAY_DM_RID_SERVER_BINDING)) {
+        // Lifetime and Binding in Server Object are always considered observed,
+        // as server connections need to be refreshed if they changed; compare
+        // with _anjay_notify_perform()
+        return (anjay_resource_observation_status_t) {
+            .is_observed = true,
+            .min_period = 0,
+            .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
+        };
+    }
+
+    // Note: some modules may also depend on resource notifications,
+    // particularly Firmware Update depends on notifications on /5/0/3, but it
+    // also implements that object and generates relevant notifications
+    // internally, so there's no need to check that here.
+
+    return _anjay_observe_status(anjay, oid, iid, rid);
+}
+#endif // WITH_OBSERVATION_STATUS

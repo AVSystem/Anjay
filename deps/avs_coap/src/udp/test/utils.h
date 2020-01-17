@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -490,6 +490,7 @@ typedef struct {
     const test_payload_writer_args_t *response_writer_args;
 
     bool start_observe;
+    bool send_request;
 } test_request_handler_expected_t;
 
 typedef enum {
@@ -895,10 +896,82 @@ test_handle_request(avs_coap_request_ctx_t *ctx,
                     (void *) (intptr_t) expected->impl.request_handler
                             .response_writer_args));
         }
+
+        if (expected->impl.request_handler.send_request) {
+            avs_coap_request_header_t header = {
+                .code = AVS_COAP_CODE_GET
+            };
+            ASSERT_OK(avs_coap_client_send_async_request(
+                    ctx->coap_ctx, NULL, &header, NULL, NULL, NULL, NULL));
+        }
     }
 
     AVS_LIST_DELETE(&expected);
     return 0;
+}
+
+static inline void _expect_request_handler_call_impl(
+        test_env_t *env,
+        avs_coap_server_request_state_t state,
+        const test_msg_t *request,
+        const avs_coap_response_header_t *response,
+        const test_payload_writer_args_t *response_writer_args,
+        bool send_request) {
+    test_handler_expected_t *expected =
+            AVS_LIST_APPEND_NEW(test_handler_expected_t, &env->expects_list);
+
+    *expected = (test_handler_expected_t) {
+        .type = EXPECT_REQUEST_HANDLER,
+        .impl = {
+            .request_handler = {
+                .state = state
+            }
+        }
+    };
+
+    if (request) {
+        avs_coap_option_block_t block1 = {
+            .seq_num = 0,
+            .size = 0
+        };
+#    ifdef WITH_AVS_COAP_BLOCK
+        avs_coap_options_get_block(&request->msg.options, AVS_COAP_BLOCK1,
+                                   &block1);
+#    endif // WITH_AVS_COAP_BLOCK
+        expected->impl.request_handler.request =
+                (avs_coap_server_async_request_t) {
+                    .header = request->request_header,
+                    .payload_offset = block1.seq_num * block1.size,
+                    .payload = request->msg.payload,
+                    .payload_size = request->msg.payload_size
+                };
+
+        expected->impl.request_handler.observe_id = (avs_coap_observe_id_t) {
+            .token = request->msg.token
+        };
+
+        expected->impl.request_handler.send_request = send_request;
+    }
+
+    if (response) {
+        expected->impl.request_handler.response = response;
+
+        if (response_writer_args) {
+            expected->impl.request_handler.response_writer =
+                    test_payload_writer;
+            expected->impl.request_handler.response_writer_args =
+                    response_writer_args;
+        }
+
+#    ifdef WITH_AVS_COAP_OBSERVE
+        uint32_t observe_opt;
+        if (request
+                && !avs_coap_options_get_observe(&request->msg.options,
+                                                 &observe_opt)) {
+            expected->impl.request_handler.start_observe = (observe_opt == 0);
+        }
+#    endif // WITH_AVS_COAP_OBSERVE
+    }
 }
 
 /**
@@ -938,59 +1011,22 @@ static inline void expect_request_handler_call(
         const test_msg_t *request,
         const avs_coap_response_header_t *response,
         const test_payload_writer_args_t *response_writer_args) {
-    test_handler_expected_t *expected =
-            AVS_LIST_APPEND_NEW(test_handler_expected_t, &env->expects_list);
+    _expect_request_handler_call_impl(env, state, request, response,
+                                      response_writer_args, false);
+}
 
-    *expected = (test_handler_expected_t) {
-        .type = EXPECT_REQUEST_HANDLER,
-        .impl = {
-            .request_handler = {
-                .state = state
-            }
-        }
-    };
-
-    if (request) {
-        avs_coap_option_block_t block1 = {
-            .seq_num = 0,
-            .size = 0
-        };
-#    ifdef WITH_AVS_COAP_BLOCK
-        avs_coap_options_get_block(&request->msg.options, AVS_COAP_BLOCK1,
-                                   &block1);
-#    endif // WITH_AVS_COAP_BLOCK
-        expected->impl.request_handler.request =
-                (avs_coap_server_async_request_t) {
-                    .header = request->request_header,
-                    .payload_offset = block1.seq_num * block1.size,
-                    .payload = request->msg.payload,
-                    .payload_size = request->msg.payload_size
-                };
-
-        expected->impl.request_handler.observe_id = (avs_coap_observe_id_t) {
-            .token = request->msg.token
-        };
-    }
-
-    if (response) {
-        expected->impl.request_handler.response = response;
-
-        if (response_writer_args) {
-            expected->impl.request_handler.response_writer =
-                    test_payload_writer;
-            expected->impl.request_handler.response_writer_args =
-                    response_writer_args;
-        }
-
-#    ifdef WITH_AVS_COAP_OBSERVE
-        uint32_t observe_opt;
-        if (request
-                && !avs_coap_options_get_observe(&request->msg.options,
-                                                 &observe_opt)) {
-            expected->impl.request_handler.start_observe = (observe_opt == 0);
-        }
-#    endif // WITH_AVS_COAP_OBSERVE
-    }
+/**
+ * Works like @ref expect_request_handler_call but also forces sending a new
+ * request from request handler.
+ */
+static inline void expect_request_handler_call_and_force_sending_request(
+        test_env_t *env,
+        avs_coap_server_request_state_t state,
+        const test_msg_t *request,
+        const avs_coap_response_header_t *response,
+        const test_payload_writer_args_t *response_writer_args) {
+    _expect_request_handler_call_impl(env, state, request, response,
+                                      response_writer_args, true);
 }
 
 static inline int

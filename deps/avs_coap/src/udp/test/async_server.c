@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,6 +115,42 @@ AVS_UNIT_TEST(udp_async_server, incoming_request_content_response) {
 #undef PAYLOAD_CONTENT
 }
 
+AVS_UNIT_TEST(udp_async_server, send_request_in_request_handler) {
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *incoming_request =
+            COAP_MSG(CON, GET, ID(123), MAKE_TOKEN("A token"), NO_PAYLOAD);
+    const test_msg_t *outgoing_response =
+            COAP_MSG(ACK, CONTENT, ID(123), MAKE_TOKEN("A token"), NO_PAYLOAD);
+
+    const test_msg_t *outgoing_request =
+            COAP_MSG(NON, GET, ID(0), TOKEN(nth_token(0)), NO_PAYLOAD);
+    const test_msg_t *incoming_response =
+            COAP_MSG(ACK, CONTENT, ID(0), TOKEN(nth_token(0)), NO_PAYLOAD);
+
+    expect_recv(&env, incoming_request);
+    expect_request_handler_call_and_force_sending_request(
+            &env, AVS_COAP_SERVER_REQUEST_RECEIVED, incoming_request,
+            &(avs_coap_response_header_t) {
+                .code = outgoing_response->response_header.code
+            },
+            NULL);
+    expect_send(&env, outgoing_request);
+    expect_send(&env, outgoing_response);
+
+    expect_request_handler_call(&env, AVS_COAP_SERVER_REQUEST_CLEANUP, NULL,
+                                NULL, NULL);
+
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(
+            env.coap_ctx, test_accept_new_request, &env));
+
+    expect_recv(&env, incoming_response);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+}
+
 AVS_UNIT_TEST(udp_async_server, incoming_request_echo_content) {
     test_env_t env __attribute__((cleanup(test_teardown))) =
             test_setup_default();
@@ -192,6 +228,16 @@ AVS_UNIT_TEST(udp_async_server, cached_response) {
 
     avs_coap_stats_t stats = avs_coap_get_stats(env.coap_ctx);
     ASSERT_EQ(stats.incoming_retransmissions_count, 1);
+    ASSERT_EQ(stats.outgoing_retransmissions_count, 0);
+
+    // another duplicated request
+    expect_recv(&env, request);
+    expect_send(&env, response);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    stats = avs_coap_get_stats(env.coap_ctx);
+    ASSERT_EQ(stats.incoming_retransmissions_count, 2);
     ASSERT_EQ(stats.outgoing_retransmissions_count, 0);
 
 #undef PAYLOAD_CONTENT

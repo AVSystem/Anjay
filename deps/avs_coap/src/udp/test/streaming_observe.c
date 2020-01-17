@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -558,7 +558,7 @@ AVS_UNIT_TEST(udp_streaming_observe, increasing_block_size_confirmable) {
                  BLOCK2_REQ(0, 16)),
         COAP_MSG(ACK, EMPTY, ID(0), NO_PAYLOAD),
 
-        // requests and seaparate response ACKs for further blocks of Notify
+        // requests and separate response ACKs for further blocks of Notify
         COAP_MSG(CON, GET, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
                  BLOCK2_REQ(1, 16)),
         COAP_MSG(ACK, EMPTY, ID(1), NO_PAYLOAD),

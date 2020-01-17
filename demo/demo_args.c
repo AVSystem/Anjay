@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,6 +166,9 @@ static void print_option_help(const struct option *opt) {
         { 'K', "PRIVATE_KEY_FILE", "$(dirname $0)/../certs/client.key.der",
           "DER-formatted PKCS#8 private key complementary to the certificate "
           "specified with -C. Mutually exclusive with -k" },
+        { 'P', "SERVER_PUBLIC_KEY_FILE",
+          "$(dirname $0)/../certs/server.crt.der",
+          "DER-formatted server public key file to load." },
         { 'q', "BINDING_MODE=UQ", "U",
           "set the Binding Mode to use for the currently configured server." },
         { 's', "MODE", NULL, "set security mode, one of: psk rpk cert nosec." },
@@ -481,6 +484,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "client-cert-file",              required_argument, 0, 'C' },
         { "key",                           required_argument, 0, 'k' },
         { "key-file",                      required_argument, 0, 'K' },
+        { "server-public-key-file",        required_argument, 0, 'P' },
         { "binding",                       required_argument, 0, 'q' },
         { "security-iid",                  required_argument, 0, 'D' },
         { "security-mode",                 required_argument, 0, 's' },
@@ -522,6 +526,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             (char *) avs_malloc(arg0_prefix_length + sizeof(DEFAULT_KEY_FILE));
     const char *cert_path = default_cert_path;
     const char *key_path = default_key_path;
+    const char *server_public_key_path = NULL;
 
     if (!default_cert_path || !default_key_path) {
         demo_log(ERROR, "Out of memory");
@@ -675,6 +680,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         case 'K':
             key_path = optarg;
+            break;
+        case 'P':
+            server_public_key_path = optarg;
             break;
         case 'q': {
             int idx = num_servers == 0 ? 0 : num_servers - 1;
@@ -1020,6 +1028,15 @@ process:
                 demo_log(ERROR, "Could not load private key from %s", key_path);
                 goto finish;
             }
+        }
+        if (server_public_key_path
+                && load_buffer_from_file(
+                           &parsed_args->connection_args.server_public_key,
+                           &parsed_args->connection_args.server_public_key_size,
+                           server_public_key_path)) {
+            demo_log(ERROR, "Could not load server public key from %s",
+                     server_public_key_path);
+            goto finish;
         }
     }
     if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
