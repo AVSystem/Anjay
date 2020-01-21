@@ -290,7 +290,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         .out_buffer_size = (size_t) cmdline_args->outbuf_size,
         .msg_cache_size = (size_t) cmdline_args->msg_cache_size,
 #ifndef IP_MTU
-        .udp_socket_config = {
+        .socket_config = {
             .forced_mtu = 1492
         },
 #endif

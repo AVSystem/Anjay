@@ -26,13 +26,14 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 TOOLS_DIR="$SCRIPT_DIR"
 
 if [ -z "$OPENSSL" ]; then
-    if [ -x /usr/local/opt/openssl/bin/openssl ]; then
-        # default OpenSSL on macOS is outdated and buggy
-        # use the one from Homebrew if available
-        OPENSSL=/usr/local/opt/openssl/bin/openssl
-    else
-        OPENSSL=openssl
-    fi
+    OPENSSL=openssl
+    for f in /usr/local/opt/openssl*/bin/openssl; do
+        if [ -x /usr/local/opt/openssl/bin/openssl ]; then
+            # default OpenSSL on macOS is outdated and buggy
+            # use the one from Homebrew if available
+            OPENSSL=/usr/local/opt/openssl/bin/openssl
+        fi
+    done
 fi
 
 if [[ "$#" < 1 ]]; then
@@ -56,7 +57,7 @@ cd self-signed
 "$OPENSSL" ecparam -name prime256v1 -genkey -out server.key
 "$OPENSSL" ecparam -name prime256v1 -genkey -out client.key
 "$OPENSSL" req -batch -new -subj '/CN=127.0.0.1' -key server.key -x509 -sha256 -days 9999 -out server.crt
-"$OPENSSL" req -batch -new -key client.key -x509 -sha256 -days 9999 -out client.crt
+"$OPENSSL" req -batch -new -subj '/' -key client.key -x509 -sha256 -days 9999 -out client.crt
 "$OPENSSL" x509 -in server.crt -outform der > server.crt.der
 "$OPENSSL" x509 -in client.crt -outform der > client.crt.der
 "$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der -nocrypt > client.key.der
@@ -65,7 +66,8 @@ echo "* generating self signed certs - done"
 
 echo "* generating root cert"
 "$OPENSSL" ecparam -name prime256v1 -genkey -out root.key
-"$OPENSSL" req -batch -new -key root.key -x509 -sha256 -days 9999 -out root.crt
+"$OPENSSL" req -batch -new -subj '/' -key root.key -x509 -sha256 -days 9999 -out root.crt
+"$OPENSSL" x509 -in root.crt -outform der > root.crt.der
 echo "* generating root cert - done"
 
 for NAME in client server; do
@@ -82,25 +84,34 @@ done
 "$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der \
     -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client.key.der
 
-if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ] || ! "$KEYTOOL" -help >/dev/null 2>/dev/null; then
-    echo ''
-    echo "NOTE: keytool not found, not generating keystores for Java/Californium"
-    echo ''
-else
-    echo "* creating trustStore.jks"
-    yes | "$KEYTOOL" -importcert -alias root -file root.crt -keystore trustStore.jks -storetype PKCS12 -storepass "$TRUSTSTORE_PASSWORD" >/dev/null
-    echo "* creating trustStore.jks - done"
+generate_java_keystores() {
+    set -e
+    if ! KEYTOOL="$(which keytool)" || [ -z "$KEYTOOL" ] || ! "$KEYTOOL" -help >/dev/null 2>/dev/null; then
+        echo ''
+        echo "NOTE: keytool not found, not generating keystores for Java/Californium"
+        echo ''
+    else
+        echo "* creating trustStore.jks"
+        yes | "$KEYTOOL" -importcert -alias root -file root.crt.der -keystore trustStore.jks -storetype PKCS12 -storepass "$TRUSTSTORE_PASSWORD" >/dev/null
+        echo "* creating trustStore.jks - done"
 
-    echo "* creating keyStore.jks"
-    for NAME in client server; do
-        "$OPENSSL" pkcs12 -export -in "${NAME}.crt" -inkey "${NAME}.key" -passin "pass:$KEYSTORE_PASSWORD" -out "${NAME}.p12" -name "${NAME}" -CAfile root.crt -caname root -password "pass:$KEYSTORE_PASSWORD"
-        "$KEYTOOL" -importkeystore -deststorepass "$KEYSTORE_PASSWORD" -destkeystore keyStore.jks -deststoretype PKCS12 -srckeystore "${NAME}.p12" -srcstoretype PKCS12 -srcstorepass "$KEYSTORE_PASSWORD" -alias "${NAME}" -trustcacerts
-    done
-    echo "* creating keyStore.jks - done"
+        echo "* creating keyStore.jks"
+        for NAME in client server; do
+            "$OPENSSL" pkcs12 -export -in "${NAME}.crt" -inkey "${NAME}.key" -passin "pass:$KEYSTORE_PASSWORD" -out "${NAME}.p12" -name "${NAME}" -CAfile root.crt -caname root -password "pass:$KEYSTORE_PASSWORD"
+            "$KEYTOOL" -importkeystore -deststorepass "$KEYSTORE_PASSWORD" -destkeystore keyStore.jks -deststoretype PKCS12 -srckeystore "${NAME}.p12" -srcstoretype PKCS12 -srcstorepass "$KEYSTORE_PASSWORD" -alias "${NAME}" -trustcacerts
+        done
+        echo "* creating keyStore.jks - done"
 
+        echo ''
+        echo "NOTE: To make demo successfully connect to Californium cf-secure server, copy contents of the $CERTS_DIR to the cf-secure/certs subdirectory and restart the server."
+        echo ''
+    fi
+}
+
+generate_java_keystores || {
     echo ''
-    echo "NOTE: To make demo successfully connect to Californium cf-secure server, copy contents of the $CERTS_DIR to the cf-secure/certs subdirectory and restart the server."
+    echo 'NOTE: Error while generating keystores for Java/Californium, ignoring'
     echo ''
-fi
+}
 
 popd >/dev/null 2>&1
