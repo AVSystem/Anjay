@@ -38,7 +38,6 @@ matrix:
     os: linux
     env: ANJAY_CC=gcc-4.7
          ANJAY_CXX=g++
-         PYMBEDTLS_CC=gcc
          DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
          DOCKER_IMAGE=ubuntu-16.04
 
@@ -46,7 +45,6 @@ matrix:
     os: linux
     env: ANJAY_CC=gcc-4.8
          ANJAY_CXX=g++
-         PYMBEDTLS_CC=gcc
          DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
          DOCKER_IMAGE=ubuntu-16.04
 
@@ -54,7 +52,6 @@ matrix:
     os: linux
     env: ANJAY_CC=gcc-4.9
          ANJAY_CXX=g++
-         PYMBEDTLS_CC=gcc
          DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
          DOCKER_IMAGE=ubuntu-16.04
 

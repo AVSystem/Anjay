@@ -43,7 +43,7 @@ int _anjay_downloader_init(anjay_downloader_t *dl, anjay_t *anjay) {
     assert(_anjay_downloader_get_anjay(dl)->sched);
 
     if (!anjay || anjay != _anjay_downloader_get_anjay(dl) || !anjay->sched) {
-        dl_log(ERROR, "invalid anjay pointer passed");
+        dl_log(ERROR, _("invalid anjay pointer passed"));
         return -1;
     }
 
@@ -71,25 +71,28 @@ void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
     switch (status.result) {
     case ANJAY_DOWNLOAD_FINISHED:
         dl_log(TRACE,
-               "aborting download id = %" PRIuPTR ": finished successfully",
+               _("aborting download id = ") "%" PRIuPTR _(
+                       ": finished successfully"),
                (*ctx)->common.id);
         break;
     case ANJAY_DOWNLOAD_ERR_FAILED:
-        dl_log(TRACE, "aborting download id = %" PRIuPTR ": failed, error: %s",
+        dl_log(TRACE,
+               _("aborting download id = ") "%" PRIuPTR _(
+                       ": failed, error: ") "%s",
                (*ctx)->common.id, AVS_COAP_STRERROR(status.details.error));
         break;
     case ANJAY_DOWNLOAD_ERR_INVALID_RESPONSE:
         dl_log(TRACE,
-               "aborting download id = %" PRIuPTR
-               ": invalid response, status code: %d",
+               _("aborting download id = ") "%" PRIuPTR _(
+                       ": invalid response, status code: ") "%d",
                (*ctx)->common.id, status.details.status_code);
         break;
     case ANJAY_DOWNLOAD_ERR_EXPIRED:
-        dl_log(TRACE, "aborting download id = %" PRIuPTR ": expired",
+        dl_log(TRACE, _("aborting download id = ") "%" PRIuPTR _(": expired"),
                (*ctx)->common.id);
         break;
     case ANJAY_DOWNLOAD_ERR_ABORTED:
-        dl_log(TRACE, "aborting download id = %" PRIuPTR ": aborted",
+        dl_log(TRACE, _("aborting download id = ") "%" PRIuPTR _(": aborted"),
                (*ctx)->common.id);
         break;
     }
@@ -255,14 +258,14 @@ avs_error_t _anjay_downloader_download(anjay_downloader_t *dl,
     } else
 #endif // WITH_HTTP_DOWNLOAD
     {
-        dl_log(WARNING, "unrecognized protocol in URL: %s", config->url);
+        dl_log(WARNING, _("unrecognized protocol in URL: ") "%s", config->url);
     }
 
     if (dl_ctx) {
         AVS_LIST_APPEND(&dl->downloads, dl_ctx);
 
         assert(dl_ctx->common.id != INVALID_DOWNLOAD_ID);
-        dl_log(INFO, "download scheduled: %s", config->url);
+        dl_log(INFO, _("download scheduled: ") "%s", config->url);
         *out_handle = (anjay_download_handle_t) dl_ctx->common.id;
         err = AVS_OK;
     }
@@ -276,7 +279,8 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
     AVS_LIST(anjay_download_ctx_t) *ctx =
             _anjay_downloader_find_ctx_ptr_by_id(dl, id);
     if (!ctx) {
-        dl_log(DEBUG, "download id = %" PRIuPTR " not found (expired?)", id);
+        dl_log(DEBUG,
+               _("download id = ") "%" PRIuPTR _(" not found (expired?)"), id);
     } else {
         _anjay_downloader_abort_transfer(dl, ctx,
                                          _anjay_download_status_aborted());
@@ -296,7 +300,7 @@ static void reconnect_all_job(avs_sched_t *sched, const void *dummy) {
 
 int _anjay_downloader_sched_reconnect_all(anjay_downloader_t *dl) {
     if (dl->reconnect_job_handle) {
-        dl_log(DEBUG, "reconnect already scheduled, ignoring");
+        dl_log(DEBUG, _("reconnect already scheduled, ignoring"));
         return 0;
     }
     return AVS_SCHED_NOW(_anjay_downloader_get_anjay(dl)->sched,

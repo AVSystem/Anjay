@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.2.3" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.2.4" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -687,7 +687,7 @@ if(WITH_STATIC_ANALYSIS)
         # let's try that
         find_program(CLANG_BINARY clang)
         if(CLANG_BINARY)
-            anjay_temp_name(_fname)
+            avs_temp_name(_fname)
             file(WRITE ${_fname} "__clang_major__ __clang_minor__")
             execute_process(COMMAND "${CLANG_BINARY}" -E -P -x c ${_fname}
                             OUTPUT_VARIABLE CLANG_VERSION_OUTPUT
@@ -708,7 +708,7 @@ if(WITH_STATIC_ANALYSIS)
     endif()
 endif()
 
-cmake_dependent_option(WITH_FIND_UNUSED_CODE "Check for unused symbols on `make check`" ON WITH_TEST OFF)
+cmake_dependent_option(WITH_FIND_UNUSED_CODE "Check for unused symbols on `make check`" ON "WITH_TEST;UNIX;NOT APPLE" OFF)
 if(WITH_FIND_UNUSED_CODE)
     add_custom_target(find_unused_code
                       COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/find_unused_code.py"

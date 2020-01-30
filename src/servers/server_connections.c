@@ -43,18 +43,22 @@ static int read_binding_info(anjay_t *anjay,
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, ANJAY_ID_INVALID,
                                ANJAY_DM_RID_SERVER_BINDING);
     if (_anjay_find_server_iid(anjay, ssid, &path.ids[ANJAY_ID_IID])) {
-        anjay_log(WARNING, "could not find Server instance for LwM2M server %u",
+        anjay_log(WARNING,
+                  _("could not find Server instance for LwM2M server ") "%u",
                   ssid);
         return -1;
     }
     if (_anjay_dm_read_resource_string(anjay, &path, *out_binding_mode,
                                        sizeof(*out_binding_mode))) {
-        anjay_log(WARNING, "could not read binding mode for LwM2M server %u",
+        anjay_log(WARNING,
+                  _("could not read binding mode for LwM2M server ") "%u",
                   ssid);
         return -1;
     }
     if (!anjay_binding_mode_valid(*out_binding_mode)) {
-        anjay_log(WARNING, "invalid binding mode \"%s\" for LwM2M server %u",
+        anjay_log(WARNING,
+                  _("invalid binding mode \"") "%s" _(
+                          "\" for LwM2M server ") "%u",
                   *out_binding_mode, ssid);
         return -1;
     }
@@ -96,7 +100,7 @@ static int rank_uri(anjay_t *anjay,
                     size_t *out_rank) {
     assert(transport_info);
     if (!_anjay_socket_transport_supported(anjay, transport_info->transport)) {
-        anjay_log(WARNING, "support for protocol %s is not enabled",
+        anjay_log(WARNING, _("support for protocol ") "%s" _(" is not enabled"),
                   transport_info->uri_scheme);
         return -1;
     }
@@ -121,7 +125,8 @@ static int rank_uri(anjay_t *anjay,
         *out_rank = sizeof(*binding_mode) + 1;
         return 0;
     }
-    anjay_log(DEBUG, "protocol %s is not present in Binding resource",
+    anjay_log(DEBUG,
+              _("protocol ") "%s" _(" is not present in Binding resource"),
               transport_info->uri_scheme);
     return -1;
 }
@@ -200,10 +205,11 @@ static int select_security_instance(anjay_t *anjay,
     }
     if (state.selected_iid == ANJAY_ID_INVALID) {
         assert(!state.selected_uri);
-        anjay_log(WARNING,
-                  "could not find Security Instance matching Server %" PRIu16
-                  " configuration",
-                  ssid);
+        anjay_log(
+                WARNING,
+                _("could not find Security Instance matching Server ") "%" PRIu16
+                        _(" configuration"),
+                ssid);
         return -1;
     }
     *out_security_iid = state.selected_iid;
@@ -217,7 +223,7 @@ bool _anjay_connections_is_trigger_requested(const char *binding_mode) {
 }
 
 void _anjay_active_server_refresh(anjay_server_info_t *server) {
-    anjay_log(TRACE, "refreshing SSID %u", server->ssid);
+    anjay_log(TRACE, _("refreshing SSID ") "%u", server->ssid);
 
     int result = -1;
     anjay_iid_t security_iid;
@@ -226,7 +232,7 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
         const anjay_transport_info_t *transport_info = NULL;
         if ((security_iid = _anjay_find_bootstrap_security_iid(server->anjay))
                 == ANJAY_ID_INVALID) {
-            anjay_log(ERROR, "could not find server Security IID");
+            anjay_log(ERROR, _("could not find server Security IID"));
         } else if (!_anjay_connection_security_generic_get_uri(
                            server->anjay, security_iid, &uri,
                            &transport_info)) {
@@ -351,7 +357,7 @@ void _anjay_connection_schedule_queue_mode_close(anjay_connection_ref_t ref) {
     if (AVS_SCHED_DELAYED(ref.server->anjay->sched,
                           &connection->queue_mode_close_socket_clb, delay,
                           queue_mode_close_socket, &ref, sizeof(ref))) {
-        anjay_log(ERROR, "could not schedule queue mode operations");
+        anjay_log(ERROR, _("could not schedule queue mode operations"));
     }
 }
 
@@ -363,8 +369,8 @@ void _anjay_connections_flush_notifications(anjay_connections_t *connections) {
     anjay_server_info_t *server =
             AVS_CONTAINER_OF(connections, anjay_server_info_t, connections);
     if (_anjay_server_registration_expired(server)) {
-        anjay_log(TRACE, "Server has no valid registration, "
-                         "not flushing notifications");
+        anjay_log(TRACE, _("Server has no valid registration, not flushing "
+                           "notifications"));
         return;
     }
 

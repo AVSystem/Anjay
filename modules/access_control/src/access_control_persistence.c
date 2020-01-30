@@ -124,7 +124,7 @@ restore_instances(anjay_t *anjay,
             AVS_LIST(access_control_instance_t) entry =
                     AVS_LIST_NEW_ELEMENT(access_control_instance_t);
             if (!entry) {
-                ac_log(ERROR, "out of memory");
+                ac_log(ERROR, _("out of memory"));
                 return avs_errno(AVS_ENOMEM);
             }
             *entry = instance;
@@ -156,7 +156,7 @@ static const char MAGIC[] = { 'A', 'C', 'O', '\1' };
 avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
-        ac_log(ERROR, "Access Control not installed in this Anjay object");
+        ac_log(ERROR, _("Access Control not installed in this Anjay object"));
         return avs_errno(AVS_EBADF);
     }
 
@@ -169,7 +169,7 @@ avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
                                sizeof(*ac->current.instances), persist_instance,
                                NULL, NULL);
     if (avs_is_ok(err)) {
-        ac_log(INFO, "Access Control state persisted");
+        ac_log(INFO, _("Access Control state persisted"));
         _anjay_access_control_clear_modified(ac);
     }
     return err;
@@ -178,7 +178,7 @@ avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
 avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
-        ac_log(ERROR, "Access Control not installed in this Anjay object");
+        ac_log(ERROR, _("Access Control not installed in this Anjay object"));
         return avs_errno(AVS_EBADF);
     }
 
@@ -186,17 +186,17 @@ avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
     avs_error_t err =
             avs_stream_read_reliably(in, magic_header, sizeof(magic_header));
     if (avs_is_err(err)) {
-        ac_log(WARNING, "magic constant not found");
+        ac_log(WARNING, _("magic constant not found"));
         return err;
     }
 
     if (memcmp(magic_header, MAGIC, sizeof(MAGIC))) {
-        ac_log(WARNING, "header magic constant mismatch");
+        ac_log(WARNING, _("header magic constant mismatch"));
         return avs_errno(AVS_EBADMSG);
     }
     if (avs_is_ok((err = restore(anjay, ac, in)))) {
         _anjay_access_control_clear_modified(ac);
-        ac_log(INFO, "Access Control state restored");
+        ac_log(INFO, _("Access Control state restored"));
     }
     return err;
 }
@@ -210,14 +210,14 @@ avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
 avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
     (void) anjay;
     (void) out;
-    ac_log(ERROR, "Persistence not compiled in");
+    ac_log(ERROR, _("Persistence not compiled in"));
     return avs_errno(AVS_ENOTSUP);
 }
 
 avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
     (void) anjay;
     (void) in;
-    ac_log(ERROR, "Persistence not compiled in");
+    ac_log(ERROR, _("Persistence not compiled in"));
     return avs_errno(AVS_ENOTSUP);
 }
 

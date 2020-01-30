@@ -30,8 +30,8 @@ static int write_single_resource(anjay_t *anjay,
     assert(_anjay_uri_path_has(path, ANJAY_ID_RID));
     if (is_array || _anjay_uri_path_has(path, ANJAY_ID_RIID)) {
         dm_log(LAZY_DEBUG,
-               "cannot write %s because the path does not point insude a "
-               "multiple resource",
+               _("cannot write ") "%s" _(" because the path does not point "
+                                         "insude a multiple resource"),
                ANJAY_DEBUG_MAKE_PATH(path));
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -49,8 +49,8 @@ static int write_multiple_resource(anjay_t *anjay,
     assert(_anjay_uri_path_has(&path, ANJAY_ID_RID));
     if (!is_array && _anjay_uri_path_leaf_is(&path, ANJAY_ID_RID)) {
         dm_log(LAZY_DEBUG,
-               "%s is a multiple resource, but the payload attempted to treat "
-               "it as single",
+               "%s" _(" is a multiple resource, but the payload attempted to "
+                      "treat it as single"),
                ANJAY_DEBUG_MAKE_PATH(&path));
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -186,7 +186,7 @@ int _anjay_dm_write(anjay_t *anjay,
                     const anjay_dm_object_def_t *const *obj,
                     const anjay_request_t *request,
                     anjay_input_ctx_t *in_ctx) {
-    dm_log(LAZY_DEBUG, "Write %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    dm_log(LAZY_DEBUG, _("Write ") "%s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     if (!_anjay_uri_path_has(&request->uri, ANJAY_ID_IID)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -215,8 +215,8 @@ int _anjay_dm_write(anjay_t *anjay,
     } else if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RID)) {
         result = write_resource(anjay, obj, in_ctx, &notify_queue);
     } else if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RIID)) {
-        dm_log(ERROR, "Write on Resource Instances is not supported in this "
-                      "version of Anjay");
+        dm_log(ERROR, _("Write on Resource Instances is not supported in this "
+                        "version of Anjay"));
         result = ANJAY_ERR_BAD_REQUEST;
     }
     if (!result) {

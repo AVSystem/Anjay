@@ -83,26 +83,27 @@ avs_stream_t *
 avs_coap_streaming_setup_response(avs_coap_streaming_request_ctx_t *ctx,
                                   const avs_coap_response_header_t *response) {
     if (!ctx) {
-        LOG(ERROR, "no request to respond to");
+        LOG(ERROR, _("no request to respond to"));
         return NULL;
     }
     if (!response) {
-        LOG(ERROR, "response must be provided");
+        LOG(ERROR, _("response must be provided"));
         return NULL;
     }
     if (!_avs_coap_response_header_valid(response)) {
         return NULL;
     }
     if (!has_received_request_chunk(&ctx->server_ctx)) {
-        LOG(ERROR, "Attempted to call avs_coap_streaming_setup_response() in "
-                   "an invalid state");
+        LOG(ERROR,
+            _("Attempted to call avs_coap_streaming_setup_response() in "
+              "an invalid state"));
         return NULL;
     }
 
     avs_coap_options_cleanup(&ctx->response_header.options);
     if (avs_is_err(_avs_coap_options_copy_as_dynamic(
                 &ctx->response_header.options, &response->options))) {
-        LOG(ERROR, "Could not copy response options");
+        LOG(ERROR, _("Could not copy response options"));
         return NULL;
     }
 
@@ -116,7 +117,7 @@ try_enter_sending_state(avs_coap_streaming_request_ctx_t *ctx) {
         return avs_errno(AVS_EINVAL);
     }
     if (!avs_coap_code_is_response(ctx->response_header.code)) {
-        LOG(WARNING, "Response not set up");
+        LOG(WARNING, _("Response not set up"));
         return avs_errno(AVS_EINVAL);
     }
     // Note: this is supposed to be called after the calls to
@@ -140,7 +141,8 @@ try_enter_sending_state(avs_coap_streaming_request_ctx_t *ctx) {
             &ctx->response_header, feed_payload_chunk, &ctx->server_ctx);
     if (avs_is_ok(err)) {
         if (avs_buffer_data_size(ctx->server_ctx.chunk_buffer) > 0) {
-            LOG(WARNING, "Ignoring %" PRIu64 " unread bytes of request",
+            LOG(WARNING,
+                _("Ignoring ") "%" PRIu64 _(" unread bytes of request"),
                 (uint64_t) avs_buffer_data_size(ctx->server_ctx.chunk_buffer));
             avs_buffer_reset(ctx->server_ctx.chunk_buffer);
         }
@@ -199,7 +201,7 @@ init_chunk_buffer(avs_coap_ctx_t *ctx,
             response ? &response->options : &empty_opts,
             &max_response_chunk_size);
     if (avs_is_err(err)) {
-        LOG(DEBUG, "get_next_outgoing_chunk_payload_size failed: %s",
+        LOG(DEBUG, _("get_next_outgoing_chunk_payload_size failed: ") "%s",
             AVS_COAP_STRERROR(err));
         return err;
     }
@@ -322,7 +324,7 @@ static int handle_new_request(avs_coap_server_ctx_t *server_ctx,
                              avs_coap_server_accept_async_request(
                                      server_ctx, request_handler,
                                      streaming_req_ctx)))) {
-            LOG(ERROR, "accept_async_request failed");
+            LOG(ERROR, _("accept_async_request failed"));
             return AVS_COAP_CODE_INTERNAL_SERVER_ERROR;
         }
         return 0;
@@ -355,7 +357,7 @@ update_recv_timeout(avs_net_socket_t *socket,
             || avs_is_err((err = avs_net_socket_set_opt(
                                    socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
                                    recv_timeout)))) {
-        LOG(ERROR, "could not set socket timeout");
+        LOG(ERROR, _("could not set socket timeout"));
     }
     return err;
 }
@@ -399,7 +401,7 @@ try_wait_for_next_chunk_request(const avs_coap_streaming_server_ctx_t *ctx,
         if (avs_is_err(avs_net_socket_set_opt(socket,
                                               AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
                                               orig_recv_timeout))) {
-            LOG(ERROR, "could not restore socket timeout");
+            LOG(ERROR, _("could not restore socket timeout"));
         }
     }
     return err;
@@ -426,7 +428,7 @@ static avs_error_t flush_response_chunk(avs_coap_streaming_request_ctx_t *ctx) {
     default:
         assert(avs_is_err(ctx->err));
         LOG(ERROR,
-            "invalid state for flush_request_chunk(), aborting exchange");
+            _("invalid state for flush_request_chunk(), aborting exchange"));
         avs_coap_exchange_cancel(ctx->server_ctx.coap_ctx,
                                  ctx->server_ctx.exchange_id);
         return avs_is_err(ctx->err) ? _avs_coap_err(AVS_COAP_ERR_ASSERT_FAILED)
@@ -444,7 +446,7 @@ coap_write(avs_stream_t *stream_, const void *data, size_t *data_length) {
         err = try_enter_sending_state(streaming_req_ctx);
     }
     if (avs_is_err(err)) {
-        LOG(ERROR, "CoAP server stream not ready for writing");
+        LOG(ERROR, _("CoAP server stream not ready for writing"));
         return err;
     }
 
@@ -543,7 +545,7 @@ handle_incoming_packet(avs_coap_streaming_request_ctx_t *streaming_req_ctx,
     }
     if (avs_is_err(avs_net_socket_set_opt(
                 socket, AVS_NET_SOCKET_OPT_RECV_TIMEOUT, orig_recv_timeout))) {
-        LOG(ERROR, "could not restore socket timeout");
+        LOG(ERROR, _("could not restore socket timeout"));
     }
     return err;
 }
@@ -606,7 +608,7 @@ static avs_error_t ensure_data_is_available_to_read(
     if (avs_is_err(streaming_req_ctx->err)) {
         return streaming_req_ctx->err;
     } else if (!has_received_request_chunk(&streaming_req_ctx->server_ctx)) {
-        LOG(ERROR, "CoAP streaming_server read called in invalid state");
+        LOG(ERROR, _("CoAP streaming_server read called in invalid state"));
         return avs_errno(AVS_EBADF);
     }
     return AVS_OK;
@@ -856,7 +858,7 @@ notify_write(avs_stream_t *stream_, const void *data, size_t *data_length) {
     notify_streaming_ctx_t *notify_streaming_ctx =
             (notify_streaming_ctx_t *) stream_;
     if (!is_sending_response_chunk(&notify_streaming_ctx->server_ctx)) {
-        LOG(ERROR, "CoAP notification stream not ready for writing");
+        LOG(ERROR, _("CoAP notification stream not ready for writing"));
         return avs_errno(AVS_EBADF);
     }
 
@@ -928,7 +930,8 @@ avs_coap_notify_streaming(avs_coap_ctx_t *ctx,
         int write_result = write_payload((avs_stream_t *) &notify_streaming_ctx,
                                          write_payload_arg);
         if (write_result) {
-            LOG(DEBUG, "unable to write notification payload, result = %d",
+            LOG(DEBUG,
+                _("unable to write notification payload, result = ") "%d",
                 write_result);
             err = _avs_coap_err(AVS_COAP_ERR_PAYLOAD_WRITER_FAILED);
         }
@@ -947,7 +950,7 @@ avs_coap_notify_streaming(avs_coap_ctx_t *ctx,
     if (avs_is_err(err)
             && avs_coap_exchange_id_valid(
                        notify_streaming_ctx.server_ctx.exchange_id)) {
-        LOG(DEBUG, "unable to send notification, result = %s",
+        LOG(DEBUG, _("unable to send notification, result = ") "%s",
             AVS_COAP_STRERROR(err));
         if (notify_streaming_ctx.server_ctx.state
                 != AVS_COAP_STREAMING_SERVER_FINISHED) {

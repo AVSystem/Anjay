@@ -86,7 +86,7 @@ int _anjay_dm_select_free_iid(anjay_t *anjay,
             _anjay_dm_foreach_instance(anjay, obj, dm_create_select_iid_clb,
                                        new_iid_ptr);
     if (!result && *new_iid_ptr == ANJAY_ID_INVALID) {
-        dm_log(ERROR, "65535 object instances already exist");
+        dm_log(ERROR, _("65535 object instances already exist"));
         return ANJAY_ERR_BAD_REQUEST;
     }
     return result;
@@ -100,14 +100,14 @@ static int dm_create_inner(anjay_t *anjay,
     int result = _anjay_dm_call_instance_create(anjay, obj, iid, NULL);
     if (result) {
         dm_log(DEBUG,
-               "Instance Create handler for object %" PRIu16 " failed",
+               _("Instance Create handler for object ") "%" PRIu16 _(" failed"),
                (*obj)->oid);
         return result ? result : ANJAY_ERR_INTERNAL;
     } else if ((result = _anjay_dm_write_created_instance(anjay, obj, iid,
                                                           in_ctx))) {
         dm_log(DEBUG,
-               "Writing Resources for newly created "
-               "/%" PRIu16 "/%" PRIu16 " failed; removing",
+               _("Writing Resources for newly created ") "/%" PRIu16 "/%" PRIu16
+                       _(" failed; removing"),
                (*obj)->oid, iid);
     }
     return result;
@@ -122,12 +122,14 @@ static int dm_create_with_explicit_iid(anjay_t *anjay,
     }
     int result = _anjay_dm_instance_present(anjay, obj, iid);
     if (result > 0) {
-        dm_log(DEBUG, "Instance /%" PRIu16 "/%" PRIu16 " already exists",
+        dm_log(DEBUG,
+               _("Instance ") "/%" PRIu16 "/%" PRIu16 _(" already exists"),
                (*obj)->oid, iid);
         return ANJAY_ERR_BAD_REQUEST;
     } else if (result) {
         dm_log(DEBUG,
-               "Instance Present handler for /%" PRIu16 "/%" PRIu16 " failed",
+               _("Instance Present handler for ") "/%" PRIu16
+                                                  "/%" PRIu16 _(" failed"),
                (*obj)->oid, iid);
         return result;
     }
@@ -138,8 +140,8 @@ static int dm_create_with_explicit_iid(anjay_t *anjay,
         if (result == ANJAY_GET_PATH_END) {
             return 0;
         } else {
-            dm_log(DEBUG, "More than one Object Instance or broken input "
-                          "stream while processing Object Create");
+            dm_log(DEBUG, _("More than one Object Instance or broken input "
+                            "stream while processing Object Create"));
             return result ? result : ANJAY_ERR_BAD_REQUEST;
         }
     }
@@ -150,7 +152,7 @@ int _anjay_dm_create(anjay_t *anjay,
                      const anjay_dm_object_def_t *const *obj,
                      const anjay_request_t *request,
                      anjay_input_ctx_t *in_ctx) {
-    dm_log(LAZY_DEBUG, "Create %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    dm_log(LAZY_DEBUG, _("Create ") "%s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     assert(_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_OID));
 
     if (!_anjay_instance_action_allowed(
@@ -175,10 +177,10 @@ int _anjay_dm_create(anjay_t *anjay,
         }
     }
     if (!result) {
-        dm_log(LAZY_DEBUG, "created: %s", ANJAY_DEBUG_MAKE_PATH(&path));
+        dm_log(LAZY_DEBUG, _("created: ") "%s", ANJAY_DEBUG_MAKE_PATH(&path));
         if ((result = setup_create_response((*obj)->oid, path.ids[ANJAY_ID_IID],
                                             request->ctx))) {
-            dm_log(DEBUG, "Could not prepare response message.");
+            dm_log(DEBUG, _("Could not prepare response message."));
         }
     }
     if (!result) {

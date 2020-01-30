@@ -76,7 +76,7 @@ static inline bool coap_stream_valid(coap_stream_t *stream) {
 
 static inline void coap_stream_set_state(coap_stream_t *stream,
                                          coap_stream_state_t new_state) {
-    LOG(DEBUG, "coap_stream state: %s -> %s",
+    LOG(DEBUG, _("coap_stream state: ") "%s" _(" -> ") "%s",
         coap_stream_state_string(stream->state),
         coap_stream_state_string(new_state));
 
@@ -84,7 +84,8 @@ static inline void coap_stream_set_state(coap_stream_t *stream,
         stream->state = new_state;
         assert(coap_stream_valid(stream));
     } else {
-        LOG(ERROR, "unexpected coap_stream state change: %s -> %s",
+        LOG(ERROR,
+            _("unexpected coap_stream state change: ") "%s" _(" -> ") "%s",
             coap_stream_state_string(stream->state),
             coap_stream_state_string(new_state));
         AVS_UNREACHABLE("coap_stream misused");
@@ -95,7 +96,7 @@ static void coap_stream_set_error(coap_stream_t *stream, avs_error_t err) {
     if (avs_is_ok(stream->err)) {
         stream->err = err;
     } else {
-        LOG(DEBUG, "Suppressing error: %s", AVS_COAP_STRERROR(err));
+        LOG(DEBUG, _("Suppressing error: ") "%s", AVS_COAP_STRERROR(err));
     }
 }
 
@@ -145,7 +146,8 @@ static void handle_response(avs_coap_ctx_t *ctx,
         if (avs_is_err((err = _avs_coap_options_copy_as_dynamic(
                                 &stream->response_header.options,
                                 &response->header.options)))) {
-            LOG(ERROR, "could not copy options: %s", AVS_COAP_STRERROR(err));
+            LOG(ERROR, _("could not copy options: ") "%s",
+                AVS_COAP_STRERROR(err));
             coap_stream_set_error(stream, err);
             // note that this will recursively call this handler
             avs_coap_exchange_cancel(ctx, stream->exchange_id);
@@ -179,8 +181,8 @@ static int reject_request(avs_coap_server_ctx_t *ctx,
     (void) arg;
 
     LOG(DEBUG,
-        "%s received while handling a streaming CoAP transfer; sending "
-        "Service Unavailable response",
+        "%s" _(" received while handling a streaming CoAP transfer; sending "
+               "Service Unavailable response"),
         AVS_COAP_CODE_STRING(request->code));
 
     return AVS_COAP_CODE_SERVICE_UNAVAILABLE;
@@ -220,7 +222,9 @@ acquire_in_buffer_and_handle_incoming_packet(coap_stream_t *stream) {
 }
 
 static avs_error_t try_wait_for_response(coap_stream_t *stream) {
-    LOG(TRACE, "waiting for response to %s (exchange ID %" PRIu64 ")",
+    LOG(TRACE,
+        _("waiting for response to ") "%s" _(" (exchange ID ") "%" PRIu64 _(
+                ")"),
         AVS_COAP_CODE_STRING(stream->request_header.code),
         stream->exchange_id.value);
 
@@ -257,7 +261,7 @@ static avs_error_t try_wait_for_response(coap_stream_t *stream) {
                                        socket,
                                        AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
                                        recv_timeout)))) {
-            LOG(ERROR, "could not set socket timeout");
+            LOG(ERROR, _("could not set socket timeout"));
         } else {
             // _avs_coap_async_incoming_packet_acquire_in_buffer_and_handle_multiple()
             // cannot be used here, because we want to receive precisely one
@@ -287,7 +291,7 @@ static avs_error_t try_wait_for_response(coap_stream_t *stream) {
                         avs_net_socket_set_opt(socket,
                                                AVS_NET_SOCKET_OPT_RECV_TIMEOUT,
                                                orig_recv_timeout))) {
-                LOG(ERROR, "could not restore socket timeout");
+                LOG(ERROR, _("could not restore socket timeout"));
             }
         }
         if (avs_is_err(err)) {
@@ -369,7 +373,7 @@ coap_write(avs_stream_t *stream_, const void *data, size_t *data_length) {
     coap_stream_t *stream = (coap_stream_t *) stream_;
     if (stream->state != COAP_STREAM_STATE_SENDING_REQUEST) {
         LOG(ERROR,
-            "Could not write to CoAP stream: exchange already processed");
+            _("Could not write to CoAP stream: exchange already processed"));
         return avs_errno(AVS_EBADF);
     }
 
@@ -489,7 +493,7 @@ static avs_error_t perform_request(coap_stream_t *coap_stream,
                                    avs_coap_streaming_writer_t *write_payload,
                                    void *write_payload_arg) {
     if (coap_stream->state != COAP_STREAM_STATE_UNINITIALIZED) {
-        LOG(DEBUG, "discarding unread response data");
+        LOG(DEBUG, _("discarding unread response data"));
         _avs_coap_stream_cleanup(coap_stream);
     }
 
@@ -502,7 +506,7 @@ static avs_error_t perform_request(coap_stream_t *coap_stream,
     avs_error_t err = _avs_coap_options_copy_as_dynamic(
             &coap_stream->request_header.options, &req->options);
     if (avs_is_err(err)) {
-        LOG(ERROR, "could not copy options: %s", AVS_COAP_STRERROR(err));
+        LOG(ERROR, _("could not copy options: ") "%s", AVS_COAP_STRERROR(err));
         return err;
     }
 
@@ -518,7 +522,7 @@ static avs_error_t perform_request(coap_stream_t *coap_stream,
         buffer_size = in_buffer_capacity;
     }
     if (avs_buffer_create(&coap_stream->chunk_buffer, buffer_size)) {
-        LOG(ERROR, "out of memory");
+        LOG(ERROR, _("out of memory"));
         return avs_errno(AVS_ENOMEM);
     }
 

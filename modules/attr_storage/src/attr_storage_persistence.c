@@ -431,13 +431,13 @@ avs_error_t anjay_attr_storage_persist(anjay_t *anjay, avs_stream_t *out) {
     anjay_attr_storage_t *as = _anjay_attr_storage_get(anjay);
     if (!as) {
         as_log(ERROR,
-               "Attribute Storage is not installed on this Anjay object");
+               _("Attribute Storage is not installed on this Anjay object"));
         return avs_errno(AVS_EINVAL);
     }
     avs_error_t err = _anjay_attr_storage_persist_inner(as, out);
     if (avs_is_ok(err)) {
         as->modified_since_persist = false;
-        as_log(INFO, "Attribute Storage state persisted");
+        as_log(INFO, _("Attribute Storage state persisted"));
     }
     return err;
 }
@@ -446,12 +446,12 @@ avs_error_t anjay_attr_storage_restore(anjay_t *anjay, avs_stream_t *in) {
     anjay_attr_storage_t *as = _anjay_attr_storage_get(anjay);
     if (!as) {
         as_log(ERROR,
-               "Attribute Storage is not installed on this Anjay object");
+               _("Attribute Storage is not installed on this Anjay object"));
         return avs_errno(AVS_EINVAL);
     }
     avs_error_t err = _anjay_attr_storage_restore_inner(anjay, as, in);
     if (avs_is_ok(err)) {
-        as_log(INFO, "Attribute Storage state restored");
+        as_log(INFO, _("Attribute Storage state restored"));
     }
     as->modified_since_persist = avs_is_err(err);
     return err;

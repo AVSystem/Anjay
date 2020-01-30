@@ -114,7 +114,7 @@ find_or_create_observe_path_entry(anjay_observe_connection_entry_t *connection,
         AVS_RBTREE_ELEM(anjay_observe_path_entry_t) new_entry =
                 AVS_RBTREE_ELEM_NEW(anjay_observe_path_entry_t);
         if (!new_entry) {
-            anjay_log(ERROR, "out of memory");
+            anjay_log(ERROR, _("out of memory"));
             return NULL;
         }
 
@@ -139,7 +139,7 @@ add_path_to_observed_paths(anjay_observe_connection_entry_t *conn,
             AVS_LIST_INSERT_NEW(AVS_RBTREE_ELEM(anjay_observation_t),
                                 &observed_path->refs);
     if (!entry) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         if (!observed_path->refs) {
             AVS_RBTREE_DELETE_ELEM(conn->observed_paths, &observed_path);
         }
@@ -309,15 +309,16 @@ static int schedule_trigger(anjay_observe_connection_entry_t *conn_state,
     if (avs_time_monotonic_before(avs_sched_time(&observation->notify_task),
                                   trigger_instant)) {
         anjay_log(LAZY_TRACE,
-                  "Notify for token %s already scheduled earlier than "
-                  "requested %ld.%09lds",
+                  _("Notify for token ") "%s" _(" already scheduled earlier "
+                                                "than requested ") "%ld.%09lds",
                   ANJAY_TOKEN_TO_STRING(observation->token),
                   (long) trigger_instant.since_monotonic_epoch.seconds,
                   (long) trigger_instant.since_monotonic_epoch.nanoseconds);
         return 0;
     }
 
-    anjay_log(LAZY_TRACE, "Notify for token %s scheduled: %ld.%09lds",
+    anjay_log(LAZY_TRACE,
+              _("Notify for token ") "%s" _(" scheduled: ") "%ld.%09lds",
               ANJAY_TOKEN_TO_STRING(observation->token),
               (long) trigger_instant.since_monotonic_epoch.seconds,
               (long) trigger_instant.since_monotonic_epoch.nanoseconds);
@@ -333,8 +334,8 @@ static int schedule_trigger(anjay_observe_connection_entry_t *conn_state,
                          sizeof(trigger_observe_args_t));
     if (retval) {
         anjay_log(ERROR,
-                  "Could not schedule automatic notification trigger, result: "
-                  "%d",
+                  _("Could not schedule automatic notification trigger, "
+                    "result: ") "%d",
                   retval);
     }
     return retval;
@@ -352,7 +353,7 @@ create_observation_value(const anjay_msg_details_t *details,
     AVS_LIST(anjay_observation_value_t) result = (AVS_LIST(
             anjay_observation_value_t)) AVS_LIST_NEW_BUFFER(element_size);
     if (!result) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return NULL;
     }
     result->details = *details;
@@ -384,7 +385,7 @@ static bool is_observe_queue_full(const anjay_observe_state_t *observe) {
     }
 
     size_t num_queued = count_queued_notifications(observe);
-    anjay_log(TRACE, "%u/%u queued notifications", (unsigned) num_queued,
+    anjay_log(TRACE, "%u/%u" _(" queued notifications"), (unsigned) num_queued,
               (unsigned) observe->notify_queue_limit);
 
     assert(num_queued <= observe->notify_queue_limit);
@@ -480,7 +481,7 @@ static int insert_error(anjay_observe_connection_entry_t *conn_state,
         .format = AVS_COAP_FORMAT_NONE
     };
     if (details.msg_code != -outer_result) {
-        anjay_log(DEBUG, "invalid error code: %d", outer_result);
+        anjay_log(DEBUG, _("invalid error code: ") "%d", outer_result);
     }
     return insert_new_value(conn_state, observation,
                             AVS_COAP_NOTIFY_PREFER_CONFIRMABLE, &details, NULL);
@@ -535,8 +536,9 @@ static inline bool is_pmax_valid(anjay_dm_oi_attributes_t attr) {
 
     if (attr.max_period == 0 || attr.max_period < attr.min_period) {
         anjay_log(DEBUG,
-                  "invalid pmax (%" PRIi32
-                  "); expected pmax > 0 && pmax >= pmin (%" PRIi32 ")",
+                  _("invalid pmax (") "%" PRIi32 _(
+                          "); expected pmax > 0 && pmax >= pmin (") "%" PRIi32
+                          _(")"),
                   attr.max_period, attr.min_period);
         return false;
     }
@@ -564,7 +566,8 @@ int _anjay_observe_schedule_pmax_trigger(
                 &observation->paths[i],
                 _anjay_server_ssid(conn_state->conn_ref.server));
         if (result) {
-            anjay_log(DEBUG, "Could not get observe attributes, result: %d",
+            anjay_log(DEBUG,
+                      _("Could not get observe attributes, result: ") "%d",
                       result);
             return result;
         }
@@ -617,7 +620,7 @@ create_detached_observation(const avs_coap_token_t *token,
                     offsetof(anjay_observation_t, paths)
                     + paths->count * sizeof(const anjay_uri_path_t));
     if (!new_observation) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return NULL;
     }
     memcpy((void *) (intptr_t) (const void *) &new_observation->token, token,
@@ -673,7 +676,7 @@ find_or_create_connection_state(anjay_connection_ref_t ref) {
                 || !((*conn_ptr)->observed_paths =
                              AVS_RBTREE_NEW(anjay_observe_path_entry_t,
                                             _anjay_observe_path_entry_cmp))) {
-            anjay_log(ERROR, "out of memory");
+            anjay_log(ERROR, _("out of memory"));
             AVS_LIST_DELETE(conn_ptr);
             return NULL;
         }
@@ -777,7 +780,7 @@ static int read_as_batch(anjay_t *anjay,
     assert(out_batch && !*out_batch);
     anjay_batch_builder_t *builder = _anjay_batch_builder_new();
     if (!builder) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
 
@@ -785,7 +788,7 @@ static int read_as_batch(anjay_t *anjay,
                                            connection_ssid);
     (void) action;
     if (!result && !(*out_batch = _anjay_batch_builder_compile(&builder))) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         result = -1;
     }
     _anjay_batch_builder_cleanup(&builder);
@@ -812,8 +815,8 @@ static int write_notify_payload(size_t payload_offset,
             (anjay_observe_connection_entry_t *) conn_;
     if (payload_offset != conn->serialization_state.expected_offset) {
         anjay_log(DEBUG,
-                  "Server requested unexpected chunk of payload (expected "
-                  "offset %zu, got %zu)",
+                  _("Server requested unexpected chunk of payload (expected "
+                    "offset ") "%zu" _(", got ") "%zu" _(")"),
                   conn->serialization_state.expected_offset, payload_offset);
         return -1;
     }
@@ -948,7 +951,7 @@ static int read_observation_values(anjay_t *anjay,
 
     if (!(*out_batches = (anjay_batch_t **) avs_calloc(
                   paths->count, sizeof(anjay_batch_t *)))) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
 
@@ -1201,7 +1204,7 @@ static bool connection_exists(anjay_t *anjay,
 static void flush_next_unsent(anjay_observe_connection_entry_t *conn);
 
 static void on_network_error(anjay_connection_ref_t conn_ref) {
-    anjay_log(WARNING, "network communication error while sending Notify");
+    anjay_log(WARNING, _("network communication error while sending Notify"));
     if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY) {
         _anjay_server_on_failure(conn_ref.server, "not reachable");
     }
@@ -1223,14 +1226,14 @@ static int
 sched_flush_send_queue(AVS_LIST(anjay_observe_connection_entry_t) conn) {
     if (conn->flush_task
             || avs_coap_exchange_id_valid(conn->notify_exchange_id)) {
-        anjay_log(TRACE, "skipping notification flush scheduling: flush "
-                         "already scheduled");
+        anjay_log(TRACE, _("skipping notification flush scheduling: flush "
+                           "already scheduled"));
         return 0;
     }
     if (AVS_SCHED_NOW(_anjay_from_server(conn->conn_ref.server)->sched,
                       &conn->flush_task, flush_send_queue_job, &conn,
                       sizeof(conn))) {
-        anjay_log(WARNING, "Could not schedule notification flush");
+        anjay_log(WARNING, _("Could not schedule notification flush"));
         return -1;
     }
     return 0;
@@ -1281,7 +1284,7 @@ static void on_entry_flushed(anjay_observe_connection_entry_t *conn,
     if (!notification_storing_enabled(conn->conn_ref)) {
         remove_all_unsent_values(conn);
     }
-    anjay_log(WARNING, "Could not send Observe notification: %s",
+    anjay_log(WARNING, _("Could not send Observe notification: ") "%s",
               AVS_COAP_STRERROR(err));
 }
 
@@ -1408,15 +1411,15 @@ void _anjay_observe_interrupt(anjay_connection_ref_t ref) {
     }
     if ((*conn_ptr)->flush_task) {
         anjay_log(TRACE,
-                  "Cancelling notifications flush task for server SSID %u, "
-                  "connection type %d",
+                  _("Cancelling notifications flush task for server "
+                    "SSID ") "%u" _(", connection type ") "%d",
                   _anjay_server_ssid(ref.server), ref.conn_type);
         avs_sched_del(&(*conn_ptr)->flush_task);
     }
     if (avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id)) {
         anjay_log(TRACE,
-                  "Cancelling notification attempt for server SSID %u, "
-                  "connection type %d",
+                  _("Cancelling notification attempt for server SSID ") "%u" _(
+                          ", connection type ") "%d",
                   _anjay_server_ssid(ref.server), ref.conn_type);
         avs_coap_exchange_cancel(_anjay_connection_get_coap(ref),
                                  (*conn_ptr)->notify_exchange_id);
@@ -1426,14 +1429,14 @@ void _anjay_observe_interrupt(anjay_connection_ref_t ref) {
 
 int _anjay_observe_sched_flush(anjay_connection_ref_t ref) {
     anjay_log(TRACE,
-              "scheduling notifications flush for server SSID %u, "
-              "connection type %d",
+              _("scheduling notifications flush for server SSID ") "%u" _(
+                      ", connection type ") "%d",
               _anjay_server_ssid(ref.server), ref.conn_type);
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             find_connection_state(ref);
     if (!conn_ptr) {
-        anjay_log(TRACE, "skipping notification flush scheduling: no "
-                         "appropriate connection found");
+        anjay_log(TRACE, _("skipping notification flush scheduling: no "
+                           "appropriate connection found"));
         return 0;
     }
     return sched_flush_send_queue(*conn_ptr);
@@ -1455,7 +1458,7 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
 
     if (!(batches = (anjay_batch_t **) avs_calloc(observation->paths_count,
                                                   sizeof(anjay_batch_t *)))) {
-        anjay_log(ERROR, "Out of memory");
+        anjay_log(ERROR, _("Out of memory"));
         return -1;
     }
 
@@ -1464,7 +1467,7 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
         anjay_dm_internal_r_attrs_t attrs;
         if ((result = get_effective_attrs(anjay, &attrs, &observation->paths[i],
                                           ssid))) {
-            anjay_log(ERROR, "Could not get attributes of path %s",
+            anjay_log(ERROR, _("Could not get attributes of path ") "%s",
                       ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
             goto finish;
         }
@@ -1474,17 +1477,17 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
             if ((result = read_observation_path(anjay, &observation->paths[i],
                                                 observation->action, ssid,
                                                 &batches[i]))) {
-                anjay_log(ERROR, "Could not read path %s for notifying",
+                anjay_log(ERROR,
+                          _("Could not read path ") "%s" _(" for notifying"),
                           ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
                 goto finish;
             }
         } else {
-            anjay_log(
-                    DEBUG,
-                    "epmin == %" PRId32
-                    " set for path %s caused holding from reading a new value",
-                    attrs.standard.common.min_eval_period,
-                    ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
+            anjay_log(DEBUG,
+                      _("epmin == ") "%" PRId32 _(" set for path ") "%s" _(
+                              " caused holding from reading a new value"),
+                      attrs.standard.common.min_eval_period,
+                      ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
             // Do not even call read_handler, just copy previous value
             batches[i] =
                     _anjay_batch_acquire(newest_value(observation)->values[i]);

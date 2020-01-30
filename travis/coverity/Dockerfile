@@ -16,7 +16,7 @@ FROM avsystemembedded/anjay-travis:ubuntu-16.04
 RUN wget https://scan.coverity.com/download/linux64 --post-data "token=<COVERITY_SCAN_TOKEN>&project=AVSystem%2FAnjay" -O coverity_tool.tgz \
     && tar xf coverity_tool.tgz
 COPY . /Anjay
-CMD cd Anjay && ./devconfig <DEVCONFIG_FLAGS> && CC=$PYMBEDTLS_CC; \
+CMD cd Anjay && ./devconfig <DEVCONFIG_FLAGS> && CC=gcc; \
     ../cov-analysis*/bin/cov-build --dir cov-int make \
     && tar zcf cov-int.tgz cov-int \
     && curl --form token=<COVERITY_SCAN_TOKEN> \

@@ -27,7 +27,7 @@ from suites.default import bootstrap_client
 
 class CertificatesTest:
     class Test(test_suite.Lwm2mSingleServerTest):
-        def setUp(self, server_crt=None, server_key=None, client_crt_der=None, client_key_der=None, server_crt_der=None):
+        def setUp(self, server_crt=None, server_key=None, client_crt_der=None, client_key_der=None, server_crt_der=None, *args, **kwargs):
             # demo_path = 'anjay/output/bin'
             certs_dir = os.path.join(os.path.dirname(self.config.demo_path), 'certs')
             extra_cmdline_args = []
@@ -43,7 +43,7 @@ class CertificatesTest:
                 extra_cmdline_args += ['-P' + os.path.join(certs_dir, server_crt_der)]
             super().setUp(server_crt_file=server_crt,
                           server_key_file=server_key,
-                          extra_cmdline_args=extra_cmdline_args)
+                          extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
 
 
 class RegisterWithCertificates(CertificatesTest.Test):
@@ -60,16 +60,21 @@ class RegisterWithSelfSignedCertificatesAndServerPublicKey(CertificatesTest.Test
 
 class RegisterWithMismatchedServerPublicKey(CertificatesTest.Test):
     def setUp(self):
-        with self.assertRaises(RuntimeError) as raised:
-            super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
-                          client_crt_der='self-signed/client.crt.der', client_key_der='self-signed/client.key.der',
-                          # Use server.crt.der generated from different server.crt (not self-signed/server.crt)
-                          server_crt_der='server.crt.der')
-        # -0x7780 == MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE
-        self.assertIn('0x7780', raised.exception.args[0])
+        super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
+                      client_crt_der='self-signed/client.crt.der',
+                      client_key_der='self-signed/client.key.der',
+                      # Use server.crt.der generated from different server.crt (not self-signed/server.crt)
+                      server_crt_der='server.crt.der', auto_register=False)
+
+    def runTest(self):
+        from framework.test_suite import read_until_match
+        with self.assertRaises(RuntimeError):
+            self.assertDemoRegisters(self.serv)
+            # -9984 == -0x2700 == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
+            read_until_match(self.demo_process.log_file, 'handshake failed: -9984', 1)
 
     def tearDown(self):
-        pass
+        super().tearDown(auto_deregister=False)
 
 
 @unittest.skip("TODO: broken due to T1083")

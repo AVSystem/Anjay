@@ -233,7 +233,8 @@ size_t _avs_coap_option_sizeof(const avs_coap_option_t *opt) {
 }
 
 void _avs_coap_option_debug_print(const avs_coap_option_t *opt) {
-    LOG(DEBUG, "opt: delta %" PRIu32 ", length %" PRIu32 ", content:",
+    LOG(DEBUG,
+        _("opt: delta ") "%" PRIu32 _(", length ") "%" PRIu32 _(", content:"),
         _avs_coap_option_delta(opt), _avs_coap_option_content_length(opt));
 
     const uint8_t *value = _avs_coap_option_value(opt);
@@ -310,7 +311,7 @@ size_t _avs_coap_option_serialize(uint8_t *buffer,
             _avs_coap_get_opt_header_size(opt_number_delta, opt_data_size);
 
     if (opt_header_size + opt_data_size > buffer_size) {
-        LOG(ERROR, "not enough space to serialize option");
+        LOG(ERROR, _("not enough space to serialize option"));
         return 0;
     }
 

@@ -34,7 +34,8 @@ int _avs_coap_bytes_append(bytes_appender_t *appender,
                            const void *data,
                            size_t size_bytes) {
     if (appender->bytes_left < size_bytes) {
-        LOG(DEBUG, "not enough space: required %u free bytes, got %u",
+        LOG(DEBUG,
+            _("not enough space: required ") "%u" _(" free bytes, got ") "%u",
             (unsigned) size_bytes, (unsigned) appender->bytes_left);
         return -1;
     }
@@ -46,7 +47,8 @@ int _avs_coap_bytes_append(bytes_appender_t *appender,
 
 int _avs_coap_bytes_append_zeros(bytes_appender_t *appender, size_t size) {
     if (appender->bytes_left < size) {
-        LOG(DEBUG, "not enough space: required %u free bytes, got %u",
+        LOG(DEBUG,
+            _("not enough space: required ") "%u" _(" free bytes, got ") "%u",
             (unsigned) size, (unsigned) appender->bytes_left);
         return -1;
     }
@@ -61,7 +63,8 @@ int _avs_coap_bytes_extract(bytes_dispenser_t *dispenser,
                             void *out,
                             size_t size_bytes) {
     if (dispenser->bytes_left < size_bytes) {
-        LOG(DEBUG, "incomplete data: tried to read %u bytes, got %u",
+        LOG(DEBUG,
+            _("incomplete data: tried to read ") "%u" _(" bytes, got ") "%u",
             (unsigned) size_bytes, (unsigned) dispenser->bytes_left);
         return -1;
     }
@@ -84,7 +87,7 @@ avs_error_t _avs_coap_parse_token(avs_coap_token_t *out_token,
                "bug: not enough space for valid token");
 
     if (_avs_coap_bytes_extract(dispenser, out_token->bytes, out_token->size)) {
-        LOG(DEBUG, "truncated token");
+        LOG(DEBUG, _("truncated token"));
         return _avs_coap_err(AVS_COAP_ERR_MALFORMED_MESSAGE);
     }
 

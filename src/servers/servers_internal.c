@@ -45,7 +45,7 @@ void _anjay_server_clean_active_data(anjay_server_info_t *server) {
 }
 
 void _anjay_server_cleanup(anjay_server_info_t *server) {
-    anjay_log(TRACE, "clear_server SSID %u", server->ssid);
+    anjay_log(TRACE, _("clear_server SSID ") "%u", server->ssid);
 
     _anjay_server_clean_active_data(server);
     _anjay_registration_info_cleanup(&server->registration_info);
@@ -66,7 +66,7 @@ void _anjay_servers_internal_deregister(anjay_servers_t *servers) {
 }
 
 void _anjay_servers_internal_cleanup(anjay_servers_t *servers) {
-    anjay_log(TRACE, "cleaning up %lu servers",
+    anjay_log(TRACE, _("cleaning up ") "%lu" _(" servers"),
               (unsigned long) AVS_LIST_SIZE(servers->servers));
 
     AVS_LIST_CLEAR(&servers->servers) {
@@ -135,7 +135,7 @@ static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
     assert(!*tail_ptr);
     AVS_LIST_INSERT_NEW(anjay_socket_entry_t, tail_ptr);
     if (!*tail_ptr) {
-        anjay_log(ERROR, "Out of memory while building socket list");
+        anjay_log(ERROR, _("Out of memory while building socket list"));
         return -1;
     }
     (*tail_ptr)->socket = socket;
@@ -206,7 +206,7 @@ AVS_LIST(anjay_server_info_t) *_anjay_servers_find_ptr(anjay_servers_t *servers,
         return ptr;
     }
 
-    anjay_log(TRACE, "no server with SSID %u", ssid);
+    anjay_log(TRACE, _("no server with SSID ") "%u", ssid);
     return NULL;
 }
 
@@ -248,11 +248,13 @@ int _anjay_servers_foreach_ssid(anjay_t *anjay,
     AVS_LIST_FOREACH(it, anjay->servers->servers) {
         int result = handler(anjay, it->ssid, data);
         if (result == ANJAY_FOREACH_BREAK) {
-            anjay_log(DEBUG, "servers_foreach_ssid: break on %u", it->ssid);
+            anjay_log(DEBUG, _("servers_foreach_ssid: break on ") "%u",
+                      it->ssid);
             return 0;
         } else if (result) {
             anjay_log(WARNING,
-                      "servers_foreach_ssid handler failed for %u (%d)",
+                      _("servers_foreach_ssid handler failed for ") "%u" _(
+                              " (") "%d" _(")"),
                       it->ssid, result);
             return result;
         }
@@ -271,11 +273,13 @@ int _anjay_servers_foreach_active(anjay_t *anjay,
         }
         int result = handler(anjay, it, data);
         if (result == ANJAY_FOREACH_BREAK) {
-            anjay_log(DEBUG, "servers_foreach_ssid: break on %u", it->ssid);
+            anjay_log(DEBUG, _("servers_foreach_ssid: break on ") "%u",
+                      it->ssid);
             return 0;
         } else if (result) {
             anjay_log(WARNING,
-                      "servers_foreach_ssid handler failed for %u (%d)",
+                      _("servers_foreach_ssid handler failed for ") "%u" _(
+                              " (") "%d" _(")"),
                       it->ssid, result);
             return result;
         }

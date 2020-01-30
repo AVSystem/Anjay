@@ -61,8 +61,9 @@ static int validate_version(const anjay_dm_object_def_t *obj_def) {
     char dummy;
     if (sscanf(obj_def->version, "%u.%u%c", &major, &minor, &dummy) != 2) {
         dm_log(ERROR,
-               "invalid Object /%u version format (expected X.Y, "
-               "where X and Y are unsigned integers): %s",
+               _("invalid Object ") "/%u" _(
+                       " version format (expected X.Y, where X and Y are "
+                       "unsigned integers): ") "%s",
                (unsigned) obj_def->oid, obj_def->version);
         return -1;
     }
@@ -73,13 +74,14 @@ static int validate_version(const anjay_dm_object_def_t *obj_def) {
 int anjay_register_object(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *def_ptr) {
     if (!def_ptr || !*def_ptr) {
-        dm_log(ERROR, "invalid object pointer");
+        dm_log(ERROR, _("invalid object pointer"));
         return -1;
     }
 
     if ((*def_ptr)->oid == ANJAY_ID_INVALID) {
         anjay_log(ERROR,
-                  "Object ID %u is forbidden by the LwM2M 1.1 specification",
+                  _("Object ID ") "%u" _(
+                          " is forbidden by the LwM2M 1.1 specification"),
                   ANJAY_ID_INVALID);
         return -1;
     }
@@ -99,7 +101,7 @@ int anjay_register_object(anjay_t *anjay,
     }
 
     if (*obj_iter && (***obj_iter)->oid == (*def_ptr)->oid) {
-        dm_log(ERROR, "data model object /%u already registered",
+        dm_log(ERROR, _("data model object ") "/%u" _(" already registered"),
                (*def_ptr)->oid);
         return -1;
     }
@@ -107,20 +109,20 @@ int anjay_register_object(anjay_t *anjay,
     AVS_LIST(const anjay_dm_object_def_t *const *) new_elem =
             AVS_LIST_NEW_ELEMENT(const anjay_dm_object_def_t *const *);
     if (!new_elem) {
-        dm_log(ERROR, "out of memory");
+        dm_log(ERROR, _("out of memory"));
         return -1;
     }
 
     *new_elem = def_ptr;
     AVS_LIST_INSERT(obj_iter, new_elem);
 
-    dm_log(INFO, "successfully registered object /%u", (**new_elem)->oid);
+    dm_log(INFO, _("successfully registered object ") "/%u", (**new_elem)->oid);
     if (anjay_notify_instances_changed(anjay, (**new_elem)->oid)) {
-        dm_log(WARNING, "anjay_notify_instances_changed() failed on /%u",
+        dm_log(WARNING, _("anjay_notify_instances_changed() failed on ") "/%u",
                (**new_elem)->oid);
     }
     if (anjay_schedule_registration_update(anjay, ANJAY_SSID_ANY)) {
-        dm_log(WARNING, "anjay_schedule_registration_update() failed");
+        dm_log(WARNING, _("anjay_schedule_registration_update() failed"));
     }
     return 0;
 }
@@ -144,7 +146,7 @@ int anjay_unregister_object(anjay_t *anjay,
     assert(!anjay->current_connection.server);
 
     if (!def_ptr || !*def_ptr) {
-        dm_log(ERROR, "invalid object pointer");
+        dm_log(ERROR, _("invalid object pointer"));
         return -1;
     }
 
@@ -157,14 +159,14 @@ int anjay_unregister_object(anjay_t *anjay,
     }
 
     if (!*obj_iter || (***obj_iter)->oid != (*def_ptr)->oid) {
-        dm_log(ERROR, "object %" PRIu16 " is not currently registered",
+        dm_log(ERROR, _("object ") "%" PRIu16 _(" is not currently registered"),
                (*def_ptr)->oid);
         return -1;
     }
     if (**obj_iter != def_ptr) {
         dm_log(ERROR,
-               "object %" PRIu16 " that is registered is not "
-               "the same as the object passed for unregister",
+               _("object ") "%" PRIu16 _(" that is registered is not the same "
+                                         "as the object passed for unregister"),
                (*def_ptr)->oid);
         return -1;
     }
@@ -180,8 +182,8 @@ int anjay_unregister_object(anjay_t *anjay,
                 if (_anjay_dm_call_transaction_rollback(anjay, **obj_iter,
                                                         NULL)) {
                     dm_log(ERROR,
-                           "cannot rollback transaction on /%u, "
-                           "object may be left in undefined state",
+                           _("cannot rollback transaction on ") "/%u" _(
+                                   ", object may be left in undefined state"),
                            (*def_ptr)->oid);
                 }
                 AVS_LIST_DELETE(obj_iter);
@@ -195,8 +197,7 @@ int anjay_unregister_object(anjay_t *anjay,
                                                         (*def_ptr)->oid)
             || _anjay_notify_flush(anjay, &notify)) {
         dm_log(WARNING,
-               "could not perform notifications about "
-               "removed object %" PRIu16,
+               _("could not perform notifications about removed object ") "%" PRIu16,
                (*def_ptr)->oid);
     }
 
@@ -206,10 +207,10 @@ int anjay_unregister_object(anjay_t *anjay,
     remove_oid_from_notify_queue(&anjay->bootstrap.notification_queue,
                                  (*def_ptr)->oid);
 #endif // WITH_BOOTSTRAP
-    dm_log(INFO, "successfully unregistered object /%u", (*def_ptr)->oid);
+    dm_log(INFO, _("successfully unregistered object ") "/%u", (*def_ptr)->oid);
     AVS_LIST_DELETE(&detached);
     if (anjay_schedule_registration_update(anjay, ANJAY_SSID_ANY)) {
-        dm_log(WARNING, "anjay_schedule_registration_update() failed");
+        dm_log(WARNING, _("anjay_schedule_registration_update() failed"));
     }
     return 0;
 }
@@ -264,7 +265,7 @@ static int prepare_input_context(avs_stream_t *stream,
 
     int result = _anjay_input_dynamic_construct(out_in_ctx, stream, request);
     if (result) {
-        dm_log(ERROR, "could not create input context");
+        dm_log(ERROR, _("could not create input context"));
     }
 
     return result;
@@ -375,7 +376,8 @@ int _anjay_dm_verify_resource_instance_present(
 static int dm_discover(anjay_t *anjay,
                        const anjay_dm_object_def_t *const *obj,
                        const anjay_request_t *request) {
-    dm_log(LAZY_DEBUG, "Discover %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    dm_log(LAZY_DEBUG, _("Discover ") "%s",
+           ANJAY_DEBUG_MAKE_PATH(&request->uri));
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_RIID)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -388,7 +390,7 @@ static int dm_discover(anjay_t *anjay,
             });
 
     if (!response_stream) {
-        dm_log(ERROR, "could not setup message");
+        dm_log(ERROR, _("could not setup message"));
         return -1;
     }
 
@@ -396,15 +398,15 @@ static int dm_discover(anjay_t *anjay,
                                  request->uri.ids[ANJAY_ID_IID],
                                  request->uri.ids[ANJAY_ID_RID]);
     if (result) {
-        dm_log(WARNING, "Discover %s failed!",
+        dm_log(WARNING, _("Discover ") "%s" _(" failed!"),
                ANJAY_DEBUG_MAKE_PATH(&request->uri));
     }
     return result;
 }
 #else // WITH_DISCOVER
-#    define dm_discover(anjay, obj, details)           \
-        (dm_log(ERROR, "Not supported: Discover %s",   \
-                ANJAY_DEBUG_MAKE_PATH(&details->uri)), \
+#    define dm_discover(anjay, obj, details)               \
+        (dm_log(ERROR, _("Not supported: Discover ") "%s", \
+                ANJAY_DEBUG_MAKE_PATH(&details->uri)),     \
          ANJAY_ERR_NOT_IMPLEMENTED)
 #endif // WITH_DISCOVER
 
@@ -412,7 +414,8 @@ static int dm_execute(anjay_t *anjay,
                       const anjay_dm_object_def_t *const *obj,
                       const anjay_request_t *request,
                       anjay_input_ctx_t *in_ctx) {
-    dm_log(LAZY_DEBUG, "Execute %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    dm_log(LAZY_DEBUG, _("Execute ") "%s",
+           ANJAY_DEBUG_MAKE_PATH(&request->uri));
     if (!_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RID)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -430,7 +433,7 @@ static int dm_execute(anjay_t *anjay,
                       anjay, obj, request->uri.ids[ANJAY_ID_IID],
                       request->uri.ids[ANJAY_ID_RID], &kind))
                 && !_anjay_dm_res_kind_executable(kind)) {
-            dm_log(LAZY_DEBUG, "%s is not executable",
+            dm_log(LAZY_DEBUG, "%s" _(" is not executable"),
                    ANJAY_DEBUG_MAKE_PATH(&request->uri));
             return ANJAY_ERR_METHOD_NOT_ALLOWED;
         }
@@ -449,7 +452,7 @@ static int dm_execute(anjay_t *anjay,
 static int dm_delete(anjay_t *anjay,
                      const anjay_dm_object_def_t *const *obj,
                      const anjay_request_t *request) {
-    dm_log(LAZY_DEBUG, "Delete %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    dm_log(LAZY_DEBUG, _("Delete ") "%s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     if (!_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_IID)) {
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
@@ -496,7 +499,7 @@ static int invoke_transactional_action(anjay_t *anjay,
         retval = dm_delete(anjay, obj, request);
         break;
     default:
-        dm_log(ERROR, "invalid transactional action");
+        dm_log(ERROR, _("invalid transactional action"));
         retval = ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 
@@ -523,7 +526,7 @@ static int invoke_action(anjay_t *anjay,
         assert(in_ctx);
         return dm_execute(anjay, obj, request, in_ctx);
     default:
-        dm_log(ERROR, "Invalid action for Management Interface");
+        dm_log(ERROR, _("Invalid action for Management Interface"));
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
 }
@@ -534,12 +537,12 @@ int _anjay_dm_perform_action(anjay_t *anjay, const anjay_request_t *request) {
         if (!(obj = _anjay_dm_find_object_by_oid(
                       anjay, request->uri.ids[ANJAY_ID_OID]))
                 || !*obj) {
-            dm_log(DEBUG, "Object not found: %u",
+            dm_log(DEBUG, _("Object not found: ") "%u",
                    request->uri.ids[ANJAY_ID_OID]);
             return ANJAY_ERR_NOT_FOUND;
         }
     } else {
-        dm_log(DEBUG, "at least Object ID must be present in Uri-Path");
+        dm_log(DEBUG, _("at least Object ID must be present in Uri-Path"));
         return ANJAY_ERR_BAD_REQUEST;
     }
 
@@ -594,10 +597,12 @@ int _anjay_dm_foreach_object(anjay_t *anjay,
 
         int result = handler(anjay, *obj, data);
         if (result == ANJAY_FOREACH_BREAK) {
-            dm_log(TRACE, "foreach_object: break on /%u", (**obj)->oid);
+            dm_log(TRACE, _("foreach_object: break on ") "/%u", (**obj)->oid);
             return 0;
         } else if (result) {
-            dm_log(DEBUG, "foreach_object_handler failed for /%u (%d)",
+            dm_log(DEBUG,
+                   _("foreach_object_handler failed for ") "/%u" _(" (") "%d" _(
+                           ")"),
                    (**obj)->oid, result);
             return result;
         }
@@ -621,14 +626,15 @@ static void foreach_instance_emit(anjay_dm_list_ctx_t *ctx_, uint16_t iid) {
             (anjay_dm_foreach_instance_ctx_t *) ctx_;
     if (!ctx->result) {
         if (iid == ANJAY_ID_INVALID) {
-            dm_log(ERROR, "%" PRIu16 " is not a valid Instance ID", iid);
+            dm_log(ERROR, "%" PRIu16 _(" is not a valid Instance ID"), iid);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
         }
         if (iid <= ctx->last_iid) {
             dm_log(ERROR,
-                   "list_instances MUST return Instance IDs in strictly "
-                   "ascending order; %" PRIu16 " returned after %" PRId32,
+                   _("list_instances MUST return Instance IDs in strictly "
+                     "ascending order; ") "%" PRIu16
+                           _(" returned after ") "%" PRId32,
                    iid, ctx->last_iid);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
@@ -637,10 +643,12 @@ static void foreach_instance_emit(anjay_dm_list_ctx_t *ctx_, uint16_t iid) {
         ctx->result =
                 ctx->handler(ctx->anjay, ctx->obj, iid, ctx->handler_data);
         if (ctx->result == ANJAY_FOREACH_BREAK) {
-            dm_log(TRACE, "foreach_instance: break on /%u/%u", (*ctx->obj)->oid,
-                   iid);
+            dm_log(TRACE, _("foreach_instance: break on ") "/%u/%u",
+                   (*ctx->obj)->oid, iid);
         } else if (ctx->result) {
-            dm_log(DEBUG, "foreach_instance_handler failed for /%u/%u (%d)",
+            dm_log(DEBUG,
+                   _("foreach_instance_handler failed for ") "/%u/%u" _(
+                           " (") "%d" _(")"),
                    (*ctx->obj)->oid, iid, ctx->result);
         }
     }
@@ -651,7 +659,7 @@ int _anjay_dm_foreach_instance(anjay_t *anjay,
                                anjay_dm_foreach_instance_handler_t *handler,
                                void *data) {
     if (!obj) {
-        dm_log(ERROR, "attempt to iterate through NULL Object");
+        dm_log(ERROR, _("attempt to iterate through NULL Object"));
         return -1;
     }
 
@@ -671,7 +679,9 @@ int _anjay_dm_foreach_instance(anjay_t *anjay,
             _anjay_dm_call_list_instances(anjay, obj,
                                           (anjay_dm_list_ctx_t *) &ctx, NULL);
     if (result < 0) {
-        dm_log(WARNING, "list_instances handler for /%u failed (%d)",
+        dm_log(WARNING,
+               _("list_instances handler for ") "/%u" _(" failed (") "%d" _(
+                       ")"),
                (*obj)->oid, result);
         return result;
     }
@@ -694,7 +704,7 @@ static int query_dm_instance(anjay_t *anjay,
 
     AVS_LIST(anjay_iid_t) new_instance = AVS_LIST_NEW_ELEMENT(anjay_iid_t);
     if (!new_instance) {
-        dm_log(ERROR, "out of memory");
+        dm_log(ERROR, _("out of memory"));
         return -1;
     }
     AVS_LIST_INSERT(*instance_insert_ptr, new_instance);
@@ -766,27 +776,28 @@ void anjay_dm_emit_res(anjay_dm_resource_list_ctx_t *ctx,
                        anjay_dm_resource_presence_t presence) {
     if (!ctx->result) {
         if (rid == ANJAY_ID_INVALID) {
-            dm_log(ERROR, "%" PRIu16 " is not a valid Resource ID", rid);
+            dm_log(ERROR, "%" PRIu16 _(" is not a valid Resource ID"), rid);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
         }
         if (rid <= ctx->last_rid) {
             dm_log(ERROR,
-                   "list_resources MUST return Resource IDs in strictly "
-                   "ascending order; %" PRIu16 " returned after %" PRId32,
+                   _("list_resources MUST return Resource IDs in strictly "
+                     "ascending order; ") "%" PRIu16
+                           _(" returned after ") "%" PRId32,
                    rid, ctx->last_rid);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
         }
         ctx->last_rid = rid;
         if (!_anjay_dm_res_kind_valid(kind)) {
-            dm_log(ERROR, "%d is not valid anjay_dm_resource_kind_t",
+            dm_log(ERROR, "%d" _(" is not valid anjay_dm_resource_kind_t"),
                    (int) kind);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
         }
         if (!presence_valid(presence)) {
-            dm_log(ERROR, "%d is not valid anjay_dm_resource_presence_t",
+            dm_log(ERROR, "%d" _(" is not valid anjay_dm_resource_presence_t"),
                    (int) presence);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
@@ -794,10 +805,12 @@ void anjay_dm_emit_res(anjay_dm_resource_list_ctx_t *ctx,
         ctx->result = ctx->handler(ctx->anjay, ctx->obj, ctx->iid, rid, kind,
                                    presence, ctx->handler_data);
         if (ctx->result == ANJAY_FOREACH_BREAK) {
-            dm_log(TRACE, "foreach_resource: break on /%u/%u/%u",
+            dm_log(TRACE, _("foreach_resource: break on ") "/%u/%u/%u",
                    (*ctx->obj)->oid, ctx->iid, rid);
         } else if (ctx->result) {
-            dm_log(DEBUG, "foreach_resource_handler failed for /%u/%u/%u (%d)",
+            dm_log(DEBUG,
+                   _("foreach_resource_handler failed for ") "/%u/%u/%u" _(
+                           " (") "%d" _(")"),
                    (*ctx->obj)->oid, ctx->iid, rid, ctx->result);
         }
     }
@@ -809,7 +822,7 @@ int _anjay_dm_foreach_resource(anjay_t *anjay,
                                anjay_dm_foreach_resource_handler_t *handler,
                                void *data) {
     if (!obj) {
-        dm_log(ERROR, "attempt to iterate through NULL Object");
+        dm_log(ERROR, _("attempt to iterate through NULL Object"));
         return -1;
     }
 
@@ -824,7 +837,9 @@ int _anjay_dm_foreach_resource(anjay_t *anjay,
     };
     int result = _anjay_dm_call_list_resources(anjay, obj, iid, &ctx, NULL);
     if (result < 0) {
-        dm_log(ERROR, "list_resources handler for /%u/%u failed (%d)",
+        dm_log(ERROR,
+               _("list_resources handler for ") "/%u/%u" _(" failed (") "%d" _(
+                       ")"),
                (*obj)->oid, iid, result);
         return result;
     }
@@ -963,16 +978,16 @@ static void foreach_resource_instance_emit(anjay_dm_list_ctx_t *ctx_,
             (anjay_dm_foreach_resource_instance_ctx_t *) ctx_;
     if (!ctx->result) {
         if (riid == ANJAY_ID_INVALID) {
-            dm_log(ERROR, "%" PRIu16 " is not a valid Resource Instance ID",
+            dm_log(ERROR, "%" PRIu16 _(" is not a valid Resource Instance ID"),
                    riid);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
         }
         if (riid <= ctx->last_riid) {
             dm_log(ERROR,
-                   "list_resource_instances MUST return Resource Instance "
-                   "IDs in strictly ascending order; %" PRIu16
-                   " returned after %" PRId32,
+                   _("list_resource_instances MUST return Resource Instance "
+                     "IDs in strictly ascending order; ") "%" PRIu16
+                           _(" returned after ") "%" PRId32,
                    riid, ctx->last_riid);
             ctx->result = ANJAY_ERR_INTERNAL;
             return;
@@ -981,11 +996,13 @@ static void foreach_resource_instance_emit(anjay_dm_list_ctx_t *ctx_,
         ctx->result = ctx->handler(ctx->anjay, ctx->obj, ctx->iid, ctx->rid,
                                    riid, ctx->handler_data);
         if (ctx->result == ANJAY_FOREACH_BREAK) {
-            dm_log(TRACE, "foreach_resource_instance: break on /%u/%u/%u/%u",
+            dm_log(TRACE,
+                   _("foreach_resource_instance: break on ") "/%u/%u/%u/%u",
                    (*ctx->obj)->oid, ctx->iid, ctx->rid, riid);
         } else if (ctx->result) {
             dm_log(DEBUG,
-                   "foreach_resource_handler failed for /%u/%u/%u/%u (%d)",
+                   _("foreach_resource_handler failed for ") "/%u/%u/%u/%u" _(
+                           " (") "%d" _(")"),
                    (*ctx->obj)->oid, ctx->iid, ctx->rid, riid, ctx->result);
         }
     }
@@ -999,7 +1016,7 @@ int _anjay_dm_foreach_resource_instance(
         anjay_dm_foreach_resource_instance_handler_t *handler,
         void *data) {
     if (!obj) {
-        dm_log(ERROR, "attempt to iterate through NULL Object");
+        dm_log(ERROR, _("attempt to iterate through NULL Object"));
         return -1;
     }
 
@@ -1021,7 +1038,8 @@ int _anjay_dm_foreach_resource_instance(
             anjay, obj, iid, rid, (anjay_dm_list_ctx_t *) &ctx, NULL);
     if (result < 0) {
         dm_log(ERROR,
-               "list_resource_instances handler for /%u/%u/%u failed (%d)",
+               _("list_resource_instances handler for ") "/%u/%u/%u" _(
+                       " failed (") "%d" _(")"),
                (*obj)->oid, iid, rid, result);
         return result;
     }

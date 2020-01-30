@@ -38,8 +38,9 @@ avs_error_t _avs_coap_in_buffer_acquire(avs_coap_ctx_t *ctx,
     avs_coap_base_t *coap_base = _avs_coap_get_base(ctx);
     if (coap_base->in_buffer_in_use) {
         LOG(WARNING,
-            "double use of shared buffer. Note: calling handle_incoming_packet "
-            "from within request handler is not supported");
+            _("double use of shared buffer. Note: calling "
+              "handle_incoming_packet from within request handler is not "
+              "supported"));
         return _avs_coap_err(AVS_COAP_ERR_SHARED_BUFFER_IN_USE);
     }
 
@@ -244,7 +245,7 @@ void _avs_coap_reschedule_retry_or_request_expired_job(
     if (AVS_SCHED_AT(coap_base->sched, &coap_base->retry_or_request_expired_job,
                      target_time, retry_or_request_expired_job, &ctx,
                      sizeof(ctx))) {
-        LOG(ERROR, "unable to reschedule timeout job");
+        LOG(ERROR, _("unable to reschedule timeout job"));
     }
 }
 
@@ -414,7 +415,9 @@ int avs_coap_options_validate_critical(
         if (_avs_coap_option_is_critical((uint16_t) opt_number)
                 && !is_critical_opt_valid(request_header->code, opt_number,
                                           validator)) {
-            LOG(DEBUG, "warning: invalid critical option in query %s: %" PRIu32,
+            LOG(DEBUG,
+                _("warning: invalid critical option in query ") "%s" _(
+                        ": ") "%" PRIu32,
                 AVS_COAP_CODE_STRING(request_header->code), opt_number);
             return -1;
         }

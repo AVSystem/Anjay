@@ -31,9 +31,26 @@
 using namespace std;
 using namespace chrono;
 
+namespace {
+
+int process_python_socket_error(py::error_already_set &err, int default_err) {
+    // Ensure that the `socket` in the eval below is actually python
+    // socket, and not some module found in the context of python code
+    // that caused this _recv() to be called on c++ side.
+    py::object scope = py::module::import("socket").attr("__dict__");
+
+    if (err.matches(py::eval("timeout", scope))) {
+        return MBEDTLS_ERR_SSL_TIMEOUT;
+    } else {
+        return default_err;
+    }
+}
+
+} // namespace
+
 namespace ssl {
 
-int Socket::_send(void *self, const unsigned char *buf, size_t len) {
+int Socket::_send(void *self, const unsigned char *buf, size_t len) try {
     Socket *socket = reinterpret_cast<Socket *>(self);
 
     call_method<void>(
@@ -41,6 +58,8 @@ int Socket::_send(void *self, const unsigned char *buf, size_t len) {
             py::reinterpret_borrow<py::object>(
                     PyMemoryView_FromMemory((char *) buf, len, PyBUF_READ)));
     return (int) len;
+} catch (py::error_already_set &err) {
+    return process_python_socket_error(err, MBEDTLS_ERR_NET_SEND_FAILED);
 }
 
 namespace {
@@ -142,17 +161,9 @@ int Socket::_recv(void *self,
                               socket->client_host_and_port_);
             break;
         } catch (py::error_already_set &err) {
-            // Ensure that the `socket` in the eval below is actually python
-            // socket, and not some module found in the context of python code
-            // that caused this _recv() to be called on c++ side.
-            py::object scope = py::module::import("socket").attr("__dict__");
-
-            if (err.matches(py::eval("timeout", scope))) {
-                bytes_received = MBEDTLS_ERR_SSL_TIMEOUT;
-            } else {
-                bytes_received = MBEDTLS_ERR_NET_RECV_FAILED;
-            }
-
+            bytes_received =
+                    process_python_socket_error(err,
+                                                MBEDTLS_ERR_NET_RECV_FAILED);
             if (!socket->in_handshake_) {
                 // HACK: it's there, explicitly called, because for some reason
                 // you can't call settimeout() when the "error is restored", and

@@ -37,17 +37,17 @@ static void refresh_server_job(avs_sched_t *sched, const void *server_ptr) {
 
     if (anjay_is_offline(anjay)) {
         anjay_log(TRACE,
-                  "Anjay is offline, not refreshing server SSID %" PRIu16,
+                  _("Anjay is offline, not refreshing server SSID ") "%" PRIu16,
                   server->ssid);
         return;
     }
 
     if (server->ssid != ANJAY_SSID_BOOTSTRAP
             && _anjay_bootstrap_in_progress(anjay)) {
-        anjay_log(
-                TRACE,
-                "Bootstrap is in progress, not refreshing server SSID %" PRIu16,
-                server->ssid);
+        anjay_log(TRACE,
+                  _("Bootstrap is in progress, not refreshing server "
+                    "SSID ") "%" PRIu16,
+                  server->ssid);
         return;
     }
 
@@ -65,7 +65,7 @@ static void refresh_server_job(avs_sched_t *sched, const void *server_ptr) {
 static int reload_server_by_ssid(anjay_t *anjay,
                                  anjay_servers_t *old_servers,
                                  anjay_ssid_t ssid) {
-    anjay_log(TRACE, "reloading server SSID %u", ssid);
+    anjay_log(TRACE, _("reloading server SSID ") "%u", ssid);
 
     AVS_LIST(anjay_server_info_t) *server_ptr =
             _anjay_servers_find_ptr(old_servers, ssid);
@@ -75,7 +75,7 @@ static int reload_server_by_ssid(anjay_t *anjay,
         if (ssid == ANJAY_SSID_BOOTSTRAP
                 || !_anjay_bootstrap_in_progress(anjay)) {
             if (_anjay_server_active(server)) {
-                anjay_log(TRACE, "reloading active server SSID %u", ssid);
+                anjay_log(TRACE, _("reloading active server SSID ") "%u", ssid);
                 return _anjay_schedule_refresh_server(server,
                                                       AVS_TIME_DURATION_ZERO);
             } else if (!server->next_action_handle
@@ -89,7 +89,7 @@ static int reload_server_by_ssid(anjay_t *anjay,
         return 0;
     }
 
-    anjay_log(TRACE, "creating server SSID %u", ssid);
+    anjay_log(TRACE, _("creating server SSID ") "%u", ssid);
     AVS_LIST(anjay_server_info_t) new_server =
             _anjay_servers_create_inactive(anjay, ssid);
     if (!new_server) {
@@ -125,7 +125,7 @@ static int reload_server_by_server_iid(anjay_t *anjay,
     }
 
     if (reload_server_by_ssid(anjay, state->old_servers, ssid)) {
-        anjay_log(TRACE, "could not reload server SSID %u", ssid);
+        anjay_log(TRACE, _("could not reload server SSID ") "%u", ssid);
         state->retval = -1;
     }
 
@@ -134,7 +134,7 @@ static int reload_server_by_server_iid(anjay_t *anjay,
 
 static void reload_servers_sched_job(avs_sched_t *sched, const void *unused) {
     (void) unused;
-    anjay_log(TRACE, "reloading servers");
+    anjay_log(TRACE, _("reloading servers"));
 
     anjay_t *anjay = _anjay_get_from_sched(sched);
     anjay_servers_t old_servers = *anjay->servers;
@@ -183,21 +183,21 @@ static void reload_servers_sched_job(avs_sched_t *sched, const void *unused) {
                 _anjay_servers_add(anjay->servers, AVS_LIST_DETACH(server_ptr));
             }
         }
-        anjay_log(WARNING, "reloading servers failed, re-scheduling job");
+        anjay_log(WARNING, _("reloading servers failed, re-scheduling job"));
         _anjay_schedule_delayed_reload_servers(anjay);
     } else {
         if (obj) {
-            anjay_log(INFO, "servers reloaded");
+            anjay_log(INFO, _("servers reloaded"));
         } else {
             anjay_log(WARNING,
-                      "Security object not present, no servers to create");
+                      _("Security object not present, no servers to create"));
         }
         _anjay_observe_gc(anjay);
     }
 
     _anjay_servers_internal_deregister(&old_servers);
     _anjay_servers_internal_cleanup(&old_servers);
-    anjay_log(TRACE, "%lu servers reloaded",
+    anjay_log(TRACE, "%lu" _(" servers reloaded"),
               (unsigned long) AVS_LIST_SIZE(anjay->servers->servers));
 }
 
@@ -209,7 +209,7 @@ static int schedule_reload_servers(anjay_t *anjay, bool delayed) {
                        avs_time_duration_from_scalar(
                                delayed ? RELOAD_DELAY_S : 0, AVS_TIME_S),
                        reload_servers_sched_job, NULL, 0)) {
-        anjay_log(ERROR, "could not schedule reload_servers_job");
+        anjay_log(ERROR, _("could not schedule reload_servers_job"));
         return -1;
     }
     return 0;
@@ -227,7 +227,7 @@ int _anjay_schedule_refresh_server(anjay_server_info_t *server,
                                    avs_time_duration_t delay) {
     if (AVS_SCHED_DELAYED(server->anjay->sched, &server->next_action_handle,
                           delay, refresh_server_job, &server, sizeof(server))) {
-        anjay_log(ERROR, "could not schedule refresh_server_job");
+        anjay_log(ERROR, _("could not schedule refresh_server_job"));
         return -1;
     }
     return 0;

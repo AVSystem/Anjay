@@ -127,8 +127,8 @@ int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,
 
     if (!def || !def->output_ctx_spawn_func) {
         anjay_log(DEBUG,
-                  "Could not find an appropriate output context for format: "
-                  "%" PRIu16,
+                  _("Could not find an appropriate output context for "
+                    "format: ") "%" PRIu16,
                   format);
         return ANJAY_ERR_NOT_ACCEPTABLE;
     }

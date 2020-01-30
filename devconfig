@@ -14,7 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+. "$(dirname "$0")/tools/utils.sh"
+
+SCRIPT_DIR="$(dirname "$(canonicalize "$0")")"
 rm -rf avs_commons/install
 rm -rf deps/avs_commons/CMakeFiles
 rm -f deps/avs_commons/CMakeCache.txt
@@ -117,8 +119,9 @@ if [ "$WITH_ASAN" == "ON" ]; then
 fi
 
 # use Homebrew-installed OpenSSL on macOS if available
-if brew ls --versions openssl >/dev/null 2>/dev/null; then
-    EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DOPENSSL_ROOT_DIR=/usr/local/opt/openssl"
+BREW_OPENSSL="$(brew --prefix openssl 2>/dev/null)"
+if [ "$BREW_OPENSSL" ]; then
+    EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DOPENSSL_ROOT_DIR=$BREW_OPENSSL"
 fi
 
 rm -f CMakeCache.txt

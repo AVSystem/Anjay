@@ -122,33 +122,27 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
         .out_buffer_size = 4096, __VA_ARGS__      \
     }
 
-#define DM_TEST_ESCAPE_PARENS_IMPL(...) __VA_ARGS__
-#define DM_TEST_ESCAPE_PARENS(...) DM_TEST_ESCAPE_PARENS_IMPL __VA_ARGS__
-
-#define DM_TEST_INIT_OBJECTS__(Objects, AddConfig)                            \
-    reset_token_generator();                                                  \
-    anjay_t *anjay = _anjay_test_dm_init(                                     \
-            DM_TEST_CONFIGURATION(DM_TEST_ESCAPE_PARENS(AddConfig)));         \
-    const anjay_dm_object_def_t *const *obj_defs[] = { DM_TEST_ESCAPE_PARENS( \
-            Objects) };                                                       \
-    do {                                                                      \
-        for (size_t _i = 0; _i < AVS_ARRAY_SIZE(obj_defs); ++_i) {            \
-            AVS_UNIT_ASSERT_SUCCESS(                                          \
-                    anjay_register_object(anjay, obj_defs[_i]));              \
-        }                                                                     \
+#define DM_TEST_INIT_OBJECTS__(ObjDefs, ...)                        \
+    reset_token_generator();                                        \
+    anjay_t *anjay = _anjay_test_dm_init((__VA_ARGS__));            \
+    do {                                                            \
+        for (size_t _i = 0; _i < AVS_ARRAY_SIZE((ObjDefs)); ++_i) { \
+            AVS_UNIT_ASSERT_SUCCESS(                                \
+                    anjay_register_object(anjay, (ObjDefs)[_i]));   \
+        }                                                           \
     } while (false)
 
 #define DM_TEST_POST_INIT__ \
     anjay_sched_run(anjay); \
     _anjay_test_dm_unsched_reload_sockets(anjay)
 
-#define DM_TEST_INIT_GENERIC(Objects, Ssids, AddConfig)                       \
-    DM_TEST_INIT_OBJECTS__(Objects, AddConfig);                               \
-    anjay_ssid_t ssids[] = { DM_TEST_ESCAPE_PARENS(Ssids) };                  \
-    avs_net_socket_t *mocksocks[AVS_ARRAY_SIZE(ssids)];                       \
-    for (size_t _i = AVS_ARRAY_SIZE(ssids) - 1; _i < AVS_ARRAY_SIZE(ssids);   \
+#define DM_TEST_INIT_GENERIC(ObjDefs, Ssids, ...)                             \
+    DM_TEST_INIT_OBJECTS__(ObjDefs, __VA_ARGS__);                             \
+    avs_net_socket_t *mocksocks[AVS_ARRAY_SIZE((Ssids))];                     \
+    for (size_t _i = AVS_ARRAY_SIZE((Ssids)) - 1;                             \
+         _i < AVS_ARRAY_SIZE((Ssids));                                        \
          --_i) {                                                              \
-        mocksocks[_i] = _anjay_test_dm_install_socket(anjay, ssids[_i]);      \
+        mocksocks[_i] = _anjay_test_dm_install_socket(anjay, (Ssids)[_i]);    \
         avs_unit_mocksock_enable_recv_timeout_getsetopt(                      \
                 mocksocks[_i], avs_time_duration_from_scalar(1, AVS_TIME_S)); \
         avs_unit_mocksock_enable_inner_mtu_getopt(mocksocks[_i], 1252);       \
@@ -161,20 +155,33 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
             (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ, \
             (const anjay_dm_object_def_t *const *) &OBJ_WITH_RESET
 
-#define DM_TEST_INIT_WITH_OBJECTS(...) \
-    DM_TEST_INIT_GENERIC((__VA_ARGS__), (1), ())
+#define DM_TEST_INIT_WITH_OBJECTS(...)                                \
+    const anjay_dm_object_def_t *const *obj_defs[] = { __VA_ARGS__ }; \
+    anjay_ssid_t ssids[] = { 1 };                                     \
+    DM_TEST_INIT_GENERIC(obj_defs, ssids, DM_TEST_CONFIGURATION())
 
-#define DM_TEST_INIT_WITH_SSIDS(...) \
-    DM_TEST_INIT_GENERIC((DM_TEST_DEFAULT_OBJECTS), (__VA_ARGS__), ())
+#define DM_TEST_INIT_WITH_SSIDS(...)                   \
+    const anjay_dm_object_def_t *const *obj_defs[] = { \
+        DM_TEST_DEFAULT_OBJECTS                        \
+    };                                                 \
+    anjay_ssid_t ssids[] = { __VA_ARGS__ };            \
+    DM_TEST_INIT_GENERIC(obj_defs, ssids, DM_TEST_CONFIGURATION())
 
-#define DM_TEST_INIT_WITHOUT_SERVER                        \
-    DM_TEST_INIT_OBJECTS__((DM_TEST_DEFAULT_OBJECTS), ()); \
+#define DM_TEST_INIT_WITHOUT_SERVER                            \
+    const anjay_dm_object_def_t *const *obj_defs[] = {         \
+        DM_TEST_DEFAULT_OBJECTS                                \
+    };                                                         \
+    DM_TEST_INIT_OBJECTS__(obj_defs, DM_TEST_CONFIGURATION()); \
     DM_TEST_POST_INIT__
 
 #define DM_TEST_INIT DM_TEST_INIT_WITH_SSIDS(1)
 
-#define DM_TEST_INIT_WITH_CONFIG(...) \
-    DM_TEST_INIT_GENERIC((DM_TEST_DEFAULT_OBJECTS), (1), (__VA_ARGS__))
+#define DM_TEST_INIT_WITH_CONFIG(...)                  \
+    const anjay_dm_object_def_t *const *obj_defs[] = { \
+        DM_TEST_DEFAULT_OBJECTS                        \
+    };                                                 \
+    anjay_ssid_t ssids[] = { 1 };                      \
+    DM_TEST_INIT_GENERIC(obj_defs, ssids, DM_TEST_CONFIGURATION(__VA_ARGS__))
 
 #define DM_TEST_FINISH _anjay_test_dm_finish(anjay)
 

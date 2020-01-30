@@ -14,4 +14,4 @@
 
 FROM avsystemembedded/anjay-travis:centos-7
 COPY . /Anjay
-CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=$PYMBEDTLS_CC; make check
+CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=gcc; make check

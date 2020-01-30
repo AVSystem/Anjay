@@ -164,7 +164,7 @@ static inline avs_error_t
 _avs_coap_ctx_set_socket_base(avs_coap_ctx_t *ctx, avs_net_socket_t *socket) {
     avs_coap_base_t *coap_base = _avs_coap_get_base(ctx);
     if (coap_base->socket != NULL) {
-        LOG(ERROR, "cannot set socket: it was already set");
+        LOG(ERROR, _("cannot set socket: it was already set"));
         return _avs_coap_err(AVS_COAP_ERR_SOCKET_ALREADY_SET);
     }
     coap_base->socket = socket;

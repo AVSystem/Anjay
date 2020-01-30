@@ -38,14 +38,14 @@ int _anjay_dm_module_install(anjay_t *anjay,
                              const anjay_dm_module_t *module,
                              void *arg) {
     if (_anjay_dm_module_find_ptr(anjay, module)) {
-        anjay_log(ERROR, "module %p is already installed",
+        anjay_log(ERROR, _("module ") "%p" _(" is already installed"),
                   (const void *) module);
         return -1;
     }
     AVS_LIST(anjay_dm_installed_module_t) new_entry =
             AVS_LIST_NEW_ELEMENT(anjay_dm_installed_module_t);
     if (!new_entry) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
     new_entry->def = module;
@@ -59,7 +59,7 @@ int _anjay_dm_module_uninstall(anjay_t *anjay,
     AVS_LIST(anjay_dm_installed_module_t) *module_ptr =
             _anjay_dm_module_find_ptr(anjay, module);
     if (!module_ptr) {
-        anjay_log(ERROR, "attempting to uninstall a non-installed module");
+        anjay_log(ERROR, _("attempting to uninstall a non-installed module"));
         return -1;
     }
     if ((*module_ptr)->def->deleter) {

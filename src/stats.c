@@ -45,7 +45,7 @@ static uint64_t get_socket_stats(avs_net_socket_t *socket,
                 avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_BYTES_SENT,
                                        &bytes_stats);
         if (avs_is_err(err)) {
-            stats_log(DEBUG, "retrieving socket stats failed (%s)",
+            stats_log(DEBUG, _("retrieving socket stats failed (") "%s" _(")"),
                       AVS_COAP_STRERROR(err));
             return 0;
         }
@@ -55,7 +55,7 @@ static uint64_t get_socket_stats(avs_net_socket_t *socket,
         avs_error_t err = avs_net_socket_get_opt(
                 socket, AVS_NET_SOCKET_OPT_BYTES_RECEIVED, &bytes_stats);
         if (avs_is_err(err)) {
-            stats_log(DEBUG, "retrieving socket stats failed (%s)",
+            stats_log(DEBUG, _("retrieving socket stats failed (") "%s" _(")"),
                       AVS_COAP_STRERROR(err));
             return 0;
         }
@@ -179,29 +179,33 @@ void _anjay_coap_ctx_cleanup(anjay_t *anjay, avs_coap_ctx_t **ctx) {
 
 uint64_t anjay_get_tx_bytes(anjay_t *anjay) {
     (void) anjay;
-    stats_log(ERROR, "NET_STATS feature disabled. Anjay was compiled without "
-                     "WITH_NET_STATS option.");
+    stats_log(ERROR,
+              _("NET_STATS feature disabled. Anjay was compiled without "
+                "WITH_NET_STATS option."));
     return 0;
 }
 
 uint64_t anjay_get_rx_bytes(anjay_t *anjay) {
     (void) anjay;
-    stats_log(ERROR, "NET_STATS feature disabled. Anjay was compiled without "
-                     "WITH_NET_STATS option.");
+    stats_log(ERROR,
+              _("NET_STATS feature disabled. Anjay was compiled without "
+                "WITH_NET_STATS option."));
     return 0;
 }
 
 uint64_t anjay_get_num_incoming_retransmissions(anjay_t *anjay) {
     (void) anjay;
-    stats_log(ERROR, "NET_STATS feature disabled. Anjay was compiled without "
-                     "WITH_NET_STATS option.");
+    stats_log(ERROR,
+              _("NET_STATS feature disabled. Anjay was compiled without "
+                "WITH_NET_STATS option."));
     return 0;
 }
 
 uint64_t anjay_get_num_outgoing_retransmissions(anjay_t *anjay) {
     (void) anjay;
-    stats_log(ERROR, "NET_STATS feature disabled. Anjay was compiled without "
-                     "WITH_NET_STATS option.");
+    stats_log(ERROR,
+              _("NET_STATS feature disabled. Anjay was compiled without "
+                "WITH_NET_STATS option."));
     return 0;
 }
 

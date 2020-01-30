@@ -87,7 +87,7 @@ static int ac_instance_create(anjay_t *anjay,
     AVS_LIST(access_control_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(access_control_instance_t);
     if (!new_instance) {
-        ac_log(ERROR, "out of memory");
+        ac_log(ERROR, _("out of memory"));
         return ANJAY_ERR_INTERNAL;
     }
     *new_instance = (access_control_instance_t) {
@@ -352,7 +352,7 @@ static int ac_transaction_begin(anjay_t *anjay, obj_ptr_t obj_ptr) {
     (void) anjay;
     access_control_t *ac = _anjay_access_control_from_obj_ptr(obj_ptr);
     if (_anjay_access_control_clone_state(&ac->saved_state, &ac->current)) {
-        ac_log(ERROR, "out of memory");
+        ac_log(ERROR, _("out of memory"));
         return ANJAY_ERR_INTERNAL;
     }
     return 0;
@@ -368,7 +368,7 @@ static int add_ssid(AVS_RBTREE(anjay_ssid_t) ssids_list, anjay_ssid_t ssid) {
     AVS_RBTREE_ELEM(anjay_ssid_t) elem = AVS_RBTREE_FIND(ssids_list, &ssid);
     if (!elem) {
         if (!(elem = AVS_RBTREE_ELEM_NEW(anjay_ssid_t))) {
-            ac_log(ERROR, "out of memory");
+            ac_log(ERROR, _("out of memory"));
             return -1;
         }
         *elem = ssid;
@@ -399,7 +399,7 @@ static int ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
     AVS_RBTREE(anjay_ssid_t) ssids_used = NULL;
     if (access_control->needs_validation) {
         if (!(ssids_used = AVS_RBTREE_NEW(anjay_ssid_t, anjay_ssid_cmp))) {
-            ac_log(ERROR, "out of memory");
+            ac_log(ERROR, _("out of memory"));
             goto finish;
         }
         access_control_instance_t *inst;
@@ -413,7 +413,8 @@ static int ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
                     || (inst->owner != ANJAY_SSID_BOOTSTRAP
                         && add_ssid(ssids_used, inst->owner))) {
                 ac_log(WARNING,
-                       "Validation failed for target: /%" PRIu16 "/%" PRId32,
+                       _("Validation failed for target: ") "/%" PRIu16
+                                                           "/%" PRId32,
                        inst->target.oid, inst->target.iid);
                 goto finish;
             }
@@ -426,7 +427,8 @@ static int ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
         }
         AVS_RBTREE_DELETE(&ssids_used) {
             if (_anjay_access_control_validate_ssid(anjay, **ssids_used)) {
-                ac_log(WARNING, "Validation failed: invalid SSID: %" PRIu16,
+                ac_log(WARNING,
+                       _("Validation failed: invalid SSID: ") "%" PRIu16,
                        **ssids_used);
                 goto finish;
             }
@@ -474,8 +476,8 @@ void anjay_access_control_purge(anjay_t *anjay) {
     ac->last_accessed_instance = NULL;
     ac->needs_validation = false;
     if (anjay_notify_instances_changed(anjay, ANJAY_DM_OID_ACCESS_CONTROL)) {
-        ac_log(WARNING, "Could not schedule access control instance changes "
-                        "notifications");
+        ac_log(WARNING, _("Could not schedule access control instance changes "
+                          "notifications"));
     }
 }
 
@@ -509,7 +511,7 @@ static const anjay_dm_object_def_t ACCESS_CONTROL = {
 
 int anjay_access_control_install(anjay_t *anjay) {
     if (!anjay) {
-        ac_log(ERROR, "ANJAY object must not be NULL");
+        ac_log(ERROR, _("ANJAY object must not be NULL"));
         return -1;
     }
     access_control_t *access_control =

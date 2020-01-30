@@ -277,7 +277,9 @@ static int
 bytes_append(anjay_ret_bytes_ctx_t *ctx, const void *data, size_t length) {
     builder_bytes_t *bytes = (builder_bytes_t *) ctx;
     if (length > bytes->remaining_bytes) {
-        batch_log(DEBUG, "tried to write too many bytes, expected %u, got %u",
+        batch_log(DEBUG,
+                  _("tried to write too many bytes, expected ") "%u" _(
+                          ", got ") "%u",
                   (unsigned) bytes->remaining_bytes, (unsigned) length);
         return -1;
     }
@@ -297,7 +299,7 @@ static int bytes_begin(anjay_output_ctx_t *ctx_,
                        anjay_ret_bytes_ctx_t **out_bytes_ctx) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     if (ctx->bytes.remaining_bytes) {
-        batch_log(ERROR, "bytes already being returned");
+        batch_log(ERROR, _("bytes already being returned"));
         return -1;
     }
 
@@ -417,7 +419,7 @@ static int set_path(anjay_output_ctx_t *ctx_, const anjay_uri_path_t *path) {
                "Attempted to use batch builder context with resources outside "
                "the declared root path");
     if (_anjay_uri_path_length(&ctx->path) > 0) {
-        batch_log(ERROR, "Path already set");
+        batch_log(ERROR, _("Path already set"));
         return -1;
     }
     ctx->path = *path;
@@ -427,7 +429,7 @@ static int set_path(anjay_output_ctx_t *ctx_, const anjay_uri_path_t *path) {
 static int clear_path(anjay_output_ctx_t *ctx_) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     if (_anjay_uri_path_length(&ctx->path) == 0) {
-        batch_log(ERROR, "Path not set");
+        batch_log(ERROR, _("Path not set"));
         return -1;
     }
     ctx->path = MAKE_ROOT_PATH();
@@ -438,11 +440,11 @@ static int output_close(anjay_output_ctx_t *ctx_) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     if (ctx->bytes.remaining_bytes) {
         batch_log(ERROR,
-                  "not all declared bytes passed by user, buffer is filled "
-                  "with random bytes");
+                  _("not all declared bytes passed by user, buffer is filled "
+                    "with random bytes"));
         return -1;
     } else if (_anjay_uri_path_length(&ctx->path) > 0) {
-        batch_log(ERROR, "set_path() called without returning a value");
+        batch_log(ERROR, _("set_path() called without returning a value"));
         return ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED;
     }
     return 0;
@@ -510,8 +512,8 @@ static bool is_timestamp_relative(avs_time_real_t timestamp) {
 static double convert_to_senml_time(avs_time_real_t timestamp,
                                     avs_time_real_t serialization_time) {
     if (avs_time_real_before(serialization_time, timestamp)) {
-        batch_log(DEBUG, "serialization time precedes timestamp, time "
-                         "measurement may be corrupted");
+        batch_log(DEBUG, _("serialization time precedes timestamp, time "
+                           "measurement may be corrupted"));
         return NAN;
     }
     if (is_timestamp_absolute(timestamp)
@@ -524,8 +526,8 @@ static double convert_to_senml_time(avs_time_real_t timestamp,
         AVS_ASSERT(result <= 0, "relative time must not be positive");
         return result;
     } else {
-        batch_log(DEBUG, "timestamp and serialization time should be both "
-                         "absolute or both relative");
+        batch_log(DEBUG, _("timestamp and serialization time should be both "
+                           "absolute or both relative"));
         return NAN;
     }
 }

@@ -47,7 +47,8 @@ read_u16(anjay_t *anjay, anjay_iid_t iid, anjay_rid_t rid, uint16_t *out) {
         return result;
     } else if (ret != (uint16_t) ret) {
         anjay_log(WARNING,
-                  "cannot read %s = %" PRId64 " as uint16: value overflow",
+                  _("cannot read ") "%s" _(" = ") "%" PRId64 _(
+                          " as uint16: value overflow"),
                   ANJAY_DEBUG_MAKE_PATH(&uri), ret);
         return -1;
     }
@@ -279,7 +280,7 @@ static anjay_access_mask_t access_control_mask(anjay_t *anjay,
     anjay_ssid_t found_ssid = ssid;
     anjay_access_mask_t mask;
     if (get_mask(anjay, ac_obj, (anjay_iid_t) ac_iid, &found_ssid, &mask)) {
-        anjay_log(WARNING, "failed to read ACL!");
+        anjay_log(WARNING, _("failed to read ACL!"));
         return ANJAY_ACCESS_MASK_NONE;
     }
 
@@ -456,7 +457,7 @@ enumerate_valid_ssids_clb(anjay_t *anjay,
         return 0;
     }
     if (!AVS_LIST_INSERT_NEW(anjay_ssid_t, insert_ptr)) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
     **insert_ptr = ssid;
@@ -592,7 +593,7 @@ process_orphaned_instances_clb(anjay_t *anjay,
         assert(!*args->orphaned_instance_list_append_ptr);
         if (!(*args->orphaned_instance_list_append_ptr =
                       AVS_LIST_NEW_ELEMENT(orphaned_instance_info_t))) {
-            anjay_log(ERROR, "out of memory");
+            anjay_log(ERROR, _("out of memory"));
             result = -1;
             goto finish;
         }
@@ -654,8 +655,8 @@ static int remove_referred_instance(anjay_t *anjay,
     }
     if (result) {
         anjay_log(ERROR,
-                  "cannot remove assigned Object Instance /%" PRIu16
-                  "/%" PRIu16,
+                  _("cannot remove assigned Object Instance /") "%" PRIu16 _(
+                          "/") "%" PRIu16,
                   it->target_oid, it->target_iid);
     }
     return result;
@@ -777,7 +778,7 @@ int _anjay_acl_ref_validate_inst_ref(anjay_t *anjay,
     acl_ref_validation_object_info_t *object_info =
             get_or_create_validation_object_info(anjay, obj, ctx);
     if (!object_info) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
     AVS_LIST(anjay_iid_t) *allowed_iid_ptr = &object_info->allowed_iids;
@@ -816,7 +817,7 @@ enumerate_instances_to_remove_clb(anjay_t *anjay,
             && _anjay_acl_ref_validate_inst_ref(anjay, &args->validation_ctx,
                                                 target_oid, target_iid)) {
         if (!AVS_LIST_INSERT_NEW(anjay_iid_t, &args->iids_to_remove)) {
-            anjay_log(ERROR, "out of memory");
+            anjay_log(ERROR, _("out of memory"));
             return -1;
         }
         *args->iids_to_remove = iid;

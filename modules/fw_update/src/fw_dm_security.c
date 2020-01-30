@@ -86,14 +86,14 @@ static int try_security_instance(anjay_t *anjay,
 
     if (_anjay_dm_read_resource_string(anjay, &path, raw_server_url,
                                        sizeof(raw_server_url))) {
-        fw_log(WARNING, "could not read LwM2M server URI from %s",
+        fw_log(WARNING, _("could not read LwM2M server URI from ") "%s",
                ANJAY_DEBUG_MAKE_PATH(&path));
         return ANJAY_FOREACH_CONTINUE;
     }
 
     avs_url_t *server_url = avs_url_parse_lenient(raw_server_url);
     if (!server_url) {
-        fw_log(WARNING, "Could not parse URL from %s: %s",
+        fw_log(WARNING, _("Could not parse URL from ") "%s" _(": ") "%s",
                ANJAY_DEBUG_MAKE_PATH(&path), raw_server_url);
         return ANJAY_FOREACH_CONTINUE;
     }
@@ -107,13 +107,13 @@ static int try_security_instance(anjay_t *anjay,
                     _anjay_get_security_config(anjay, security_iid);
             if (!new_result) {
                 fw_log(WARNING,
-                       "Could not read security information for server "
-                       "/%" PRIu16 "/%" PRIu16,
+                       _("Could not read security information for "
+                         "server ") "/%" PRIu16 "/%" PRIu16,
                        ANJAY_DM_OID_SECURITY, security_iid);
             } else if (!has_valid_keys(&new_result->security_info)) {
                 fw_log(DEBUG,
-                       "Server /%" PRIu16 "/%" PRIu16
-                       " does not use encrypted connection, ignoring",
+                       _("Server ") "/%" PRIu16 "/%" PRIu16 _(
+                               " does not use encrypted connection, ignoring"),
                        ANJAY_DM_OID_SECURITY, security_iid);
             } else {
                 avs_free(args->result);
@@ -138,13 +138,13 @@ anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
     const anjay_dm_object_def_t *const *security_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!security_obj) {
-        fw_log(ERROR, "Security object not installed");
+        fw_log(ERROR, _("Security object not installed"));
         return NULL;
     }
 
     avs_url_t *url = avs_url_parse(raw_url);
     if (!url) {
-        fw_log(ERROR, "Could not parse URL: %s", raw_url);
+        fw_log(ERROR, _("Could not parse URL: ") "%s", raw_url);
         return NULL;
     }
 
@@ -158,8 +158,8 @@ anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
 
     if (!args.result) {
         fw_log(WARNING,
-               "Matching security information not found in data model for URL: "
-               "%s",
+               _("Matching security information not found in data model for "
+                 "URL: ") "%s",
                raw_url);
     }
     return args.result;

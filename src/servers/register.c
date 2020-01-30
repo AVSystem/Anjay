@@ -91,8 +91,8 @@ get_server_update_interval_margin(anjay_server_info_t *server) {
 static int schedule_update(anjay_server_info_t *server,
                            avs_time_duration_t delay) {
     anjay_log(DEBUG,
-              "scheduling update for SSID %u after "
-              "%" PRId64 ".%09" PRId32,
+              _("scheduling update for SSID ") "%u" _(" after ") "%" PRId64
+                                                                 ".%09" PRId32,
               server->ssid, delay.seconds, delay.nanoseconds);
 
     return AVS_SCHED_DELAYED(server->anjay->sched, &server->next_action_handle,
@@ -127,7 +127,7 @@ bool _anjay_server_primary_connection_valid(anjay_server_info_t *server) {
 
 int _anjay_server_reschedule_update_job(anjay_server_info_t *server) {
     if (schedule_next_update(server)) {
-        anjay_log(ERROR, "could not schedule next Update for server %u",
+        anjay_log(ERROR, _("could not schedule next Update for server ") "%u",
                   server->ssid);
         return -1;
     }
@@ -142,7 +142,7 @@ static int reschedule_update_for_server(anjay_server_info_t *server) {
         return 0;
     }
     if (schedule_update(server, AVS_TIME_DURATION_ZERO)) {
-        anjay_log(ERROR, "could not schedule send_update_sched_job");
+        anjay_log(ERROR, _("could not schedule send_update_sched_job"));
         return -1;
     }
     return 0;
@@ -184,7 +184,7 @@ static int reschedule_update_for_all_servers(anjay_t *anjay) {
 int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid) {
     if (anjay_is_offline(anjay)) {
         anjay_log(ERROR,
-                  "cannot schedule registration update while being offline");
+                  _("cannot schedule registration update while being offline"));
         return -1;
     }
     int result = 0;
@@ -194,7 +194,7 @@ int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid) {
     } else {
         anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
         if (!server) {
-            anjay_log(ERROR, "no active server with SSID = %u", ssid);
+            anjay_log(ERROR, _("no active server with SSID = ") "%u", ssid);
             result = -1;
         } else {
             result = reschedule_update_for_server(server);
@@ -235,10 +235,13 @@ get_server_lifetime(anjay_t *anjay, anjay_ssid_t ssid, int64_t *out_lifetime) {
     int read_ret = _anjay_dm_read_resource_i64(anjay, &path, &lifetime);
 
     if (read_ret) {
-        anjay_log(ERROR, "could not read lifetime for LwM2M server %u", ssid);
+        anjay_log(ERROR, _("could not read lifetime for LwM2M server ") "%u",
+                  ssid);
         return -1;
     } else if (lifetime <= 0) {
-        anjay_log(ERROR, "lifetime returned by LwM2M server %u is <= 0", ssid);
+        anjay_log(ERROR,
+                  _("lifetime returned by LwM2M server ") "%u" _(" is <= 0"),
+                  ssid);
         return -1;
     }
     *out_lifetime = lifetime;
@@ -313,7 +316,7 @@ static int query_dm(anjay_t *anjay, char **out) {
     assert(!*out);
     avs_stream_t *stream = avs_stream_membuf_create();
     if (!stream) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
     int retval;
@@ -329,7 +332,7 @@ static int query_dm(anjay_t *anjay, char **out) {
                                   stream, &data, NULL))
                                   ? 0
                                   : -1))) {
-        anjay_log(ERROR, "could not enumerate objects");
+        anjay_log(ERROR, _("could not enumerate objects"));
     }
     avs_stream_cleanup(&stream);
     *out = (char *) data;
@@ -419,7 +422,7 @@ static int get_endpoint_path(AVS_LIST(const anjay_string_t) *out_path,
         AVS_LIST(anjay_string_t) segment =
                 (AVS_LIST(anjay_string_t)) AVS_LIST_NEW_BUFFER(attr_size + 1);
         if (!segment) {
-            anjay_log(ERROR, "out of memory");
+            anjay_log(ERROR, _("out of memory"));
             goto fail;
         }
 
@@ -459,7 +462,7 @@ static anjay_registration_result_t map_coap_error(avs_error_t coap_err) {
             && coap_err.code == AVS_COAP_ERR_TIMEOUT) {
         return ANJAY_REGISTRATION_ERROR_TIMEOUT;
     } else {
-        anjay_log(DEBUG, "mapping CoAP error (%s) to network error",
+        anjay_log(DEBUG, _("mapping CoAP error (") "%s" _(") to network error"),
                   AVS_COAP_STRERROR(coap_err));
         return ANJAY_REGISTRATION_ERROR_NETWORK;
     }
@@ -493,7 +496,7 @@ setup_register_request_options(avs_coap_options_t *opts,
                                            ? NULL
                                            : params->binding_mode,
                                    lwm2m11_queue_mode, msisdn)))) {
-        anjay_log(ERROR, "could not initialize request headers");
+        anjay_log(ERROR, _("could not initialize request headers"));
     }
     return err;
 }
@@ -507,7 +510,8 @@ static anjay_registration_result_t
 check_register_response(const avs_coap_response_header_t *response,
                         AVS_LIST(const anjay_string_t) *out_endpoint_path) {
     if (response->code != AVS_COAP_CODE_CREATED) {
-        anjay_log(WARNING, "server responded with %s (expected %s)",
+        anjay_log(WARNING,
+                  _("server responded with ") "%s" _(" (expected ") "%s" _(")"),
                   AVS_COAP_CODE_STRING(response->code),
                   AVS_COAP_CODE_STRING(AVS_COAP_CODE_CREATED));
         assert(response->code != 0);
@@ -518,12 +522,12 @@ check_register_response(const avs_coap_response_header_t *response,
 
     AVS_LIST_CLEAR(out_endpoint_path);
     if (get_endpoint_path(out_endpoint_path, &response->options)) {
-        anjay_log(ERROR, "could not store Update location");
+        anjay_log(ERROR, _("could not store Update location"));
         return ANJAY_REGISTRATION_ERROR_OTHER;
     }
 
     char location_buf[256];
-    anjay_log(INFO, "registration successful, location = %s",
+    anjay_log(INFO, _("registration successful, location = ") "%s",
               assemble_endpoint_path(location_buf, sizeof(location_buf),
                                      *out_endpoint_path));
     return ANJAY_REGISTRATION_SUCCESS;
@@ -541,7 +545,7 @@ handle_register_response(anjay_server_info_t *server,
                          anjay_registration_result_t result,
                          avs_error_t err) {
     if (result != ANJAY_REGISTRATION_SUCCESS) {
-        anjay_log(WARNING, "could not register to server %u",
+        anjay_log(WARNING, _("could not register to server ") "%u",
                   _anjay_server_ssid(server));
         AVS_LIST_CLEAR(move_endpoint_path);
     } else {
@@ -589,7 +593,8 @@ receive_register_response(avs_coap_ctx_t *coap,
 
     case AVS_COAP_CLIENT_REQUEST_FAIL: {
         assert(avs_is_err(err));
-        anjay_log(WARNING, "failure while receiving Register response: %s",
+        anjay_log(WARNING,
+                  _("failure while receiving Register response: ") "%s",
                   AVS_COAP_STRERROR(err));
         result = map_coap_error(err);
         break;
@@ -653,7 +658,7 @@ static void send_register(anjay_server_info_t *server,
         goto cleanup;
     }
 
-    anjay_log(DEBUG, "sending Register");
+    anjay_log(DEBUG, _("sending Register"));
 
     if (avs_coap_exchange_id_valid(
                 server->registration_exchange_state.exchange_id)) {
@@ -672,10 +677,11 @@ static void send_register(anjay_server_info_t *server,
                          &server->registration_exchange_state,
                          receive_register_response,
                          &server->registration_exchange_state)))) {
-        anjay_log(ERROR, "could not send Register: %s", AVS_COAP_STRERROR(err));
+        anjay_log(ERROR, _("could not send Register: ") "%s",
+                  AVS_COAP_STRERROR(err));
         _anjay_server_on_updated_registration(server, map_coap_error(err), err);
     } else {
-        anjay_log(INFO, "Register sent");
+        anjay_log(INFO, _("Register sent"));
     }
 cleanup:
     avs_coap_options_cleanup(&request.options);
@@ -689,7 +695,7 @@ static void register_with_version(anjay_server_info_t *server,
         .conn_type = ANJAY_CONNECTION_PRIMARY
     };
     if (!_anjay_connection_get_online_socket(connection)) {
-        anjay_log(ERROR, "server connection is not online");
+        anjay_log(ERROR, _("server connection is not online"));
         _anjay_server_on_updated_registration(
                 server, ANJAY_REGISTRATION_ERROR_OTHER, avs_errno(AVS_EBADF));
     } else {
@@ -706,7 +712,7 @@ static void register_with_version(anjay_server_info_t *server,
 static void do_register(anjay_server_info_t *server,
                         anjay_update_parameters_t *move_params) {
     anjay_lwm2m_version_t attempted_version = ANJAY_LWM2M_VERSION_1_0;
-    anjay_log(INFO, "Attempting to register with LwM2M version %s",
+    anjay_log(INFO, _("Attempting to register with LwM2M version ") "%s",
               _anjay_lwm2m_version_as_string(attempted_version));
     register_with_version(server, attempted_version, move_params);
 }
@@ -757,7 +763,7 @@ setup_update_request_options(avs_coap_options_t *opts,
 static anjay_registration_result_t
 check_update_response(const avs_coap_response_header_t *response) {
     if (response->code == AVS_COAP_CODE_CHANGED) {
-        anjay_log(INFO, "registration successfully updated");
+        anjay_log(INFO, _("registration successfully updated"));
         return ANJAY_REGISTRATION_SUCCESS;
     } else {
         /* 4.xx (client error) response means that a server received a
@@ -776,7 +782,8 @@ check_update_response(const avs_coap_response_header_t *response) {
          * case retransmission may succeed, or an unexpected non-error
          * response. However, as we don't do retransmissions, degenerating
          * to Register seems the best thing we can do. */
-        anjay_log(DEBUG, "Update rejected: %s (expected %s)",
+        anjay_log(DEBUG,
+                  _("Update rejected: ") "%s" _(" (expected ") "%s" _(")"),
                   AVS_COAP_CODE_STRING(response->code),
                   AVS_COAP_CODE_STRING(AVS_COAP_CODE_CHANGED));
         assert(response->code != 0);
@@ -792,8 +799,8 @@ on_registration_update_result(anjay_server_info_t *server,
     switch (result) {
     case ANJAY_REGISTRATION_ERROR_TIMEOUT:
         anjay_log(WARNING,
-                  "timeout while updating registration for "
-                  "SSID==%" PRIu16 "; trying to re-register",
+                  _("timeout while updating registration for SSID==") "%" PRIu16
+                          _("; trying to re-register"),
                   server->ssid);
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
         do_register(server, move_params);
@@ -801,7 +808,8 @@ on_registration_update_result(anjay_server_info_t *server,
 
     case ANJAY_REGISTRATION_ERROR_REJECTED:
         anjay_log(DEBUG,
-                  "update rejected for SSID = %u; needs re-registration",
+                  _("update rejected for SSID = ") "%u" _(
+                          "; needs re-registration"),
                   server->ssid);
         server->registration_info.expire_time = AVS_TIME_REAL_INVALID;
         do_register(server, move_params);
@@ -820,10 +828,11 @@ on_registration_update_result(anjay_server_info_t *server,
     }
 
     default:
-        anjay_log(ERROR,
-                  "could not send registration update for "
-                  "SSID==%" PRIu16 ": %d",
-                  server->ssid, (int) result);
+        anjay_log(
+                ERROR,
+                _("could not send registration update for SSID==") "%" PRIu16 _(
+                        ": ") "%d",
+                server->ssid, (int) result);
         update_parameters_cleanup(move_params);
         _anjay_server_on_updated_registration(server, result, err);
     }
@@ -856,7 +865,7 @@ receive_update_response(avs_coap_ctx_t *coap,
 
     case AVS_COAP_CLIENT_REQUEST_FAIL: {
         assert(avs_is_err(err));
-        anjay_log(WARNING, "failure while receiving Update response: %s",
+        anjay_log(WARNING, _("failure while receiving Update response: ") "%s",
                   AVS_COAP_STRERROR(err));
         result = map_coap_error(err);
         break;
@@ -887,13 +896,13 @@ static void send_update(anjay_server_info_t *server,
                                    &request.options, old_info->endpoint_path,
                                    &old_info->last_update_params, move_params,
                                    &dm_changed_since_last_update)))) {
-        anjay_log(ERROR, "could not setup update request");
+        anjay_log(ERROR, _("could not setup update request"));
         on_registration_update_result(server, move_params,
                                       ANJAY_REGISTRATION_ERROR_OTHER, err);
         goto end;
     }
 
-    anjay_log(DEBUG, "sending Update");
+    anjay_log(DEBUG, _("sending Update"));
 
     if (avs_coap_exchange_id_valid(
                 server->registration_exchange_state.exchange_id)) {
@@ -914,11 +923,12 @@ static void send_update(anjay_server_info_t *server,
                         &server->registration_exchange_state,
                         receive_update_response,
                         &server->registration_exchange_state)))) {
-        anjay_log(ERROR, "could not send Update: %s", AVS_COAP_STRERROR(err));
+        anjay_log(ERROR, _("could not send Update: ") "%s",
+                  AVS_COAP_STRERROR(err));
         on_registration_update_result(server, move_params, map_coap_error(err),
                                       err);
     } else {
-        anjay_log(INFO, "Update sent");
+        anjay_log(INFO, _("Update sent"));
     }
 end:
     avs_coap_options_cleanup(&request.options);
@@ -943,7 +953,7 @@ static void update_registration(anjay_server_info_t *server,
         .conn_type = ANJAY_CONNECTION_PRIMARY
     };
     if (!_anjay_connection_get_online_socket(connection)) {
-        anjay_log(ERROR, "server connection is not online");
+        anjay_log(ERROR, _("server connection is not online"));
         on_registration_update_result(server, move_params,
                                       ANJAY_REGISTRATION_ERROR_OTHER,
                                       avs_errno(AVS_EBADF));
@@ -968,8 +978,8 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
                                       avs_errno(AVS_UNKNOWN_ERROR));
     } else if (!_anjay_server_primary_connection_valid(server)) {
         anjay_log(ERROR,
-                  "No valid connection to Registration Interface for "
-                  "SSID = %u",
+                  _("No valid connection to Registration Interface for "
+                    "SSID = ") "%u",
                   server->ssid);
         on_registration_update_result(server, &new_params,
                                       ANJAY_REGISTRATION_ERROR_OTHER,
@@ -1000,7 +1010,7 @@ setup_deregister_request(avs_coap_request_header_t *out_request,
                                    &out_request->options,
                                    endpoint_path,
                                    AVS_COAP_OPTION_URI_PATH)))) {
-        anjay_log(ERROR, "could not initialize request headers");
+        anjay_log(ERROR, _("could not initialize request headers"));
     }
     return err;
 }
@@ -1025,19 +1035,20 @@ static avs_error_t deregister(anjay_server_info_t *server) {
 
     if (avs_is_err((err = avs_coap_streaming_send_request(
                             coap, &request, NULL, NULL, &response, NULL)))) {
-        anjay_log(ERROR, "Could not perform De-registration");
+        anjay_log(ERROR, _("Could not perform De-registration"));
         goto end;
     }
 
     if (response.code != AVS_COAP_CODE_DELETED) {
-        anjay_log(WARNING, "server responded with %s (expected %s)",
+        anjay_log(WARNING,
+                  _("server responded with ") "%s" _(" (expected ") "%s" _(")"),
                   AVS_COAP_CODE_STRING(response.code),
                   AVS_COAP_CODE_STRING(AVS_COAP_CODE_DELETED));
         err = avs_errno(AVS_EPROTO);
         goto end;
     }
 
-    anjay_log(INFO, "De-register sent");
+    anjay_log(INFO, _("De-register sent"));
     err = AVS_OK;
 
 end:
@@ -1057,18 +1068,19 @@ avs_error_t _anjay_server_deregister(anjay_server_info_t *server) {
         .conn_type = ANJAY_CONNECTION_PRIMARY
     };
     if (connection.conn_type == ANJAY_CONNECTION_UNSET) {
-        anjay_log(ERROR, "could not get stream for server %u, skipping",
+        anjay_log(ERROR,
+                  _("could not get stream for server ") "%u" _(", skipping"),
                   server->ssid);
         return AVS_OK;
     }
     if (!_anjay_connection_get_online_socket(connection)) {
-        anjay_log(ERROR, "server connection is not online, skipping");
+        anjay_log(ERROR, _("server connection is not online, skipping"));
         return AVS_OK;
     }
 
     avs_error_t err = deregister(server);
     if (avs_is_err(err)) {
-        anjay_log(ERROR, "could not send De-Register request: %s",
+        anjay_log(ERROR, _("could not send De-Register request: ") "%s",
                   AVS_COAP_STRERROR(err));
     }
     return err;

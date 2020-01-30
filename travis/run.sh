@@ -25,7 +25,6 @@ if [ -n "$DOCKER_IMAGE" ]; then
     docker build -t "$DOCKER_IMAGE" -f "travis/$DOCKER_IMAGE/Dockerfile" .
     docker run -e CC="$ANJAY_CC" \
                -e CXX="$ANJAY_CXX" \
-               -e PYMBEDTLS_CC="$(if [ "$PYMBEDTLS_CC" ]; then echo "$PYMBEDTLS_CC"; else echo "$ANJAY_CC"; fi)" \
                "$DOCKER_IMAGE"
 else
     ./devconfig $DEVCONFIG_FLAGS && make -j && make check

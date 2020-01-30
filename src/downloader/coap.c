@@ -97,7 +97,7 @@ static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     if (ctx->coap
             && AVS_SCHED_NOW(anjay->sched, NULL, cleanup_coap_context, &args,
                              sizeof(args))) {
-        dl_log(WARNING, "could not schedule cleanup of CoAP context");
+        dl_log(WARNING, _("could not schedule cleanup of CoAP context"));
     }
     AVS_LIST_DELETE(ctx_ptr);
 }
@@ -108,14 +108,14 @@ static int read_etag(const avs_coap_response_header_t *hdr,
     case 0:
         break;
     case AVS_COAP_OPTION_MISSING:
-        dl_log(TRACE, "no ETag option");
+        dl_log(TRACE, _("no ETag option"));
         return 0;
     default:
-        dl_log(DEBUG, "invalid ETag option size");
+        dl_log(DEBUG, _("invalid ETag option size"));
         return -1;
     }
 
-    dl_log(TRACE, "ETag: %s", AVS_COAP_ETAG_HEX(out_etag));
+    dl_log(TRACE, _("ETag: ") "%s", AVS_COAP_ETAG_HEX(out_etag));
     return 0;
 }
 
@@ -157,7 +157,9 @@ handle_coap_response(avs_coap_ctx_t *ctx,
     case AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT: {
         const uint8_t code = response->header.code;
         if (code != AVS_COAP_CODE_CONTENT) {
-            dl_log(DEBUG, "server responded with %s (expected %s)",
+            dl_log(DEBUG,
+                   _("server responded with ") "%s" _(" (expected ") "%s" _(
+                           ")"),
                    AVS_COAP_CODE_STRING(code),
                    AVS_COAP_CODE_STRING(AVS_COAP_CODE_CONTENT));
             abort_download_transfer(
@@ -166,7 +168,7 @@ handle_coap_response(avs_coap_ctx_t *ctx,
         }
         avs_coap_etag_t etag;
         if (read_etag(&response->header, &etag)) {
-            dl_log(DEBUG, "could not parse CoAP response");
+            dl_log(DEBUG, _("could not parse CoAP response"));
             abort_download_transfer(dl_ctx,
                                     _anjay_download_status_failed(
                                             avs_errno(AVS_EPROTO)));
@@ -179,7 +181,7 @@ handle_coap_response(avs_coap_ctx_t *ctx,
         if (dl_ctx->etag.size == 0) {
             dl_ctx->etag = etag;
         } else if (!etag_matches(&dl_ctx->etag, &etag)) {
-            dl_log(DEBUG, "remote resource expired, aborting download");
+            dl_log(DEBUG, _("remote resource expired, aborting download"));
             abort_download_transfer(dl_ctx, _anjay_download_status_expired());
             return;
         }
@@ -202,17 +204,19 @@ handle_coap_response(avs_coap_ctx_t *ctx,
         }
         dl_ctx->bytes_downloaded += payload_size;
         if (result == AVS_COAP_CLIENT_REQUEST_OK) {
-            dl_log(INFO, "transfer id = %" PRIuPTR " finished",
+            dl_log(INFO, _("transfer id = ") "%" PRIuPTR _(" finished"),
                    dl_ctx->common.id);
             abort_download_transfer(dl_ctx, _anjay_download_status_success());
         } else {
-            dl_log(TRACE, "transfer id = %" PRIuPTR ": %lu B downloaded",
+            dl_log(TRACE,
+                   _("transfer id = ") "%" PRIuPTR _(": ") "%lu" _(
+                           " B downloaded"),
                    dl_ctx->common.id, (unsigned long) dl_ctx->bytes_downloaded);
         }
         break;
     }
     case AVS_COAP_CLIENT_REQUEST_FAIL: {
-        dl_log(DEBUG, "download failed: %s", AVS_COAP_STRERROR(err));
+        dl_log(DEBUG, _("download failed: ") "%s", AVS_COAP_STRERROR(err));
         if (err.category == AVS_COAP_ERR_CATEGORY
                 && err.code == AVS_COAP_ERR_ETAG_MISMATCH) {
             abort_download_transfer(dl_ctx, _anjay_download_status_expired());
@@ -292,7 +296,7 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
     AVS_LIST(anjay_download_ctx_t) *dl_ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!dl_ctx_ptr) {
-        dl_log(DEBUG, "download id = %" PRIuPTR "expired", id);
+        dl_log(DEBUG, _("download id = ") "%" PRIuPTR _("expired"), id);
         return;
     }
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *dl_ctx_ptr;
@@ -302,7 +306,8 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
     const uint8_t code = AVS_COAP_CODE_GET;
     const size_t block_size = initial_block2_option_size(ctx, code);
     if (avs_is_err((err = avs_coap_options_dynamic_init(&options)))) {
-        dl_log(ERROR, "download id = %" PRIuPTR "cannot start: out of memory",
+        dl_log(ERROR,
+               _("download id = ") "%" PRIuPTR _("cannot start: out of memory"),
                id);
         goto end;
     }
@@ -376,20 +381,20 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
 
     default:
         dl_log(ERROR,
-               "anjay_coap_download_ctx_t is compatible only with "
-               "ANJAY_SOCKET_TRANSPORT_UDP and ANJAY_SOCKET_TRANSPORT_TCP (if "
-               "they are compiled-in)");
+               _("anjay_coap_download_ctx_t is compatible only with "
+                 "ANJAY_SOCKET_TRANSPORT_UDP and "
+                 "ANJAY_SOCKET_TRANSPORT_TCP (if they are compiled-in)"));
         return avs_errno(AVS_EPROTONOSUPPORT);
     }
 
     if (!ctx->coap) {
-        dl_log(ERROR, "could not create CoAP context");
+        dl_log(ERROR, _("could not create CoAP context"));
         return avs_errno(AVS_ENOMEM);
     }
 
     avs_error_t err = avs_coap_ctx_set_socket(ctx->coap, ctx->socket);
     if (avs_is_err(err)) {
-        anjay_log(ERROR, "could not assign socket to CoAP context");
+        anjay_log(ERROR, _("could not assign socket to CoAP context"));
         _anjay_coap_ctx_cleanup(anjay, &ctx->coap);
     }
 
@@ -420,8 +425,7 @@ reconnect_coap_transfer(anjay_downloader_t *dl,
             || avs_is_err((err = avs_net_socket_connect(ctx->socket, hostname,
                                                         port)))) {
         dl_log(WARNING,
-               "could not reconnect socket for download "
-               "id = %" PRIuPTR,
+               _("could not reconnect socket for download id = ") "%" PRIuPTR,
                ctx->common.id);
         return err;
     } else {
@@ -437,8 +441,8 @@ reconnect_coap_transfer(anjay_downloader_t *dl,
             if (AVS_SCHED_NOW(anjay->sched, &ctx->job_start, start_download_job,
                               &ctx->common.id, sizeof(ctx->common.id))) {
                 dl_log(WARNING,
-                       "could not schedule resumption for download "
-                       "id = %" PRIuPTR,
+                       _("could not schedule resumption for download id "
+                         "= ") "%" PRIuPTR,
                        ctx->common.id);
                 return avs_errno(AVS_ENOMEM);
             }
@@ -457,7 +461,7 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     AVS_LIST(anjay_coap_download_ctx_t) ctx =
             AVS_LIST_NEW_ELEMENT(anjay_coap_download_ctx_t);
     if (!ctx) {
-        dl_log(ERROR, "out of memory");
+        dl_log(ERROR, _("out of memory"));
         return avs_errno(AVS_ENOMEM);
     }
 
@@ -476,20 +480,20 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     const anjay_transport_info_t *transport_info =
             _anjay_transport_info_by_uri_scheme(cfg->url);
     if (!transport_info || _anjay_url_parse(cfg->url, &ctx->uri)) {
-        dl_log(ERROR, "invalid URL: %s", cfg->url);
+        dl_log(ERROR, _("invalid URL: ") "%s", cfg->url);
         err = avs_errno(AVS_EINVAL);
         goto error;
     }
     ctx->transport = transport_info->transport;
 
     if (cfg->etag && cfg->etag->size > sizeof(ctx->etag.bytes)) {
-        dl_log(ERROR, "ETag too long");
+        dl_log(ERROR, _("ETag too long"));
         err = avs_errno(AVS_EPROTO);
         goto error;
     }
 
     if (!cfg->on_next_block || !cfg->on_download_finished) {
-        dl_log(ERROR, "invalid download config: handlers not set up");
+        dl_log(ERROR, _("invalid download config: handlers not set up"));
         err = avs_errno(AVS_EINVAL);
         goto error;
     }
@@ -510,8 +514,8 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
 
     if (!transport_info->socket_type) {
         dl_log(ERROR,
-               "URI scheme %s uses a non-IP transport, which is not supported "
-               "for downloads",
+               _("URI scheme ") "%s" _(" uses a non-IP transport, which is not "
+                                       "supported for downloads"),
                transport_info->uri_scheme);
         err = avs_errno(AVS_EPROTONOSUPPORT);
         goto error;
@@ -534,16 +538,16 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     if (avs_is_err((err = avs_net_socket_create(&ctx->socket,
                                                 *transport_info->socket_type,
                                                 config)))) {
-        dl_log(ERROR, "could not create CoAP socket");
+        dl_log(ERROR, _("could not create CoAP socket"));
     } else if (avs_is_err((err = avs_net_socket_connect(ctx->socket,
                                                         ctx->uri.host,
                                                         ctx->uri.port)))) {
-        dl_log(ERROR, "could not connect CoAP socket");
+        dl_log(ERROR, _("could not connect CoAP socket"));
         _anjay_socket_cleanup(anjay, &ctx->socket);
     }
     if (!ctx->socket) {
         assert(avs_is_err(err));
-        dl_log(ERROR, "could not create CoAP socket");
+        dl_log(ERROR, _("could not create CoAP socket"));
         goto error;
     }
 
@@ -567,7 +571,7 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         if (avs_coap_udp_tx_params_valid(cfg->coap_tx_params, &error_string)) {
             ctx->tx_params = *cfg->coap_tx_params;
         } else {
-            dl_log(ERROR, "invalid tx_params: %s", error_string);
+            dl_log(ERROR, _("invalid tx_params: ") "%s", error_string);
             goto error;
         }
     }
@@ -579,7 +583,7 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
 
     if (AVS_SCHED_NOW(anjay->sched, &ctx->job_start, start_download_job,
                       &ctx->common.id, sizeof(ctx->common.id))) {
-        dl_log(ERROR, "could not schedule download job");
+        dl_log(ERROR, _("could not schedule download job"));
         err = avs_errno(AVS_ENOMEM);
         goto error;
     }

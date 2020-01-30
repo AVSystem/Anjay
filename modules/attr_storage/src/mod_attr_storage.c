@@ -70,14 +70,14 @@ const anjay_dm_module_t _anjay_attr_storage_MODULE = {
 
 int anjay_attr_storage_install(anjay_t *anjay) {
     if (!anjay) {
-        as_log(ERROR, "ANJAY object must not be NULL");
+        as_log(ERROR, _("ANJAY object must not be NULL"));
         return -1;
     }
     anjay_attr_storage_t *as =
             (anjay_attr_storage_t *) avs_calloc(1,
                                                 sizeof(anjay_attr_storage_t));
     if (!as) {
-        as_log(ERROR, "out of memory");
+        as_log(ERROR, _("out of memory"));
         return -1;
     }
     if (!(as->saved_state.persist_data = avs_stream_membuf_create())
@@ -93,7 +93,7 @@ int anjay_attr_storage_install(anjay_t *anjay) {
 bool anjay_attr_storage_is_modified(anjay_t *anjay) {
     anjay_attr_storage_t *as = _anjay_attr_storage_get(anjay);
     if (!as) {
-        as_log(ERROR, "Attribute Storage is not installed");
+        as_log(ERROR, _("Attribute Storage is not installed"));
         return false;
     }
     return as->modified_since_persist;
@@ -108,7 +108,7 @@ void _anjay_attr_storage_clear(anjay_attr_storage_t *as) {
 void anjay_attr_storage_purge(anjay_t *anjay) {
     anjay_attr_storage_t *as = _anjay_attr_storage_get(anjay);
     if (!as) {
-        as_log(ERROR, "Attribute Storage is not installed");
+        as_log(ERROR, _("Attribute Storage is not installed"));
         return;
     }
     _anjay_attr_storage_clear(as);
@@ -182,7 +182,7 @@ find_or_create_entry_impl(AVS_LIST(void) *children_list_ptr,
         if (allow_create) {
             AVS_LIST(void) new_entry = AVS_LIST_NEW_BUFFER(entry_size);
             if (!new_entry) {
-                as_log(ERROR, "out of memory");
+                as_log(ERROR, _("out of memory"));
                 return NULL;
             }
             *(uint16_t *) new_entry = id;
@@ -261,7 +261,7 @@ static inline anjay_rid_t ssid_rid(anjay_oid_t oid) {
     default:
         AVS_UNREACHABLE("Invalid object for Short Server ID query");
     }
-    as_log(ERROR, "Could not get valid RID");
+    as_log(ERROR, _("Could not get valid RID"));
     return (anjay_rid_t) -1;
 }
 
@@ -458,7 +458,7 @@ static int write_attrs_impl(anjay_attr_storage_t *as,
             // entry does not exist, creating
             AVS_LIST(void) new_attrs = AVS_LIST_NEW_BUFFER(element_size);
             if (!new_attrs) {
-                as_log(ERROR, "out of memory");
+                as_log(ERROR, _("out of memory"));
                 return ANJAY_ERR_INTERNAL;
             }
             *get_ssid_ptr(new_attrs) = ssid;
@@ -487,7 +487,7 @@ static int write_object_attrs(anjay_t *anjay,
                               const anjay_dm_internal_oi_attrs_t *attrs) {
     anjay_attr_storage_t *as = get_as(anjay);
     if (!as) {
-        as_log(ERROR, "Attribute Storage module is not installed");
+        as_log(ERROR, _("Attribute Storage module is not installed"));
         return -1;
     }
     AVS_LIST(as_object_entry_t) *object_ptr =
@@ -509,7 +509,7 @@ static int write_instance_attrs(anjay_t *anjay,
     assert(iid != ANJAY_ID_INVALID);
     anjay_attr_storage_t *as = get_as(anjay);
     if (!as) {
-        as_log(ERROR, "Attribute Storage module is not installed");
+        as_log(ERROR, _("Attribute Storage module is not installed"));
         return -1;
     }
 
@@ -540,7 +540,7 @@ static int write_resource_attrs(anjay_t *anjay,
     assert(iid != ANJAY_ID_INVALID && rid != ANJAY_ID_INVALID);
     anjay_attr_storage_t *as = get_as(anjay);
     if (!as) {
-        as_log(ERROR, "Attribute Storage module is not installed");
+        as_log(ERROR, _("Attribute Storage module is not installed"));
         return -1;
     }
 
@@ -888,36 +888,42 @@ maybe_get_object_before_setting_attrs(anjay_t *anjay,
                                       anjay_oid_t oid,
                                       const void *attrs) {
     if (!attrs) {
-        as_log(ERROR, "attributes cannot be NULL");
+        as_log(ERROR, _("attributes cannot be NULL"));
         return NULL;
     }
     if (ssid == ANJAY_SSID_BOOTSTRAP || !_anjay_dm_ssid_exists(anjay, ssid)) {
-        as_log(ERROR, "SSID %" PRIu16 " does not exist", ssid);
+        as_log(ERROR, _("SSID ") "%" PRIu16 _(" does not exist"), ssid);
         return NULL;
     }
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, oid);
     if (!obj) {
-        as_log(ERROR, "/%" PRIu16 " does not exist", oid);
+        as_log(ERROR, "/%" PRIu16 _(" does not exist"), oid);
     }
     return obj;
 }
 
-#define ERR_HANDLERS_IMPLEMENTED_BY_BACKEND                                \
-    "cannot set %s level attribs: %s or %s is implemented by the backend " \
-    "object"
+#define ERR_HANDLERS_IMPLEMENTED_BY_BACKEND           \
+    _("cannot set ")                                  \
+    "%s" _(" level attribs: ") "%s" _(" or ") "%s" _( \
+            " is implemented by the backend object")
 
-#define ERR_INSTANCE_PRESENCE_CHECK  \
-    "instance /%" PRIu16 "/%" PRIu16 \
-    " does not exist or an error occurred during querying its presence"
+#define ERR_INSTANCE_PRESENCE_CHECK                                          \
+    _("instance ")                                                           \
+    "/%" PRIu16 "/%" PRIu16 _(" does not exist or an error occurred during " \
+                              "querying its presence")
 
-#define ERR_RESOURCE_PRESENCE_CHECK              \
-    "resource /%" PRIu16 "/%" PRIu16 "/%" PRIu16 \
-    "does not exist or an error occurred during querying its presence"
+#define ERR_RESOURCE_PRESENCE_CHECK                                          \
+    _("resource ")                                                           \
+    "/%" PRIu16 "/%" PRIu16                                                  \
+    "/%" PRIu16 _("does not exist or an error occurred during querying its " \
+                  "presence")
 
-#define ERR_RESOURCE_INSTANCE_PRESENCE_CHECK                          \
-    "resource instance /%" PRIu16 "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 \
-    "does not exist or an error occurred during querying its presence"
+#define ERR_RESOURCE_INSTANCE_PRESENCE_CHECK                                 \
+    _("resource instance ")                                                  \
+    "/%" PRIu16 "/%" PRIu16 "/%" PRIu16                                      \
+    "/%" PRIu16 _("does not exist or an error occurred during querying its " \
+                  "presence")
 
 int anjay_attr_storage_set_object_attrs(anjay_t *anjay,
                                         anjay_ssid_t ssid,

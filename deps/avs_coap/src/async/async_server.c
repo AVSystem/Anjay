@@ -236,7 +236,9 @@ static void cancel_notification_on_error(avs_coap_ctx_t *ctx,
                                          avs_coap_observe_id_t observe_id,
                                          uint8_t response_code) {
     if (!avs_coap_code_is_success(response_code)) {
-        LOG(DEBUG, "Non-success notification code (%s): cancelling observation",
+        LOG(DEBUG,
+            _("Non-success notification code (") "%s" _(
+                    "): cancelling observation"),
             AVS_COAP_CODE_STRING(response_code));
 
 #ifdef WITH_AVS_COAP_OBSERVE
@@ -364,7 +366,7 @@ _avs_coap_async_server_abort_timedout_exchanges(avs_coap_ctx_t *ctx) {
            && avs_time_monotonic_before(coap_base->server_exchanges->by_type
                                                 .server.exchange_deadline,
                                         avs_time_monotonic_now())) {
-        LOG(DEBUG, "exchange %" PRIu64 " timed out",
+        LOG(DEBUG, _("exchange ") "%" PRIu64 _(" timed out"),
             coap_base->server_exchanges->id.value);
 
         _avs_coap_server_exchange_cleanup(
@@ -410,15 +412,15 @@ avs_coap_exchange_id_t avs_coap_server_accept_async_request(
         avs_coap_server_async_request_handler_t *request_handler,
         void *request_handler_arg) {
     if (!ctx) {
-        LOG(ERROR, "server_ctx must not be NULL");
+        LOG(ERROR, _("server_ctx must not be NULL"));
         return AVS_COAP_EXCHANGE_ID_INVALID;
     }
     if (!request_handler) {
-        LOG(ERROR, "request_handler must not be NULL");
+        LOG(ERROR, _("request_handler must not be NULL"));
         return AVS_COAP_EXCHANGE_ID_INVALID;
     }
     if (avs_coap_exchange_id_valid(ctx->exchange_id)) {
-        LOG(ERROR, "cannot accept a request twice");
+        LOG(ERROR, _("cannot accept a request twice"));
         return AVS_COAP_EXCHANGE_ID_INVALID;
     }
 
@@ -460,14 +462,14 @@ avs_coap_exchange_id_t avs_coap_server_accept_async_request(
 
 bool _avs_coap_response_header_valid(const avs_coap_response_header_t *res) {
     if (!avs_coap_code_is_response(res->code)) {
-        LOG(WARNING, "non-response code %s used in response header",
+        LOG(WARNING, _("non-response code ") "%s" _(" used in response header"),
             AVS_COAP_CODE_STRING(res->code));
         return false;
     }
     if (res->code == AVS_COAP_CODE_CONTINUE) {
         LOG(WARNING,
-            "%s responses are handled internally and not allowed "
-            "in avs_coap_server_setup_async_response",
+            "%s" _(" responses are handled internally and not allowed "
+                   "in avs_coap_server_setup_async_response"),
             AVS_COAP_CODE_STRING(res->code));
         return false;
     }
@@ -481,11 +483,11 @@ avs_coap_server_setup_async_response(avs_coap_request_ctx_t *ctx,
                                      avs_coap_payload_writer_t *response_writer,
                                      void *response_writer_arg) {
     if (!ctx) {
-        LOG(ERROR, "no request to respond to");
+        LOG(ERROR, _("no request to respond to"));
         return avs_errno(AVS_EINVAL);
     }
     if (!response) {
-        LOG(ERROR, "response must be provided");
+        LOG(ERROR, _("response must be provided"));
         return avs_errno(AVS_EINVAL);
     }
 
@@ -494,7 +496,8 @@ avs_coap_server_setup_async_response(avs_coap_request_ctx_t *ctx,
             _avs_coap_find_server_exchange_ptr_by_id(coap_ctx,
                                                      ctx->exchange_id);
     if (!response_exchange_ptr) {
-        LOG(ERROR, "invalid exchange ID: %" PRIu64, ctx->exchange_id.value);
+        LOG(ERROR, _("invalid exchange ID: ") "%" PRIu64,
+            ctx->exchange_id.value);
         return avs_errno(AVS_EINVAL);
     }
 
@@ -506,7 +509,7 @@ avs_coap_server_setup_async_response(avs_coap_request_ctx_t *ctx,
             && _avs_coap_option_exists(&response->options,
                                        AVS_COAP_OPTION_OBSERVE)) {
         LOG(ERROR,
-            "Observe option in response, but observe is not established");
+            _("Observe option in response, but observe is not established"));
         return avs_errno(AVS_EINVAL);
     }
 
@@ -615,13 +618,15 @@ static uint8_t response_code_from_result(int result) {
             return (uint8_t) result;
         }
 
-        LOG(WARNING, "%s is not a valid response code, sending %s instead",
+        LOG(WARNING,
+            "%s" _(" is not a valid response code, sending ") "%s" _(
+                    " instead"),
             AVS_COAP_CODE_STRING((uint8_t) result),
             AVS_COAP_CODE_STRING(DEFAULT_CODE));
     } else {
         LOG(DEBUG,
-            "%d does not represent a correct CoAP code, sending %s "
-            "instead",
+            "%d" _(" does not represent a correct CoAP code, sending ") "%s" _(
+                    " instead"),
             result, AVS_COAP_CODE_STRING(DEFAULT_CODE));
     }
 
@@ -658,7 +663,7 @@ get_observe_option(const avs_coap_borrowed_msg_t *request) {
     case 1:
         return OBSERVE_DEREGISTER;
     default:
-        LOG(DEBUG, "invalid Observe value: %" PRIu32, observe_value);
+        LOG(DEBUG, _("invalid Observe value: ") "%" PRIu32, observe_value);
         return OBSERVE_MISSING;
     }
 }
@@ -729,7 +734,8 @@ int _avs_coap_async_incoming_packet_call_request_handler(
         .payload_size = coap_base->request_ctx.request.payload_size
     };
 
-    LOG(DEBUG, "exchange %" PRIu64 ": request_handler, %s", exchange->id.value,
+    LOG(DEBUG, _("exchange ") "%" PRIu64 _(": request_handler, ") "%s",
+        exchange->id.value,
         entire_request_finished ? "full request" : "partial content");
 
     return exchange->by_type.server.request_handler(
@@ -745,7 +751,7 @@ static bool matching_request_options(uint16_t opt_number) {
 static bool request_matches_exchange(const avs_coap_borrowed_msg_t *request,
                                      const avs_coap_exchange_t *exchange) {
     if (exchange->by_type.server.request_code != request->code) {
-        LOG(TRACE, "looking for CoAP code %s, got %s",
+        LOG(TRACE, _("looking for CoAP code ") "%s" _(", got ") "%s",
             AVS_COAP_CODE_STRING(exchange->by_type.server.request_code),
             AVS_COAP_CODE_STRING(request->code));
         return false;
@@ -851,7 +857,7 @@ static int validate_request_exchange_state(avs_coap_ctx_t *ctx) {
     avs_coap_base_t *coap_base = _avs_coap_get_base(ctx);
     if (!_avs_coap_find_server_exchange_ptr_by_id(
                 ctx, coap_base->request_ctx.exchange_id)) {
-        LOG(DEBUG, "exchange %" PRIu64 " canceled by user handler",
+        LOG(DEBUG, _("exchange ") "%" PRIu64 _(" canceled by user handler"),
             coap_base->request_ctx.exchange_id.value);
         return AVS_COAP_CODE_INTERNAL_SERVER_ERROR;
     }
@@ -859,8 +865,9 @@ static int validate_request_exchange_state(avs_coap_ctx_t *ctx) {
     if (!coap_base->request_ctx.response_setup
             && is_entire_request_finished(&coap_base->request_ctx.request)) {
         LOG(DEBUG,
-            "request %" PRIu64 " finished, but response still not set up and "
-            "request handler returned 0",
+            _("request ") "%" PRIu64 _(
+                    " finished, but response still not set up and "
+                    "request handler returned 0"),
             coap_base->request_ctx.exchange_id.value);
         return AVS_COAP_CODE_INTERNAL_SERVER_ERROR;
     }
@@ -953,7 +960,7 @@ handle_new_request(avs_coap_ctx_t *ctx,
                    user_defined_request_handler_t *user_handler,
                    AVS_LIST(avs_coap_exchange_t) *out_exchange) {
     if (!user_handler->on_new_request) {
-        LOG(ERROR, "rejecting incoming %s: on_new_request NULL",
+        LOG(ERROR, _("rejecting incoming ") "%s" _(": on_new_request NULL"),
             AVS_COAP_CODE_STRING(request->code));
         return send_empty_response(ctx, &request->token,
                                    AVS_COAP_CODE_INTERNAL_SERVER_ERROR);
@@ -980,7 +987,7 @@ handle_new_request(avs_coap_ctx_t *ctx,
     }
 
     if (!avs_coap_exchange_id_valid(server_ctx.exchange_id)) {
-        LOG(WARNING, "on_new_request suceeded, but %s not accepted",
+        LOG(WARNING, _("on_new_request suceeded, but ") "%s" _(" not accepted"),
             AVS_COAP_CODE_STRING(request->code));
 
         return send_empty_response(ctx, &request->token,
@@ -990,8 +997,8 @@ handle_new_request(avs_coap_ctx_t *ctx,
     if (!(*out_exchange = _avs_coap_find_server_exchange_by_id(
                   ctx, server_ctx.exchange_id))) {
         LOG(DEBUG,
-            "on_new_request handler canceled exchange %" PRIu64
-            " immediately after accepting it",
+            _("on_new_request handler canceled exchange ") "%" PRIu64 _(
+                    " immediately after accepting it"),
             server_ctx.exchange_id.value);
     }
     return AVS_OK;
@@ -1206,7 +1213,7 @@ void _avs_coap_server_exchange_cleanup(avs_coap_ctx_t *ctx,
     avs_coap_server_exchange_data_t *server = &exchange->by_type.server;
 
     if (server->request_handler) {
-        LOG(DEBUG, "exchange %" PRIu64 ": request_handler, cleanup",
+        LOG(DEBUG, _("exchange ") "%" PRIu64 _(": request_handler, cleanup"),
             exchange->id.value);
 
         server->request_handler(NULL, exchange->id,
@@ -1276,14 +1283,15 @@ avs_coap_notify_async(avs_coap_ctx_t *ctx,
                       avs_coap_delivery_status_handler_t *delivery_handler,
                       void *delivery_handler_arg) {
     if (!avs_coap_code_is_response(response_header->code)) {
-        LOG(ERROR, "%s is not a valid response code",
+        LOG(ERROR, "%s" _(" is not a valid response code"),
             AVS_COAP_CODE_STRING(response_header->code));
         avs_errno(AVS_EINVAL);
     }
 
     if (!delivery_handler
             && reliability_hint != AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE) {
-        LOG(ERROR, "delivery_handler is mandatory for reliable notifications");
+        LOG(ERROR,
+            _("delivery_handler is mandatory for reliable notifications"));
         avs_errno(AVS_EINVAL);
     }
 

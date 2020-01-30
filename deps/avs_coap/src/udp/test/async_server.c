@@ -163,7 +163,7 @@ AVS_UNIT_TEST(udp_async_server, incoming_request_echo_content) {
             COAP_MSG(ACK, CONTENT, ID(0), MAKE_TOKEN("A token"),
                      PAYLOAD(PAYLOAD_CONTENT));
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = PAYLOAD_CONTENT,
         .payload_size = sizeof(PAYLOAD_CONTENT) - 1
     };
@@ -200,7 +200,7 @@ AVS_UNIT_TEST(udp_async_server, cached_response) {
             COAP_MSG(ACK, CONTENT, ID(0), MAKE_TOKEN("4m3l1num"),
                      PAYLOAD(PAYLOAD_CONTENT));
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = PAYLOAD_CONTENT,
         .payload_size = sizeof(PAYLOAD_CONTENT) - 1
     };
@@ -403,7 +403,7 @@ AVS_UNIT_TEST(udp_async_server, incoming_request_block_response) {
                  BLOCK2_RES(1, 1024, REQUEST_PAYLOAD))
     };
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = REQUEST_PAYLOAD,
         .payload_size = sizeof(REQUEST_PAYLOAD) - 1
     };
@@ -460,7 +460,7 @@ AVS_UNIT_TEST(udp_async_server, incoming_block_request_nonblock_response) {
                  BLOCK1_RES(1, 1024, false), PAYLOAD(RESPONSE_PAYLOAD))
     };
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = RESPONSE_PAYLOAD,
         .payload_size = sizeof(RESPONSE_PAYLOAD) - 1
     };
@@ -530,7 +530,7 @@ AVS_UNIT_TEST(udp_async_server, incoming_request_block_response_weird_sizes) {
                  BLOCK2_RES(2, 512, REQUEST_PAYLOAD))
     };
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = REQUEST_PAYLOAD,
         .payload_size = sizeof(REQUEST_PAYLOAD) - 1
     };
@@ -614,7 +614,7 @@ AVS_UNIT_TEST(udp_async_server, block2_request_from_the_middle) {
                  BLOCK2_RES(3, 1024, RESPONSE_PAYLOAD))
     };
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = RESPONSE_PAYLOAD,
         .expected_payload_offset = 2048,
         .payload_size = sizeof(RESPONSE_PAYLOAD) - 1
@@ -720,7 +720,7 @@ AVS_UNIT_TEST(udp_async_server, request_timeout_refresh) {
                  BLOCK1_AND_2_RES(1, 1024, 1024, REQUEST_PAYLOAD)),
     };
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = REQUEST_PAYLOAD,
         .payload_size = sizeof(REQUEST_PAYLOAD) - 1
     };
@@ -845,7 +845,7 @@ AVS_UNIT_TEST(udp_async_server, duplicated_block_requests) {
     const test_msg_t *error =
             COAP_MSG(ACK, INTERNAL_SERVER_ERROR, ID(0), TOKEN(nth_token(0)));
 
-    const test_payload_writer_args_t response_payload = {
+    test_payload_writer_args_t response_payload = {
         .payload = RESPONSE_PAYLOAD,
         .payload_size = sizeof(RESPONSE_PAYLOAD) - 1
     };

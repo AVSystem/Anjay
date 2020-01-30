@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import errno
 import socket
 import select
 import unittest
@@ -23,6 +24,7 @@ import contextlib
 
 from framework.lwm2m_test import *
 from framework.lwm2m.coap.server import Server
+
 
 class UdpProxy(threading.Thread):
     def __init__(self, client_socket, server_socket):
@@ -207,7 +209,12 @@ class DtlsWithoutConnectionIdTest(test_suite.Lwm2mDtlsSingleServerTest,
 
         # Unconnect the socket at the pymbedtls site (this unconnects the link between "server proxy"
         # and "Lwm2m Server" in the diagram above), to allow accepting packets from unknown endpoints.
-        self.serv.socket.py_socket.connect(('', 0))
+        try:
+            self.serv.socket.py_socket.connect(('', 0))
+        except OSError as e:
+            # On macOS, the call above returns failure, but actually works anyway...
+            if e.errno not in {errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL}:
+                raise
 
         # Nonetheless, connection_id was not used, so we should expect that the server
         # ignores Update messages messages.

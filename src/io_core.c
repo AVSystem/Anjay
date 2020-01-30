@@ -53,19 +53,20 @@ uint16_t _anjay_translate_legacy_content_format(uint16_t format) {
 
     switch (format) {
     case ANJAY_COAP_FORMAT_LEGACY_PLAINTEXT:
-        anjay_log(DEBUG, MSG_FMT, "text", ANJAY_COAP_FORMAT_LEGACY_PLAINTEXT);
+        anjay_log(DEBUG, MSG_FMT, _("text"),
+                  ANJAY_COAP_FORMAT_LEGACY_PLAINTEXT);
         return AVS_COAP_FORMAT_PLAINTEXT;
 
     case ANJAY_COAP_FORMAT_LEGACY_TLV:
-        anjay_log(DEBUG, MSG_FMT, "tlv", ANJAY_COAP_FORMAT_LEGACY_TLV);
+        anjay_log(DEBUG, MSG_FMT, _("tlv"), ANJAY_COAP_FORMAT_LEGACY_TLV);
         return AVS_COAP_FORMAT_OMA_LWM2M_TLV;
 
     case ANJAY_COAP_FORMAT_LEGACY_JSON:
-        anjay_log(DEBUG, MSG_FMT, "json", ANJAY_COAP_FORMAT_LEGACY_JSON);
+        anjay_log(DEBUG, MSG_FMT, _("json"), ANJAY_COAP_FORMAT_LEGACY_JSON);
         return AVS_COAP_FORMAT_OMA_LWM2M_JSON;
 
     case ANJAY_COAP_FORMAT_LEGACY_OPAQUE:
-        anjay_log(DEBUG, MSG_FMT, "opaque", ANJAY_COAP_FORMAT_LEGACY_OPAQUE);
+        anjay_log(DEBUG, MSG_FMT, _("opaque"), ANJAY_COAP_FORMAT_LEGACY_OPAQUE);
         return AVS_COAP_FORMAT_OCTET_STREAM;
 
     default:
@@ -221,8 +222,10 @@ int _anjay_output_ctx_destroy_and_process_result(
     } else if (result) {
         return result;
     } else {
-        anjay_log(ERROR, "unable to determine resource type: anjay_ret_* not "
-                         "called during successful resource_read handler call");
+        anjay_log(
+                ERROR,
+                _("unable to determine resource type: anjay_ret_* not ") _(
+                        "called during successful resource_read handler call"));
         return ANJAY_ERR_INTERNAL;
     }
 }

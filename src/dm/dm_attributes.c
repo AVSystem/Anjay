@@ -122,9 +122,10 @@ static int dm_read_combined_server_attrs(anjay_t *anjay,
     }
     anjay_iid_t server_iid = ANJAY_ID_INVALID;
     if (_anjay_find_server_iid(anjay, ssid, &server_iid)) {
-        anjay_log(WARNING,
-                  "Could not find Server IID for Short Server ID: %" PRIu16,
-                  ssid);
+        anjay_log(
+                WARNING,
+                _("Could not find Server IID for Short Server ID: ") "%" PRIu16,
+                ssid);
     } else {
         int result;
         if ((result = read_combined_period(anjay, server_iid,

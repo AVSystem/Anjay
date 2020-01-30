@@ -140,8 +140,8 @@ ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
         return 0;
     } else if (buf_size < 2 || !out_buf) {
         dm_log(ERROR,
-               "Invalid arguments passed to anjay_execute_get_arg_value(): "
-               "needs a buffer with at least 2 bytes size");
+               _("Invalid arguments passed to anjay_execute_get_arg_value(): "
+                 "needs a buffer with at least 2 bytes size"));
         return -1;
     }
 

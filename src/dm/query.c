@@ -107,7 +107,7 @@ int _anjay_ssid_from_security_iid(anjay_t *anjay,
 
     if (_anjay_dm_read_resource_i64(anjay, &path, &_ssid) || _ssid <= 0
             || _ssid > UINT16_MAX) {
-        anjay_log(ERROR, "could not get Short Server ID from %s",
+        anjay_log(ERROR, _("could not get Short Server ID from ") "%s",
                   ANJAY_DEBUG_MAKE_PATH(&path));
         return -1;
     }

@@ -301,7 +301,7 @@ if(WITH_TEST)
         set(source_file "${CMAKE_CURRENT_BINARY_DIR}/ensure-no-warnings-from-headers-if-cpp.cpp")
         add_custom_command(OUTPUT "${source_file}"
                            COMMAND /bin/echo > "${source_file}"
-                           COMMAND for F in ${all_includes} \\; do /bin/echo -e "$$F" >> "${source_file}" \\; done)
+                           COMMAND for F in ${all_includes} \\; do /bin/echo "$$F" >> "${source_file}" \\; done)
         add_library("${HWC_TARGET}" OBJECT "${source_file}")
         target_include_directories("${HWC_TARGET}" PRIVATE $<TARGET_PROPERTY:avs_coap,INTERFACE_INCLUDE_DIRECTORIES>)
         target_compile_options("${HWC_TARGET}" PRIVATE -std=c++11 -Wall -Wextra -pedantic -Werror)

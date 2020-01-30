@@ -1014,8 +1014,13 @@ AVS_UNIT_TEST(notify, epmin_less_than_pmax) {
 
 AVS_UNIT_TEST(notify, confirmable) {
     ////// INITIALIZATION //////
-    DM_TEST_INIT_GENERIC((DM_TEST_DEFAULT_OBJECTS), (14),
-                         (.confirmable_notifications = true));
+    const anjay_dm_object_def_t *const *obj_defs[] = {
+        DM_TEST_DEFAULT_OBJECTS
+    };
+    anjay_ssid_t ssids[] = { 14 };
+    DM_TEST_INIT_GENERIC(obj_defs, ssids,
+                         DM_TEST_CONFIGURATION(.confirmable_notifications =
+                                                       true));
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID_TOKEN(0x69ED, "Res4"),
                     OBSERVE(0), PATH("42", "69", "4"));
     expect_read_res(anjay, &OBJ, 69, 4, ANJAY_MOCK_DM_FLOAT(0, 514.0));

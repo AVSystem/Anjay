@@ -55,7 +55,9 @@ static int read_resource_instance_clb(anjay_t *anjay,
     if ((result == ANJAY_ERR_METHOD_NOT_ALLOWED
          || result == ANJAY_ERR_NOT_FOUND)
             && !(result = _anjay_output_clear_path(out_ctx))) {
-        dm_log(DEBUG, "%s when attempted to read /%u/%u/%u/%u, skipping",
+        dm_log(DEBUG,
+               "%s" _(" when attempted to read ") "/%u/%u/%u/%u" _(
+                       ", skipping"),
                AVS_COAP_CODE_STRING((uint8_t) -result), (*obj)->oid, iid, rid,
                riid);
     }
@@ -103,7 +105,7 @@ static int read_resource(anjay_t *anjay,
                          anjay_dm_resource_kind_t kind,
                          anjay_output_ctx_t *out_ctx) {
     if (!_anjay_dm_res_kind_readable(kind)) {
-        dm_log(DEBUG, "/%u/%u/%u is not readable", (*obj)->oid, iid, rid);
+        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable"), (*obj)->oid, iid, rid);
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
     return read_resource_internal(anjay, obj, iid, rid, kind, out_ctx);
@@ -124,8 +126,8 @@ static int read_instance_resource_clb(anjay_t *anjay,
     read_instance_resource_clb_args_t *args =
             (read_instance_resource_clb_args_t *) args_;
     if (presence == ANJAY_DM_RES_ABSENT) {
-        dm_log(DEBUG, "/%u/%u/%u is not present, skipping", (*obj)->oid, iid,
-               rid);
+        dm_log(DEBUG, "/%u/%u/%u" _(" is not present, skipping"), (*obj)->oid,
+               iid, rid);
         return 0;
     }
     bool read_allowed = _anjay_dm_res_kind_readable(kind);
@@ -134,8 +136,8 @@ static int read_instance_resource_clb(anjay_t *anjay,
                        || _anjay_dm_res_kind_writable(kind);
     }
     if (!read_allowed) {
-        dm_log(DEBUG, "/%u/%u/%u is not readable, skipping", (*obj)->oid, iid,
-               rid);
+        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable, skipping"), (*obj)->oid,
+               iid, rid);
         return 0;
     }
 
@@ -144,7 +146,8 @@ static int read_instance_resource_clb(anjay_t *anjay,
     if ((result == ANJAY_ERR_METHOD_NOT_ALLOWED
          || result == ANJAY_ERR_NOT_FOUND)
             && !(result = _anjay_output_clear_path(args->out_ctx))) {
-        dm_log(DEBUG, "%s when attempted to read /%u/%u/%u, skipping",
+        dm_log(DEBUG,
+               "%s" _(" when attempted to read ") "/%u/%u/%u" _(", skipping"),
                AVS_COAP_CODE_STRING((uint8_t) -result), (*obj)->oid, iid, rid);
     }
     return result;
@@ -268,8 +271,8 @@ int _anjay_dm_read(anjay_t *anjay,
                              out_ctx);
     } else {
         assert(_anjay_uri_path_leaf_is(&path_info->uri, ANJAY_ID_RIID));
-        dm_log(ERROR, "Read on Resource Instances is not supported in this "
-                      "version of Anjay");
+        dm_log(ERROR, _("Read on Resource Instances is not supported in this "
+                        "version of Anjay"));
         return ANJAY_ERR_BAD_REQUEST;
     }
 }
@@ -279,7 +282,7 @@ int _anjay_dm_read_and_destroy_ctx(anjay_t *anjay,
                                    const anjay_dm_path_info_t *path_info,
                                    anjay_ssid_t requesting_ssid,
                                    anjay_output_ctx_t **out_ctx_ptr) {
-    dm_log(LAZY_DEBUG, "Read %s", ANJAY_DEBUG_MAKE_PATH(&path_info->uri));
+    dm_log(LAZY_DEBUG, _("Read ") "%s", ANJAY_DEBUG_MAKE_PATH(&path_info->uri));
     return _anjay_output_ctx_destroy_and_process_result(
             out_ctx_ptr, _anjay_dm_read(anjay, obj, path_info, requesting_ssid,
                                         *out_ctx_ptr));
@@ -310,11 +313,12 @@ int _anjay_dm_read_or_observe(anjay_t *anjay,
                               const anjay_request_t *request) {
     assert(_anjay_uri_path_has(&request->uri, ANJAY_ID_OID));
     if (request->observe) {
-        dm_log(LAZY_DEBUG, "Observe %s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
+        dm_log(LAZY_DEBUG, _("Observe ") "%s",
+               ANJAY_DEBUG_MAKE_PATH(&request->uri));
 #ifdef WITH_OBSERVE
         return _anjay_observe_handle(anjay, request);
 #else  // WITH_OBSERVE
-        dm_log(ERROR, "Observe support disabled");
+        dm_log(ERROR, _("Observe support disabled"));
         return ANJAY_ERR_BAD_OPTION;
 #endif // WITH_OBSERVE
     }
@@ -354,7 +358,8 @@ int _anjay_dm_read_resource(anjay_t *anjay,
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, path->ids[ANJAY_ID_OID]);
     if (!obj) {
-        dm_log(ERROR, "unregistered Object ID: %u", path->ids[ANJAY_ID_OID]);
+        dm_log(ERROR, _("unregistered Object ID: ") "%u",
+               path->ids[ANJAY_ID_OID]);
         return -1;
     }
 

@@ -223,7 +223,7 @@ static int senml_set_path(anjay_output_ctx_t *ctx_,
                "Attempted to set path outside the context's base path. "
                "This is a bug in resource reading logic.");
     if (_anjay_uri_path_length(&ctx->path) > 0) {
-        senml_log(ERROR, "Path already set");
+        senml_log(ERROR, _("Path already set"));
         return -1;
     }
     ctx->path = *uri;
@@ -233,7 +233,7 @@ static int senml_set_path(anjay_output_ctx_t *ctx_,
 static int senml_clear_path(anjay_output_ctx_t *ctx_) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     if (_anjay_uri_path_length(&ctx->path) == 0) {
-        senml_log(ERROR, "Path not set");
+        senml_log(ERROR, _("Path not set"));
         return -1;
     }
     ctx->path = MAKE_ROOT_PATH();
@@ -255,7 +255,7 @@ static int senml_output_close(anjay_output_ctx_t *ctx_) {
     _anjay_update_ret(&result,
                       _anjay_senml_like_encoder_cleanup(&ctx->encoder));
     if (_anjay_uri_path_length(&ctx->path) > 0) {
-        senml_log(ERROR, "set_path() called without returning a value");
+        senml_log(ERROR, _("set_path() called without returning a value"));
         _anjay_update_ret(&result, ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED);
     }
     return result;
@@ -300,7 +300,7 @@ anjay_output_ctx_t *_anjay_output_senml_like_create(avs_stream_t *stream,
     }
 #endif // WITH_LWM2M_JSON
     default:
-        senml_log(WARNING, "unsupported content format");
+        senml_log(WARNING, _("unsupported content format"));
         goto error;
     }
 
@@ -308,11 +308,11 @@ anjay_output_ctx_t *_anjay_output_senml_like_create(avs_stream_t *stream,
         goto error;
     }
 
-    senml_log(DEBUG, "created SenML-like context");
+    senml_log(DEBUG, _("created SenML-like context"));
     return (anjay_output_ctx_t *) ctx;
 
 error:
-    senml_log(DEBUG, "failed to create SenML-like encoder");
+    senml_log(DEBUG, _("failed to create SenML-like encoder"));
     avs_free(ctx);
     return NULL;
 }

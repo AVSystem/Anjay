@@ -41,7 +41,9 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
     server->refresh_failed = true;
 
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
-        anjay_log(DEBUG, "Bootstrap Server: %s. Disabling all communication.",
+        anjay_log(DEBUG,
+                  _("Bootstrap Server: ") "%s" _(
+                          ". Disabling all communication."),
                   debug_msg);
         // Abort any further bootstrap retries.
         _anjay_bootstrap_cleanup(server->anjay);
@@ -56,7 +58,8 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
                 anjay_enable_server(server->anjay, ANJAY_SSID_BOOTSTRAP);
             }
         } else {
-            anjay_log(DEBUG, "Non-Bootstrap Server %" PRIu16 ": %s.",
+            anjay_log(DEBUG,
+                      _("Non-Bootstrap Server ") "%" PRIu16 _(": ") "%s" _("."),
                       server->ssid, debug_msg);
         }
     }
@@ -78,7 +81,8 @@ void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
     if (AVS_SCHED_NOW(server->anjay->sched, &server->next_action_handle,
                       server_communication_error_job, &server,
                       sizeof(server))) {
-        anjay_log(ERROR, "could not schedule server_communication_error_job");
+        anjay_log(ERROR,
+                  _("could not schedule server_communication_error_job"));
         server->refresh_failed = true;
     }
 }
@@ -116,7 +120,7 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
     assert(server);
     if (state == ANJAY_SERVER_CONNECTION_ERROR) {
         assert(avs_is_err(err));
-        anjay_log(TRACE, "could not initialize sockets for SSID %u",
+        anjay_log(TRACE, _("could not initialize sockets for SSID ") "%u",
                   server->ssid);
         _anjay_server_on_server_communication_error(server, err);
     } else if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
@@ -267,7 +271,8 @@ int _anjay_server_deactivate(anjay_t *anjay,
     AVS_LIST(anjay_server_info_t) *server_ptr =
             _anjay_servers_find_ptr(anjay->servers, ssid);
     if (!server_ptr) {
-        anjay_log(ERROR, "SSID %" PRIu16 " is not a known server", ssid);
+        anjay_log(ERROR, _("SSID ") "%" PRIu16 _(" is not a known server"),
+                  ssid);
         return -1;
     }
 
@@ -285,7 +290,7 @@ int _anjay_server_deactivate(anjay_t *anjay,
     if (avs_time_duration_valid(reactivate_delay)
             && _anjay_server_sched_activate(*server_ptr, reactivate_delay)) {
         // not much we can do other than removing the server altogether
-        anjay_log(ERROR, "could not reschedule server reactivation");
+        anjay_log(ERROR, _("could not reschedule server reactivation"));
         AVS_LIST_DELETE(server_ptr);
         return -1;
     }
@@ -297,7 +302,7 @@ _anjay_servers_create_inactive(anjay_t *anjay, anjay_ssid_t ssid) {
     AVS_LIST(anjay_server_info_t) new_server =
             AVS_LIST_NEW_ELEMENT(anjay_server_info_t);
     if (!new_server) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return NULL;
     }
 
@@ -316,8 +321,8 @@ static void disable_server_job(avs_sched_t *sched, const void *ssid_ptr) {
     anjay_iid_t server_iid;
     if (_anjay_find_server_iid(anjay, ssid, &server_iid)) {
         anjay_log(DEBUG,
-                  "no Server Object Instance with SSID = %u, disabling "
-                  "skipped",
+                  _("no Server Object Instance with SSID = ") "%u" _(
+                          ", disabling skipped"),
                   ssid);
     } else {
         const avs_time_duration_t disable_timeout =
@@ -341,7 +346,7 @@ int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid) {
     avs_sched_del(&server->next_action_handle);
     if (AVS_SCHED_NOW(anjay->sched, &server->next_action_handle,
                       disable_server_job, &ssid, sizeof(ssid))) {
-        anjay_log(ERROR, "could not schedule disable_server_job");
+        anjay_log(ERROR, _("could not schedule disable_server_job"));
         return -1;
     }
 
@@ -359,16 +364,18 @@ static void disable_server_with_timeout_job(avs_sched_t *sched,
             (const disable_server_data_t *) data_ptr_;
     if (_anjay_server_deactivate(_anjay_get_from_sched(sched), data->ssid,
                                  data->timeout)) {
-        anjay_log(ERROR, "unable to deactivate server: %" PRIu16, data->ssid);
+        anjay_log(ERROR, _("unable to deactivate server: ") "%" PRIu16,
+                  data->ssid);
     } else {
         if (avs_time_duration_valid(data->timeout)) {
             anjay_log(INFO,
-                      "server %" PRIu16 " disabled for %" PRId64 ".%09" PRId32
-                      " seconds",
+                      _("server ") "%" PRIu16 _(
+                              " disabled for ") "%" PRId64
+                                                ".%09" PRId32 _(" seconds"),
                       data->ssid, data->timeout.seconds,
                       data->timeout.nanoseconds);
         } else {
-            anjay_log(INFO, "server %" PRIu16 " disabled", data->ssid);
+            anjay_log(INFO, _("server ") "%" PRIu16 _(" disabled"), data->ssid);
         }
     }
 }
@@ -388,7 +395,7 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
                                       anjay_ssid_t ssid,
                                       avs_time_duration_t timeout) {
     if (ssid == ANJAY_SSID_ANY) {
-        anjay_log(WARNING, "invalid SSID: %u", ssid);
+        anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
         return -1;
     }
 
@@ -405,7 +412,8 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
     avs_sched_del(&server->next_action_handle);
     if (AVS_SCHED_NOW(anjay->sched, &server->next_action_handle,
                       disable_server_with_timeout_job, &data, sizeof(data))) {
-        anjay_log(ERROR, "could not schedule disable_server_with_timeout_job");
+        anjay_log(ERROR,
+                  _("could not schedule disable_server_with_timeout_job"));
         return -1;
     }
 
@@ -421,7 +429,7 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
  */
 int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid) {
     if (ssid == ANJAY_SSID_ANY) {
-        anjay_log(WARNING, "invalid SSID: %u", ssid);
+        anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
         return -1;
     }
 
@@ -429,16 +437,17 @@ int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid) {
             _anjay_servers_find_ptr(anjay->servers, ssid);
 
     if (!server_ptr || !*server_ptr || _anjay_server_active(*server_ptr)) {
-        anjay_log(TRACE, "not an inactive server: SSID = %u", ssid);
+        anjay_log(TRACE, _("not an inactive server: SSID = ") "%u", ssid);
         return -1;
     }
 
     if (ssid == ANJAY_SSID_BOOTSTRAP
             && !_anjay_bootstrap_legacy_server_initiated_allowed(anjay)
             && !_anjay_should_retry_bootstrap(anjay)) {
-        anjay_log(TRACE, "1.0-style Server-Initiated Bootstrap is disabled and "
-                         "Client-Initiated Bootstrap is currently not allowed, "
-                         "not enabling Bootstrap Server");
+        anjay_log(TRACE,
+                  _("1.0-style Server-Initiated Bootstrap is disabled and ")
+                          _("Client-Initiated Bootstrap is currently not "
+                            "allowed, not enabling Bootstrap Server"));
         return -1;
     }
 

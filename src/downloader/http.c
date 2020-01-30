@@ -132,7 +132,7 @@ static void handle_http_packet(anjay_downloader_t *dl,
             ctx->bytes_downloaded += bytes_read;
         }
         if (message_finished) {
-            dl_log(INFO, "HTTP transfer id = %" PRIuPTR " finished",
+            dl_log(INFO, _("HTTP transfer id = ") "%" PRIuPTR _(" finished"),
                    ctx->common.id);
             _anjay_downloader_abort_transfer(dl, ctx_ptr,
                                              _anjay_download_status_success());
@@ -149,7 +149,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!ctx_ptr) {
-        dl_log(DEBUG, "download id = %" PRIuPTR "expired", id);
+        dl_log(DEBUG, _("download id = ") "%" PRIuPTR _("expired"), id);
         return;
     }
 
@@ -173,7 +173,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                                 (int) ctx->etag->size, ctx->etag->value)
                         < 0
                 || avs_http_add_header(ctx->stream, "If-Match", ifmatch)) {
-            dl_log(ERROR, "Could not send If-Match header");
+            dl_log(ERROR, _("Could not send If-Match header"));
             _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
                                              _anjay_download_status_failed(
                                                      avs_errno(AVS_ENOMEM)));
@@ -188,8 +188,8 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                                 (unsigned long) ctx->bytes_written)
                         < 0
                 || avs_http_add_header(ctx->stream, "Range", range)) {
-            dl_log(ERROR, "Could not resume HTTP download: "
-                          "could not send Range header");
+            dl_log(ERROR, _("Could not resume HTTP download: could not send "
+                            "Range header"));
             _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
                                              _anjay_download_status_failed(
                                                      avs_errno(AVS_ENOMEM)));
@@ -203,7 +203,8 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
             http_status = avs_http_status_code(ctx->stream);
         }
         if (http_status < 200 || http_status >= 300) {
-            dl_log(WARNING, "HTTP error code %d received", http_status);
+            dl_log(WARNING, _("HTTP error code ") "%d" _(" received"),
+                   http_status);
             if (http_status == 412) { // Precondition Failed
                 _anjay_downloader_abort_transfer(
                         &anjay->downloader, ctx_ptr,
@@ -214,7 +215,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                         _anjay_download_status_invalid_response(http_status));
             }
         } else {
-            dl_log(ERROR, "Could not send HTTP request: %s",
+            dl_log(ERROR, _("Could not send HTTP request: ") "%s",
                    AVS_COAP_STRERROR(err));
             _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
                                              _anjay_download_status_failed(
@@ -230,8 +231,8 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
             if (read_start_byte_from_content_range(it->value, &bytes_downloaded)
                     || bytes_downloaded > ctx->bytes_written) {
                 dl_log(ERROR,
-                       "Could not resume HTTP download: "
-                       "invalid Content-Range: %s",
+                       _("Could not resume HTTP download: invalid "
+                         "Content-Range: ") "%s",
                        it->value);
                 _anjay_downloader_abort_transfer(
                         &anjay->downloader, ctx_ptr,
@@ -242,14 +243,15 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
         } else if (avs_strcasecmp(it->key, "ETag") == 0) {
             if (ctx->etag) {
                 if (!etag_matches(ctx->etag, it->value)) {
-                    dl_log(ERROR, "ETag does not match");
+                    dl_log(ERROR, _("ETag does not match"));
                     _anjay_downloader_abort_transfer(
                             &anjay->downloader, ctx_ptr,
                             _anjay_download_status_expired());
                     return;
                 }
             } else if (!(ctx->etag = read_etag(it->value))) {
-                dl_log(WARNING, "Could not store ETag of the download: %s",
+                dl_log(WARNING,
+                       _("Could not store ETag of the download: ") "%s",
                        it->value);
             }
         }
@@ -307,7 +309,7 @@ reconnect_http_transfer(anjay_downloader_t *dl,
     anjay_t *anjay = _anjay_downloader_get_anjay(dl);
     if (AVS_SCHED_NOW(anjay->sched, &ctx->send_request_job, send_request,
                       &ctx->common.id, sizeof(ctx->common.id))) {
-        dl_log(ERROR, "could not schedule download job");
+        dl_log(ERROR, _("could not schedule download job"));
         return avs_errno(AVS_ENOMEM);
     }
     return AVS_OK;
@@ -322,7 +324,7 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     AVS_LIST(anjay_http_download_ctx_t) ctx =
             AVS_LIST_NEW_ELEMENT(anjay_http_download_ctx_t);
     if (!ctx) {
-        dl_log(ERROR, "out of memory");
+        dl_log(ERROR, _("out of memory"));
         return avs_errno(AVS_ENOMEM);
     }
 
@@ -368,7 +370,7 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     if (cfg->etag) {
         size_t struct_size = offsetof(anjay_etag_t, value) + cfg->etag->size;
         if (!(ctx->etag = (anjay_etag_t *) avs_malloc(struct_size))) {
-            dl_log(ERROR, "could not copy ETag");
+            dl_log(ERROR, _("could not copy ETag"));
             err = avs_errno(AVS_ENOMEM);
             goto error;
         }
@@ -378,7 +380,7 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     if (AVS_SCHED_NOW(_anjay_downloader_get_anjay(dl)->sched,
                       &ctx->send_request_job, send_request, &ctx->common.id,
                       sizeof(ctx->common.id))) {
-        dl_log(ERROR, "could not schedule download job");
+        dl_log(ERROR, _("could not schedule download job"));
         err = avs_errno(AVS_ENOMEM);
         goto error;
     }

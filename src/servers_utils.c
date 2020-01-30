@@ -148,8 +148,8 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server) {
                                                   server),
                                           registration_info->session_token)) {
         anjay_log(DEBUG,
-                  "Registration session changed for SSID = %u, "
-                  "forcing re-register",
+                  _("Registration session changed for SSID = ") "%u" _(
+                          ", forcing re-register"),
                   _anjay_server_ssid(server));
         return true;
     }
@@ -160,8 +160,8 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server) {
     // registration to be considered expired
     if (!avs_time_duration_less(AVS_TIME_DURATION_ZERO, remaining)) {
         anjay_log(DEBUG,
-                  "Registration Lifetime expired for SSID = %u, "
-                  "forcing re-register",
+                  _("Registration Lifetime expired for SSID = ") "%u" _(
+                          ", forcing re-register"),
                   _anjay_server_ssid(server));
         return true;
     }

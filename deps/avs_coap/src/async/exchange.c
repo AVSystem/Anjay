@@ -63,12 +63,15 @@ static avs_error_t call_payload_writer(avs_coap_payload_writer_t *write_payload,
                                        size_t *out_bytes_read) {
     int result = write_payload(payload_offset, buffer, bytes_to_read,
                                out_bytes_read, write_payload_arg);
-    LOG(TRACE, "write_payload(offset = %u, size %u) = %d; read %u B",
+    LOG(TRACE,
+        _("write_payload(offset = ") "%u" _(", size ") "%u" _(") = ") "%d" _(
+                "; read ") "%u" _(" B"),
         (unsigned) payload_offset, (unsigned) bytes_to_read, result,
         (unsigned) *out_bytes_read);
 
     if (result) {
-        LOG(DEBUG, "unable to get request payload (result = %d)", result);
+        LOG(DEBUG, _("unable to get request payload (result = ") "%d" _(")"),
+            result);
         return _avs_coap_err(AVS_COAP_ERR_PAYLOAD_WRITER_FAILED);
     }
 
@@ -184,19 +187,21 @@ static avs_error_t lower_block_size(avs_coap_exchange_t *exchange,
             AVS_MIN(max_payload_size, AVS_COAP_BLOCK_MAX_SIZE));
     if (!_avs_coap_is_valid_block_size((uint16_t) new_block_size)) {
         LOG(DEBUG,
-            "CoAP context unable to handle payload size declared "
-            "in BLOCK option (max size = %u; required = %u)",
+            _("CoAP context unable to handle payload size declared "
+              "in BLOCK option (max size = ") "%u" _("; required = ") "%u" _(")"),
             (unsigned) max_payload_size, (unsigned) block.size);
         return _avs_coap_err(AVS_COAP_ERR_MESSAGE_TOO_BIG);
     }
 
-    LOG(DEBUG, "lowering block size: %u -> %u", (unsigned) block.size,
-        (unsigned) new_block_size);
+    LOG(DEBUG, _("lowering block size: ") "%u" _(" -> ") "%u",
+        (unsigned) block.size, (unsigned) new_block_size);
 
     // Reducing block size may overflow seq_num
     size_t scale_factor = block.size / new_block_size;
     if (block.seq_num * scale_factor > AVS_COAP_BLOCK_MAX_SEQ_NUMBER) {
-        LOG(DEBUG, "lowering block size overflows seq_num (%lu > %lu)",
+        LOG(DEBUG,
+            _("lowering block size overflows seq_num (") "%lu" _(" > ") "%lu" _(
+                    ")"),
             (unsigned long) block.seq_num * scale_factor,
             (unsigned long) AVS_COAP_BLOCK_MAX_SEQ_NUMBER);
         return _avs_coap_err(AVS_COAP_ERR_BLOCK_SEQ_NUM_OVERFLOW);
@@ -249,8 +254,8 @@ exchange_get_next_outgoing_chunk_payload_size(avs_coap_ctx_t *ctx,
             && err.code == AVS_COAP_ERR_MESSAGE_TOO_BIG) {
         if (*out_payload_chunk_size < AVS_COAP_BLOCK_MIN_SIZE) {
             LOG(WARNING,
-                "calculated payload size too small to handle even "
-                "smallest possible BLOCK (size %u < %u)",
+                _("calculated payload size too small to handle even "
+                  "smallest possible BLOCK (size ") "%u" _(" < ") "%u" _(")"),
                 (unsigned) *out_payload_chunk_size,
                 (unsigned) AVS_COAP_BLOCK_MIN_SIZE);
         } else {

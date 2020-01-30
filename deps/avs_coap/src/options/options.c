@@ -50,7 +50,7 @@ static int fill_block_data(const avs_coap_option_t *block_opt,
             || _avs_coap_option_block_has_more(block_opt, &out_info->has_more)
             || _avs_coap_option_block_size(block_opt, &out_info->size,
                                            &out_info->is_bert)) {
-        LOG(DEBUG, "malformed BLOCK%d option",
+        LOG(DEBUG, _("malformed BLOCK") "%d" _(" option"),
             opt_number == AVS_COAP_OPTION_BLOCK1 ? 1 : 2);
         return -1;
     }
@@ -77,7 +77,7 @@ block_type_from_code(uint8_t code, avs_coap_option_block_type_t *out_type) {
         *out_type = AVS_COAP_BLOCK2;
         return AVS_OK;
     } else {
-        LOG(DEBUG, "%s is neither a request nor response",
+        LOG(DEBUG, "%s" _(" is neither a request nor response"),
             AVS_COAP_CODE_STRING(code));
         return avs_errno(AVS_EINVAL);
     }
@@ -121,7 +121,9 @@ bool _avs_coap_options_valid_until_payload_marker(
     }
 
     if (opts->size > opts->capacity) {
-        LOG(DEBUG, "unexpected size (%" PRIu64 ") > capacity (%" PRIu64 ")",
+        LOG(DEBUG,
+            _("unexpected size (") "%" PRIu64 _(") > capacity (") "%" PRIu64 _(
+                    ")"),
             (uint64_t) opts->size, (uint64_t) opts->capacity);
         return false;
     }
@@ -159,7 +161,7 @@ bool _avs_coap_options_valid_until_payload_marker(
 
         const avs_coap_option_t *opt = _avs_coap_optit_current(&it);
         if (!_avs_coap_option_is_valid(opt, bytes_available)) {
-            LOG(DEBUG, "malformed CoAP option at offset %u",
+            LOG(DEBUG, _("malformed CoAP option at offset ") "%u",
                 (unsigned) ((const uint8_t *) it.curr_opt - opts_begin));
             if (out_truncated) {
                 *out_truncated = true;
@@ -169,7 +171,8 @@ bool _avs_coap_options_valid_until_payload_marker(
 
         uint32_t opt_number = _avs_coap_optit_number(&it);
         if (opt_number > UINT16_MAX) {
-            LOG(DEBUG, "invalid CoAP option number (%" PRIu32 " > 65535)",
+            LOG(DEBUG,
+                _("invalid CoAP option number (") "%" PRIu32 _(" > 65535)"),
                 opt_number);
             return false;
         }
@@ -182,8 +185,8 @@ bool _avs_coap_options_valid_until_payload_marker(
             if (non_repeatable_critical_options[i].number == opt_number) {
                 if (non_repeatable_critical_options[i].found) {
                     LOG(DEBUG,
-                        "duplicated non-repeatable critical CoAP option "
-                        "%" PRIu32,
+                        _("duplicated non-repeatable critical CoAP "
+                          "option ") "%" PRIu32,
                         opt_number);
                     return false;
                 }
@@ -200,7 +203,7 @@ bool _avs_coap_options_valid_until_payload_marker(
             }
             break;
 #else  // WITH_AVS_COAP_BLOCK
-            LOG(DEBUG, "BLOCK option received, but BLOCKs are disabled");
+            LOG(DEBUG, _("BLOCK option received, but BLOCKs are disabled"));
             return false;
 #endif // WITH_AVS_COAP_BLOCK
         default:
@@ -235,7 +238,8 @@ bool _avs_coap_options_valid(const avs_coap_options_t *opts) {
     }
 
     if (opts->size != actual_size) {
-        LOG(DEBUG, "size mismatch: declared %" PRIu32 ", actual %" PRIu32,
+        LOG(DEBUG,
+            _("size mismatch: declared ") "%" PRIu32 _(", actual ") "%" PRIu32,
             (uint32_t) opts->size, (uint32_t) actual_size);
         return false;
     }
@@ -273,7 +277,7 @@ avs_error_t avs_coap_options_set_content_format(avs_coap_options_t *opts,
 avs_error_t avs_coap_options_add_etag(avs_coap_options_t *opts,
                                       const avs_coap_etag_t *etag) {
     if (etag->size > AVS_COAP_MAX_ETAG_LENGTH) {
-        LOG(ERROR, "invalid ETag with length >%d bytes",
+        LOG(ERROR, _("invalid ETag with length >") "%d" _(" bytes"),
             AVS_COAP_MAX_ETAG_LENGTH);
         return avs_errno(AVS_EINVAL);
     }
@@ -309,8 +313,8 @@ static avs_error_t encode_block_size(uint16_t size,
         break;
     default:
         LOG(ERROR,
-            "invalid block size: %d, expected power of 2 between 16 "
-            "and 1024 (inclusive)",
+            _("invalid block size: ") "%d" _(", expected power of 2 between 16 "
+                                             "and 1024 (inclusive)"),
             (int) size);
         return avs_errno(AVS_EINVAL);
     }
@@ -338,8 +342,8 @@ static avs_error_t add_block_opt(avs_coap_options_t *opts,
             size_exponent = AVS_COAP_OPT_BERT_SZX;
         } else {
             LOG(ERROR,
-                "unexpected size_exponent %d for option with BERT flag set, "
-                "size should be 1024",
+                _("unexpected size_exponent ") "%d" _(
+                        " for option with BERT flag set, size should be 1024"),
                 size_exponent);
             return avs_errno(AVS_EINVAL);
         }
@@ -347,7 +351,7 @@ static avs_error_t add_block_opt(avs_coap_options_t *opts,
 
     AVS_STATIC_ASSERT(sizeof(int) >= sizeof(int32_t), int_type_too_small);
     if (seq_number >= (1 << 20)) {
-        LOG(ERROR, "block sequence number must be less than 2^20");
+        LOG(ERROR, _("block sequence number must be less than 2^20"));
         return avs_errno(AVS_ERANGE);
     }
 
@@ -518,7 +522,7 @@ avs_error_t avs_coap_options_add_opaque(avs_coap_options_t *opts,
             + opt_data_size;
 
     if (!new_option_fits(&insert_it, opt_number, bytes_required)) {
-        LOG(ERROR, "options buffer too small to fit another option");
+        LOG(ERROR, _("options buffer too small to fit another option"));
         return _avs_coap_err(AVS_COAP_ERR_MESSAGE_TOO_BIG);
     }
 
@@ -613,8 +617,8 @@ avs_error_t avs_coap_options_add_string_fv(avs_coap_options_t *opts,
 
     if (result < 0 || result > UINT16_MAX) {
         LOG(DEBUG,
-            "invalid formatted option size: %d, expected integer in "
-            "range [0; 65535]",
+            _("invalid formatted option size: ") "%d" _(", expected integer in "
+                                                        "range [0; 65535]"),
             result);
         return avs_errno(AVS_ERANGE);
     }
@@ -622,7 +626,7 @@ avs_error_t avs_coap_options_add_string_fv(avs_coap_options_t *opts,
     uint16_t size = (uint16_t) result;
     char *buf = (char *) avs_malloc(size + 1u); // +1 for nullbyte
     if (!buf) {
-        LOG(ERROR, "out of memory");
+        LOG(ERROR, _("out of memory"));
         return avs_errno(AVS_ENOMEM);
     }
 
@@ -732,7 +736,7 @@ int avs_coap_options_get_u16(const avs_coap_options_t *opts,
     const avs_coap_option_t *opt =
             _avs_coap_options_find_first_opt(opts, option_number);
     if (!opt) {
-        LOG(TRACE, "option %d not found", option_number);
+        LOG(TRACE, _("option ") "%d" _(" not found"), option_number);
         return AVS_COAP_OPTION_MISSING;
     }
 
@@ -745,7 +749,7 @@ int avs_coap_options_get_u32(const avs_coap_options_t *opts,
     const avs_coap_option_t *opt =
             _avs_coap_options_find_first_opt(opts, option_number);
     if (!opt) {
-        LOG(TRACE, "option %d not found", option_number);
+        LOG(TRACE, _("option ") "%d" _(" not found"), option_number);
         return AVS_COAP_OPTION_MISSING;
     }
 
@@ -792,7 +796,7 @@ static int fetch_bytes(const avs_coap_option_t *opt,
     *out_option_size = _avs_coap_option_content_length(opt);
 
     if (buffer_size < *out_option_size) {
-        LOG(DEBUG, "buffer too small to hold entire option");
+        LOG(DEBUG, _("buffer too small to hold entire option"));
         return -1;
     }
 
@@ -904,7 +908,8 @@ bool _avs_coap_selected_options_equal(const avs_coap_options_t *first,
 
         if (opt_num_first != opt_num_second) {
             LOG(TRACE,
-                "some option only exists in one set (%" PRIu32 "/%" PRIu32 ")",
+                _("some option only exists in one set (") "%" PRIu32
+                                                          "/%" PRIu32 _(")"),
                 opt_num_first, opt_num_second);
             return false;
         }
@@ -912,7 +917,8 @@ bool _avs_coap_selected_options_equal(const avs_coap_options_t *first,
         avs_coap_option_t *opt_first = _avs_coap_optit_current(&it_first);
         avs_coap_option_t *opt_second = _avs_coap_optit_current(&it_second);
         if (!is_option_identical(opt_first, opt_second)) {
-            LOG(TRACE, "different value of option %" PRIu32, opt_num_first);
+            LOG(TRACE, _("different value of option ") "%" PRIu32,
+                opt_num_first);
             return false;
         }
 
@@ -921,11 +927,11 @@ bool _avs_coap_selected_options_equal(const avs_coap_options_t *first,
     }
 
     if (!_avs_coap_optit_end(&it_first)) {
-        LOG(TRACE, "excess %" PRIu32 " option in `first` set",
+        LOG(TRACE, _("excess ") "%" PRIu32 _(" option in `first` set"),
             _avs_coap_optit_number(&it_first));
         return false;
     } else if (!_avs_coap_optit_end(&it_second)) {
-        LOG(TRACE, "excess %" PRIu32 " option in `second` set",
+        LOG(TRACE, _("excess ") "%" PRIu32 _(" option in `second` set"),
             _avs_coap_optit_number(&it_second));
         return false;
     }
@@ -953,7 +959,7 @@ static size_t get_block_offset(const avs_coap_options_t *opts,
     int result = avs_coap_options_get_block(opts, type, &block);
 
     if (result == AVS_COAP_OPTION_MISSING) {
-        LOG(TRACE, "BLOCK%d option missing, returning 0",
+        LOG(TRACE, _("BLOCK") "%d" _(" option missing, returning 0"),
             type == AVS_COAP_BLOCK1 ? 1 : 2);
         return 0;
     }
@@ -981,7 +987,7 @@ static bool block1_offset_matches(size_t expected_offset,
                                   const avs_coap_options_t *curr_request) {
     size_t actual_offset = block1_offset(curr_request);
     if (expected_offset != actual_offset) {
-        LOG(TRACE, "expected BLOCK1 offset %u, got %u",
+        LOG(TRACE, _("expected BLOCK1 offset ") "%u" _(", got ") "%u",
             (unsigned) expected_offset, (unsigned) actual_offset);
         return false;
     }
@@ -993,7 +999,7 @@ static bool block2_offset_matches(const avs_coap_options_t *prev_response,
     size_t expected_offset = next_block2_offset(prev_response);
     size_t actual_offset = block2_offset(curr_request);
     if (expected_offset != actual_offset) {
-        LOG(TRACE, "expected BLOCK2 offset %u, got %u",
+        LOG(TRACE, _("expected BLOCK2 offset ") "%u" _(", got ") "%u",
             (unsigned) expected_offset, (unsigned) actual_offset);
         return false;
     }
@@ -1014,7 +1020,7 @@ static inline bool request_block1_offset_valid(const avs_coap_options_t *prev,
     avs_coap_option_block_t block;
     int result = avs_coap_options_get_block(prev, AVS_COAP_BLOCK1, &block);
     if (result == AVS_COAP_OPTION_MISSING) {
-        LOG(TRACE, "BLOCK1 option missing");
+        LOG(TRACE, _("BLOCK1 option missing"));
         return (offset == 0);
     }
     size_t expected_offset_if_block = next_block1_offset(prev);
@@ -1113,8 +1119,8 @@ validate_block2_in_block1_request(const avs_coap_options_t *opts) {
     AVS_ASSERT(!result, "BUG: malformed option passed option validation");
 
     if (block1.has_more) {
-        LOG(TRACE, "BLOCK2 can be used in conjunction with BLOCK1 only in "
-                   "final BLOCK1 request exchange");
+        LOG(TRACE, _("BLOCK2 can be used in conjunction with BLOCK1 only in "
+                     "final BLOCK1 request exchange"));
         return _avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS);
     }
 

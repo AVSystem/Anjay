@@ -45,7 +45,8 @@ prepare_connection(anjay_t *anjay,
 
     const char *uri_scheme = avs_url_protocol(info->uri);
     if (!info->transport_info || !info->transport_info->socket_type) {
-        anjay_log(ERROR, "Protocol %s is not supported for IP transports",
+        anjay_log(ERROR,
+                  _("Protocol ") "%s" _(" is not supported for IP transports"),
                   uri_scheme ? uri_scheme : "(unknown)");
         return avs_errno(AVS_EINVAL);
     }
@@ -62,7 +63,7 @@ prepare_connection(anjay_t *anjay,
     avs_net_socket_create(&socket, *info->transport_info->socket_type,
                           config_ptr);
     if (!socket) {
-        anjay_log(ERROR, "could not create CoAP socket");
+        anjay_log(ERROR, _("could not create CoAP socket"));
         return avs_errno(AVS_ENOMEM);
     }
 
@@ -82,25 +83,25 @@ static avs_error_t connect_socket(anjay_t *anjay,
     avs_error_t err = avs_net_socket_connect(socket, connection->uri.host,
                                              connection->uri.port);
     if (avs_is_err(err)) {
-        anjay_log(ERROR, "could not connect to %s:%s", connection->uri.host,
-                  connection->uri.port);
+        anjay_log(ERROR, _("could not connect to ") "%s" _(":") "%s",
+                  connection->uri.host, connection->uri.port);
         return err;
     }
 
     if (!avs_coap_ctx_has_socket(connection->coap_ctx)
             && avs_is_err((err = avs_coap_ctx_set_socket(connection->coap_ctx,
                                                          socket)))) {
-        anjay_log(ERROR, "could not assign socket to CoAP/UDP context");
+        anjay_log(ERROR, _("could not assign socket to CoAP/UDP context"));
         return err;
     }
 
     if (avs_is_ok(avs_net_socket_get_local_port(
                 socket, connection->nontransient_state.last_local_port,
                 ANJAY_MAX_URL_PORT_SIZE))) {
-        anjay_log(DEBUG, "bound to port %s",
+        anjay_log(DEBUG, _("bound to port ") "%s",
                   connection->nontransient_state.last_local_port);
     } else {
-        anjay_log(WARNING, "could not store bound local port");
+        anjay_log(WARNING, _("could not store bound local port"));
         connection->nontransient_state.last_local_port[0] = '\0';
     }
 
@@ -115,7 +116,7 @@ static int ensure_udp_coap_context(anjay_t *anjay,
                 anjay->sched, &anjay->udp_tx_params, anjay->in_shared_buffer,
                 anjay->out_shared_buffer, anjay->udp_response_cache);
         if (!connection->coap_ctx) {
-            anjay_log(ERROR, "could not create CoAP/UDP context");
+            anjay_log(ERROR, _("could not create CoAP/UDP context"));
             return -1;
         }
     }
@@ -139,7 +140,7 @@ try_bind_to_static_preferred_port(anjay_t *anjay,
                 _anjay_connection_internal_get_socket(connection), local_addr,
                 static_preferred_port);
         if (avs_is_err(err)) {
-            anjay_log(ERROR, "could not bind socket to [%s]:%s",
+            anjay_log(ERROR, _("could not bind socket to ") "[%s]:%s",
                       local_addr ? local_addr : "", static_preferred_port);
             return err;
         }
@@ -160,7 +161,7 @@ try_bind_to_last_local_port(anjay_server_connection_t *connection,
             return AVS_OK;
         }
         anjay_log(WARNING,
-                  "could not bind socket to last known address [%s]:%s",
+                  _("could not bind socket to last known address ") "[%s]:%s",
                   local_addr ? local_addr : "",
                   connection->nontransient_state.last_local_port);
     }

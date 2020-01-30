@@ -42,7 +42,7 @@ create_observe(avs_coap_observe_id_t id,
             (AVS_LIST(avs_coap_observe_t)) AVS_LIST_NEW_BUFFER(
                     sizeof(avs_coap_observe_t) + options_capacity);
     if (!observe) {
-        LOG(ERROR, "out of memory");
+        LOG(ERROR, _("out of memory"));
         return NULL;
     }
 
@@ -82,7 +82,7 @@ avs_coap_observe_start(avs_coap_ctx_t *ctx,
                        avs_coap_observe_cancel_handler_t *cancel_handler,
                        void *handler_arg) {
     if (!avs_coap_code_is_request(req->code)) {
-        LOG(ERROR, "%s is not a valid request code",
+        LOG(ERROR, "%s" _(" is not a valid request code"),
             AVS_COAP_CODE_STRING(req->code));
         return avs_errno(AVS_EINVAL);
     }
@@ -103,7 +103,7 @@ avs_coap_observe_start(avs_coap_ctx_t *ctx,
     // make sure to *replace* existing observation with same ID if one exists
     _avs_coap_observe_cancel(ctx, &id);
 
-    LOG(DEBUG, "Observe start: %s", AVS_COAP_TOKEN_HEX(&id.token));
+    LOG(DEBUG, _("Observe start: ") "%s", AVS_COAP_TOKEN_HEX(&id.token));
 
     AVS_LIST_INSERT(&_avs_coap_get_base(ctx)->observes, observe);
     return AVS_OK;
@@ -121,7 +121,7 @@ _avs_coap_observe_setup_notify(avs_coap_ctx_t *ctx,
                                avs_coap_observe_notify_t *out_notify) {
     avs_coap_observe_t *observe = find_observe_by_id(ctx, id);
     if (!observe) {
-        LOG(DEBUG, "observation %s does not exist",
+        LOG(DEBUG, _("observation ") "%s" _(" does not exist"),
             AVS_COAP_TOKEN_HEX(&id->token));
         return avs_errno(AVS_EINVAL);
     }
@@ -138,12 +138,12 @@ void _avs_coap_observe_cancel(avs_coap_ctx_t *ctx,
                               const avs_coap_observe_id_t *id) {
     AVS_LIST(avs_coap_observe_t) *observe_ptr = find_observe_ptr_by_id(ctx, id);
     if (!observe_ptr) {
-        LOG(TRACE, "observation %s does not exist",
+        LOG(TRACE, _("observation ") "%s" _(" does not exist"),
             AVS_COAP_TOKEN_HEX(&id->token));
         return;
     }
 
-    LOG(DEBUG, "Observe cancel: %s", AVS_COAP_TOKEN_HEX(&id->token));
+    LOG(DEBUG, _("Observe cancel: ") "%s", AVS_COAP_TOKEN_HEX(&id->token));
 
     avs_coap_observe_t *observe = AVS_LIST_DETACH(observe_ptr);
     if (observe->cancel_handler) {
@@ -188,13 +188,14 @@ avs_error_t avs_coap_observe_persist(avs_coap_ctx_t *ctx,
     }
     avs_coap_observe_t *observe = find_observe_by_id(ctx, &id);
     if (!observe) {
-        LOG(ERROR, "Cannot persist observation %s: it does not exist",
+        LOG(ERROR,
+            _("Cannot persist observation ") "%s" _(": it does not exist"),
             AVS_COAP_TOKEN_HEX(&id.token));
         return avs_errno(AVS_EINVAL);
     }
     uint16_t options_size = (uint16_t) observe->request_key.size;
     if (options_size != observe->request_key.size) {
-        LOG(ERROR, "Options longer than %u are not supported",
+        LOG(ERROR, _("Options longer than ") "%u" _(" are not supported"),
             (unsigned) UINT16_MAX);
         return _avs_coap_err(AVS_COAP_ERR_NOT_IMPLEMENTED);
     }
@@ -220,8 +221,8 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
     }
     avs_coap_base_t *coap_base = _avs_coap_get_base(ctx);
     if (coap_base->socket) {
-        LOG(ERROR, "CoAP context is already initialized, cannot restore "
-                   "observation state");
+        LOG(ERROR, _("CoAP context is already initialized, cannot restore "
+                     "observation state"));
         return avs_errno(AVS_EINVAL);
     }
 
@@ -238,7 +239,8 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
     }
 
     if (find_observe_by_id(ctx, &id)) {
-        LOG(ERROR, "Observe %s already exists", AVS_COAP_TOKEN_HEX(&id.token));
+        LOG(ERROR, _("Observe ") "%s" _(" already exists"),
+            AVS_COAP_TOKEN_HEX(&id.token));
         // persistence data likely malformed
         return avs_errno(AVS_EBADMSG);
     }
@@ -246,7 +248,7 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
     observe = (AVS_LIST(avs_coap_observe_t)) AVS_LIST_NEW_BUFFER(
             sizeof(avs_coap_observe_t) + options_size);
     if (!observe) {
-        LOG(ERROR, "Out of memory");
+        LOG(ERROR, _("Out of memory"));
         return avs_errno(AVS_ENOMEM);
     }
     *observe = (avs_coap_observe_t) {
@@ -265,7 +267,8 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
         AVS_LIST_DELETE(&observe);
         return err;
     }
-    LOG(DEBUG, "Observe (restored) start: %s", AVS_COAP_TOKEN_HEX(&id.token));
+    LOG(DEBUG, _("Observe (restored) start: ") "%s",
+        AVS_COAP_TOKEN_HEX(&id.token));
     AVS_LIST_INSERT(&coap_base->observes, observe);
 
     return AVS_OK;
@@ -280,7 +283,7 @@ avs_error_t avs_coap_observe_persist(avs_coap_ctx_t *ctx,
     (void) id;
     (void) persistence;
 
-    LOG(WARNING, "observe persistence not compiled in");
+    LOG(WARNING, _("observe persistence not compiled in"));
     return _avs_coap_err(AVS_COAP_ERR_FEATURE_DISABLED);
 }
 
@@ -294,7 +297,7 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
     (void) handler_arg;
     (void) persistence;
 
-    LOG(WARNING, "observe persistence not compiled in");
+    LOG(WARNING, _("observe persistence not compiled in"));
     return _avs_coap_err(AVS_COAP_ERR_FEATURE_DISABLED);
 }
 

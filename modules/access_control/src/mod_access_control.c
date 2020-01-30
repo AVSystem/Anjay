@@ -99,7 +99,7 @@ static int add_instances_without_iids(
     }
 
     if (*instances_to_move) {
-        ac_log(ERROR, "no free IIDs left");
+        ac_log(ERROR, _("no free IIDs left"));
         return -1;
     }
     return 0;
@@ -118,7 +118,8 @@ int _anjay_access_control_add_instance(
     AVS_LIST(access_control_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &access_control->current.instances) {
         if ((*ptr)->iid == instance->iid) {
-            ac_log(WARNING, "element with IID == %" PRIu16 " already exists",
+            ac_log(WARNING,
+                   _("element with IID == ") "%" PRIu16 _(" already exists"),
                    instance->iid);
             return -1;
         } else if ((*ptr)->iid > instance->iid) {
@@ -207,15 +208,15 @@ static int set_acl_in_instance(anjay_t *anjay,
     if (!entry) {
         if (_anjay_access_control_validate_ssid(anjay, ssid)) {
             ac_log(WARNING,
-                   "cannot set ACL: Server with SSID==%" PRIu16
-                   " does not exist",
+                   _("cannot set ACL: Server with SSID==") "%" PRIu16 _(
+                           " does not exist"),
                    ssid);
             return -1;
         }
 
         entry = AVS_LIST_NEW_ELEMENT(acl_entry_t);
         if (!entry) {
-            ac_log(ERROR, "out of memory");
+            ac_log(ERROR, _("out of memory"));
             return -1;
         }
 
@@ -240,8 +241,8 @@ static int set_acl(anjay_t *anjay,
     if (!ac_instance) {
         if (!target_instance_reachable(anjay, oid, iid)) {
             ac_log(WARNING,
-                   "cannot set ACL: object instance /%" PRIu16 "/%" PRIu16
-                   " does not exist",
+                   _("cannot set ACL: object instance ") "/%" PRIu16 "/%" PRIu16
+                           _(" does not exist"),
                    oid, iid);
             return -1;
         }
@@ -249,8 +250,8 @@ static int set_acl(anjay_t *anjay,
                 ANJAY_SSID_BOOTSTRAP, &(const acl_target_t) { oid, iid });
         if (!ac_instance) {
             ac_log(WARNING,
-                   "cannot set ACL: Access Control instance for /%u/%u does "
-                   "not exist and it could not be created",
+                   _("cannot set ACL: Access Control instance for ") "/%u/%u" _(
+                           " does not exist and it could not be created"),
                    oid, iid);
             return -1;
         }
@@ -268,7 +269,8 @@ static int set_acl(anjay_t *anjay,
     if (!result
             && (result = anjay_notify_instances_changed(
                         anjay, ANJAY_DM_OID_ACCESS_CONTROL))) {
-        ac_log(ERROR, "error while calling anjay_notify_instances_changed()");
+        ac_log(ERROR,
+               _("error while calling anjay_notify_instances_changed()"));
     }
     anjay_notify_queue_t dm_changes = NULL;
     if (!result
@@ -299,27 +301,30 @@ int anjay_access_control_set_acl(anjay_t *anjay,
                                  anjay_access_mask_t access_mask) {
     access_control_t *access_control = _anjay_access_control_get(anjay);
     if (!access_control) {
-        ac_log(ERROR, "Access Control not installed in this Anjay object");
+        ac_log(ERROR, _("Access Control not installed in this Anjay object"));
         return -1;
     }
 
     if (ssid == ANJAY_SSID_BOOTSTRAP) {
-        ac_log(ERROR, "cannot set ACL: SSID = %u is a reserved value", ssid);
+        ac_log(ERROR,
+               _("cannot set ACL: SSID = ") "%u" _(" is a reserved value"),
+               ssid);
         return -1;
     }
     if ((access_mask & ANJAY_ACCESS_MASK_FULL) != access_mask) {
-        ac_log(ERROR, "cannot set ACL: invalid permission mask");
+        ac_log(ERROR, _("cannot set ACL: invalid permission mask"));
         return -1;
     }
     if (iid != ANJAY_ID_INVALID && (access_mask & ANJAY_ACCESS_MASK_CREATE)) {
-        ac_log(ERROR, "cannot set ACL: Create permission makes no sense for "
-                      "Object Instances");
+        ac_log(ERROR, _("cannot set ACL: Create permission makes no sense for "
+                        "Object Instances"));
         return -1;
     }
     if (iid == ANJAY_ID_INVALID
             && (access_mask & ANJAY_ACCESS_MASK_CREATE) != access_mask) {
-        ac_log(ERROR, "cannot set ACL: only Create permission makes sense for "
-                      "creation instance");
+        ac_log(ERROR,
+               _("cannot set ACL: only Create permission makes sense for "
+                 "creation instance"));
         return -1;
     }
 

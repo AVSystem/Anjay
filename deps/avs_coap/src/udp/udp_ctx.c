@@ -212,15 +212,15 @@ static void update_last_mtu_from_socket(avs_coap_udp_ctx_t *ctx) {
 
     if (avs_is_err(avs_net_socket_get_opt(
                 ctx->base.socket, AVS_NET_SOCKET_OPT_INNER_MTU, &opt_value))) {
-        LOG(DEBUG, "socket MTU unknown");
+        LOG(DEBUG, _("socket MTU unknown"));
     } else if (opt_value.mtu <= 0) {
-        LOG(DEBUG, "socket MTU invalid: %d", opt_value.mtu);
+        LOG(DEBUG, _("socket MTU invalid: ") "%d", opt_value.mtu);
     } else {
         if ((size_t) opt_value.mtu != ctx->last_mtu) {
-            LOG(DEBUG, "socket MTU changed: %u -> %d", (unsigned) ctx->last_mtu,
-                opt_value.mtu);
+            LOG(DEBUG, _("socket MTU changed: ") "%u" _(" -> ") "%d",
+                (unsigned) ctx->last_mtu, opt_value.mtu);
         } else {
-            LOG(TRACE, "socket MTU: %d", opt_value.mtu);
+            LOG(TRACE, _("socket MTU: ") "%d", opt_value.mtu);
         }
 
         ctx->last_mtu = (size_t) opt_value.mtu;
@@ -365,7 +365,7 @@ static void try_cache_response(avs_coap_udp_ctx_t *ctx,
                                                   sizeof(addr)))
             || avs_is_err(avs_net_socket_get_remote_port(ctx->base.socket, port,
                                                          sizeof(port)))) {
-        LOG(DEBUG, "could not get remote host/port");
+        LOG(DEBUG, _("could not get remote host/port"));
         return;
     }
 
@@ -383,7 +383,7 @@ static avs_error_t coap_udp_send_serialized_msg(avs_coap_udp_ctx_t *ctx,
 
     avs_error_t err = avs_net_socket_send(ctx->base.socket, msg_buf, msg_size);
     if (avs_is_err(err)) {
-        LOG(DEBUG, "send failed: %s", AVS_COAP_STRERROR(err));
+        LOG(DEBUG, _("send failed: ") "%s", AVS_COAP_STRERROR(err));
     }
     return err;
 }
@@ -506,9 +506,9 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
     avs_time_monotonic_t next_retransmit = get_first_retransmit_time(ctx);
     if (!avs_time_monotonic_valid(next_retransmit)) {
         LOG(ERROR,
-            "unable to schedule retransmit: get_first_retransmit_time() "
-            "returned invalid time; either the monotonic clock malfunctioned, "
-            "or UDP tx params are too large to handle.");
+            _("unable to schedule retransmit: get_first_retransmit_time() "
+              "returned invalid time; either the monotonic clock "
+              "malfunctioned, or UDP tx params are too large to handle."));
 
         // We can't rely on getting valid times for any held job. Fail all
         // of them immediately.
@@ -540,7 +540,8 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
     unconfirmed->hold = false;
     unconfirmed->next_retransmit = next_retransmit;
 
-    LOG(DEBUG, "msg %s resumed", AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token));
+    LOG(DEBUG, _("msg ") "%s" _(" resumed"),
+        AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token));
 
     (void) coap_udp_send_serialized_msg(ctx, &unconfirmed->msg,
                                         unconfirmed->packet,
@@ -564,7 +565,7 @@ static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
 
     const size_t msgs_to_resume =
             AVS_MIN(ctx->tx_params.nstart - resumed_msgs, held_msgs);
-    LOG(DEBUG, "%zu/%zu msgs held; resuming %zu", held_msgs, all_msgs,
+    LOG(DEBUG, "%zu/%zu" _(" msgs held; resuming ") "%zu", held_msgs, all_msgs,
         msgs_to_resume);
 
     // Ending up resuming 0 messages here indicates one of:
@@ -605,7 +606,8 @@ static void try_cleanup_unconfirmed(avs_coap_udp_ctx_t *ctx,
     assert(unconfirmed);
     AVS_ASSERT(!AVS_LIST_FIND_PTR(&ctx->unconfirmed_messages, unconfirmed),
                "unconfirmed must be detached");
-    LOG(DEBUG, "msg %s: %s", AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token),
+    LOG(DEBUG, _("msg ") "%s" _(": ") "%s",
+        AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token),
         send_result_string(result));
 
     avs_coap_send_result_handler_result_t handler_result =
@@ -779,7 +781,8 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
     if (_avs_coap_udp_all_retries_sent(&unconfirmed->retry_state,
                                        &ctx->tx_params)) {
         LOG(DEBUG,
-            "msg %s: MAX_RETRANSMIT reached without response from the server",
+            _("msg ") "%s" _(": MAX_RETRANSMIT reached without response from "
+                             "the server"),
             AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token));
 
         // retransmission_job is rescheduled by fail_unconfirmed()
@@ -794,7 +797,7 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
         return;
     }
 
-    LOG(DEBUG, "msg %s: retry %u/%u",
+    LOG(DEBUG, _("msg ") "%s" _(": retry ") "%u/%u",
         AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token),
         unconfirmed->retry_state.retry_count, ctx->tx_params.max_retransmit);
 
@@ -808,9 +811,10 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
             avs_time_monotonic_add(unconfirmed->next_retransmit,
                                    unconfirmed->retry_state.recv_timeout);
     if (!avs_time_monotonic_valid(unconfirmed->next_retransmit)) {
-        LOG(ERROR, "unable to schedule message retransmission: "
-                   "next_retransmit time invalid; either the monotonic clock "
-                   "malfunctioned or UDP tx params are too large to handle");
+        LOG(ERROR,
+            _("unable to schedule message retransmission: next_retransmit time "
+              "invalid; either the monotonic clock malfunctioned or UDP tx "
+              "params are too large to handle"));
         fail_unconfirmed(ctx, &ctx->unconfirmed_messages, NULL,
                          _avs_coap_err(AVS_COAP_ERR_TIME_INVALID));
         return;
@@ -832,7 +836,7 @@ static avs_time_monotonic_t coap_udp_on_timeout(avs_coap_ctx_t *ctx_) {
     if (ctx->unconfirmed_messages) {
         avs_coap_udp_unconfirmed_msg_t *unconfirmed = ctx->unconfirmed_messages;
 
-        LOG(DEBUG, "next UDP retransmission: %" PRIi64 ".%09" PRId32,
+        LOG(DEBUG, _("next UDP retransmission: ") "%" PRIi64 ".%09" PRId32,
             unconfirmed->next_retransmit.since_monotonic_epoch.seconds,
             unconfirmed->next_retransmit.since_monotonic_epoch.nanoseconds);
         return ctx->unconfirmed_messages->next_retransmit;
@@ -844,7 +848,8 @@ static avs_time_monotonic_t coap_udp_on_timeout(avs_coap_ctx_t *ctx_) {
 static avs_error_t
 enqueue_unconfirmed(avs_coap_udp_ctx_t *ctx,
                     AVS_LIST(avs_coap_udp_unconfirmed_msg_t) unconfirmed) {
-    LOG(TRACE, "msg %s: enqueue", AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token));
+    LOG(TRACE, _("msg ") "%s" _(": enqueue"),
+        AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token));
 
     // do not send the message unless there is no other one waiting to be sent
     // that is held for longer than this one
@@ -860,16 +865,17 @@ enqueue_unconfirmed(avs_coap_udp_ctx_t *ctx,
                               : get_first_retransmit_time(ctx);
     if (!avs_time_monotonic_valid(unconfirmed->next_retransmit)) {
         LOG(ERROR,
-            "unable to enqueue msg: next_retransmit time invalid; "
-            "either the monotonic clock malfunctioned or UDP tx params are "
-            "too large to handle");
+            _("unable to enqueue msg: next_retransmit time invalid; "
+              "either the monotonic clock malfunctioned or UDP tx "
+              "params are "
+              "too large to handle"));
         return _avs_coap_err(AVS_COAP_ERR_TIME_INVALID);
     }
 
     unconfirmed->next_retransmit = next_retransmit;
 
     if (unconfirmed->hold) {
-        LOG(DEBUG, "msg %s held due to NSTART = %u",
+        LOG(DEBUG, _("msg ") "%s" _(" held due to NSTART = ") "%u",
             AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token),
             (unsigned) ctx->tx_params.nstart);
     } else {
@@ -1064,13 +1070,13 @@ static avs_error_t coap_udp_recv_msg(avs_coap_udp_ctx_t *ctx,
     avs_error_t err = avs_net_socket_receive(ctx->base.socket, &packet_size,
                                              buf, buf_size);
     if (avs_is_err(err)) {
-        LOG(TRACE, "recv failed");
+        LOG(TRACE, _("recv failed"));
         return err;
     }
 
     err = _avs_coap_udp_msg_parse(out_msg, buf, packet_size);
     if (avs_is_err(err)) {
-        LOG(DEBUG, "recv: malformed packet");
+        LOG(DEBUG, _("recv: malformed packet"));
         return err;
     }
 
@@ -1094,7 +1100,7 @@ static avs_error_t try_send_cached_response(avs_coap_udp_ctx_t *ctx,
                                                   sizeof(addr)))
             || avs_is_err(avs_net_socket_get_remote_port(ctx->base.socket, port,
                                                          sizeof(port)))) {
-        LOG(DEBUG, "could not get remote remote host/port");
+        LOG(DEBUG, _("could not get remote remote host/port"));
         *out_cache_hit = false;
         return AVS_OK;
     }
@@ -1175,7 +1181,8 @@ static avs_error_t handle_response(avs_coap_udp_ctx_t *ctx,
     if (!unconfirmed_ptr) {
         bool is_confirmable = (_avs_coap_udp_header_get_type(&msg->header)
                                == AVS_COAP_UDP_TYPE_CONFIRMABLE);
-        LOG(DEBUG, "Received response does not match any known request, %s",
+        LOG(DEBUG,
+            _("Received response does not match any known request, ") "%s",
             is_confirmable ? "rejecting" : "ignoring");
         if (is_confirmable) {
             return send_reset(ctx, _avs_coap_udp_header_get_id(&msg->header));
@@ -1227,9 +1234,10 @@ ack_request(avs_coap_udp_ctx_t *ctx,
             avs_coap_udp_exchange_lifetime(&ctx->tx_params));
 
     if (!avs_time_monotonic_valid((*unconfirmed_ptr)->next_retransmit)) {
-        LOG(ERROR, "unable to schedule msg retransmission: "
-                   "next_retransmit time invalid; either the monotonic clock "
-                   "malfunctioned or UDP tx params are too large to handle");
+        LOG(ERROR,
+            _("unable to schedule msg retransmission: next_retransmit time "
+              "invalid; either the monotonic clock malfunctioned or UDP tx "
+              "params are too large to handle"));
         fail_unconfirmed(ctx, unconfirmed_ptr, NULL,
                          _avs_coap_err(AVS_COAP_ERR_TIME_INVALID));
         return;
@@ -1274,7 +1282,9 @@ static avs_error_t handle_empty(avs_coap_udp_ctx_t *ctx,
             }
             return AVS_OK;
         } else {
-            LOG(DEBUG, "Unexpected Separate ACK (ID %#04" PRIx16 "), ignoring",
+            LOG(DEBUG,
+                _("Unexpected Separate ACK (ID ") "%#04" PRIx16 _(
+                        "), ignoring"),
                 msg_id);
             return AVS_OK;
         }
@@ -1326,7 +1336,7 @@ static avs_error_t handle_msg(avs_coap_udp_ctx_t *ctx,
     } else if (msg->header.code == AVS_COAP_CODE_EMPTY) {
         return handle_empty(ctx, msg);
     } else {
-        LOG(DEBUG, "Unexpected CoAP code: %s, ignoring",
+        LOG(DEBUG, _("Unexpected CoAP code: ") "%s" _(", ignoring"),
             AVS_COAP_CODE_STRING(msg->header.code));
     }
     return AVS_OK;
@@ -1386,8 +1396,8 @@ static avs_error_t handle_truncated_msg(avs_coap_udp_ctx_t *ctx,
                                       message_buf_size, &has_token,
                                       &has_options);
     if (!has_token) {
-        LOG(DEBUG, "received truncated CoAP message with incomplete "
-                   "token; ignoring");
+        LOG(DEBUG, _("received truncated CoAP message with incomplete token; "
+                     "ignoring"));
         return AVS_OK;
     }
 
@@ -1430,7 +1440,7 @@ coap_udp_receive_message(avs_coap_ctx_t *ctx_,
     if (err.category == AVS_COAP_ERR_CATEGORY) {
         switch ((avs_coap_error_t) err.code) {
         case AVS_COAP_ERR_MALFORMED_MESSAGE:
-            LOG(DEBUG, "malformed CoAP message received, ignoring");
+            LOG(DEBUG, _("malformed CoAP message received, ignoring"));
             return AVS_OK;
 
         case AVS_COAP_ERR_MALFORMED_OPTIONS: {
@@ -1470,7 +1480,8 @@ coap_udp_receive_message(avs_coap_ctx_t *ctx_,
         }
     }
 
-    LOG(DEBUG, "unhandled error (%s) returned from coap_udp_recv_msg()",
+    LOG(DEBUG,
+        _("unhandled error (") "%s" _(") returned from coap_udp_recv_msg()"),
         AVS_COAP_STRERROR(err));
     return err;
 }
@@ -1483,7 +1494,7 @@ static avs_error_t coap_udp_accept_observation(avs_coap_ctx_t *ctx_,
 #ifdef WITH_AVS_COAP_OBSERVE
     return AVS_OK;
 #else  // WITH_AVS_COAP_OBSERVE
-    LOG(WARNING, "Observes support disabled");
+    LOG(WARNING, _("Observes support disabled"));
     return _avs_coap_err(AVS_COAP_ERR_FEATURE_DISABLED);
 #endif // WITH_AVS_COAP_OBSERVE
 }
@@ -1546,11 +1557,11 @@ avs_coap_udp_ctx_create(avs_sched_t *sched,
 
     const char *error;
     if (!avs_coap_udp_tx_params_valid(udp_tx_params, &error)) {
-        LOG(ERROR, "invalid UDP transmission parameters: %s", error);
+        LOG(ERROR, _("invalid UDP transmission parameters: ") "%s", error);
         return NULL;
     }
     if (!are_tx_params_sane(udp_tx_params)) {
-        LOG(ERROR, "UDP transmission parameters cause ack_timeout overflow");
+        LOG(ERROR, _("UDP transmission parameters cause ack_timeout overflow"));
         return NULL;
     }
 

@@ -26,14 +26,14 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 TOOLS_DIR="$SCRIPT_DIR"
 
 if [ -z "$OPENSSL" ]; then
-    OPENSSL=openssl
-    for f in /usr/local/opt/openssl*/bin/openssl; do
-        if [ -x /usr/local/opt/openssl/bin/openssl ]; then
-            # default OpenSSL on macOS is outdated and buggy
-            # use the one from Homebrew if available
-            OPENSSL=/usr/local/opt/openssl/bin/openssl
-        fi
-    done
+    # default OpenSSL on macOS is outdated and buggy
+    # use the one from Homebrew if available
+    BREW_OPENSSL="$(brew --prefix openssl 2>/dev/null || true)"
+    if [ "$BREW_OPENSSL" ]; then
+        OPENSSL="$BREW_OPENSSL/bin/openssl"
+    else
+        OPENSSL=openssl
+    fi
 fi
 
 if [[ "$#" < 1 ]]; then
@@ -57,7 +57,7 @@ cd self-signed
 "$OPENSSL" ecparam -name prime256v1 -genkey -out server.key
 "$OPENSSL" ecparam -name prime256v1 -genkey -out client.key
 "$OPENSSL" req -batch -new -subj '/CN=127.0.0.1' -key server.key -x509 -sha256 -days 9999 -out server.crt
-"$OPENSSL" req -batch -new -subj '/' -key client.key -x509 -sha256 -days 9999 -out client.crt
+"$OPENSSL" req -batch -new -subj '/CN=localhost' -key client.key -x509 -sha256 -days 9999 -out client.crt
 "$OPENSSL" x509 -in server.crt -outform der > server.crt.der
 "$OPENSSL" x509 -in client.crt -outform der > client.crt.der
 "$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der -nocrypt > client.key.der
@@ -66,7 +66,7 @@ echo "* generating self signed certs - done"
 
 echo "* generating root cert"
 "$OPENSSL" ecparam -name prime256v1 -genkey -out root.key
-"$OPENSSL" req -batch -new -subj '/' -key root.key -x509 -sha256 -days 9999 -out root.crt
+"$OPENSSL" req -batch -new -subj '/CN=root' -key root.key -x509 -sha256 -days 9999 -out root.crt
 "$OPENSSL" x509 -in root.crt -outform der > root.crt.der
 echo "* generating root cert - done"
 

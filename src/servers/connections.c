@@ -62,7 +62,7 @@ bool _anjay_connection_is_online(anjay_server_connection_t *connection) {
     avs_net_socket_opt_value_t opt;
     if (avs_is_err(avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_STATE,
                                           &opt))) {
-        anjay_log(DEBUG, "Could not get socket state");
+        anjay_log(DEBUG, _("Could not get socket state"));
         return false;
     }
     return opt.state == AVS_NET_SOCKET_STATE_CONNECTED;
@@ -109,7 +109,7 @@ avs_error_t _anjay_server_connection_internal_bring_online(
     (void) security_iid;
 
     if (_anjay_connection_is_online(connection)) {
-        anjay_log(DEBUG, "socket already connected");
+        anjay_log(DEBUG, _("socket already connected"));
         connection->state = ANJAY_SERVER_CONNECTION_STABLE;
         connection->needs_observe_flush = true;
         return AVS_OK;
@@ -123,7 +123,7 @@ avs_error_t _anjay_server_connection_internal_bring_online(
         _anjay_coap_ctx_cleanup(server->anjay, &connection->coap_ctx);
 
         if (avs_is_err(avs_net_socket_close(connection->conn_socket_))) {
-            anjay_log(ERROR, "Could not close the socket (?!)");
+            anjay_log(ERROR, _("Could not close the socket (?!)"));
         }
         return err;
     }
@@ -192,7 +192,9 @@ recreate_socket(anjay_t *anjay,
                                                               inout_info);
     }
     if (!security_config) {
-        anjay_log(DEBUG, "could not get %s security config for server /%u/%u",
+        anjay_log(DEBUG,
+                  _("could not get ") "%s" _(
+                          " security config for server ") "/%u/%u",
                   def->name, ANJAY_DM_OID_SECURITY, inout_info->security_iid);
         return avs_errno(AVS_EPROTO);
     }
@@ -287,7 +289,7 @@ void _anjay_server_connections_refresh(
     if (server_info.transport_info
             && !_anjay_socket_transport_supported(
                        server->anjay, server_info.transport_info->transport)) {
-        anjay_log(WARNING, "support for protocol %s not enabled",
+        anjay_log(WARNING, _("support for protocol ") "%s" _(" not enabled"),
                   server_info.transport_info->uri_scheme);
         server_info.transport_info = NULL;
     }
@@ -296,7 +298,9 @@ void _anjay_server_connections_refresh(
                            != server_info.transport_info->transport) {
         const char *host = avs_url_host(server_info.uri);
         const char *port = avs_url_port(server_info.uri);
-        anjay_log(INFO, "server /0/%u: transport change %c -> %c (uri: %s:%s)",
+        anjay_log(INFO,
+                  _("server /0/") "%u" _(": transport change ") "%c" _(
+                          " -> ") "%c" _(" (uri: ") "%s" _(":") "%s" _(")"),
                   security_iid,
                   _anjay_binding_info_by_transport(primary_conn->transport)
                           ->letter,

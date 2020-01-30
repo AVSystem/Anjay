@@ -358,7 +358,7 @@ _anjay_json_encoder_new(avs_stream_t *stream,
                         key_encoder_t key_encoder,
                         avs_base64_config_t base64_config) {
     if (!stream) {
-        json_log(DEBUG, "no stream provided");
+        json_log(DEBUG, _("no stream provided"));
         return NULL;
     }
 
@@ -370,7 +370,7 @@ _anjay_json_encoder_new(avs_stream_t *stream,
         ctx->key_encoder = key_encoder;
         ctx->base64_config = base64_config;
     } else {
-        json_log(DEBUG, "failed to allocate encoder context");
+        json_log(DEBUG, _("failed to allocate encoder context"));
     }
     return ctx;
 }

@@ -35,13 +35,13 @@ VISIBILITY_SOURCE_BEGIN
 static bool is_msg_header_valid(const avs_coap_udp_header_t *hdr) {
     uint8_t version = _avs_coap_udp_header_get_version(hdr);
     if (version != 1) {
-        LOG(DEBUG, "unsupported CoAP version: %u", version);
+        LOG(DEBUG, _("unsupported CoAP version: ") "%u", version);
         return false;
     }
 
     if (_avs_coap_udp_header_get_token_length(hdr)
             > AVS_COAP_MAX_TOKEN_LENGTH) {
-        LOG(DEBUG, "invalid token longer than %u bytes",
+        LOG(DEBUG, _("invalid token longer than ") "%u" _(" bytes"),
             (unsigned) AVS_COAP_MAX_TOKEN_LENGTH);
         return false;
     }
@@ -51,7 +51,9 @@ static bool is_msg_header_valid(const avs_coap_udp_header_t *hdr) {
     switch (type) {
     case AVS_COAP_UDP_TYPE_ACKNOWLEDGEMENT:
         if (avs_coap_code_is_request(hdr->code)) {
-            LOG(DEBUG, "Request code (%s) on an Acknowledgement makes no sense",
+            LOG(DEBUG,
+                _("Request code (") "%s" _(
+                        ") on an Acknowledgement makes no sense"),
                 AVS_COAP_CODE_STRING(hdr->code));
             return false;
         }
@@ -59,7 +61,9 @@ static bool is_msg_header_valid(const avs_coap_udp_header_t *hdr) {
 
     case AVS_COAP_UDP_TYPE_RESET:
         if (hdr->code != AVS_COAP_CODE_EMPTY) {
-            LOG(DEBUG, "Reset message must use %s CoAP code (got %s)",
+            LOG(DEBUG,
+                _("Reset message must use ") "%s" _(" CoAP code (got ") "%s" _(
+                        ")"),
                 AVS_COAP_CODE_STRING(AVS_COAP_CODE_EMPTY),
                 AVS_COAP_CODE_STRING(hdr->code));
             return false;
@@ -77,12 +81,12 @@ static avs_error_t parse_header(avs_coap_udp_header_t *out_hdr,
                                 bytes_dispenser_t *dispenser) {
     if (_avs_coap_bytes_extract(dispenser, out_hdr, sizeof(*out_hdr))
             || !is_msg_header_valid(out_hdr)) {
-        LOG(DEBUG, "malformed CoAP/UDP header");
+        LOG(DEBUG, _("malformed CoAP/UDP header"));
         return _avs_coap_err(AVS_COAP_ERR_MALFORMED_MESSAGE);
     }
 
     if (out_hdr->code == AVS_COAP_CODE_EMPTY && dispenser->bytes_left > 0) {
-        LOG(DEBUG, "%s message must not have token, options nor payload",
+        LOG(DEBUG, "%s" _(" message must not have token, options nor payload"),
             AVS_COAP_CODE_STRING(AVS_COAP_CODE_EMPTY));
         return _avs_coap_err(AVS_COAP_ERR_MALFORMED_MESSAGE);
     }
@@ -109,7 +113,7 @@ static avs_error_t parse_payload(const void **out_payload,
 
     if (*out_payload_size == 0) {
         // not MALFORMED_MESSAGE, because the header is still valid
-        LOG(DEBUG, "payload marker must be omitted if there is no payload");
+        LOG(DEBUG, _("payload marker must be omitted if there is no payload"));
         return _avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS);
     }
 
@@ -130,7 +134,7 @@ validate_block_opt(avs_coap_options_t *opts,
     avs_coap_option_block_t block;
     if (avs_coap_options_get_block(opts, block_type, &block) == 0
             && block.is_bert) {
-        LOG(DEBUG, "BERT option in CoAP/UDP message");
+        LOG(DEBUG, _("BERT option in CoAP/UDP message"));
         return _avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS);
     }
     return AVS_OK;

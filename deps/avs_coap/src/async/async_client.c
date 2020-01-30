@@ -117,7 +117,7 @@ client_exchange_start(avs_coap_ctx_t *ctx,
 
 static inline bool request_header_valid(const avs_coap_request_header_t *req) {
     if (!avs_coap_code_is_request(req->code)) {
-        LOG(WARNING, "non-request code %s used in request header",
+        LOG(WARNING, _("non-request code ") "%s" _(" used in request header"),
             AVS_COAP_CODE_STRING(req->code));
         return false;
     }
@@ -182,7 +182,7 @@ call_exchange_response_handler(avs_coap_ctx_t *ctx,
     assert(ctx);
     assert(exchange);
 
-    LOG(TRACE, "exchange %" PRIu64 ": %s", exchange->id.value,
+    LOG(TRACE, _("exchange ") "%" PRIu64 _(": ") "%s", exchange->id.value,
         request_state_string(request_state.state));
 
     // TODO: T2243
@@ -256,15 +256,16 @@ static avs_error_t handle_request_block_size_renegotiation(
 
         if (new_seq_num > AVS_COAP_BLOCK_MAX_SEQ_NUMBER) {
             LOG(DEBUG,
-                "BLOCK%d size renegotiation impossible: seq_num "
-                "overflows (%" PRIu32 " >= %" PRIu32 " == 2^20), ignoring "
-                "size renegotiation request",
+                _("BLOCK") "%d" _(" size renegotiation impossible: seq_num "
+                                  "overflows (") "%" PRIu32 _(" >= ") "%" PRIu32
+                        _(" == 2^20), ignoring size renegotiation request"),
                 request_block->type == AVS_COAP_BLOCK1 ? 1 : 2, new_seq_num,
                 (uint32_t) AVS_COAP_BLOCK_MAX_SEQ_NUMBER);
         } else {
             LOG(DEBUG,
-                "BLOCK%d size renegotiated: %" PRIu16 " -> %" PRIu16
-                "; seq_num %" PRIu32 " -> %" PRIu32,
+                _("BLOCK") "%d" _(" size renegotiated: ") "%" PRIu16
+                        _(" -> ") "%" PRIu16 _("; seq_num ") "%" PRIu32 _(
+                                " -> ") "%" PRIu32,
                 request_block->type == AVS_COAP_BLOCK1 ? 1 : 2,
                 request_block->size, response_block->size,
                 request_block->seq_num, new_seq_num);
@@ -276,8 +277,8 @@ static avs_error_t handle_request_block_size_renegotiation(
     } else {
         assert(request_block->size < response_block->size);
         LOG(DEBUG,
-            "invalid BLOCK%d size increase requested (%" PRIu16 " -> %" PRIu16
-            "), ignoring",
+            _("invalid BLOCK") "%d" _(" size increase requested (") "%" PRIu16
+                    _(" -> ") "%" PRIu16 _("), ignoring"),
             request_block->type == AVS_COAP_BLOCK1 ? 1 : 2, request_block->size,
             response_block->size);
         return _avs_coap_err(AVS_COAP_ERR_BLOCK_SIZE_RENEGOTIATION_INVALID);
@@ -314,8 +315,8 @@ static avs_error_t update_exchange_for_next_request_block(
 
     if (request_block1.seq_num > AVS_COAP_BLOCK_MAX_SEQ_NUMBER) {
         LOG(ERROR,
-            "BLOCK1 sequence number (%" PRIu32
-            ") exceeds maximum acceptable value (%" PRIu32 ")",
+            _("BLOCK1 sequence number (") "%" PRIu32 _(
+                    ") exceeds maximum acceptable value (") "%" PRIu32 _(")"),
             request_block1.seq_num, (uint32_t) AVS_COAP_BLOCK_MAX_SEQ_NUMBER);
         return _avs_coap_err(AVS_COAP_ERR_BLOCK_SEQ_NUM_OVERFLOW);
     }
@@ -355,12 +356,12 @@ handle_continue_response(avs_coap_exchange_t *exchange,
     }
 
     case AVS_COAP_OPTION_MISSING:
-        LOG(DEBUG, "BLOCK1 option missing in %s response",
+        LOG(DEBUG, _("BLOCK1 option missing in ") "%s" _(" response"),
             AVS_COAP_CODE_STRING(msg->code));
         return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
 
     default:
-        LOG(DEBUG, "malformed BLOCK1 option in %s response",
+        LOG(DEBUG, _("malformed BLOCK1 option in ") "%s" _(" response"),
             AVS_COAP_CODE_STRING(msg->code));
         return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
     }
@@ -394,8 +395,8 @@ static avs_error_t update_request_for_next_response_block(
 
     if (expected_offset != actual_offset) {
         LOG(DEBUG,
-            "mismatched response block offset (expected %" PRIu32
-            ", got %" PRIu32 ")",
+            _("mismatched response block offset (expected ") "%" PRIu32 _(
+                    ", got ") "%" PRIu32 _(")"),
             expected_offset, actual_offset);
         return _avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS);
     }
@@ -453,7 +454,8 @@ static bool etag_matches(avs_coap_exchange_t *exchange,
         return true;
     }
     if (!avs_coap_etag_equal(&etag, &exchange->by_type.client.etag)) {
-        LOG(WARNING, "Response ETag mismatch: previous: %s, current: %s",
+        LOG(WARNING,
+            _("Response ETag mismatch: previous: ") "%s" _(", current: ") "%s",
             AVS_COAP_ETAG_HEX(&exchange->by_type.client.etag),
             AVS_COAP_ETAG_HEX(&etag));
         return false;
@@ -498,7 +500,7 @@ handle_final_response(avs_coap_exchange_t *exchange,
         if (request_off != response_off) {
             // We asked the server for one block of data, but it returned
             // another one. This is clearly a server-side error.
-            LOG(WARNING, "expected %s, got %s",
+            LOG(WARNING, _("expected ") "%s" _(", got ") "%s",
                 _AVS_COAP_OPTION_BLOCK_STRING(&request_block2),
                 _AVS_COAP_OPTION_BLOCK_STRING(&response_block2));
             return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
@@ -507,7 +509,7 @@ handle_final_response(avs_coap_exchange_t *exchange,
         // TODO T2123: check that all options other than BLOCK2 are identical
         // across responses
 
-        LOG(TRACE, "exchange %" PRIu64 ": %s", exchange->id.value,
+        LOG(TRACE, _("exchange ") "%" PRIu64 _(": ") "%s", exchange->id.value,
             _AVS_COAP_OPTION_BLOCK_STRING(&response_block2));
 
         if (response_block2.has_more) {
@@ -529,7 +531,7 @@ handle_final_response(avs_coap_exchange_t *exchange,
         // with a non-BLOCK response. This most likely indicates a server
         // error.
         if (request_has_block2) {
-            LOG(DEBUG, "expected %s, but BLOCK2 option not found",
+            LOG(DEBUG, _("expected ") "%s" _(", but BLOCK2 option not found"),
                 _AVS_COAP_OPTION_BLOCK_STRING(&request_block2));
             return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
         }
@@ -538,7 +540,7 @@ handle_final_response(avs_coap_exchange_t *exchange,
         return success_state(AVS_COAP_CLIENT_REQUEST_OK);
 
     default:
-        LOG(DEBUG, "malformed BLOCK2 option");
+        LOG(DEBUG, _("malformed BLOCK2 option"));
         return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
     }
 }
@@ -566,7 +568,7 @@ handle_response(avs_coap_exchange_t *exchange,
     case AVS_COAP_CODE_CONTINUE:
 #ifdef WITH_AVS_COAP_BLOCK
         if (!exchange_expects_continue_response(exchange)) {
-            LOG(DEBUG, "unexpected %s response",
+            LOG(DEBUG, _("unexpected ") "%s" _(" response"),
                 AVS_COAP_CODE_STRING(response->code));
             return failure_state(
                     _avs_coap_err(AVS_COAP_ERR_UNEXPECTED_CONTINUE_RESPONSE));
@@ -574,7 +576,7 @@ handle_response(avs_coap_exchange_t *exchange,
 
         return handle_continue_response(exchange, response);
 #else  // WITH_AVS_COAP_BLOCK
-        LOG(DEBUG, "unexpected %s response",
+        LOG(DEBUG, _("unexpected ") "%s" _(" response"),
             AVS_COAP_CODE_STRING(response->code));
         return failure_state(_avs_coap_err(AVS_COAP_ERR_FEATURE_DISABLED));
 #endif // WITH_AVS_COAP_BLOCK

@@ -140,7 +140,7 @@ avs_error_t anjay_security_object_persist(anjay_t *anjay,
                                (void *) (intptr_t) 0, NULL);
     if (avs_is_ok(err)) {
         _anjay_sec_clear_modified(repr);
-        persistence_log(INFO, "Security Object state persisted");
+        persistence_log(INFO, _("Security Object state persisted"));
     }
     return err;
 }
@@ -162,7 +162,7 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay,
     avs_error_t err = avs_stream_read_reliably(in_stream, magic_header,
                                                sizeof(magic_header));
     if (avs_is_err(err)) {
-        persistence_log(WARNING, "Could not read Security Object header");
+        persistence_log(WARNING, _("Could not read Security Object header"));
         return err;
     }
 
@@ -172,7 +172,7 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay,
     } else if (!memcmp(magic_header, MAGIC_V1, sizeof(MAGIC_V1))) {
         version = 1;
     } else {
-        persistence_log(WARNING, "Header magic constant mismatch");
+        persistence_log(WARNING, _("Header magic constant mismatch"));
         return avs_errno(AVS_EBADMSG);
     }
     avs_persistence_context_t restore_ctx =
@@ -191,7 +191,7 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay,
     } else {
         _anjay_sec_destroy_instances(&backup.instances);
         _anjay_sec_clear_modified(repr);
-        persistence_log(INFO, "Security Object state restored");
+        persistence_log(INFO, _("Security Object state restored"));
     }
     return err;
 }
@@ -206,7 +206,7 @@ avs_error_t anjay_security_object_persist(anjay_t *anjay,
                                           avs_stream_t *out_stream) {
     (void) anjay;
     (void) out_stream;
-    persistence_log(ERROR, "Persistence not compiled in");
+    persistence_log(ERROR, _("Persistence not compiled in"));
     return avs_errno(AVS_ENOTSUP);
 }
 
@@ -214,7 +214,7 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay,
                                           avs_stream_t *in_stream) {
     (void) anjay;
     (void) in_stream;
-    persistence_log(ERROR, "Persistence not compiled in");
+    persistence_log(ERROR, _("Persistence not compiled in"));
     return avs_errno(AVS_ENOTSUP);
 }
 

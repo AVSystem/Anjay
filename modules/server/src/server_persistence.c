@@ -139,7 +139,8 @@ static avs_error_t restore_legacy_binding_mode(avs_persistence_context_t *ctx,
         binding_str = "UQS";
         break;
     default:
-        persistence_log(WARNING, "Invalid binding mode: %" PRIu32, binding);
+        persistence_log(WARNING, _("Invalid binding mode: ") "%" PRIu32,
+                        binding);
         err = avs_errno(AVS_EBADMSG);
         break;
     }
@@ -148,7 +149,8 @@ static avs_error_t restore_legacy_binding_mode(avs_persistence_context_t *ctx,
                                    sizeof(element->binding_buf), "%s",
                                    binding_str)
                            < 0) {
-        persistence_log(WARNING, "Could not restore binding: %s", binding_str);
+        persistence_log(WARNING, _("Could not restore binding: ") "%s",
+                        binding_str);
         err = avs_errno(AVS_EBADMSG);
     }
     return err;
@@ -207,7 +209,7 @@ avs_error_t anjay_server_object_persist(anjay_t *anjay,
                                &persistence_version, NULL);
     if (avs_is_ok(err)) {
         _anjay_serv_clear_modified(repr);
-        persistence_log(INFO, "Server Object state persisted");
+        persistence_log(INFO, _("Server Object state persisted"));
     }
     return err;
 }
@@ -243,12 +245,12 @@ avs_error_t anjay_server_object_restore(anjay_t *anjay,
     avs_error_t err = avs_persistence_bytes(&restore_ctx, magic_header,
                                             sizeof(magic_header));
     if (avs_is_err(err)) {
-        persistence_log(WARNING, "Could not read Server Object header");
+        persistence_log(WARNING, _("Could not read Server Object header"));
         return err;
     }
     server_persistence_version_t persistence_version;
     if (check_magic_header(magic_header, &persistence_version)) {
-        persistence_log(WARNING, "Header magic constant mismatch");
+        persistence_log(WARNING, _("Header magic constant mismatch"));
         return avs_errno(AVS_EBADMSG);
     }
 
@@ -267,7 +269,7 @@ avs_error_t anjay_server_object_restore(anjay_t *anjay,
     } else {
         _anjay_serv_destroy_instances(&backup.instances);
         _anjay_serv_clear_modified(repr);
-        persistence_log(INFO, "Server Object state restored");
+        persistence_log(INFO, _("Server Object state restored"));
     }
     return err;
 }
@@ -282,7 +284,7 @@ avs_error_t anjay_server_object_persist(anjay_t *anjay,
                                         avs_stream_t *out_stream) {
     (void) anjay;
     (void) out_stream;
-    persistence_log(ERROR, "Persistence not compiled in");
+    persistence_log(ERROR, _("Persistence not compiled in"));
     return avs_errno(AVS_ENOTSUP);
 }
 
@@ -290,7 +292,7 @@ avs_error_t anjay_server_object_restore(anjay_t *anjay,
                                         avs_stream_t *in_stream) {
     (void) anjay;
     (void) in_stream;
-    persistence_log(ERROR, "Persistence not compiled in");
+    persistence_log(ERROR, _("Persistence not compiled in"));
     return avs_errno(AVS_ENOTSUP);
 }
 

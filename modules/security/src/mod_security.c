@@ -80,7 +80,7 @@ static int add_instance(sec_repr_t *repr,
     AVS_LIST(sec_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(sec_instance_t);
     if (!new_instance) {
-        security_log(ERROR, "out of memory");
+        security_log(ERROR, _("out of memory"));
         return -1;
     }
     new_instance->iid = *inout_iid;
@@ -163,11 +163,15 @@ static int add_instance(sec_repr_t *repr,
     AVS_LIST_INSERT(ptr, new_instance);
 
     if (instance->bootstrap_server) {
-        security_log(INFO, "Added instance %u (bootstrap, URI: %s)", *inout_iid,
-                     instance->server_uri);
+        security_log(INFO,
+                     _("Added instance ") "%u" _(" (bootstrap, URI: ") "%s" _(
+                             ")"),
+                     *inout_iid, instance->server_uri);
     } else {
-        security_log(INFO, "Added instance %u (SSID: %u, URI: %s)", *inout_iid,
-                     instance->ssid, instance->server_uri);
+        security_log(INFO,
+                     _("Added instance ") "%u" _(" (SSID: ") "%u" _(
+                             ", URI: ") "%s" _(")"),
+                     *inout_iid, instance->ssid, instance->server_uri);
     }
 
     _anjay_sec_mark_modified(repr);
@@ -476,7 +480,7 @@ int anjay_security_object_add_instance(
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
 
     if (!repr) {
-        security_log(ERROR, "Security object is not registered");
+        security_log(ERROR, _("Security object is not registered"));
         return -1;
     }
 
@@ -492,7 +496,7 @@ int anjay_security_object_add_instance(
 
     if (!retval) {
         if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
-            security_log(WARNING, "Could not schedule socket reload");
+            security_log(WARNING, _("Could not schedule socket reload"));
         }
     }
 
@@ -522,7 +526,7 @@ void anjay_security_object_purge(anjay_t *anjay) {
     security_purge(repr);
 
     if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
-        security_log(WARNING, "Could not schedule socket reload");
+        security_log(WARNING, _("Could not schedule socket reload"));
     }
 }
 
@@ -543,7 +547,7 @@ int anjay_security_object_install(anjay_t *anjay) {
 
     sec_repr_t *repr = (sec_repr_t *) avs_calloc(1, sizeof(sec_repr_t));
     if (!repr) {
-        security_log(ERROR, "out of memory");
+        security_log(ERROR, _("out of memory"));
         return -1;
     }
 

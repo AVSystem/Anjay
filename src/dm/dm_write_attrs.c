@@ -70,8 +70,8 @@ static bool oi_attrs_valid(const anjay_dm_internal_oi_attrs_t *attrs) {
             && attrs->standard.max_eval_period >= 0
             && attrs->standard.min_eval_period
                            >= attrs->standard.max_eval_period) {
-        dm_log(DEBUG, "Attempted to set attributes that fail the 'epmin < "
-                      "epmax' precondition");
+        dm_log(DEBUG, _("Attempted to set attributes that fail the 'epmin < "
+                        "epmax' precondition"));
         return false;
     }
     return true;
@@ -86,7 +86,7 @@ static bool r_attrs_valid(const anjay_dm_internal_r_attrs_t *attrs) {
     double step = 0.0;
     if (!isnan(attrs->standard.step)) {
         if (attrs->standard.step < 0.0) {
-            dm_log(DEBUG, "Attempted to set negative step attribute");
+            dm_log(DEBUG, _("Attempted to set negative step attribute"));
             return false;
         }
         step = attrs->standard.step;
@@ -95,8 +95,8 @@ static bool r_attrs_valid(const anjay_dm_internal_r_attrs_t *attrs) {
             && !isnan(attrs->standard.greater_than)
             && attrs->standard.less_than + 2 * step
                            >= attrs->standard.greater_than) {
-        dm_log(DEBUG, "Attempted to set attributes that fail the "
-                      "'lt + 2*st < gt' precondition");
+        dm_log(DEBUG, _("Attempted to set attributes that fail the 'lt + 2*st "
+                        "< gt' precondition"));
         return false;
     }
     return true;
@@ -186,7 +186,7 @@ static int dm_write_object_attrs(anjay_t *anjay,
 int _anjay_dm_write_attributes(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                const anjay_request_t *request) {
-    dm_log(LAZY_DEBUG, "Write Attributes %s",
+    dm_log(LAZY_DEBUG, _("Write Attributes ") "%s",
            ANJAY_DEBUG_MAKE_PATH(&request->uri));
     assert(_anjay_uri_path_has(&request->uri, ANJAY_ID_OID));
     if (request_attrs_empty(&request->attributes)) {
@@ -205,8 +205,9 @@ int _anjay_dm_write_attributes(anjay_t *anjay,
                         anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
                 result = ANJAY_ERR_UNAUTHORIZED;
             } else if (_anjay_uri_path_has(&request->uri, ANJAY_ID_RIID)) {
-                dm_log(ERROR, "Resource Instance Attributes not supported in "
-                              "this version of Anjay");
+                dm_log(ERROR,
+                       _("Resource Instance Attributes not supported in this "
+                         "version of Anjay"));
                 return ANJAY_ERR_BAD_REQUEST;
             } else if (_anjay_uri_path_has(&request->uri, ANJAY_ID_RID)) {
                 result = dm_write_resource_attrs(anjay, obj,

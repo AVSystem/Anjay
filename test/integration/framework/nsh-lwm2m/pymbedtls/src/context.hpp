@@ -18,6 +18,7 @@
 #define PYMBEDTLS_CONTEXT_HPP
 
 #include <memory>
+#include <string>
 
 #include <mbedtls/ssl_cache.h>
 

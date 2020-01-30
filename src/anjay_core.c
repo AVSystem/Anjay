@@ -63,7 +63,7 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
 
     anjay->endpoint_name = config->endpoint_name;
     if (!anjay->endpoint_name) {
-        anjay_log(ERROR, "endpoint name must not be null");
+        anjay_log(ERROR, _("endpoint name must not be null"));
         return -1;
     }
 
@@ -75,7 +75,8 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
 #ifdef WITH_AVS_COAP_UDP
     if (config->udp_tx_params) {
         if (!avs_coap_udp_tx_params_valid(config->udp_tx_params, &error_msg)) {
-            anjay_log(ERROR, "UDP CoAP transmission parameters are invalid: %s",
+            anjay_log(ERROR,
+                      _("UDP CoAP transmission parameters are invalid: ") "%s",
                       error_msg);
             return -1;
         }
@@ -88,7 +89,7 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
         anjay->udp_response_cache =
                 avs_coap_udp_response_cache_create(config->msg_cache_size);
         if (!anjay->udp_response_cache) {
-            anjay_log(ERROR, "out of memory");
+            anjay_log(ERROR, _("out of memory"));
             return -1;
         }
     }
@@ -97,8 +98,9 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
     if (config->udp_dtls_hs_tx_params) {
         if (!avs_time_duration_less(config->udp_dtls_hs_tx_params->min,
                                     config->udp_dtls_hs_tx_params->max)) {
-            anjay_log(ERROR, "UDP DTLS Handshake transmission parameters are "
-                             "invalid: min >= max");
+            anjay_log(ERROR,
+                      _("UDP DTLS Handshake transmission parameters are "
+                        "invalid: min >= max"));
             return -1;
         }
         anjay->udp_dtls_hs_tx_params = *config->udp_dtls_hs_tx_params;
@@ -114,18 +116,18 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
 
     anjay->servers = _anjay_servers_create();
     if (!anjay->servers) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
 
     anjay->in_shared_buffer = avs_shared_buffer_new(config->in_buffer_size);
     if (!anjay->in_shared_buffer) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
     anjay->out_shared_buffer = avs_shared_buffer_new(config->out_buffer_size);
     if (!anjay->out_shared_buffer) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return -1;
     }
 
@@ -150,16 +152,16 @@ const char *anjay_get_version(void) {
 }
 
 anjay_t *anjay_new(const anjay_configuration_t *config) {
-    anjay_log(INFO, "Initializing Anjay " ANJAY_VERSION);
+    anjay_log(INFO, _("Initializing Anjay ") ANJAY_VERSION);
     _anjay_log_feature_list();
     anjay_t *out = (anjay_t *) avs_calloc(1, sizeof(*out));
     if (!out) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         return NULL;
     }
     out->sched = avs_sched_new("Anjay", out);
     if (!out->sched) {
-        anjay_log(ERROR, "out of memory");
+        anjay_log(ERROR, _("out of memory"));
         avs_free(out);
         return NULL;
     }
@@ -172,7 +174,7 @@ anjay_t *anjay_new(const anjay_configuration_t *config) {
 }
 
 static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
-    anjay_log(TRACE, "deleting anjay object");
+    anjay_log(TRACE, _("deleting anjay object"));
 
 #ifdef WITH_DOWNLOADER
     _anjay_downloader_cleanup(&anjay->downloader);
@@ -238,7 +240,8 @@ static int parse_nullable_period(const char *key_str,
                                  int32_t *out_value) {
     long long num;
     if (*out_present) {
-        anjay_log(WARNING, "Duplicated attribute in query string: %s", key_str);
+        anjay_log(WARNING, _("Duplicated attribute in query string: ") "%s",
+                  key_str);
         return -1;
     } else if (!period_str) {
         *out_present = true;
@@ -258,7 +261,8 @@ static int parse_nullable_double(const char *key_str,
                                  bool *out_present,
                                  double *out_value) {
     if (*out_present) {
-        anjay_log(WARNING, "Duplicated attribute in query string: %s", key_str);
+        anjay_log(WARNING, _("Duplicated attribute in query string: ") "%s",
+                  key_str);
         return -1;
     } else if (!double_str) {
         *out_present = true;
@@ -277,7 +281,7 @@ static int parse_con(const char *value,
                      bool *out_present,
                      anjay_dm_con_attr_t *out_value) {
     if (*out_present) {
-        anjay_log(WARNING, "Duplicated attribute in query string: con");
+        anjay_log(WARNING, _("Duplicated attribute in query string: con"));
         return -1;
     } else if (!value) {
         *out_present = true;
@@ -292,7 +296,7 @@ static int parse_con(const char *value,
         *out_value = ANJAY_DM_CON_ATTR_CON;
         return 0;
     } else {
-        anjay_log(WARNING, "Invalid con attribute value: %s", value);
+        anjay_log(WARNING, _("Invalid con attribute value: ") "%s", value);
         return -1;
     }
 }
@@ -332,8 +336,8 @@ static int parse_attribute(anjay_request_attributes_t *out_attrs,
                          &out_attrs->values.custom.data.con);
 #endif // WITH_CON_ATTR
     } else {
-        anjay_log(DEBUG, "unrecognized query string: %s = %s", key,
-                  value ? value : "(null)");
+        anjay_log(DEBUG, _("unrecognized query string: ") "%s" _(" = ") "%s",
+                  key, value ? value : "(null)");
         return -1;
     }
 }
@@ -360,14 +364,14 @@ static int parse_attributes(const avs_coap_request_header_t *hdr,
         assert(key != NULL);
 
         if (parse_attribute(out_attrs, key, value)) {
-            anjay_log(DEBUG, "invalid query string: %s = %s", key,
-                      value ? value : "(null)");
+            anjay_log(DEBUG, _("invalid query string: ") "%s" _(" = ") "%s",
+                      key, value ? value : "(null)");
             return -1;
         }
     }
 
     if (result < 0) {
-        anjay_log(WARNING, "could not read Request-Query");
+        anjay_log(WARNING, _("could not read Request-Query"));
         return -1;
     }
 
@@ -438,7 +442,7 @@ static int code_to_action(uint8_t code,
         *out_action = ANJAY_ACTION_DELETE;
         return 0;
     default:
-        anjay_log(DEBUG, "unrecognized CoAP method: %s",
+        anjay_log(DEBUG, _("unrecognized CoAP method: ") "%s",
                   AVS_COAP_CODE_STRING(code));
         return -1;
     }
@@ -458,7 +462,7 @@ static int parse_action(const avs_coap_request_header_t *hdr,
                                 inout_request->is_bs_uri, &inout_request->uri,
                                 has_content_format, &inout_request->action);
     if (!result) {
-        anjay_log(DEBUG, "LwM2M action: %s",
+        anjay_log(DEBUG, _("LwM2M action: ") "%s",
                   action_to_string(inout_request->action));
     }
     return result;
@@ -467,7 +471,7 @@ static int parse_action(const avs_coap_request_header_t *hdr,
 static int parse_request_uri_segment(const char *uri, uint16_t *out_id) {
     long long num;
     if (_anjay_safe_strtoll(uri, &num) || num < 0 || num >= UINT16_MAX) {
-        anjay_log(DEBUG, "invalid Uri-Path segment: %s", uri);
+        anjay_log(DEBUG, _("invalid Uri-Path segment: ") "%s", uri);
         return -1;
     }
 
@@ -534,7 +538,7 @@ static int parse_dm_uri(const avs_coap_request_header_t *hdr,
     if (avs_coap_options_get_string_it(&hdr->options, AVS_COAP_OPTION_URI_PATH,
                                        &it, &uri_size, uri, sizeof(uri) - 1)
             != AVS_COAP_OPTION_MISSING) {
-        anjay_log(WARNING, "prefixed Uri-Path are not supported");
+        anjay_log(WARNING, _("prefixed Uri-Path are not supported"));
         return -1;
     }
     return 0;
@@ -634,9 +638,10 @@ handle_incoming_message(avs_coap_streaming_request_ctx_t *ctx,
             (handle_incoming_message_args_t *) args_;
 
     if (_anjay_dm_current_ssid(args->anjay) == ANJAY_SSID_BOOTSTRAP) {
-        anjay_log(DEBUG, "bootstrap server");
+        anjay_log(DEBUG, _("bootstrap server"));
     } else {
-        anjay_log(DEBUG, "server ID = %u", _anjay_dm_current_ssid(args->anjay));
+        anjay_log(DEBUG, _("server ID = ") "%u",
+                  _anjay_dm_current_ssid(args->anjay));
     }
 
     anjay_request_t request;
@@ -653,16 +658,16 @@ handle_incoming_message(avs_coap_streaming_request_ctx_t *ctx,
     if (result) {
         const uint8_t error_code = _anjay_make_error_response_code(result);
         if (error_code != -result) {
-            anjay_log(WARNING, "invalid error code: %d", result);
+            anjay_log(WARNING, _("invalid error code: ") "%d", result);
         }
 
         if (avs_coap_code_is_client_error(error_code)) {
             // the request was invalid; that's not really an error on our side,
-            anjay_log(TRACE, "invalid request: %s",
+            anjay_log(TRACE, _("invalid request: ") "%s",
                       AVS_COAP_CODE_STRING(request_header->code));
             args->serve_result = 0;
         } else {
-            anjay_log(DEBUG, "could not handle request: %s",
+            anjay_log(DEBUG, _("could not handle request: ") "%s",
                       AVS_COAP_CODE_STRING(request_header->code));
             args->serve_result = result;
         }
@@ -702,7 +707,7 @@ _anjay_exchange_lifetime_for_transport(anjay_t *anjay,
 int _anjay_bind_connection(anjay_t *anjay, anjay_connection_ref_t ref) {
     avs_net_socket_t *socket = _anjay_connection_get_online_socket(ref);
     if (!socket) {
-        anjay_log(ERROR, "server connection is not online");
+        anjay_log(ERROR, _("server connection is not online"));
         return -1;
     }
     assert(!anjay->current_connection.server);
@@ -806,7 +811,7 @@ avs_error_t anjay_download(anjay_t *anjay,
     (void) anjay;
     (void) config;
     (void) out_handle;
-    anjay_log(ERROR, "CoAP download support disabled");
+    anjay_log(ERROR, _("CoAP download support disabled"));
     return avs_errno(AVS_ENOTSUP);
 #endif // WITH_DOWNLOADER
 }
@@ -817,7 +822,7 @@ void anjay_download_abort(anjay_t *anjay, anjay_download_handle_t handle) {
 #else  // WITH_DOWNLOADER
     (void) anjay;
     (void) handle;
-    anjay_log(ERROR, "CoAP download support disabled");
+    anjay_log(ERROR, _("CoAP download support disabled"));
 #endif // WITH_DOWNLOADER
 }
 

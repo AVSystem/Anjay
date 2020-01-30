@@ -43,7 +43,7 @@ int _anjay_connection_security_generic_get_uri(
 
     if (_anjay_dm_read_resource_string(anjay, &path, raw_uri,
                                        sizeof(raw_uri))) {
-        anjay_log(ERROR, "could not read LwM2M server URI from %s",
+        anjay_log(ERROR, _("could not read LwM2M server URI from ") "%s",
                   ANJAY_DEBUG_MAKE_PATH(&path));
         return -1;
     }
@@ -58,7 +58,7 @@ int _anjay_connection_security_generic_get_uri(
         }
         *out_uri = NULL;
         *out_transport_info = NULL;
-        anjay_log(ERROR, "could not parse LwM2M server URI: %s", raw_uri);
+        anjay_log(ERROR, _("could not parse LwM2M server URI: ") "%s", raw_uri);
         return -1;
     }
     return 0;
@@ -73,14 +73,15 @@ static int get_security_mode(anjay_t *anjay,
                                ANJAY_DM_RID_SECURITY_MODE);
 
     if (_anjay_dm_read_resource_i64(anjay, &path, &mode)) {
-        anjay_log(ERROR, "could not read LwM2M server security mode from %s",
+        anjay_log(ERROR,
+                  _("could not read LwM2M server security mode from ") "%s",
                   ANJAY_DEBUG_MAKE_PATH(&path));
         return -1;
     }
 
     switch (mode) {
     case ANJAY_SECURITY_RPK:
-        anjay_log(ERROR, "unsupported security mode: %" PRId64, mode);
+        anjay_log(ERROR, _("unsupported security mode: ") "%" PRId64, mode);
         return -1;
     case ANJAY_SECURITY_NOSEC:
     case ANJAY_SECURITY_PSK:
@@ -88,7 +89,7 @@ static int get_security_mode(anjay_t *anjay,
         *out_mode = (anjay_security_mode_t) mode;
         return 0;
     default:
-        anjay_log(ERROR, "invalid security mode: %" PRId64, mode);
+        anjay_log(ERROR, _("invalid security mode: ") "%" PRId64, mode);
         return -1;
     }
 }
@@ -109,8 +110,8 @@ security_matches_transport(anjay_security_mode_t security_mode,
 
     if (is_secure_transport != needs_secure_transport) {
         anjay_log(WARNING,
-                  "security mode %d requires %ssecure protocol, but '%s' was "
-                  "configured",
+                  _("security mode ") "%d" _(" requires ") "%s" _(
+                          "secure protocol, but '") "%s" _("' was configured"),
                   (int) security_mode, needs_secure_transport ? "" : "in",
                   transport_info->uri_scheme);
         return false;
@@ -165,7 +166,8 @@ static int get_dtls_keys(anjay_t *anjay,
                                     values[i].buffer_capacity,
                                     values[i].buffer_size_ptr)
                 && values[i].required) {
-            anjay_log(WARNING, "read %s failed", ANJAY_DEBUG_MAKE_PATH(&path));
+            anjay_log(WARNING, _("read ") "%s" _(" failed"),
+                      ANJAY_DEBUG_MAKE_PATH(&path));
             return -1;
         }
     }
@@ -213,7 +215,8 @@ static int init_security(avs_net_security_info_t *security,
         return init_cert_security(security, keys);
     case ANJAY_SECURITY_RPK:
     default:
-        anjay_log(ERROR, "unsupported security mode: %d", (int) security_mode);
+        anjay_log(ERROR, _("unsupported security mode: ") "%d",
+                  (int) security_mode);
         return -1;
     }
 }
@@ -248,8 +251,9 @@ anjay_security_config_t *_anjay_connection_security_generic_get_config(
         goto error;
     }
     inout_info->is_encrypted = (security_mode != ANJAY_SECURITY_NOSEC);
-    anjay_log(DEBUG, "server /%u/%u: security mode = %d", ANJAY_DM_OID_SECURITY,
-              inout_info->security_iid, (int) security_mode);
+    anjay_log(DEBUG, _("server ") "/%u/%u" _(": security mode = ") "%d",
+              ANJAY_DM_OID_SECURITY, inout_info->security_iid,
+              (int) security_mode);
     AVS_STATIC_ASSERT(offsetof(security_config_with_data_t, security_config)
                               == 0,
                       security_config_pointers_castable);

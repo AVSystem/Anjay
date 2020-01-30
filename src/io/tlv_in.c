@@ -337,7 +337,7 @@ static int tlv_get_path(anjay_input_ctx_t *ctx,
             // to be able to return back to the parent).
             parent->bytes_read += in->entries->length + header_len;
             if (parent->bytes_read > parent->length) {
-                LOG(DEBUG, "child entry is longer than its parent");
+                LOG(DEBUG, _("child entry is longer than its parent"));
                 return ANJAY_ERR_BAD_REQUEST;
             }
         }
@@ -345,7 +345,8 @@ static int tlv_get_path(anjay_input_ctx_t *ctx,
         in->current_path_len = (size_t) type + 1;
 
         if (_anjay_uri_path_outside_base(&in->current_path, &in->uri_path)) {
-            LOG(LAZY_DEBUG, "parsed path %s would be outside of uri-path %s",
+            LOG(LAZY_DEBUG,
+                _("parsed path ") "%s" _(" would be outside of uri-path ") "%s",
                 ANJAY_DEBUG_MAKE_PATH(&in->current_path),
                 ANJAY_DEBUG_MAKE_PATH(&in->uri_path));
             return ANJAY_ERR_BAD_REQUEST;
@@ -411,7 +412,7 @@ static int tlv_update_root_path(anjay_input_ctx_t *ctx_,
 static int tlv_in_close(anjay_input_ctx_t *ctx_) {
     tlv_in_t *ctx = (tlv_in_t *) ctx_;
     if (ctx->entries && !ctx->finished) {
-        LOG(DEBUG, "input context is destroyed but not fully processed yet");
+        LOG(DEBUG, _("input context is destroyed but not fully processed yet"));
     }
     AVS_LIST_CLEAR(&ctx->entries);
     return 0;

@@ -31,10 +31,10 @@ int _anjay_sec_validate_security_mode(int32_t security_mode) {
     case ANJAY_SECURITY_CERTIFICATE:
         return 0;
     case ANJAY_SECURITY_RPK:
-        security_log(ERROR, "Raw Public Key mode not supported");
+        security_log(ERROR, _("Raw Public Key mode not supported"));
         return ANJAY_ERR_NOT_IMPLEMENTED;
     default:
-        security_log(ERROR, "Invalid Security Mode");
+        security_log(ERROR, _("Invalid Security Mode"));
         return ANJAY_ERR_BAD_REQUEST;
     }
 }
@@ -58,10 +58,10 @@ int _anjay_sec_validate_sms_security_mode(int32_t security_mode) {
     case ANJAY_SMS_SECURITY_NOSEC:
         return 0;
     case ANJAY_SMS_SECURITY_SECURE_PACKET:
-        security_log(DEBUG, "Secure Packet mode not supported");
+        security_log(DEBUG, _("Secure Packet mode not supported"));
         return ANJAY_ERR_NOT_IMPLEMENTED;
     default:
-        security_log(DEBUG, "Invalid SMS Security Mode");
+        security_log(DEBUG, _("Invalid SMS Security Mode"));
         return ANJAY_ERR_BAD_REQUEST;
     }
 }
@@ -121,40 +121,42 @@ static int _anjay_sec_clone_instance(sec_instance_t *dest,
 
     dest->server_uri = avs_strdup(src->server_uri);
     if (!dest->server_uri) {
-        security_log(ERROR, "Cannot clone Server Uri resource");
+        security_log(ERROR, _("Cannot clone Server Uri resource"));
         return -1;
     }
 
     dest->public_cert_or_psk_identity = ANJAY_RAW_BUFFER_EMPTY;
     if (_anjay_raw_buffer_clone(&dest->public_cert_or_psk_identity,
                                 &src->public_cert_or_psk_identity)) {
-        security_log(ERROR, "Cannot clone Pk Or Identity resource");
+        security_log(ERROR, _("Cannot clone Pk Or Identity resource"));
         return -1;
     }
 
     dest->private_cert_or_psk_key = ANJAY_RAW_BUFFER_EMPTY;
     if (_anjay_raw_buffer_clone(&dest->private_cert_or_psk_key,
                                 &src->private_cert_or_psk_key)) {
-        security_log(ERROR, "Cannot clone Secret Key resource");
+        security_log(ERROR, _("Cannot clone Secret Key resource"));
         return -1;
     }
 
     dest->server_public_key = ANJAY_RAW_BUFFER_EMPTY;
     if (_anjay_raw_buffer_clone(&dest->server_public_key,
                                 &src->server_public_key)) {
-        security_log(ERROR, "Cannot clone Server Public Key resource");
+        security_log(ERROR, _("Cannot clone Server Public Key resource"));
         return -1;
     }
 
     dest->sms_key_params = ANJAY_RAW_BUFFER_EMPTY;
     if (_anjay_raw_buffer_clone(&dest->sms_key_params, &src->sms_key_params)) {
-        security_log(ERROR, "Cannot clone SMS Binding Key Parameters resource");
+        security_log(ERROR,
+                     _("Cannot clone SMS Binding Key Parameters resource"));
         return -1;
     }
 
     dest->sms_secret_key = ANJAY_RAW_BUFFER_EMPTY;
     if (_anjay_raw_buffer_clone(&dest->sms_secret_key, &src->sms_secret_key)) {
-        security_log(ERROR, "Cannot clone SMS Binding Secret Key(s) resource");
+        security_log(ERROR,
+                     _("Cannot clone SMS Binding Secret Key(s) resource"));
         return -1;
     }
 
@@ -162,7 +164,7 @@ static int _anjay_sec_clone_instance(sec_instance_t *dest,
     if (src->sms_number) {
         dest->sms_number = avs_strdup(src->sms_number);
         if (!dest->sms_number) {
-            security_log(ERROR, "Cannot clone Server SMS Number resource");
+            security_log(ERROR, _("Cannot clone Server SMS Number resource"));
             return -1;
         }
     }
@@ -179,7 +181,8 @@ AVS_LIST(sec_instance_t) _anjay_sec_clone_instances(const sec_repr_t *repr) {
     AVS_LIST_FOREACH(current, repr->instances) {
         if (AVS_LIST_INSERT_NEW(sec_instance_t, last)) {
             if (_anjay_sec_clone_instance(*last, current)) {
-                security_log(ERROR, "Cannot clone Security Object Instances");
+                security_log(ERROR,
+                             _("Cannot clone Security Object Instances"));
                 _anjay_sec_destroy_instances(&retval);
                 return NULL;
             }

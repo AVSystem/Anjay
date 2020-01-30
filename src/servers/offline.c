@@ -87,7 +87,7 @@ int anjay_enter_offline(anjay_t *anjay) {
     avs_sched_del(&anjay->enter_offline_job_handle);
     if (AVS_SCHED_NOW(anjay->sched, &anjay->enter_offline_job_handle,
                       enter_offline_job, NULL, 0)) {
-        anjay_log(ERROR, "could not schedule enter_offline_job");
+        anjay_log(ERROR, _("could not schedule enter_offline_job"));
         return -1;
     }
     return 0;

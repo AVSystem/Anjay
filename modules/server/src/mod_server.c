@@ -93,7 +93,7 @@ static int add_instance(server_repr_t *repr,
     AVS_LIST(server_instance_t) new_instance =
             AVS_LIST_NEW_ELEMENT(server_instance_t);
     if (!new_instance) {
-        server_log(ERROR, "out of memory");
+        server_log(ERROR, _("out of memory"));
         return -1;
     }
     new_instance->data = *instance;
@@ -103,7 +103,7 @@ static int add_instance(server_repr_t *repr,
                                        sizeof(new_instance->binding_buf), "%s",
                                        instance->binding)
                                < 0) {
-            server_log(ERROR, "Unsupported binding mode: %s",
+            server_log(ERROR, _("Unsupported binding mode: ") "%s",
                        instance->binding);
             return -1;
         }
@@ -117,8 +117,8 @@ static int add_instance(server_repr_t *repr,
         AVS_LIST_CLEAR(&new_instance);
         return -1;
     }
-    server_log(INFO, "Added instance %u (SSID: %u)", *inout_iid,
-               instance->ssid);
+    server_log(INFO, _("Added instance ") "%u" _(" (SSID: ") "%u" _(")"),
+               *inout_iid, instance->ssid);
     return 0;
 }
 
@@ -436,7 +436,7 @@ int anjay_server_object_add_instance(anjay_t *anjay,
 
     if (!retval) {
         if (anjay_notify_instances_changed(anjay, SERVER.oid)) {
-            server_log(WARNING, "Could not schedule socket reload");
+            server_log(WARNING, _("Could not schedule socket reload"));
         }
     }
 
@@ -466,7 +466,7 @@ void anjay_server_object_purge(anjay_t *anjay) {
     server_purge(repr);
 
     if (anjay_notify_instances_changed(anjay, SERVER.oid)) {
-        server_log(WARNING, "Could not schedule socket reload");
+        server_log(WARNING, _("Could not schedule socket reload"));
     }
 }
 
@@ -488,7 +488,7 @@ int anjay_server_object_install(anjay_t *anjay) {
     server_repr_t *repr =
             (server_repr_t *) avs_calloc(1, sizeof(server_repr_t));
     if (!repr) {
-        server_log(ERROR, "out of memory");
+        server_log(ERROR, _("out of memory"));
         return -1;
     }
 
