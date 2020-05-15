@@ -25,22 +25,22 @@ Contents:
    Introduction
    LwM2M
    Compiling_client_applications
-   BasicTutorial
-   AdvancedTutorial
+   BasicClient
+   AdvancedTopics
+   FirmwareUpdateTutorial
    Tools
    PortingGuideForNonPOSIXPlatforms
+   Migrating
    Commercial_support
 
 Links
 -----
 
 * `Source repository <https://github.com/AVSystem/Anjay>`_
-* `Doxygen-generated API documentation <api>`_
+* `Doxygen-generated API documentation <api/index.html>`_
 
 Indices and tables
 ==================
 
-* :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`
 

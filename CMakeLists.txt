@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.2.5" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.3a" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -77,15 +77,6 @@ if(WITH_LIBRARY_SHARED)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
-# -fvisibility, #pragma GCC visibility
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c
-     "#pragma GCC visibility push(default)\nint f();\n#pragma GCC visibility push(hidden)\nint f() { return 0; }\n#pragma GCC visibility pop\nint main() { return f(); }\n\n")
-try_compile(HAVE_VISIBILITY
-            ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp
-            ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c
-            COMPILE_DEFINITIONS -Wall -Wextra -Werror -fvisibility=default
-            LINK_LIBRARIES -Wl,--exclude-libs,ALL)
-
 ################# TUNABLES #####################################################
 
 set(MAX_PK_OR_IDENTITY_SIZE 2048 CACHE STRING
@@ -95,12 +86,7 @@ set(MAX_SERVER_PK_OR_IDENTITY_SIZE 2048 CACHE STRING
 set(MAX_SECRET_KEY_SIZE 256 CACHE STRING
     "Maximum supported size (in bytes) of 'Secret Key' Resource in Security object.")
 
-set(MAX_OBSERVABLE_RESOURCE_SIZE 2048 CACHE STRING
-    "Maximum supported size (in bytes) of a single notification value.")
-
 # Following options refer to the payload of plaintext-encoded CoAP packets.
-set(MAX_FLOAT_STRING_SIZE 64 CACHE STRING
-    "Maximum supported length (in characters) of a string that can be parsed as a single-precision float value, including trailing nullbyte.")
 set(MAX_DOUBLE_STRING_SIZE 512 CACHE STRING
     "Maximum supported length (in characters) of a string that can be parsed as a double-precision float value, including trailing nullbyte.")
 
@@ -135,7 +121,7 @@ option(WITH_AVS_LOG "Enable logging support" ON)
 option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
 
 # avs_commons required components.
-set(AVS_COMMONS_COMPONENTS algorithm list vector rbtree buffer net sched stream stream_net utils compat_threading)
+set(AVS_COMMONS_COMPONENTS algorithm crypto list rbtree buffer net sched stream stream_net utils compat_threading)
 if(WITH_HTTP_DOWNLOAD)
     list(APPEND AVS_COMMONS_COMPONENTS http)
 endif()
@@ -167,6 +153,21 @@ if(WITH_LOCAL_AVS_COMMONS)
         cmake_dependent_option(WITH_VALGRIND "Enable usage of valgrind during unit tests" OFF "VALGRIND_EXECUTABLE" OFF)
     endif()
     find_package(avs_commons COMPONENTS ${AVS_COMMONS_COMPONENTS} REQUIRED)
+
+    function(read_avs_commons_compile_time_option OPTION_NAME)
+        file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/avs_commons_check.c
+             "#include <avsystem/commons/avs_commons_config.h>\nint main() {\n#ifndef ${OPTION_NAME}\nint error[-1];\n#endif\nreturn 0; }\n")
+        get_target_property(INCLUDE_DIRS avs_utils INTERFACE_INCLUDE_DIRECTORIES)
+        try_compile(OPTION_VALUE
+                    ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp
+                    ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/avs_commons_check.c
+                    CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${INCLUDE_DIRS}")
+        set(${OPTION_NAME} ${OPTION_VALUE} CACHE INTERNAL "")
+    endfunction()
+
+    read_avs_coap_compile_time_option(AVS_COMMONS_HAVE_VISIBILITY)
+    read_avs_coap_compile_time_option(AVS_COMMONS_STREAM_WITH_FILE)
+    set(WITH_AVS_STREAM_FILE "${AVS_COMMONS_STREAM_WITH_FILE}")
 else()
     set(_DTLS_BACKENDS "mbedtls" "openssl" "tinydtls")
     set(DTLS_BACKEND "mbedtls" CACHE STRING "DTLS backend to use; possible values: <empty> ${_DTLS_BACKENDS}")
@@ -189,12 +190,6 @@ else()
         message(FATAL_ERROR "Unsupported DTLS backend: ${_DTLS_BACKEND_LOWERCASE}; possible values: ${_DTLS_BACKENDS}")
     endif()
 
-    # Used in fw_update to determine supported download protocols
-    set(WITH_SSL OFF CACHE INTERNAL "")
-    if(WITH_MBEDTLS OR WITH_OPENSSL OR WITH_TINYDTLS)
-        set(WITH_SSL ON CACHE INTERNAL "" FORCE)
-    endif()
-
     message(STATUS "DTLS backend: ${_DTLS_BACKEND_LOWERCASE}")
 
     set(WITH_SCHEDULER_THREAD_SAFE OFF CACHE INTERNAL "")
@@ -208,13 +203,13 @@ if(WITH_LOCAL_AVS_COAP)
 
     function(read_avs_coap_compile_time_option OPTION_NAME)
         file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/avs_coap_check.c
-             "#include <avsystem/coap/config.h>\nint main() {\n#ifndef ${OPTION_NAME}\nint error[-1];\n#endif\nreturn 0; }\n")
+             "#include <avsystem/coap/avs_coap_config.h>\nint main() {\n#ifndef ${OPTION_NAME}\nint error[-1];\n#endif\nreturn 0; }\n")
         get_target_property(INCLUDE_DIRS avs_coap INTERFACE_INCLUDE_DIRECTORIES)
         try_compile(OPTION_VALUE
                     ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp
                     ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/avs_coap_check.c
                     CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${INCLUDE_DIRS}")
-        set(${OPTION_NAME} ${OPTION_VALUE} PARENT_SCOPE)
+        set(${OPTION_NAME} ${OPTION_VALUE} CACHE INTERNAL "")
     endfunction()
 
     read_avs_coap_compile_time_option(WITH_AVS_COAP_UDP)
@@ -236,14 +231,10 @@ endif()
 ################# FEATURES #####################################################
 
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
-option(WITH_ATTR_STORAGE "Enable Attribute storage module" ON)
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
 option(WITH_DISCOVER "Enable support for LwM2M Discover operation" ON)
 cmake_dependent_option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe)" ON "WITH_AVS_COAP_OBSERVE" OFF)
-if(WITH_OBSERVE)
-    option(WITH_CON_ATTR
-           "Enable support for a custom attribute that controls Confirmable notifications" OFF)
-endif()
+cmake_dependent_option(WITH_CON_ATTR "Enable support for a custom attribute that controls Confirmable notifications" OFF WITH_OBSERVE OFF)
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_LWM2M_JSON "Enable support for LwM2M 1.0 JSON (output only)" ON)
@@ -260,224 +251,192 @@ cmake_dependent_option(WITH_INTERNAL_TRACE "Enable TRACE-level logs inside AVSys
 
 option(WITH_NET_STATS "Enable measuring amount of LwM2M traffic" ON)
 
+################# MODULES ######################################################
+
+
+cmake_dependent_option(WITH_MODULE_attr_storage "Automatic attribute storage module" ON WITH_AVS_PERSISTENCE OFF)
+cmake_dependent_option(WITH_MODULE_access_control "Access control object implementation module" ON WITH_ACCESS_CONTROL OFF)
+option(WITH_MODULE_security "Security object module" ON)
+option(WITH_MODULE_server "Server object module" ON)
+cmake_dependent_option(WITH_MODULE_fw_update "Firmware Update object module" ON WITH_DOWNLOADER OFF)
+
 ################# CODE #########################################################
 
 add_library(anjay
-            src/access_utils.c
-            src/anjay_core.c
-            src/dm_core.c
-            src/dm/dm_attributes.c
-            src/dm/dm_create.c
-            src/dm/dm_execute.c
-            src/dm/dm_handlers.c
-            src/dm/dm_read.c
-            src/dm/dm_write_attrs.c
-            src/dm/dm_write.c
-            src/dm/modules.c
-            src/dm/query.c
-            src/bootstrap_core.c
-            src/io/base64_out.c
-            src/io_core.c
-            src/io/common.c
-            src/io/dynamic.c
-            src/io/opaque.c
-            src/io/output_buf.c
-            src/io/text.c
-            src/io/tlv_in.c
-            src/io/tlv_out.c
-            src/io_utils.c
-            src/notify.c
-            src/raw_buffer.c
-            src/servers/activate.c
-            src/servers/connections.c
-            src/servers/connection_ip.c
-            src/servers/offline.c
-            src/servers/register.c
-            src/servers/reload.c
-            src/servers/security_generic.c
-            src/servers/server_connections.c
-            src/servers/servers_internal.c
-            src/servers_utils.c
-            src/stats.c
-            src/utils_core.c
-            src/access_utils.h
-            src/anjay_core.h
-            src/coap/content_format.h
-            src/coap/msg_details.h
-            src/dm/discover.h
-            src/dm/dm_attributes.h
-            src/dm/dm_execute.h
-            src/dm/query.h
-            src/dm_core.h
-            src/downloader.h
-            src/downloader/private.h
-            src/bootstrap_core.h
-            src/io/base64_out.h
-            src/io/tlv.h
-            src/io/vtable.h
-            src/io_core.h
-            src/observe/observe_core.h
-            src/observe/observe_internal.h
-            src/servers.h
-            src/servers/activate.h
-            src/servers/connections.h
-            src/servers/connections_internal.h
-            src/servers/register.h
-            src/servers/reload.h
-            src/servers/security.h
-            src/servers/server_connections.h
-            src/servers/servers_internal.h
-            src/servers_inactive.h
-            src/servers_utils.h
-            src/stats.h
-            src/utils_core.h
-            include_modules/anjay_modules/access_utils.h
-            include_modules/anjay_modules/dm/attributes.h
-            include_modules/anjay_modules/dm/execute.h
-            include_modules/anjay_modules/dm/modules.h
-            include_modules/anjay_modules/dm_utils.h
-            include_modules/anjay_modules/io_utils.h
-            include_modules/anjay_modules/notify.h
-            include_modules/anjay_modules/raw_buffer.h
-            include_modules/anjay_modules/sched.h
-            include_modules/anjay_modules/servers.h
-            include_modules/anjay_modules/time_defs.h
-            include_modules/anjay_modules/utils_core.h
+            src/core/anjay_access_utils.c
+            src/core/anjay_bootstrap_core.c
+            src/core/anjay_core.c
+            src/core/anjay_dm_core.c
+            src/core/anjay_io_core.c
+            src/core/anjay_io_utils.c
+            src/core/anjay_notify.c
+            src/core/anjay_raw_buffer.c
+            src/core/anjay_servers_utils.c
+            src/core/anjay_stats.c
+            src/core/anjay_utils_core.c
+            src/core/dm/anjay_discover.c
+            src/core/dm/anjay_dm_attributes.c
+            src/core/dm/anjay_dm_create.c
+            src/core/dm/anjay_dm_execute.c
+            src/core/dm/anjay_dm_handlers.c
+            src/core/dm/anjay_dm_read.c
+            src/core/dm/anjay_dm_write_attrs.c
+            src/core/dm/anjay_dm_write.c
+            src/core/dm/anjay_modules.c
+            src/core/dm/anjay_query.c
+            src/core/downloader/anjay_coap.c
+            src/core/downloader/anjay_downloader.c
+            src/core/downloader/anjay_http.c
+            src/core/io/anjay_base64_out.c
+            src/core/io/anjay_batch_builder.c
+            src/core/io/anjay_common.c
+            src/core/io/anjay_dynamic.c
+            src/core/io/anjay_json_encoder.c
+            src/core/io/anjay_opaque.c
+            src/core/io/anjay_output_buf.c
+            src/core/io/anjay_senml_like_encoder.c
+            src/core/io/anjay_senml_like_out.c
+            src/core/io/anjay_text.c
+            src/core/io/anjay_tlv_in.c
+            src/core/io/anjay_tlv_out.c
+            src/core/observe/anjay_observe_core.c
+            src/core/servers/anjay_activate.c
+            src/core/servers/anjay_connection_ip.c
+            src/core/servers/anjay_connections.c
+            src/core/servers/anjay_offline.c
+            src/core/servers/anjay_register.c
+            src/core/servers/anjay_reload.c
+            src/core/servers/anjay_security_generic.c
+            src/core/servers/anjay_server_connections.c
+            src/core/servers/anjay_servers_internal.c
+            src/modules/access_control/anjay_access_control_handlers.c
+            src/modules/access_control/anjay_access_control_persistence.c
+            src/modules/access_control/anjay_mod_access_control.c
+            src/modules/attr_storage/anjay_attr_storage_persistence.c
+            src/modules/attr_storage/anjay_mod_attr_storage.c
+            src/modules/fw_update/anjay_fw_dm_security.c
+            src/modules/fw_update/anjay_fw_update.c
+            src/modules/security/anjay_mod_security.c
+            src/modules/security/anjay_security_persistence.c
+            src/modules/security/anjay_security_transaction.c
+            src/modules/security/anjay_security_utils.c
+            src/modules/server/anjay_mod_server.c
+            src/modules/server/anjay_server_persistence.c
+            src/modules/server/anjay_server_transaction.c
+            src/modules/server/anjay_server_utils.c
+            src/anjay_config_log.h
+            src/anjay_init.h
+            src/core/anjay_access_utils.h
+            src/core/anjay_bootstrap_core.h
+            src/core/anjay_core.h
+            src/core/anjay_dm_core.h
+            src/core/anjay_downloader.h
+            src/core/anjay_io_core.h
+            src/core/anjay_servers.h
+            src/core/anjay_servers_inactive.h
+            src/core/anjay_servers_utils.h
+            src/core/anjay_stats.h
+            src/core/anjay_utils_core.h
+            src/core/coap/anjay_content_format.h
+            src/core/coap/anjay_msg_details.h
+            src/core/dm/anjay_discover.h
+            src/core/dm/anjay_dm_attributes.h
+            src/core/dm/anjay_dm_create.h
+            src/core/dm/anjay_dm_execute.h
+            src/core/dm/anjay_dm_read.h
+            src/core/dm/anjay_dm_write.h
+            src/core/dm/anjay_dm_write_attrs.h
+            src/core/dm/anjay_query.h
+            src/core/downloader/anjay_private.h
+            src/core/io/anjay_base64_out.h
+            src/core/io/anjay_batch_builder.h
+            src/core/io/anjay_common.h
+            src/core/io/anjay_senml_like_encoder.h
+            src/core/io/anjay_senml_like_encoder_vtable.h
+            src/core/io/anjay_tlv.h
+            src/core/io/anjay_vtable.h
+            src/core/observe/anjay_observe_core.h
+            src/core/observe/anjay_observe_internal.h
+            src/core/servers/anjay_activate.h
+            src/core/servers/anjay_connections.h
+            src/core/servers/anjay_connections_internal.h
+            src/core/servers/anjay_register.h
+            src/core/servers/anjay_reload.h
+            src/core/servers/anjay_security.h
+            src/core/servers/anjay_server_connections.h
+            src/core/servers/anjay_servers_internal.h
+            src/modules/access_control/anjay_mod_access_control.h
+            src/modules/attr_storage/anjay_mod_attr_storage.h
+            src/modules/security/anjay_mod_security.h
+            src/modules/security/anjay_security_transaction.h
+            src/modules/security/anjay_security_utils.h
+            src/modules/server/anjay_mod_server.h
+            src/modules/server/anjay_server_transaction.h
+            src/modules/server/anjay_server_utils.h
+            src/anjay_modules/anjay_access_utils.h
+            src/anjay_modules/anjay_bootstrap.h
+            src/anjay_modules/anjay_dm_utils.h
+            src/anjay_modules/anjay_io_utils.h
+            src/anjay_modules/anjay_notify.h
+            src/anjay_modules/anjay_raw_buffer.h
+            src/anjay_modules/anjay_sched.h
+            src/anjay_modules/anjay_servers.h
+            src/anjay_modules/anjay_time_defs.h
+            src/anjay_modules/anjay_utils_core.h
+            src/anjay_modules/dm/anjay_attributes.h
+            src/anjay_modules/dm/anjay_execute.h
+            src/anjay_modules/dm/anjay_modules.h
+            include_public/anjay/access_control.h
             include_public/anjay/anjay.h
+            include_public/anjay/attr_storage.h
             include_public/anjay/core.h
             include_public/anjay/dm.h
             include_public/anjay/download.h
+            include_public/anjay/fw_update.h
             include_public/anjay/io.h
+            include_public/anjay/security.h
+            include_public/anjay/server.h
             include_public/anjay/stats.h)
 
-if(WITH_DOWNLOADER)
-    target_sources(anjay PRIVATE src/downloader/downloader.c)
-endif()
-if(WITH_COAP_DOWNLOAD)
-    target_sources(anjay PRIVATE src/downloader/coap.c)
-endif()
-if(WITH_HTTP_DOWNLOAD)
-    target_sources(anjay PRIVATE src/downloader/http.c)
-endif()
-if(WITH_DISCOVER)
-    target_sources(anjay PRIVATE src/dm/discover.c)
-endif()
-if(WITH_OBSERVE)
-    target_sources(anjay PRIVATE src/observe/observe_core.c)
-endif()
-if(WITH_LWM2M_JSON
-   )
-    target_sources(anjay PRIVATE
-                   src/io/senml_like_encoder.c
-                   src/io/senml_like_out.c)
-endif()
-if(WITH_LWM2M_JSON
-   )
-    target_sources(anjay PRIVATE src/io/json_encoder.c)
-endif()
-if(WITH_OBSERVE
-   )
-    target_sources(anjay PRIVATE src/io/batch_builder.c)
-endif()
-
 target_include_directories(anjay PUBLIC
+                           $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include_public>
                            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_public>
                            $<INSTALL_INTERFACE:include>)
 target_include_directories(anjay PRIVATE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_modules>)
+                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 target_link_libraries(anjay PUBLIC avs_coap ${AVS_COMMONS_LIBRARIES})
-
-################# MODULES ######################################################
-
-macro(SUBDIRLIST result curdir)
-  file(GLOB children RELATIVE ${curdir} ${curdir}/*)
-  set(dirlist "")
-  foreach(child ${children})
-    if(IS_DIRECTORY ${curdir}/${child})
-      list(APPEND dirlist ${child})
-    endif()
-  endforeach()
-  set(${result} ${dirlist})
-endmacro()
-
-SUBDIRLIST(ALL_MODULES "${CMAKE_CURRENT_SOURCE_DIR}/modules")
-
-macro(DEFINE_MODULE MOD_NAME MOD_DEFAULT MOD_DESC)
-    option(WITH_MODULE_${MOD_NAME} "${MOD_DESC}" ${MOD_DEFAULT})
-    if(WITH_MODULE_${MOD_NAME})
-        add_subdirectory(modules/${MOD_NAME})
-    endif()
-endmacro()
-
-
-if(WITH_ATTR_STORAGE)
-    if(WITH_AVS_PERSISTENCE)
-        DEFINE_MODULE(attr_storage ON "Automatic attribute storage module")
-    else()
-        message(FATAL_ERROR "Attribute storage module cannot be used if persistence is turned off")
-    endif()
-endif()
-if(WITH_ACCESS_CONTROL)
-    DEFINE_MODULE(access_control ON "Access control object implementation module")
-endif()
-DEFINE_MODULE(security ON "Security object module")
-DEFINE_MODULE(server ON "Server object module")
-if(WITH_DOWNLOADER)
-    DEFINE_MODULE(fw_update ON "Firmware Update object module")
-endif()
-
-
-################# FEATURE LIST LOG #############################################
-
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/config/anjay_config.h.in" CONFIG_FILE_CONTENTS)
-set(CONFIG_FILE_VARIABLES)
-foreach(CONFIG_FILE_LINE IN LISTS CONFIG_FILE_CONTENTS)
-    if(CONFIG_FILE_LINE MATCHES "\#[ \t]*define[ \t]+([A-Za-z_0-9]+)[ \t]+\@([A-Za-z_0-9]+)\@")
-        set(CONFIG_FILE_VARIABLE "${CMAKE_MATCH_1}")
-        set(CONFIG_FILE_VARIABLE_TYPE "VALUE")
-    elseif(CONFIG_FILE_LINE MATCHES "#[ \t]*cmakedefine[ \t]+([A-Za-z_0-9]+)")
-        set(CONFIG_FILE_VARIABLE "${CMAKE_MATCH_1}")
-        set(CONFIG_FILE_VARIABLE_TYPE "FLAG")
-    elseif(CONFIG_FILE_LINE MATCHES "#[ \t]*cmakedefine" OR CONFIG_FILE_LINE MATCHES "\@[A-Za-z_0-9]+\@")
-        message(SEND_ERROR "Found unloggable line in anjay_config.h.in: ${CONFIG_FILE_LINE}")
-    else()
-        set(CONFIG_FILE_VARIABLE "")
-    endif()
-    if(NOT CONFIG_FILE_VARIABLE MATCHES "^(ANJAY_VERSION|ANJAY_LOG_FEATURE_LIST|)$")
-        list(APPEND CONFIG_FILE_VARIABLES "${CONFIG_FILE_VARIABLE} ${CONFIG_FILE_VARIABLE_TYPE}")
-    endif()
-endforeach()
-list(SORT CONFIG_FILE_VARIABLES)
-
-set(ANJAY_LOG_FEATURE_LIST "")
-foreach(CONFIG_FILE_VARIABLE_ENTRY IN LISTS CONFIG_FILE_VARIABLES)
-    string(REPLACE " " ";" CONFIG_FILE_VARIABLE_ENTRY "${CONFIG_FILE_VARIABLE_ENTRY}")
-    list(GET CONFIG_FILE_VARIABLE_ENTRY 0 CONFIG_FILE_VARIABLE)
-    list(GET CONFIG_FILE_VARIABLE_ENTRY 1 CONFIG_FILE_VARIABLE_TYPE)
-
-    if(CONFIG_FILE_VARIABLE_TYPE MATCHES "^VALUE$")
-        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n    _anjay_log(anjay, TRACE, \"${CONFIG_FILE_VARIABLE} = \" AVS_QUOTE_MACRO(${CONFIG_FILE_VARIABLE}));")
-    else()
-        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n#ifdef ${CONFIG_FILE_VARIABLE}")
-        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n    _anjay_log(anjay, TRACE, \"${CONFIG_FILE_VARIABLE} = ON\");")
-        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n#else // ${CONFIG_FILE_VARIABLE}")
-        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n    _anjay_log(anjay, TRACE, \"${CONFIG_FILE_VARIABLE} = OFF\");")
-        set(ANJAY_LOG_FEATURE_LIST "${ANJAY_LOG_FEATURE_LIST}\n#endif // ${CONFIG_FILE_VARIABLE}")
-    endif()
-endforeach()
+set_property(TARGET anjay APPEND PROPERTY COMPILE_DEFINITIONS "ANJAY_VERSION=\"${ANJAY_VERSION}\"")
 
 ################# LINK #########################################################
 
-configure_file(config/anjay_config.h.in
-               config/anjay_config.h)
-configure_file(config/anjay_config_log.h.in
-               config/anjay_config_log.h)
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/config")
+set(ANJAY_WITH_ACCESS_CONTROL "${WITH_ACCESS_CONTROL}")
+set(ANJAY_WITH_BOOTSTRAP "${WITH_BOOTSTRAP}")
+set(ANJAY_WITH_COAP_DOWNLOAD "${WITH_COAP_DOWNLOAD}")
+set(ANJAY_WITH_CON_ATTR "${WITH_CON_ATTR}")
+set(ANJAY_WITH_DISCOVER "${WITH_DISCOVER}")
+set(ANJAY_WITH_DOWNLOADER "${WITH_DOWNLOADER}")
+set(ANJAY_WITH_HTTP_DOWNLOAD "${WITH_HTTP_DOWNLOAD}")
+set(ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT "${WITH_LEGACY_CONTENT_FORMAT_SUPPORT}")
+set(ANJAY_WITH_LOGS "${WITH_ANJAY_LOGS}")
+set(ANJAY_WITH_LWM2M_JSON "${WITH_LWM2M_JSON}")
+set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
+set(ANJAY_WITH_MODULE_ATTR_STORAGE "${WITH_MODULE_attr_storage}")
+set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
+set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
+set(ANJAY_WITH_MODULE_SERVER "${WITH_MODULE_server}")
+set(ANJAY_WITH_NET_STATS "${WITH_NET_STATS}")
+set(ANJAY_WITH_OBSERVATION_STATUS "${WITH_OBSERVATION_STATUS}")
+set(ANJAY_WITH_OBSERVE "${WITH_OBSERVE}")
+set(ANJAY_WITH_TRACE_LOGS "${WITH_ANJAY_TRACE_LOGS}")
+
+
+configure_file(include_public/anjay/anjay_config.h.in
+               include_public/anjay/anjay_config.h)
 
 if(BUILD_SHARED_LIBS)
     set_target_properties(anjay PROPERTIES
                           VERSION ${ANJAY_BINARY_VERSION})
-    if(HAVE_VISIBILITY)
+    if(AVS_COMMONS_HAVE_VISIBILITY)
         get_property(LINK_FLAGS TARGET anjay PROPERTY LINK_FLAGS)
         set_property(TARGET anjay PROPERTY LINK_FLAGS "${LINK_FLAGS} -Wl,--exclude-libs,ALL")
     endif()
@@ -493,6 +452,7 @@ set(DEMO_DEPENDENCIES
     WITH_ACCESS_CONTROL
     WITH_AVS_LOG
     WITH_AVS_PERSISTENCE
+    WITH_AVS_STREAM_FILE
     WITH_BOOTSTRAP
     WITH_OBSERVE
     WITH_MODULE_access_control
@@ -537,22 +497,24 @@ if(WITH_TEST)
     # anjay_test
     add_executable(anjay_test EXCLUDE_FROM_ALL
                    $<TARGET_PROPERTY:anjay,SOURCES>
-                   src/coap/test/utils.c
-                   src/coap/test/utils.h
-                   src/downloader/test/downloader_mock.h
-                   src/test/bootstrap_mock.h
-                   src/io/test/bigdata.h
-                   src/observe/test/observe_mock.h
-                   test/include/anjay_test/dm.h
-                   test/include/anjay_test/mock_clock.h
-                   test/include/anjay_test/mock_dm.h
-                   test/include/anjay_test/utils.h
-                   test/include/anjay_test/coap/socket.h
-                   test/src/coap/socket.c
-                   test/src/dm.c
-                   test/src/mock_clock.c
-                   test/src/mock_dm.c)
-    target_include_directories(anjay_test PRIVATE test/include $<TARGET_PROPERTY:anjay,INCLUDE_DIRECTORIES>)
+                   tests/core/coap/utils.c
+                   tests/core/coap/utils.h
+                   tests/core/downloader/downloader_mock.h
+                   tests/core/bootstrap_mock.h
+                   tests/core/io/bigdata.h
+                   tests/core/observe/observe_mock.h
+                   tests/utils/dm.c
+                   tests/utils/dm.h
+                   tests/utils/mock_clock.c
+                   tests/utils/mock_clock.h
+                   tests/utils/mock_dm.c
+                   tests/utils/mock_dm.h
+                   tests/utils/utils.h
+                   tests/utils/coap/socket.h
+                   tests/utils/coap/socket.c)
+    target_include_directories(anjay_test PRIVATE
+                               "${CMAKE_CURRENT_SOURCE_DIR}"
+                               $<TARGET_PROPERTY:anjay,INCLUDE_DIRECTORIES>)
     target_link_libraries(anjay_test PRIVATE avs_unit avs_coap_for_tests ${AVS_COMMONS_LIBRARIES})
 
     if(NOT HAVE_DLSYM AND NOT DLSYM_LIBRARY)
@@ -604,8 +566,8 @@ if(WITH_TEST)
 
     # Source validation
     foreach(F ${ABSOLUTE_SOURCES})
-        add_test(NAME test_${F}_visibility COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_visibility.py ${F})
-        add_test(NAME test_${F}_headers COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_headers.py ${F})
+        add_test(NAME test_${F}_visibility COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_visibility.py ${F})
+        add_test(NAME test_${F}_headers COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_headers.py ${F})
     endforeach()
 
     add_custom_target(visibility_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_visibility$$'")
@@ -620,16 +582,20 @@ if(WITH_TEST)
             list(APPEND ABSOLUTE_HEADERS ${F})
         endif()
     endforeach()
-    add_test(NAME test_function_duplicates COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_duplicates.py ${ABSOLUTE_HEADERS})
+    add_test(NAME test_function_duplicates COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_duplicates.py ${ABSOLUTE_HEADERS})
     add_test(NAME test_markdown_toc COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-toc.py --check "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+    add_test(NAME test_config_log COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/anjay_config_log_tool.py validate)
 
     add_custom_target(function_duplicates_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_function_duplicates$$'")
 
     add_custom_target(toc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_markdown_toc$$'")
 
+    add_custom_target(config_log_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_config_log$$'")
+
     add_dependencies(anjay_unit_check
                      function_duplicates_check
-                     toc_check)
+                     toc_check
+                     config_log_check)
 
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
         option(WITH_LICENSE_TEST "Enable checking if all files have the license boilerplate" OFF)
@@ -645,9 +611,9 @@ if(WITH_TEST)
     add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
 
     if(BUILD_SHARED_LIBS)
-        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_)
+        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_)
     else()
-        add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ _anjay_ _ANJAY_)
+        add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ _anjay_ _ANJAY_)
     endif()
     add_dependencies(symbols_check anjay)
     add_dependencies(anjay_unit_check symbols_check)
@@ -656,16 +622,21 @@ if(WITH_TEST)
                       "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/tools/check-extern-c.py" --path "${CMAKE_CURRENT_SOURCE_DIR}")
     add_dependencies(anjay_unit_check anjay_extern_c_check)
 
+    add_custom_target(anjay_filename_check
+                      COMMAND ! find src -name "'*.[ch]'" | sed -e "'s|^.*/||'" | grep -v "'^anjay_'"
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_dependencies(anjay_check anjay_filename_check)
+
     # Unit tests
     include(ProcessorCount)
     ProcessorCount(ANJAY_DEFAULT_NPROC)
 
     set(NPROC "${ANJAY_DEFAULT_NPROC}" CACHE STRING "Number of threads for multi-threaded build/test operations")
 
-    add_subdirectory(test/codegen)
+    add_subdirectory(tests/codegen)
 
     if(WITH_INTEGRATION_TESTS)
-        add_subdirectory(test/integration)
+        add_subdirectory(tests/integration)
     endif()
 else(WITH_TEST)
     macro(add_anjay_test NAME)
@@ -674,7 +645,7 @@ endif(WITH_TEST)
 
 ################# FUZZ TESTING #################################################
 
-add_subdirectory(test/fuzz)
+add_subdirectory(tests/fuzz)
 add_subdirectory(doc)
 
 ################# STATIC ANALYSIS ##############################################
@@ -713,7 +684,7 @@ if(WITH_FIND_UNUSED_CODE)
     add_custom_target(find_unused_code
                       COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/find_unused_code.py"
                               # avs_commons global cleanup functions
-                              --ignore-symbol "^_avs_.*_cleanup_global_state$$"
+                              --ignore-symbol "^_avs_.*_cleanup_global.*_state$$"
                               # gcc internals
                               --ignore-object ".*/crtbegin.o"
                               # external libraries
@@ -728,9 +699,35 @@ add_subdirectory(examples)
 # libraries
 install(TARGETS anjay EXPORT anjay-targets DESTINATION lib)
 
-install(DIRECTORY include_public/anjay
-        DESTINATION include
-        FILES_MATCHING REGEX "[.]h$")
+install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/include_public/anjay/anjay_config.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/anjay.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/core.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/dm.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/download.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/io.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/stats.h"
+        DESTINATION include/anjay)
+if(WITH_MODULE_access_control)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/access_control.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_attr_storage)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/attr_storage.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_fw_update)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/fw_update.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_security)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/security.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_server)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/server.h"
+            DESTINATION include/anjay)
+endif()
 
 # install CMake package
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/anjay-config.cmake.in

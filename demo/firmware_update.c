@@ -27,11 +27,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <avsystem/commons/persistence.h>
+#include <avsystem/commons/avs_persistence.h>
 
-#include <avsystem/commons/memory.h>
-#include <avsystem/commons/stream/stream_file.h>
-#include <avsystem/commons/utils.h>
+#include <avsystem/commons/avs_memory.h>
+#include <avsystem/commons/avs_stream_file.h>
+#include <avsystem/commons/avs_utils.h>
 
 #define FORCE_ERROR_OUT_OF_MEMORY 1
 #define FORCE_ERROR_FAILED_UPDATE 2

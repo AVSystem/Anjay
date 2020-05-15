@@ -49,35 +49,30 @@ set(COAP_UDP_NOTIFY_CACHE_SIZE 4 CACHE STRING "Maximum number of notification to
 
 ### depedencies
 
-set(AVS_COMMONS_REQUIRED_COMPONENTS avs_buffer avs_compat_threading avs_list avs_net avs_sched avs_stream avs_utils avs_persistence avs_rbtree)
+set(AVS_COMMONS_REQUIRED_COMPONENTS avs_buffer avs_compat_threading avs_list avs_net avs_sched avs_utils avs_crypto)
 
 if(WITH_AVS_COAP_LOGS)
-    set(WITH_AVS_LOG ON)
     list(APPEND AVS_COMMONS_REQUIRED_COMPONENTS avs_log)
 endif()
 
+if(WITH_AVS_COAP_STREAMING_API)
+    list(APPEND AVS_COMMONS_REQUIRED_COMPONENTS avs_stream)
+endif()
+
+if(WITH_AVS_COAP_OBSERVE_PERSISTENCE)
+    list(APPEND AVS_COMMONS_REQUIRED_COMPONENTS avs_persistence avs_rbtree)
+endif()
 
 if(WITH_TEST)
-    set(WITH_AVS_UNIT ON)
     list(APPEND AVS_COMMONS_REQUIRED_COMPONENTS avs_unit)
 endif()
 
 ### feature support
 
-# -fvisibility, #pragma GCC visibility
-if(NOT DEFINED HAVE_VISIBILITY)
-    file(WRITE ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c "#pragma GCC visibility push(default)\nint f();\n#pragma GCC visibility push(hidden)\nint f() { return 0; }\n#pragma GCC visibility pop\nint main() { return f(); }\n\n")
-    try_compile(HAVE_VISIBILITY
-                ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeTmp
-                ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeTmp/visibility.c
-                COMPILE_DEFINITIONS -Wall -Wextra -Werror -fvisibility=default)
-endif()
+set(WITH_AVS_COAP_POISONING "${WITH_POISONING}")
 
-configure_file(src/avs_coap_config.h.in
-               src/avs_coap_config.h)
-
-configure_file(include_public/avsystem/coap/config.h.in
-               generated/include_public/avsystem/coap/config.h)
+configure_file(include_public/avsystem/coap/avs_coap_config.h.in
+               include_public/avsystem/coap/avs_coap_config.h)
 
 ### targets
 
@@ -95,57 +90,50 @@ set(PUBLIC_INCLUDES
     include_public/avsystem/coap/async_server.h
     include_public/avsystem/coap/ctx.h
     include_public/avsystem/coap/observe.h
-    ${CMAKE_CURRENT_BINARY_DIR}/generated/include_public/avsystem/coap/config.h)
+    ${CMAKE_CURRENT_BINARY_DIR}/include_public/avsystem/coap/avs_coap_config.h)
 
 set(SOURCES
     ${PUBLIC_INCLUDES}
 
-    src/async/async_client.c
-    src/async/async_client.h
-    src/async/async_server.c
-    src/async/exchange.c
-    src/async/exchange.h
-    src/code_utils.c
-    src/code_utils.h
-    src/common_utils.c
-    src/common_utils.h
-    src/ctx.c
-    src/ctx.h
-    src/ctx_vtable.h
-    src/parse_utils.h
+    src/async/avs_coap_async_client.c
+    src/async/avs_coap_async_client.h
+    src/async/avs_coap_async_server.c
+    src/async/avs_coap_async_server.h
+    src/async/avs_coap_exchange.c
+    src/async/avs_coap_exchange.h
+    src/avs_coap_init.h
+    src/avs_coap_code_utils.c
+    src/avs_coap_code_utils.h
+    src/avs_coap_common_utils.c
+    src/avs_coap_common_utils.h
+    src/avs_coap_ctx.c
+    src/avs_coap_ctx.h
+    src/avs_coap_ctx_vtable.h
+    src/avs_coap_parse_utils.h
 
-    src/options/iterator.c
-    src/options/iterator.h
-    src/options/option.c
-    src/options/options.c
-    src/options/option.h)
+    src/options/avs_coap_iterator.c
+    src/options/avs_coap_iterator.h
+    src/options/avs_coap_option.c
+    src/options/avs_coap_option.h
+    src/options/avs_coap_options.c
+    src/options/avs_coap_options.h
 
-if(WITH_AVS_COAP_UDP)
-    set(SOURCES ${SOURCES}
-        src/udp/udp_ctx.c
-        src/udp/udp_msg.h
-        src/udp/udp_msg.c
-        src/udp/udp_msg_cache.c
-        src/udp/udp_msg_cache.h
-        src/udp/udp_header.h
-        src/udp/udp_tx_params.c
-        src/udp/udp_tx_params.h)
-endif()
+    src/udp/avs_coap_udp_ctx.c
+    src/udp/avs_coap_udp_header.h
+    src/udp/avs_coap_udp_msg.h
+    src/udp/avs_coap_udp_msg.c
+    src/udp/avs_coap_udp_msg_cache.c
+    src/udp/avs_coap_udp_msg_cache.h
+    src/udp/avs_coap_udp_tx_params.c
+    src/udp/avs_coap_udp_tx_params.h
 
+    src/streaming/avs_coap_streaming_client.c
+    src/streaming/avs_coap_streaming_client.h
+    src/streaming/avs_coap_streaming_server.c
+    src/streaming/avs_coap_streaming_server.h
 
-if(WITH_AVS_COAP_STREAMING_API)
-    set(SOURCES ${SOURCES}
-        src/streaming/streaming_client.c
-        src/streaming/streaming_client.h
-        src/streaming/streaming_server.c
-        src/streaming/streaming_server.h)
-endif()
-
-if(WITH_AVS_COAP_OBSERVE)
-    set(SOURCES ${SOURCES}
-        src/observe.c
-        src/observe.h)
-endif()
+    src/avs_coap_observe.c
+    src/avs_coap_observe.h)
 
 # avs_coap_library(NAME name
 #                  [ PRIVATE_FLAGS flags... ])
@@ -161,11 +149,9 @@ function(add_coap_library)
 
     target_include_directories(${name} PRIVATE src)
     target_include_directories(${name} PUBLIC
+                               $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include_public>
                                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include_public>
-                               $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated/include_public>
                                $<INSTALL_INTERFACE:include>)
-    target_include_directories(${name} PRIVATE
-                               $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/src>)
     target_link_libraries(${name} PUBLIC ${AVS_COMMONS_REQUIRED_COMPONENTS})
     target_compile_definitions(${name} PRIVATE ${private_definitions})
 endfunction()
@@ -182,51 +168,38 @@ if(WITH_TEST)
     set_target_properties(avs_coap_for_tests PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
     set(TEST_SOURCES
-        src/test/socket.c
-        src/test/socket.h
-        src/test/mock_clock.c
-        src/test/mock_clock.h
-        src/test/utils.h
-        src/test/utils.c
+        tests/socket.c
+        tests/socket.h
+        tests/mock_clock.c
+        tests/mock_clock.h
+        tests/utils.h
+        tests/utils.c
 
-        src/options/test/option.c
-        src/options/test/options.c)
+        tests/options/option.c
+        tests/options/options.c
 
-    if(WITH_AVS_COAP_UDP)
-        set(TEST_SOURCES ${TEST_SOURCES}
-            src/udp/test/async_client_with_big_data.c
-            src/udp/test/async_client.c
-            src/udp/test/async_server.c
-            src/udp/test/big_data.h
-            src/udp/test/fuzzer_cases.c
-            src/udp/test/msg_cache.c
-            src/udp/test/msg.c
-            src/udp/test/udp_tx_params.c
-            src/udp/test/utils.h
-            src/udp/test/setsock.c)
+        tests/udp/async_client_with_big_data.c
+        tests/udp/async_client.c
+        tests/udp/async_server.c
+        tests/udp/big_data.h
+        tests/udp/fuzzer_cases.c
+        tests/udp/msg_cache.c
+        tests/udp/msg.c
+        tests/udp/udp_tx_params.c
+        tests/udp/utils.h
+        tests/udp/setsock.c
 
-        if(WITH_AVS_COAP_OBSERVE)
-            set(TEST_SOURCES ${TEST_SOURCES}
-                src/udp/test/async_observe.c)
-        endif()
+        tests/udp/async_observe.c
 
-        if(WITH_AVS_COAP_STREAMING_API)
-            set(TEST_SOURCES ${TEST_SOURCES}
-                src/udp/test/streaming_client.c
-                src/udp/test/streaming_server.c)
-        endif()
+        tests/udp/streaming_client.c
+        tests/udp/streaming_server.c
 
-        if(WITH_AVS_COAP_OBSERVE AND WITH_AVS_COAP_STREAMING_API)
-        set(TEST_SOURCES ${TEST_SOURCES}
-            src/udp/test/streaming_observe.c)
-        endif()
-    endif()
-
+        tests/udp/streaming_observe.c)
 
     add_executable(avs_coap_test EXCLUDE_FROM_ALL ${TEST_SOURCES})
     target_include_directories(avs_coap_test PRIVATE src)
     target_include_directories(avs_coap_test PRIVATE
-                               $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/src>)
+                               "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
     # dl required for mock_clock
     target_link_libraries(avs_coap_test PRIVATE avs_coap_for_tests avs_unit dl)
     target_compile_options(avs_coap_test PRIVATE
@@ -256,7 +229,7 @@ if(WITH_TEST)
         add_dependencies(check avs_coap_check)
     endif()
 
-    add_subdirectory(test/fuzz)
+    add_subdirectory(tests/fuzz)
 
     include(cmake/AddHeaderSelfSufficiencyTests.cmake)
     add_header_self_sufficiency_tests(TARGET avs_coap_public_header_self_sufficiency_check
@@ -266,8 +239,8 @@ if(WITH_TEST)
     add_header_self_sufficiency_tests(TARGET avs_coap_internal_header_self_sufficiency_check
                                       TARGET_PREFIX avs_coap
                                       INCLUDES
-                                      "avs_coap_config.h"
-                                      "x_log_config.h"
+                                      "avs_coap_init.h"
+                                      "avs_coap_x_log_config.h"
                                       INCLUDE_DIRECTORIES
                                       "${CMAKE_CURRENT_BINARY_DIR}/src"
                                       "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -282,6 +255,12 @@ if(WITH_TEST)
                      avs_coap_public_header_self_sufficiency_check
                      avs_coap_internal_header_self_sufficiency_check)
     add_dependencies(avs_coap_check avs_coap_header_self_sufficiency_check)
+
+    add_custom_target(avs_coap_filename_check
+                      COMMAND ! find src -name "'*.[ch]'" | sed -e "'s|^.*/||'" | grep -v "'^avs_coap_'"
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_dependencies(avs_coap_check avs_coap_filename_check)
+
     function(add_cpp_header_warnings_check)
         set(options)
         set(one_value_args TARGET)
@@ -322,7 +301,7 @@ install(EXPORT avs_coap-targets DESTINATION lib/avs_coap)
 install(DIRECTORY include_public/
         DESTINATION include
         FILES_MATCHING REGEX "[.]h$")
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/include_public/avsystem/coap/config.h"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include_public/avsystem/coap/avs_coap_config.h"
         DESTINATION include/avsystem/coap)
 
 # see https://cmake.org/cmake/help/v3.4/module/CMakePackageConfigHelpers.html#example-generating-package-files

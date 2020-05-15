@@ -20,8 +20,9 @@
 #include "demo_utils.h"
 #include "firmware_update.h"
 #include "iosched.h"
+
 #include "objects.h"
-#include <avsystem/commons/url.h>
+#include <avsystem/commons/avs_url.h>
 
 #include <assert.h>
 #include <signal.h>
@@ -32,7 +33,7 @@
 
 #include <unistd.h>
 
-#include <avsystem/commons/stream/stream_file.h>
+#include <avsystem/commons/avs_stream_file.h>
 
 #include <anjay/access_control.h>
 #include <anjay/attr_storage.h>
@@ -97,7 +98,7 @@ static int server_object_reload(anjay_demo_t *demo) {
             .default_max_period = -1,
             .disable_timeout = -1,
             .binding = server->binding_mode,
-            .notification_storing = true
+            .notification_storing = true,
         };
         anjay_iid_t iid = server->server_iid;
         if (anjay_server_object_add_instance(demo->anjay, &instance, &iid)) {

@@ -151,7 +151,7 @@ typedef struct anjay_ret_bytes_ctx_struct anjay_ret_bytes_ctx_t;
  *     // handle error
  * }
  *
- * ssize_t bytes_read;
+ * size_t bytes_read;
  * char buffer[1024];
  * while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
  *     if (anjay_ret_bytes_append(bytes_ctx, buffer, bytes_read)) {
@@ -339,7 +339,9 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
  * argument does not have associated value with it, or because the value has
  * already been read / skipped entirely.
  *
- * If the function returns buf_size-1, then there might be more data to read.
+ * When the output buffer is not big enough to contain whole message content +
+ * terminating nullbyte, ANJAY_BUFFER_TOO_SHORT is returned, after which further
+ * calls can be made, to retrieve more data.
  *
  * In case of an error following values are returned:
  * - -1 if buf_size < 2 or out_buf is NULL
@@ -347,15 +349,21 @@ int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
  *
  * In such cases all data read up to this point should be considered invalid.
  *
- * @param ctx       Execute context
- * @param out_buf   Buffer where read bytes will be stored
- * @param buf_size  Size of the buffer
+ * @param ctx            Execute context
+ * @param out_bytes_read Pointer to a variable that, on successful exit, will be
+ *                       set to the number of bytes read (not counting the
+ *                       terminating null-byte). May be NULL if not needed.
+ * @param out_buf        Buffer where read bytes will be stored
+ * @param buf_size       Size of the buffer
  *
- * @returns number of bytes read, or a negative value in case of an error
+ * @returns 0 on success, a negative value in case of error,
+ *          ANJAY_BUFFER_TOO_SHORT if the buffer is not big enough to contain
+ *          whole message content + terminating nullbyte.
  */
-ssize_t anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
-                                    char *out_buf,
-                                    size_t buf_size);
+int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
+                                size_t *out_bytes_read,
+                                char *out_buf,
+                                size_t buf_size);
 
 /**
  * Reads a chunk of data blob from the RPC request message.
@@ -402,9 +410,10 @@ int anjay_get_bytes(anjay_input_ctx_t *ctx,
 
 #define ANJAY_BUFFER_TOO_SHORT 1
 /**
- * Reads a null-terminated string from the RPC request content. On success,
- * the content inside @p out_buf is always null-terminated. On failure, the
- * contents of @p out_buf are undefined.
+ * Reads a null-terminated string from the RPC request content. On success or
+ * even when @ref ANJAY_BUFFER_TOO_SHORT is returned, the content inside
+ * @p out_buf is always null-terminated. On failure, the contents of @p out_buf
+ * are undefined.
  *
  * When the input buffer is not big enough to contain whole message content +
  * terminating nullbyte, ANJAY_BUFFER_TOO_SHORT is returned, after which further
@@ -413,10 +422,11 @@ int anjay_get_bytes(anjay_input_ctx_t *ctx,
  * @param      ctx                  Input context to operate on.
  * @param[out] out_buf              Buffer to read data into.
  * @param      buf_size             Number of bytes available in @p out_buf .
+ *                                  Must be at least 1.
  *
  * @returns 0 on success, a negative value in case of error,
- *          ANJAY_BUFFER_TOO_SHORT if the buffer is not big enough to contain
- *          whole message content + terminating nullbyte.
+ *          @ref ANJAY_BUFFER_TOO_SHORT if the buffer is not big enough to
+ *          contain whole message content + terminating nullbyte.
  */
 int anjay_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size);
 

@@ -22,10 +22,12 @@
 
 #include <avsystem/coap/udp.h>
 
-#include <avsystem/commons/list.h>
-#include <avsystem/commons/net.h>
-#include <avsystem/commons/stream.h>
-#include <avsystem/commons/time.h>
+#include <avsystem/commons/avs_list.h>
+#include <avsystem/commons/avs_net.h>
+#include <avsystem/commons/avs_prng.h>
+#include <avsystem/commons/avs_sched.h>
+#include <avsystem/commons/avs_stream.h>
+#include <avsystem/commons/avs_time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -246,6 +248,18 @@ typedef struct anjay_configuration {
      */
     avs_net_socket_tls_ciphersuites_t default_tls_ciphersuites;
 
+    /**
+     * Custom PRNG context to use. If @c NULL , a default one is used, with
+     * entropy source specific to selected cryptograpic backend. If default
+     * entropy source isn't available, creation of Anjay object will fail.
+     *
+     * Used for establishing TLS and DTLS connections, generation of tokens and
+     * by OSCORE module, if it's available.
+     *
+     * If not @c NULL , then MUST outlive created Anjay object.
+     */
+    avs_crypto_prng_ctx_t *prng_ctx;
+
 } anjay_configuration_t;
 
 /**
@@ -269,7 +283,7 @@ anjay_t *anjay_new(const anjay_configuration_t *config);
  * NOTE: It shall be called <strong>before</strong> freeing LwM2M Objects
  * registered within the <c>anjay</c> object.
  *
- * @param anjay Anjay object to delete.
+ * @param anjay Anjay object to delete. MUST NOT be @c NULL .
  */
 void anjay_delete(anjay_t *anjay);
 
@@ -455,6 +469,23 @@ typedef uint16_t anjay_riid_t;
 /** @} */
 
 /**
+ * Extracts the scheduler used by Anjay allowing the user to schedule his own
+ * tasks.
+ *
+ * See docs of [avs_commons library](https://github.com/AVSystem/avs_commons/
+ * blob/master/include_public/avsystem/commons/sched.h) for API of
+ * @c avs_sched_t object.
+ *
+ * **Must not** use @c avs_sched_cleanup on the returned scheduler. Anjay will
+ * cleanup it itself.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns non-null scheduler object used by Anjay.
+ */
+avs_sched_t *anjay_get_scheduler(anjay_t *anjay);
+
+/**
  * Determines time of next scheduled task.
  *
  * May be used to determine how long the device may wait before calling
@@ -581,7 +612,7 @@ int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid);
  *
  * @param anjay   Anjay object to operate on.
  * @param ssid    Short Server ID of the server to put in a disabled state.
- * @param timeout Disable timeout. If set to @ref AVS_TIME_DURATION_INVALID,
+ * @param timeout Disable timeout. If set to @c AVS_TIME_DURATION_INVALID,
  *                the server will remain disabled until explicit call to
  *                @ref anjay_enable_server . Otherwise, the server will get
  *                enabled automatically after @p timeout .

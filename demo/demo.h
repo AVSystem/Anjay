@@ -17,16 +17,17 @@
 #ifndef DEMO_H
 #define DEMO_H
 
-#include "firmware_update.h"
-#include "objects.h"
-
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>
+#include <anjay/anjay_config.h>
 #include <anjay/attr_storage.h>
 
-#include <avsystem/commons/list.h>
-#include <avsystem/commons/stream/stream_file.h>
-#include <avsystem/commons/time.h>
+#include <avsystem/commons/avs_list.h>
+#include <avsystem/commons/avs_stream_file.h>
+#include <avsystem/commons/avs_time.h>
+
+#include "firmware_update.h"
+#include "objects.h"
 
 typedef struct {
     char data[1]; // actually a VLA, but struct cannot be empty

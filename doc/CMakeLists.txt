@@ -36,6 +36,10 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
                               ${ANJAY_SPHINX_DOC_ROOT_DIR}
                               ${ANJAY_SPHINX_DOC_CONF_DIR}/html
                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sphinx)
+    add_custom_command(TARGET doc_sphinx POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E remove -f api
+                       COMMAND ${CMAKE_COMMAND} -E create_symlink ../../doxygen/html api
+                       WORKING_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/html")
 
     add_dependencies(doc doc_sphinx)
 
@@ -54,7 +58,7 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
         if(WITH_URL_CHECK)
             add_test(NAME test_doc_url
                      COMMAND ./runtest.py
-                     WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/test/doc)
+                     WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/tests/doc)
         endif()
         set_property(TEST test_doc_snippet APPEND PROPERTY ENVIRONMENT
                      "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"

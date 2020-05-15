@@ -1,0 +1,26 @@
+0008 # in buf size
+0008 # out buf size
+00 # default tx params
+00 # no response cache
+00 # default mtu
+
+03 # handle incoming packet
+0400 # mock_recv: msg size
+40 # mock_recv: CON, empty token
+01 # mock_recv: code = Get
+0000 # mock_recv: msg id
+00 # mock_recv: do not override msd id/token with last sent
+
+00 # handle_new_request: do nothing in do_stuff
+00 # handle_new_request: don't return early
+00 # handle_new_request: do nothing in do_stuff
+00000000 # handle_new_request: succeed
+
+00 # handle_request: do nothing in do_stuff
+00 # handle_request: don't return early
+45 # handle_request: 2.05 Content
+0000 # handle_request: empty options
+0000 # handle_request: zero capacity
+00 # handle_request: don't pass payload_writer
+00 # handle_request: do nothing in do_stuff
+00000000 # handle_request: suceed

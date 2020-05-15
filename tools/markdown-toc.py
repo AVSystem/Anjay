@@ -50,9 +50,10 @@ def strip_links(text):
 
 
 def anchor_from_title(title):
+    # Should be fine, as it follows: https://github.com/jch/html-pipeline/blob/master/lib/html/pipeline/toc_filter.rb#L42
     title = title.lower()
     title = ''.join(c for c in title if c not in string.punctuation)
-    return '-'.join(title.split())
+    return title.replace(' ', '-')
 
 
 def make_toc_from_headers(headers):
@@ -61,7 +62,8 @@ def make_toc_from_headers(headers):
 
     for header in headers:
         indent = '  ' * (header.level - min_level)
-        toc_string += '%s* [%s](#%s)\n' % (indent, strip_links(header.title), anchor_from_title(header.title))
+        linkless_header = strip_links(header.title)
+        toc_string += '%s* [%s](#%s)\n' % (indent, linkless_header, anchor_from_title(linkless_header))
 
     return toc_string
 

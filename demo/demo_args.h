@@ -17,12 +17,13 @@
 #ifndef DEMO_ARGS_H
 #define DEMO_ARGS_H
 
-#include "demo_utils.h"
-#include "objects.h"
-
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>
+#include <anjay/anjay_config.h>
 #include <anjay/fw_update.h>
+
+#include "demo_utils.h"
+#include "objects.h"
 
 typedef struct access_entry {
     anjay_ssid_t ssid;

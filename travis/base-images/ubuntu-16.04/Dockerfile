@@ -16,7 +16,8 @@ FROM ubuntu:16.04
 RUN apt-get update
 RUN apt-get install -y python3-pip git build-essential cmake libmbedtls-dev \
     libssl-dev python3 libpython3-dev wget python3-cryptography \
-    python3-sphinx python3-requests valgrind curl
+    python3-requests valgrind curl
 RUN sed -i -e "s/-Wdate-time/ /g" \
     /usr/lib/python3.5/config-3.5m-x86_64-linux-gnu/Makefile \
     /usr/lib/python3.5/plat-x86_64-linux-gnu/_sysconfigdata_m.py
+RUN pip3 install sphinx sphinx-rtd-theme

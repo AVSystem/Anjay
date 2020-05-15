@@ -21,8 +21,8 @@
 #include <assert.h>
 #include <string.h>
 
-#include <avsystem/commons/memory.h>
-#include <avsystem/commons/vector.h>
+#include <avsystem/commons/avs_memory.h>
+#include <avsystem/commons/avs_vector.h>
 
 #define TEST_RES_TIMESTAMP 0
 #define TEST_RES_COUNTER 1
@@ -281,17 +281,21 @@ static int test_resource_read(anjay_t *anjay,
             return ANJAY_ERR_INTERNAL;
         }
         if (inst->bytes_size) {
-            char *buffer = (char *) avs_malloc((size_t) inst->bytes_burst);
+            int32_t bytes_burst = inst->bytes_burst;
+            if (bytes_burst <= 0) {
+                bytes_burst = inst->bytes_size;
+            }
+            char *buffer = (char *) avs_malloc((size_t) bytes_burst);
             if (!buffer) {
                 demo_log(ERROR, "Out of memory");
                 return -1;
             }
             int32_t counter = 0;
             for (int32_t offset = 0; offset < inst->bytes_size;
-                 offset += inst->bytes_burst) {
+                 offset += bytes_burst) {
                 int32_t bytes_to_write = inst->bytes_size - offset;
-                if (bytes_to_write > inst->bytes_burst) {
-                    bytes_to_write = inst->bytes_burst;
+                if (bytes_to_write > bytes_burst) {
+                    bytes_to_write = bytes_burst;
                 }
                 for (int32_t i = 0; i < bytes_to_write; ++i) {
                     buffer[i] = (char) (counter++ % 128);
@@ -306,16 +310,9 @@ static int test_resource_read(anjay_t *anjay,
         }
         return result;
     }
-    case TEST_RES_RAW_BYTES: {
+    case TEST_RES_RAW_BYTES:
         assert(riid == ANJAY_ID_INVALID);
-        anjay_ret_bytes_ctx_t *bytes_ctx =
-                anjay_ret_bytes_begin(ctx, inst->raw_bytes_size);
-        if (!bytes_ctx) {
-            return -1;
-        }
-        return anjay_ret_bytes_append(bytes_ctx, inst->raw_bytes,
-                                      inst->raw_bytes_size);
-    }
+        return anjay_ret_bytes(ctx, inst->raw_bytes, inst->raw_bytes_size);
     case TEST_RES_BYTES_SIZE:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i32(ctx, inst->bytes_size);
@@ -484,11 +481,12 @@ static int test_resource_write(anjay_t *anjay,
 static int read_exec_arg_value(anjay_execute_ctx_t *arg_ctx,
                                char **out_string) {
 #define VALUE_CHUNK_SIZE 256
-    size_t bytes_read = 0;
-    ssize_t result = 0;
+    size_t total_bytes_read = 0;
+    int result = 0;
 
     while (true) {
-        size_t new_value_size = bytes_read + VALUE_CHUNK_SIZE;
+        size_t new_value_size = total_bytes_read + VALUE_CHUNK_SIZE;
+        size_t bytes_read;
 
         char *new_string = (char *) avs_realloc(*out_string, new_value_size);
         if (!new_string) {
@@ -499,19 +497,21 @@ static int read_exec_arg_value(anjay_execute_ctx_t *arg_ctx,
 
         *out_string = new_string;
 
-        result = anjay_execute_get_arg_value(arg_ctx, new_string + bytes_read,
-                                             (ssize_t) VALUE_CHUNK_SIZE);
+        result = anjay_execute_get_arg_value(arg_ctx, &bytes_read,
+                                             new_string + total_bytes_read,
+                                             (size_t) VALUE_CHUNK_SIZE);
 
         if (result < 0) {
             demo_log(ERROR, "could not read arg value: %d", (int) result);
             goto fail;
-        } else if ((size_t) result != VALUE_CHUNK_SIZE - 1) {
+        } else if (result == 0) {
             // nothing more to read, we're done
             break;
         }
 
         // incomplete read; bigger buffer required
-        bytes_read += (size_t) result;
+        assert(result == ANJAY_BUFFER_TOO_SHORT);
+        total_bytes_read += bytes_read;
     }
 
     return 0;
@@ -519,7 +519,7 @@ static int read_exec_arg_value(anjay_execute_ctx_t *arg_ctx,
 fail:
     avs_free(*out_string);
     *out_string = NULL;
-    return (int) result;
+    return result;
 }
 
 static int read_exec_arg(anjay_execute_ctx_t *arg_ctx,
@@ -587,16 +587,16 @@ static int init_int_array_read_element(test_array_entry_t *out_entry,
     int arg_number;
     bool has_value;
 
-    ssize_t result =
-            anjay_execute_get_next_arg(arg_ctx, &arg_number, &has_value);
+    int result = anjay_execute_get_next_arg(arg_ctx, &arg_number, &has_value);
     if (result) {
-        return (int) result;
+        return result;
     }
 
     char value_buf[16];
-    result = anjay_execute_get_arg_value(arg_ctx, value_buf, sizeof(value_buf));
-    if (result < 0) {
-        return (int) result;
+    if ((result = anjay_execute_get_arg_value(arg_ctx, NULL, value_buf,
+                                              sizeof(value_buf)))
+            < 0) {
+        return result;
     }
 
     long value;

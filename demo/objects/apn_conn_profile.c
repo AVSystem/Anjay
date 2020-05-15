@@ -207,9 +207,9 @@ static int apncp_resource_write(anjay_t *anjay,
             return ANJAY_ERR_INTERNAL;
         }
 
-        ssize_t result = snprintf(inst->profile_name,
-                                  sizeof(inst->profile_name), "%s", buf);
-        if (result < 0 || result >= (ssize_t) sizeof(inst->profile_name)) {
+        int result = snprintf(inst->profile_name, sizeof(inst->profile_name),
+                              "%s", buf);
+        if (result < 0 || (size_t) result >= sizeof(inst->profile_name)) {
             return ANJAY_ERR_INTERNAL;
         }
         inst->has_profile_name = true;

@@ -25,14 +25,14 @@ extern "C" {
 /**
  * @returns the total amount of bytes transmitted by the client.
  *
- * NOTE: When WITH_NET_STATS is disabled this function always return 0.
+ * NOTE: When ANJAY_WITH_NET_STATS is disabled this function always return 0.
  */
 uint64_t anjay_get_tx_bytes(anjay_t *anjay);
 
 /**
  * @returns the amount of bytes received by the client.
  *
- * NOTE: When WITH_NET_STATS is disabled this function always return 0.
+ * NOTE: When ANJAY_WITH_NET_STATS is disabled this function always return 0.
  */
 uint64_t anjay_get_rx_bytes(anjay_t *anjay);
 
@@ -40,7 +40,7 @@ uint64_t anjay_get_rx_bytes(anjay_t *anjay);
  * @returns the number of packets received by the client to which cached
  *          responses were found.
  *
- * NOTE: When WITH_NET_STATS is disabled this function always return 0.
+ * NOTE: When ANJAY_WITH_NET_STATS is disabled this function always return 0.
  */
 uint64_t anjay_get_num_incoming_retransmissions(anjay_t *anjay);
 
@@ -49,7 +49,7 @@ uint64_t anjay_get_num_incoming_retransmissions(anjay_t *anjay);
  *          cached as well as requests which the client did not get any
  *          response to.
  *
- * NOTE: When WITH_NET_STATS is disabled this function always return 0.
+ * NOTE: When ANJAY_WITH_NET_STATS is disabled this function always return 0.
  */
 uint64_t anjay_get_num_outgoing_retransmissions(anjay_t *anjay);
 

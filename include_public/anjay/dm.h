@@ -642,86 +642,212 @@ anjay_dm_transaction_rollback_t(anjay_t *anjay,
 typedef struct {
     /**
      * Get default Object attributes, @ref anjay_dm_object_read_default_attrs_t
+     *
+     * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
+     *
+     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+     * handler overrides *Attribute Storage* logic.
      */
     anjay_dm_object_read_default_attrs_t *object_read_default_attrs;
+
     /**
      * Set default Object attributes,
      * @ref anjay_dm_object_write_default_attrs_t
+     *
+     * Required for handling *LwM2M Write-Attributes* operation.
+     *
+     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+     * handler overrides *Attribute Storage* logic.
      */
     anjay_dm_object_write_default_attrs_t *object_write_default_attrs;
 
-    /** Enumerate available Object Instances, @ref anjay_dm_list_instances_t */
+    /**
+     * Enumerate available Object Instances, @ref anjay_dm_list_instances_t
+     *
+     * Required for every LwM2M operation.
+     *
+     * **Must not be NULL.** @ref anjay_dm_list_instances_SINGLE can be used
+     * here.
+     */
     anjay_dm_list_instances_t *list_instances;
 
-    /** Resets an Object Instance, @ref anjay_dm_instance_reset_t */
+    /**
+     * Resets an Object Instance, @ref anjay_dm_instance_reset_t
+     *
+     * Required for handling *LwM2M Write* operation in *replace mode*.
+     *
+     * Can be NULL if the object does not contain writable resources.
+     */
     anjay_dm_instance_reset_t *instance_reset;
-    /** Create an Object Instance, @ref anjay_dm_instance_create_t */
+
+    /**
+     * Create an Object Instance, @ref anjay_dm_instance_create_t
+     *
+     * Required for handling *LwM2M Create* operation.
+     *
+     * Can be NULL for single instance objects.
+     */
     anjay_dm_instance_create_t *instance_create;
-    /** Delete an Object Instance, @ref anjay_dm_instance_remove_t */
+
+    /**
+     * Delete an Object Instance, @ref anjay_dm_instance_remove_t
+     *
+     * Required for handling *LwM2M Delete* operation.
+     *
+     * Can be NULL for single instance objects.
+     */
     anjay_dm_instance_remove_t *instance_remove;
 
     /**
      * Get default Object Instance attributes,
      * @ref anjay_dm_instance_read_default_attrs_t
+     *
+     * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
+     *
+     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+     * handler overrides *Attribute Storage* logic.
      */
     anjay_dm_instance_read_default_attrs_t *instance_read_default_attrs;
+
     /**
      * Set default Object Instance attributes,
      * @ref anjay_dm_instance_write_default_attrs_t
+     *
+     * Required for handling *LwM2M Write-Attributes* operation.
+     *
+     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+     * handler overrides *Attribute Storage* logic.
      */
     anjay_dm_instance_write_default_attrs_t *instance_write_default_attrs;
 
     /**
      * Enumerate PRESENT Resources in a given Object Instance,
      * @ref anjay_dm_list_resources_t
+     *
+     * Required for every LwM2M operation.
+     *
+     * **Must not be NULL.**
      */
     anjay_dm_list_resources_t *list_resources;
 
-    /** Get Resource value, @ref anjay_dm_resource_read_t */
+    /**
+     * Get Resource value, @ref anjay_dm_resource_read_t
+     *
+     * Required for *LwM2M Read* operation.
+     *
+     * Can be NULL if the object does not contain readable resources.
+     */
     anjay_dm_resource_read_t *resource_read;
-    /** Set Resource value, @ref anjay_dm_resource_write_t */
+
+    /**
+     * Set Resource value, @ref anjay_dm_resource_write_t
+     *
+     * Required for *LwM2M Write* operation.
+     *
+     * Can be NULL if the object does not contain writable resources.
+     */
     anjay_dm_resource_write_t *resource_write;
+
     /**
      * Perform Execute action on a Resource, @ref anjay_dm_resource_execute_t
+     *
+     * Required for *LwM2M Execute* operation.
+     *
+     * Can be NULL if the object does not contain executable resources.
      */
     anjay_dm_resource_execute_t *resource_execute;
 
     /**
      * Remove all Resource Instances from a Multiple Resource,
      * @ref anjay_dm_resource_reset_t
+     *
+     * Required for *LwM2M Write* operation performed on multiple-instance
+     * resources.
+     *
+     * Can be NULL if the object does not contain multiple writable resources.
      */
     anjay_dm_resource_reset_t *resource_reset;
+
     /**
      * Enumerate available Resource Instances,
      * @ref anjay_dm_list_resource_instances_t
+     *
+     * Required for *LwM2M Read*, *LwM2M Write* and *LwM2M Discover* operations
+     * performed on multiple-instance resources..
+     *
+     * Can be NULL if the object does not contain multiple resources.
      */
     anjay_dm_list_resource_instances_t *list_resource_instances;
 
-    /** Get Resource attributes, @ref anjay_dm_resource_read_attrs_t */
+    /**
+     * Get Resource attributes, @ref anjay_dm_resource_read_attrs_t
+     *
+     * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
+     *
+     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+     * handler overrides *Attribute Storage* logic.
+     */
     anjay_dm_resource_read_attrs_t *resource_read_attrs;
-    /** Set Resource attributes, @ref anjay_dm_resource_write_attrs_t */
+
+    /**
+     * Set Resource attributes, @ref anjay_dm_resource_write_attrs_t
+     *
+     * Required for handling *LwM2M Write-Attributes* operation.
+     *
+     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+     * handler overrides *Attribute Storage* logic.
+     */
     anjay_dm_resource_write_attrs_t *resource_write_attrs;
 
-    /** Begin a transaction on this Object, @ref anjay_dm_transaction_begin_t */
+    /**
+     * Begin a transaction on this Object, @ref anjay_dm_transaction_begin_t
+     *
+     * Required for handling modifying operation: *LwM2M Write*, *LwM2M Create*
+     * or *LwM2M Delete*.
+     *
+     * Can be NULL for read-only objects. @ref anjay_dm_transaction_NOOP can be
+     * used here.
+     */
     anjay_dm_transaction_begin_t *transaction_begin;
+
     /**
      * Validate whether a transaction on this Object can be cleanly committed.
      * See @ref anjay_dm_transaction_validate_t
+     *
+     * Required for handling modifying operation: *LwM2M Write*, *LwM2M Create*
+     * or *LwM2M Delete*.
+     *
+     * Can be NULL for read-only objects. @ref anjay_dm_transaction_NOOP can be
+     * used here.
      */
     anjay_dm_transaction_validate_t *transaction_validate;
+
     /**
      * Commit changes made in a transaction, @ref anjay_dm_transaction_commit_t
+     *
+     * Required for handling modifying operation: *LwM2M Write*, *LwM2M Create*
+     * or *LwM2M Delete*.
+     *
+     * Can be NULL for read-only objects. @ref anjay_dm_transaction_NOOP can be
+     * used here.
      */
     anjay_dm_transaction_commit_t *transaction_commit;
+
     /**
      * Rollback changes made in a transaction,
      * @ref anjay_dm_transaction_rollback_t
+     *
+     * Required for handling modifying operation: *LwM2M Write*, *LwM2M Create*
+     * or *LwM2M Delete*.
+     *
+     * Can be NULL for read-only objects. @ref anjay_dm_transaction_NOOP can be
+     * used here.
      */
     anjay_dm_transaction_rollback_t *transaction_rollback;
 
 } anjay_dm_handlers_t;
 
-/** A struct defining an LwM2M Object. */
+/** A struct defining a LwM2M Object. */
 struct anjay_dm_object_def_struct {
     /** Object ID; MUST not be <c>ANJAY_ID_INVALID</c> (65535) */
     anjay_oid_t oid;
@@ -740,7 +866,7 @@ struct anjay_dm_object_def_struct {
 
 /**
  * Notifies the library that the value of given Resource changed. It may trigger
- * an LwM2M Notify message, update server connections and perform other tasks,
+ * a LwM2M Notify message, update server connections and perform other tasks,
  * as required for the specified Resource.
  *
  * Needs to be called for any Resource after its value is changed by means other
@@ -763,7 +889,7 @@ int anjay_notify_changed(anjay_t *anjay,
 
 /**
  * Notifies the library that the set of Instances existing in a given Object
- * changed. It may trigger an LwM2M Notify message, update server connections
+ * changed. It may trigger a LwM2M Notify message, update server connections
  * and perform other tasks, as required for the specified Object ID.
  *
  * Needs to be called for each Object, after an Instance is created or removed

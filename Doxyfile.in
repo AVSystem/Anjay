@@ -1495,7 +1495,8 @@ SEARCH_INCLUDES        = YES
 # contain include files that are not input files but should be processed by 
 # the preprocessor.
 
-INCLUDE_PATH           = avs_commons/install/include
+INCLUDE_PATH           = deps/avs_coap/include_public \
+                         deps/avs_commons/include_public
 
 # You can use the INCLUDE_FILE_PATTERNS tag to specify one or more wildcard 
 # patterns (like *.h and *.hpp) to filter out the header-files in the 

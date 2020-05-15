@@ -16,4 +16,4 @@ FROM avsystemembedded/anjay-travis:ubuntu-16.04
 RUN apt-get update
 RUN apt-get -y install <CC_PKG> <CXX_PKG>
 COPY . /Anjay
-CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=gcc; make check
+CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=gcc; export LC_ALL=C.UTF-8; make check

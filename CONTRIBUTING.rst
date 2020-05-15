@@ -22,8 +22,6 @@ Please take a moment to review this document in order to make the contribution p
 
 Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open source project. In return, they should reciprocate that respect in addressing your issue, assessing changes, and helping you finalize your pull requests.
 
-Contributions to the project are governed by the `Open Code of Conduct <http://todogroup.org/opencodeofconduct/>`_.
-
 
 Reporting issues
 ----------------
@@ -34,6 +32,7 @@ Use GitHub issue tracker for reporting other bugs. A great bug report should inc
 
 - Affected library version.
 - Platform information:
+
   - processor architecture,
   - operating system,
   - compiler version.
@@ -52,11 +51,11 @@ Code contributions
 
 If you never submitted a pull request before, take a look at `this fantastic tutorial <https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github>`_.
 
-#. Fork the project,
-#. Work on your contribution - follow guidelines described below,
-#. Push changes to your fork,
-#. Make sure all ``make check`` tests still pass,
-#. `Create a pull request <https://help.github.com/articles/creating-a-pull-request-from-a-fork/>`_,
+#. Fork the project.
+#. Work on your contribution - follow guidelines described below.
+#. Push changes to your fork.
+#. Make sure all ``make check`` tests still pass.
+#. `Create a pull request <https://help.github.com/articles/creating-a-pull-request-from-a-fork/>`_.
 #. Wait for someone from Anjay team to review your contribution and give feedback.
 
 
@@ -75,12 +74,11 @@ General guidelines
 - When using bitfields, make sure they are not saved to persistent storage nor sent over the network - their memory layout is implementation-defined, making them non-portable.
 - Avoid recursion - when writing code for an embedded platform, it is important to determine a hard limit on the stack space used by a program.
 - Include license information at the top of each file you add.
-- Use visibility macros defined in ``anjay_config.h`` to prevent internal symbols from being exported when using a GCC-compatible compiler. See `Visibility macros`_ section for examples.
+- Use visibility macros defined in ``anjay_init.h`` to prevent internal symbols from being exported when using a GCC-compatible compiler. See `Visibility macros`_ section for examples.
 
 
 Visibility macros
 `````````````````
-
 - Public header files (``.h`` files inside ``include_public/`` directories): no visibility macros.
 - Private header files (``.h`` files outside ``include_public/`` directories)::
 
@@ -95,7 +93,7 @@ Visibility macros
 
 - Source files (``.c``)::
 
-    #include <anjay_config.h>
+    #include <anjay_init.h>
 
     // ... includes
 
@@ -111,3 +109,36 @@ Make use of the `coverage script <tools/coverage>`_ to generate a code coverage 
 
 Before submitting your code, run the whole test suite (``make check``) to ensure that it does not introduce regressions. Use ``valgrind`` and Address Sanitizer to check for memory corruption errors.
 
+Running tests on Ubuntu 16.04 or later: ::
+
+    # Install these for tests:
+    sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-jinja2 python3-sphinx python3-requests clang valgrind clang-tools
+    # Configure and run check target
+    ./devconfig && make check
+
+Running tests on CentOS 7 or later: ::
+
+    # Install these for tests:
+    sudo yum install -y valgrind valgrind-devel openssl openssl-devel python35u python35u-devel python35u-pip python-sphinx python-sphinx_rtd_theme clang-analyzer
+    # Some test scripts expect Python >=3.5 to be available via `python3` command
+    # Use update-alternatives to create a /usr/bin/python3 symlink with priority 0
+    # (lowest possible)
+    sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.5 0
+    sudo python3 -m pip install cryptography jinja2 requests
+
+    # Configure and run check target
+    # NOTE: clang-3.4 static analyzer (default version for CentOS) gives false
+    # positives. --without-analysis flag disables static analysis.
+    ./devconfig --without-analysis -DPython_ADDITIONAL_VERSIONS=3.5 && make check
+
+Running tests on macOS Sierra or later: ::
+
+    # Install these for tests:
+    brew install python3 openssl llvm
+    pip3 install cryptography sphinx sphinx_rtd_theme requests
+
+    # Configure and run check target:
+    # if the scan-build script is located somewhere else, then you need to
+    # specify a different SCAN_BUILD_BINARY. Below, we are assumming scan-build
+    # comes from an llvm package, installed via homebrew.
+    ./devconfig -DSCAN_BUILD_BINARY=/usr/local/Cellar/llvm/*/bin/scan-build && make check

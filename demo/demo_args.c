@@ -24,7 +24,7 @@
 #include <inttypes.h>
 #include <string.h>
 
-#include <avsystem/commons/memory.h>
+#include <avsystem/commons/avs_memory.h>
 
 #define DEFAULT_PSK_IDENTITY "sesame"
 #define DEFAULT_PSK_KEY "password"
@@ -37,7 +37,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
             .server_iid = ANJAY_ID_INVALID,
             .id = 1,
             .uri = "coap://127.0.0.1:5683",
-            .binding_mode = "U"
+            .binding_mode = "U",
         },
         .bootstrap_holdoff_s = 0,
         .bootstrap_timeout_s = 0,
@@ -90,7 +90,7 @@ static int parse_security_mode(const char *mode_string,
     char allowed_modes[64];
     size_t offset = 0;
     for (size_t i = 0; i < AVS_ARRAY_SIZE(MODES); ++i) {
-        ssize_t written =
+        int written =
                 snprintf(allowed_modes + offset, sizeof(allowed_modes) - offset,
                          " %s", MODES[i].name);
         if (written < 0 || (size_t) written >= sizeof(allowed_modes) - offset) {
@@ -398,13 +398,13 @@ static void build_getopt_string(const struct option *options,
     memset(buffer, 0, buffer_size);
 
     while (curr_opt->val != 0) {
-        assert(getopt_string_ptr - buffer < (ssize_t) buffer_size - 1);
+        assert(getopt_string_ptr - buffer < (ptrdiff_t) buffer_size - 1);
         *getopt_string_ptr++ = (char) curr_opt->val;
 
         int colons = curr_opt->has_arg;
         assert(colons >= 0 && colons <= 2); // 2 colons signify optional arg
         while (colons-- > 0) {
-            assert(getopt_string_ptr - buffer < (ssize_t) buffer_size - 1);
+            assert(getopt_string_ptr - buffer < (ptrdiff_t) buffer_size - 1);
             *getopt_string_ptr++ = ':';
         }
 
@@ -440,14 +440,17 @@ load_buffer_from_file(uint8_t **out, size_t *out_size, const char *filename) {
     if (size < 0 || (unsigned long) size > SIZE_MAX || fseek(f, 0, SEEK_SET)) {
         goto finish;
     }
-    *out_size = (size_t) size;
-    if (!(*out = (uint8_t *) avs_malloc(*out_size))) {
-        goto finish;
-    }
-    if (fread(*out, *out_size, 1, f) != 1) {
-        avs_free(*out);
+    if (!(*out_size = (size_t) size)) {
         *out = NULL;
-        goto finish;
+    } else {
+        if (!(*out = (uint8_t *) avs_malloc(*out_size))) {
+            goto finish;
+        }
+        if (fread(*out, *out_size, 1, f) != 1) {
+            avs_free(*out);
+            *out = NULL;
+            goto finish;
+        }
     }
     result = 0;
 finish:

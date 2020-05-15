@@ -38,8 +38,7 @@ Testing/
 /cmake/avs_coap-config.cmake
 /build*
 /examples/build
-/src/avs_coap_config.h
-/generated/include_public/avsystem/coap/config.h
+/include_public/avsystem/coap/avs_coap_config.h
 
 # documentation
 !/doc/Doxyfile.in

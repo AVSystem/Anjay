@@ -17,14 +17,16 @@
 #ifndef AVSYSTEM_COAP_OBSERVE_H
 #define AVSYSTEM_COAP_OBSERVE_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
 #include <avsystem/coap/async_exchange.h>
 #include <avsystem/coap/ctx.h>
 #include <avsystem/coap/token.h>
 #include <avsystem/coap/writer.h>
 
-#include <avsystem/commons/persistence.h>
+#ifdef WITH_AVS_COAP_OBSERVE_PERSISTENCE
+#    include <avsystem/commons/avs_persistence.h>
+#endif // WITH_AVS_COAP_OBSERVE_PERSISTENCE
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,7 +86,7 @@ typedef void avs_coap_delivery_status_handler_t(avs_coap_ctx_t *ctx,
                                                 avs_error_t err,
                                                 void *arg);
 
-#ifdef WITH_AVS_COAP_OBSERVE
+#ifdef WITH_AVS_COAP_OBSERVE_PERSISTENCE
 
 /**
  * Stores Observe information (for the Observe entry as specified by @p id)
@@ -144,6 +146,10 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
                          avs_coap_observe_cancel_handler_t *cancel_handler,
                          void *handler_arg,
                          avs_persistence_context_t *persistence);
+
+#endif // WITH_AVS_COAP_OBSERVE_PERSISTENCE
+
+#ifdef WITH_AVS_COAP_OBSERVE
 
 /**
  * Informs the CoAP context that it should establish an observation without

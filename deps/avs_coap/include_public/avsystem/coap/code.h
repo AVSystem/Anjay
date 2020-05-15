@@ -17,12 +17,12 @@
 #ifndef AVSYSTEM_COAP_CODE_H
 #define AVSYSTEM_COAP_CODE_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <avsystem/commons/defs.h>
+#include <avsystem/commons/avs_defs.h>
 
 #ifdef __cplusplus
 extern "C" {

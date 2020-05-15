@@ -17,11 +17,11 @@
 #ifndef AVSYSTEM_COAP_OPTION_H
 #define AVSYSTEM_COAP_OPTION_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
-#include <avsystem/commons/errno.h>
-#include <avsystem/commons/list.h>
-#include <avsystem/commons/utils.h>
+#include <avsystem/commons/avs_errno.h>
+#include <avsystem/commons/avs_list.h>
+#include <avsystem/commons/avs_utils.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -185,10 +185,10 @@ typedef struct {
 static inline const char *avs_coap_etag_hex(avs_coap_etag_hex_t *out_value,
                                             const avs_coap_etag_t *etag) {
     assert(etag->size <= 8);
-    ssize_t written = avs_hexlify(out_value->buf, sizeof(out_value->buf),
-                                  etag->bytes, etag->size);
-    assert(written == etag->size);
-    (void) written;
+    if (avs_hexlify(out_value->buf, sizeof(out_value->buf), NULL, etag->bytes,
+                    etag->size)) {
+        AVS_UNREACHABLE("avs_hexlify() failed");
+    }
     return out_value->buf;
 }
 
@@ -254,12 +254,12 @@ static inline void avs_coap_options_cleanup(avs_coap_options_t *opts) {
 static inline avs_error_t
 avs_coap_options_dynamic_init_with_size(avs_coap_options_t *opts,
                                         size_t initial_capacity) {
-    opts->begin = avs_malloc(initial_capacity);
+    opts->begin = initial_capacity ? avs_malloc(initial_capacity) : NULL;
     opts->size = 0;
     opts->capacity = initial_capacity;
     opts->allocated = true;
 
-    if (!opts->begin) {
+    if (initial_capacity && !opts->begin) {
         avs_coap_options_cleanup(opts);
         return avs_errno(AVS_ENOMEM);
     }

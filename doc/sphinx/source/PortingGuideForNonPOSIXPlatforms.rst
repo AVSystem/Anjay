@@ -34,7 +34,7 @@ If POSIX ``clock_gettime`` function is not available:
 
 .. note::
     For signatures and detailed description of listed functions, see
-    `avs_commons <https://github.com/AVSystem/avs_commons/blob/commons4.0/utils/include_public/avsystem/commons/time.h>`_
+    `avs_time.h <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_time.h>`_
 
 
 Networking API
@@ -47,6 +47,7 @@ Networking API
      - ``-DWITH_POSIX_AVS_SOCKET=ON``
      - ``-DWITH_IPV6=OFF``
      - ``-DPOSIX_COMPAT_HEADER=deps/avs_commons/compat/lwip-posix-compat.h``
+
     CMake options for an out-of-the-box socket compatibility layer implementation.
 
 If POSIX socket API is not available:
@@ -64,7 +65,7 @@ If POSIX socket API is not available:
     ``socket_configuration`` argument is a pointer to
     ``const avs_net_socket_configuration_t`` struct cast to ``void *``.
 
-    The function should create a socket object, and return its pointer case to
+    The function should create a socket object, and return its pointer cast to
     ``avs_net_socket_t *`` through the ``*socket`` argument.
     The socket object should be a struct, whose first field is
     ``avs_net_socket_v_table_t *`` filled with pointers to method handlers.
@@ -76,7 +77,6 @@ If POSIX socket API is not available:
     - ``close``
     - ``connect``
     - ``create``
-    - ``errno``
     - ``get_local_port``
     - ``get_opt`` able to read following options:
 
@@ -119,7 +119,6 @@ If POSIX socket API is not available:
     - ``close``
     - ``connect``
     - ``create``
-    - ``errno``
     - ``receive``
     - ``send``
     - ``set_opt`` able to set the ``AVS_NET_SOCKET_OPT_RECV_TIMEOUT`` option
@@ -134,4 +133,56 @@ If POSIX socket API is not available:
 
 .. note::
     For signatures and detailed description of listed methods, see
-    `avs_commons <https://github.com/AVSystem/avs_commons/blob/commons4.0/net/include_public/avsystem/commons/net.h>`_
+    `avs_net.h <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_net.h>`_
+
+
+Threading API
+-------------
+
+The ``avs_net`` and ``avs_log`` modules require threading primitives
+to operate reliably in multi-threaded environments, specifically:
+
+- ``avs_net`` requires ``avs_init_once()``,
+- ``avs_log`` requires ``avs_mutex_create()``, ``avs_mutex_cleanup()``,
+  ``avs_mutex_lock()``, ``avs_mutex_unlock()``, and
+  ``avs_init_once()``. 
+
+In addition, ``avs_sched`` optionally depends on ``avs_condvar_create()``,
+``avs_condvar_cleanup()``, ``avs_condvar_notify_all()`` as well as
+``avs_mutex_*`` APIs. The dependency can be controlled with
+``WITH_SCHEDULER_THREAD_SAFE`` CMake option.
+
+There are two independent implementations of the threading API for compatibility
+with most platforms:
+
+- based on `pthreads <https://en.wikipedia.org/wiki/POSIX_Threads>`_,
+- based on C11 atomic operations.
+
+If, for some reason none of the defaults is suitable:
+
+- Use ``WITH_CUSTOM_AVS_THREADING=ON`` when running CMake on Anjay,
+- Provide an implementation of:
+
+  - ``avs_mutex_create()``,
+  - ``avs_mutex_cleanup()``,
+  - ``avs_init_once()``,
+  - ``avs_mutex_lock()``,
+  - ``avs_mutex_unlock()``.
+
+- And if you use thread-safe scheduler, also provide implementation for:  
+
+  - ``avs_condvar_create()``,
+  - ``avs_condvar_cleanup()``,
+  - ``avs_condvar_notify_all()``.
+
+.. note::
+    For signatures and detailed description of listed functions, see
+
+    - `avs_mutex.h <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_mutex.h>`_
+    - `avs_init_once.h <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_init_once.h>`_
+    - `avs_condvar.h <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_condvar.h>`_
+
+.. note::
+
+    If you intend to operate the library in a single-threaded fashion, you may
+    provide no-op stubs (returning success) of all mentioned primitives.

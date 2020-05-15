@@ -14,4 +14,4 @@
 
 FROM avsystemembedded/anjay-travis:centos-7
 COPY . /Anjay
-CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=gcc; make check
+CMD cd Anjay && ./devconfig --with-valgrind <DEVCONFIG_FLAGS> && CC=gcc; export LC_ALL=en_US.utf8; make check

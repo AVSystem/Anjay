@@ -17,7 +17,7 @@
 #ifndef AVSYSTEM_COAP_ASYNC_SERVER_H
 #define AVSYSTEM_COAP_ASYNC_SERVER_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
 #include <stdint.h>
 

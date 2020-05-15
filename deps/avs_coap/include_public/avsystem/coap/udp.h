@@ -17,11 +17,11 @@
 #ifndef AVSYSTEM_COAP_UDP_H
 #define AVSYSTEM_COAP_UDP_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
-#include <avsystem/commons/sched.h>
-#include <avsystem/commons/shared_buffer.h>
-#include <avsystem/commons/socket.h>
+#include <avsystem/commons/avs_sched.h>
+#include <avsystem/commons/avs_shared_buffer.h>
+#include <avsystem/commons/avs_socket.h>
 
 #include <avsystem/coap/ctx.h>
 
@@ -154,6 +154,9 @@ void avs_coap_udp_response_cache_release(
  *                      objects, but MUST outlive all CoAP context objects it
  *                      is passed to.
  *
+ * @param prng_ctx      PRNG context to use for token generation. MUST NOT be
+ *                      @c NULL . MUST outlive the created CoAP context.
+ *
  * @returns Created CoAP/UDP context on success, NULL on error.
  *
  * NOTE: @p in_buffer and @p out_buffer may be reused across different CoAP
@@ -164,7 +167,8 @@ avs_coap_udp_ctx_create(avs_sched_t *sched,
                         const avs_coap_udp_tx_params_t *udp_tx_params,
                         avs_shared_buffer_t *in_buffer,
                         avs_shared_buffer_t *out_buffer,
-                        avs_coap_udp_response_cache_t *cache);
+                        avs_coap_udp_response_cache_t *cache,
+                        avs_crypto_prng_ctx_t *prng_ctx);
 
 #endif // WITH_AVS_COAP_UDP
 

@@ -22,8 +22,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <avsystem/commons/list.h>
-#include <avsystem/commons/memory.h>
+#include <avsystem/commons/avs_list.h>
+#include <avsystem/commons/avs_memory.h>
 
 typedef struct iosched_instant_entry {
     iosched_handler_t *handler;
@@ -174,12 +174,14 @@ get_poll_fds(iosched_t *sched, struct pollfd *poll_fds, size_t max_poll_fds) {
 
 static int handle_poll_entries(iosched_t *sched, int poll_timeout_ms) {
     size_t num_entries = AVS_LIST_SIZE(sched->entries);
-    struct pollfd *poll_fds =
-            (struct pollfd *) avs_malloc(sizeof(struct pollfd) * num_entries);
-    if (!poll_fds) {
+    struct pollfd *poll_fds = NULL;
+    if (num_entries
+            && !(poll_fds = (struct pollfd *) avs_malloc(sizeof(struct pollfd)
+                                                         * num_entries))) {
         return -1;
     }
     nfds_t poll_fds_count = get_poll_fds(sched, poll_fds, num_entries);
+    assert(poll_fds_count == num_entries);
     size_t i = 0;
 
     int result = poll(poll_fds, poll_fds_count, poll_timeout_ms);

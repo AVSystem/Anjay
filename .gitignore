@@ -29,13 +29,12 @@ CPackConfig.cmake
 CPackSourceConfig.cmake
 CTestTestfile.cmake
 Testing/
-anjay_config_log.h
-anjay_config.h
+/include_public/anjay/anjay_config.h
 posix-config.h
 anjay-*.cmake
 Doxyfile
 /doc/sphinx/source/conf.py
-test/integration/framework/nsh-lwm2m/pymbedtls/build/
+tests/integration/framework/nsh-lwm2m/pymbedtls/build/
 
 # other
 Makefile
@@ -47,15 +46,15 @@ Makefile
 tags
 .ycm_extra_conf.py
 .ycm_extra_conf.pyc
-/test/codegen/*.c
-/test/codegen/*.cpp
-/test/integration/build
+/tests/codegen/*.c
+/tests/codegen/*.cpp
+/tests/integration/build
 __pycache__/
 .gdb_history
 *.orig
 *.egg-info
 *.pyc
-/test/integration/framework/nsh-lwm2m/coap/pymbedtls*
+/tests/integration/framework/nsh-lwm2m/coap/pymbedtls*
 compile_commands.json
 
 /avs_commons/install

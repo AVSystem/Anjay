@@ -17,7 +17,7 @@
 #ifndef AVSYSTEM_COAP_ASYNC_H
 #define AVSYSTEM_COAP_ASYNC_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
 #include <stdint.h>
 
@@ -32,16 +32,13 @@ extern "C" {
 
 /**
  * Receives some data from the socket associated with @p ctx and handles it as
- * appropriately.
+ * appropriately. If more than one message can be received without blocking,
+ * all of them will be handled.
  *
  * [TCP] If received data is not a complete CoAP message or if it doesn't
  * contain at least a part of payload, this function does nothing except of
  * buffering these data internally. It is considered as successfull call if
  * there is enough space in the buffer.
- *
- * [TCP] If more than one complete message is available on socket and will
- * fit into incoming buffer, all of them will be handled during single call to
- * this function.
  *
  * If the packet is recognized as part of a known ongoing exchange, such
  * message is handled internally without calling @p handle_request . Otherwise,

@@ -31,8 +31,8 @@
 #include <string.h>
 
 #include <anjay/anjay.h>
-#include <avsystem/commons/defs.h>
-#include <avsystem/commons/list.h>
+#include <avsystem/commons/avs_defs.h>
+#include <avsystem/commons/avs_list.h>
 
 /**
  * Identity: RW, Multiple, Mandatory
@@ -247,7 +247,7 @@ static int resource_write(anjay_t *anjay,
     switch (rid) {
     case RID_IDENTITY: {
         if (riid >= _MAX_IDENTITY_TYPE) {
-            return ANJAY_ERR_BAD_REQUEST;
+            return ANJAY_ERR_NOT_FOUND;
         }
         char value[MAX_IDENTITY_VALUE_SIZE];
         int result = anjay_get_string(ctx, value, sizeof(value));

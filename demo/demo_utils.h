@@ -21,8 +21,8 @@
 #include <stdbool.h>
 #include <time.h>
 
-#include <avsystem/commons/log.h>
-#include <avsystem/commons/time.h>
+#include <avsystem/commons/avs_log.h>
+#include <avsystem/commons/avs_time.h>
 
 #include <anjay/anjay.h>
 

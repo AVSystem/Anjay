@@ -23,8 +23,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <avsystem/commons/list.h>
-#include <avsystem/commons/time.h>
+#include <avsystem/commons/avs_list.h>
+#include <avsystem/commons/avs_time.h>
 
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>

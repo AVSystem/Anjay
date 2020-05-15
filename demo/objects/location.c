@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <avsystem/commons/utils.h>
+#include <avsystem/commons/avs_utils.h>
 
 #define LOCATION_LATITUDE 0
 #define LOCATION_LONGITUDE 1

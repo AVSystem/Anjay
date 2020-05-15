@@ -20,7 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <avsystem/commons/net.h>
+#include <avsystem/commons/avs_net.h>
 
 #include <anjay/core.h>
 
@@ -128,7 +128,7 @@ typedef void anjay_download_finished_handler_t(anjay_t *anjay,
                                                void *user_data);
 
 typedef struct anjay_download_config {
-    /** Required. coap://, coaps://, http:// or https:// URL */
+    /** Required. %coap://, %coaps://, %http:// or %https:// URL */
     const char *url;
 
     /**

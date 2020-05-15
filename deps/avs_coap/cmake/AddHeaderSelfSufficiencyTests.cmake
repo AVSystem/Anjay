@@ -37,7 +37,7 @@
 #                                   particular header file should be excluded
 #                                   from checks.
 # - INCLUDES <path>...            - list of files that need to be included
-#                                   before any header file (e.g. config.h)
+#                                   before any header file (e.g. avs_coap_config.h)
 # - INCLUDE_DIRECTORIES <path>... - list of additional include directories to
 #                                   add when compiling
 # - COMPILE_OPTIONS <opt>...      - list of extra compilation options

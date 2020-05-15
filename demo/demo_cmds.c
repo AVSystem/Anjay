@@ -26,7 +26,7 @@
 #include <anjay/attr_storage.h>
 #include <anjay/security.h>
 
-#include <avsystem/commons/memory.h>
+#include <avsystem/commons/avs_memory.h>
 
 static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
     unsigned id;
@@ -426,8 +426,7 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     }
 
     int oid, iid, rid;
-    switch (sscanf(path, "/%d/%d/%d", &oid, &iid, &rid //
-                   )) {
+    switch (sscanf(path, "/%d/%d/%d", &oid, &iid, &rid)) {
     case 3:
         if (anjay_attr_storage_set_resource_attrs(
                     demo->anjay, (anjay_ssid_t) ssid, (anjay_oid_t) oid,
@@ -501,6 +500,29 @@ static void cmd_schedule_update_on_exit(anjay_demo_t *demo,
     (void) unused_args;
     demo->schedule_update_on_exit = true;
 }
+
+#ifdef ANJAY_WITH_OBSERVATION_STATUS
+static void cmd_observation_status(anjay_demo_t *demo,
+                                   const char *args_string) {
+    anjay_oid_t oid;
+    anjay_iid_t iid;
+    anjay_rid_t rid;
+    if (sscanf(args_string, " /%" SCNu16 "/%" SCNu16 "/%" SCNu16, &oid, &iid,
+               &rid)
+            != 3) {
+        demo_log(WARNING,
+                 "observation-status usage: observation_status /OID/IID/RID");
+        return;
+    }
+    anjay_resource_observation_status_t status =
+            anjay_resource_observation_status(demo->anjay, oid, iid, rid);
+    demo_log(INFO,
+             "anjay_resource_observation_status, is_observed == %s, "
+             "min_period == %" PRId32 ", max_eval_period == %" PRId32,
+             status.is_observed ? "true" : "false", status.min_period,
+             status.max_eval_period);
+}
+#endif // ANJAY_WITH_OBSERVATION_STATUS
 
 static void cmd_badc_write(anjay_demo_t *demo, const char *args_string) {
     anjay_iid_t iid;
@@ -599,6 +621,10 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("schedule-update-on-exit", "", cmd_schedule_update_on_exit,
                 "Ensure Registration Update is scheduled for immediate "
                 "execution at the point of calling anjay_delete()"),
+#ifdef ANJAY_WITH_OBSERVATION_STATUS
+    CMD_HANDLER("observation-status", "/OID/IID/RID", cmd_observation_status,
+                "Queries the observation status of a given Resource"),
+#endif // ANJAY_WITH_OBSERVATION_STATUS
     CMD_HANDLER("badc-write", "IID RIID value", cmd_badc_write,
                 "Writes new value to Binary App Data Container object"),
     CMD_HANDLER("set-event-log-data", "data", cmd_set_event_log_data,

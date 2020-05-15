@@ -17,10 +17,10 @@
 #ifndef AVSYSTEM_COAP_CTX_H
 #define AVSYSTEM_COAP_CTX_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
-#include <avsystem/commons/sched.h>
-#include <avsystem/commons/socket.h>
+#include <avsystem/commons/avs_sched.h>
+#include <avsystem/commons/avs_socket.h>
 
 #include <avsystem/coap/option.h>
 #include <avsystem/coap/token.h>
@@ -323,6 +323,8 @@ typedef enum {
     AVS_COAP_ERR_FEATURE_DISABLED,
     /** Data created in OSCORE context is too big. */
     AVS_COAP_ERR_OSCORE_DATA_TOO_BIG,
+    /** Error caused by PRNG failure. */
+    AVS_COAP_ERR_PRNG_FAIL,
     /** @} */
 
     /**

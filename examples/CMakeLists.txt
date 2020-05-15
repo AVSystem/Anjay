@@ -29,6 +29,7 @@ add_custom_command(TARGET examples
                         -DCMAKE_INSTALL_PREFIX="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                         -DWITH_LIBRARY_SHARED=OFF
                         -DWITH_DEMO=OFF
+                        -DCMAKE_BUILD_TYPE=Debug
                    COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${NPROC}
                    WORKING_DIRECTORY ${ANJAY_TUTORIALS_ANJAY_BUILD_DIR})
 
@@ -38,6 +39,7 @@ add_custom_command(TARGET examples
                         -B.
                         -DCMAKE_PREFIX_PATH="${ANJAY_TUTORIALS_ANJAY_INSTALL_DIR}"
                         -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples"
+                        -DCMAKE_BUILD_TYPE=Debug
                    COMMAND ${CMAKE_COMMAND} --build . -- -j${NPROC}
                    WORKING_DIRECTORY "${ANJAY_EXAMPLES_BUILD_DIR}")
 

@@ -19,7 +19,13 @@ Compiling client applications
 Compiling the library
 ---------------------
 
-Anjay uses CMake for project configuration. To compile the library with default settings:
+.. important::
+
+    If you cloned Anjay from a Git repository, ensure that you updated
+    submodules by calling ``git submodule update --init`` before continuing.
+
+Anjay uses CMake for project configuration. To compile the library with default
+settings, call the following command in Anjay root directory:
 
 .. code-block:: bash
 
@@ -28,6 +34,14 @@ Anjay uses CMake for project configuration. To compile the library with default 
 
 Cross-compiling
 ---------------
+
+.. note::
+
+    Cross-compilation is necessary only if you are compiling the library to use
+    on a different system, than the one used for compilation. If you, for
+    example, want to use Anjay on Raspberry Pi, then you can perform
+    compilation on Raspberry Pi as described above or cross-compilation on your
+    PC.
 
 ARM Cortex-M3-powered STM3220
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -59,7 +73,7 @@ An example CMake toolchain file for an ARM Cortex-M3-powered STM3220 platform ma
 Android
 ~~~~~~~
 
-Compliation on Android platform is rather straightforward. First you have to get `Android NDK
+Compilation on Android platform is rather straightforward. First you have to get `Android NDK
 <https://developer.android.com/ndk/index.html>`_. To configure Anjay you
 have to pass ``CMAKE_TOOLCHAIN_FILE`` from the NDK (we assume that
 ``ANDROID_NDK`` variable contains a path to the folder where Android NDK
@@ -85,7 +99,7 @@ After that Anjay can be compiled as usual via `make`.
     ``ANDROID_ALLOW_UNDEFINED_SYMBOLS`` is set, so that unresolved symbols
     required by the `libanjay.so` are not reported during the linking
     stage. They shall be resolved by providing dependencies to the final
-    exectuable as it is illustrated in the next section.
+    executable as it is illustrated in the next section.
 
 Note that we did not set any ``DTLS_BACKEND`` and therefore Anjay is compiled
 without DTLS support. To enable DTLS support you have to provide a value
@@ -134,6 +148,11 @@ depending on the chosen backend.
 Installing the library
 ----------------------
 
+Building with CMake
+~~~~~~~~~~~~~~~~~~~
+
+The preferred way of building Anjay is to use CMake.
+
 To install Anjay headers and libraries in :code:`/usr/local`:
 
 .. code-block:: bash
@@ -145,6 +164,70 @@ A custom installation prefix may be set using :code:`CMAKE_INSTALL_PREFIX`:
 .. code-block:: bash
 
     cmake -DCMAKE_INSTALL_PREFIX=/custom/path . && make && make install
+
+.. _no-cmake:
+
+Alternative build systems
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Alternatively, you may use any other build system. You will need to:
+
+* Prepare your ``avs_commons_config.h``, ``avs_coap_config.h`` and ``anjay_config.h`` files.
+
+  * Comments in `avs_commons_config.h.in
+    <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_commons_config.h.in>`_,
+    `avs_coap_config.h.in <https://github.com/AVSystem/Anjay/blob/master/deps/avs_coap/include_public/avsystem/coap/avs_coap_config.h.in>`_
+    and `anjay_config.h.in <https://github.com/AVSystem/Anjay/blob/master/include_public/anjay/anjay_config.h.in>`_
+    will guide you about the meaning of various settings.
+  * You may use one of the directories from `example_configs
+    <https://github.com/AVSystem/Anjay/blob/master/example_configs>`_ as a starting point. See
+    `README.md inside that directory
+    <https://github.com/AVSystem/Anjay/blob/master/example_configs/README.md>`_ for details. You may
+    even set one of the subdirectories there are as an include path directly in your compiler if you
+    do not need any customizations.
+* Configure your build system so that:
+
+  * At least all ``*.c`` and ``*.h`` files from ``src``, ``include_public``, ``deps/avs_coap/src``,
+    ``deps/avs_coap/include_public``, ``deps/avs_commons/src`` and
+    ``deps/avs_commons/include_public`` directories are preserved, with the directory structure
+    intact.
+
+    * It is also safe to merge contents of all ``include_public`` directories into one. Merging
+      ``src`` directories should be safe, too, but is not explicitly supported.
+  * All ``*.c`` files inside ``src``, ``deps/avs_coap/src``, ``deps/avs_commons/src``, or any of
+    their direct or indirect subdirectories are compiled.
+  * ``deps/avs_commons/src`` and ``deps/avs_commons/include_public`` directories are included in the
+    header search path when compiling ``avs_commons``.
+  * ``deps/avs_coap/src``, ``deps/avs_coap/include_public`` and ``deps/avs_commons/include_public``
+    directories are included in the header search path when compiling ``avs_coap``.
+  * ``src``, ``include_public``, ``deps/avs_coap/include_public`` and
+    ``deps/avs_commons/include_public`` directories are included in the header search path when
+    compiling Anjay.
+  * ``include_public``, ``deps/avs_coap/include_public`` and ``deps/avs_commons/include_public``
+    directories, or copies of them (possibly merged into one directory) are included in the header
+    search path when compiling dependent application code.
+
+.. rubric:: Example
+
+Below is an example of a simplistic build process, that builds all of avs_commons, avs_coap and
+Anjay from a Unix-like shell:
+
+.. code-block:: bash
+
+    # configuration
+    cp -r example_configs/linux_lwm2m10 config
+    # you may want to edit the files in the "config" directory before continuing
+
+    # compilation
+    cc -Iconfig -Iinclude_public -Ideps/avs_coap/include_public -Ideps/avs_commons/include_public -Isrc -Ideps/avs_coap/src -Ideps/avs_commons/src -c $(find src deps/avs_coap/src deps/avs_commons/src -name '*.c')
+    ar rcs libanjay.a *.o
+
+    # installation
+    cp libanjay.a /usr/local/lib/
+    cp -r include_public/avsystem /usr/local/include/
+    cp -r deps/avs_coap/include_public/avsystem /usr/local/include/
+    cp -r deps/avs_commons/include_public/avsystem /usr/local/include/
+    cp -r config/* /usr/local/include/
 
 
 Including the library in an application
@@ -169,7 +252,8 @@ The preferred method of using Anjay in custom projects is to use CMake :code:`fi
 Alternative build systems
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For other build systems, necessary flags can be retrieved using :code:`cmake` command:
+If Anjay itself has been compiled using CMake, flags necessary for other build systems can be
+retrieved using :code:`cmake` command:
 
 .. code-block:: bash
 
@@ -185,3 +269,39 @@ Where :code:`<mode>` is one of:
 
 	If a custom installation prefix is used, you need to also pass :code:`-Danjay_DIR=$YOUR_INSTALL_PREFIX/lib/anjay`.
 
+
+
+Anjay compiled without CMake
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If Anjay has been compiled without using CMake, you will need to provide necessary flags manually.
+
+Specific dependencies will vary according to:
+
+* compile-time configuration, including:
+
+  * avs_compat_threading backend
+  * avs_crypto backend, if any
+  * avs_net DTLS backend, if any
+  * ``AVS_COMMONS_HTTP_WITH_ZLIB`` setting, if avs_http is enabled
+* target platform
+* build environment
+
+.. rubric:: Example
+
+For the following conditions:
+
+* Anjay compiled with all optional features enabled, and:
+
+  * mbed TLS security enabled as avs_net DTLS backend and/or avs_crypto backend
+  * PThread used as avs_compat_threading backend
+  * avs_http enabled with zlib support
+* Target platform being a typical desktop GNU/Linux distribution
+* GCC or Clang used as the compiler
+* Anjay compiled and installed as shown in the example in the :ref:`no-cmake` section
+
+the flags necessary to link client applications would be:
+
+.. code-block:: bash
+
+    -lanjay -lz -lmbedtls -lmbedcrypto -lmbedx509 -lm -pthread

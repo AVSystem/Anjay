@@ -17,14 +17,14 @@
 #ifndef AVSYSTEM_COAP_TOKEN_H
 #define AVSYSTEM_COAP_TOKEN_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
-#include <avsystem/commons/utils.h>
+#include <avsystem/commons/avs_utils.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,10 +67,10 @@ typedef struct {
 static inline const char *avs_coap_token_hex(avs_coap_token_hex_t *out_value,
                                              const avs_coap_token_t *token) {
     assert(token->size <= 8);
-    ssize_t written = avs_hexlify(out_value->buf, sizeof(out_value->buf),
-                                  token->bytes, token->size);
-    assert(written == token->size);
-    (void) written;
+    if (avs_hexlify(out_value->buf, sizeof(out_value->buf), NULL, token->bytes,
+                    token->size)) {
+        AVS_UNREACHABLE("avs_hexlify() failed");
+    }
     return out_value->buf;
 }
 

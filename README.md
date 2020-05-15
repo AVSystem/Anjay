@@ -10,7 +10,7 @@ Anjay is a C library that aims to be the reference implementation of the OMA Lig
 The project has been created and is actively maintained by [AVSystem](https://www.avsystem.com).
 
 -   [Full documentation](https://AVSystem.github.io/Anjay-doc/)
--   [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicTutorial.html)
+-   [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicClient.html)
 -   [API docs](https://AVSystem.github.io/Anjay-doc/api/)
 
 <!-- toc -->
@@ -19,11 +19,13 @@ The project has been created and is actively maintained by [AVSystem](https://ww
 * [About OMA LwM2M](#about-oma-lwm2m)
 * [Quickstart guide](#quickstart-guide)
   * [Dependencies](#dependencies)
-    * [Ubuntu 16.04 LTS](#ubuntu-1604-lts)
-    * [CentOS 7](#centos-7)
-    * [macOS Sierra with Homebrew](#macos-sierra-with-homebrewhttpsbrewsh)
+    * [Ubuntu 16.04 LTS / Raspbian Buster or later](#ubuntu-1604-lts--raspbian-buster-or-later)
+    * [CentOS 7 or later](#centos-7-or-later)
+    * [macOS Sierra or later, with Homebrew](#macos-sierra-or-later-with-homebrew)
   * [Running the demo client](#running-the-demo-client)
   * [Detailed compilation guide](#detailed-compilation-guide)
+    * [Building using CMake](#building-using-cmake)
+    * [Alternative build systems](#alternative-build-systems)
 * [License](#license)
   * [Commercial support](#commercial-support)
 * [Contributing](#contributing)
@@ -104,49 +106,39 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 ### Dependencies
 
 -   C compiler with C99 support,
--   [CMake 2.8.11+](https://cmake.org/),
 -   [avs\_commons](https://github.com/AVSystem/avs_commons/) - included in the repository as a subproject,
 -   If DTLS support is enabled, at least one of:
     -   [OpenSSL 1.1+](https://www.openssl.org/),
     -   [mbed TLS 2.0+](https://tls.mbed.org/),
     -   [tinydtls 0.9+](https://projects.eclipse.org/projects/iot.tinydtls),
 -   Optional dependencies (required for tests):
+    -   [CMake 3.4+](https://cmake.org/) - non-mandatory, but preferred build system,
     -   C++ compiler with C++11 support,
     -   [Python 3.5+](https://www.python.org/),
     -   [pybind11](https://github.com/pybind/pybind11) - included in the repository as a subproject,
-    -   [scan-build](https://clang-analyzer.llvm.org/scan-build.html) - for static analysis.
+    -   [scan-build](https://clang-analyzer.llvm.org/scan-build.html) - for static analysis,
+-   Optional dependencies (required for building documentation - more information in "Contributing" section):
+    -   [Doxygen](http://www.doxygen.nl/),
+    -   [Sphinx](https://www.sphinx-doc.org/en/master/).
 
-#### Ubuntu 16.04 LTS
+#### Ubuntu 16.04 LTS / Raspbian Buster or later
 
 ``` sh
 sudo apt-get install git build-essential cmake libmbedtls-dev zlib1g-dev
-# Optionally for tests:
-sudo apt-get install libpython3-dev libssl-dev python3 python3-cryptography python3-jinja2 python3-sphinx python3-requests clang valgrind clang-tools
 ```
 
-#### CentOS 7
+#### CentOS 7 or later
 
 ``` sh
 # Required for mbedtls-devel and python3.5
 sudo yum install -y https://centos7.iuscommunity.org/ius-release.rpm
 sudo yum install -y which git make cmake mbedtls-devel gcc gcc-c++
-
-# Optionally for tests:
-sudo yum install -y valgrind valgrind-devel openssl openssl-devel python35u python35u-devel python35u-pip python-sphinx python-sphinx_rtd_theme clang-analyzer
-# Some test scripts expect Python >=3.5 to be available via `python3` command
-# Use update-alternatives to create a /usr/bin/python3 symlink with priority 0
-# (lowest possible)
-sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.5 0
-sudo python3 -m pip install cryptography jinja2 requests
 ```
 
-#### macOS Sierra with [Homebrew](https://brew.sh/)
+#### macOS Sierra or later, with [Homebrew](https://brew.sh/)
 
 ``` sh
 brew install cmake mbedtls
-# Optionally for tests:
-brew install python3 openssl llvm
-pip3 install cryptography sphinx sphinx_rtd_theme requests
 ```
 
 ### Running the demo client
@@ -169,6 +161,12 @@ First, make sure all necessary submodules are downloaded and up-to-date:
 ``` sh
 git submodule update --init
 ```
+
+After that, you have several options to compile the library.
+
+#### Building using CMake
+
+The preferred way of building Anjay is to use CMake.
 
 By default demo client compiles with DTLS enabled and uses `mbedtls` as a DTLS provider,
 but you may choose other DTLS backends currently supported by setting `DTLS_BACKEND` in
@@ -200,24 +198,39 @@ To start the demo client:
 
 **NOTE**: When establishing a DTLS connection, the URI MUST use "coaps://". In NoSec mode (default), the URI MUST use "<coap://>".
 
-Running tests on Ubuntu 16.04:
-``` sh
-./devconfig && make check
-```
+#### Alternative build systems
 
-Running tests on CentOS 7:
-``` sh
-# NOTE: clang-3.4 static analyzer (default version for CentOS) gives false
-# positives. --without-analysis flag disables static analysis.
-./devconfig --without-analysis -DPython_ADDITIONAL_VERSIONS=3.5 && make check
-```
+Alternatively, you may use any other build system. You will need to:
 
-Running tests on macOS Sierra:
-``` sh
-# If the scan-build script is located somewhere else, then you need to
-# specify a different SCAN_BUILD_BINARY. Below, we are assumming scan-build
-# comes from an llvm package, installed via homebrew.
-./devconfig -DSCAN_BUILD_BINARY=/usr/local/Cellar/llvm/*/bin/scan-build && make check
+* Prepare your `avs_commons_config.h`, `avs_coap_config.h` and `anjay_config.h` files.
+  * Comments in [`avs_commons_config.h.in`](https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_commons_config.h.in), [`avs_coap_config.h.in`](deps/avs_coap/include_public/avsystem/coap/avs_coap_config.h.in) and [`anjay_config.h.in`](include_public/anjay/anjay_config.h.in) will guide you about the meaning of various settings.
+  * You may use one of the directories from [`example_configs`](example_configs) as a starting point. See [`README.md`](example_configs/README.md) inside that directory for details. You may even set one of the subdirectories there as an include path directly in your compiler if you do not need any customizations.
+* Configure your build system so that:
+  * At least all `*.c` and `*.h` files from `src`, `include_public`, `deps/avs_coap/src`, `deps/avs_coap/include_public`, `deps/avs_commons/src` and `deps/avs_commons/include_public` directories are preserved, with the directory structure intact.
+    * It is also safe to merge contents of all `include_public` directories into one. Merging `src` directories should be safe, too, but is not explicitly supported.
+  * All `*.c` files inside `src`, `deps/avs_coap/src`, `deps/avs_commons/src`, or any of their direct or indirect subdirectories are compiled.
+  * `deps/avs_commons/src` and `deps/avs_commons/include_public` directories are included in the header search path when compiling `avs_commons`.
+  * `deps/avs_coap/src`, `deps/avs_coap/include_public` and `deps/avs_commons/include_public` directories are included in the header search path when compiling `avs_coap`.
+  * `src`, `include_public`, `deps/avs_coap/include_public` and `deps/avs_commons/include_public` directories are included in the header search path when compiling Anjay.
+  * `include_public`, `deps/avs_coap/include_public` and `deps/avs_commons/include_public` directories, or copies of them (possibly merged into one directory) are included in the header search path when compiling dependent application code.
+
+Below is an example of a simplistic build process, that builds all of avs_commons, avs_coap and Anjay from a Unix-like shell:
+
+```sh
+# configuration
+cp -r example_configs/linux_lwm2m10 config
+# you may want to edit the files in the "config" directory before continuing
+
+# compilation
+cc -Iconfig -Iinclude_public -Ideps/avs_coap/include_public -Ideps/avs_commons/include_public -Isrc -Ideps/avs_coap/src -Ideps/avs_commons/src -c $(find src deps/avs_coap/src deps/avs_commons/src -name '*.c')
+ar rcs libanjay.a *.o
+
+# installation
+cp libanjay.a /usr/local/lib/
+cp -r include_public/avsystem /usr/local/include/
+cp -r deps/avs_coap/include_public/avsystem /usr/local/include/
+cp -r deps/avs_commons/include_public/avsystem /usr/local/include/
+cp -r config/* /usr/local/include/
 ```
 
 ## License
@@ -235,3 +248,13 @@ If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Devic
 ## Contributing
 
 Contributions are welcome! See our [contributing guide](CONTRIBUTING.rst).
+
+# Building documentation
+
+Make sure, both Doxygen and Sphinx are installed on your system, then type:
+
+``` sh
+cmake . && make doc
+```
+
+the documentation will be available under `output/doc/doxygen` and `output/doc/sphinx`.

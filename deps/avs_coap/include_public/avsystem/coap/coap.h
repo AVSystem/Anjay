@@ -17,7 +17,7 @@
 #ifndef AVSYSTEM_COAP_H
 #define AVSYSTEM_COAP_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
 /**
  * The general idea is to provide a hybrid blocking (stream-based) + async API
@@ -35,14 +35,14 @@
  *       @ref avs_coap_streaming_send_request .
  *
  *     - @ref avs_coap_streaming_request_handler_t - callback used to handle an
- *       incoming request, see @ref avs_coap_handle_incoming_packet .
+ *       incoming request, see @ref avs_coap_async_handle_incoming_packet .
  *
  *   - functions:
  *
  *     - @ref avs_coap_streaming_send_request - sends a (possibly BLOCK-wise)
  *       request.
  *
- *     - @ref avs_coap_handle_incoming_packet - receives a packet from a
+ *     - @ref avs_coap_async_handle_incoming_packet - receives a packet from a
  *       socket, calls @ref avs_coap_streaming_request_handler_t if it's an
  *       incoming request (note: this function is common to streaming and
  *       async APIs).
@@ -51,21 +51,21 @@
  *
  *   - typedefs:
  *
- *     - @ref avs_coap_async_response_handler_t - handler called after async
- *       request delivery is confirmed and a response was received.
+ *     - @ref avs_coap_client_async_response_handler_t - handler called after
+ *       async request delivery is confirmed and a response was received.
  *
  *   - functions:
  *
- *     - @ref avs_coap_async_send_request - sends an asynchronous request and
- *       possibly registers a function to be called when a response is
+ *     - @ref avs_coap_client_send_async_request - sends an asynchronous request
+ *       and possibly registers a function to be called when a response is
  *       received.
  *
- *     - @ref avs_coap_exchange_abort - cancels an asynchronous request if it's
+ *     - @ref avs_coap_exchange_cancel - cancels an asynchronous request if it's
  *       still in progress.
  *
- *     - @ref avs_coap_handle_incoming_packet - receives a packet from a
- *       socket, calls appropriate @ref avs_coap_async_response_handler_t if
- *       a delivery confirmation was received (note: this function is common
+ *     - @ref avs_coap_async_handle_incoming_packet - receives a packet from a
+ *       socket, calls appropriate @ref avs_coap_client_async_response_handler_t
+ *       if a delivery confirmation was received (note: this function is common
  *       to streaming and async APIs).
  *
  * - notification API:
@@ -77,14 +77,19 @@
  *
  *   - functions:
  *
- *      - @ref avs_coap_observe_start - function that may be called from within
- *        @ref avs_coap_streaming_request_handler_t to indicate that an Observe
- *        request was established and the user will proceed to send
- *        notifications using @ref avs_coap_streaming_notify or
- *        @ref avs_coap_async_notify whenever required.
+ *      - @ref avs_coap_observe_streaming_start - function that may be called
+ *        from within @ref avs_coap_streaming_request_handler_t to indicate that
+ *        an Observe request was established and the user will proceed to send
+ *        notifications.
  *
- *      - @ref avs_coap_observe_notify - function that may be called at any
- *        time after an observation is established to send a notification.
+ *      - @ref avs_coap_observe_async_start - function that may be called from
+ *        within @ref avs_coap_server_async_request_handler_t to indicate that
+ *        an Observe request was established and the user will proceed to send
+ *        notifications.
+ *
+ *      - @ref avs_coap_notify_streaming and
+ *        @ref avs_coap_notify_async - functions that may be called at
+ *        any time after an observation is established to send a notification.
  *
  *
  * The API is supposed to be independent from the underlying transport and
@@ -98,60 +103,14 @@
  * Transport-specific details are abstracted away:
  *
  * - UDP:
- *
  *   - message ID,
  *   - message type (CON/NON/ACK/RST),
  *   - retransmissions,
  *   - BLOCK
  *
  * - TCP:
- *
  *   - Signaling options, including Capabilities and Settings Messages (CSM)
  *   - Block-wise transfers over Reliable Transports (BERT)
- *
- *
- * The CoAP API would integrate into Anjay as follows:
- *
- * - Every server object has its own avs_coap_ctx_t object associated with
- *   the server socket.
- *
- * - Anjay is responsible for maintaining the socket connection and tearing
- *   down the CoAP context object whenever CoAP endpoint changes.
- *
- * - anjay_serve() calls avs_coap_handle_incoming_packet() for a CoAP context
- *   object associated with the socket that's ready.
- *
- * - Downloader uses async API. BLOCK-wise transfers are possible with the
- *   use of @ref AVS_COAP_EXCHANGE_PARTIAL_CONTENT exchange result. Download
- *   continuations require setting up the BLOCK2 option in initial request.
- *
- * - Send uses async API.
- *
- * - Register/Update and all server-originated reqests like Read/Write etc. use
- *   streaming API.
- *
- * - Observe uses avs_coap_observe_start to make the CoAP context keep track of
- *   the observation and become notified of observation cancellation.
- *
- * - Notify uses avs_coap_observe_notify to handle observations. Either
- *   streaming or async API may then be used to send the notification.
- *
- *   [UDP] using async API with no response handler maps to NON notifications.
- *
- *   [UDP] Observe cancellation via Reset will be detected by CoAP context,
- *   and result in a call to avs_coap_observe_cancel_handler_t .
- *
- *   TODO: this will break block-wise Notify on non-Confirmable messages, which
- *   we currently try to support.
- *
- * - CoAP statistics getters will need to aggregate stats from all CoAP context
- *   objects.
- *
- * TODO: Observe persistence will need to be reimplemented.
- *
- * Note: in the future, it could be possible to use async API for
- * Register/Update instead of the blocking one, at the cost of caching the
- * whole payload.
  */
 
 #include <avsystem/coap/async.h>

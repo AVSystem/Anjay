@@ -19,8 +19,8 @@
 #include <stdbool.h>
 
 #include <anjay/anjay.h>
-#include <avsystem/commons/defs.h>
-#include <avsystem/commons/memory.h>
+#include <avsystem/commons/avs_defs.h>
+#include <avsystem/commons/avs_memory.h>
 
 #include "../objects.h"
 
@@ -234,8 +234,9 @@ static int get_next_argument_value(anjay_execute_ctx_t *arg_ctx,
     }
 
     char value[AVS_INT_STR_BUF_SIZE(int64_t)];
-    if ((result = anjay_execute_get_arg_value(arg_ctx, value, sizeof(value))
-                  < 0)) {
+    if ((result = anjay_execute_get_arg_value(arg_ctx, NULL, value,
+                                              sizeof(value)))
+            < 0) {
         return result;
     }
 

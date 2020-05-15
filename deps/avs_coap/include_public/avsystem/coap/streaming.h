@@ -17,9 +17,9 @@
 #ifndef AVSYSTEM_COAP_STREAMING_H
 #define AVSYSTEM_COAP_STREAMING_H
 
-#include <avsystem/coap/config.h>
+#include <avsystem/coap/avs_coap_config.h>
 
-#include <avsystem/commons/stream.h>
+#include <avsystem/commons/avs_stream.h>
 
 #include <avsystem/coap/ctx.h>
 #include <avsystem/coap/observe.h>

@@ -52,7 +52,7 @@ entities:
   allowing them to manage and monitor the devices' resources, which are exposed
   via a standardized `data model`_.
 
-  - An LwM2M Client is uniquely identified independently of its network address
+  - A LwM2M Client is uniquely identified independently of its network address
     by an **Endpoint Client Name** - a URN uniquely assigned to a device by its
     manufacturer. OMA recommends the Endpoint Client Name to be in one of the
     following formats:
@@ -74,7 +74,7 @@ entities:
   Client during its first or every boot-up. Its only purpose is to initialize
   the data model, including connections to regular LwM2M Servers, before first
   contact to such. The Bootstrap Server communicates with the Client using a
-  different set of commands, so it cannot be considered an "LwM2M Server" in the
+  different set of commands, so it cannot be considered a "LwM2M Server" in the
   ordinary sense.
 
 - **LwM2M Servers** maintain connections with the clients and have the ability
@@ -90,7 +90,7 @@ of this article will be written from the Client perspective.
 Data model
 ----------
 
-Each LwM2M client presents a *data model* - standardized, symbolic
+Each LwM2M Client presents a *data model* - standardized, symbolic
 representation of its configuration and state that is accessible for reading
 and modifying by LwM2M Servers. It can be thought of as a combination of a
 hierarchical configuration file, and a view on statistical information about the
@@ -101,8 +101,8 @@ on each of those levels are identified with numerical identifiers. Those three
 levels are:
 
 - **Object** - each Object represent some different concept of data accessible
-  via the LwM2M client. For example, separate Objects are defined for managing
-  connections with LwM2M servers, for managing network connections, for
+  via the LwM2M Client. For example, separate Objects are defined for managing
+  connections with LwM2M Servers, for managing network connections, for
   accessing data from various types of sensors, etc.
 
   Each Object is assigned a unique numerical identifier in the range 0-65535,
@@ -208,10 +208,6 @@ the following information:
   each of which containing a unique Resource Instance ID (range 0-65535,
   inclusive) and instance value, of the type referred in the Resource
   definition.
-
-  To implement Multiple Resources in Anjay, you will need to use
-  ``anjay_get_array`` (for reading) and ``anjay_ret_array_*`` (for writing)
-  functions. Please refer to appropriate API documentation for details.
 
 - **Mandatory** - *Mandatory* or *Optional*; Mandatory resources need to be
   present in all Instances on all devices. Optional resources may not be present
@@ -402,14 +398,10 @@ client/server relationship on the CoAP layer is reversible at any time.
 The Device Management and Service Enablement interface defines the following
 commands:
 
-.. _lwm2m-discover:
-
 - **Discover** (CoAP **GET Accept: application/link-format**) allows the Server
   to get a list of all supported and present Objects, Object Instances and
   Resources, and to read Attributes_ attached to them. Data stored in Resources
   is not returned.
-
-.. _lwm2m-read:
 
 - **Read** (CoAP **GET** other than the above) reads data - either from a single
   Resource, entire Object Instance, or even a whole Object at once.

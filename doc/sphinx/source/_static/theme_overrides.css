@@ -30,4 +30,9 @@
    .wy-table-responsive {
       overflow: visible !important;
    }
+
+   /* https://stackoverflow.com/questions/23211695/modifying-content-width-of-the-sphinx-theme-read-the-docs */
+   .wy-nav-content {
+        max-width: 960px !important;
+    }
 }

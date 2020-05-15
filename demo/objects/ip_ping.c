@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <avsystem/commons/utils.h>
+#include <avsystem/commons/avs_utils.h>
 
 #define IP_PING_HOSTNAME 0
 #define IP_PING_REPETITIONS 1

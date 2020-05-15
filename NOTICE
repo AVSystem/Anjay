@@ -10,4 +10,4 @@ Apache License, version 2.0. See deps/avs_commons/NOTICE file for details.
 This product's integration testing framework uses pybind11
 (https://github.com/pybind/pybind11), licensed under the terms of
 a 3-clause BSD-style license. For details, see the
-test/integration/framework/nsh-lwm2m/pymbedtls/src/pybind11/LICENSE file.
+tests/integration/framework/nsh-lwm2m/pymbedtls/src/pybind11/LICENSE file.

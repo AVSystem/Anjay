@@ -86,10 +86,13 @@ def get_object_definition(urn_or_oid, version):
 
         if version is None:
             if (len(objects) > 1):
-                logging.info(available_versions_message)
+                logging.info('%s; defaulting to maximum available version: %s' % (
+                    available_versions_message, max(objects).Ver))
             object_ddf_url = max(objects).DDF
         else:
             object_ddf_url = next(obj for obj in objects if obj.Ver == version).DDF
+        if not object_ddf_url:
+            raise ValueError("Object with ID = %d doesn't have attached XML definition" % oid)
         if not object_ddf_url.startswith('http'):
             object_ddf_url = registry.repo_url + '/' + object_ddf_url
         return _read_url(object_ddf_url).decode('utf-8-sig')
