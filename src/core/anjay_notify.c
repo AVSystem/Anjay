@@ -59,9 +59,6 @@ static int observe_notify(anjay_t *anjay, anjay_notify_queue_t queue) {
 static int
 security_modified_notify(anjay_t *anjay,
                          anjay_notify_queue_object_entry_t *security) {
-    if (anjay_is_offline(anjay)) {
-        return 0;
-    }
     int ret = 0;
     int32_t last_iid = -1;
     AVS_LIST(anjay_notify_queue_resource_entry_t) it;
@@ -81,23 +78,27 @@ security_modified_notify(anjay_t *anjay,
 static int server_modified_notify(anjay_t *anjay,
                                   anjay_notify_queue_object_entry_t *server) {
     int ret = 0;
-    AVS_LIST(anjay_notify_queue_resource_entry_t) it;
-    AVS_LIST_FOREACH(it, server->resources_changed) {
-        if (it->rid != ANJAY_DM_RID_SERVER_BINDING
-                && it->rid != ANJAY_DM_RID_SERVER_LIFETIME) {
-            continue;
-        }
-        const anjay_uri_path_t path =
-                MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, it->iid,
-                                   ANJAY_DM_RID_SERVER_SSID);
-        int64_t ssid;
-        if (_anjay_dm_read_resource_i64(anjay, &path, &ssid) || ssid <= 0
-                || ssid >= UINT16_MAX) {
-            _anjay_update_ret(&ret, -1);
-        } else if (_anjay_servers_find_active(anjay, (anjay_ssid_t) ssid)) {
-            _anjay_update_ret(&ret,
-                              anjay_schedule_registration_update(
-                                      anjay, (anjay_ssid_t) ssid));
+    if (server->instance_set_changes.instance_set_changed) {
+        _anjay_update_ret(&ret, _anjay_schedule_reload_servers(anjay));
+    } else {
+        AVS_LIST(anjay_notify_queue_resource_entry_t) it;
+        AVS_LIST_FOREACH(it, server->resources_changed) {
+            if (it->rid != ANJAY_DM_RID_SERVER_BINDING
+                    && it->rid != ANJAY_DM_RID_SERVER_LIFETIME) {
+                continue;
+            }
+            const anjay_uri_path_t path =
+                    MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, it->iid,
+                                       ANJAY_DM_RID_SERVER_SSID);
+            int64_t ssid;
+            if (_anjay_dm_read_resource_i64(anjay, &path, &ssid) || ssid <= 0
+                    || ssid >= UINT16_MAX) {
+                _anjay_update_ret(&ret, -1);
+            } else if (_anjay_servers_find_active(anjay, (anjay_ssid_t) ssid)) {
+                _anjay_update_ret(&ret,
+                                  anjay_schedule_registration_update(
+                                          anjay, (anjay_ssid_t) ssid));
+            }
         }
     }
     return ret;

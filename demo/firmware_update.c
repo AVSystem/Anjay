@@ -39,6 +39,7 @@
 #define FORCE_DELAYED_ERROR_FAILED_UPDATE 4
 #define FORCE_SET_SUCCESS_FROM_PERFORM_UPGRADE 5
 #define FORCE_SET_FAILURE_FROM_PERFORM_UPGRADE 6
+#define FORCE_DO_NOTHING 7
 
 static char *generate_random_target_filepath(void) {
     char *result = NULL;
@@ -519,6 +520,8 @@ static int fw_perform_upgrade(void *fw_) {
             return -1;
         }
         return 0;
+    case FORCE_DO_NOTHING:
+        return 0;
     default:
         break;
     }
@@ -666,7 +669,6 @@ int firmware_update_install(anjay_t *anjay,
 
     if (tx_params) {
         g_tx_params = *tx_params;
-        FW_UPDATE_HANDLERS.get_coap_tx_params = fw_get_coap_tx_params;
     } else {
         FW_UPDATE_HANDLERS.get_coap_tx_params = NULL;
     }

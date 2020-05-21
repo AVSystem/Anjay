@@ -220,7 +220,7 @@ class RegisterIcmpTest(test_suite.PcapEnabledTest,
         # Close socket to induce ICMP port unreachable.
         with self.serv.fake_close():
             # Force Register
-            self.communicate('reconnect 0')
+            self.communicate('reconnect')
             # Wait for ICMP port unreachable.
             self.wait_until_icmp_unreachable_count(1, timeout_s=self.last_retransmission_timeout())
 
@@ -505,7 +505,7 @@ class RequestBootstrapIcmpTest(test_suite.PcapEnabledTest,
         # Close socket to induce ICMP port unreachable.
         with self.bootstrap_server.fake_close():
             # Force Register
-            self.communicate('reconnect 0')
+            self.communicate('reconnect')
             # Wait for ICMP port unreachable.
             self.wait_until_icmp_unreachable_count(1, timeout_s=self.last_retransmission_timeout())
 

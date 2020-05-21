@@ -127,8 +127,8 @@ static void print_option_help(const struct option *opt) {
         const char *default_value;
         const char *help;
     } HELP_INFO[] = {
-        { 'a', "OBJECT_ID SHORT_SERVER_ID", NULL,
-          "allow Short Server ID to instantiate Object ID." },
+        { 'a', "/OID/IID,SSID,ACCESS_MASK", NULL,
+          "create ACL entry for specified /OID/IID and SSID" },
         { 'b', "client-initiated-only", NULL,
           "treat first URI as Bootstrap Server. If the optional "
           "\"client-initiated-only\" option is specified, the legacy LwM2M "
@@ -247,6 +247,10 @@ static void print_option_help(const struct option *opt) {
         { 23, "CIPHERSUITE[,CIPHERSUITE...]", "TLS library defaults",
           "Sets the ciphersuites to be used by default for (D)TLS "
           "connections." },
+        { 28, NULL, NULL,
+          "Configures preference of re-using existing LwM2M CoAP contexts for "
+          "firmware download" },
+        { 29, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
     };
 
     int description_offset = 25;
@@ -515,6 +519,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "prefer-hierarchical-formats",   no_argument,       0, 20 },
         { "use-connection-id",             no_argument,       0, 22 },
         { "ciphersuites",                  required_argument, 0, 23 },
+        { "nstart",                        required_argument, 0, 29 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -554,30 +559,31 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                      argv[option_index]);
             goto finish;
         case -1:
-            goto process;
+            if (optind >= argc) {
+                goto process;
+            }
+            demo_log(ERROR, "unrecognized free argument: %s", argv[optind]);
+            goto finish;
         case 'a': {
-            /* optind is the index of the next argument to be processed, which
-               means that argv[optind-1] is the current one. We shall fail if
-               more than one free argument is provided */
-            if (*argv[optind - 1] == '-' || optind == argc
-                    || *argv[optind] == '-'
-                    || (optind + 1 < argc && *argv[optind + 1] != '-')) {
-                demo_log(ERROR, "invalid pair OID SSID");
+            uint16_t oid;
+            uint16_t iid;
+            uint16_t ssid;
+            uint16_t mask;
+            if (sscanf(optarg, "/%" SCNu16 "/%" SCNu16 ",%" SCNu16 ",%" SCNu16,
+                       &oid, &iid, &ssid, &mask)
+                    != 4) {
+                demo_log(ERROR, "insufficient arguments");
                 goto finish;
             }
-
             AVS_LIST(access_entry_t) entry =
                     AVS_LIST_NEW_ELEMENT(access_entry_t);
             if (!entry) {
                 goto finish;
             }
-
-            // We ignore the fact, that someone passes bad input, and silently
-            // truncate it to zero.
-            long oid = strtol(argv[optind - 1], NULL, 10);
-            long ssid = strtol(argv[optind], NULL, 10);
             entry->oid = (anjay_oid_t) oid;
+            entry->iid = (anjay_iid_t) iid;
             entry->ssid = (anjay_ssid_t) ssid;
+            entry->mask = (anjay_access_mask_t) mask;
             AVS_LIST_INSERT(&parsed_args->access_entries, entry);
             break;
         }
@@ -964,6 +970,15 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         }
+        case 29:
+            if (parse_size(optarg, &parsed_args->tx_params.nstart)) {
+                demo_log(ERROR,
+                         "Invalid NSTART value, expected non-negative integer, "
+                         "got %s",
+                         optarg);
+                goto finish;
+            }
+            break;
         case 0:
             goto process;
         }

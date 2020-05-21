@@ -42,6 +42,21 @@ typedef struct {
     size_t secret_key_size;
 } anjay_server_dtls_keys_t;
 
+// inactive servers include administratively disabled ones
+// as well as those which were unreachable at connect attempt
+struct anjay_server_info_struct;
+typedef struct anjay_server_info_struct anjay_server_info_t;
+
+struct anjay_servers_struct;
+typedef struct anjay_servers_struct anjay_servers_t;
+
+typedef struct {
+    anjay_server_info_t *server;
+    anjay_connection_type_t conn_type;
+} anjay_connection_ref_t;
+
+avs_coap_ctx_t *_anjay_connection_get_coap(anjay_connection_ref_t ref);
+
 /**
  * Reads security information (security mode, keys etc.) for a given Security
  * object instance. This is part of the servers subsystem because it reuses some
@@ -55,6 +70,12 @@ typedef struct {
  */
 anjay_security_config_t *_anjay_get_security_config(anjay_t *anjay,
                                                     anjay_iid_t security_iid);
+
+/**
+ * Returns an active server object associated with given @p socket .
+ */
+anjay_server_info_t *
+_anjay_servers_find_by_primary_socket(anjay_t *anjay, avs_net_socket_t *socket);
 
 VISIBILITY_PRIVATE_HEADER_END
 

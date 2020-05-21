@@ -108,7 +108,7 @@ class AccessControl:
                 servers_count = servers
             else:
                 servers_count = len(servers)
-            extra_args = sum((['--access-entry', str(OID.Test), str(ssid)] for ssid in
+            extra_args = sum((['--access-entry', '/%d/65535,%d,%d' % (OID.Test, ssid, AccessMask.CREATE)] for ssid in
                               range(2, servers_count + 1)),
                              extra_cmdline_args)
             self.setup_demo_with_servers(servers=servers,

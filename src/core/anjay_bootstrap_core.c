@@ -55,11 +55,13 @@ static int suspend_nonbootstrap_server(anjay_t *anjay,
     (void) anjay;
     (void) data;
     if (_anjay_server_ssid(server) != ANJAY_SSID_BOOTSTRAP) {
-        anjay_connection_ref_t ref = {
-            .server = server,
-            .conn_type = ANJAY_CONNECTION_UNSET
-        };
-        _anjay_connection_suspend(ref);
+        anjay_connection_type_t conn_type;
+        ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+            _anjay_connection_suspend((anjay_connection_ref_t) {
+                .server = server,
+                .conn_type = conn_type
+            });
+        }
     }
     return 0;
 }

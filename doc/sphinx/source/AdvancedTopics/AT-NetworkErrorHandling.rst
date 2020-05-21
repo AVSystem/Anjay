@@ -105,8 +105,8 @@ Other error conditions
          `anjay_all_connections_failed()
          <../api/core_8h.html#a4329b620520c565fd61b526ba760e59f>`_ will start
          returning ``true``. Operation can be restored by calling
-         `anjay_schedule_reconnect()
-         <../api/core_8h.html#a5c6dad6c4f234e89b99a4a07f762479e>`_ or
+         `anjay_transport_schedule_reconnect()
+         <../api/core_8h.html#ad895be5694083d015ffcd8d0b87d0b2a>`_ or
          `anjay_enable_server()
          <../api/core_8h.html#abc4b554e51a56da874238f3e64bff074>`_.
 
@@ -124,5 +124,5 @@ Other error conditions
          returning ``true`` if that was the last operational connection.
          Connection can be retried by calling `anjay_enable_server()
          <../api/core_8h.html#abc4b554e51a56da874238f3e64bff074>`_ or
-         `anjay_schedule_reconnect()
-         <../api/core_8h.html#a5c6dad6c4f234e89b99a4a07f762479e>`_.
+         `anjay_transport_schedule_reconnect()
+         <../api/core_8h.html#ad895be5694083d015ffcd8d0b87d0b2a>`_.

@@ -410,32 +410,34 @@ try_wait_for_next_chunk_request(const avs_coap_streaming_server_ctx_t *ctx,
 }
 
 static avs_error_t flush_response_chunk(avs_coap_streaming_request_ctx_t *ctx) {
-    switch (ctx->server_ctx.state) {
-    case AVS_COAP_STREAMING_SERVER_RECEIVED_REQUEST_CHUNK:
-    case AVS_COAP_STREAMING_SERVER_RECEIVED_LAST_REQUEST_CHUNK:
-    case AVS_COAP_STREAMING_SERVER_SENDING_FIRST_RESPONSE_CHUNK:
-        // This call concludes the replication of
-        // _avs_coap_async_incoming_packet_simple_handle(). Note that in the
-        // AVS_COAP_STREAMING_SERVER_SENDING_FIRST_RESPONSE_CHUNK case,
-        // feed_payload_chunk() will be called here.
-        return _avs_coap_async_incoming_packet_send_response(
-                ctx->server_ctx.coap_ctx, ctx->error_response_code);
+    if (avs_is_ok(ctx->err)) {
+        switch (ctx->server_ctx.state) {
+        case AVS_COAP_STREAMING_SERVER_RECEIVED_REQUEST_CHUNK:
+        case AVS_COAP_STREAMING_SERVER_RECEIVED_LAST_REQUEST_CHUNK:
+        case AVS_COAP_STREAMING_SERVER_SENDING_FIRST_RESPONSE_CHUNK:
+            // This call concludes the replication of
+            // _avs_coap_async_incoming_packet_simple_handle(). Note that in the
+            // AVS_COAP_STREAMING_SERVER_SENDING_FIRST_RESPONSE_CHUNK case,
+            // feed_payload_chunk() will be called here.
+            return _avs_coap_async_incoming_packet_send_response(
+                    ctx->server_ctx.coap_ctx, ctx->error_response_code);
 
-    case AVS_COAP_STREAMING_SERVER_SENDING_RESPONSE_CHUNK:
-        // For the non-first chunk, we are not in the middle of
-        // incoming_packet_handle logic, so we need to handle this case
-        // differently.
-        return try_wait_for_next_chunk_request(&ctx->server_ctx, NULL);
+        case AVS_COAP_STREAMING_SERVER_SENDING_RESPONSE_CHUNK:
+            // For the non-first chunk, we are not in the middle of
+            // incoming_packet_handle logic, so we need to handle this case
+            // differently.
+            return try_wait_for_next_chunk_request(&ctx->server_ctx, NULL);
 
-    default:
-        assert(avs_is_err(ctx->err));
-        LOG(ERROR,
-            _("invalid state for flush_request_chunk(), aborting exchange"));
-        avs_coap_exchange_cancel(ctx->server_ctx.coap_ctx,
-                                 ctx->server_ctx.exchange_id);
-        return avs_is_err(ctx->err) ? ctx->err
-                                    : _avs_coap_err(AVS_COAP_ERR_ASSERT_FAILED);
+        default:;
+        }
     }
+
+    assert(avs_is_err(ctx->err));
+    LOG(ERROR, _("invalid state for flush_request_chunk(), aborting exchange"));
+    avs_coap_exchange_cancel(ctx->server_ctx.coap_ctx,
+                             ctx->server_ctx.exchange_id);
+    return avs_is_err(ctx->err) ? ctx->err
+                                : _avs_coap_err(AVS_COAP_ERR_ASSERT_FAILED);
 }
 
 static avs_error_t
@@ -797,7 +799,7 @@ typedef struct {
     const avs_coap_response_header_t *response_header;
     avs_coap_notify_reliability_hint_t reliability_hint;
     bool required_receiving;
-    avs_error_t notify_abort_reason;
+    avs_error_t err;
 } notify_streaming_ctx_t;
 
 static void notify_delivery_status_handler(avs_coap_ctx_t *ctx,
@@ -808,8 +810,8 @@ static void notify_delivery_status_handler(avs_coap_ctx_t *ctx,
     notify_streaming_ctx_t *notify_streaming_ctx =
             (notify_streaming_ctx_t *) arg;
     notify_streaming_ctx->server_ctx.state = AVS_COAP_STREAMING_SERVER_FINISHED;
-    if (avs_is_err(err)) {
-        notify_streaming_ctx->notify_abort_reason = err;
+    if (avs_is_ok(notify_streaming_ctx->err) && avs_is_err(err)) {
+        notify_streaming_ctx->err = err;
     }
 }
 
@@ -828,7 +830,7 @@ static avs_error_t flush_notify_chunk(notify_streaming_ctx_t *ctx) {
                 notify_delivery_status_handler, ctx);
         if (avs_is_err(err)) {
             ctx->server_ctx.state = AVS_COAP_STREAMING_SERVER_FINISHED;
-            ctx->notify_abort_reason = err;
+            ctx->err = err;
         } else if (avs_coap_exchange_id_valid(ctx->server_ctx.exchange_id)) {
             // If we have the exchange ID here, it means that it is either a
             // Confirmable notification, and/or requires a blockwise transfer.
@@ -846,8 +848,8 @@ static avs_error_t flush_notify_chunk(notify_streaming_ctx_t *ctx) {
         // try_wait_for_next_chunk_request() will actually also call
         // feed_payload_chunk() and send that chunk. See comments inside for
         // details.
-        return try_wait_for_next_chunk_request(&ctx->server_ctx,
-                                               &ctx->notify_abort_reason);
+        ctx->err = try_wait_for_next_chunk_request(&ctx->server_ctx, &ctx->err);
+        return ctx->err;
 
     default:
         AVS_UNREACHABLE("invalid state for flush_notify_chunk()");
@@ -862,6 +864,10 @@ notify_write(avs_stream_t *stream_, const void *data, size_t *data_length) {
     if (!is_sending_response_chunk(&notify_streaming_ctx->server_ctx)) {
         LOG(ERROR, _("CoAP notification stream not ready for writing"));
         return avs_errno(AVS_EBADF);
+    }
+    if (avs_is_err(notify_streaming_ctx->err)) {
+        LOG(ERROR, _("CoAP notification stream already in a failed state"));
+        return notify_streaming_ctx->err;
     }
 
     size_t bytes_written = 0;
@@ -911,14 +917,14 @@ avs_coap_notify_streaming(avs_coap_ctx_t *ctx,
         .response_header = response_header,
         .reliability_hint = reliability_hint
     };
-    avs_error_t err = _avs_coap_in_buffer_acquire(
+    notify_streaming_ctx.err = _avs_coap_in_buffer_acquire(
             ctx, &notify_streaming_ctx.server_ctx.acquired_in_buffer,
             &notify_streaming_ctx.server_ctx.acquired_in_buffer_size);
-    if (avs_is_err(err)) {
-        return err;
+    if (avs_is_err(notify_streaming_ctx.err)) {
+        return notify_streaming_ctx.err;
     }
 
-    if (avs_is_err((err = init_chunk_buffer(
+    if (avs_is_err((notify_streaming_ctx.err = init_chunk_buffer(
                             ctx,
                             &notify_streaming_ctx.server_ctx.chunk_buffer,
                             NULL,
@@ -935,25 +941,26 @@ avs_coap_notify_streaming(avs_coap_ctx_t *ctx,
             LOG(DEBUG,
                 _("unable to write notification payload, result = ") "%d",
                 write_result);
-            err = _avs_coap_err(AVS_COAP_ERR_PAYLOAD_WRITER_FAILED);
+            if (avs_is_ok(notify_streaming_ctx.err)) {
+                notify_streaming_ctx.err =
+                        _avs_coap_err(AVS_COAP_ERR_PAYLOAD_WRITER_FAILED);
+            }
         }
     }
     // If notify_write() has either not been called at all, or its calls have
     // not filled the buffer enough to send a BLOCK1 request, we need to
     // actually send the notification here.
-    while (avs_is_ok(err)
+    while (avs_is_ok(notify_streaming_ctx.err)
            && notify_streaming_ctx.server_ctx.state
                       != AVS_COAP_STREAMING_SERVER_FINISHED) {
-        err = flush_notify_chunk(&notify_streaming_ctx);
+        notify_streaming_ctx.err = flush_notify_chunk(&notify_streaming_ctx);
     }
 
-    // note: notify_result is not set to success unless the
-    // delivery_status_handler is called with success response
-    if (avs_is_err(err)
+    if (avs_is_err(notify_streaming_ctx.err)
             && avs_coap_exchange_id_valid(
                        notify_streaming_ctx.server_ctx.exchange_id)) {
         LOG(DEBUG, _("unable to send notification, result = ") "%s",
-            AVS_COAP_STRERROR(err));
+            AVS_COAP_STRERROR(notify_streaming_ctx.err));
         if (notify_streaming_ctx.server_ctx.state
                 != AVS_COAP_STREAMING_SERVER_FINISHED) {
             avs_coap_exchange_cancel(
@@ -965,14 +972,16 @@ avs_coap_notify_streaming(avs_coap_ctx_t *ctx,
 
 finish:
     avs_buffer_free(&notify_streaming_ctx.server_ctx.chunk_buffer);
-    if (avs_is_ok(err) && notify_streaming_ctx.required_receiving) {
-        err = _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
-                ctx, notify_streaming_ctx.server_ctx.acquired_in_buffer,
-                notify_streaming_ctx.server_ctx.acquired_in_buffer_size,
-                reject_new_request, NULL);
+    if (avs_is_ok(notify_streaming_ctx.err)
+            && notify_streaming_ctx.required_receiving) {
+        notify_streaming_ctx.err =
+                _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
+                        ctx, notify_streaming_ctx.server_ctx.acquired_in_buffer,
+                        notify_streaming_ctx.server_ctx.acquired_in_buffer_size,
+                        reject_new_request, NULL);
     }
     _avs_coap_in_buffer_release(ctx);
-    return err;
+    return notify_streaming_ctx.err;
 }
 #    endif // WITH_AVS_COAP_OBSERVE
 

@@ -28,6 +28,8 @@
 typedef struct access_entry {
     anjay_ssid_t ssid;
     anjay_oid_t oid;
+    anjay_iid_t iid;
+    anjay_access_mask_t mask;
 } access_entry_t;
 
 typedef struct cmdline_args {
@@ -73,6 +75,7 @@ typedef struct cmdline_args {
 
     uint32_t *default_ciphersuites;
     size_t default_ciphersuites_count;
+
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

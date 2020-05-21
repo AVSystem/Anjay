@@ -726,6 +726,189 @@ AVS_UNIT_TEST(udp_streaming_server, connection_closed_peek) {
 #        undef REQUEST_PAYLOAD
 }
 
+static int broken_handle_request(avs_coap_streaming_request_ctx_t *ctx,
+                                 const avs_coap_request_header_t *request,
+                                 avs_stream_t *payload_stream,
+                                 const avs_coap_observe_id_t *observe_id,
+                                 void *args_) {
+    (void) ctx;
+    (void) request;
+    (void) observe_id;
+    (void) args_;
+    bool finished = false;
+    avs_error_t err = AVS_OK;
+    while (!finished && avs_is_ok(err)) {
+        size_t bytes_read;
+        unsigned char buf[4096];
+        err = avs_stream_read(payload_stream, &bytes_read, &finished, buf,
+                              sizeof(buf));
+    }
+    ASSERT_EQ(err.category, AVS_ERRNO_CATEGORY);
+    ASSERT_EQ(err.code, AVS_ENODEV);
+    // Intentionally return success even though we're not really that successful
+    return 0;
+}
+
+AVS_UNIT_TEST(udp_streaming_server, connection_closed_send_broken_handler) {
+#        define REQUEST_PAYLOAD DATA_1KB "?"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *request = COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)),
+                                         BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD));
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, request);
+    avs_unit_mocksock_output_fail(env.mocksock, avs_errno(AVS_ENODEV));
+
+    avs_error_t err = avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, broken_handle_request, NULL);
+    ASSERT_EQ(err.category, AVS_ERRNO_CATEGORY);
+    ASSERT_EQ(err.code, AVS_ENODEV);
+#        undef REQUEST_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_server,
+              connection_closed_block_send_broken_handler) {
+#        define REQUEST_PAYLOAD DATA_1KB DATA_1KB "?"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, PUT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_REQ(1, 1024, REQUEST_PAYLOAD))
+    };
+    const test_msg_t *responses[] = { COAP_MSG(ACK, CONTINUE, ID(0),
+                                               TOKEN(nth_token(0)),
+                                               BLOCK1_RES(0, 1024, true)) };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, requests[0]);
+    expect_send(&env, responses[0]);
+    expect_recv(&env, requests[1]);
+    avs_unit_mocksock_output_fail(env.mocksock, avs_errno(AVS_ENODEV));
+
+    avs_error_t err = avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, broken_handle_request, NULL);
+    ASSERT_EQ(err.category, AVS_ERRNO_CATEGORY);
+    ASSERT_EQ(err.code, AVS_ENODEV);
+#        undef REQUEST_PAYLOAD
+}
+
+static int broken_write_handle_request(avs_coap_streaming_request_ctx_t *ctx,
+                                       const avs_coap_request_header_t *request,
+                                       avs_stream_t *payload_stream,
+                                       const avs_coap_observe_id_t *observe_id,
+                                       void *payload) {
+    (void) ctx;
+    (void) request;
+    (void) observe_id;
+    bool finished = false;
+    while (!finished) {
+        size_t bytes_read;
+        unsigned char buf[4096];
+        ASSERT_OK(avs_stream_read(payload_stream, &bytes_read, &finished, buf,
+                                  sizeof(buf)));
+    }
+    avs_stream_t *response_stream = avs_coap_streaming_setup_response(
+            ctx, &(const avs_coap_response_header_t) {
+                     .code = AVS_COAP_CODE_CONTENT
+                 });
+    ASSERT_NOT_NULL(response_stream);
+    avs_stream_write(response_stream, payload, strlen((const char *) payload));
+    // Intentionally ignore return value of the above
+    return 0;
+}
+
+AVS_UNIT_TEST(udp_streaming_server,
+              connection_closed_block_send_broken_write_handler) {
+#        define REQUEST_PAYLOAD DATA_1KB "?"
+#        define RESPONSE_PAYLOAD DATA_1KB "!"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, PUT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_REQ(1, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, PUT, ID(2), TOKEN(nth_token(2)), BLOCK2_REQ(1, 1024)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTINUE, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_RES(0, 1024, true)),
+        COAP_MSG(ACK, CONTENT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_AND_2_RES(1, 1024, 1024, RESPONSE_PAYLOAD))
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, requests[0]);
+    expect_send(&env, responses[0]);
+    expect_recv(&env, requests[1]);
+    expect_send(&env, responses[1]);
+    expect_recv(&env, requests[2]);
+    avs_unit_mocksock_output_fail(env.mocksock, avs_errno(AVS_ENODEV));
+
+    avs_error_t err = avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, broken_write_handle_request, RESPONSE_PAYLOAD);
+    ASSERT_EQ(err.category, AVS_ERRNO_CATEGORY);
+    ASSERT_EQ(err.code, AVS_ENODEV);
+#        undef REQUEST_PAYLOAD
+#        undef RESPONSE_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_server,
+              connection_closed_block_send_broken_bigger_write_handler) {
+#        define REQUEST_PAYLOAD DATA_1KB "?"
+#        define RESPONSE_PAYLOAD DATA_1KB DATA_1KB DATA_1KB "!"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, PUT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_REQ(1, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, PUT, ID(2), TOKEN(nth_token(2)), BLOCK2_REQ(1, 1024)),
+        COAP_MSG(CON, PUT, ID(3), TOKEN(nth_token(3)), BLOCK2_REQ(2, 1024))
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTINUE, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_RES(0, 1024, true)),
+        COAP_MSG(ACK, CONTENT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_AND_2_RES(1, 1024, 1024, RESPONSE_PAYLOAD)),
+        COAP_MSG(ACK, CONTENT, ID(2), TOKEN(nth_token(2)),
+                 BLOCK2_RES(1, 1024, RESPONSE_PAYLOAD)),
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, requests[0]);
+    expect_send(&env, responses[0]);
+    expect_recv(&env, requests[1]);
+    expect_send(&env, responses[1]);
+    expect_recv(&env, requests[2]);
+    expect_send(&env, responses[2]);
+    expect_recv(&env, requests[3]);
+    avs_unit_mocksock_output_fail(env.mocksock, avs_errno(AVS_ENODEV));
+
+    avs_error_t err = avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, broken_write_handle_request, RESPONSE_PAYLOAD);
+    ASSERT_EQ(err.category, AVS_ERRNO_CATEGORY);
+    ASSERT_EQ(err.code, AVS_ENODEV);
+#        undef REQUEST_PAYLOAD
+#        undef RESPONSE_PAYLOAD
+}
+
 #    endif // WITH_AVS_COAP_BLOCK
 
 #endif // defined(AVS_UNIT_TESTING) && defined(WITH_AVS_COAP_UDP) &&

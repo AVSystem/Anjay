@@ -1547,8 +1547,12 @@ static void trigger_observe(avs_sched_t *sched, const void *args_) {
     const trigger_observe_args_t *args = (const trigger_observe_args_t *) args_;
     assert(args->conn_state);
     assert(args->observation);
-    bool ready_for_notifying = _anjay_connection_ready_for_outgoing_message(
-            args->conn_state->conn_ref);
+    bool ready_for_notifying =
+            _anjay_connection_ready_for_outgoing_message(
+                    args->conn_state->conn_ref)
+            && _anjay_socket_transport_is_online(
+                       _anjay_from_server(args->conn_state->conn_ref.server),
+                       _anjay_connection_transport(args->conn_state->conn_ref));
     if (ready_for_notifying
             || notification_storing_enabled(args->conn_state->conn_ref)) {
         int result =

@@ -34,6 +34,8 @@
 #include "../anjay_servers_utils.h"
 #include "../dm/anjay_query.h"
 
+#include "../../modules/server/anjay_mod_server.h"
+
 #include "anjay_activate.h"
 #include "anjay_register.h"
 #include "anjay_reload.h"
@@ -182,11 +184,6 @@ static int reschedule_update_for_all_servers(anjay_t *anjay) {
  *   see the docs of that function for details
  */
 int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid) {
-    if (anjay_is_offline(anjay)) {
-        anjay_log(ERROR,
-                  _("cannot schedule registration update while being offline"));
-        return -1;
-    }
     int result = 0;
 
     if (ssid == ANJAY_SSID_ANY) {
@@ -1068,12 +1065,6 @@ avs_error_t _anjay_server_deregister(anjay_server_info_t *server) {
         .server = server,
         .conn_type = ANJAY_CONNECTION_PRIMARY
     };
-    if (connection.conn_type == ANJAY_CONNECTION_UNSET) {
-        anjay_log(ERROR,
-                  _("could not get stream for server ") "%u" _(", skipping"),
-                  server->ssid);
-        return AVS_OK;
-    }
     if (!_anjay_connection_get_online_socket(connection)) {
         anjay_log(ERROR, _("server connection is not online, skipping"));
         return AVS_OK;
@@ -1123,4 +1114,44 @@ void _anjay_server_update_registration_info(
             get_registration_expire_time(info->last_update_params.lifetime_s);
     info->update_forced = false;
     info->session_token = _anjay_server_primary_session_token(server);
+}
+
+static bool registered_or_gave_up(anjay_server_info_t *server) {
+    if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+        return false;
+    }
+
+    const bool anjay_registered =
+            !_anjay_bootstrap_in_progress(server->anjay)
+            && _anjay_server_active(server)
+            && !_anjay_server_registration_expired(server);
+
+    return anjay_registered || server->refresh_failed;
+}
+
+bool anjay_ongoing_registration_exists(anjay_t *anjay) {
+    size_t dm_servers_count = _anjay_server_object_get_instances_count(anjay);
+    if (dm_servers_count == 0) {
+        return false;
+    }
+
+    size_t loaded_servers_count = 0;
+    anjay_server_info_t *server;
+    AVS_LIST_FOREACH(server, anjay->servers->servers) {
+        if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
+            loaded_servers_count++;
+        }
+    }
+
+    if (dm_servers_count != loaded_servers_count) {
+        return true;
+    }
+
+    AVS_LIST_FOREACH(server, anjay->servers->servers) {
+        if (!registered_or_gave_up(server)) {
+            return true;
+        }
+    }
+
+    return false;
 }

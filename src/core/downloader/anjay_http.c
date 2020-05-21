@@ -253,6 +253,8 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
         return;
     }
 
+    ctx->bytes_downloaded = 0;
+
     AVS_LIST(const avs_http_header_t) it;
     AVS_LIST_FOREACH(it, received_headers) {
         if (avs_strcasecmp(it->key, "Content-Range") == 0) {
@@ -316,17 +318,17 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
     }
 }
 
-static int get_http_socket(anjay_downloader_t *dl,
-                           anjay_download_ctx_t *ctx,
-                           avs_net_socket_t **out_socket,
-                           anjay_socket_transport_t *out_transport) {
+static avs_net_socket_t *get_http_socket(anjay_downloader_t *dl,
+                                         anjay_download_ctx_t *ctx) {
     (void) dl;
-    if (!(*out_socket = avs_stream_net_getsock(
-                  ((anjay_http_download_ctx_t *) ctx)->stream))) {
-        return -1;
-    }
-    *out_transport = ANJAY_SOCKET_TRANSPORT_TCP;
-    return 0;
+    return avs_stream_net_getsock(((anjay_http_download_ctx_t *) ctx)->stream);
+}
+
+static anjay_socket_transport_t
+get_http_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
+    (void) dl;
+    (void) ctx;
+    return ANJAY_SOCKET_TRANSPORT_TCP;
 }
 
 static void cleanup_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
@@ -338,6 +340,14 @@ static void cleanup_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     avs_free(ctx->ssl_configuration.ciphersuites.ids);
     avs_http_free(ctx->client);
     AVS_LIST_DELETE(ctx_ptr);
+}
+
+static void suspend_http_transfer(anjay_downloader_t *dl,
+                                  anjay_download_ctx_t *ctx_) {
+    (void) dl;
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
+    avs_sched_del(&ctx->next_action_job);
+    avs_stream_cleanup(&ctx->stream);
 }
 
 static avs_error_t
@@ -369,8 +379,10 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
 
     static const anjay_download_ctx_vtable_t VTABLE = {
         .get_socket = get_http_socket,
+        .get_socket_transport = get_http_socket_transport,
         .handle_packet = handle_http_packet,
         .cleanup = cleanup_http_transfer,
+        .suspend = suspend_http_transfer,
         .reconnect = reconnect_http_transfer
     };
     ctx->common.vtable = &VTABLE;

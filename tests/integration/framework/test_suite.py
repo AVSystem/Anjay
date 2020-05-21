@@ -519,6 +519,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 extra_cmdline_args=[],
                                 auto_register=True,
                                 lifetime=None,
+                                binding=None,
                                 fw_updated_marker_path=None):
         """
         Starts the demo process and creates any required auxiliary objects (such as Lwm2mServer objects) or processes.
@@ -549,6 +550,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         Passed down to self.assertDemoRegisters() if auto_register is true
 
         :param lifetime:
+        Passed down to self.assertDemoRegisters() if auto_register is true
+
+        :param binding:
         Passed down to self.assertDemoRegisters() if auto_register is true
 
         :return: None
@@ -598,7 +602,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             if auto_register:
                 for serv in servers_passed:
                     self.assertDemoRegisters(serv,
-                                             lifetime=lifetime)
+                                             lifetime=lifetime,
+                                             binding=binding)
         except Exception:
             try:
                 self.teardown_demo_with_servers(auto_deregister=False)
@@ -795,6 +800,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         return bool(int(self.communicate('get-all-connections-failed', match_regex='ALL_CONNECTIONS_FAILED==([0-9])\n').group(1)))
 
 
+    def ongoing_registration_exists(self):
+        result = self.communicate('ongoing-registration-exists', match_regex='ONGOING_REGISTRATION==(true|false)\n').group(1)
+        if result == "true":
+            return True
+        elif result == "false":
+            return False
+        raise ValueError("invalid value")
+
 
 class SingleServerAccessor:
     @property
@@ -817,7 +830,7 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         pass
 
     def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None,
-              server_crt_file=None, server_key_file=None, *args, **kwargs):
+              server_crt_file=None, server_key_file=None, binding=None, *args, **kwargs):
         assert((psk_identity is None) == (psk_key is None))
         extra_args = []
         if psk_identity:
@@ -837,6 +850,7 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
             kwargs['servers'] = [Lwm2mServer(coap_server)]
 
         self.setup_demo_with_servers(extra_cmdline_args=extra_args,
+                                     binding=binding,
                                      *args,
                                      **kwargs)
 

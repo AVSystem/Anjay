@@ -127,19 +127,6 @@ typedef struct {
     anjay_update_parameters_t last_update_params;
 } anjay_registration_info_t;
 
-// inactive servers include administratively disabled ones
-// as well as those which were unreachable at connect attempt
-struct anjay_server_info_struct;
-typedef struct anjay_server_info_struct anjay_server_info_t;
-
-struct anjay_servers_struct;
-typedef struct anjay_servers_struct anjay_servers_t;
-
-typedef struct {
-    anjay_server_info_t *server;
-    anjay_connection_type_t conn_type;
-} anjay_connection_ref_t;
-
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON THE WHOLE SERVERS SUBSYSTEM //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -378,6 +365,8 @@ anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server);
 
 anjay_iid_t _anjay_server_last_used_security_iid(anjay_server_info_t *server);
 
+anjay_t *_anjay_from_server(anjay_server_info_t *server);
+
 /**
  * Gets the administratively configured binding mode of the server in question.
  */
@@ -478,8 +467,6 @@ avs_net_socket_t *
 _anjay_connection_get_online_socket(anjay_connection_ref_t ref);
 
 bool _anjay_connection_ready_for_outgoing_message(anjay_connection_ref_t ref);
-
-avs_coap_ctx_t *_anjay_connection_get_coap(anjay_connection_ref_t ref);
 
 /**
  * This function only makes sense when the connection is online. It marks the

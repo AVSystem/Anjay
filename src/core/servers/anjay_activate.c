@@ -118,11 +118,19 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
                                 anjay_server_connection_state_t state,
                                 avs_error_t err) {
     assert(server);
-    if (state == ANJAY_SERVER_CONNECTION_ERROR) {
-        assert(avs_is_err(err));
-        anjay_log(TRACE, _("could not initialize sockets for SSID ") "%u",
-                  server->ssid);
-        _anjay_server_on_server_communication_error(server, err);
+    if (state == ANJAY_SERVER_CONNECTION_OFFLINE) {
+        if (avs_is_err(err)) {
+            anjay_log(TRACE, _("could not initialize sockets for SSID ") "%u",
+                      server->ssid);
+            _anjay_server_on_server_communication_error(server, err);
+        } else {
+            anjay_log(TRACE, _("Server with SSID ") "%u" _(" is offline"),
+                      server->ssid);
+            if (!avs_time_real_valid(server->reactivate_time)) {
+                // make the server reactive when it comes back online
+                server->reactivate_time = avs_time_real_now();
+            }
+        }
     } else if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
         assert(avs_is_ok(err));
         if (_anjay_should_retry_bootstrap(server->anjay)) {
@@ -286,8 +294,7 @@ int _anjay_server_deactivate(anjay_t *anjay,
         return -1;
     }
 
-    if (ssid != ANJAY_SSID_BOOTSTRAP && !anjay_is_offline(anjay)
-            && !_anjay_bootstrap_in_progress(anjay)
+    if (ssid != ANJAY_SSID_BOOTSTRAP && !_anjay_bootstrap_in_progress(anjay)
             && _anjay_server_active(*server_ptr)
             && !_anjay_server_registration_expired(*server_ptr)) {
         // Return value intentionally ignored.

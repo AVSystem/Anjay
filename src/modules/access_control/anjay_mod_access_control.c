@@ -200,14 +200,14 @@ static int set_acl_in_instance(anjay_t *anjay,
                                access_control_instance_t *ac_instance,
                                anjay_ssid_t ssid,
                                anjay_access_mask_t access_mask) {
-    AVS_LIST(acl_entry_t) entry;
-    AVS_LIST_FOREACH(entry, ac_instance->acl) {
-        if (entry->ssid == ssid) {
+    AVS_LIST(acl_entry_t) *insert_ptr;
+    AVS_LIST_FOREACH_PTR(insert_ptr, &ac_instance->acl) {
+        if ((*insert_ptr)->ssid >= ssid) {
             break;
         }
     }
 
-    if (!entry) {
+    if (!*insert_ptr || (*insert_ptr)->ssid != ssid) {
         if (_anjay_access_control_validate_ssid(anjay, ssid)) {
             ac_log(WARNING,
                    _("cannot set ACL: Server with SSID==") "%" PRIu16 _(
@@ -216,18 +216,18 @@ static int set_acl_in_instance(anjay_t *anjay,
             return -1;
         }
 
-        entry = AVS_LIST_NEW_ELEMENT(acl_entry_t);
-        if (!entry) {
+        AVS_LIST(acl_entry_t) new_entry = AVS_LIST_NEW_ELEMENT(acl_entry_t);
+        if (!new_entry) {
             ac_log(ERROR, _("out of memory"));
             return -1;
         }
 
-        AVS_LIST_INSERT(&ac_instance->acl, entry);
+        AVS_LIST_INSERT(insert_ptr, new_entry);
         ac_instance->has_acl = true;
-        entry->ssid = ssid;
+        new_entry->ssid = ssid;
     }
 
-    entry->mask = access_mask;
+    (*insert_ptr)->mask = access_mask;
     return 0;
 }
 

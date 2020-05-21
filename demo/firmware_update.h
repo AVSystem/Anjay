@@ -20,6 +20,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include <anjay/anjay_config.h>
 #include <anjay/fw_update.h>
 
 #include "iosched.h"

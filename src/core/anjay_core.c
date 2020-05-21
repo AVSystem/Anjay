@@ -52,7 +52,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.3a"
+#    define ANJAY_VERSION "2.4"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
@@ -139,6 +139,10 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
                         config->confirmable_notifications,
                         config->stored_notification_limit);
 
+    anjay->online_transports =
+            _anjay_transport_set_remove_unavailable(anjay,
+                                                    ANJAY_TRANSPORT_SET_ALL);
+
 #ifdef ANJAY_WITH_DOWNLOADER
     if (_anjay_downloader_init(&anjay->downloader, anjay)) {
         return -1;
@@ -158,7 +162,6 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
             return -1;
         }
     }
-
     return 0;
 }
 
@@ -220,7 +223,6 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
 
     avs_sched_del(&anjay->reload_servers_sched_job_handle);
     avs_sched_del(&anjay->scheduled_notify.handle);
-    avs_sched_del(&anjay->enter_offline_job_handle);
     avs_sched_cleanup(&anjay->sched);
 
     if (!anjay->prng_ctx.allocated_by_user) {
@@ -759,6 +761,9 @@ static int serve_connection(anjay_t *anjay, anjay_connection_ref_t connection) {
             avs_coap_error_recovery_action(err);
     if (recovery_action == AVS_COAP_ERR_RECOVERY_RECREATE_CONTEXT) {
         _anjay_server_on_fatal_coap_error(connection);
+    } else if (err.category == AVS_ERRNO_CATEGORY && err.code == AVS_ENODEV) {
+        anjay_log(WARNING,
+                  _("ENODEV returned from the networking layer, ignoring"));
     } else if (recovery_action == AVS_COAP_ERR_RECOVERY_UNKNOWN
                && (err.category != AVS_COAP_ERR_CATEGORY
                    || avs_coap_error_class(err) != AVS_COAP_ERR_CLASS_OTHER)) {

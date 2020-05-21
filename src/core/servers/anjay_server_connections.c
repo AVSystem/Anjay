@@ -92,6 +92,12 @@ typedef struct {
  *   'U'. See below for explanation.
  *
  * Smaller rank number is considered better.
+ *
+ * Additionally, if a specific transport is not online at the moment, the rank
+ * is increased by an additional penalty of sizeof(*binding_mode) + 2, so that
+ * all online protocols have better rank than offline ones. We can't completely
+ * eliminate offline transports at this moment, because it is not considered an
+ * error if a transport is offline.
  */
 static int rank_uri(anjay_t *anjay,
                     anjay_binding_mode_t *binding_mode,
@@ -104,31 +110,31 @@ static int rank_uri(anjay_t *anjay,
                   transport_info->uri_scheme);
         return -1;
     }
+    const char *rank_ptr;
     char transport_binding =
             _anjay_binding_info_by_transport(transport_info->transport)->letter;
     if (transport_binding == preferred_transport) {
         *out_rank = 0;
-        return 0;
-    }
-    const char *rank_ptr =
-            strchr(*binding_mode, *(uint8_t *) &transport_binding);
-    if (rank_ptr) {
+    } else if ((rank_ptr = strchr(*binding_mode,
+                                  *(uint8_t *) &transport_binding))) {
         *out_rank = (size_t) (rank_ptr - *binding_mode) + 1;
-        return 0;
-    }
-    if (transport_binding == 'U') {
+    } else if (transport_binding == 'U') {
         // According to LwM2M TS 1.1.1, 6.2.1.2. Behaviour with Current
         // Transport Binding and Modes:
         // > The client SHALL assume that the server supports the UDP binding
         // > even if the server does not include UDP ("U") in the "binding"
         // > resource of the LwM2M server object (/1/x/7).
         *out_rank = sizeof(*binding_mode) + 1;
-        return 0;
+    } else {
+        anjay_log(DEBUG,
+                  _("protocol ") "%s" _(" is not present in Binding resource"),
+                  transport_info->uri_scheme);
+        return -1;
     }
-    anjay_log(DEBUG,
-              _("protocol ") "%s" _(" is not present in Binding resource"),
-              transport_info->uri_scheme);
-    return -1;
+    if (!_anjay_socket_transport_is_online(anjay, transport_info->transport)) {
+        *out_rank += sizeof(*binding_mode) + 2;
+    }
+    return 0;
 }
 
 static void update_selected_security_instance_if_ranked_better(
@@ -225,20 +231,22 @@ bool _anjay_connections_is_trigger_requested(const char *binding_mode) {
 void _anjay_active_server_refresh(anjay_server_info_t *server) {
     anjay_log(TRACE, _("refreshing SSID ") "%u", server->ssid);
 
-    int result = -1;
-    anjay_iid_t security_iid;
+    int result = 0;
+    anjay_iid_t security_iid = ANJAY_ID_INVALID;
     avs_url_t *uri = NULL;
+    bool is_trigger_requested = false;
+    anjay_server_name_indication_t sni = { "" };
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
         const anjay_transport_info_t *transport_info = NULL;
         if ((security_iid = _anjay_find_bootstrap_security_iid(server->anjay))
                 == ANJAY_ID_INVALID) {
             anjay_log(ERROR, _("could not find server Security IID"));
+            result = -1;
         } else if (!_anjay_connection_security_generic_get_uri(
                            server->anjay, security_iid, &uri,
                            &transport_info)) {
             assert(uri);
             assert(transport_info);
-            anjay_server_name_indication_t sni = { "" };
             if ((result =
                          avs_simple_snprintf(server->binding_mode,
                                              sizeof(server->binding_mode), "%c",
@@ -248,35 +256,31 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
                     >= 0) {
                 result = 0;
             }
-            if (!result) {
-                _anjay_server_connections_refresh(server, security_iid, &uri,
-                                                  false, &sni);
-            }
         }
     } else {
         char preferred_transport;
-        anjay_server_name_indication_t sni = { "" };
         if (!(result = read_binding_info(server->anjay, server->ssid,
                                          &server->binding_mode,
                                          &preferred_transport))
                 && !(result = select_security_instance(
                              server->anjay, server->ssid, &server->binding_mode,
                              preferred_transport, &security_iid, &uri))) {
-            _anjay_server_connections_refresh(
-                    server, security_iid, &uri,
-                    _anjay_connections_is_trigger_requested(
-                            server->binding_mode),
-                    &sni);
+            is_trigger_requested = _anjay_connections_is_trigger_requested(
+                    server->binding_mode);
         }
+    }
+    if (!result) {
+        _anjay_server_connections_refresh(server, security_iid, &uri,
+                                          is_trigger_requested, &sni);
     }
     avs_url_free(uri);
     if (result) {
-        _anjay_server_on_refreshed(server, ANJAY_SERVER_CONNECTION_ERROR,
+        _anjay_server_on_refreshed(server, ANJAY_SERVER_CONNECTION_OFFLINE,
                                    avs_errno(AVS_EPROTO));
     }
 }
 
-static void connection_suspend(anjay_connection_ref_t conn_ref) {
+void _anjay_connection_suspend(anjay_connection_ref_t conn_ref) {
     anjay_server_connection_t *conn = _anjay_get_server_connection(conn_ref);
     avs_net_socket_t *socket = _anjay_connection_internal_get_socket(conn);
     if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY
@@ -291,16 +295,6 @@ static void connection_suspend(anjay_connection_ref_t conn_ref) {
     if (socket) {
         avs_net_socket_shutdown(socket);
         avs_net_socket_close(socket);
-    }
-}
-
-void _anjay_connection_suspend(anjay_connection_ref_t conn_ref) {
-    if (conn_ref.conn_type == ANJAY_CONNECTION_UNSET) {
-        ANJAY_CONNECTION_TYPE_FOREACH(conn_ref.conn_type) {
-            connection_suspend(conn_ref);
-        }
-    } else {
-        connection_suspend(conn_ref);
     }
 }
 
@@ -374,9 +368,12 @@ void _anjay_connections_flush_notifications(anjay_connections_t *connections) {
         return;
     }
 
-    anjay_connection_ref_t ref;
-    ref.server = server;
-    ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
+    anjay_connection_type_t conn_type;
+    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+        const anjay_connection_ref_t ref = {
+            .server = server,
+            .conn_type = conn_type
+        };
         anjay_server_connection_t *connection =
                 _anjay_connection_get(connections, ref.conn_type);
         if (connection->needs_observe_flush

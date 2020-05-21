@@ -26,9 +26,16 @@
 
 #include "anjay_utils_core.h"
 
+#include <anjay_modules/anjay_dm_utils.h>
+#include <anjay_modules/anjay_servers.h>
+
 #include <avsystem/commons/avs_errno.h>
 #include <avsystem/commons/avs_url.h>
 #include <avsystem/commons/avs_utils.h>
+
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+#    include <anjay/fw_update.h>
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -243,6 +250,19 @@ bool anjay_binding_mode_valid(const char *binding_mode) {
     return is_valid_lwm2m_1_0_binding_mode(binding_mode);
 }
 
+bool _anjay_socket_is_online(avs_net_socket_t *socket) {
+    if (!socket) {
+        return false;
+    }
+    avs_net_socket_opt_value_t opt;
+    if (avs_is_err(avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_STATE,
+                                          &opt))) {
+        anjay_log(DEBUG, _("Could not get socket state"));
+        return false;
+    }
+    return opt.state == AVS_NET_SOCKET_STATE_CONNECTED;
+}
+
 avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
                                           const anjay_lwm2m_version_t *version,
                                           const char *endpoint_name,
@@ -375,6 +395,235 @@ int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,
     dest->num_ids = src->num_ids;
     return 0;
 }
+
+#define DEFAULT_COAPS_PORT "5684"
+#define DEFAULT_COAP_PORT "5683"
+
+static bool url_service_matches(const avs_url_t *left,
+                                const avs_url_t *right,
+                                const char *default_port) {
+    const char *protocol_left = avs_url_protocol(left);
+    const char *protocol_right = avs_url_protocol(right);
+    // NULL protocol means that the URL is protocol-relative (e.g.
+    // //avsystem.com). In that case protocol is essentially undefined (i.e.,
+    // dependent on where such link is contained). We don't consider two
+    // undefined protocols as equivalent, similar to comparing NaNs.
+    if (!protocol_left || !protocol_right
+            || strcmp(protocol_left, protocol_right) != 0) {
+        return false;
+    }
+    const char *port_left = avs_url_port(left);
+    const char *port_right = avs_url_port(right);
+    if (!port_left) {
+        port_left = default_port;
+    }
+    if (!port_right) {
+        port_right = default_port;
+    }
+    return strcmp(port_left, port_right) == 0;
+}
+
+typedef union {
+    anjay_security_config_t *security;
+    avs_coap_ctx_t *coap;
+} security_or_socket_info_t;
+
+typedef int
+try_security_instance_callback_t(anjay_t *anjay,
+                                 security_or_socket_info_t *out_info,
+                                 anjay_iid_t security_iid,
+                                 const avs_url_t *url,
+                                 const avs_url_t *server_url);
+
+typedef struct {
+    security_or_socket_info_t *info;
+    const avs_url_t *url;
+    try_security_instance_callback_t *clb;
+} try_security_instance_args_t;
+
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+
+static bool has_valid_keys(const avs_net_security_info_t *info) {
+    switch (info->mode) {
+    case AVS_NET_SECURITY_CERTIFICATE:
+        return info->data.cert.server_cert_validation
+               || info->data.cert.client_cert.desc.info.buffer.buffer_size > 0
+               || info->data.cert.client_key.desc.info.buffer.buffer_size > 0;
+    case AVS_NET_SECURITY_PSK:
+        return info->data.psk.identity_size > 0 || info->data.psk.psk_size > 0;
+    }
+    return false;
+}
+
+static int
+try_security_instance_read_security(anjay_t *anjay,
+                                    security_or_socket_info_t *out_info,
+                                    anjay_iid_t security_iid,
+                                    const avs_url_t *url,
+                                    const avs_url_t *server_url) {
+    anjay_security_config_t *new_result =
+            _anjay_get_security_config(anjay, security_iid);
+    if (!new_result) {
+        anjay_log(WARNING,
+                  _("Could not read security information for "
+                    "server ") "/%" PRIu16 "/%" PRIu16,
+                  ANJAY_DM_OID_SECURITY, security_iid);
+    } else if (!has_valid_keys(&new_result->security_info)) {
+        anjay_log(DEBUG,
+                  _("Server ") "/%" PRIu16
+                               "/%" PRIu16 _(" does not use encrypted "
+                                             "connection, ignoring"),
+                  ANJAY_DM_OID_SECURITY, security_iid);
+    } else {
+        avs_free(out_info->security);
+        out_info->security = new_result;
+        new_result = NULL;
+        if (url_service_matches(server_url, url, DEFAULT_COAPS_PORT)) {
+            // this is the best match we could get
+            return ANJAY_FOREACH_BREAK;
+        }
+        // and here we are left with "some match", not necessarily the best
+        // one, and thus we'll continue looking
+    }
+    avs_free(new_result);
+    return ANJAY_FOREACH_CONTINUE;
+}
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+static int try_security_instance_get_coap(anjay_t *anjay,
+                                          security_or_socket_info_t *out_info,
+                                          anjay_iid_t security_iid,
+                                          const avs_url_t *url,
+                                          const avs_url_t *server_url) {
+    const anjay_transport_info_t *transport_info =
+            _anjay_transport_info_by_uri_scheme(avs_url_protocol(url));
+    if (!transport_info
+            || !url_service_matches(server_url, url,
+                                    transport_info->default_port)) {
+        return ANJAY_FOREACH_CONTINUE;
+    }
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SSID);
+
+    uint16_t ssid;
+    if (_anjay_dm_read_resource_u16(anjay, &path, &ssid)) {
+        anjay_log(WARNING, _("could not read LwM2M short server ID from ") "%s",
+                  ANJAY_DEBUG_MAKE_PATH(&path));
+        return ANJAY_FOREACH_CONTINUE;
+    }
+    AVS_LIST(const anjay_socket_entry_t) it;
+    AVS_LIST_FOREACH(it, anjay_get_socket_entries(anjay)) {
+        if (it->ssid == ssid) {
+            anjay_connection_ref_t connection = {
+                .server = _anjay_servers_find_by_primary_socket(anjay,
+                                                                it->socket),
+                .conn_type = ANJAY_CONNECTION_PRIMARY
+            };
+            if (!connection.server) {
+                return ANJAY_FOREACH_CONTINUE;
+            }
+            out_info->coap = _anjay_connection_get_coap(connection);
+            anjay_log(DEBUG,
+                      _("using coap context of SSID=") "%" PRIu16 _(
+                              " to conduct the download"),
+                      ssid);
+            return ANJAY_FOREACH_BREAK;
+        }
+    }
+    return ANJAY_FOREACH_CONTINUE;
+}
+
+static bool optional_strings_equal(const char *left, const char *right) {
+    if (left && right) {
+        return strcmp(left, right) == 0;
+    } else {
+        return !left && !right;
+    }
+}
+
+static int try_security_instance(anjay_t *anjay,
+                                 const anjay_dm_object_def_t *const *obj,
+                                 anjay_iid_t security_iid,
+                                 void *args_) {
+    (void) obj;
+    try_security_instance_args_t *args = (try_security_instance_args_t *) args_;
+
+    char raw_server_url[ANJAY_MAX_URL_RAW_LENGTH];
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SERVER_URI);
+
+    if (_anjay_dm_read_resource_string(anjay, &path, raw_server_url,
+                                       sizeof(raw_server_url))) {
+        anjay_log(WARNING, _("could not read LwM2M server URI from ") "%s",
+                  ANJAY_DEBUG_MAKE_PATH(&path));
+        return ANJAY_FOREACH_CONTINUE;
+    }
+
+    avs_url_t *server_url = avs_url_parse_lenient(raw_server_url);
+    if (!server_url) {
+        anjay_log(WARNING, _("Could not parse URL from ") "%s" _(": ") "%s",
+                  ANJAY_DEBUG_MAKE_PATH(&path), raw_server_url);
+        return ANJAY_FOREACH_CONTINUE;
+    }
+
+    int retval = ANJAY_FOREACH_CONTINUE;
+    if (optional_strings_equal(avs_url_host(server_url),
+                               avs_url_host(args->url))) {
+        retval = args->clb(anjay, args->info, security_iid, args->url,
+                           server_url);
+    }
+
+    avs_url_free(server_url);
+    return retval;
+}
+
+static void try_get_info_from_dm(anjay_t *anjay,
+                                 const char *raw_url,
+                                 security_or_socket_info_t *out_info,
+                                 try_security_instance_callback_t *clb) {
+    assert(anjay);
+
+    const anjay_dm_object_def_t *const *security_obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
+    if (!security_obj) {
+        anjay_log(ERROR, _("Security object not installed"));
+        return;
+    }
+
+    avs_url_t *url = avs_url_parse_lenient(raw_url);
+    if (!url) {
+        anjay_log(ERROR, _("Could not parse URL: ") "%s", raw_url);
+        return;
+    }
+    try_security_instance_args_t args = {
+        .info = out_info,
+        .url = url,
+        .clb = clb
+    };
+    _anjay_dm_foreach_instance(anjay, security_obj, try_security_instance,
+                               &args);
+    avs_url_free(url);
+}
+
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+anjay_security_config_t *
+anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
+    security_or_socket_info_t info;
+    memset(&info, 0, sizeof(info));
+    try_get_info_from_dm(anjay, raw_url, &info,
+                         try_security_instance_read_security);
+
+    if (!info.security) {
+        anjay_log(WARNING,
+                  _("Matching security information not found in data model for "
+                    "URL: ") "%s",
+                  raw_url);
+    }
+    return info.security;
+}
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 #ifdef ANJAY_TEST
 #    include "tests/core/utils.c"

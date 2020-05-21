@@ -221,7 +221,7 @@ static avs_error_t connect_udp_socket(anjay_t *anjay,
                                       anjay_server_connection_t *connection) {
     const char *local_addr = get_preferred_local_addr(connection);
     avs_error_t err;
-    if (avs_is_err((err = try_bind_to_last_local_port(connection, local_addr)))
+    if (avs_is_err(try_bind_to_last_local_port(connection, local_addr))
             && avs_is_err((err = try_bind_to_static_preferred_port(
                                    anjay, connection)))) {
         return err;

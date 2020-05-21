@@ -76,7 +76,7 @@ class Base64ReadWrite(Base64Test.Test):
 
 class Base64InvalidWrite(Base64Test.Test):
     def runTest(self):
-        def write(value, expected_error_code=coap.Code.RES_INTERNAL_SERVER_ERROR):
+        def write(value, expected_error_code=coap.Code.RES_BAD_REQUEST):
             self.write_resource(self.serv, oid=OID.Test, iid=1,
                                 rid=RID.Test.ResRawBytes, content=value,
                                 expect_error_code=expected_error_code)

@@ -28,7 +28,6 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 bool _anjay_server_active(anjay_server_info_t *server);
-anjay_t *_anjay_from_server(anjay_server_info_t *server);
 
 VISIBILITY_PRIVATE_HEADER_END
 

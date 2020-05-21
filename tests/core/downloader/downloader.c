@@ -65,9 +65,11 @@ static void setup(void) {
 
     for (size_t i = 0; i < AVS_ARRAY_SIZE(ENV.mocksock); ++i) {
         _anjay_mocksock_create(&ENV.mocksock[i], 1252, 1252);
+        avs_unit_mocksock_enable_state_getopt(ENV.mocksock[i]);
     }
 
     ENV.anjay = (anjay_t) {
+        .online_transports = ANJAY_TRANSPORT_SET_ALL,
         .sched = avs_sched_new("Anjay-test", &ENV.anjay),
         .udp_tx_params = DETERMINISTIC_TX_PARAMS,
         .prng_ctx = (anjay_prng_ctx_t) {
@@ -263,7 +265,9 @@ static void assert_download_not_possible(anjay_downloader_t *dl,
     AVS_LIST_CLEAR(&socks);
 
     anjay_download_handle_t handle = NULL;
-    avs_error_t err = _anjay_downloader_download(dl, &handle, cfg);
+    avs_error_t err = _anjay_downloader_download(dl, &handle, cfg
+
+    );
     AVS_UNIT_ASSERT_EQUAL(err.category, AVS_ERRNO_CATEGORY);
     AVS_UNIT_ASSERT_EQUAL(err.code, AVS_EINVAL);
     AVS_UNIT_ASSERT_NULL(handle);
@@ -383,7 +387,9 @@ AVS_UNIT_TEST(downloader, download_abort_on_cleanup) {
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg
+
+            ));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     expect_download_finished(&SIMPLE_ENV.data,

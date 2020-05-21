@@ -35,13 +35,6 @@ static void refresh_server_job(avs_sched_t *sched, const void *server_ptr) {
     anjay_t *anjay = _anjay_get_from_sched(sched);
     anjay_server_info_t *server = *(anjay_server_info_t *const *) server_ptr;
 
-    if (anjay_is_offline(anjay)) {
-        anjay_log(TRACE,
-                  _("Anjay is offline, not refreshing server SSID ") "%" PRIu16,
-                  server->ssid);
-        return;
-    }
-
     if (server->ssid != ANJAY_SSID_BOOTSTRAP
             && _anjay_bootstrap_in_progress(anjay)) {
         anjay_log(TRACE,
@@ -233,6 +226,123 @@ int _anjay_schedule_refresh_server(anjay_server_info_t *server,
     return 0;
 }
 
+const anjay_transport_set_t ANJAY_TRANSPORT_SET_ALL = {
+    .udp = true,
+    .tcp = true
+};
+
+const anjay_transport_set_t ANJAY_TRANSPORT_SET_IP = {
+    .udp = true,
+    .tcp = true
+};
+
+const anjay_transport_set_t ANJAY_TRANSPORT_SET_UDP = {
+    .udp = true
+};
+
+const anjay_transport_set_t ANJAY_TRANSPORT_SET_TCP = {
+    .tcp = true
+};
+
+static anjay_transport_set_t transport_set_not(anjay_transport_set_t set) {
+    return (anjay_transport_set_t) {
+        .udp = !set.udp,
+        .tcp = !set.tcp
+    };
+}
+
+static anjay_transport_set_t transport_set_union(anjay_transport_set_t left,
+                                                 anjay_transport_set_t right) {
+    return (anjay_transport_set_t) {
+        .udp = left.udp || right.udp,
+        .tcp = left.tcp || right.tcp
+    };
+}
+
+static anjay_transport_set_t
+transport_set_intersection(anjay_transport_set_t left,
+                           anjay_transport_set_t right) {
+    return (anjay_transport_set_t) {
+        .udp = left.udp && right.udp,
+        .tcp = left.tcp && right.tcp
+    };
+}
+
+static bool transport_set_empty(anjay_transport_set_t set) {
+    return !(set.udp || set.tcp);
+}
+
+anjay_transport_set_t
+_anjay_transport_set_remove_unavailable(anjay_t *anjay,
+                                        anjay_transport_set_t set) {
+    return (anjay_transport_set_t) {
+        .udp = set.udp,
+        .tcp = set.tcp
+    };
+}
+
+bool _anjay_socket_transport_included(anjay_transport_set_t set,
+                                      anjay_socket_transport_t transport) {
+    switch (transport) {
+    case ANJAY_SOCKET_TRANSPORT_UDP:
+        return set.udp;
+    case ANJAY_SOCKET_TRANSPORT_TCP:
+        return set.tcp;
+    }
+    AVS_UNREACHABLE("Invalid transport");
+    return false;
+}
+
+bool _anjay_socket_transport_is_online(anjay_t *anjay,
+                                       anjay_socket_transport_t transport) {
+    return _anjay_socket_transport_included(anjay->online_transports,
+                                            transport);
+}
+
+bool anjay_transport_is_offline(anjay_t *anjay,
+                                anjay_transport_set_t transport_set) {
+    return transport_set_empty(transport_set_intersection(
+            anjay->online_transports, transport_set));
+}
+
+int anjay_transport_enter_offline(anjay_t *anjay,
+                                  anjay_transport_set_t transport_set) {
+    return anjay_transport_set_online(
+            anjay,
+            transport_set_intersection(anjay->online_transports,
+                                       transport_set_not(transport_set)));
+}
+
+int anjay_transport_exit_offline(anjay_t *anjay,
+                                 anjay_transport_set_t transport_set) {
+    return anjay_transport_set_online(
+            anjay,
+            transport_set_union(anjay->online_transports, transport_set));
+}
+
+int anjay_transport_set_online(anjay_t *anjay,
+                               anjay_transport_set_t transport_set) {
+    anjay_transport_set_t orig_online_transports = anjay->online_transports;
+    anjay->online_transports =
+            _anjay_transport_set_remove_unavailable(anjay, transport_set);
+    bool reload_was_scheduled = !!anjay->reload_servers_sched_job_handle;
+    int result = _anjay_schedule_reload_servers(anjay);
+#ifdef ANJAY_WITH_DOWNLOADER
+    if (!result
+            && (result = _anjay_downloader_sync_online_transports(
+                        &anjay->downloader))
+            && !reload_was_scheduled) {
+        avs_sched_del(&anjay->reload_servers_sched_job_handle);
+    }
+#else  // ANJAY_WITH_DOWNLOADER
+    (void) reload_was_scheduled;
+#endif // ANJAY_WITH_DOWNLOADER
+    if (result) {
+        anjay->online_transports = orig_online_transports;
+    }
+    return result;
+}
+
 /**
  * Schedules reconnection of all servers, and even downloader sockets. This is
  * basically:
@@ -245,23 +355,34 @@ int _anjay_schedule_refresh_server(anjay_server_info_t *server,
  * - Calls _anjay_downloader_sched_reconnect_all() to reconnect downloader
  *   sockets
  */
-int anjay_schedule_reconnect(anjay_t *anjay) {
-    int result = _anjay_schedule_reload_servers(anjay);
+int anjay_transport_schedule_reconnect(anjay_t *anjay,
+                                       anjay_transport_set_t transport_set) {
+    int result = anjay_transport_exit_offline(anjay, transport_set);
     if (result) {
         return result;
     }
-    anjay->offline = false;
     AVS_LIST(anjay_server_info_t) server;
     AVS_LIST_FOREACH(server, anjay->servers->servers) {
-        _anjay_connection_suspend((anjay_connection_ref_t) {
-            .server = server,
-            .conn_type = ANJAY_CONNECTION_UNSET
-        });
+        anjay_connection_type_t conn_type;
+        ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+            const anjay_connection_ref_t ref = {
+                .server = server,
+                .conn_type = conn_type
+            };
+            anjay_server_connection_t *connection =
+                    _anjay_get_server_connection(ref);
+            if (_anjay_connection_internal_get_socket(connection)
+                    && _anjay_socket_transport_included(
+                               transport_set, connection->transport)) {
+                _anjay_connection_suspend(ref);
+            }
+        }
     }
     result = _anjay_servers_sched_reactivate_all_given_up(anjay);
 #ifdef ANJAY_WITH_DOWNLOADER
     if (!result) {
-        result = _anjay_downloader_sched_reconnect_all(&anjay->downloader);
+        result = _anjay_downloader_sched_reconnect(&anjay->downloader,
+                                                   transport_set);
     }
 #endif // ANJAY_WITH_DOWNLOADER
     return result;

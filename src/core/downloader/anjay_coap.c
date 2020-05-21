@@ -62,6 +62,8 @@ typedef struct {
     avs_coap_ctx_t *coap;
 
     avs_sched_handle_t job_start;
+    bool aborting;
+    bool reconnecting;
 } anjay_coap_download_ctx_t;
 
 typedef struct {
@@ -131,7 +133,15 @@ static inline bool etag_matches(const avs_coap_etag_t *a,
 
 static void abort_download_transfer(anjay_coap_download_ctx_t *dl_ctx,
                                     anjay_download_status_t status) {
+    if (dl_ctx->aborting) {
+        return;
+    }
+    // avoid all kinds of situations in which abort_download_transfer() may be
+    // called more than once which would lead to use-after-free.
+    dl_ctx->aborting = true;
+
     avs_coap_exchange_cancel(dl_ctx->coap, dl_ctx->exchange_id);
+    assert(!avs_coap_exchange_id_valid(dl_ctx->exchange_id));
 
     AVS_LIST(anjay_download_ctx_t) *dl_ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(dl_ctx->dl, dl_ctx->common.id);
@@ -148,14 +158,17 @@ handle_coap_response(avs_coap_ctx_t *ctx,
                      avs_error_t err,
                      void *arg) {
     (void) ctx;
-    if (result == AVS_COAP_CLIENT_REQUEST_CANCEL) {
-        return;
-    }
-
     anjay_coap_download_ctx_t *dl_ctx = (anjay_coap_download_ctx_t *) arg;
 
     assert(dl_ctx->exchange_id.value == id.value);
     (void) id;
+    if (result != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
+        // The exchange is being finished one way or another, so let's set the
+        // exchange_id field so that it can be used to check if there is an
+        // ongoing exchange or not (it is checked in suspend_coap_transfer()
+        // and reconnect_coap_transfer()).
+        dl_ctx->exchange_id = AVS_COAP_EXCHANGE_ID_INVALID;
+    }
 
     switch (result) {
     case AVS_COAP_CLIENT_REQUEST_OK:
@@ -231,7 +244,10 @@ handle_coap_response(avs_coap_ctx_t *ctx,
         break;
     }
     case AVS_COAP_CLIENT_REQUEST_CANCEL:
-        AVS_UNREACHABLE("This case shall already be handler above.");
+        dl_log(DEBUG, _("download request canceled"));
+        if (!dl_ctx->reconnecting) {
+            abort_download_transfer(dl_ctx, _anjay_download_status_aborted());
+        }
         break;
     }
 }
@@ -246,16 +262,16 @@ static void handle_coap_message(anjay_downloader_t *dl,
             ((anjay_coap_download_ctx_t *) *ctx_ptr)->coap, NULL, NULL);
 }
 
-static int get_coap_socket(anjay_downloader_t *dl,
-                           anjay_download_ctx_t *ctx,
-                           avs_net_socket_t **out_socket,
-                           anjay_socket_transport_t *out_transport) {
+static avs_net_socket_t *get_coap_socket(anjay_downloader_t *dl,
+                                         anjay_download_ctx_t *ctx) {
     (void) dl;
-    if (!(*out_socket = ((anjay_coap_download_ctx_t *) ctx)->socket)) {
-        return -1;
-    }
-    *out_transport = ANJAY_SOCKET_TRANSPORT_UDP;
-    return 0;
+    return ((anjay_coap_download_ctx_t *) ctx)->socket;
+}
+
+static anjay_socket_transport_t
+get_coap_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
+    (void) dl;
+    return ((anjay_coap_download_ctx_t *) ctx)->transport;
 }
 
 #    ifdef ANJAY_TEST
@@ -301,10 +317,11 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
     AVS_LIST(anjay_download_ctx_t) *dl_ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!dl_ctx_ptr) {
-        dl_log(DEBUG, _("download id = ") "%" PRIuPTR _("expired"), id);
+        dl_log(DEBUG, _("download id = ") "%" PRIuPTR _(" expired"), id);
         return;
     }
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *dl_ctx_ptr;
+    ctx->reconnecting = false;
 
     avs_error_t err;
     avs_coap_options_t options;
@@ -312,7 +329,8 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
     const size_t block_size = initial_block2_option_size(ctx, code);
     if (avs_is_err((err = avs_coap_options_dynamic_init(&options)))) {
         dl_log(ERROR,
-               _("download id = ") "%" PRIuPTR _("cannot start: out of memory"),
+               _("download id = ") "%" PRIuPTR _(
+                       " cannot start: out of memory"),
                id);
         goto end;
     }
@@ -349,6 +367,7 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
         goto end;
     }
 
+    assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
     err = avs_coap_client_send_async_request(ctx->coap, &ctx->exchange_id,
                                              &(avs_coap_request_header_t) {
                                                  .code = code,
@@ -370,6 +389,7 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
     anjay_t *anjay = _anjay_downloader_get_anjay(ctx->dl);
 
     _anjay_coap_ctx_cleanup(anjay, &ctx->coap);
+    assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
 
     switch (ctx->transport) {
 #    ifdef WITH_AVS_COAP_UDP
@@ -407,10 +427,34 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
     return err;
 }
 
-static inline avs_error_t shutdown_and_close(avs_net_socket_t *socket) {
-    avs_error_t err = avs_net_socket_shutdown(socket);
-    avs_error_t close_err = avs_net_socket_close(socket);
-    return avs_is_err(err) ? err : close_err;
+static void suspend_coap_transfer(anjay_downloader_t *dl,
+                                  anjay_download_ctx_t *ctx_) {
+    (void) dl;
+    anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) ctx_;
+    ctx->reconnecting = true;
+    avs_sched_del(&ctx->job_start);
+    if (avs_coap_exchange_id_valid(ctx->exchange_id)) {
+        assert(ctx->coap);
+        avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
+        assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
+    }
+    avs_net_socket_shutdown(ctx->socket);
+    // not calling close because that might clean up remote hostname and
+    // port fields that will be necessary for reconnection
+}
+
+static avs_error_t sched_download_resumption(anjay_downloader_t *dl,
+                                             anjay_coap_download_ctx_t *ctx) {
+    anjay_t *anjay = _anjay_downloader_get_anjay(dl);
+    if (AVS_SCHED_NOW(anjay->sched, &ctx->job_start, start_download_job,
+                      &ctx->common.id, sizeof(ctx->common.id))) {
+        dl_log(WARNING,
+               _("could not schedule resumption for download id "
+                 "= ") "%" PRIuPTR,
+               ctx->common.id);
+        return avs_errno(AVS_ENOMEM);
+    }
+    return AVS_OK;
 }
 
 static avs_error_t
@@ -419,6 +463,8 @@ reconnect_coap_transfer(anjay_downloader_t *dl,
     (void) dl;
     (void) ctx_ptr;
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
+    ctx->reconnecting = true;
+
     char hostname[ANJAY_MAX_URL_HOSTNAME_SIZE];
     char port[ANJAY_MAX_URL_PORT_SIZE];
 
@@ -427,7 +473,8 @@ reconnect_coap_transfer(anjay_downloader_t *dl,
                             ctx->socket, hostname, sizeof(hostname))))
             || avs_is_err((err = avs_net_socket_get_remote_port(
                                    ctx->socket, port, sizeof(port))))
-            || avs_is_err((err = shutdown_and_close(ctx->socket)))
+            || ((void) avs_net_socket_shutdown(ctx->socket), 0)
+            || ((void) avs_net_socket_close(ctx->socket), 0)
             || avs_is_err((err = avs_net_socket_connect(ctx->socket, hostname,
                                                         port)))) {
         dl_log(WARNING,
@@ -438,20 +485,12 @@ reconnect_coap_transfer(anjay_downloader_t *dl,
         // A new DTLS session requires resetting the CoAP context.
         // If we manage to resume the session, we can simply continue sending
         // retransmissions as if nothing happened.
-        if (!_anjay_was_session_resumed(ctx->socket)) {
-            if (avs_is_err((err = reset_coap_ctx(ctx)))) {
-                return err;
-            }
-
-            anjay_t *anjay = _anjay_downloader_get_anjay(dl);
-            if (AVS_SCHED_NOW(anjay->sched, &ctx->job_start, start_download_job,
-                              &ctx->common.id, sizeof(ctx->common.id))) {
-                dl_log(WARNING,
-                       _("could not schedule resumption for download id "
-                         "= ") "%" PRIuPTR,
-                       ctx->common.id);
-                return avs_errno(AVS_ENOMEM);
-            }
+        if (!_anjay_was_session_resumed(ctx->socket)
+                && avs_is_err((err = reset_coap_ctx(ctx)))) {
+            return err;
+        }
+        if (!avs_coap_exchange_id_valid(ctx->exchange_id)) {
+            return sched_download_resumption(dl, ctx);
         }
     }
     return AVS_OK;
@@ -475,8 +514,10 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     avs_error_t err = AVS_OK;
     static const anjay_download_ctx_vtable_t VTABLE = {
         .get_socket = get_coap_socket,
+        .get_socket_transport = get_coap_socket_transport,
         .handle_packet = handle_coap_message,
         .cleanup = cleanup_coap_transfer,
+        .suspend = suspend_coap_transfer,
         .reconnect = reconnect_coap_transfer
     };
     ctx->common.vtable = &VTABLE;
@@ -502,72 +543,75 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         goto error;
     }
 
-    ssl_config = (avs_net_ssl_configuration_t) {
-        .version = anjay->dtls_version,
-        .security = cfg->security_config.security_info,
-        .session_resumption_buffer = ctx->dtls_session_buffer,
-        .session_resumption_buffer_size = sizeof(ctx->dtls_session_buffer),
-        .ciphersuites = cfg->security_config.tls_ciphersuites.num_ids
-                                ? cfg->security_config.tls_ciphersuites
-                                : anjay->default_tls_ciphersuites,
-        .backend_configuration = anjay->socket_config,
-        .prng_ctx = anjay->prng_ctx.ctx
-    };
-    ssl_config.backend_configuration.reuse_addr = 1;
-    ssl_config.backend_configuration.preferred_endpoint =
-            &ctx->preferred_endpoint;
+    {
+        ssl_config = (avs_net_ssl_configuration_t) {
+            .version = anjay->dtls_version,
+            .security = cfg->security_config.security_info,
+            .session_resumption_buffer = ctx->dtls_session_buffer,
+            .session_resumption_buffer_size = sizeof(ctx->dtls_session_buffer),
+            .ciphersuites = cfg->security_config.tls_ciphersuites.num_ids
+                                    ? cfg->security_config.tls_ciphersuites
+                                    : anjay->default_tls_ciphersuites,
+            .backend_configuration = anjay->socket_config,
+            .prng_ctx = anjay->prng_ctx.ctx
+        };
+        ssl_config.backend_configuration.reuse_addr = 1;
+        ssl_config.backend_configuration.preferred_endpoint =
+                &ctx->preferred_endpoint;
 
-    if (!transport_info->socket_type) {
-        dl_log(ERROR,
-               _("URI scheme ") "%s" _(" uses a non-IP transport, which is not "
-                                       "supported for downloads"),
-               transport_info->uri_scheme);
-        err = avs_errno(AVS_EPROTONOSUPPORT);
-        goto error;
-    }
+        if (!transport_info->socket_type) {
+            dl_log(ERROR,
+                   _("URI scheme ") "%s" _(
+                           " uses a non-IP transport, which is not "
+                           "supported for downloads"),
+                   transport_info->uri_scheme);
+            err = avs_errno(AVS_EPROTONOSUPPORT);
+            goto error;
+        }
 
-    assert(transport_info->security != ANJAY_TRANSPORT_SECURITY_UNDEFINED);
+        assert(transport_info->security != ANJAY_TRANSPORT_SECURITY_UNDEFINED);
 
-    // Downloader sockets MUST NOT reuse the same local port as LwM2M
-    // sockets. If they do, and the client attempts to download anything
-    // from the same host:port as is used by an LwM2M server, we will get
-    // two sockets with identical local/remote host/port tuples. Depending
-    // on the socket implementation, we may not be able to create such
-    // socket, packets might get duplicated between these "identical"
-    // sockets, or we may get some kind of load-balancing behavior. In the
-    // last case, the client would randomly handle or ignore LwM2M requests
-    // and CoAP download responses.
-    switch (*transport_info->socket_type) {
-    case AVS_NET_TCP_SOCKET:
-        err = avs_net_tcp_socket_create(&ctx->socket,
-                                        &ssl_config.backend_configuration);
-        break;
-    case AVS_NET_UDP_SOCKET:
-        err = avs_net_udp_socket_create(&ctx->socket,
-                                        &ssl_config.backend_configuration);
-        break;
-    case AVS_NET_SSL_SOCKET:
-        err = avs_net_ssl_socket_create(&ctx->socket, &ssl_config);
-        break;
-    case AVS_NET_DTLS_SOCKET:
-        err = avs_net_dtls_socket_create(&ctx->socket, &ssl_config);
-        break;
-    default:
-        err = avs_errno(AVS_EPROTONOSUPPORT);
-        break;
-    }
-    if (avs_is_err(err)) {
-        dl_log(ERROR, _("could not create CoAP socket"));
-    } else if (avs_is_err((err = avs_net_socket_connect(ctx->socket,
-                                                        ctx->uri.host,
-                                                        ctx->uri.port)))) {
-        dl_log(ERROR, _("could not connect CoAP socket"));
-        _anjay_socket_cleanup(anjay, &ctx->socket);
-    }
-    if (!ctx->socket) {
-        assert(avs_is_err(err));
-        dl_log(ERROR, _("could not create CoAP socket"));
-        goto error;
+        // Downloader sockets MUST NOT reuse the same local port as LwM2M
+        // sockets. If they do, and the client attempts to download anything
+        // from the same host:port as is used by an LwM2M server, we will get
+        // two sockets with identical local/remote host/port tuples. Depending
+        // on the socket implementation, we may not be able to create such
+        // socket, packets might get duplicated between these "identical"
+        // sockets, or we may get some kind of load-balancing behavior. In the
+        // last case, the client would randomly handle or ignore LwM2M requests
+        // and CoAP download responses.
+        switch (*transport_info->socket_type) {
+        case AVS_NET_TCP_SOCKET:
+            err = avs_net_tcp_socket_create(&ctx->socket,
+                                            &ssl_config.backend_configuration);
+            break;
+        case AVS_NET_UDP_SOCKET:
+            err = avs_net_udp_socket_create(&ctx->socket,
+                                            &ssl_config.backend_configuration);
+            break;
+        case AVS_NET_SSL_SOCKET:
+            err = avs_net_ssl_socket_create(&ctx->socket, &ssl_config);
+            break;
+        case AVS_NET_DTLS_SOCKET:
+            err = avs_net_dtls_socket_create(&ctx->socket, &ssl_config);
+            break;
+        default:
+            err = avs_errno(AVS_EPROTONOSUPPORT);
+            break;
+        }
+        if (avs_is_err(err)) {
+            dl_log(ERROR, _("could not create CoAP socket"));
+        } else if (avs_is_err((err = avs_net_socket_connect(ctx->socket,
+                                                            ctx->uri.host,
+                                                            ctx->uri.port)))) {
+            dl_log(ERROR, _("could not connect CoAP socket"));
+            _anjay_socket_cleanup(anjay, &ctx->socket);
+        }
+        if (!ctx->socket) {
+            assert(avs_is_err(err));
+            dl_log(ERROR, _("could not create CoAP socket"));
+            goto error;
+        }
     }
 
     ctx->common.id = id;

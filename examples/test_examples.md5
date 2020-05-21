@@ -39,9 +39,9 @@ e658a3387f1256c2d02ced80a1a96d67	examples/tutorial/firmware-update/basic-impleme
 82f4595ee44aca15dcb70b77e3394838	examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
 826212134c1d964b0402de668396bd12	examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 bccdb671e486777e5b3d8543814f9402	include_public/anjay/attr_storage.h
-d5ecc2bbb93b0f8f7ecb51025e4f8a47	include_public/anjay/core.h
+9909723fde38a6965891569e7bee41a1	include_public/anjay/core.h
 5352bae6279830eeffcdac01c86ae3e2	include_public/anjay/dm.h
-a86fc6f456bb84eb958466ba92798c79	include_public/anjay/download.h
-79dec3f836f2c42357683d3ba44e0571	include_public/anjay/fw_update.h
+e9b09477e35337de7c3002994bbf1831	include_public/anjay/download.h
+ac53664e14610141803a50a4dfac388d	include_public/anjay/fw_update.h
 f2993232076286f0008878ff3a962528	include_public/anjay/io.h
 0841e2bd09c34593d018e7711e97339e	src/modules/access_control/anjay_access_control_handlers.c

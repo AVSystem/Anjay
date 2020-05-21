@@ -240,18 +240,18 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
         }
         encoded[stream_bytes_read] = '\0';
         if (stream_bytes_read % 4) {
-            return -1;
+            return ANJAY_ERR_BAD_REQUEST;
         }
         if (has_valid_padding(encoded, stream_bytes_read,
                               stream_msg_finished)) {
-            return -1;
+            return ANJAY_ERR_BAD_REQUEST;
         }
         assert(ctx->num_bytes_cached == 0);
         size_t num_decoded;
         if (avs_base64_decode_strict(&num_decoded,
                                      (uint8_t *) ctx->bytes_cached,
                                      sizeof(ctx->bytes_cached), encoded)) {
-            return -1;
+            return ANJAY_ERR_BAD_REQUEST;
         }
         ctx->num_bytes_cached = num_decoded;
         text_get_some_bytes_cache_flush(ctx, &current, &buf_size);

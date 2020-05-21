@@ -16,11 +16,11 @@
 
 import concurrent.futures
 import contextlib
-import os
-import time
 import http.server
+import os
+import socket
 import threading
-import tempfile
+import time
 
 from framework.coap_file_server import CoapFileServerThread
 from framework.lwm2m_test import *
@@ -281,7 +281,7 @@ class CoapDownloadAbortsOnUnexpectedResponse(CoapDownload.Test):
             self.assertNotEqual(f.read(), DUMMY_PAYLOAD)
 
 
-class CoapDownloadResumption(CoapDownload.ReconnectTest):
+class CoapDownloadReconnect(CoapDownload.ReconnectTest):
     def runTest(self):
         with self.downloadContext('/test') as ctx:
             ctx.transferData(len(DUMMY_PAYLOAD) / 2)
@@ -299,7 +299,28 @@ class CoapDownloadResumption(CoapDownload.ReconnectTest):
             ctx.transferData()
 
 
-class CoapsDownloadResumption(CoapDownload.ReconnectTest):
+class CoapDownloadOffline(CoapDownload.ReconnectTest):
+    def runTest(self):
+        with self.downloadContext('/test') as ctx:
+            ctx.transferData(len(DUMMY_PAYLOAD) / 2)
+
+            req = self.file_server.recv()
+            self.assertMsgEqual(CoapGet('/test', options=[
+                coap.Option.BLOCK2(seq_num=ctx.seq_num, block_size=ctx.block_size, has_more=0)]), req)
+
+            previous_port = self.file_server.get_remote_addr()[1]
+            self.file_server.reset()
+            self.communicate('enter-offline')
+            with self.assertRaises(socket.timeout):
+                self.file_server.listen(timeout_s=5)
+            self.communicate('exit-offline')
+            self.file_server.listen()
+            self.assertNotEqual(self.file_server.get_remote_addr()[1], previous_port)
+
+            ctx.transferData()
+
+
+class CoapsDownloadReconnect(CoapDownload.ReconnectTest):
     PSK_IDENTITY = '1d3nt17y'
     PSK_KEY = 's3cr3tk3y'
 
@@ -319,6 +340,53 @@ class CoapsDownloadResumption(CoapDownload.ReconnectTest):
             self.communicate('reconnect')
             self.file_server.listen()
             self.assertNotEqual(self.file_server.get_remote_addr()[1], previous_port)
+
+            ctx.transferData()
+
+
+class CoapsDownloadOffline(CoapDownload.ReconnectTest):
+    PSK_IDENTITY = '1d3nt17y'
+    PSK_KEY = 's3cr3tk3y'
+
+    def setUp(self):
+        super().setUp(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY))
+
+    def runTest(self):
+        with self.downloadContext('/test', self.PSK_IDENTITY, self.PSK_KEY) as ctx:
+            ctx.transferData(len(DUMMY_PAYLOAD) / 2)
+
+            req = self.file_server.recv()
+            self.assertMsgEqual(CoapGet('/test', options=[
+                coap.Option.BLOCK2(seq_num=ctx.seq_num, block_size=ctx.block_size, has_more=0)]), req)
+
+            previous_port = self.file_server.get_remote_addr()[1]
+            self.file_server.reset()
+            self.communicate('enter-offline')
+            with self.assertRaises(socket.timeout):
+                self.file_server.listen(timeout_s=5)
+            self.communicate('exit-offline')
+            self.file_server.listen()
+            self.assertNotEqual(self.file_server.get_remote_addr()[1], previous_port)
+
+            ctx.transferData()
+
+
+class CoapsDownloadUnaffectedByTcpOffline(CoapDownload.ReconnectTest):
+    PSK_IDENTITY = '1d3nt17y'
+    PSK_KEY = 's3cr3tk3y'
+
+    def setUp(self):
+        super().setUp(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY))
+
+    def runTest(self):
+        with self.downloadContext('/test', self.PSK_IDENTITY, self.PSK_KEY) as ctx:
+            ctx.transferData(len(DUMMY_PAYLOAD) / 2)
+
+            req = self.file_server.recv()
+            self.assertMsgEqual(CoapGet('/test', options=[
+                coap.Option.BLOCK2(seq_num=ctx.seq_num, block_size=ctx.block_size, has_more=0)]), req)
+
+            self.communicate('enter-offline tcp')
 
             ctx.transferData()
 
@@ -348,13 +416,14 @@ class HttpDownload:
             self.server_thread = threading.Thread(target=lambda: self.http_server.serve_forever())
             self.server_thread.start()
 
-        def tearDown(self):
+        def tearDown(self, *args, **kwargs):
             try:
-                super().tearDown()
+                super().tearDown(*args, **kwargs)
             finally:
                 self.cv_notify_all()
                 self.http_server.shutdown()
                 self.server_thread.join()
+
 
 class HttpSinglePacketDownloadDoesNotHangIfRemoteServerDoesntCloseConnection(HttpDownload.Test):
     CONTENT = b'foo'

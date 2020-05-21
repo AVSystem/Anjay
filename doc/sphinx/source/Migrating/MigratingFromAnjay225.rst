@@ -80,6 +80,7 @@ Other changes
   * ``MAX_OBSERVABLE_RESOURCE_SIZE``
   * ``WITH_ATTR_STORAGE``
 
+
 Changes in avs_coap
 -------------------
 

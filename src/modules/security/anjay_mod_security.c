@@ -389,7 +389,6 @@ static int sec_instance_create(anjay_t *anjay,
     }
 
     created->iid = iid;
-    created->ssid = iid;
 
     AVS_LIST(sec_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {

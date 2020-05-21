@@ -178,6 +178,22 @@ class RegisterTest(RegisterUdp.TestCase):
             print(self.serv.recv(timeout_s=6))
 
 
+class RegisterCheckOngoingRegistrations(RegisterUdp.TestCase):
+    def runTest(self):
+        self.assertTrue(self.ongoing_registration_exists())
+
+        pkt = self.serv.recv()
+        self.assertMsgEqual(
+            Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,),
+                          content=expected_content()), pkt)
+
+        self.assertTrue(self.ongoing_registration_exists())
+
+        self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
+
+        self.assertFalse(self.ongoing_registration_exists())
+
+
 class RegisterWithLostSeparateAck(RegisterUdp.TestCase):
     def runTest(self):
         # should send Register request at start

@@ -75,6 +75,29 @@ int anjay_server_object_add_instance(anjay_t *anjay,
 void anjay_server_object_purge(anjay_t *anjay);
 
 /**
+ * Retrieves a list of SSIDs currently present in the Server object. The SSIDs
+ * are NOT guaranteed to be returned in any particular order. Returned list may
+ * not be freed nor modified.
+ *
+ * Attempting to call this function if @ref anjay_server_object_install has not
+ * been previously successfully called on the same Anjay instance yields
+ * undefined behavior.
+ *
+ * The returned list pointer shall be considered invalidated by any call to @ref
+ * anjay_sched_run, @ref anjay_serve, @ref anjay_server_object_add_instance,
+ * @ref anjay_server_object_purge, @ref anjay_server_object_restore, or, if
+ * called from within some callback handler, on return from that handler.
+ *
+ * If a transaction on the Server object is currently ongoing (e.g., during
+ * Bootstrap), last known state from before the transaction will be returned.
+ *
+ * @param anjay Anjay instance with Server Object installed.
+ *
+ * @returns A list of known SSIDs on success, NULL when the object is empty.
+ */
+AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay);
+
+/**
  * Dumps Server Object Instance into the @p out_stream .
  *
  * @param anjay         Anjay instance with Server Object installed.

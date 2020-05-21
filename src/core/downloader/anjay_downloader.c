@@ -102,7 +102,16 @@ void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
     (*ctx)->common.on_download_finished(_anjay_downloader_get_anjay(dl), status,
                                         (*ctx)->common.user_data);
 
+    avs_sched_del(&(*ctx)->common.reconnect_job_handle);
     cleanup_transfer(ctx);
+}
+
+static void suspend_transfer(anjay_downloader_t *dl,
+                             anjay_download_ctx_t *ctx) {
+    assert(dl);
+    assert(ctx);
+    assert(ctx->common.vtable);
+    ctx->common.vtable->suspend(dl, ctx);
 }
 
 static void reconnect_transfer(anjay_downloader_t *dl,
@@ -120,41 +129,37 @@ static void reconnect_transfer(anjay_downloader_t *dl,
 
 void _anjay_downloader_cleanup(anjay_downloader_t *dl) {
     assert(dl);
-    avs_sched_del(&dl->reconnect_job_handle);
     while (dl->downloads) {
         _anjay_downloader_abort_transfer(dl, &dl->downloads,
                                          _anjay_download_status_aborted());
     }
 }
 
-static int get_ctx_socket(anjay_downloader_t *dl,
-                          anjay_download_ctx_t *ctx,
-                          avs_net_socket_t **out_socket,
-                          anjay_socket_transport_t *out_transport) {
+static avs_net_socket_t *get_ctx_socket(anjay_downloader_t *dl,
+                                        anjay_download_ctx_t *ctx) {
     assert(dl);
     assert(ctx);
     assert(ctx->common.vtable);
-    int result =
-            ctx->common.vtable->get_socket(dl, ctx, out_socket, out_transport);
-    if (!result) {
-        assert(*out_socket);
-    }
-    return result;
+    return ctx->common.vtable->get_socket(dl, ctx);
+}
+
+static anjay_socket_transport_t
+get_ctx_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
+    assert(dl);
+    assert(ctx);
+    assert(ctx->common.vtable);
+    return ctx->common.vtable->get_socket_transport(dl, ctx);
 }
 
 static AVS_LIST(anjay_download_ctx_t) *
 find_ctx_ptr_by_socket(anjay_downloader_t *dl, avs_net_socket_t *socket) {
+    assert(socket);
     AVS_LIST(anjay_download_ctx_t) *ctx;
     AVS_LIST_FOREACH_PTR(ctx, &dl->downloads) {
-        avs_net_socket_t *ctx_socket = NULL;
-        if (!get_ctx_socket(dl, *ctx, &ctx_socket,
-                            &(anjay_socket_transport_t) {
-                                    (anjay_socket_transport_t) 0 })
-                && ctx_socket == socket) {
+        if (get_ctx_socket(dl, *ctx) == socket) {
             return ctx;
         }
     }
-
     return NULL;
 }
 
@@ -164,9 +169,8 @@ int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
     AVS_LIST(anjay_download_ctx_t) dl_ctx;
 
     AVS_LIST_FOREACH(dl_ctx, dl->downloads) {
-        avs_net_socket_t *socket = NULL;
-        anjay_socket_transport_t transport;
-        if (!get_ctx_socket(dl, dl_ctx, &socket, &transport)) {
+        avs_net_socket_t *socket = get_ctx_socket(dl, dl_ctx);
+        if (_anjay_socket_is_online(socket)) {
             AVS_LIST(anjay_socket_entry_t) elem =
                     AVS_LIST_NEW_ELEMENT(anjay_socket_entry_t);
             if (!elem) {
@@ -175,7 +179,7 @@ int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
             }
 
             elem->socket = socket;
-            elem->transport = transport;
+            elem->transport = get_ctx_socket_transport(dl, dl_ctx);
             elem->ssid = ANJAY_SSID_ANY;
             elem->queue_mode = false;
             AVS_LIST_INSERT(&sockets, elem);
@@ -239,28 +243,54 @@ static bool starts_with(const char *haystack, const char *needle) {
 }
 #    endif // ANJAY_WITH_HTTP_DOWNLOAD
 
+static avs_error_t find_downloader_ctx_constructor(
+        const char *url,
+        anjay_downloader_ctx_constructor_t **out_constructor,
+        anjay_socket_transport_t *out_transport) {
+#    ifdef ANJAY_WITH_COAP_DOWNLOAD
+    const anjay_transport_info_t *transport_info =
+            _anjay_transport_info_by_uri_scheme(url);
+    if (transport_info != NULL) {
+        *out_constructor = _anjay_downloader_coap_ctx_new;
+        *out_transport = transport_info->transport;
+        return AVS_OK;
+    }
+#    endif // ANJAY_WITH_COAP_DOWNLOAD
+#    ifdef ANJAY_WITH_HTTP_DOWNLOAD
+    if (starts_with(url, "http")) {
+        *out_constructor = _anjay_downloader_http_ctx_new;
+        *out_transport = ANJAY_SOCKET_TRANSPORT_TCP;
+        return AVS_OK;
+    }
+#    endif // ANJAY_WITH_HTTP_DOWNLOAD
+    dl_log(WARNING, _("unrecognized protocol in URL: ") "%s", url);
+    *out_constructor = NULL;
+    return avs_errno(AVS_EPROTONOSUPPORT);
+}
+
 avs_error_t _anjay_downloader_download(anjay_downloader_t *dl,
                                        anjay_download_handle_t *out_handle,
                                        const anjay_download_config_t *config) {
     assert(&_anjay_downloader_get_anjay(dl)->downloader == dl);
     assert(out_handle);
 
+    anjay_downloader_ctx_constructor_t *constructor = NULL;
+    anjay_socket_transport_t transport;
+    avs_error_t err = find_downloader_ctx_constructor(config->url, &constructor,
+                                                      &transport);
+
     AVS_LIST(anjay_download_ctx_t) dl_ctx = NULL;
-    avs_error_t err = avs_errno(AVS_EPROTONOSUPPORT);
-#    ifdef ANJAY_WITH_COAP_DOWNLOAD
-    if (_anjay_transport_info_by_uri_scheme(config->url) != NULL) {
-        err = _anjay_downloader_coap_ctx_new(dl, &dl_ctx, config,
-                                             find_free_id(dl));
-    } else
-#    endif // ANJAY_WITH_COAP_DOWNLOAD
-#    ifdef ANJAY_WITH_HTTP_DOWNLOAD
-            if (starts_with(config->url, "http")) {
-        err = _anjay_downloader_http_ctx_new(dl, &dl_ctx, config,
-                                             find_free_id(dl));
-    } else
-#    endif // ANJAY_WITH_HTTP_DOWNLOAD
-    {
-        dl_log(WARNING, _("unrecognized protocol in URL: ") "%s", config->url);
+    if (avs_is_ok(err)) {
+        assert(constructor);
+        if (_anjay_socket_transport_included(
+                    _anjay_downloader_get_anjay(dl)->online_transports,
+                    transport)) {
+            err = constructor(dl, &dl_ctx, config, find_free_id(dl));
+        } else {
+            dl_log(WARNING, _("transport currently offline for URL: ") "%s",
+                   config->url);
+            err = avs_errno(AVS_ENODEV);
+        }
     }
 
     if (dl_ctx) {
@@ -269,9 +299,11 @@ avs_error_t _anjay_downloader_download(anjay_downloader_t *dl,
         assert(dl_ctx->common.id != INVALID_DOWNLOAD_ID);
         dl_log(INFO, _("download scheduled: ") "%s", config->url);
         *out_handle = (anjay_download_handle_t) dl_ctx->common.id;
-        err = AVS_OK;
+        return AVS_OK;
+    } else {
+        assert(avs_is_err(err));
+        return err;
     }
-    return err;
 }
 
 void _anjay_downloader_abort(anjay_downloader_t *dl,
@@ -289,24 +321,67 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
     }
 }
 
-static void reconnect_all_job(avs_sched_t *sched, const void *dummy) {
-    (void) dummy;
+static void reconnect_job(avs_sched_t *sched, const void *id_ptr) {
     anjay_t *anjay = _anjay_get_from_sched(sched);
-    AVS_LIST(anjay_download_ctx_t) *ctx_ptr;
-    AVS_LIST(anjay_download_ctx_t) helper;
-    AVS_LIST_DELETABLE_FOREACH_PTR(ctx_ptr, helper,
-                                   &anjay->downloader.downloads) {
+    uintptr_t id = *(const uintptr_t *) id_ptr;
+    AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
+            _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
+    if (!ctx_ptr) {
+        dl_log(DEBUG,
+               _("download id = ") "%" PRIuPTR _(" not found (expired?)"), id);
+        return;
+    }
+
+    if (_anjay_socket_transport_included(
+                anjay->online_transports,
+                get_ctx_socket_transport(&anjay->downloader, *ctx_ptr))) {
         reconnect_transfer(&anjay->downloader, ctx_ptr);
+    } else {
+        suspend_transfer(&anjay->downloader, *ctx_ptr);
     }
 }
 
-int _anjay_downloader_sched_reconnect_all(anjay_downloader_t *dl) {
-    if (dl->reconnect_job_handle) {
-        dl_log(DEBUG, _("reconnect already scheduled, ignoring"));
-        return 0;
-    }
+static int schedule_reconnect(anjay_downloader_t *dl,
+                              anjay_download_ctx_t *ctx) {
     return AVS_SCHED_NOW(_anjay_downloader_get_anjay(dl)->sched,
-                         &dl->reconnect_job_handle, reconnect_all_job, NULL, 0);
+                         &ctx->common.reconnect_job_handle, reconnect_job,
+                         &ctx->common.id, sizeof(ctx->common.id));
+}
+
+int _anjay_downloader_sched_reconnect(anjay_downloader_t *dl,
+                                      anjay_transport_set_t transport_set) {
+    int result = 0;
+    AVS_LIST(anjay_download_ctx_t) ctx;
+    AVS_LIST_FOREACH(ctx, dl->downloads) {
+        if (!ctx->common.reconnect_job_handle
+                && _anjay_socket_transport_included(
+                           transport_set, get_ctx_socket_transport(dl, ctx))) {
+            int partial_result = schedule_reconnect(dl, ctx);
+            if (!result && partial_result) {
+                result = partial_result;
+            }
+        }
+    }
+    return result;
+}
+
+int _anjay_downloader_sync_online_transports(anjay_downloader_t *dl) {
+    int result = 0;
+    AVS_LIST(anjay_download_ctx_t) ctx;
+    AVS_LIST_FOREACH(ctx, dl->downloads) {
+        if (!ctx->common.reconnect_job_handle
+                && _anjay_socket_transport_included(
+                           _anjay_downloader_get_anjay(dl)->online_transports,
+                           get_ctx_socket_transport(dl, ctx))
+                               != _anjay_socket_is_online(
+                                          get_ctx_socket(dl, ctx))) {
+            int partial_result = schedule_reconnect(dl, ctx);
+            if (!result && partial_result) {
+                result = partial_result;
+            }
+        }
+    }
+    return result;
 }
 
 #endif // ANJAY_WITH_DOWNLOADER

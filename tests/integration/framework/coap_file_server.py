@@ -30,11 +30,12 @@ from .lwm2m.messages import *
 class CoapFileServer:
     Resource = NamedTuple('Resource', [('etag', bytes), ('data', bytes)])
 
-    def __init__(self, coap_server: coap.Server):
+    def __init__(self, coap_server: coap.Server, binding='U'):
         self._resources = {}
         self._server = coap_server
         self.requests = []
         self.should_ignore_request = lambda _: False
+        self.binding = binding
 
     def set_resource(self,
                      path: str,
@@ -58,7 +59,11 @@ class CoapFileServer:
         else:
             raise TypeError('unexpected server type')
 
-        return '%s://127.0.0.1:%d%s' % (proto, self._server.get_listen_port(), path)
+        if self.binding == 'N':
+            return '%s+nidd://%s' % (proto, path)
+        else:
+            return '%s://127.0.0.1:%d%s' % (proto, self._server.get_listen_port(), path)
+
 
     def _recv_request(self, timeout_s):
         if self._server.get_remote_addr() is None:
@@ -69,9 +74,7 @@ class CoapFileServer:
 
         return self._server.recv(timeout_s=timeout_s)
 
-    def handle_request(self, timeout_s=5.0):
-        req = self._recv_request(timeout_s=timeout_s)
-
+    def handle_recvd_request(self, req):
         self.requests.append(req)
 
         if self.should_ignore_request(req):
@@ -113,6 +116,10 @@ class CoapFileServer:
 
         self._server.send(Lwm2mContent.matching(req)(content=content,
                                                      options=[res_block2, coap.Option.ETAG(resource.etag)]))
+
+
+    def handle_request(self, timeout_s=5.0):
+        self.handle_recvd_request(self._recv_request(timeout_s=timeout_s))
 
 
 class CoapFileServerThread(threading.Thread):

@@ -223,6 +223,21 @@ static inline int _anjay_dm_read_resource_i64(anjay_t *anjay,
     return bytes_read != sizeof(*out_value);
 }
 
+static inline int _anjay_dm_read_resource_u16(anjay_t *anjay,
+                                              const anjay_uri_path_t *path,
+                                              uint16_t *out_value) {
+    int64_t value;
+    int result = _anjay_dm_read_resource_i64(anjay, path, &value);
+    if (result) {
+        return result;
+    }
+    if (value < 0 || value >= UINT16_MAX) {
+        return -1;
+    }
+    *out_value = (uint16_t) value;
+    return 0;
+}
+
 static inline int _anjay_dm_read_resource_bool(anjay_t *anjay,
                                                const anjay_uri_path_t *path,
                                                bool *out_value) {
@@ -603,6 +618,9 @@ int _anjay_dm_transaction_include_object(
  */
 int _anjay_dm_transaction_finish(anjay_t *anjay, int result);
 
+bool _anjay_dm_transaction_object_included(
+        anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr);
+
 const anjay_dm_object_def_t *const *
 _anjay_dm_find_object_by_oid(anjay_t *anjay, anjay_oid_t oid);
 
@@ -641,6 +659,7 @@ int _anjay_dm_verify_instance_present(
 #define ANJAY_DM_OID_SECURITY 0
 #define ANJAY_DM_OID_SERVER 1
 #define ANJAY_DM_OID_ACCESS_CONTROL 2
+#define ANJAY_DM_OID_DEVICE 3
 #define ANJAY_DM_OID_FIRMWARE_UPDATE 5
 
 #define ANJAY_DM_RID_SECURITY_SERVER_URI 0
@@ -669,6 +688,9 @@ int _anjay_dm_verify_instance_present(
 #define ANJAY_DM_RID_ACCESS_CONTROL_OIID 1
 #define ANJAY_DM_RID_ACCESS_CONTROL_ACL 2
 #define ANJAY_DM_RID_ACCESS_CONTROL_OWNER 3
+
+#define ANJAY_DM_RID_DEVICE_FIRMWARE_VERSION 3
+#define ANJAY_DM_RID_DEVICE_SOFTWARE_VERSION 19
 
 /** NOTE: Returns ANJAY_SSID_BOOTSTRAP if there is no active connection. */
 anjay_ssid_t _anjay_dm_current_ssid(anjay_t *anjay);

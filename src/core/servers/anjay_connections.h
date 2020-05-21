@@ -64,12 +64,13 @@ typedef enum {
     ANJAY_SERVER_CONNECTION_STABLE,
 
     /**
-     * Attempt to refresh the connection failed. Possible causes include:
+     * Connection is offline. Possible causes include:
      * - failure to read connection configuration from the data model
      * - error when creating the socket
      * - error during the "connect" operation
+     * - none of the supported transports is available
      */
-    ANJAY_SERVER_CONNECTION_ERROR
+    ANJAY_SERVER_CONNECTION_OFFLINE
 } anjay_server_connection_state_t;
 
 /**
@@ -221,7 +222,11 @@ void _anjay_connection_internal_clean_socket(
 anjay_conn_session_token_t
 _anjay_connections_get_primary_session_token(anjay_connections_t *connections);
 
-bool _anjay_connection_is_online(anjay_server_connection_t *connection);
+static inline bool
+_anjay_connection_is_online(anjay_server_connection_t *connection) {
+    return _anjay_socket_is_online(
+            _anjay_connection_internal_get_socket(connection));
+}
 
 avs_error_t _anjay_server_connection_internal_bring_online(
         anjay_server_info_t *server,

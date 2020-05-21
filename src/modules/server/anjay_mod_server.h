@@ -38,22 +38,24 @@ typedef enum {
 } server_rid_t;
 
 typedef struct {
-    anjay_iid_t iid;
-    bool has_binding;
-    anjay_binding_mode_t binding;
     /* mandatory resources */
-    bool has_ssid;
     anjay_ssid_t ssid;
-    bool has_lifetime;
+    bool has_ssid;
+    anjay_binding_mode_t binding;
+    bool has_binding;
     int32_t lifetime;
-    bool has_default_min_period;
+    bool has_lifetime;
     int32_t default_min_period;
-    bool has_default_max_period;
+    bool has_default_min_period;
     int32_t default_max_period;
-    bool has_disable_timeout;
+    bool has_default_max_period;
     int32_t disable_timeout;
-    bool has_notification_storing;
+    bool has_disable_timeout;
     bool notification_storing;
+    bool has_notification_storing;
+
+    anjay_iid_t iid;
+
 } server_instance_t;
 
 typedef struct {
@@ -71,6 +73,8 @@ static inline void _anjay_serv_mark_modified(server_repr_t *repr) {
 static inline void _anjay_serv_clear_modified(server_repr_t *repr) {
     repr->modified_since_persist = false;
 }
+
+size_t _anjay_server_object_get_instances_count(anjay_t *anjay);
 
 #define server_log(level, ...) _anjay_log(server, level, __VA_ARGS__)
 

@@ -55,6 +55,12 @@ static int validate_instance(server_instance_t *it) {
                 it, _("missing mandatory 'Short Server ID' resource value"));
         return -1;
     }
+    if (it->ssid < 1 || it->ssid >= UINT16_MAX) {
+        LOG_VALIDATION_FAILED(
+                it, _("invalid 'Short Server ID' resource value: ") "%" PRIu16,
+                it->ssid);
+        return -1;
+    }
     if (!it->has_binding) {
         LOG_VALIDATION_FAILED(it,
                               _("missing mandatory 'Binding' resource value"));

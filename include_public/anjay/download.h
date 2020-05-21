@@ -22,6 +22,7 @@
 
 #include <avsystem/commons/avs_net.h>
 
+#include <anjay/anjay_config.h>
 #include <anjay/core.h>
 
 #ifdef __cplusplus
@@ -168,6 +169,7 @@ typedef struct anjay_download_config {
      * inherit parameters from Anjay.
      */
     avs_coap_udp_tx_params_t *coap_tx_params;
+
 } anjay_download_config_t;
 
 typedef void *anjay_download_handle_t;

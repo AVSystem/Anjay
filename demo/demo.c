@@ -33,6 +33,7 @@
 
 #include <unistd.h>
 
+#include <avsystem/commons/avs_base64.h>
 #include <avsystem/commons/avs_stream_file.h>
 
 #include <anjay/access_control.h>
@@ -228,8 +229,8 @@ static int add_access_entries(anjay_demo_t *demo,
                               const cmdline_args_t *cmdline_args) {
     const AVS_LIST(access_entry_t) it;
     AVS_LIST_FOREACH(it, cmdline_args->access_entries) {
-        if (anjay_access_control_set_acl(demo->anjay, it->oid, ANJAY_ID_INVALID,
-                                         it->ssid, ANJAY_ACCESS_MASK_CREATE)) {
+        if (anjay_access_control_set_acl(demo->anjay, it->oid, it->iid,
+                                         it->ssid, it->mask)) {
             return -1;
         }
     }
@@ -321,15 +322,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     demo->iosched = iosched_create();
     if (!demo->anjay || !demo->iosched
             || anjay_attr_storage_install(demo->anjay)
-            || anjay_access_control_install(demo->anjay)
-            || firmware_update_install(
-                       demo->anjay, demo->iosched, &demo->fw_update,
-                       cmdline_args->fw_updated_marker_path,
-                       fw_security_info_ptr,
-                       cmdline_args->fwu_tx_params_modified
-                               ? &cmdline_args->fwu_tx_params
-                               : NULL,
-                       cmdline_args->fw_update_delayed_result)) {
+            || anjay_access_control_install(demo->anjay)) {
         return -1;
     }
 
@@ -399,10 +392,23 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 
     demo_reload_servers(demo);
 
+    // Install Firmware Update Object at the end, because installed Device
+    // Object and Server Object's instances may be needed.
+    if (firmware_update_install(demo->anjay, demo->iosched, &demo->fw_update,
+                                cmdline_args->fw_updated_marker_path,
+                                fw_security_info_ptr,
+                                cmdline_args->fwu_tx_params_modified
+                                        ? &cmdline_args->fwu_tx_params
+                                        : NULL,
+                                cmdline_args->fw_update_delayed_result)) {
+        return -1;
+    }
+
     if (add_default_access_entries(demo)
             || add_access_entries(demo, cmdline_args)) {
         return -1;
     }
+
     if (cmdline_args->attr_storage_file) {
         avs_stream_t *data =
                 avs_stream_file_create(cmdline_args->attr_storage_file,

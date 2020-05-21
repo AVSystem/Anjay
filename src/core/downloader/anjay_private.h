@@ -29,13 +29,14 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define dl_log(...) _anjay_log(downloader, __VA_ARGS__)
 
 typedef struct {
-    int (*get_socket)(anjay_downloader_t *dl,
-                      anjay_download_ctx_t *ctx,
-                      avs_net_socket_t **out_socket,
-                      anjay_socket_transport_t *out_transport);
+    avs_net_socket_t *(*get_socket)(anjay_downloader_t *dl,
+                                    anjay_download_ctx_t *ctx);
+    anjay_socket_transport_t (*get_socket_transport)(anjay_downloader_t *dl,
+                                                     anjay_download_ctx_t *ctx);
     void (*handle_packet)(anjay_downloader_t *dl,
                           AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
     void (*cleanup)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    void (*suspend)(anjay_downloader_t *dl, anjay_download_ctx_t *ctx);
     avs_error_t (*reconnect)(anjay_downloader_t *dl,
                              AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
 } anjay_download_ctx_vtable_t;
@@ -44,6 +45,7 @@ typedef struct {
     const anjay_download_ctx_vtable_t *vtable;
 
     uintptr_t id;
+    avs_sched_handle_t reconnect_job_handle;
 
     anjay_download_next_block_handler_t *on_next_block;
     anjay_download_finished_handler_t *on_download_finished;
@@ -99,20 +101,18 @@ static inline anjay_download_status_t _anjay_download_status_aborted(void) {
     };
 }
 
+typedef avs_error_t
+anjay_downloader_ctx_constructor_t(anjay_downloader_t *dl,
+                                   AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
+                                   const anjay_download_config_t *cfg,
+                                   uintptr_t id);
+
 #ifdef ANJAY_WITH_COAP_DOWNLOAD
-avs_error_t
-_anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
-                               AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
-                               const anjay_download_config_t *cfg,
-                               uintptr_t id);
+anjay_downloader_ctx_constructor_t _anjay_downloader_coap_ctx_new;
 #endif // ANJAY_WITH_COAP_DOWNLOAD
 
 #ifdef ANJAY_WITH_HTTP_DOWNLOAD
-avs_error_t
-_anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
-                               AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
-                               const anjay_download_config_t *cfg,
-                               uintptr_t id);
+anjay_downloader_ctx_constructor_t _anjay_downloader_http_ctx_new;
 #endif // ANJAY_WITH_HTTP_DOWNLOAD
 
 VISIBILITY_PRIVATE_HEADER_END

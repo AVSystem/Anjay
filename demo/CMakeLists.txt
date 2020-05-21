@@ -59,7 +59,7 @@ add_executable(demo ${ALL_SOURCES})
 target_link_libraries(demo PRIVATE anjay m)
 
 add_custom_target(demo_firmware
-                  COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../test/integration/framework/firmware_package.py
+                  COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/firmware_package.py
                           -i ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo
                           -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/demo.fw-pkg
                   DEPENDS demo)

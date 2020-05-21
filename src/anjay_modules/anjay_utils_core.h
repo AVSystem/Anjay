@@ -148,6 +148,8 @@ _anjay_transport_info_by_uri_scheme(const char *uri_or_scheme);
 
 const char *_anjay_default_port_by_url(const anjay_url_t *url);
 
+avs_coap_ctx_t *_anjay_find_matching_coap_context(anjay_t *anjay,
+                                                  const char *raw_url);
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_UTILS_CORE_H */

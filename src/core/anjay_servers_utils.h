@@ -22,12 +22,6 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 /**
- * Returns an active server object associated with given @p socket .
- */
-anjay_server_info_t *
-_anjay_servers_find_by_primary_socket(anjay_t *anjay, avs_net_socket_t *socket);
-
-/**
  * Returns a server object for given SSID.
  *
  * NOTE: the bootstrap server is identified by the ANJAY_SSID_BOOTSTRAP

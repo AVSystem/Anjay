@@ -122,7 +122,7 @@ bool _anjay_connection_ready_for_outgoing_message(anjay_connection_ref_t ref) {
     // notifications if we don't have a valid registration, so we treat such
     // server as inactive for notification purposes.
     anjay_t *anjay = _anjay_from_server(ref.server);
-    return !anjay_is_offline(anjay) && !_anjay_bootstrap_in_progress(anjay)
+    return !_anjay_bootstrap_in_progress(anjay)
            && _anjay_server_active(ref.server)
            && !_anjay_server_registration_expired(ref.server);
 }
@@ -211,12 +211,13 @@ AVS_LIST(anjay_server_info_t) *_anjay_servers_find_ptr(anjay_servers_t *servers,
 }
 
 bool _anjay_server_active(anjay_server_info_t *server) {
-    anjay_connection_ref_t ref = {
-        .server = server
-    };
-    ANJAY_CONNECTION_TYPE_FOREACH(ref.conn_type) {
+    anjay_connection_type_t conn_type;
+    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
         if (_anjay_connection_internal_get_socket(
-                    _anjay_get_server_connection(ref))) {
+                    _anjay_get_server_connection((anjay_connection_ref_t) {
+                        .server = server,
+                        .conn_type = conn_type
+                    }))) {
             return true;
         }
     }

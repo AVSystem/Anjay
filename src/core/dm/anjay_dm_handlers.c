@@ -466,6 +466,22 @@ int _anjay_dm_transaction_finish(anjay_t *anjay, int result) {
     return _anjay_dm_transaction_finish_without_validation(anjay, result);
 }
 
+bool _anjay_dm_transaction_object_included(
+        anjay_t *anjay, const anjay_dm_object_def_t *const *obj_ptr) {
+    if (anjay->transaction_state.depth > 0) {
+        AVS_LIST(const anjay_dm_object_def_t *const *) *it;
+        AVS_LIST_FOREACH_PTR(it,
+                             &anjay->transaction_state.objs_in_transaction) {
+            if (**it == obj_ptr) {
+                return true;
+            } else if (**it > obj_ptr) {
+                break;
+            }
+        }
+    }
+    return false;
+}
+
 int anjay_dm_list_instances_SINGLE(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj_ptr,
                                    anjay_dm_list_ctx_t *ctx) {

@@ -29,6 +29,7 @@ class FirmwareUpdateForcedError(enum.IntEnum):
     DelayedFailedUpdate = 4
     SetSuccessInPerformUpgrade = 5
     SetFailureInPerformUpgrade = 6
+    DoNothing = 7
 
 
 def make_firmware_package(binary: bytes,

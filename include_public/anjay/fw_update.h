@@ -17,6 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_FW_UPDATE_H
 #define ANJAY_INCLUDE_ANJAY_FW_UPDATE_H
 
+#include <anjay/anjay_config.h>
 #include <anjay/dm.h>
 
 #ifdef __cplusplus
@@ -341,17 +342,23 @@ typedef const char *anjay_fw_update_get_version_t(void *user_ptr);
  * Performs the actual upgrade with previously downloaded package.
  *
  * Will be called at request of the server, after a package has been downloaded.
- * It is expected that this callback will do either one of the following:
+ *
+ * Most users will want to implement firmware update in a way that involves a
+ * reboot. In such case, it is expected that this callback will do either one of
+ * the following:
  *
  * - return, causing the outermost event loop to terminate, shutdown the library
  *   and then perform the firmware upgrade and then the device to reboot
  * - perform the firmware upgrade internally and never return, causing a reboot
  *   in the process
  *
- * In any case, it is expected that the device will then reboot. After
- * rebooting, the result of the upgrade process may be passed to the library
- * during initialization via the <c>initial_result</c> argument to
+ * After rebooting, the result of the upgrade process may be passed to the
+ * library during initialization via the <c>initial_result</c> argument to
  * @ref anjay_fw_update_install .
+ *
+ * Alternatively, if the update can be performed without reinitializing Anjay,
+ * you can use @ref anjay_fw_update_set_result (either from within the handler
+ * or some time after returning from it) to pass the update result.
  *
  * @param user_ptr Opaque pointer to user data, as passed to
  *                 @ref anjay_fw_update_install
@@ -366,9 +373,7 @@ typedef const char *anjay_fw_update_get_version_t(void *user_ptr);
  *          Resource is set to generic "Firmware update failed" code.
  *
  *          If an update is to be attempted, it shall either return 0 or
- *          perform a reboot internally without returning. In either case, a
- *          reboot or at least a reinitialization of the library is then
- *          required to pass the update result.
+ *          perform a reboot internally without returning.
  */
 typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
 
@@ -590,7 +595,7 @@ anjay_security_config_t *anjay_fw_update_load_security_from_dm(anjay_t *anjay,
  *   application process was started by the server (an Execute operation was
  *   already performed on the Update resource of the Firmware Update object or
  *   @ref ANJAY_FW_UPDATE_INITIAL_UPDATING was used in a call to @ref
- *   anjay_fw_update_install . Otherwise, the function fails.
+ *   anjay_fw_update_install). Otherwise, the function fails.
  *
  * - Other values of @p result (various error codes) are only allowed if
  *   Firmware Update State is not Idle (0), i.e. firmware is being downloaded,

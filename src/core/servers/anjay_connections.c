@@ -53,21 +53,6 @@ void _anjay_connection_internal_clean_socket(
     avs_sched_del(&connection->queue_mode_close_socket_clb);
 }
 
-bool _anjay_connection_is_online(anjay_server_connection_t *connection) {
-    avs_net_socket_t *socket =
-            _anjay_connection_internal_get_socket(connection);
-    if (!socket) {
-        return false;
-    }
-    avs_net_socket_opt_value_t opt;
-    if (avs_is_err(avs_net_socket_get_opt(socket, AVS_NET_SOCKET_OPT_STATE,
-                                          &opt))) {
-        anjay_log(DEBUG, _("Could not get socket state"));
-        return false;
-    }
-    return opt.state == AVS_NET_SOCKET_STATE_CONNECTED;
-}
-
 int _anjay_connection_init_psk_security(avs_net_security_info_t *security,
                                         const anjay_server_dtls_keys_t *keys) {
     *security = avs_net_security_info_from_psk((avs_net_psk_info_t) {
@@ -119,7 +104,7 @@ avs_error_t _anjay_server_connection_internal_bring_online(
     if (def->ensure_coap_context(server->anjay, connection)
             || avs_is_err((
                        err = def->connect_socket(server->anjay, connection)))) {
-        connection->state = ANJAY_SERVER_CONNECTION_ERROR;
+        connection->state = ANJAY_SERVER_CONNECTION_OFFLINE;
         _anjay_coap_ctx_cleanup(server->anjay, &connection->coap_ctx);
 
         if (avs_is_err(avs_net_socket_close(connection->conn_socket_))) {
@@ -228,7 +213,7 @@ ensure_socket_connected(anjay_server_info_t *server,
         avs_error_t err =
                 recreate_socket(server->anjay, def, connection, inout_info);
         if (avs_is_err(err)) {
-            connection->state = ANJAY_SERVER_CONNECTION_ERROR;
+            connection->state = ANJAY_SERVER_CONNECTION_OFFLINE;
             return err;
         }
     }
@@ -248,17 +233,17 @@ static avs_error_t refresh_connection(anjay_server_info_t *server,
     _anjay_url_cleanup(&out_connection->uri);
 
     if (!enabled) {
-        _anjay_connection_internal_clean_socket(server->anjay, out_connection);
         if (conn_type == ANJAY_CONNECTION_PRIMARY) {
-            // Primary connection may have mode set to DISABLED only if the
-            // required binding mode is unsupported (see the call to
-            // select_primary_transport() from _anjay_connection_refresh()).
-            // This is an error, so mark it as such, so that
-            // on_connection_refreshed() won't try to register via an invalid
-            // socket but properly treat it as an error.
-            out_connection->state = ANJAY_SERVER_CONNECTION_ERROR;
+            _anjay_connection_suspend((anjay_connection_ref_t) {
+                .server = server,
+                .conn_type = ANJAY_CONNECTION_PRIMARY
+            });
+            out_connection->state = ANJAY_SERVER_CONNECTION_OFFLINE;
         } else {
-            // Disabled trigger connection is OK.
+            // Disabled trigger connection does not matter much,
+            // so treat it as stable
+            _anjay_connection_internal_clean_socket(server->anjay,
+                                                    out_connection);
             out_connection->state = ANJAY_SERVER_CONNECTION_STABLE;
         }
         out_connection->needs_observe_flush = false;
@@ -276,21 +261,30 @@ void _anjay_server_connections_refresh(
         const anjay_server_name_indication_t *sni) {
     anjay_connection_info_t server_info = {
         .security_iid = security_iid,
-        .uri = *move_uri,
-        .transport_info =
-                _anjay_transport_info_by_uri_scheme(avs_url_protocol(*move_uri))
     };
-    *move_uri = NULL;
+    if (*move_uri) {
+        server_info.uri = *move_uri;
+        server_info.transport_info = _anjay_transport_info_by_uri_scheme(
+                avs_url_protocol(*move_uri));
+        *move_uri = NULL;
+    }
     memcpy(&server_info.sni, sni, sizeof(*sni));
 
-    server->last_used_security_iid = security_iid;
+    if (security_iid != ANJAY_ID_INVALID) {
+        server->last_used_security_iid = security_iid;
+    }
     anjay_server_connection_t *primary_conn =
             _anjay_connection_get(&server->connections,
                                   ANJAY_CONNECTION_PRIMARY);
     if (server_info.transport_info
-            && !_anjay_socket_transport_supported(
-                       server->anjay, server_info.transport_info->transport)) {
-        anjay_log(WARNING, _("support for protocol ") "%s" _(" not enabled"),
+            && (!_anjay_socket_transport_supported(
+                        server->anjay, server_info.transport_info->transport)
+                || !_anjay_socket_transport_is_online(
+                           server->anjay,
+                           server_info.transport_info->transport))) {
+        anjay_log(WARNING,
+                  _("transport required for protocol ") "%s" _(
+                          " is not supported or offline"),
                   server_info.transport_info->uri_scheme);
         server_info.transport_info = NULL;
     }

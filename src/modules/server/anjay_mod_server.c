@@ -121,7 +121,7 @@ static int add_instance(server_repr_t *repr,
     }
     new_instance->has_default_max_period = (instance->default_max_period >= 0);
     if (new_instance->has_default_max_period) {
-        new_instance->has_default_max_period = instance->default_max_period;
+        new_instance->default_max_period = instance->default_max_period;
     }
     new_instance->has_disable_timeout = (instance->disable_timeout >= 0);
     if (new_instance->has_disable_timeout) {
@@ -358,12 +358,9 @@ static int serv_execute(anjay_t *anjay,
 
     switch ((server_rid_t) rid) {
     case SERV_RES_DISABLE: {
-        avs_time_duration_t disable_timeout =
-                inst->has_disable_timeout
-                        ? avs_time_duration_from_scalar(inst->disable_timeout,
-                                                        AVS_TIME_S)
-                        : AVS_TIME_DURATION_INVALID;
-
+        avs_time_duration_t disable_timeout = avs_time_duration_from_scalar(
+                inst->has_disable_timeout ? inst->disable_timeout : 86400,
+                AVS_TIME_S);
         return anjay_disable_server_with_timeout(anjay, inst->ssid,
                                                  disable_timeout);
     }
@@ -483,12 +480,45 @@ void anjay_server_object_purge(anjay_t *anjay) {
     }
 }
 
+AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay) {
+    assert(anjay);
+    const anjay_dm_object_def_t *const *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+    server_repr_t *repr = _anjay_serv_get(server_obj);
+    AVS_LIST(server_instance_t) source = NULL;
+    if (_anjay_dm_transaction_object_included(anjay, server_obj)) {
+        source = repr->saved_instances;
+    } else {
+        source = repr->instances;
+    }
+    // We rely on the fact that the "ssid" field is first in server_instance_t,
+    // which means that both "source" and "&source->ssid" point to exactly the
+    // same memory location. The "next" pointer location in AVS_LIST is
+    // independent from the stored data type, so it's safe to do such "cast".
+    AVS_STATIC_ASSERT(offsetof(server_instance_t, ssid) == 0,
+                      instance_ssid_is_first_field);
+    return &source->ssid;
+}
+
 bool anjay_server_object_is_modified(anjay_t *anjay) {
     assert(anjay);
 
     const anjay_dm_object_def_t *const *server_obj =
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
     return _anjay_serv_get(server_obj)->modified_since_persist;
+}
+
+size_t _anjay_server_object_get_instances_count(anjay_t *anjay) {
+    const anjay_dm_object_def_t *const *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+    server_repr_t *repr = _anjay_serv_get(server_obj);
+
+    size_t count = 0;
+    server_instance_t *inst;
+    AVS_LIST_FOREACH(inst, repr->instances) {
+        count++;
+    }
+    return count;
 }
 
 static const anjay_dm_module_t SERVER_MODULE = {

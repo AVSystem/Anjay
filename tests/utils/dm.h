@@ -131,9 +131,11 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
         }                                                           \
     } while (false)
 
-#define DM_TEST_POST_INIT__ \
-    anjay_sched_run(anjay); \
-    _anjay_test_dm_unsched_reload_sockets(anjay)
+#define DM_TEST_POST_INIT__                           \
+    do {                                              \
+        anjay_sched_run(anjay);                       \
+        _anjay_test_dm_unsched_reload_sockets(anjay); \
+    } while (anjay_sched_calculate_wait_time_ms(anjay, INT_MAX) == 0)
 
 #define DM_TEST_INIT_GENERIC(ObjDefs, Ssids, ...)                             \
     DM_TEST_INIT_OBJECTS__(ObjDefs, __VA_ARGS__);                             \

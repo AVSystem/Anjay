@@ -379,6 +379,86 @@ AVS_UNIT_TEST(udp_streaming_observe, notify_block) {
 #        undef NOTIFY_PAYLOAD
 }
 
+AVS_UNIT_TEST(udp_streaming_observe, notify_block_send_fail) {
+#        define NOTIFY_PAYLOAD DATA_1KB DATA_1KB DATA_1KB "Notifaj"
+    avs_coap_udp_tx_params_t tx_params = AVS_COAP_DEFAULT_UDP_TX_PARAMS;
+    tx_params.nstart = 999;
+    test_env_t env __attribute__((cleanup(test_teardown_late_expects_check))) =
+            test_setup(&tx_params, 4096, 1200, NULL);
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+
+        // request for more blocks of Notify
+        COAP_MSG(CON, GET, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_REQ(1, 1024)),
+        COAP_MSG(CON, GET, ID(102), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_REQ(2, 1024)),
+        COAP_MSG(CON, GET, ID(103), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_REQ(2, 1024)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+
+        // BLOCK Notify
+        COAP_MSG(NON, CONTENT, ID(0), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(1),
+                 BLOCK2_RES(0, 1024, NOTIFY_PAYLOAD)),
+        // Note: further blocks should not contain the Observe option
+        // see RFC 7959, Figure 12: "Observe Sequence with Block-Wise Response"
+        COAP_MSG(ACK, CONTENT, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_RES(1, 1024, NOTIFY_PAYLOAD)),
+        COAP_MSG(ACK, CONTENT, ID(102), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_RES(2, 1024, NOTIFY_PAYLOAD)),
+    };
+
+    streaming_handle_request_args_t args = {
+        .env = &env,
+        .expected_request_header = requests[0]->request_header,
+        .response_header = {
+            .code = responses[0]->response_header.code
+        }
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, requests[0]);
+    expect_send(&env, responses[0]);
+
+    ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+
+    avs_coap_observe_id_t observe_id = {
+        .token = requests[0]->msg.token
+    };
+    test_streaming_payload_t test_payload = {
+        .data = NOTIFY_PAYLOAD,
+        .size = sizeof(NOTIFY_PAYLOAD) - 1
+    };
+
+    expect_send(&env, responses[1]);
+    expect_recv(&env, requests[1]);
+    expect_send(&env, responses[2]);
+    expect_recv(&env, requests[2]);
+    avs_unit_mocksock_output_fail(env.mocksock, avs_errno(AVS_ENODEV));
+
+    avs_error_t err = avs_coap_notify_streaming(
+            env.coap_ctx, observe_id,
+            &(avs_coap_response_header_t) {
+                .code = responses[1]->response_header.code
+            },
+            AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE, test_streaming_writer,
+            &test_payload);
+    ASSERT_EQ(err.category, AVS_ERRNO_CATEGORY);
+    ASSERT_EQ(err.code, AVS_ENODEV);
+
+    // should be canceled by cleanup
+    expect_observe_cancel(&env, requests[0]->msg.token);
+#        undef NOTIFY_PAYLOAD
+}
+
 AVS_UNIT_TEST(udp_streaming_observe, increasing_block_size) {
 #        define NOTIFY_PAYLOAD DATA_1KB "Notifaj"
     avs_coap_udp_tx_params_t tx_params = AVS_COAP_DEFAULT_UDP_TX_PARAMS;

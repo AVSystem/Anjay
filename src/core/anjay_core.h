@@ -52,8 +52,7 @@ typedef struct {
 } anjay_prng_ctx_t;
 
 struct anjay_struct {
-    bool offline;
-    avs_sched_handle_t enter_offline_job_handle;
+    anjay_transport_set_t online_transports;
 
     avs_net_ssl_version_t dtls_version;
     avs_net_socket_configuration_t socket_config;

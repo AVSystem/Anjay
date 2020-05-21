@@ -29,6 +29,8 @@
 #include <avsystem/commons/avs_stream.h>
 #include <avsystem/commons/avs_time.h>
 
+#include <anjay/anjay_config.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -559,25 +561,6 @@ void anjay_sched_run(anjay_t *anjay);
 int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid);
 
 /**
- * Reconnects sockets associated with all connected servers and ongoing
- * downloads. Should be called if something related to the device's IP
- * connection has changed.
- *
- * The reconnection will be performed during the next @ref anjay_sched_run call
- * and will trigger sending any messages necessary to maintain valid
- * registration (DTLS session resumption and/or Register or Update RPCs).
- *
- * In case of ongoing downloads (started via @ref anjay_download or the
- * <c>fw_update</c> module), if the reconnection fails, the download will be
- * aborted with an error.
- *
- * Note: This function makes Anjay enter online mode.
- *
- * @param anjay              Anjay object to operate on.
- */
-int anjay_schedule_reconnect(anjay_t *anjay);
-
-/**
  * This function shall be called when an LwM2M Server Object shall be disabled.
  * The standard case for this is when Execute is performed on the Disable
  * resource (/1/x/4).
@@ -636,47 +619,196 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
 int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid);
 
 /**
- * Checks whether anjay is currently in offline state.
+ * Structure defining the set of transports that
+ * @ref anjay_transport_is_offline, @ref anjay_transport_enter_offline,
+ * @ref anjay_transport_exit_offline, @ref anjay_transport_set_online and
+ * @ref anjay_transport_schedule_reconnect operate on.
+ */
+typedef struct {
+    bool udp : 1;
+    bool tcp : 1;
+} anjay_transport_set_t;
+
+/**
+ * @ref anjay_transport_set_t constant with all fields set to <c>true</c>.
+ */
+extern const anjay_transport_set_t ANJAY_TRANSPORT_SET_ALL;
+
+/**
+ * @ref anjay_transport_set_t constant with <c>udp</c> and <c>tcp</c> fields set
+ * to <c>true</c>.
+ *
+ * NOTE: In the open-source version, @ref ANJAY_TRANSPORT_SET_ALL and
+ * @ref ANJAY_TRANSPORT_SET_IP are equivalent.
+ */
+extern const anjay_transport_set_t ANJAY_TRANSPORT_SET_IP;
+
+/**
+ * @ref anjay_transport_set_t constant with just the <c>udp</c> field set to
+ * <c>true</c>.
+ */
+extern const anjay_transport_set_t ANJAY_TRANSPORT_SET_UDP;
+
+/**
+ * @ref anjay_transport_set_t constant with just the <c>tcp</c> field set to
+ * <c>true</c>.
+ */
+extern const anjay_transport_set_t ANJAY_TRANSPORT_SET_TCP;
+
+/**
+ * Checks whether all the specified transports are in offline mode.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param transport_set Set of transports to check.
+ *
+ * @returns true if all of the transports speicifed by @p transport_set are in
+ *          offline mode, false otherwise
+ */
+bool anjay_transport_is_offline(anjay_t *anjay,
+                                anjay_transport_set_t transport_set);
+
+/**
+ * Puts all the transports specified by @p transport_set into offline mode.
+ * This should be done when the connectivity for these transports is deemed
+ * unavailable or lost.
+ *
+ * During subsequent calls to @ref anjay_sched_run, Anjay will close all of the
+ * sockets corresponding to the specified transport and stop attempting to make
+ * any contact with remote hosts over it, until a call to
+ * @ref anjay_transport_exit_offline for any of the corresponding transports.
+ *
+ * Note that offline mode also affects downloads. E.g., putting the TCP
+ * transport into offline mode will pause all ongoing downloads over TCP and
+ * prevent new such download requests from being performed.
+ *
+ * User code shall still interface normally with the library, even if all the
+ * transports are in the offline state. This include regular calls to
+ * @ref anjay_sched_run. Notifications (as reported using
+ * @ref anjay_notify_changed and @ref anjay_notify_instance_changed) continue to
+ * be tracked, and may be sent after reconnecting, depending on values of the
+ * "Notification Storing When Disabled or Offline" resource.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param transport_set Set of transports to put into offline mode.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_transport_enter_offline(anjay_t *anjay,
+                                  anjay_transport_set_t transport_set);
+
+/**
+ * Puts all the transports specified by @p transport_set back into online
+ * mode, if any of them were previously put into offline mode using
+ * @ref anjay_transport_enter_offline.
+ *
+ * Transports that are unavailable due to compile-time or runtime configuration
+ * are ignored.
+ *
+ * During subsequent calls to @ref anjay_sched_run, new connections to all
+ * LwM2M servers disconnected due to offline mode will be attempted, and
+ * Register or Registration Update messages will be sent as appropriate.
+ * Downloads paused due to offline mode will be resumed as well.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param transport_set Set of transports to put into online mode.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_transport_exit_offline(anjay_t *anjay,
+                                 anjay_transport_set_t transport_set);
+
+/**
+ * Puts all the transports that are enabled through the compile-time and
+ * runtime configuration, and specified in @p transport_set, into online mode.
+ * At the same time, puts all the other transports into offline mode.
+ *
+ * This function combines the functionality of @p anjay_transport_enter_offline
+ * and @p anjay_transport_exit_offline into a single function. See their
+ * documentation for details about the semantics of online and offline modes.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param transport_set Set of transports to put into online mode.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_transport_set_online(anjay_t *anjay,
+                               anjay_transport_set_t transport_set);
+
+/**
+ * Reconnects sockets associated with all servers and ongoing downloads over the
+ * specified transports. Should be called if something related to the
+ * connectivity over those transports changes.
+ *
+ * The reconnection will be performed during the next @ref anjay_sched_run call
+ * and will trigger sending any messages necessary to maintain valid
+ * registration (DTLS session resumption and/or Register or Update RPCs).
+ *
+ * In case of ongoing downloads (started via @ref anjay_download or the
+ * <c>fw_update</c> module), if the reconnection fails, the download will be
+ * aborted with an error.
+ *
+ * Note: This function puts all the transports in @p transport_set into online
+ * mode.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param transport_set Set of transports whose sockets shall be reconnected.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_transport_schedule_reconnect(anjay_t *anjay,
+                                       anjay_transport_set_t transport_set);
+
+/**
+ * Checks whether all the transports are currently in offline mode.
+ *
+ * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
  *
  * @param anjay Anjay object to operate on.
  * @returns true if Anjay's instance is offline, false otherwise.
  */
-bool anjay_is_offline(anjay_t *anjay);
+static inline bool anjay_is_offline(anjay_t *anjay) {
+    return anjay_transport_is_offline(anjay, ANJAY_TRANSPORT_SET_ALL);
+}
 
 /**
- * Puts the LwM2M client into offline mode. This should be done when the
- * Internet connection is deemed to be unavailable or lost.
+ * Puts all the transports into offline mode.
  *
- * During the next call to @ref anjay_sched_run, Anjay will close all of its
- * sockets and stop attempting to make any contact with remote hosts. It will
- * remain in this state until the call to @ref anjay_exit_offline.
- *
- * User code shall still interface normally with the library while in the
- * offline state, which includes regular calls to @ref anjay_sched_run.
- * Notifications (as reported using @ref anjay_notify_changed and
- * @ref anjay_notify_instances_changed) continue to be tracked, and may be sent
- * after reconnecting, depending on values of the "Notification Storing When
- * Disabled or Offline" resource.
+ * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
  *
  * @param anjay Anjay object to operate on.
  *
  * @returns 0 on success, a negative value in case of error.
  */
-int anjay_enter_offline(anjay_t *anjay);
+static inline int anjay_enter_offline(anjay_t *anjay) {
+    return anjay_transport_enter_offline(anjay, ANJAY_TRANSPORT_SET_ALL);
+}
 
 /**
- * Exits the offline state entered using the @ref anjay_enter_offline function.
+ * Puts all the available transports into online mode.
  *
- * During subsequent calls to @ref anjay_sched_run, new connections to all
- * configured LwM2M Servers will be attempted, and Registration Update
- * (or Register, if the registration lifetime passed in the meantime) messages
- * will be sent.
+ * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
  *
  * @param anjay Anjay object to operate on.
  *
  * @returns 0 on success, a negative value in case of error.
  */
-int anjay_exit_offline(anjay_t *anjay);
+static inline int anjay_exit_offline(anjay_t *anjay) {
+    return anjay_transport_exit_offline(anjay, ANJAY_TRANSPORT_SET_ALL);
+}
+
+/**
+ * Reconnects sockets associated with all connected servers and ongoing
+ * downloads over all transports.
+ *
+ * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+static inline int anjay_schedule_reconnect(anjay_t *anjay) {
+    return anjay_transport_schedule_reconnect(anjay, ANJAY_TRANSPORT_SET_ALL);
+}
 
 /**
  * Tests if Anjay gave up on any further server connection attempts. It will
@@ -685,8 +817,9 @@ int anjay_exit_offline(anjay_t *anjay);
  * If this function returns <c>true</c>, it means that Anjay is in an
  * essentially non-operational state. @ref anjay_schedule_reconnect may be
  * called to reset the failure state and retry connecting to all configured
- * servers. Alternatively, @ref anjay_enable_server may be used to retry
- * connection only to a specific server.
+ * servers. @ref anjay_transport_schedule_reconnect will do the same, but only
+ * for the specified transports. Alternatively, @ref anjay_enable_server may be
+ * used to retry connection only to a specific server.
  *
  * @param anjay Anjay object to operate on.
  *
@@ -709,6 +842,13 @@ typedef struct {
      */
     avs_net_socket_tls_ciphersuites_t tls_ciphersuites;
 } anjay_security_config_t;
+
+/**
+ * Returns @c false if registration to all LwM2M Servers either succeeded or
+ * failed with no more retries pending and @c true if registration is in
+ * progress.
+ */
+bool anjay_ongoing_registration_exists(anjay_t *anjay);
 
 #ifdef __cplusplus
 } /* extern "C" */

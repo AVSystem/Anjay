@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.3a" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.4" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -303,7 +303,6 @@ add_library(anjay
             src/core/servers/anjay_activate.c
             src/core/servers/anjay_connection_ip.c
             src/core/servers/anjay_connections.c
-            src/core/servers/anjay_offline.c
             src/core/servers/anjay_register.c
             src/core/servers/anjay_reload.c
             src/core/servers/anjay_security_generic.c
@@ -314,7 +313,6 @@ add_library(anjay
             src/modules/access_control/anjay_mod_access_control.c
             src/modules/attr_storage/anjay_attr_storage_persistence.c
             src/modules/attr_storage/anjay_mod_attr_storage.c
-            src/modules/fw_update/anjay_fw_dm_security.c
             src/modules/fw_update/anjay_fw_update.c
             src/modules/security/anjay_mod_security.c
             src/modules/security/anjay_security_persistence.c
