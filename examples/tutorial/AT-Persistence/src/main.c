@@ -151,7 +151,7 @@ finish:
 void initialize_objects_with_default_settings(anjay_t *anjay) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
-        .server_uri = "coap://127.0.0.1:5683",
+        .server_uri = "coap://try-anjay.avsystem.com:5683",
         .security_mode = ANJAY_SECURITY_NOSEC
     };
 
@@ -173,10 +173,15 @@ void initialize_objects_with_default_settings(anjay_t *anjay) {
 }
 
 int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+        return -1;
+    }
+
     signal(SIGINT, signal_handler);
 
-    static const anjay_configuration_t CONFIG = {
-        .endpoint_name = "urn:dev:os:anjay-tutorial",
+    const anjay_configuration_t CONFIG = {
+        .endpoint_name = argv[1],
         .in_buffer_size = 4000,
         .out_buffer_size = 4000
     };

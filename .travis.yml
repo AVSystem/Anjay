@@ -106,4 +106,4 @@ before_script:
   - source travis/prepare.sh
 
 script:
-  - travis/run.sh
+  - travis/run.py

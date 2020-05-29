@@ -16,15 +16,15 @@
 
 #include <avs_coap_init.h>
 
-#define MODULE_NAME coap
-#include <avs_coap_x_log_config.h>
-
 #include <string.h>
 
 #include <avsystem/commons/avs_utils.h>
 
 #include "options/avs_coap_iterator.h"
 #include "options/avs_coap_option.h"
+
+#define MODULE_NAME coap
+#include <avs_coap_x_log_config.h>
 
 VISIBILITY_SOURCE_BEGIN
 

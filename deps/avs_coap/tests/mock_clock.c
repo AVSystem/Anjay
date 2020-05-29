@@ -19,9 +19,6 @@
 
 #ifdef AVS_UNIT_TESTING
 
-#    define MODULE_NAME test
-#    include <avs_coap_x_log_config.h>
-
 #    include <dlfcn.h>
 #    include <time.h>
 
@@ -29,6 +26,9 @@
 #    include <avsystem/commons/avs_unit_test.h>
 
 #    include "./mock_clock.h"
+
+#    define MODULE_NAME test
+#    include <avs_coap_x_log_config.h>
 
 static avs_time_monotonic_t MOCK_CLOCK = { { 0, -1 } };
 

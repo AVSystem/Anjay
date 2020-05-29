@@ -69,11 +69,18 @@ the function declared in ``firmware_update.h``:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/basic-implementation/src/firmware_update.h
+    :emphasize-lines: 12-17
 
     #ifndef FIRMWARE_UPDATE_H
     #define FIRMWARE_UPDATE_H
     #include <anjay/anjay.h>
     #include <anjay/fw_update.h>
+
+    /**
+     * Buffer for the endpoint name that will be used when re-launching the client
+     * after firmware upgrade.
+     */
+    extern const char *ENDPOINT_NAME;
 
     /**
      * Installs the firmware update module.
@@ -88,7 +95,7 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/basic-implementation/src/main.c
-    :emphasize-lines: 9, 139
+    :emphasize-lines: 9, 146
 
     #include <anjay/anjay.h>
     #include <anjay/attr_storage.h>
@@ -161,7 +168,7 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
 
         anjay_security_instance_t security_instance = {
             .ssid = 1,
-            .server_uri = "coaps://127.0.0.1:5684",
+            .server_uri = "coaps://try-anjay.avsystem.com:5684",
             .security_mode = ANJAY_SECURITY_PSK,
             .public_cert_or_psk_identity = (const uint8_t *) PSK_IDENTITY,
             .public_cert_or_psk_identity_size = strlen(PSK_IDENTITY),
@@ -212,8 +219,15 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
     }
 
     int main(int argc, char *argv[]) {
-        static const anjay_configuration_t CONFIG = {
-            .endpoint_name = "urn:dev:os:anjay-tutorial",
+        if (argc != 2) {
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+            return -1;
+        }
+
+        ENDPOINT_NAME = argv[1];
+
+        const anjay_configuration_t CONFIG = {
+            .endpoint_name = ENDPOINT_NAME,
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
             .msg_cache_size = 4000
@@ -250,6 +264,16 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
         time_object_release(time_object);
         return result;
     }
+
+.. note::
+
+    As you may see, there is also an additional ``ENDPOINT_NAME`` global
+    variable that now stores the command line argument. As we will use the same
+    kind of program binary as the update image, we will need this to properly
+    launch it as part of the upgrade process.
+
+    This is usually not necessary in production code, as the endpoint name is
+    usually either hard-coded, or configured through other means.
 
 Implementing handlers and installation routine
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -415,9 +439,11 @@ The code is self explanatory:
         }
         fclose(marker);
 
+        assert(ENDPOINT_NAME);
         // If the call below succeeds, the firmware is considered as "upgraded",
         // and we hope the newly started client registers to the Server.
-        (void) execl(FW_IMAGE_DOWNLOAD_NAME, FW_IMAGE_DOWNLOAD_NAME, NULL);
+        (void) execl(FW_IMAGE_DOWNLOAD_NAME, FW_IMAGE_DOWNLOAD_NAME, ENDPOINT_NAME,
+                     NULL);
         fprintf(stderr, "execl() failed: %s\n", strerror(errno));
         // If we are here, it means execl() failed. Marker file MUST now be removed,
         // as the firmware update failed.
@@ -432,6 +458,8 @@ The code is self explanatory:
         .reset = fw_reset,
         .perform_upgrade = fw_perform_upgrade
     };
+
+    const char *ENDPOINT_NAME = NULL;
 
     int fw_update_install(anjay_t *anjay) {
         anjay_fw_update_initial_state_t state;

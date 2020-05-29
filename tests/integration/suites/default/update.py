@@ -20,6 +20,7 @@ import unittest
 
 from framework.lwm2m_test import *
 
+
 class UpdateTest(test_suite.Lwm2mSingleServerTest):
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
@@ -182,7 +183,8 @@ class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
         self.serv.reset()
 
         pkt = self.serv.recv()
-        self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=1.0&ep=urn:dev:os:0023C7-000001&lt=86400'), pkt)
+        self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,)),
+                            pkt)
         self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_INTERNAL_SERVER_ERROR))
 
         # client should abort

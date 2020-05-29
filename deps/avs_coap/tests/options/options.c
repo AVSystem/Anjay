@@ -18,19 +18,20 @@
 
 #ifdef AVS_UNIT_TESTING
 
-#    define MODULE_NAME test
-#    include <avs_coap_x_log_config.h>
-
 #    include <stdlib.h>
 
 #    include <avsystem/coap/code.h>
 #    include <avsystem/coap/option.h>
 
 #    include "options/avs_coap_iterator.h"
-#    include "options/avs_coap_options.h"
 
 #    define AVS_UNIT_ENABLE_SHORT_ASSERTS
 #    include <avsystem/commons/avs_unit_test.h>
+
+#    define MODULE_NAME test
+#    include <avs_coap_x_log_config.h>
+
+#    include "options/avs_coap_options.h"
 
 AVS_UNIT_TEST(coap_options, erase_all_from_front) {
     uint8_t OPTS[] = "\x00" // delta = 0, empty

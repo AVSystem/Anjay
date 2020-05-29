@@ -122,7 +122,7 @@ So, it could be written like this:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC3/src/main.c
-    :emphasize-lines: 7-51,130-132
+    :emphasize-lines: 7-51,135-137
 
     #include <anjay/anjay.h>
     #include <anjay/attr_storage.h>
@@ -186,7 +186,7 @@ So, it could be written like this:
 
         const anjay_security_instance_t security_instance = {
             .ssid = 1,
-            .server_uri = "coap://127.0.0.1:5683",
+            .server_uri = "coap://try-anjay.avsystem.com:5683",
             .security_mode = ANJAY_SECURITY_NOSEC
         };
 
@@ -233,8 +233,13 @@ So, it could be written like this:
     }
 
     int main(int argc, char *argv[]) {
-        static const anjay_configuration_t CONFIG = {
-            .endpoint_name = "urn:dev:os:anjay-tutorial",
+        if (argc != 2) {
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+            return -1;
+        }
+
+        const anjay_configuration_t CONFIG = {
+            .endpoint_name = argv[1],
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
             .msg_cache_size = 4000
@@ -262,10 +267,10 @@ So, it could be written like this:
     }
 
 After running the client, you should see ``registration successful, location =
-/rd/urn:dev:os:anjay-tutorial`` once and ``registration successfully updated``
-every 30 seconds in logs. It means, that the client has connected to the server
-and successfully sends Update messages. Now you can perform some Reads for
-example from the LwM2M Server side.
+/rd/<server-dependent identifier>`` once and ``registration successfully
+updated`` every 30 seconds in logs. It means, that the client has connected to
+the server and successfully sends Update messages. Now you can perform some
+Reads for example from the LwM2M Server side.
 
 Application events
 ^^^^^^^^^^^^^^^^^^

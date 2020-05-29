@@ -6,6 +6,8 @@
 #include <anjay/security.h>
 #include <anjay/server.h>
 
+#include <avsystem/commons/avs_log.h>
+
 typedef struct test_instance {
     char label[32];
     int32_t value;
@@ -165,7 +167,7 @@ static int setup_security_object(anjay_t *anjay) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
         .bootstrap_server = true,
-        .server_uri = "coap://127.0.0.1:5683",
+        .server_uri = "coap://try-anjay.avsystem.com:5693",
         .security_mode = ANJAY_SECURITY_NOSEC
     };
 
@@ -231,9 +233,14 @@ int main_loop(anjay_t *anjay) {
     return 0;
 }
 
-int main() {
-    static const anjay_configuration_t CONFIG = {
-        .endpoint_name = "urn:dev:os:anjay-tutorial",
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+        return -1;
+    }
+
+    const anjay_configuration_t CONFIG = {
+        .endpoint_name = argv[1],
         .in_buffer_size = 4000,
         .out_buffer_size = 4000
     };

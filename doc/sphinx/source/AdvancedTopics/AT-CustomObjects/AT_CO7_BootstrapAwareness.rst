@@ -102,7 +102,7 @@ Server is a matter of setting ``bootstrap_server = true`` on
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
         .bootstrap_server = true,
-        .server_uri = "coap://127.0.0.1:5683",
+        .server_uri = "coap://try-anjay.avsystem.com:5693",
         .security_mode = ANJAY_SECURITY_NOSEC
     };
 

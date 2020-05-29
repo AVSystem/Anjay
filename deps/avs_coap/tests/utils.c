@@ -18,13 +18,13 @@
 
 #ifdef AVS_UNIT_TESTING
 
-#    define MODULE_NAME test
-#    include <avs_coap_x_log_config.h>
-
 #    include <avsystem/coap/coap.h>
 #    include <avsystem/commons/avs_utils.h>
 
 #    include "utils.h"
+
+#    define MODULE_NAME test
+#    include <avs_coap_x_log_config.h>
 
 static uint64_t GLOBAL_TOKEN_VALUE;
 

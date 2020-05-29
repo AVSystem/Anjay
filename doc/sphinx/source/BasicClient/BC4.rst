@@ -189,7 +189,7 @@ Continuing the previous tutorial, we can modify ``setup_security_object()`` and
 
         anjay_security_instance_t security_instance = {
             .ssid = 1,
-            .server_uri = "coaps://127.0.0.1:5684",
+            .server_uri = "coaps://try-anjay.avsystem.com:5684",
             .security_mode = ANJAY_SECURITY_PSK,
             .public_cert_or_psk_identity = (const uint8_t *) PSK_IDENTITY,
             .public_cert_or_psk_identity_size = strlen(PSK_IDENTITY),
@@ -240,8 +240,13 @@ Continuing the previous tutorial, we can modify ``setup_security_object()`` and
     }
 
     int main(int argc, char *argv[]) {
-        static const anjay_configuration_t CONFIG = {
-            .endpoint_name = "urn:dev:os:anjay-tutorial",
+        if (argc != 2) {
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+            return -1;
+        }
+
+        const anjay_configuration_t CONFIG = {
+            .endpoint_name = argv[1],
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
             .msg_cache_size = 4000
@@ -273,3 +278,13 @@ URI scheme and port ``5684`` (default for secure CoAP).
 
 All remaining activities related to establishing secure communication channel
 with the LwM2M Server are performed automatically by Anjay.
+
+.. note::
+
+    For many LwM2M Servers, including the `Try Anjay platform
+    <https://www.avsystem.com/try-anjay/>`_, you will need to change server-side
+    configuration if you previously used NoSec connectivity for the same
+    endpoint name.
+
+    The simplest solution might often be to remove the device entry completely
+    and create it from scratch.

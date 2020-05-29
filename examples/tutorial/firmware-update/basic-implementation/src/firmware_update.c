@@ -87,9 +87,11 @@ static int fw_perform_upgrade(void *user_ptr) {
     }
     fclose(marker);
 
+    assert(ENDPOINT_NAME);
     // If the call below succeeds, the firmware is considered as "upgraded",
     // and we hope the newly started client registers to the Server.
-    (void) execl(FW_IMAGE_DOWNLOAD_NAME, FW_IMAGE_DOWNLOAD_NAME, NULL);
+    (void) execl(FW_IMAGE_DOWNLOAD_NAME, FW_IMAGE_DOWNLOAD_NAME, ENDPOINT_NAME,
+                 NULL);
     fprintf(stderr, "execl() failed: %s\n", strerror(errno));
     // If we are here, it means execl() failed. Marker file MUST now be removed,
     // as the firmware update failed.
@@ -104,6 +106,8 @@ static const anjay_fw_update_handlers_t HANDLERS = {
     .reset = fw_reset,
     .perform_upgrade = fw_perform_upgrade
 };
+
+const char *ENDPOINT_NAME = NULL;
 
 int fw_update_install(anjay_t *anjay) {
     anjay_fw_update_initial_state_t state;

@@ -94,7 +94,7 @@ static int setup_security_object(anjay_t *anjay) {
 
     anjay_security_instance_t security_instance = {
         .ssid = 1,
-        .server_uri = "coaps://127.0.0.1:5684",
+        .server_uri = "coaps://try-anjay.avsystem.com:5684",
         .security_mode = ANJAY_SECURITY_CERTIFICATE
     };
 
@@ -164,8 +164,13 @@ static int setup_server_object(anjay_t *anjay) {
 }
 
 int main(int argc, char *argv[]) {
-    static const anjay_configuration_t CONFIG = {
-        .endpoint_name = "urn:dev:os:anjay-tutorial",
+    if (argc != 2) {
+        avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+        return -1;
+    }
+
+    const anjay_configuration_t CONFIG = {
+        .endpoint_name = argv[1],
         .in_buffer_size = 4000,
         .out_buffer_size = 4000,
         .msg_cache_size = 4000

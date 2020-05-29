@@ -24,13 +24,11 @@ from suites.default.retransmissions import RetransmissionTest
 class BufferSizeTest:
     class Base(test_suite.Lwm2mSingleServerTest,
                test_suite.Lwm2mDmOperations):
-        def setUp(self, inbuf_size=4096, outbuf_size=4096, endpoint=None, **kwargs):
+        def setUp(self, inbuf_size=4096, outbuf_size=4096, **kwargs):
             if 'extra_cmdline_args' not in kwargs:
                 kwargs['extra_cmdline_args'] = []
 
             kwargs['extra_cmdline_args'] += ['-I', str(inbuf_size), '-O', str(outbuf_size)]
-            if endpoint is not None:
-                kwargs['extra_cmdline_args'] += ['-e', endpoint]
 
             super().setUp(**kwargs)
 
@@ -109,7 +107,7 @@ class OutputBufferSizeIsEnoughToHandleBlockRegister(BufferSizeTest.Base):
         #
         # However, since we use maximum BLOCK option size for calculations, the
         # actual size of buffer should be 191.
-        super().setUp(endpoint="F" * 128, outbuf_size=191, auto_register=False)
+        super().setUp(endpoint_name="F" * 128, outbuf_size=191, auto_register=False)
 
     def tearDown(self):
         super().tearDown(auto_deregister=True)

@@ -18,13 +18,13 @@
 
 #ifdef AVS_UNIT_TESTING
 
-#    define MODULE_NAME test
-#    include <avs_coap_x_log_config.h>
-
 #    include "src/options/avs_coap_option.h"
 
 #    define AVS_UNIT_ENABLE_SHORT_ASSERTS
 #    include <avsystem/commons/avs_unit_test.h>
+
+#    define MODULE_NAME test
+#    include <avs_coap_x_log_config.h>
 
 AVS_UNIT_TEST(coap_option, sizeof) {
     uint8_t buffer[512] = "";

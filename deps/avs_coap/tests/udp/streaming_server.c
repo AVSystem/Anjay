@@ -19,10 +19,10 @@
 #if defined(AVS_UNIT_TESTING) && defined(WITH_AVS_COAP_UDP) \
         && defined(WITH_AVS_COAP_STREAMING_API)
 
+#    include <avsystem/coap/coap.h>
+
 #    define MODULE_NAME test
 #    include <avs_coap_x_log_config.h>
-
-#    include <avsystem/coap/coap.h>
 
 #    include "./utils.h"
 

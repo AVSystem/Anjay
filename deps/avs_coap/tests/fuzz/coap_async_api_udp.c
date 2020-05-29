@@ -17,9 +17,6 @@
 #define AVS_COAP_POISON_H // disable libc poisoning
 #include <avs_coap_init.h>
 
-#define MODULE_NAME fuzz
-#include <avs_coap_x_log_config.h>
-
 #include <avsystem/coap/coap.h>
 
 #include <avsystem/commons/avs_log.h>
@@ -28,10 +25,13 @@
 #include <avsystem/commons/avs_socket_v_table.h>
 #include <avsystem/commons/avs_utils.h>
 
-#include "avs_coap_ctx.h"
-
 #include <inttypes.h>
 #include <stdio.h>
+
+#define MODULE_NAME fuzz
+#include <avs_coap_x_log_config.h>
+
+#include "avs_coap_ctx.h"
 
 static uint16_t g_mtu = 1500;
 static avs_sched_t *g_sched = NULL;

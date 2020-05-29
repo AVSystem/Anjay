@@ -16,14 +16,14 @@
 
 #include <avs_coap_init.h>
 
-#define MODULE_NAME coap_utils
-#include <avs_coap_x_log_config.h>
-
 #include <avsystem/commons/avs_errno.h>
 
 #include <inttypes.h>
 
 #include "options/avs_coap_iterator.h"
+
+#define MODULE_NAME coap_utils
+#include <avs_coap_x_log_config.h>
 
 #include "avs_coap_common_utils.h"
 #include "avs_coap_ctx.h"

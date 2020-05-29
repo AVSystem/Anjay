@@ -490,50 +490,6 @@ try_security_instance_read_security(anjay_t *anjay,
 }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
-static int try_security_instance_get_coap(anjay_t *anjay,
-                                          security_or_socket_info_t *out_info,
-                                          anjay_iid_t security_iid,
-                                          const avs_url_t *url,
-                                          const avs_url_t *server_url) {
-    const anjay_transport_info_t *transport_info =
-            _anjay_transport_info_by_uri_scheme(avs_url_protocol(url));
-    if (!transport_info
-            || !url_service_matches(server_url, url,
-                                    transport_info->default_port)) {
-        return ANJAY_FOREACH_CONTINUE;
-    }
-    const anjay_uri_path_t path =
-            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                               ANJAY_DM_RID_SECURITY_SSID);
-
-    uint16_t ssid;
-    if (_anjay_dm_read_resource_u16(anjay, &path, &ssid)) {
-        anjay_log(WARNING, _("could not read LwM2M short server ID from ") "%s",
-                  ANJAY_DEBUG_MAKE_PATH(&path));
-        return ANJAY_FOREACH_CONTINUE;
-    }
-    AVS_LIST(const anjay_socket_entry_t) it;
-    AVS_LIST_FOREACH(it, anjay_get_socket_entries(anjay)) {
-        if (it->ssid == ssid) {
-            anjay_connection_ref_t connection = {
-                .server = _anjay_servers_find_by_primary_socket(anjay,
-                                                                it->socket),
-                .conn_type = ANJAY_CONNECTION_PRIMARY
-            };
-            if (!connection.server) {
-                return ANJAY_FOREACH_CONTINUE;
-            }
-            out_info->coap = _anjay_connection_get_coap(connection);
-            anjay_log(DEBUG,
-                      _("using coap context of SSID=") "%" PRIu16 _(
-                              " to conduct the download"),
-                      ssid);
-            return ANJAY_FOREACH_BREAK;
-        }
-    }
-    return ANJAY_FOREACH_CONTINUE;
-}
-
 static bool optional_strings_equal(const char *left, const char *right) {
     if (left && right) {
         return strcmp(left, right) == 0;

@@ -68,10 +68,14 @@ Now we are going to create functions which install Server and Security Objects
 and add instances of them. We modify the code from the
 :ref:`previous tutorial <anjay-hello-world>`.
 
-The first one will be ``setup_security_object()``. Please note, that we are
-going to use LwM2M Server ran locally. If your server has a different URI,
-then you must replace ``coap://127.0.0.1:5683`` with a valid value. For now,
-we will establish non-secure connection, a secure one will be described later.
+The first one will be ``setup_security_object()``. In this tutorial, we will use
+the Try Anjay platform as the hard-coded server URI. You can go to
+https://www.avsystem.com/try-anjay/ to create an account, and after logging in,
+add the device entry for your application. If you wish to use another server,
+then you must replace ``coap://try-anjay.avsystem.com:5683`` with a valid value.
+
+For now, we will establish non-secure connection, a secure one will be described
+later.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC2/src/main.c
@@ -86,7 +90,7 @@ we will establish non-secure connection, a secure one will be described later.
 
         const anjay_security_instance_t security_instance = {
             .ssid = 1,
-            .server_uri = "coap://127.0.0.1:5683",
+            .server_uri = "coap://try-anjay.avsystem.com:5683",
             .security_mode = ANJAY_SECURITY_NOSEC
         };
 
@@ -144,11 +148,16 @@ Now we are ready to call these functions from ``main()``, altogether with
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC2/src/main.c
-    :emphasize-lines: 16-20
+    :emphasize-lines: 21-25
 
     int main(int argc, char *argv[]) {
-        static const anjay_configuration_t CONFIG = {
-            .endpoint_name = "urn:dev:os:anjay-tutorial",
+        if (argc != 2) {
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+            return -1;
+        }
+
+        const anjay_configuration_t CONFIG = {
+            .endpoint_name = argv[1],
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
             .msg_cache_size = 4000

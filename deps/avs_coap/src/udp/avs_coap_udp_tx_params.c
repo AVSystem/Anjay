@@ -18,13 +18,13 @@
 
 #ifdef WITH_AVS_COAP_UDP
 
-#    define MODULE_NAME coap_udp
-#    include <avs_coap_x_log_config.h>
-
 #    include <avsystem/commons/avs_time.h>
 #    include <avsystem/commons/avs_utils.h>
 
 #    include <avsystem/coap/udp.h>
+
+#    define MODULE_NAME coap_udp
+#    include <avs_coap_x_log_config.h>
 
 VISIBILITY_SOURCE_BEGIN
 

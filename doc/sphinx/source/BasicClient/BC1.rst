@@ -66,8 +66,13 @@ instantiation of Anjay object is presented below:
     #include <avsystem/commons/avs_log.h>
 
     int main(int argc, char *argv[]) {
-        static const anjay_configuration_t CONFIG = {
-            .endpoint_name = "urn:dev:os:anjay-tutorial",
+        if (argc != 2) {
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+            return -1;
+        }
+
+        const anjay_configuration_t CONFIG = {
+            .endpoint_name = argv[1],
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
             .msg_cache_size = 4000
@@ -89,11 +94,24 @@ instantiation of Anjay object is presented below:
     `API documentation <../api/>`_ if something isn't immediately
     clear to you.
 
-Let's just build our minimal client and test that it works:
+Let's build our minimal client:
 
 .. code-block:: sh
 
-    $ cmake . && make && ./anjay-bc1
+    $ cmake . && make
+
+If that succeeds, we can now run it. We need to pass an endpoint name as the
+program's argument - this is not important now, but when we get to the point of
+being able to communicate with a server, this will be a name that the client
+uses to identify itself to the server. Please look ino the :ref:`brief
+description of LwM2M <clients-and-servers>` for details on recommended formats
+of the endpoint name.
+
+A simple idea for generating an endpoint name is to use the local hostname:
+
+.. code-block:: sh
+
+    $ ./anjay-bc1 urn:dev:os:$(hostname)
 
 .. important::
 

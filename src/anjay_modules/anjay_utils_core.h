@@ -21,6 +21,22 @@
 #include <avsystem/commons/avs_url.h>
 
 #ifdef ANJAY_WITH_LOGS
+// these macros interfere with avs_log() macro implementation
+#    ifdef TRACE
+#        undef TRACE
+#    endif
+#    ifdef DEBUG
+#        undef DEBUG
+#    endif
+#    ifdef INFO
+#        undef INFO
+#    endif
+#    ifdef WARNING
+#        undef WARNING
+#    endif
+#    ifdef ERROR
+#        undef ERROR
+#    endif
 #    include <avsystem/commons/avs_log.h>
 #    define _anjay_log(...) avs_log(__VA_ARGS__)
 #else

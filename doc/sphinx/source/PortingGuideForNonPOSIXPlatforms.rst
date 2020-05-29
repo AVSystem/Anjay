@@ -65,10 +65,11 @@ If POSIX socket API is not available:
     ``socket_configuration`` argument is a pointer to
     ``const avs_net_socket_configuration_t`` struct cast to ``void *``.
 
-    The function should create a socket object, and return its pointer cast to
-    ``avs_net_socket_t *`` through the ``*socket`` argument.
-    The socket object should be a struct, whose first field is
-    ``avs_net_socket_v_table_t *`` filled with pointers to method handlers.
+    The function should return ``AVS_OK`` on success and an error code on error.
+    It should create a socket object, and return its pointer cast to
+    ``avs_net_socket_t *`` through the ``*socket`` argument. The socket object
+    should be a struct, whose first field is ``avs_net_socket_v_table_t *``
+    filled with pointers to method handlers.
 
     Minimal set of socket methods that have to be implemented:
 
@@ -108,10 +109,11 @@ If POSIX socket API is not available:
     ``socket_configuration`` argument is a pointer to
     ``const avs_net_socket_configuration_t`` struct cast to ``void *``.
 
-    The function should create a socket object, and return its pointer case to
-    ``avs_net_socket_t *`` through the ``*socket`` argument.
-    The socket object should be a struct, whose first field is
-    ``avs_net_socket_v_table_t *`` filled with pointers to method handlers.
+    The function should return ``AVS_OK`` on success and an error code on error.
+    It should create a socket object, and return its pointer cast to
+    ``avs_net_socket_t *`` through the ``*socket`` argument. The socket object
+    should be a struct, whose first field is ``avs_net_socket_v_table_t *``
+    filled with pointers to method handlers.
 
     Minimal set of socket methods that have to be implemented:
 
@@ -123,6 +125,29 @@ If POSIX socket API is not available:
     - ``send``
     - ``set_opt`` able to set the ``AVS_NET_SOCKET_OPT_RECV_TIMEOUT`` option
     - ``shutdown``
+
+  - ``_avs_net_initialize_global_compat_state`` - a function with following
+    signature:
+
+    .. code-block:: c
+
+        avs_error_t _avs_net_initialize_global_compat_state(void);
+
+    The function should return ``AVS_OK`` on success and an error code on error.
+    It should initialize any global state that needs to be kept by the network
+    stack. If there is no such global state or it is initialized elsewhere, it
+    is safe to implement this function as a no-op (``return AVS_OK;``).
+
+  - ``_avs_net_cleanup_global_compat_state`` - a function with following
+    signature:
+
+    .. code-block:: c
+
+        void _avs_net_cleanup_global_compat_state(void);
+
+    The function should clean up any global state that is kept by the network
+    stack. If there is no such global state or it is managed elsewhere, it is
+    safe to implement this function as a no-op.
 
 
 .. warning::
@@ -145,7 +170,7 @@ to operate reliably in multi-threaded environments, specifically:
 - ``avs_net`` requires ``avs_init_once()``,
 - ``avs_log`` requires ``avs_mutex_create()``, ``avs_mutex_cleanup()``,
   ``avs_mutex_lock()``, ``avs_mutex_unlock()``, and
-  ``avs_init_once()``. 
+  ``avs_init_once()``.
 
 In addition, ``avs_sched`` optionally depends on ``avs_condvar_create()``,
 ``avs_condvar_cleanup()``, ``avs_condvar_notify_all()`` as well as
@@ -169,7 +194,7 @@ If, for some reason none of the defaults is suitable:
   - ``avs_mutex_lock()``,
   - ``avs_mutex_unlock()``.
 
-- And if you use thread-safe scheduler, also provide implementation for:  
+- And if you use thread-safe scheduler, also provide implementation for:
 
   - ``avs_condvar_create()``,
   - ``avs_condvar_cleanup()``,

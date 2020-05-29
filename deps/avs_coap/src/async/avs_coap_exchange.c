@@ -21,17 +21,18 @@
 
 #include <avs_coap_init.h>
 
-#define MODULE_NAME coap
-#include <avs_coap_x_log_config.h>
-
 #include <avsystem/commons/avs_errno.h>
 
 #include <avsystem/coap/async_client.h>
 
 #include "avs_coap_code_utils.h"
-#include "avs_coap_ctx.h"
 #include "avs_coap_exchange.h"
 #include "options/avs_coap_option.h"
+
+#define MODULE_NAME coap
+#include <avs_coap_x_log_config.h>
+
+#include "avs_coap_ctx.h"
 #include "options/avs_coap_options.h"
 
 VISIBILITY_SOURCE_BEGIN

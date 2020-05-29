@@ -20,13 +20,13 @@
         && defined(WITH_AVS_COAP_STREAMING_API)             \
         && defined(WITH_AVS_COAP_OBSERVE)
 
-#    define MODULE_NAME test
-#    include <avs_coap_x_log_config.h>
-
 #    include <avsystem/commons/avs_errno.h>
 #    include <avsystem/commons/avs_stream_membuf.h>
 
 #    include <avsystem/coap/coap.h>
+
+#    define MODULE_NAME test
+#    include <avs_coap_x_log_config.h>
 
 #    include "./utils.h"
 

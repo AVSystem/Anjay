@@ -247,6 +247,7 @@ if(WITH_TEST)
                                       COMPILE_OPTIONS
                                       # disable test-specific warnings
                                       $<TARGET_PROPERTY:avs_coap_test,COMPILE_OPTIONS>
+                                      -DMODULE_NAME=header_self_sufficiency_test
                                       DIRECTORIES src
                                       EXCLUDE_PATTERNS ".*/test/.*"
                                       LIBS avs_coap_for_tests avs_unit)

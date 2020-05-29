@@ -301,7 +301,7 @@ The implementation is presented below. Changes made since :doc:`last time <FU2>`
 are highlighted:
 
 .. snippet-source:: examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
-    :emphasize-lines: 11-15, 73-76, 111-144, 151, 165-167
+    :emphasize-lines: 11-15, 73-76, 113-146, 153, 169-171
 
     #include "./firmware_update.h"
 
@@ -403,9 +403,11 @@ are highlighted:
         }
         fclose(marker);
 
+        assert(ENDPOINT_NAME);
         // If the call below succeeds, the firmware is considered as "upgraded",
         // and we hope the newly started client registers to the Server.
-        (void) execl(FW_IMAGE_DOWNLOAD_NAME, FW_IMAGE_DOWNLOAD_NAME, NULL);
+        (void) execl(FW_IMAGE_DOWNLOAD_NAME, FW_IMAGE_DOWNLOAD_NAME, ENDPOINT_NAME,
+                     NULL);
         fprintf(stderr, "execl() failed: %s\n", strerror(errno));
         // If we are here, it means execl() failed. Marker file MUST now be removed,
         // as the firmware update failed.
@@ -456,6 +458,8 @@ are highlighted:
         .perform_upgrade = fw_perform_upgrade,
         .get_security_config = fw_get_security_config
     };
+
+    const char *ENDPOINT_NAME = NULL;
 
     int fw_update_install(anjay_t *anjay) {
         anjay_fw_update_initial_state_t state;

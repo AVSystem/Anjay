@@ -322,11 +322,16 @@ it in Anjay and update ``CMakeLists.txt`` file.
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC5/src/main.c
     :caption: main.c
-    :emphasize-lines: 22-30,37
+    :emphasize-lines: 27-35,42
 
     int main(int argc, char *argv[]) {
-        static const anjay_configuration_t CONFIG = {
-            .endpoint_name = "urn:dev:os:anjay-tutorial",
+        if (argc != 2) {
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+            return -1;
+        }
+
+        const anjay_configuration_t CONFIG = {
+            .endpoint_name = argv[1],
             .in_buffer_size = 4000,
             .out_buffer_size = 4000,
             .msg_cache_size = 4000

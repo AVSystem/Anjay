@@ -18,9 +18,6 @@
 
 #if defined(AVS_UNIT_TESTING) && defined(WITH_AVS_COAP_UDP)
 
-#    define MODULE_NAME test
-#    include <avs_coap_x_log_config.h>
-
 #    include <time.h>
 
 #    include <avsystem/commons/avs_defs.h>
@@ -35,6 +32,9 @@
 #    include "udp/avs_coap_udp_msg_cache.h"
 
 #    include "tests/mock_clock.h"
+
+#    define MODULE_NAME test
+#    include <avs_coap_x_log_config.h>
 
 static const avs_coap_udp_tx_params_t tx_params = {
     .ack_timeout = { 2, 0 },

@@ -16,9 +16,6 @@
 
 #include <avs_coap_init.h>
 
-#define MODULE_NAME coap
-#include <avs_coap_x_log_config.h>
-
 #include <string.h>
 
 #include <avsystem/coap/code.h>
@@ -26,6 +23,10 @@
 
 #include "options/avs_coap_iterator.h"
 #include "options/avs_coap_option.h"
+
+#define MODULE_NAME coap
+#include <avs_coap_x_log_config.h>
+
 #include "options/avs_coap_options.h"
 
 #define MAX_OBSERVE_OPTION_VALUE (0xFFFFFF)

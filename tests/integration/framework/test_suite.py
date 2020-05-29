@@ -327,6 +327,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         return name.replace('/', '.')
 
     def make_demo_args(self,
+                       endpoint_name,
                        servers,
                        fw_updated_marker_path):
         """
@@ -347,7 +348,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         # Default ciphersuites mandated by LwM2M:
         # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
         # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
-        args = ['--ciphersuites', '0xC030,0xC0A8,0xC0AE',
+        args = ['--endpoint-name', endpoint_name, '--ciphersuites', '0xC030,0xC0A8,0xC0AE',
                 '--fw-updated-marker-path', fw_updated_marker_path, '--security-mode', security_mode]
 
         for serv in servers:
@@ -518,6 +519,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 legacy_server_initiated_bootstrap_allowed=True,
                                 extra_cmdline_args=[],
                                 auto_register=True,
+                                endpoint_name=DEMO_ENDPOINT_NAME,
                                 lifetime=None,
                                 binding=None,
                                 fw_updated_marker_path=None):
@@ -587,7 +589,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             fw_updated_marker_path = generate_temp_filename(
                 dir='/tmp', prefix='anjay-fw-updated-')
 
-        demo_args += self.make_demo_args(all_servers_passed,
+        demo_args += self.make_demo_args(endpoint_name, all_servers_passed,
                                          fw_updated_marker_path)
         demo_args += extra_cmdline_args
         if lifetime is not None:

@@ -16,9 +16,6 @@
 
 #include <avs_coap_init.h>
 
-#define MODULE_NAME coap
-#include <avs_coap_x_log_config.h>
-
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -29,6 +26,9 @@
 #include <avsystem/coap/option.h>
 
 #include "options/avs_coap_option.h"
+
+#define MODULE_NAME coap
+#include <avs_coap_x_log_config.h>
 
 VISIBILITY_SOURCE_BEGIN
 

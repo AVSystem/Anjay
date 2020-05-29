@@ -18,11 +18,11 @@
 
 #if defined(AVS_UNIT_TESTING) && defined(WITH_AVS_COAP_UDP)
 
-#    define MODULE_NAME test
-#    include <avs_coap_x_log_config.h>
-
 #    include <avsystem/coap/coap.h>
 #    include <avsystem/commons/avs_errno.h>
+
+#    define MODULE_NAME test
+#    include <avs_coap_x_log_config.h>
 
 #    include "./utils.h"
 

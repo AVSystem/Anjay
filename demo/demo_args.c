@@ -30,13 +30,11 @@
 #define DEFAULT_PSK_KEY "password"
 
 static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
-    .endpoint_name = "urn:dev:os:0023C7-000001",
     .connection_args = {
         .servers[0] = {
             .security_iid = ANJAY_ID_INVALID,
             .server_iid = ANJAY_ID_INVALID,
             .id = 1,
-            .uri = "coap://127.0.0.1:5683",
             .binding_mode = "U",
         },
         .bootstrap_holdoff_s = 0,
@@ -172,7 +170,7 @@ static void print_option_help(const struct option *opt) {
         { 'q', "BINDING_MODE=UQ", "U",
           "set the Binding Mode to use for the currently configured server." },
         { 's', "MODE", NULL, "set security mode, one of: psk rpk cert nosec." },
-        { 'u', "URI", DEFAULT_CMDLINE_ARGS.connection_args.servers[0].uri,
+        { 'u', "URI", NULL,
           "server URI to use. Note: coap:// URIs require --security-mode nosec "
           "to be set. N consecutive URIs will create N servers enumerated "
           "from 1 to N." },
@@ -587,8 +585,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             AVS_LIST_INSERT(&parsed_args->access_entries, entry);
             break;
         }
-        case 'b':
-            parsed_args->connection_args.servers[0].is_bootstrap = true;
+        case 'b': {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            parsed_args->connection_args.servers[idx].is_bootstrap = true;
             if (optarg && *optarg) {
                 if (strcmp(optarg, "client-initiated-only") == 0) {
                     parsed_args->disable_legacy_server_initiated_bootstrap =
@@ -602,6 +601,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 }
             }
             break;
+        }
         case 'H':
             if (parse_i32(optarg,
                           &parsed_args->connection_args.bootstrap_holdoff_s)) {
@@ -724,19 +724,20 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         }
         case 'u': {
             AVS_ASSERT(num_servers < MAX_SERVERS, "Too many servers");
+            const server_entry_t *prev_entry = NULL;
+            if (num_servers > 0) {
+                prev_entry =
+                        &parsed_args->connection_args.servers[num_servers - 1];
+            }
             server_entry_t *entry =
                     &parsed_args->connection_args.servers[num_servers++];
+            if (prev_entry) {
+                memcpy(entry, prev_entry, sizeof(*prev_entry));
+                entry->security_iid = ANJAY_ID_INVALID;
+                entry->server_iid = ANJAY_ID_INVALID;
+                entry->is_bootstrap = false;
+            }
             entry->uri = optarg;
-            entry->security_iid = ANJAY_ID_INVALID;
-            entry->server_iid = ANJAY_ID_INVALID;
-            entry->binding_mode =
-                    parsed_args->connection_args.servers[num_servers - 1]
-                                    .binding_mode
-                            ? parsed_args->connection_args
-                                      .servers[num_servers - 1]
-                                      .binding_mode
-                            : DEFAULT_CMDLINE_ARGS.connection_args.servers[0]
-                                      .binding_mode;
             break;
         }
         case 'I':
@@ -984,7 +985,18 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         }
     }
 process:
-    for (int i = 0; i < AVS_MAX(num_servers, 1); ++i) {
+    retval = 0;
+    if (!parsed_args->endpoint_name) {
+        demo_log(ERROR,
+                 "Endpoint name not specified, please use the -e option");
+        retval = -1;
+    }
+    if (num_servers == 0) {
+        demo_log(ERROR, "At least one LwM2M Server URI needs to be specified, "
+                        "please use the -u option");
+        retval = -1;
+    }
+    for (int i = 0; i < num_servers; ++i) {
         server_entry_t *entry = &parsed_args->connection_args.servers[i];
         entry->id = (anjay_ssid_t) (i + 1);
         if (entry->security_iid == ANJAY_ID_INVALID) {
@@ -1001,7 +1013,8 @@ process:
             || (key_set && (key_path != default_key_path))) {
         demo_log(ERROR, "Certificate information cannot be loaded both from "
                         "file and immediate hex data at the same time");
-        goto finish;
+        parsed_args->connection_args.security_mode = ANJAY_SECURITY_NOSEC;
+        retval = -1;
     }
     if (parsed_args->connection_args.security_mode == ANJAY_SECURITY_PSK) {
         if (!identity_set
@@ -1011,7 +1024,7 @@ process:
                                          .public_cert_or_psk_identity_size,
                                 DEFAULT_PSK_IDENTITY,
                                 sizeof(DEFAULT_PSK_IDENTITY) - 1)) {
-            goto finish;
+            retval = -1;
         }
         if (!key_set
                 && clone_buffer(&parsed_args->connection_args
@@ -1019,14 +1032,14 @@ process:
                                 &parsed_args->connection_args
                                          .private_cert_or_psk_key_size,
                                 DEFAULT_PSK_KEY, sizeof(DEFAULT_PSK_KEY) - 1)) {
-            goto finish;
+            retval = -1;
         }
     } else if (parsed_args->connection_args.security_mode
                == ANJAY_SECURITY_CERTIFICATE) {
         if (identity_set ^ key_set) {
             demo_log(ERROR, "Setting public cert but not private cert (and "
                             "other way around) makes little sense");
-            goto finish;
+            retval = -1;
         } else if (!identity_set) {
             if (load_buffer_from_file(
                         &parsed_args->connection_args
@@ -1036,7 +1049,7 @@ process:
                         cert_path)) {
                 demo_log(ERROR, "Could not load certificate from %s",
                          cert_path);
-                goto finish;
+                retval = -1;
             }
             if (load_buffer_from_file(
                         &parsed_args->connection_args.private_cert_or_psk_key,
@@ -1044,7 +1057,7 @@ process:
                                  .private_cert_or_psk_key_size,
                         key_path)) {
                 demo_log(ERROR, "Could not load private key from %s", key_path);
-                goto finish;
+                retval = -1;
             }
         }
         if (server_public_key_path
@@ -1054,7 +1067,7 @@ process:
                            server_public_key_path)) {
             demo_log(ERROR, "Could not load server public key from %s",
                      server_public_key_path);
-            goto finish;
+            retval = -1;
         }
     }
     if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
@@ -1062,9 +1075,8 @@ process:
                 || !parsed_args->fw_security_info.data.psk.psk)) {
         demo_log(ERROR, "Both identity and key must be provided when using PSK "
                         "for firmware upgrade security");
-        goto finish;
+        retval = -1;
     }
-    retval = 0;
 finish:
     if (retval) {
         AVS_LIST_CLEAR(&parsed_args->access_entries);

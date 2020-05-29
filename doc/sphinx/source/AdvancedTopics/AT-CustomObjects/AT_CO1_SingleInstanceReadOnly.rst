@@ -207,7 +207,7 @@ it in the library:
 
 .. snippet-source:: examples/tutorial/AT-CustomObjects/read-only/src/main.c
 
-   int main() {
+   int main(int argc, char *argv[]) {
        // ... Anjay initialization
 
        // note: in this simple case the object does not have any state,

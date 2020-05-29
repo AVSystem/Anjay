@@ -18,10 +18,10 @@
 
 #ifdef AVS_UNIT_TESTING
 
+#    include "./socket.h"
+
 #    define MODULE_NAME test
 #    include <avs_coap_x_log_config.h>
-
-#    include "./socket.h"
 
 void _avs_mocksock_create(avs_net_socket_t **mocksock, int inner_mtu, int mtu) {
     avs_unit_mocksock_create(mocksock);

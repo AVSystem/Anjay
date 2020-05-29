@@ -128,7 +128,7 @@ Then we setup two LwM2M Servers:
     // LwM2M Server account with SSID = 1
     const anjay_security_instance_t security_instance1 = {
         .ssid = 1,
-        .server_uri = "coap://127.0.0.1:5683",
+        .server_uri = "coap://try-anjay.avsystem.com:5683",
         .security_mode = ANJAY_SECURITY_NOSEC
     };
 
@@ -144,7 +144,7 @@ Then we setup two LwM2M Servers:
     // LwM2M Server account with SSID = 2
     const anjay_security_instance_t security_instance2 = {
         .ssid = 2,
-        .server_uri = "coap://127.0.0.1:5693",
+        .server_uri = "coap://127.0.0.1:5683",
         .security_mode = ANJAY_SECURITY_NOSEC
     };
 

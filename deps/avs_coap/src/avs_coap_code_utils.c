@@ -16,12 +16,12 @@
 
 #include <avs_coap_init.h>
 
-#define MODULE_NAME coap_code
-#include <avs_coap_x_log_config.h>
-
 #include <avsystem/commons/avs_utils.h>
 
 #include <avsystem/coap/code.h>
+
+#define MODULE_NAME coap_code
+#include <avs_coap_x_log_config.h>
 
 #include "avs_coap_code_utils.h"
 

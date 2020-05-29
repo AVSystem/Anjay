@@ -26,6 +26,7 @@ The project has been created and is actively maintained by [AVSystem](https://ww
   * [Detailed compilation guide](#detailed-compilation-guide)
     * [Building using CMake](#building-using-cmake)
     * [Alternative build systems](#alternative-build-systems)
+* [Mbed OS port](#mbed-os-port)
 * [License](#license)
   * [Commercial support](#commercial-support)
 * [Contributing](#contributing)
@@ -77,7 +78,7 @@ This version includes full support for OMA LwM2M TS 1.0 features. Version that s
     - Microsoft Windows (preliminary support, see [README.Windows.md](README.Windows.md) for details)
     - any embedded platform (e.g. FreeRTOS, ThreadX) with lwIP networking stack
     - porting is possible for any other platform that has ISO C99 compiler available, see [Porting guide for non-POSIX platforms](https://avsystem.github.io/Anjay-doc/PortingGuideForNonPOSIXPlatforms.html) for details
-        - preimplemented integration layer for Arm Mbed OS is available commercially
+        - preimplemented [integration layer for Arm Mbed OS](https://github.com/AVSystem/Anjay-mbedos) and an [example client based on it](https://github.com/AVSystem/Anjay-mbedos-client) are available
 
 - CoAP data formats:
     - TLV
@@ -123,9 +124,11 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
 
 #### Ubuntu 16.04 LTS / Raspbian Buster or later
 
+<!-- deps_install_begin -->
 ``` sh
 sudo apt-get install git build-essential cmake libmbedtls-dev zlib1g-dev
 ```
+<!-- deps_install_end -->
 
 #### CentOS 7 or later
 
@@ -143,16 +146,22 @@ brew install cmake mbedtls
 
 ### Running the demo client
 
-To compile Anjay demo client and connect it to a local LwM2M server listening on default 5683 port:
+For initial development and testing of LwM2M clients, we recommend using the [Try Anjay platform](https://www.avsystem.com/try-anjay/) where you can use the basic LwM2M server functionality for free.
 
+After setting up an account and adding the device entry, you can compile Anjay demo client and connect it to the platform by running:
+
+<!-- compile_instruction_begin -->
 ``` sh
 git clone https://github.com/AVSystem/Anjay.git \
     && cd Anjay \
     && git submodule update --init \
     && cmake . \
     && make -j \
-    && ./output/bin/demo --server-uri coap://127.0.0.1:5683
+    && ./output/bin/demo --endpoint-name $(hostname) --server-uri coap://try-anjay.avsystem.com:5683
 ```
+<!-- compile_instruction_end -->
+
+**NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://avsystem.github.io/Anjay-doc/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Try Anjay platform, you will need to enter the endpoint name into the server UI first.
 
 ### Detailed compilation guide
 
@@ -190,10 +199,10 @@ To start the demo client:
 
 ``` sh
 # uses plain CoAP
-./output/bin/demo --server-uri coap://127.0.0.1:5683
+./output/bin/demo --endpoint-name $(hostname) --server-uri coap://try-anjay.avsystem.com:5683
 
 # uses DTLS in PSK mode, with PSK identity "foo" and secret key "bar" (hex-encoded)
-./output/bin/demo --server-uri coaps://127.0.0.1:5684 --security-mode psk --identity 666f6f --key 626172
+./output/bin/demo --endpoint-name $(hostname) --server-uri coaps://try-anjay.avsystem.com:5684 --security-mode psk --identity 666f6f --key 626172
 ```
 
 **NOTE**: When establishing a DTLS connection, the URI MUST use "coaps://". In NoSec mode (default), the URI MUST use "<coap://>".
@@ -232,6 +241,10 @@ cp -r deps/avs_coap/include_public/avsystem /usr/local/include/
 cp -r deps/avs_commons/include_public/avsystem /usr/local/include/
 cp -r config/* /usr/local/include/
 ```
+
+## Mbed OS port
+
+If you want to use Anjay on Mbed OS, you might be interested in the [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) and [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) repositories, which contain basic integration with that system.
 
 ## License
 

@@ -18,15 +18,16 @@
 
 #ifdef WITH_AVS_COAP_OBSERVE
 
-#    define MODULE_NAME coap
-#    include <avs_coap_x_log_config.h>
-
 #    include <avsystem/commons/avs_errno.h>
 #    include <avsystem/commons/avs_persistence.h>
 
 #    include <avsystem/coap/observe.h>
 
 #    include "avs_coap_code_utils.h"
+
+#    define MODULE_NAME coap
+#    include <avs_coap_x_log_config.h>
+
 #    include "avs_coap_ctx.h"
 #    include "options/avs_coap_options.h"
 

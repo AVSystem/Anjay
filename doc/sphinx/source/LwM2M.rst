@@ -42,6 +42,8 @@ be implemented. You are encouraged to read the `full specification
 <https://www.omaspecworks.org/what-is-oma-specworks/iot/lightweight-m2m-lwm2m/>`_,
 but this article provides a quick summary of the most important concepts.
 
+.. _clients-and-servers:
+
 Clients and servers
 -------------------
 

@@ -18,9 +18,6 @@
 
 #ifdef WITH_AVS_COAP_UDP
 
-#    define MODULE_NAME coap_udp
-#    include <avs_coap_x_log_config.h>
-
 #    include <assert.h>
 #    include <inttypes.h>
 
@@ -34,6 +31,10 @@
 #    include <avsystem/coap/udp.h>
 
 #    include "udp/avs_coap_udp_msg_cache.h"
+
+#    define MODULE_NAME coap_udp
+#    include <avs_coap_x_log_config.h>
+
 #    include "udp/avs_coap_udp_tx_params.h"
 
 VISIBILITY_SOURCE_BEGIN

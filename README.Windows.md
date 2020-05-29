@@ -13,23 +13,12 @@ Anjay is currently not supported or regularly tested (which means that builds ma
 
 ## Prerequisites
 
-### Note about symbolic links
-
-Anjay repository on GitHub makes use of symbolic links. They are necessary for successful compilation of the project. You will need to either:
-
-- use Windows 10 version 1703 or later and enable developer mode, or
-- run Git with elevated privileges
-
-See [note on symbolic links in Git for Windows documentation](https://github.com/git-for-windows/git/wiki/Symbolic-Links) for details.
-
 ### Installing dependencies
 
 1. Install [MSYS2](http://www.msys2.org/)
 2. Install [Git for Windows](https://gitforwindows.org/)
 
    **NOTE:** You can also install these using [Chocolatey](https://chocolatey.org/): `choco install git msys2` but please make sure to still follow the instructions to update MSYS2 after installing it.
-
-   **NOTE: DO NOT use Git from MSYS repositories.** It does not support symbolic links properly. You will need to use the tools provided by Git for Windows installation to clone and manipulate the repository.
 
 3. Open the appropriate MINGW shell (e.g., `C:\msys64\mingw32.exe` or `C:\msys64\mingw64.exe`, depending on whether you want to build 32- or 64-bit binaries) and install the compile-time dependencies:
 
@@ -39,7 +28,7 @@ See [note on symbolic links in Git for Windows documentation](https://github.com
 
 ## Cloning the repository
 
-Run the following command in a directory of choice **in the Git for Windows bash environment**, making sure that you have the appropriate permissions to create symbolic links (see the [note](#note-about-symbolic-links) above):
+Run the following command in a directory of choice **in the Git for Windows bash environment**:
 
 ``` sh
 git clone --recurse-submodules -c core.symlinks=true https://github.com/AVSystem/Anjay.git
@@ -59,7 +48,7 @@ make
 The demo application can be run from the MINGW shell just like on any other Unix system, e.g.:
 
 ```
-./output/bin/demo --server-uri coap://127.0.0.1:5683
+./output/bin/demo --endpoint-name $(hostname) --server-uri coap://try-anjay.avsystem.com:5683
 ```
 
 If you want to run the resulting application outside of the MINGW shell, you will likely need to copy the DLL dependencies, such as:
