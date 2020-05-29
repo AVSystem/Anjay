@@ -23,6 +23,7 @@ import uuid
 assert __name__ == '__main__'
 
 check_command = os.getenv('CHECK_COMMAND', 'make check')
+os.environ['CHECK_COMMAND'] = check_command
 
 docker_image = os.getenv('DOCKER_IMAGE', '')
 if docker_image != '':
