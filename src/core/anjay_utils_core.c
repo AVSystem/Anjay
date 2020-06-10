@@ -290,7 +290,7 @@ avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
     if (lifetime
             && avs_is_err((err = avs_coap_options_add_string_f(
                                    opts, AVS_COAP_OPTION_URI_QUERY,
-                                   "lt=%" PRId64, *lifetime)))) {
+                                   "lt=%" PRIi32, *lifetime)))) {
         return err;
     }
 
