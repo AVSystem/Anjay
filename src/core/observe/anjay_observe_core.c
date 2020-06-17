@@ -822,8 +822,9 @@ static int write_notify_payload(size_t payload_offset,
     if (payload_offset != conn->serialization_state.expected_offset) {
         anjay_log(DEBUG,
                   _("Server requested unexpected chunk of payload (expected "
-                    "offset ") "%zu" _(", got ") "%zu" _(")"),
-                  conn->serialization_state.expected_offset, payload_offset);
+                    "offset ") "%u" _(", got ") "%u" _(")"),
+                  (unsigned) conn->serialization_state.expected_offset,
+                  (unsigned) payload_offset);
         return -1;
     }
 

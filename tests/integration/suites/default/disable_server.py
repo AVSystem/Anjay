@@ -17,6 +17,7 @@
 import socket
 
 from framework.lwm2m_test import *
+from .access_control import AccessMask
 
 
 class DisableServerTest(test_suite.Lwm2mSingleServerTest):
@@ -52,3 +53,22 @@ class DisableServerTest(test_suite.Lwm2mSingleServerTest):
             print(self.serv.recv(timeout_s=2))
 
         self.assertSocketsPolled(1)
+
+
+class DisabledServerUpdateTriggerTest(test_suite.Lwm2mTest, test_suite.Lwm2mDmOperations):
+    def setUp(self, **kwargs):
+        super().setUp(servers=2, extra_cmdline_args=[
+            '--access-entry', '/%d/1,2,%d' % (OID.Server, AccessMask.OWNER)])
+
+    def runTest(self):
+        # Disable the first server
+        self.execute_resource(
+            self.servers[0], OID.Server, 1, RID.Server.Disable)
+        self.assertDemoDeregisters(self.servers[0])
+
+        # Update trigger for the disabled server should return BAD REQUEST
+        self.execute_resource(self.servers[1], OID.Server, 1, RID.Server.RegistrationUpdateTrigger,
+                              expect_error_code=coap.Code.RES_BAD_REQUEST)
+
+    def tearDown(self):
+        self.teardown_demo_with_servers(deregister_servers=[self.servers[1]])

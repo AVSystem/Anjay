@@ -89,7 +89,7 @@ perform some unnecessary actions (like calling read handler for example).
 .. snippet-source:: examples/tutorial/BC6/src/time_object.c
 
     void time_object_notify(anjay_t *anjay, const anjay_dm_object_def_t **def) {
-        if (!anjay && !def) {
+        if (!anjay || !def) {
             return;
         }
         time_object_t *obj = get_obj(def);

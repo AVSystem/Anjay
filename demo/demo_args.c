@@ -35,7 +35,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
             .security_iid = ANJAY_ID_INVALID,
             .server_iid = ANJAY_ID_INVALID,
             .id = 1,
-            .binding_mode = "U",
+            .binding_mode = NULL,
         },
         .bootstrap_holdoff_s = 0,
         .bootstrap_timeout_s = 0,
@@ -120,7 +120,7 @@ static const char *help_arg_list(const struct option *opt) {
 
 static void print_option_help(const struct option *opt) {
     const struct {
-        char opt_val;
+        int opt_val;
         const char *args;
         const char *default_value;
         const char *help;
@@ -167,8 +167,10 @@ static void print_option_help(const struct option *opt) {
         { 'P', "SERVER_PUBLIC_KEY_FILE",
           "$(dirname $0)/../certs/server.crt.der",
           "DER-formatted server public key file to load." },
-        { 'q', "BINDING_MODE=UQ", "U",
-          "set the Binding Mode to use for the currently configured server." },
+        { 'q', "BINDING_MODE=UQ", NULL,
+          "set the Binding Mode to use for the currently configured server."
+          "If Binding Mode is not set by this flag, client tries to derive it"
+          "from URI and if it cannot, it uses the default value 'U'" },
         { 's', "MODE", NULL, "set security mode, one of: psk rpk cert nosec." },
         { 'u', "URI", NULL,
           "server URI to use. Note: coap:// URIs require --security-mode nosec "
@@ -196,59 +198,59 @@ static void print_option_help(const struct option *opt) {
           "If specified and nonzero, initializes the Firmware Update object in "
           "UPDATING state, and sets the result to given value after a short "
           "while" },
-        { 1, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
+        { 256, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
-        { 2, "CERT_FILE", NULL,
+        { 257, "CERT_FILE", NULL,
           "Require certificate validation against specified file when "
           "downloading firmware over encrypted channels" },
-        { 3, "CERT_DIR", NULL,
+        { 258, "CERT_DIR", NULL,
           "Require certificate validation against files in specified path when "
           "downloading firmware over encrypted channels; note that the TLS "
           "backend may impose specific requirements for file names and "
           "formats" },
-        { 4, "PSK identity", NULL,
+        { 259, "PSK identity", NULL,
           "Download firmware over encrypted channels using PSK-mode encryption "
           "with the specified identity (provided as hexlified string); must be "
           "used together with --fw-psk-key" },
-        { 5, "PSK key", NULL,
+        { 260, "PSK key", NULL,
           "Download firmware over encrypted channels using PSK-mode encryption "
           "with the specified key (provided as hexlified string); must be used "
           "together with --fw-psk-identity" },
-        { 6, "PERSISTENCE_FILE", NULL,
+        { 261, "PERSISTENCE_FILE", NULL,
           "File to load attribute storage data from at startup, and "
           "store it at shutdown" },
-        { 12, "ACK_RANDOM_FACTOR", "1.5",
+        { 267, "ACK_RANDOM_FACTOR", "1.5",
           "Configures ACK_RANDOM_FACTOR (defined in RFC7252)" },
-        { 13, "ACK_TIMEOUT", "2.0",
+        { 268, "ACK_TIMEOUT", "2.0",
           "Configures ACK_TIMEOUT (defined in RFC7252) in seconds" },
-        { 14, "MAX_RETRANSMIT", "4",
+        { 269, "MAX_RETRANSMIT", "4",
           "Configures MAX_RETRANSMIT (defined in RFC7252)" },
-        { 15, "DTLS_HS_RETRY_WAIT_MIN", "1",
+        { 270, "DTLS_HS_RETRY_WAIT_MIN", "1",
           "Configures minimum period of time to wait before sending first "
           "DTLS HS retransmission" },
-        { 16, "DTLS_HS_RETRY_WAIT_MAX", "60",
+        { 271, "DTLS_HS_RETRY_WAIT_MAX", "60",
           "Configures maximum period of time to wait (after last "
           "retransmission) before giving up on handshake completely" },
-        { 17, "ACK_RANDOM_FACTOR", "1.5",
+        { 272, "ACK_RANDOM_FACTOR", "1.5",
           "Configures ACK_RANDOM_FACTOR (defined in RFC7252) for firmware "
           "update" },
-        { 18, "ACK_TIMEOUT", "2.0",
+        { 273, "ACK_TIMEOUT", "2.0",
           "Configures ACK_TIMEOUT (defined in RFC7252) in seconds for firmware "
           "update" },
-        { 19, "MAX_RETRANSMIT", "4",
+        { 274, "MAX_RETRANSMIT", "4",
           "Configures MAX_RETRANSMIT (defined in RFC7252) for firmware "
           "update" },
-        { 20, NULL, NULL,
+        { 275, NULL, NULL,
           "Sets the library to use hierarchical content formats by default for "
           "all responses." },
-        { 22, NULL, NULL, "Enables DTLS connection_id extension." },
-        { 23, "CIPHERSUITE[,CIPHERSUITE...]", "TLS library defaults",
+        { 277, NULL, NULL, "Enables DTLS connection_id extension." },
+        { 278, "CIPHERSUITE[,CIPHERSUITE...]", "TLS library defaults",
           "Sets the ciphersuites to be used by default for (D)TLS "
           "connections." },
-        { 28, NULL, NULL,
+        { 283, NULL, NULL,
           "Configures preference of re-using existing LwM2M CoAP contexts for "
           "firmware download" },
-        { 29, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
+        { 284, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
     };
 
     int description_offset = 25;
@@ -400,6 +402,11 @@ static void build_getopt_string(const struct option *options,
     memset(buffer, 0, buffer_size);
 
     while (curr_opt->val != 0) {
+        if (curr_opt->val > UCHAR_MAX) {
+            curr_opt++;
+            continue;
+        }
+
         assert(getopt_string_ptr - buffer < (ptrdiff_t) buffer_size - 1);
         *getopt_string_ptr++ = (char) curr_opt->val;
 
@@ -500,24 +507,24 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "cache-size",                    required_argument, 0, '$' },
         { "confirmable-notifications",     no_argument,       0, 'N' },
         { "delayed-upgrade-result",        required_argument, 0, 'r' },
-        { "fw-updated-marker-path",        required_argument, 0, 1 },
-        { "fw-cert-file",                  required_argument, 0, 2 },
-        { "fw-cert-path",                  required_argument, 0, 3 },
-        { "fw-psk-identity",               required_argument, 0, 4 },
-        { "fw-psk-key",                    required_argument, 0, 5 },
-        { "attribute-storage-persistence-file", required_argument, 0, 6 },
-        { "ack-random-factor",             required_argument, 0, 12 },
-        { "ack-timeout",                   required_argument, 0, 13 },
-        { "max-retransmit",                required_argument, 0, 14 },
-        { "dtls-hs-retry-wait-min",        required_argument, 0, 15 },
-        { "dtls-hs-retry-wait-max",        required_argument, 0, 16 },
-        { "fwu-ack-random-factor",         required_argument, 0, 17 },
-        { "fwu-ack-timeout",               required_argument, 0, 18 },
-        { "fwu-max-retransmit",            required_argument, 0, 19 },
-        { "prefer-hierarchical-formats",   no_argument,       0, 20 },
-        { "use-connection-id",             no_argument,       0, 22 },
-        { "ciphersuites",                  required_argument, 0, 23 },
-        { "nstart",                        required_argument, 0, 29 },
+        { "fw-updated-marker-path",        required_argument, 0, 256 },
+        { "fw-cert-file",                  required_argument, 0, 257 },
+        { "fw-cert-path",                  required_argument, 0, 258 },
+        { "fw-psk-identity",               required_argument, 0, 259 },
+        { "fw-psk-key",                    required_argument, 0, 260 },
+        { "attribute-storage-persistence-file", required_argument, 0, 261 },
+        { "ack-random-factor",             required_argument, 0, 267 },
+        { "ack-timeout",                   required_argument, 0, 268 },
+        { "max-retransmit",                required_argument, 0, 269 },
+        { "dtls-hs-retry-wait-min",        required_argument, 0, 270 },
+        { "dtls-hs-retry-wait-max",        required_argument, 0, 271 },
+        { "fwu-ack-random-factor",         required_argument, 0, 272 },
+        { "fwu-ack-timeout",               required_argument, 0, 273 },
+        { "fwu-max-retransmit",            required_argument, 0, 274 },
+        { "prefer-hierarchical-formats",   no_argument,       0, 275 },
+        { "use-connection-id",             no_argument,       0, 277 },
+        { "ciphersuites",                  required_argument, 0, 278 },
+        { "nstart",                        required_argument, 0, 284 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -737,7 +744,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 entry->server_iid = ANJAY_ID_INVALID;
                 entry->is_bootstrap = false;
             }
+
             entry->uri = optarg;
+
             break;
         }
         case 'I':
@@ -773,10 +782,10 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     (anjay_fw_update_result_t) result;
             break;
         }
-        case 1:
+        case 256:
             parsed_args->fw_updated_marker_path = optarg;
             break;
-        case 2: {
+        case 257: {
             if (parsed_args->fw_security_info.mode
                     != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
@@ -792,7 +801,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     avs_net_security_info_from_certificates(cert_info);
             break;
         }
-        case 3: {
+        case 258: {
             if (parsed_args->fw_security_info.mode
                     != (avs_net_security_mode_t) -1) {
                 demo_log(ERROR, "Multiple incompatible security information "
@@ -807,7 +816,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     avs_net_security_info_from_certificates(cert_info);
             break;
         }
-        case 4:
+        case 259:
             if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.mode
                                    != (avs_net_security_mode_t) -1) {
@@ -830,7 +839,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
-        case 5: {
+        case 260: {
             if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.mode
                                    != (avs_net_security_mode_t) -1) {
@@ -855,10 +864,10 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
         }
-        case 6:
+        case 261:
             parsed_args->attr_storage_file = optarg;
             break;
-        case 12:
+        case 267:
             if (parse_double(optarg,
                              &parsed_args->tx_params.ack_random_factor)) {
                 demo_log(ERROR, "Expected ACK_RANDOM_FACTOR to be a floating "
@@ -866,7 +875,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             break;
-        case 13: {
+        case 268: {
             double ack_timeout_s;
             if (parse_double(optarg, &ack_timeout_s)) {
                 demo_log(ERROR,
@@ -877,7 +886,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     avs_time_duration_from_fscalar(ack_timeout_s, AVS_TIME_S);
             break;
         }
-        case 14: {
+        case 269: {
             int32_t max_retransmit;
             if (parse_i32(optarg, &max_retransmit) || max_retransmit < 0) {
                 demo_log(ERROR, "Expected MAX_RETRANSMIT to be an unsigned "
@@ -887,7 +896,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->tx_params.max_retransmit = (unsigned) max_retransmit;
             break;
         }
-        case 15: {
+        case 270: {
             double min_wait_s;
             if (parse_double(optarg, &min_wait_s) || min_wait_s <= 0) {
                 demo_log(ERROR, "Expected DTLS_HS_RETRY_WAIT_MIN > 0");
@@ -897,7 +906,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     avs_time_duration_from_fscalar(min_wait_s, AVS_TIME_S);
             break;
         }
-        case 16: {
+        case 271: {
             double max_wait_s;
             if (parse_double(optarg, &max_wait_s) || max_wait_s <= 0) {
                 demo_log(ERROR, "Expected DTLS_HS_RETRY_WAIT_MAX > 0");
@@ -907,7 +916,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     avs_time_duration_from_fscalar(max_wait_s, AVS_TIME_S);
             break;
         }
-        case 17:
+        case 272:
             if (parse_double(optarg,
                              &parsed_args->fwu_tx_params.ack_random_factor)) {
                 demo_log(ERROR, "Expected ACK_RANDOM_FACTOR to be a floating "
@@ -916,7 +925,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             parsed_args->fwu_tx_params_modified = true;
             break;
-        case 18: {
+        case 273: {
             double ack_timeout_s;
             if (parse_double(optarg, &ack_timeout_s)) {
                 demo_log(ERROR,
@@ -928,7 +937,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->fwu_tx_params_modified = true;
             break;
         }
-        case 19: {
+        case 274: {
             int32_t max_retransmit;
             if (parse_i32(optarg, &max_retransmit) || max_retransmit < 0) {
                 demo_log(ERROR, "Expected MAX_RETRANSMIT to be an unsigned "
@@ -940,13 +949,13 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->fwu_tx_params_modified = true;
             break;
         }
-        case 20:
+        case 275:
             parsed_args->prefer_hierarchical_formats = true;
             break;
-        case 22:
+        case 277:
             parsed_args->use_connection_id = true;
             break;
-        case 23: {
+        case 278: {
             char *saveptr = NULL;
             char *str = optarg;
             const char *token;
@@ -971,7 +980,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         }
-        case 29:
+        case 284:
             if (parse_size(optarg, &parsed_args->tx_params.nstart)) {
                 demo_log(ERROR,
                          "Invalid NSTART value, expected non-negative integer, "

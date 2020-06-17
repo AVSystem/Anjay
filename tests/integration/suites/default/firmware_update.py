@@ -28,8 +28,8 @@ import zlib
 
 from framework.coap_file_server import CoapFileServerThread, CoapFileServer
 from framework.lwm2m_test import *
-from .block_write import Block, equal_chunk_splitter
 from .access_control import AccessMask
+from .block_write import Block, equal_chunk_splitter
 
 UPDATE_STATE_IDLE = 0
 UPDATE_STATE_DOWNLOADING = 1
@@ -76,7 +76,9 @@ class FirmwareUpdate:
         def tearDown(self):
             auto_deregister = getattr(self, 'auto_deregister', True)
             check_marker = getattr(self, 'check_marker', False)
-            expect_send_after_state_machine_reset = getattr(self, 'expect_send_after_state_machine_reset', False)
+            expect_send_after_state_machine_reset = getattr(self,
+                                                            'expect_send_after_state_machine_reset',
+                                                            False)
             try:
                 if check_marker:
                     for _ in range(10):
@@ -522,6 +524,7 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
 
         # there should be exactly one request
         self.assertEqual(['/firmware'], self.requests)
+
 
 
 class FirmwareUpdateBadBase64(FirmwareUpdate.Test):
@@ -1461,4 +1464,5 @@ class FirmwareUpdateWeakEtagTest(FirmwareUpdate.TestWithHttpServer):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
 

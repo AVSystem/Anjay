@@ -365,7 +365,9 @@ static int serv_execute(anjay_t *anjay,
                                                  disable_timeout);
     }
     case SERV_RES_REGISTRATION_UPDATE_TRIGGER:
-        return anjay_schedule_registration_update(anjay, inst->ssid);
+        return anjay_schedule_registration_update(anjay, inst->ssid)
+                       ? ANJAY_ERR_BAD_REQUEST
+                       : 0;
     default:
         AVS_UNREACHABLE(
                 "Execute called on unknown or non-executable Server resource");

@@ -385,10 +385,10 @@ static ip_ping_state_t start_ip_ping(anjay_t *anjay, ip_ping_t *ping) {
         return IP_PING_STATE_ERROR_INTERNAL;
     }
 
-    ping->command_state.iosched_entry =
-            iosched_poll_entry_new(ping->iosched,
-                                   fileno(ping->command_state.ping_pipe),
-                                   POLLIN, ip_ping_handler, ping, NULL);
+    ping->command_state.iosched_entry = iosched_poll_entry_new(
+            ping->iosched,
+            &(const int) { fileno(ping->command_state.ping_pipe) }, DEMO_POLLIN,
+            ip_ping_handler, ping, NULL);
     if (!ping->command_state.iosched_entry) {
         pclose(ping->command_state.ping_pipe);
         ping->command_state.ping_pipe = NULL;

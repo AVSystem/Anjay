@@ -170,6 +170,28 @@ avs_coap_udp_ctx_create(avs_sched_t *sched,
                         avs_coap_udp_response_cache_t *cache,
                         avs_crypto_prng_ctx_t *prng_ctx);
 
+/**
+ * Sets forced incoming MTU on a CoAP/UDP context.
+ *
+ * This value will be used when calculating BLOCK size to request from the
+ * remote endpoint when performing renegotiation, and will have impact on the
+ * result of @ref avs_coap_max_incoming_message_payload.
+ *
+ * @param ctx                 CoAP/UDP context to operate on, previously created
+ *                            using @ref avs_coap_udp_ctx_create.
+ *
+ * @param forced_incoming_mtu Number of bytes expected to be the upper limit of
+ *                            incoming message size, calculated on the datagram
+ *                            layer (similar to @c AVS_NET_SOCKET_OPT_INNER_MTU)
+ *                            or @c 0 to disable this mechanism and use MTU
+ *                            reported by socket instead.
+ *
+ * @returns 0 on success, or -1 if @p ctx is not a CoAP/UDP context created
+ *          by @ref avs_coap_udp_ctx_create.
+ */
+int avs_coap_udp_ctx_set_forced_incoming_mtu(avs_coap_ctx_t *ctx,
+                                             size_t forced_incoming_mtu);
+
 #endif // WITH_AVS_COAP_UDP
 
 #ifdef __cplusplus

@@ -14,9 +14,32 @@
  * limitations under the License.
  */
 
-#include "iosched.h"
+#ifdef _WIN32
+#    if defined(_WINDOWS_) || defined(_WIN32_WINNT)
+#        error "including windows.h or _mingw.h must be performed below the whole _WIN32 ifdef"
+#    endif
+
+#    define WIN32_LEAN_AND_MEAN
+#    define _WIN32_WINNT \
+        0x600 // minimum requirement: Windows NT 6.0 a.k.a. Vista
+#    include <winsock2.h>
+
+#    define poll WSAPoll
+typedef UINT nfds_t;
+typedef SOCKET demo_fd_t;
+
+#else // _WIN32
+#    include <arpa/inet.h>
+#    include <netinet/in.h>
+#    include <poll.h>
+
+typedef int demo_fd_t;
+
+#endif // _WIN32
+
 #include "demo.h"
 #include "demo_utils.h"
+#include "iosched.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -24,6 +47,9 @@
 
 #include <avsystem/commons/avs_list.h>
 #include <avsystem/commons/avs_memory.h>
+
+const short DEMO_POLLIN = POLLIN;
+const short DEMO_POLLHUP = POLLHUP;
 
 typedef struct iosched_instant_entry {
     iosched_handler_t *handler;
@@ -84,12 +110,13 @@ static void insert_entry(iosched_t *sched, AVS_LIST(iosched_entry_t) entry) {
 }
 
 const iosched_entry_t *iosched_poll_entry_new(iosched_t *sched,
-                                              demo_fd_t fd,
+                                              const void *system_fd_ptr,
                                               short events,
                                               iosched_poll_handler_t *handler,
                                               void *arg,
                                               iosched_free_arg_t *free_arg) {
-    if (fd == (demo_fd_t) -1 || !events || !handler) {
+    if (!system_fd_ptr || *(const demo_fd_t *) system_fd_ptr == -1 || !events
+            || !handler) {
         return NULL;
     }
 
@@ -98,7 +125,7 @@ const iosched_entry_t *iosched_poll_entry_new(iosched_t *sched,
         entry->type = SCHED_ENTRY_POLL;
         entry->arg = arg;
         entry->free_arg = free_arg;
-        entry->data.poll.fd = fd;
+        entry->data.poll.fd = *(const demo_fd_t *) system_fd_ptr;
         entry->data.poll.events = events;
         entry->data.poll.handler = handler;
         insert_entry(sched, entry);

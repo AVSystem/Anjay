@@ -54,6 +54,10 @@ pushd "$CERTS_DIR" >/dev/null 2>&1
 echo "* generating self signed certs"
 mkdir self-signed
 cd self-signed
+
+# MSYS translates arguments that start with "/" to Windows paths... but /CN= is not a path, so we disable it for this call
+export MSYS2_ARG_CONV_EXCL='*'
+
 "$OPENSSL" ecparam -name prime256v1 -genkey -out server.key
 "$OPENSSL" ecparam -name prime256v1 -genkey -out client.key
 "$OPENSSL" req -batch -new -subj '/CN=127.0.0.1' -key server.key -x509 -sha256 -days 9999 -out server.crt
@@ -73,8 +77,7 @@ echo "* generating root cert - done"
 for NAME in client server; do
     echo "* generating $NAME cert"
     "$OPENSSL" ecparam -name prime256v1 -genkey -out "${NAME}.key"
-    # MSYS translates arguments that start with "/" to Windows paths... but /CN= is not a path, so we disable it for this call
-    MSYS2_ARG_CONV_EXCL='*' "$OPENSSL" req -batch -new -subj '/CN=localhost' -key "${NAME}.key" -sha256 -out "${NAME}.csr"
+    "$OPENSSL" req -batch -new -subj '/CN=localhost' -key "${NAME}.key" -sha256 -out "${NAME}.csr"
     "$OPENSSL" x509 -sha256 -req -in "${NAME}.csr" -CA root.crt -CAkey root.key -out "${NAME}.crt" -days 9999 -CAcreateserial
     cat "${NAME}.crt" root.crt > "${NAME}-and-root.crt"
     echo "* generating $NAME cert - done"

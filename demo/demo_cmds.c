@@ -758,10 +758,10 @@ static void handle_command(anjay_demo_t *demo, char *buf) {
 
 void demo_command_dispatch(short revents, void *demo_) {
     anjay_demo_t *demo = (anjay_demo_t *) demo_;
-    if (revents & POLLHUP) {
+    if (revents & DEMO_POLLHUP) {
         demo->running = false;
     }
-    if (revents & POLLIN) {
+    if (revents & DEMO_POLLIN) {
         static char buf[500] = "";
 
         if (fgets(buf, sizeof(buf), stdin) && buf[0]) {

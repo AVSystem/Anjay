@@ -15,6 +15,7 @@
  */
 
 #include <cstring>
+#include <stdexcept>
 
 #include "context.hpp"
 

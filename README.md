@@ -26,6 +26,7 @@ The project has been created and is actively maintained by [AVSystem](https://ww
   * [Detailed compilation guide](#detailed-compilation-guide)
     * [Building using CMake](#building-using-cmake)
     * [Alternative build systems](#alternative-build-systems)
+  * [Use a Dockerfile](#use-a-dockerfile)
 * [Mbed OS port](#mbed-os-port)
 * [License](#license)
   * [Commercial support](#commercial-support)
@@ -241,6 +242,25 @@ cp -r deps/avs_coap/include_public/avsystem /usr/local/include/
 cp -r deps/avs_commons/include_public/avsystem /usr/local/include/
 cp -r config/* /usr/local/include/
 ```
+
+### Use a Dockerfile
+
+For some cases you may find it comfortable to use Docker image. In this case, the only dependency is Docker, which you can install with your favorite package manager.
+If Docker is already installed, you can clone the repo and build the Docker image:
+
+```
+git clone https://github.com/AVSystem/Anjay.git
+cd Anjay
+docker build --tag anjay .
+```
+
+Then, you can launch the built image and run the demo client:
+
+```
+docker run -it anjay
+./output/bin/demo -e $(hostname) -u coap://try-anjay.avsystem.io:5683
+```
+
 
 ## Mbed OS port
 

@@ -43,6 +43,7 @@ ALLOWED_LICENSES = {
 }
 
 IGNORE_PATTERNS = list(map(re.compile, [
+    '\.dockerignore$',
     '\.gitignore$',
     '\.gitmodules$',
     '^examples/',

@@ -1,6 +1,6 @@
 0a68689ac65f266cdbc204807e69acec	demo/objects/portfolio.c
 755ede76427325b48bd99814387ca72f	deps/avs_coap/include_public/avsystem/coap/ctx.h
-3c3f87f5a3cbb02f8fc990cf090e9238	deps/avs_coap/include_public/avsystem/coap/udp.h
+083f8f64c598a25f572d913824bad94b	deps/avs_coap/include_public/avsystem/coap/udp.h
 397d1dbf4f61b38eb3d13344a899ea3c	deps/avs_commons/include_public/avsystem/commons/avs_base64.h
 18cefc94b28f88f858913061b7510fe8	deps/avs_commons/include_public/avsystem/commons/avs_errno.h
 c82eeed6e0baa3441776a8926c2b8fe0	deps/avs_commons/include_public/avsystem/commons/avs_http.h
@@ -31,7 +31,7 @@ bfbd5566c662483ab427e089f9e7714b	examples/tutorial/BC5/CMakeLists.txt
 a870d087efe6d8d992320c8be9c4de4c	examples/tutorial/BC5/src/time_object.c
 2cc2aa2169283d1553696b4022de6110	examples/tutorial/BC5/src/time_object.h
 bbfc3bf59bec976be8344f8d25405edc	examples/tutorial/BC6/src/main.c
-d110a1aa4f5bfbd88d8fcc7a9904bc13	examples/tutorial/BC6/src/time_object.c
+810862365ed3787e1c756ad0b9dbd1cd	examples/tutorial/BC6/src/time_object.c
 f1516f08b1fdc34192d7ae8db4332980	examples/tutorial/BC6/src/time_object.h
 f971df7872a8f052bb72ae64610a8031	examples/tutorial/firmware-update/basic-implementation/src/firmware_update.c
 8e79fe9e76c36fef28476e89140ec43b	examples/tutorial/firmware-update/basic-implementation/src/firmware_update.h

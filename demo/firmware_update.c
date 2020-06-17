@@ -99,9 +99,9 @@ void firmware_update_set_package_path(fw_update_logic_t *fw, const char *path) {
 }
 
 static void fix_fw_meta_endianness(fw_metadata_t *meta) {
-    meta->version = ntohs(meta->version);
-    meta->force_error_case = ntohs(meta->force_error_case);
-    meta->crc = ntohl(meta->crc);
+    meta->version = avs_convert_be16(meta->version);
+    meta->force_error_case = avs_convert_be16(meta->force_error_case);
+    meta->crc = avs_convert_be32(meta->crc);
 }
 
 static int read_fw_meta_from_file(FILE *f, fw_metadata_t *out_metadata) {

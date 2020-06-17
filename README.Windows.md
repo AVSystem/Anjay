@@ -31,7 +31,7 @@ Anjay is currently not supported or regularly tested (which means that builds ma
 Run the following command in a directory of choice **in the Git for Windows bash environment**:
 
 ``` sh
-git clone --recurse-submodules -c core.symlinks=true https://github.com/AVSystem/Anjay.git
+git clone --recurse-submodules https://github.com/AVSystem/Anjay.git
 ```
 
 ## Compiling the project

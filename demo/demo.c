@@ -283,6 +283,16 @@ install_object(anjay_demo_t *demo,
 }
 
 static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
+    for (size_t i = 0; i < MAX_SERVERS; ++i) {
+        server_entry_t *entry = &cmdline_args->connection_args.servers[i];
+        if (entry->uri == NULL) {
+            break;
+        }
+
+        if (entry->binding_mode == NULL) {
+            entry->binding_mode = "U";
+        }
+    }
 
     anjay_configuration_t config = {
         .endpoint_name = cmdline_args->endpoint_name,
@@ -328,9 +338,10 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 
 #ifndef _WIN32
     if (!cmdline_args->disable_stdin) {
-        if (!iosched_poll_entry_new(demo->iosched, STDIN_FILENO,
-                                    POLLIN | POLLHUP, demo_command_dispatch,
-                                    demo, NULL)) {
+        if (!iosched_poll_entry_new(demo->iosched,
+                                    &(const int) { STDIN_FILENO },
+                                    DEMO_POLLIN | DEMO_POLLHUP,
+                                    demo_command_dispatch, demo, NULL)) {
             return -1;
         }
     }
@@ -472,8 +483,7 @@ static socket_entry_t *create_socket_entry(anjay_demo_t *demo,
         return NULL;
     }
 
-    const demo_fd_t *sys_socket =
-            (const demo_fd_t *) avs_net_socket_get_system(socket);
+    const void *sys_socket = avs_net_socket_get_system(socket);
     if (!sys_socket) {
         demo_log(ERROR, "could not obtain system socket");
         AVS_LIST_DELETE(&entry);
@@ -482,7 +492,7 @@ static socket_entry_t *create_socket_entry(anjay_demo_t *demo,
     entry->demo = demo;
     entry->socket = socket;
     entry->iosched_entry =
-            iosched_poll_entry_new(demo->iosched, *sys_socket, POLLIN,
+            iosched_poll_entry_new(demo->iosched, sys_socket, DEMO_POLLIN,
                                    socket_dispatch, entry, NULL);
     if (!entry->iosched_entry) {
         demo_log(ERROR, "cannot add iosched entry");

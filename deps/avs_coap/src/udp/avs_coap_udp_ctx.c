@@ -184,6 +184,7 @@ typedef struct {
 
     avs_net_socket_t *socket;
     size_t last_mtu;
+    size_t forced_incoming_mtu;
     avs_coap_udp_tx_params_t tx_params;
 
     avs_coap_stats_t stats;
@@ -263,8 +264,12 @@ coap_udp_max_incoming_payload_size(avs_coap_ctx_t *ctx_,
                                    uint8_t code) {
     (void) code;
     avs_coap_udp_ctx_t *ctx = (avs_coap_udp_ctx_t *) ctx_;
-    update_last_mtu_from_socket(ctx);
-    return udp_max_payload_size(ctx->base.in_buffer->capacity, ctx->last_mtu,
+    size_t incoming_mtu = ctx->forced_incoming_mtu;
+    if (incoming_mtu <= 0) {
+        update_last_mtu_from_socket(ctx);
+        incoming_mtu = ctx->last_mtu;
+    }
+    return udp_max_payload_size(ctx->base.in_buffer->capacity, incoming_mtu,
                                 token_size, options ? options->size : 0);
 }
 
@@ -583,8 +588,8 @@ static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
 
     const size_t msgs_to_resume =
             AVS_MIN(ctx->tx_params.nstart - resumed_msgs, held_msgs);
-    LOG(DEBUG, "%zu/%zu" _(" msgs held; resuming ") "%zu", held_msgs, all_msgs,
-        msgs_to_resume);
+    LOG(DEBUG, "%u/%u" _(" msgs held; resuming ") "%u", (unsigned) held_msgs,
+        (unsigned) all_msgs, (unsigned) msgs_to_resume);
 
     // Ending up resuming 0 messages here indicates one of:
     //
@@ -1633,6 +1638,18 @@ avs_coap_udp_ctx_create(avs_sched_t *sched,
     ctx->last_msg_id = last_msg_id;
 
     return (avs_coap_ctx_t *) ctx;
+}
+
+int avs_coap_udp_ctx_set_forced_incoming_mtu(avs_coap_ctx_t *ctx,
+                                             size_t forced_incoming_mtu) {
+    if (!ctx || ctx->vtable != &COAP_UDP_VTABLE) {
+        LOG(ERROR, _("avs_coap_udp_ctx_set_forced_incoming_mtu() called on a "
+                     "NULL or non-UDP context"));
+        return -1;
+    }
+
+    ((avs_coap_udp_ctx_t *) ctx)->forced_incoming_mtu = forced_incoming_mtu;
+    return 0;
 }
 
 #endif // WITH_AVS_COAP_UDP

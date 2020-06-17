@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <avsystem/commons/avs_memory.h>
+#include <avsystem/commons/avs_utils.h>
 #include <avsystem/commons/avs_vector.h>
 
 #define TEST_RES_TIMESTAMP 0
@@ -329,7 +330,7 @@ static int test_resource_read(anjay_t *anjay,
         if (!it) {
             return ANJAY_ERR_NOT_FOUND;
         }
-        const uint32_t value = htonl((uint32_t) it->value);
+        const uint32_t value = avs_convert_be32((uint32_t) it->value);
         return anjay_ret_bytes(ctx, &value, sizeof(value));
     }
     case TEST_RES_INT:

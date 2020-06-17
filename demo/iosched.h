@@ -17,36 +17,8 @@
 #ifndef DEMO_SCHEDULER_H
 #define DEMO_SCHEDULER_H
 
-#ifdef _WIN32
-
-#    if defined(_WINDOWS_) || defined(_WIN32_WINNT)
-#        error "iosched.h needs to be included before windows.h or _mingw.h"
-#    endif
-
-#    define WIN32_LEAN_AND_MEAN
-#    define _WIN32_WINNT \
-        0x600 // minimum requirement: Windows NT 6.0 a.k.a. Vista
-#    include <winsock2.h>
-
-#    ifdef ERROR
-// Windows headers are REALLY weird. winsock2.h includes windows.h, which
-// includes wingdi.h, even with WIN32_LEAN_AND_MEAN. And wingdi.h defines
-// a macro called ERROR, which conflicts with avs_log() usage.
-#        undef ERROR
-#    endif
-#    define poll WSAPoll
-typedef UINT nfds_t;
-typedef SOCKET demo_fd_t;
-
-#else // _WIN32
-
-#    include <arpa/inet.h>
-#    include <netinet/in.h>
-#    include <poll.h>
-
-typedef int demo_fd_t;
-
-#endif // _WIN32
+extern const short DEMO_POLLIN;
+extern const short DEMO_POLLHUP;
 
 /** Frees any resources associated with a handler @p arg. */
 typedef void iosched_free_arg_t(void *arg);
@@ -69,12 +41,12 @@ void iosched_release(iosched_t *sched);
 
 /**
  * Schedules a persistent job to be executed each time any of @p events happen
- * on given @p fd.
+ * on given @p system_fd_ptr.
  *
  * @p free_arg may be NULL if @p arg does not need to be released.
  */
 const iosched_entry_t *iosched_poll_entry_new(iosched_t *sched,
-                                              demo_fd_t fd,
+                                              const void *system_fd_ptr,
                                               short events,
                                               iosched_poll_handler_t *handler,
                                               void *arg,
