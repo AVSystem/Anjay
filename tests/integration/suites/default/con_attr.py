@@ -59,14 +59,17 @@ class ConfirmableTest(test_suite.Lwm2mSingleServerTest,
         # trigger a BLOCK transfer. In that case, Anjay is not expected to
         # attempt to receive additional packets during request handling - they
         # should be handled sequentially without any errors.
-        self.serv.send(Lwm2mObserve(ResPath.Test[0].Counter, token=counter_pkt.token, observe=1))
-        self.serv.send(Lwm2mObserve(ResPath.Test[0].Timestamp, token=timestamp_pkt.token, observe=1))
+        self.serv.send(Lwm2mObserve(
+            ResPath.Test[0].Counter, token=counter_pkt.token, observe=1))
+        self.serv.send(Lwm2mObserve(
+            ResPath.Test[0].Timestamp, token=timestamp_pkt.token, observe=1))
 
         # flush any remaining notifications & Cancel Observe responses
         try:
             while True:
                 pkt = self.serv.recv(timeout_s=0.1)
-                self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
+                self.assertIn(
+                    pkt.token, {counter_pkt.token, timestamp_pkt.token})
         except socket.timeout:
             pass
 
@@ -114,13 +117,16 @@ class NonConfirmableTest(test_suite.Lwm2mSingleServerTest,
         # trigger a BLOCK transfer. In that case, Anjay is not expected to
         # attempt to receive additional packets during request handling - they
         # should be handled sequentially without any errors.
-        self.serv.send(Lwm2mObserve(ResPath.Test[0].Counter, token=counter_pkt.token, observe=1))
-        self.serv.send(Lwm2mObserve(ResPath.Test[0].Timestamp, token=timestamp_pkt.token, observe=1))
+        self.serv.send(Lwm2mObserve(
+            ResPath.Test[0].Counter, token=counter_pkt.token, observe=1))
+        self.serv.send(Lwm2mObserve(
+            ResPath.Test[0].Timestamp, token=timestamp_pkt.token, observe=1))
 
         # flush any remaining notifications & Cancel Observe responses
         try:
             while True:
                 pkt = self.serv.recv(timeout_s=0.1)
-                self.assertIn(pkt.token, {counter_pkt.token, timestamp_pkt.token})
+                self.assertIn(
+                    pkt.token, {counter_pkt.token, timestamp_pkt.token})
         except socket.timeout:
             pass

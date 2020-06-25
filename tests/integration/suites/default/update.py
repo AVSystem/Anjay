@@ -79,59 +79,6 @@ class ReconnectTest(test_suite.Lwm2mDtlsSingleServerTest):
         self.assertDtlsReconnect()
 
 
-class ReconnectBootstrapTest(test_suite.Lwm2mSingleServerTest):
-    def setUp(self):
-        self.setup_demo_with_servers(servers=0, bootstrap_server=True)
-
-    def runTest(self):
-        self.bootstrap_server.set_timeout(timeout_s=1)
-        pkt = self.bootstrap_server.recv()
-        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
-                            pkt)
-        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
-
-        original_remote_addr = self.bootstrap_server.get_remote_addr()
-
-        # reconnect
-        self.communicate('reconnect')
-        self.bootstrap_server.reset()
-        pkt = self.bootstrap_server.recv()
-
-        # should retain remote port after reconnecting
-        self.assertEqual(original_remote_addr, self.bootstrap_server.get_remote_addr())
-        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
-                            pkt)
-
-        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
-
-        demo_port = self.get_demo_port()
-        self.assertEqual(self.bootstrap_server.get_remote_addr()[1], demo_port)
-
-        # send Bootstrap Finish
-        req = Lwm2mBootstrapFinish()
-        self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.bootstrap_server.recv())
-
-        # reconnect once again
-        self.communicate('reconnect')
-
-        # now there should be no Bootstrap Request
-        with self.assertRaises(socket.timeout):
-            print(self.bootstrap_server.recv(timeout_s=3))
-
-        # should retain remote port after reconnecting
-        new_demo_port = self.get_demo_port()
-        self.assertEqual(demo_port, new_demo_port)
-
-        self.bootstrap_server.connect_to_client(('127.0.0.1', new_demo_port))
-
-        # DELETE /33605, essentially a no-op to check connectivity
-        req = Lwm2mDelete(Lwm2mPath('/%d' % (OID.Test,)))
-        self.bootstrap_server.send(req)
-        self.assertMsgEqual(Lwm2mDeleted.matching(req)(), self.bootstrap_server.recv())
-
-
 class UpdateFallbacksToRegisterAfterLifetimeExpiresTest(test_suite.Lwm2mSingleServerTest):
     LIFETIME = 4
 
@@ -146,9 +93,12 @@ class UpdateFallbacksToRegisterAfterLifetimeExpiresTest(test_suite.Lwm2mSingleSe
     def runTest(self):
         self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1)
 
-        self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1, respond=False)
-        self.assertDemoUpdatesRegistration(timeout_s=self.LIFETIME / 2 + 1, respond=False)
-        self.assertDemoRegisters(lifetime=self.LIFETIME, timeout_s=self.LIFETIME / 2 + 1)
+        self.assertDemoUpdatesRegistration(
+            timeout_s=self.LIFETIME / 2 + 1, respond=False)
+        self.assertDemoUpdatesRegistration(
+            timeout_s=self.LIFETIME / 2 + 1, respond=False)
+        self.assertDemoRegisters(
+            lifetime=self.LIFETIME, timeout_s=self.LIFETIME / 2 + 1)
 
 
 class UpdateFallbacksToRegisterAfterCoapClientErrorResponse(test_suite.Lwm2mSingleServerTest):
@@ -185,7 +135,8 @@ class ReconnectFailsWithCoapErrorCodeTest(test_suite.Lwm2mSingleServerTest):
         pkt = self.serv.recv()
         self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=86400' % (DEMO_ENDPOINT_NAME,)),
                             pkt)
-        self.serv.send(Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_INTERNAL_SERVER_ERROR))
+        self.serv.send(Lwm2mErrorResponse.matching(pkt)(
+            code=coap.Code.RES_INTERNAL_SERVER_ERROR))
 
         # client should abort
         with self.assertRaises(socket.timeout):

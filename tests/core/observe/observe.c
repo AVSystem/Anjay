@@ -2158,3 +2158,37 @@ AVS_UNIT_TEST(notify, no_storing_of_errors) {
     // errors, regardless of the actual setting.
     storing_of_errors_test_impl(false);
 }
+
+AVS_UNIT_TEST(notify, send_error) {
+    SUCCESS_TEST(14);
+
+    // first notification
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_notify_changed(anjay, 42, 69, 4));
+    anjay_sched_run(anjay);
+
+    _anjay_mock_clock_advance(avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    // let's leave storing on for a moment
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0, (const anjay_iid_t[]) { 69, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 69, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 2, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 3, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 4, ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT },
+                    { 5, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 6, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_STRING(0, "Meiko"));
+    avs_unit_mocksock_output_fail(mocksocks[0], avs_errno(AVS_ECONNRESET));
+    _anjay_mocksock_expect_stats_zero(mocksocks[0]);
+    anjay_sched_run(anjay);
+
+    DM_TEST_FINISH;
+}

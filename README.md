@@ -249,9 +249,9 @@ For some cases you may find it comfortable to use Docker image. In this case, th
 If Docker is already installed, you can clone the repo and build the Docker image:
 
 ```
-git clone https://github.com/AVSystem/Anjay.git
+git clone --recurse-submodules https://github.com/AVSystem/Anjay.git
 cd Anjay
-docker build --tag anjay .
+docker build --no-cache --tag anjay .
 ```
 
 Then, you can launch the built image and run the demo client:

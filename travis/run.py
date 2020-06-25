@@ -41,7 +41,13 @@ if docker_image != '':
         image_uuid = str(uuid.uuid4()).lower()
         image_name = '%s-%s' % (docker_image, image_uuid)
 
-        subprocess.check_call(['docker', 'build', '-t', image_name, '-f', dockerfile_path, '.'])
+        subprocess.check_call(['docker', 'build', '--no-cache', '--tag', image_name, '--file', dockerfile_path, '.'],
+                              # Use DOCKER_BUILDKIT=1 to alleviate storage problems that
+                              # depend on .dockerignore file presence in a very, very strange
+                              # way (with .dockerignore in the repo, the build fails, with
+                              # "archive too large" error, without .dockerignore it works just
+                              # fine)
+                              env={'DOCKER_BUILDKIT': '1'})
 
         try:
             subprocess.check_call(['docker', 'run',
@@ -52,5 +58,6 @@ if docker_image != '':
             subprocess.check_call(['docker', 'rmi', '-f', image_name])
 else:
     subprocess.check_call(
-        './devconfig %s && make -j && %s' % (os.getenv('DEVCONFIG_FLAGS', ''), check_command),
+        './devconfig %s && make -j && %s' % (
+            os.getenv('DEVCONFIG_FLAGS', ''), check_command),
         shell=True)

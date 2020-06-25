@@ -1407,12 +1407,16 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
                                     handle_notify_delivery, conn)))
                    && connection_exists(_anjay_from_server(conn_ref.server),
                                         conn)) {
-            on_entry_flushed(conn, err);
             cleanup_serialization_state(&conn->serialization_state);
+            on_entry_flushed(conn, err);
         }
     }
     avs_coap_options_cleanup(&response.options);
-    _anjay_connection_schedule_queue_mode_close(conn_ref);
+    // on_entry_flushed() may have closed the socket already,
+    // so we need to check if it's still open
+    if (_anjay_connection_get_online_socket(conn_ref)) {
+        _anjay_connection_schedule_queue_mode_close(conn_ref);
+    }
 }
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref) {

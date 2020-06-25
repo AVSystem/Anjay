@@ -83,9 +83,11 @@ void _anjay_test_dm_finish(anjay_t *anjay) {
                     .server = server,
                     .conn_type = ANJAY_CONNECTION_PRIMARY
                 });
-        avs_unit_mocksock_assert_expects_met(connection->conn_socket_);
-        avs_unit_mocksock_assert_io_clean(connection->conn_socket_);
-        _anjay_mocksock_expect_stats_zero(connection->conn_socket_);
+        if (connection->conn_socket_) {
+            avs_unit_mocksock_assert_expects_met(connection->conn_socket_);
+            avs_unit_mocksock_assert_io_clean(connection->conn_socket_);
+            _anjay_mocksock_expect_stats_zero(connection->conn_socket_);
+        }
     }
     _anjay_mock_dm_expect_clean();
     AVS_LIST_CLEAR(&anjay->servers->servers) {

@@ -52,7 +52,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.4.2"
+#    define ANJAY_VERSION "2.4.3"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
