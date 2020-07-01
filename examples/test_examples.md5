@@ -4,7 +4,7 @@
 397d1dbf4f61b38eb3d13344a899ea3c	deps/avs_commons/include_public/avsystem/commons/avs_base64.h
 18cefc94b28f88f858913061b7510fe8	deps/avs_commons/include_public/avsystem/commons/avs_errno.h
 c82eeed6e0baa3441776a8926c2b8fe0	deps/avs_commons/include_public/avsystem/commons/avs_http.h
-3ed04a7756aee5de126da9ba2329bd35	deps/avs_commons/include_public/avsystem/commons/avs_socket.h
+86dffbdc0554811009856c76ef56051e	deps/avs_commons/include_public/avsystem/commons/avs_socket.h
 e16268992b3c5c8d7a2091cda7bf3089	deps/avs_commons/include_public/avsystem/commons/avs_socket_v_table.h
 7cbc2ba776437d7986ac1a3990fcf18b	deps/avs_commons/include_public/avsystem/commons/avs_stream.h
 85f8e0b3998aa61f7ccc3d39e14e9acb	deps/avs_commons/include_public/avsystem/commons/avs_stream_net.h
@@ -36,8 +36,8 @@ f1516f08b1fdc34192d7ae8db4332980	examples/tutorial/BC6/src/time_object.h
 f971df7872a8f052bb72ae64610a8031	examples/tutorial/firmware-update/basic-implementation/src/firmware_update.c
 8e79fe9e76c36fef28476e89140ec43b	examples/tutorial/firmware-update/basic-implementation/src/firmware_update.h
 2c840cb99d21959586cb26be45065a8d	examples/tutorial/firmware-update/basic-implementation/src/main.c
-fd2d8a0f9bc27b6be66cdb3795c815d9	examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
-e5283c62ad58a19b49f19699f9b0e546	examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
+504ff5e268f5d42029d3235b7acde906	examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
+ef252b2976d9518e8807f517003660cb	examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 bccdb671e486777e5b3d8543814f9402	include_public/anjay/attr_storage.h
 9909723fde38a6965891569e7bee41a1	include_public/anjay/core.h
 5352bae6279830eeffcdac01c86ae3e2	include_public/anjay/dm.h

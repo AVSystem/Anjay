@@ -147,3 +147,4 @@ class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mDtlsSingleServerTest
         self.communicate('exit-offline')
         self.assertDtlsReconnect()
         self.assertDemoUpdatesRegistration()
+

@@ -303,10 +303,12 @@ static int fw_get_security_config(void *user_ptr,
     // no match found, fallback to loading certificates from given paths
     const avs_net_certificate_info_t cert_info = {
         .server_cert_validation = true,
-        .trusted_certs = avs_net_trusted_cert_info_from_path("./certs/CA.crt"),
-        .client_cert = avs_net_client_cert_info_from_file("./certs/client.crt"),
+        .trusted_certs =
+                avs_crypto_trusted_cert_info_from_path("./certs/CA.crt"),
+        .client_cert =
+                avs_crypto_client_cert_info_from_file("./certs/client.crt"),
         .client_key =
-                avs_net_client_key_info_from_file("./certs/client.key", NULL)
+                avs_crypto_client_key_info_from_file("./certs/client.key", NULL)
     };
     // NOTE: this assignment is safe, because cert_info contains pointers to
     // string literals only. If the configuration were to load certificate info

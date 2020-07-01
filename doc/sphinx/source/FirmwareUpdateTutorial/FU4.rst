@@ -140,22 +140,22 @@ is:
      * Certificate and key information may be read from files or passed as raw data.
      *
      * User should initialize:
-     *  - @ref avs_net_certificate_info_t#client_cert,
-     *  - @ref avs_net_certificate_info_t#client_key,
-     *  - @ref avs_net_certificate_info_t#trusted_certs
+     *  - @ref avs_crypto_certificate_info_t#client_cert,
+     *  - @ref avs_crypto_certificate_info_t#client_key,
+     *  - @ref avs_crypto_certificate_info_t#trusted_certs
      * via helper functions:
-     *  - @ref avs_net_client_cert_from_*
-     *  - @ref avs_net_client_key_from_*
-     *  - @ref avs_net_trusted_cert_source_from_*
+     *  - @ref avs_crypto_client_cert_from_*
+     *  - @ref avs_crypto_client_key_from_*
+     *  - @ref avs_crypto_trusted_cert_source_from_*
      *
      * Moreover, to enable CA chain validation one MUST set @ref
      * avs_net_certificate_info_t#server_cert_validation to true.
      */
     typedef struct {
         bool server_cert_validation;
-        avs_net_trusted_cert_info_t trusted_certs;
-        avs_net_client_cert_info_t client_cert;
-        avs_net_client_key_info_t client_key;
+        avs_crypto_trusted_cert_info_t trusted_certs;
+        avs_crypto_client_cert_info_t client_cert;
+        avs_crypto_client_key_info_t client_key;
     } avs_net_certificate_info_t;
 
 To populate it properly, we're gonna need at least two pieces of information
@@ -178,13 +178,14 @@ from files, we could do something like this:
 
     const avs_net_certificate_info_t cert_info = {
         .server_cert_validation = true,
-        .trusted_certs = avs_net_trusted_cert_info_from_path("./CA.crt"),
-        .client_cert = avs_net_client_cert_info_from_file("./client.crt"),
+        .trusted_certs = avs_crypto_trusted_cert_info_from_path("./CA.crt"),
+        .client_cert = avs_crypto_client_cert_info_from_file("./client.crt"),
         // NOTE: "password" may be NULL if no password is required
-        .client_key = avs_net_client_key_info_from_file("./client.key", "password")
+        .client_key =
+                avs_crypto_client_key_info_from_file("./client.key", "password")
     };
     avs_net_security_info_t cert_security =
-        avs_net_security_info_from_certificates(cert_info);
+            avs_net_security_info_from_certificates(cert_info);
 
 Security configuration with ``get_security_config`` callback
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -437,10 +438,12 @@ are highlighted:
         // no match found, fallback to loading certificates from given paths
         const avs_net_certificate_info_t cert_info = {
             .server_cert_validation = true,
-            .trusted_certs = avs_net_trusted_cert_info_from_path("./certs/CA.crt"),
-            .client_cert = avs_net_client_cert_info_from_file("./certs/client.crt"),
+            .trusted_certs =
+                    avs_crypto_trusted_cert_info_from_path("./certs/CA.crt"),
+            .client_cert =
+                    avs_crypto_client_cert_info_from_file("./certs/client.crt"),
             .client_key =
-                    avs_net_client_key_info_from_file("./certs/client.key", NULL)
+                    avs_crypto_client_key_info_from_file("./certs/client.key", NULL)
         };
         // NOTE: this assignment is safe, because cert_info contains pointers to
         // string literals only. If the configuration were to load certificate info

@@ -174,6 +174,30 @@ class BootstrapClientTest(BootstrapTest.Test):
             print(self.bootstrap_server.recv(timeout_s=1))
 
 
+class BootstrapOneResourceAtATimeTest(BootstrapTest.Test):
+    def runTest(self):
+        self.assertDemoRequestsBootstrap(endpoint=DEMO_ENDPOINT_NAME)
+        # Create typical Server Object instance
+        for rid, value in ((RID.Server.Lifetime, '86400'),
+                           (RID.Server.ShortServerID, '1'),
+                           (RID.Server.NotificationStoring, '1'),
+                           (RID.Server.Binding, 'U')):
+            self.write_resource(self.bootstrap_server, oid=OID.Server, iid=1, rid=rid,
+                                content=value)
+        # Create typical (corresponding) Security Object instance
+        for rid, value in ((RID.Security.ServerURI,
+                            'coap://127.0.0.1:%d' % self.serv.get_listen_port()),
+                           (RID.Security.Bootstrap, '0'),
+                           (RID.Security.Mode, str(SecurityMode.NoSec.value)),
+                           (RID.Security.ShortServerID, '1')):
+            self.write_resource(self.bootstrap_server, oid=OID.Security, iid=2, rid=rid,
+                                content=value)
+        self.perform_bootstrap_finish()
+
+        # should now register with the non-bootstrap server
+        self.assertDemoRegisters(self.serv)
+
+
 
 
 class ClientBootstrapNotSentAfterDisableWithinHoldoffTest(BootstrapTest.Test):

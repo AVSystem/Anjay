@@ -2187,6 +2187,8 @@ AVS_UNIT_TEST(notify, send_error) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 4, ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_STRING(0, "Meiko"));
     avs_unit_mocksock_output_fail(mocksocks[0], avs_errno(AVS_ECONNRESET));
+    anjay_sched_run(anjay);
+
     _anjay_mocksock_expect_stats_zero(mocksocks[0]);
     anjay_sched_run(anjay);
 

@@ -87,7 +87,8 @@ void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
     }
 }
 
-void _anjay_server_on_registration_timeout(anjay_server_info_t *server) {
+void _anjay_server_on_server_communication_timeout(
+        anjay_server_info_t *server) {
     anjay_connection_ref_t ref = {
         .server = server,
         .conn_type = ANJAY_CONNECTION_PRIMARY
@@ -176,7 +177,7 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
         _anjay_connections_flush_notifications(&server->connections);
         break;
     case ANJAY_REGISTRATION_ERROR_TIMEOUT:
-        _anjay_server_on_registration_timeout(server);
+        _anjay_server_on_server_communication_timeout(server);
         break;
     default:
         _anjay_server_on_server_communication_error(

@@ -431,7 +431,7 @@ void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
  * was stable (i.e. not just freshly connected and not stateless), or calls
  * @ref _anjay_server_on_server_communication_error otherwise.
  */
-void _anjay_server_on_registration_timeout(anjay_server_info_t *server);
+void _anjay_server_on_server_communication_timeout(anjay_server_info_t *server);
 
 void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref);
 

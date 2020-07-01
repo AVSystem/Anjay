@@ -17,6 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_SERVER_H
 #define ANJAY_INCLUDE_ANJAY_SERVER_H
 
+#include <anjay/anjay_config.h>
 #include <anjay/dm.h>
 
 #include <avsystem/commons/avs_stream.h>

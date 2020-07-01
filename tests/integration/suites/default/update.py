@@ -202,3 +202,4 @@ class NoUpdateDuringShutdownTest(test_suite.Lwm2mSingleServerTest):
         self.communicate('schedule-update-on-exit')
         # tearDown() expects a De-Register operation and will fail on
         # unexpected Update
+

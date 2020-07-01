@@ -177,19 +177,20 @@ static int get_dtls_keys(anjay_t *anjay,
 
 static int init_cert_security(avs_net_security_info_t *security,
                               const anjay_server_dtls_keys_t *keys) {
-    avs_net_client_cert_info_t client_cert =
-            avs_net_client_cert_info_from_buffer(keys->pk_or_identity,
-                                                 keys->pk_or_identity_size);
+    avs_crypto_client_cert_info_t client_cert =
+            avs_crypto_client_cert_info_from_buffer(keys->pk_or_identity,
+                                                    keys->pk_or_identity_size);
 
-    avs_net_client_key_info_t private_key =
-            avs_net_client_key_info_from_buffer(keys->secret_key,
-                                                keys->secret_key_size, NULL);
+    avs_crypto_client_key_info_t private_key =
+            avs_crypto_client_key_info_from_buffer(keys->secret_key,
+                                                   keys->secret_key_size, NULL);
 
     const void *raw_cert_der = keys->server_pk_or_identity_size > 0
                                        ? keys->server_pk_or_identity
                                        : NULL;
-    avs_net_trusted_cert_info_t ca = avs_net_trusted_cert_info_from_buffer(
-            raw_cert_der, keys->server_pk_or_identity_size);
+    avs_crypto_trusted_cert_info_t ca =
+            avs_crypto_trusted_cert_info_from_buffer(
+                    raw_cert_der, keys->server_pk_or_identity_size);
 
     *security = avs_net_security_info_from_certificates(
             (avs_net_certificate_info_t) {

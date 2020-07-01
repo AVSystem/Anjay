@@ -746,8 +746,8 @@ static void bootstrap_request_response_handler(
                       _("Client-initiated Bootstrap successfully started"));
             start_bootstrap_if_not_already_started(anjay, connection);
             if (schedule_finish_timeout(anjay, connection)) {
-                _anjay_server_on_failure(connection.server,
-                                         "cannot schedule finish timeout job");
+                _anjay_server_on_server_communication_error(
+                        connection.server, avs_errno(AVS_ENOMEM));
             }
         }
         break;
@@ -757,7 +757,8 @@ static void bootstrap_request_response_handler(
             if (err.category == AVS_COAP_ERR_CATEGORY
                     && err.code == AVS_COAP_ERR_TIMEOUT) {
                 anjay_log(WARNING, _("could not request bootstrap: timeout"));
-                _anjay_server_on_registration_timeout(connection.server);
+                _anjay_server_on_server_communication_timeout(
+                        connection.server);
             } else {
                 anjay_log(WARNING, _("could not send Request Bootstrap: ") "%s",
                           AVS_COAP_STRERROR(err));

@@ -1215,10 +1215,10 @@ static bool connection_exists(anjay_t *anjay,
 
 static void flush_next_unsent(anjay_observe_connection_entry_t *conn);
 
-static void on_network_error(anjay_connection_ref_t conn_ref) {
+static void on_network_error(anjay_connection_ref_t conn_ref, avs_error_t err) {
     anjay_log(WARNING, _("network communication error while sending Notify"));
     if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY) {
-        _anjay_server_on_failure(conn_ref.server, "not reachable");
+        _anjay_server_on_server_communication_error(conn_ref.server, err);
     }
 }
 
@@ -1265,7 +1265,7 @@ static void on_entry_flushed(anjay_observe_connection_entry_t *conn,
     if (err.category == AVS_COAP_ERR_CATEGORY) {
         if (avs_coap_error_recovery_action(err)
                 == AVS_COAP_ERR_RECOVERY_RECREATE_CONTEXT) {
-            on_network_error(conn->conn_ref);
+            on_network_error(conn->conn_ref, err);
             return;
         } else if (err.code == AVS_COAP_ERR_UDP_RESET_RECEIVED
                    || err.code == AVS_COAP_ERR_EXCHANGE_CANCELED) {
@@ -1287,7 +1287,7 @@ static void on_entry_flushed(anjay_observe_connection_entry_t *conn,
     } else {
         // All other errors are treated as fatal socket errors, i.e., we assume
         // that the socket is no longer usable.
-        on_network_error(conn->conn_ref);
+        on_network_error(conn->conn_ref, err);
         return;
     }
 

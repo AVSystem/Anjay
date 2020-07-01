@@ -41,8 +41,10 @@
 #    error "WITH_AVS_COAP_OBSERVE_PERSISTENCE requires avs_persistence to be enabled"
 #endif
 
-#if defined(WITH_AVS_COAP_OSCORE) && !defined(AVS_COMMONS_WITH_AVS_CRYPTO)
-#    error "WITH_AVS_COAP_OSCORE requires avs_crypto to be enabled"
+#if defined(WITH_AVS_COAP_OSCORE)                 \
+        && (!defined(AVS_COMMONS_WITH_AVS_CRYPTO) \
+            || !defined(AVS_COMMONS_WITH_AVS_CRYPTO_ADVANCED_FEATURES))
+#    error "WITH_AVS_COAP_OSCORE requires avs_crypto with advanced features to be enabled"
 #endif
 
 #ifdef AVS_COMMONS_HAVE_VISIBILITY

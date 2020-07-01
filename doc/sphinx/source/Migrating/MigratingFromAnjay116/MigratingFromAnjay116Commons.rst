@@ -42,93 +42,101 @@ The general rename patterns are:
 * ``avsystem/commons/unit/*.h`` → ``avsystem/commons/avs_unit_*.h``
 
 
-+------------------------------------------------+----------------------------------------------+
-| Old header file                                | New header file                              |
-+================================================+==============================================+
-| ``avsystem/commons/addrinfo.h``                | ``avsystem/commons/avs_addrinfo.h``          |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/base64.h``                  | ``avsystem/commons/avs_base64.h``            |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/buffer.h``                  | ``avsystem/commons/avs_buffer.h``            |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/coap/*``                    | | removed in existing form                   |
-|                                                | | replaced by ``avsystem/coap/*``            |
-|                                                | | see :doc:`MigratingFromAnjay116Coap` for   |
-|                                                |   details                                    |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/cleanup.h``                 | ``avsystem/commons/avs_cleanup.h``           |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/condvar.h``                 | ``avsystem/commons/avs_condvar.h``           |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/defs.h``                    | ``avsystem/commons/avs_defs.h``              |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/errno.h``                   | removed in existing form, replaced by:       |
-|                                                |                                              |
-|                                                | - ``avsystem/commons/avs_errno.h``           |
-|                                                | - ``avsystem/commons/avs_errno_map.h``       |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/http.h``                    | ``avsystem/commons/avs_http.h``              |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/init_once.h``               | ``avsystem/commons/avs_init_once.h``         |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/list.h``                    | ``avsystem/commons/avs_list.h``              |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/log.h``                     | ``avsystem/commons/avs_log.h``               |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/memory.h``                  | ``avsystem/commons/avs_memory.h``            |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/mutex.h``                   | ``avsystem/commons/avs_mutex.h``             |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/net.h``                     | ``avsystem/commons/avs_net.h``               |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/persistence.h``             | ``avsystem/commons/avs_persistence.h``       |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/rbtree.h``                  | ``avsystem/commons/avs_rbtree.h``            |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/shared_buffer.h``           | ``avsystem/commons/avs_shared_buffer.h``     |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/socket.h``                  | ``avsystem/commons/avs_socket.h``            |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/socket_v_table.h``          | ``avsystem/commons/avs_socket_v_table.h``    |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream.h``                  | ``avsystem/commons/avs_stream.h``            |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/stream_buffered.h``  | ``avsystem/commons/avs_stream_buffered.h``   |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/stream_file.h``      | ``avsystem/commons/avs_stream_file.h``       |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/stream_inbuf.h``     | ``avsystem/commons/avs_stream_inbuf.h``      |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/md5.h``              | ``avsystem/commons/avs_stream_md5.h``        |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/stream_membuf.h``    | ``avsystem/commons/avs_stream_membuf.h``     |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/stream_net.h``       | ``avsystem/commons/avs_stream_net.h``        |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/netbuf.h``           | ``avsystem/commons/avs_stream_netbuf.h``     |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/stream_outbuf.h``    | ``avsystem/commons/avs_stream_outbuf.h``     |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream/stream_simple_io.h`` | ``avsystem/commons/avs_stream_simple_io.h``  |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/stream_v_table.h``          | ``avsystem/commons/avs_stream_v_table.h``    |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/time.h``                    | ``avsystem/commons/avs_time.h``              |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/unit/memstream.h``          | ``avsystem/commons/avs_unit_memstream.h``    |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/unit/mock_helpers.h``       | ``avsystem/commons/avs_unit_mock_helpers.h`` |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/unit/mocksock.h``           | ``avsystem/commons/avs_unit_mocksock.h``     |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/unit/test.h``               | ``avsystem/commons/avs_unit_test.h``         |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/url.h``                     | ``avsystem/commons/avs_url.h``               |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/utils.h``                   | ``avsystem/commons/avs_utils.h``             |
-+------------------------------------------------+----------------------------------------------+
-| ``avsystem/commons/vector.h``                  | ``avsystem/commons/avs_vector.h``            |
-+------------------------------------------------+----------------------------------------------+
++------------------------------------------------+-----------------------------------------------------+
+| Old header file                                | New header file                                     |
++================================================+=====================================================+
+| ``avsystem/commons/addrinfo.h``                | ``avsystem/commons/avs_addrinfo.h``                 |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/base64.h``                  | ``avsystem/commons/avs_base64.h``                   |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/buffer.h``                  | ``avsystem/commons/avs_buffer.h``                   |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/coap/*``                    | | removed in existing form                          |
+|                                                | | replaced by ``avsystem/coap/*``                   |
+|                                                | | see :doc:`MigratingFromAnjay116Coap` for details  |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/cleanup.h``                 | ``avsystem/commons/avs_cleanup.h``                  |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/condvar.h``                 | ``avsystem/commons/avs_condvar.h``                  |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/defs.h``                    | ``avsystem/commons/avs_defs.h``                     |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/errno.h``                   | removed in existing form, replaced by:              |
+|                                                |                                                     |
+|                                                | - ``avsystem/commons/avs_errno.h``                  |
+|                                                | - ``avsystem/commons/avs_errno_map.h``              |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/http.h``                    | ``avsystem/commons/avs_http.h``                     |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/init_once.h``               | ``avsystem/commons/avs_init_once.h``                |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/list.h``                    | ``avsystem/commons/avs_list.h``                     |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/log.h``                     | ``avsystem/commons/avs_log.h``                      |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/memory.h``                  | ``avsystem/commons/avs_memory.h``                   |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/mutex.h``                   | ``avsystem/commons/avs_mutex.h``                    |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/net.h``                     | ``avsystem/commons/avs_net.h``                      |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/persistence.h``             | ``avsystem/commons/avs_persistence.h``              |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/rbtree.h``                  | ``avsystem/commons/avs_rbtree.h``                   |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/shared_buffer.h``           | ``avsystem/commons/avs_shared_buffer.h``            |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/socket.h``                  | | ``avsystem/commons/avs_socket.h``                 |
+|                                                | | ``avsystem/commons/avs_crypto_pki.h`` [#pki]_     |
+|                                                | | ``avsystem/commons/avs_net_pki_compat.h`` [#pki]_ |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/socket_v_table.h``          | ``avsystem/commons/avs_socket_v_table.h``           |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream.h``                  | ``avsystem/commons/avs_stream.h``                   |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/stream_buffered.h``  | ``avsystem/commons/avs_stream_buffered.h``          |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/stream_file.h``      | ``avsystem/commons/avs_stream_file.h``              |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/stream_inbuf.h``     | ``avsystem/commons/avs_stream_inbuf.h``             |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/md5.h``              | ``avsystem/commons/avs_stream_md5.h``               |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/stream_membuf.h``    | ``avsystem/commons/avs_stream_membuf.h``            |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/stream_net.h``       | ``avsystem/commons/avs_stream_net.h``               |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/netbuf.h``           | ``avsystem/commons/avs_stream_netbuf.h``            |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/stream_outbuf.h``    | ``avsystem/commons/avs_stream_outbuf.h``            |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream/stream_simple_io.h`` | ``avsystem/commons/avs_stream_simple_io.h``         |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/stream_v_table.h``          | ``avsystem/commons/avs_stream_v_table.h``           |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/time.h``                    | ``avsystem/commons/avs_time.h``                     |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/unit/memstream.h``          | ``avsystem/commons/avs_unit_memstream.h``           |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/unit/mock_helpers.h``       | ``avsystem/commons/avs_unit_mock_helpers.h``        |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/unit/mocksock.h``           | ``avsystem/commons/avs_unit_mocksock.h``            |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/unit/test.h``               | ``avsystem/commons/avs_unit_test.h``                |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/url.h``                     | ``avsystem/commons/avs_url.h``                      |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/utils.h``                   | ``avsystem/commons/avs_utils.h``                    |
++------------------------------------------------+-----------------------------------------------------+
+| ``avsystem/commons/vector.h``                  | ``avsystem/commons/avs_vector.h``                   |
++------------------------------------------------+-----------------------------------------------------+
+
+.. [#pki] Some symbols related to public-key cryptography have been refactored
+          by moving from ``avsystem/commons/avs_socket.h`` to
+          ``avsystem/commons/avs_crypto_pki.h``, with additional renames. Old
+          names are available for compatibility via
+          ``avsystem/commons/avs_net_pki_compat.h``. For details, see
+          :ref:`avs-commons-pki-move-116`.
 
 .. _avs-commons-type-renames:
 
@@ -728,6 +736,43 @@ mentioned in :ref:`avs-commons-type-renames`):
 * ``_avs_net_create_udp_socket()``
 * ``_avs_net_initialize_global_compat_state()``
 
+.. _avs-commons-pki-move-116:
+
+Move of public-key cryptography APIs from avs_net to avs_crypto
+---------------------------------------------------------------
+
+Public key cryptography APIs, previously defined in
+``avsystem/commons/socket.h``, have been moved into a new header called
+``avsystem/commons/avs_crypto_pki.h``.
+
+Additionally, the following types and functions have been renamed:
+
++------------------------------------------------+------------------------------------------------+
+| Old symbol name                                | New symbol name                                |
++================================================+================================================+
+| ``avs_net_client_cert_info_t``                 | ``avs_crypto_client_cert_info_t``              |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_client_key_info_t``                  | ``avs_crypto_client_key_info_t``               |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_security_info_union_t``              | ``avs_crypto_security_info_union_t``           |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_trusted_cert_info_t``                | ``avs_crypto_trusted_cert_info_t``             |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_client_cert_info_from_buffer()``     | ``avs_crypto_client_cert_info_from_buffer()``  |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_client_cert_info_from_file()``       | ``avs_crypto_client_cert_info_from_file()``    |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_client_key_info_from_buffer()``      | ``avs_crypto_client_key_info_from_buffer()``   |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_client_key_info_from_file()``        | ``avs_crypto_client_key_info_from_file()``     |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_trusted_cert_info_from_buffer()``    | ``avs_crypto_trusted_cert_info_from_buffer()`` |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_trusted_cert_info_from_file()``      | ``avs_crypto_trusted_cert_info_from_file()``   |
++------------------------------------------------+------------------------------------------------+
+| ``avs_net_trusted_cert_info_from_path()``      | ``avs_crypto_trusted_cert_info_from_path()``   |
++------------------------------------------------+------------------------------------------------+
+
 .. _avs-commons-persistence-changes:
 
 Changes in public avs_persistence APIs
@@ -917,24 +962,31 @@ better namespace separation.
 If your code checks for these macros using ``#ifdef`` etc., it will need
 adjustments.
 
-+---------------------------------------------------------+---------------------------------+
-| Old macro name                                          | New macro name                  |
-+=========================================================+=================================+
-| ``WITH_IPV4``                                           | ``AVS_COMMONS_NET_WITH_IPV4``   |
-+---------------------------------------------------------+---------------------------------+
-| ``WITH_IPV6``                                           | ``AVS_COMMONS_NET_WITH_IPV6``   |
-+---------------------------------------------------------+---------------------------------+
-| ``HAVE_NET_IF_H``                                       | ``AVS_COMMONS_HAVE_NET_IF_H``   |
-+---------------------------------------------------------+---------------------------------+
-| ``AVS_SSIZE_T_DEFINED``                                 | *removed completely*            |
-+---------------------------------------------------------+---------------------------------+
-| ``HAVE_SYS_TYPES_H``                                    | *removed completely*            |
-+---------------------------------------------------------+---------------------------------+
-| ``AVS_COMMONS_WITH_MBEDTLS_CUSTOM_ENTROPY_INITIALIZER`` | *removed completely*            |
-+---------------------------------------------------------+---------------------------------+
++---------------------------------------------------------+-------------------------------------+
+| Old macro name                                          | New macro name                      |
++=========================================================+=====================================+
+| ``WITH_IPV4``                                           | ``AVS_COMMONS_NET_WITH_IPV4``       |
++---------------------------------------------------------+-------------------------------------+
+| ``WITH_IPV6``                                           | ``AVS_COMMONS_NET_WITH_IPV6``       |
++---------------------------------------------------------+-------------------------------------+
+| ``WITH_X509``                                           | ``AVS_COMMONS_WITH_AVS_CRYPTO_PKI`` |
++---------------------------------------------------------+-------------------------------------+
+| ``HAVE_NET_IF_H``                                       | ``AVS_COMMONS_HAVE_NET_IF_H``       |
++---------------------------------------------------------+-------------------------------------+
+| ``AVS_SSIZE_T_DEFINED``                                 | *removed completely*                |
++---------------------------------------------------------+-------------------------------------+
+| ``HAVE_SYS_TYPES_H``                                    | *removed completely*                |
++---------------------------------------------------------+-------------------------------------+
+| ``AVS_COMMONS_WITH_MBEDTLS_CUSTOM_ENTROPY_INITIALIZER`` | *removed completely*                |
++---------------------------------------------------------+-------------------------------------+
+
+.. important::
+
+    In the case of ``WITH_X509``, the corresponding CMake variable has also been
+    renamed to ``WITH_PKI``. The old name is still recognized, but deprecated.
 
 .. note::
 
-    Names of CMake variables corresponding to the macros listed above have not
-    changed (aside from those removed completely). This change affects **only**
-    the C preprocessor.
+    Aside from the one variable mentioned above, and those removed completely,
+    the CMake variable names have not changed - the renames affect **only** the
+    C preprocessor.

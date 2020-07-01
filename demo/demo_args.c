@@ -795,7 +795,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 
             const avs_net_certificate_info_t cert_info = {
                 .server_cert_validation = true,
-                .trusted_certs = avs_net_trusted_cert_info_from_file(optarg)
+                .trusted_certs = avs_crypto_trusted_cert_info_from_file(optarg)
             };
             parsed_args->fw_security_info =
                     avs_net_security_info_from_certificates(cert_info);
@@ -810,7 +810,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             const avs_net_certificate_info_t cert_info = {
                 .server_cert_validation = true,
-                .trusted_certs = avs_net_trusted_cert_info_from_path(optarg)
+                .trusted_certs = avs_crypto_trusted_cert_info_from_path(optarg)
             };
             parsed_args->fw_security_info =
                     avs_net_security_info_from_certificates(cert_info);

@@ -18,6 +18,7 @@
 
 #ifdef ANJAY_WITH_MODULE_SERVER
 
+#    include <inttypes.h>
 #    include <string.h>
 
 #    include <avsystem/commons/avs_utils.h>
