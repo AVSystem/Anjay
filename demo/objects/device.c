@@ -83,6 +83,10 @@ typedef struct {
     time_t current_time_offset;
     char utc_offset[16];
     char timezone[32];
+
+    time_t saved_current_time_offset;
+    char saved_utc_offset[16];
+    char saved_timezone[32];
 } dev_repr_t;
 
 static inline dev_repr_t *get_dev(const anjay_dm_object_def_t *const *obj_ptr) {
@@ -383,6 +387,27 @@ static int dev_resource_instances(anjay_t *anjay,
     }
 }
 
+static int dev_transaction_begin(anjay_t *anjay,
+                                 const anjay_dm_object_def_t *const *obj_ptr) {
+    (void) anjay;
+    dev_repr_t *repr = get_dev(obj_ptr);
+    repr->saved_current_time_offset = repr->current_time_offset;
+    strcpy(repr->saved_utc_offset, repr->utc_offset);
+    strcpy(repr->saved_timezone, repr->timezone);
+    return 0;
+}
+
+static int
+dev_transaction_rollback(anjay_t *anjay,
+                         const anjay_dm_object_def_t *const *obj_ptr) {
+    (void) anjay;
+    dev_repr_t *repr = get_dev(obj_ptr);
+    repr->current_time_offset = repr->saved_current_time_offset;
+    strcpy(repr->utc_offset, repr->saved_utc_offset);
+    strcpy(repr->timezone, repr->saved_timezone);
+    return 0;
+}
+
 static const anjay_dm_object_def_t DEVICE = {
     .oid = DEMO_OID_DEVICE,
     .handlers = {
@@ -393,10 +418,10 @@ static const anjay_dm_object_def_t DEVICE = {
         .resource_write = dev_write,
         .resource_execute = dev_execute,
         .list_resource_instances = dev_resource_instances,
-        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_begin = dev_transaction_begin,
         .transaction_validate = anjay_dm_transaction_NOOP,
         .transaction_commit = anjay_dm_transaction_NOOP,
-        .transaction_rollback = anjay_dm_transaction_NOOP
+        .transaction_rollback = dev_transaction_rollback
     }
 };
 

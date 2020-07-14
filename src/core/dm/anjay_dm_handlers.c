@@ -276,6 +276,10 @@ int _anjay_dm_call_resource_reset(anjay_t *anjay,
                                   anjay_rid_t rid,
                                   const anjay_dm_module_t *current_module) {
     dm_log(TRACE, _("resource_reset ") "/%u/%u/%u", (*obj_ptr)->oid, iid, rid);
+    int result = _anjay_dm_transaction_include_object(anjay, obj_ptr);
+    if (result) {
+        return result;
+    }
     CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, resource_reset,
                               anjay, obj_ptr, iid, rid);
 }

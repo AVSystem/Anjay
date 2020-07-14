@@ -22,6 +22,8 @@ class ContentFormat(object):
     APPLICATION_CBOR = 60
     APPLICATION_LWM2M_SENML_JSON = 110
     APPLICATION_LWM2M_SENML_CBOR = 112
+    APPLICATION_PKCS10 = 286
+    APPLICATION_PKIX_CERT = 287
     APPLICATION_LWM2M_TEXT_LEGACY = 1541
     APPLICATION_LWM2M_TLV_LEGACY = 1542
     APPLICATION_LWM2M_JSON_LEGACY = 1543
@@ -55,7 +57,3 @@ class ContentFormat(object):
     @staticmethod
     def iter():
         return ContentFormat._iter_formats()
-
-    @staticmethod
-    def iter_nonlegacy():
-        return ContentFormat._iter_formats(lambda name: 'LEGACY' not in name)

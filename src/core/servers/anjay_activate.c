@@ -189,7 +189,7 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
 bool _anjay_should_retry_bootstrap(anjay_t *anjay) {
 #ifdef ANJAY_WITH_BOOTSTRAP
     if (avs_coap_exchange_id_valid(
-                anjay->bootstrap.bootstrap_request_exchange_id)) {
+                anjay->bootstrap.outgoing_request_exchange_id)) {
         // Bootstrap attempt already ongoing, no need to retry
         return false;
     }

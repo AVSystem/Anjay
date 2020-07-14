@@ -261,6 +261,17 @@
 #cmakedefine ANJAY_WITH_CBOR
 
 /**
+ * Enable support for Enrollment over Secure Transport.
+ *
+ * Requires <c>ANJAY_WITH_LWM2M11</c> and <c>ANJAY_WITH_BOOTSTRAP</c>  to be
+ * enabled.
+ *
+ * IMPORTANT: Only available in the commercial version. Ignored in the open
+ * source version.
+ */
+#cmakedefine ANJAY_WITH_EST
+
+/**
  * Enable support for custom "con" attribute that controls Confirmable
  * notifications.
  *

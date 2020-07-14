@@ -36,12 +36,12 @@ f1516f08b1fdc34192d7ae8db4332980	examples/tutorial/BC6/src/time_object.h
 f971df7872a8f052bb72ae64610a8031	examples/tutorial/firmware-update/basic-implementation/src/firmware_update.c
 8e79fe9e76c36fef28476e89140ec43b	examples/tutorial/firmware-update/basic-implementation/src/firmware_update.h
 2c840cb99d21959586cb26be45065a8d	examples/tutorial/firmware-update/basic-implementation/src/main.c
-504ff5e268f5d42029d3235b7acde906	examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
+ff4cb468e0c4edd434526100df11fd03	examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
 ef252b2976d9518e8807f517003660cb	examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 bccdb671e486777e5b3d8543814f9402	include_public/anjay/attr_storage.h
 9909723fde38a6965891569e7bee41a1	include_public/anjay/core.h
-5352bae6279830eeffcdac01c86ae3e2	include_public/anjay/dm.h
-e9b09477e35337de7c3002994bbf1831	include_public/anjay/download.h
+31c54c6d3eab3f4f57671993727b2fea	include_public/anjay/dm.h
+fb859b2d7a8a215ba43ed5b3403b4f76	include_public/anjay/download.h
 ac53664e14610141803a50a4dfac388d	include_public/anjay/fw_update.h
 f2993232076286f0008878ff3a962528	include_public/anjay/io.h
 0841e2bd09c34593d018e7711e97339e	src/modules/access_control/anjay_access_control_handlers.c

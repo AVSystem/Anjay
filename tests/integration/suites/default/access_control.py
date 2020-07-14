@@ -35,6 +35,7 @@ IID_BOUND = 64
 
 # This is all defined in standard
 class AccessMask:
+    NONE = 0
     READ = 1 << 0
     WRITE = 1 << 1
     EXECUTE = 1 << 2
@@ -245,7 +246,8 @@ class DeleteTest(AccessControl.Test):
 class EmptyAclMeansFullAccessTest(AccessControl.Test):
     def runTest(self):
         self.create_instance(server=self.servers[1], oid=OID.Test)
-        self.update_access(server=self.servers[1], oid=OID.Test, iid=0, acl=[])
+        self.update_access(server=self.servers[1], oid=OID.Test, iid=0, acl=[],
+                           expected_acl=[make_acl_entry(2, AccessMask.OWNER)])
 
         # Read
         self.read_resource(server=self.servers[1], oid=OID.Test, iid=0, rid=RID.Test.Timestamp)
@@ -312,7 +314,9 @@ class DefaultAclTest(AccessControl.Test):
 
         # Now we take away the rights and make sure SSID1 can not do execute
         self.update_access(server=self.servers[1], oid=OID.Test, iid=0,
-                           acl=[make_acl_entry(2, AccessMask.OWNER)])
+                           acl=[make_acl_entry(0, AccessMask.NONE)],
+                           expected_acl=[make_acl_entry(0, AccessMask.NONE),
+                                         make_acl_entry(2, AccessMask.OWNER)])
 
         self.execute_resource(server=self.servers[0], oid=OID.Test, iid=0,
                               rid=RID.Test.IncrementCounter,

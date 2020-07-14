@@ -75,6 +75,7 @@ static int parse_security_mode(const char *mode_string,
         { "rpk",   ANJAY_SECURITY_RPK         },
         { "cert",  ANJAY_SECURITY_CERTIFICATE },
         { "nosec", ANJAY_SECURITY_NOSEC       },
+        { "est",   ANJAY_SECURITY_EST         },
         // clang-format on
     };
 
@@ -1044,7 +1045,9 @@ process:
             retval = -1;
         }
     } else if (parsed_args->connection_args.security_mode
-               == ANJAY_SECURITY_CERTIFICATE) {
+                       == ANJAY_SECURITY_CERTIFICATE
+               || parsed_args->connection_args.security_mode
+                          == ANJAY_SECURITY_EST) {
         if (identity_set ^ key_set) {
             demo_log(ERROR, "Setting public cert but not private cert (and "
                             "other way around) makes little sense");

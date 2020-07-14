@@ -78,10 +78,8 @@ static anjay_etag_t *read_etag(const char *text) {
             || text[len - 1] != '"') {
         return NULL;
     }
-    anjay_etag_t *result = (anjay_etag_t *) avs_malloc(
-            offsetof(anjay_etag_t, value) + (len - 2));
+    anjay_etag_t *result = anjay_etag_new((uint8_t) (len - 2));
     if (result) {
-        result->size = (uint8_t) (len - 2);
         memcpy(result->value, &text[1], result->size);
     }
     return result;
@@ -420,13 +418,11 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     ctx->common.user_data = cfg->user_data;
     ctx->bytes_written = cfg->start_offset;
     if (cfg->etag) {
-        size_t struct_size = offsetof(anjay_etag_t, value) + cfg->etag->size;
-        if (!(ctx->etag = (anjay_etag_t *) avs_malloc(struct_size))) {
+        if (!(ctx->etag = anjay_etag_clone(cfg->etag))) {
             dl_log(ERROR, _("could not copy ETag"));
             err = avs_errno(AVS_ENOMEM);
             goto error;
         }
-        memcpy(ctx->etag, cfg->etag, struct_size);
     }
 
     if (AVS_SCHED_NOW(_anjay_downloader_get_anjay(dl)->sched,

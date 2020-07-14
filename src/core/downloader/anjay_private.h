@@ -50,6 +50,7 @@ typedef struct {
     anjay_download_next_block_handler_t *on_next_block;
     anjay_download_finished_handler_t *on_download_finished;
     void *user_data;
+
 } anjay_download_ctx_common_t;
 
 static inline anjay_t *_anjay_downloader_get_anjay(anjay_downloader_t *dl) {

@@ -1032,7 +1032,8 @@ typedef enum {
     ANJAY_SECURITY_PSK = 0,         //< Pre-Shared Key mode
     ANJAY_SECURITY_RPK = 1,         //< Raw Public Key mode
     ANJAY_SECURITY_CERTIFICATE = 2, //< Certificate mode
-    ANJAY_SECURITY_NOSEC = 3        //< NoSec mode
+    ANJAY_SECURITY_NOSEC = 3,       //< NoSec mode
+    ANJAY_SECURITY_EST = 4          //< Certificate mode with EST
 } anjay_security_mode_t;
 
 /**

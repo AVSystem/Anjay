@@ -235,3 +235,67 @@ class EmptyBytesTest(TestObject.TestCase, test_suite.Lwm2mDmOperations):
         self.assertEqual(len(e), len(expected_rest) + 1)
         for i in range(len(expected_rest)):
             self.assertEqual(e[i + 1], expected_rest[i])
+
+
+class UpdateResourceInstanceTest(TestObject.TestCase):
+    def runTest(self):
+        # ensure the array is empty
+        req = Lwm2mRead(ResPath.Test[0].IntArray)
+        self.serv.send(req)
+
+        empty_array_tlv = TLV.make_multires(resource_id=RID.Test.IntArray, instances=[])
+        self.assertMsgEqual(Lwm2mContent.matching(req)(content=empty_array_tlv.serialize()),
+                            self.serv.recv())
+
+        # write something
+        array_tlv = TLV.make_multires(
+            resource_id=RID.Test.IntArray,
+            instances=[
+                (2, (12).to_bytes(1, byteorder='big')),
+                (4, (97).to_bytes(1, byteorder='big')),
+            ])
+        req = Lwm2mWrite(ResPath.Test[0].IntArray,
+                         array_tlv.serialize(),
+                         format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        self.serv.send(req)
+
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # check updated content
+        req = Lwm2mRead(ResPath.Test[0].IntArray)
+        self.serv.send(req)
+
+        self.assertMsgEqual(Lwm2mContent.matching(req)(content=array_tlv.serialize(),
+                                                       format=coap.ContentFormat.APPLICATION_LWM2M_TLV),
+                            self.serv.recv())
+
+        # update one of resource instances
+        to_update_array_tlv = TLV.make_multires(
+            resource_id=RID.Test.IntArray,
+            instances=[
+                (4, (65).to_bytes(1, byteorder='big'))
+            ])
+        req = Lwm2mWrite('/%d/0' % (OID.Test,),
+                         to_update_array_tlv.serialize(),
+                         format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                         update=True)
+        self.serv.send(req)
+
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+        
+        # check updated content
+        updated_array_tlv = TLV.make_multires(
+            resource_id=RID.Test.IntArray,
+            instances=[
+                (2, (12).to_bytes(1, byteorder='big')),
+                (4, (65).to_bytes(1, byteorder='big')),
+            ])
+
+        req = Lwm2mRead(ResPath.Test[0].IntArray)
+        self.serv.send(req)
+
+        self.assertMsgEqual(Lwm2mContent.matching(req)(content=updated_array_tlv.serialize(),
+                                                       format=coap.ContentFormat.APPLICATION_LWM2M_TLV),
+                            self.serv.recv())

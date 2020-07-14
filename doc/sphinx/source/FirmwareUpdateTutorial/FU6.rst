@@ -118,7 +118,7 @@ the state from persistent storage:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
-    :emphasize-lines: 1, 10-121, 130-132
+    :emphasize-lines: 1, 10-119, 128-130
 
     #define _DEFAULT_SOURCE // for fileno()
     #include "./firmware_update.h"
@@ -177,15 +177,10 @@ the state from persistent storage:
         if (fread(&size, sizeof(size), 1, fp) != 1 || size == 0) {
             return -1;
         }
-        // NOTE: anjay_etag_t is a flexible array member, which means it
-        // has an array of runtime-allocated size at the end of it. That's
-        // why it is created using avs_malloc().
-        anjay_etag_t *etag =
-                (anjay_etag_t *) avs_malloc(offsetof(anjay_etag_t, value) + size);
+        anjay_etag_t *etag = anjay_etag_new(size);
         if (!etag) {
             return -1;
         }
-        etag->size = size;
 
         if (fread(etag->value, size, 1, fp) != 1) {
             avs_free(etag);
@@ -253,6 +248,8 @@ the state from persistent storage:
         // fw_stream_write() call.
         download_state_t download_state;
     } FW_STATE;
+
+    static const char *FW_IMAGE_DOWNLOAD_NAME = "/tmp/firmware_image.bin";
 
 In the next section, we'll discuss when state storing and restoring should
 be done.
@@ -359,14 +356,10 @@ accordingly:
             }
             anjay_etag_t *etag_copy = NULL;
             if (!result && package_etag) {
-                const size_t etag_size =
-                        offsetof(anjay_etag_t, value) + package_etag->size;
-                etag_copy = (anjay_etag_t *) avs_malloc(etag_size);
+                etag_copy = anjay_etag_clone(package_etag);
                 if (!etag_copy) {
                     fprintf(stderr, "Could not duplicate package ETag\n");
                     result = -1;
-                } else {
-                    memcpy(etag_copy, package_etag, etag_size);
                 }
             }
             if (!result) {
@@ -379,6 +372,7 @@ accordingly:
 
         return fw_open_download_file(0);
     }
+
 
 Then, we can implement storing the download state logic in ``fw_stream_write``:
 

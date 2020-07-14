@@ -31,6 +31,7 @@ int _anjay_sec_validate_security_mode(int32_t security_mode) {
     case ANJAY_SECURITY_NOSEC:
     case ANJAY_SECURITY_PSK:
     case ANJAY_SECURITY_CERTIFICATE:
+    case ANJAY_SECURITY_EST:
         return 0;
     case ANJAY_SECURITY_RPK:
         security_log(ERROR, _("Raw Public Key mode not supported"));

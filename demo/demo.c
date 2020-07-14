@@ -65,13 +65,16 @@ static int security_object_reload(anjay_demo_t *demo) {
          * anjay_security_object_add_instance will make a deep copy by itself.
          */
         instance.server_uri = server->uri;
-        instance.public_cert_or_psk_identity =
-                args->public_cert_or_psk_identity;
-        instance.public_cert_or_psk_identity_size =
-                args->public_cert_or_psk_identity_size;
-        instance.private_cert_or_psk_key = args->private_cert_or_psk_key;
-        instance.private_cert_or_psk_key_size =
-                args->private_cert_or_psk_key_size;
+        if (instance.security_mode != ANJAY_SECURITY_EST
+                || server->is_bootstrap) {
+            instance.public_cert_or_psk_identity =
+                    args->public_cert_or_psk_identity;
+            instance.public_cert_or_psk_identity_size =
+                    args->public_cert_or_psk_identity_size;
+            instance.private_cert_or_psk_key = args->private_cert_or_psk_key;
+            instance.private_cert_or_psk_key_size =
+                    args->private_cert_or_psk_key_size;
+        }
         instance.server_public_key = args->server_public_key;
         instance.server_public_key_size = args->server_public_key_size;
 

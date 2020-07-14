@@ -86,6 +86,7 @@ static int get_security_mode(anjay_t *anjay,
     case ANJAY_SECURITY_NOSEC:
     case ANJAY_SECURITY_PSK:
     case ANJAY_SECURITY_CERTIFICATE:
+    case ANJAY_SECURITY_EST:
         *out_mode = (anjay_security_mode_t) mode;
         return 0;
     default:
@@ -128,44 +129,53 @@ static int get_dtls_keys(anjay_t *anjay,
         return 0;
     }
 
-    const struct {
-        bool required;
+    typedef enum { SKIP, OPTIONAL, REQUIRED } value_status_t;
+
+    typedef struct {
+        value_status_t status;
         anjay_rid_t rid;
         char *buffer;
         size_t buffer_capacity;
         size_t *buffer_size_ptr;
-    } values[] = {
-        {
-            .required = true,
-            .rid = ANJAY_DM_RID_SECURITY_PK_OR_IDENTITY,
-            .buffer = out_keys->pk_or_identity,
-            .buffer_capacity = sizeof(out_keys->pk_or_identity),
-            .buffer_size_ptr = &out_keys->pk_or_identity_size
-        },
-        {
-            .required = security_mode != ANJAY_SECURITY_PSK,
-            .rid = ANJAY_DM_RID_SECURITY_SERVER_PK_OR_IDENTITY,
-            .buffer = out_keys->server_pk_or_identity,
-            .buffer_capacity = sizeof(out_keys->server_pk_or_identity),
-            .buffer_size_ptr = &out_keys->server_pk_or_identity_size
-        },
-        {
-            .required = true,
-            .rid = ANJAY_DM_RID_SECURITY_SECRET_KEY,
-            .buffer = out_keys->secret_key,
-            .buffer_capacity = sizeof(out_keys->secret_key),
-            .buffer_size_ptr = &out_keys->secret_key_size
-        }
+    } value_def_t;
+
+    value_def_t PK_OR_IDENTITY_VALUE = {
+        .status = REQUIRED,
+        .rid = ANJAY_DM_RID_SECURITY_PK_OR_IDENTITY,
+        .buffer = out_keys->pk_or_identity,
+        .buffer_capacity = sizeof(out_keys->pk_or_identity),
+        .buffer_size_ptr = &out_keys->pk_or_identity_size
+    };
+    value_def_t SERVER_PK_OR_IDENTITY_VALUE = {
+        .status = (security_mode != ANJAY_SECURITY_PSK) ? REQUIRED : OPTIONAL,
+        .rid = ANJAY_DM_RID_SECURITY_SERVER_PK_OR_IDENTITY,
+        .buffer = out_keys->server_pk_or_identity,
+        .buffer_capacity = sizeof(out_keys->server_pk_or_identity),
+        .buffer_size_ptr = &out_keys->server_pk_or_identity_size
+    };
+    value_def_t SECRET_KEY_VALUE = {
+        .status = REQUIRED,
+        .rid = ANJAY_DM_RID_SECURITY_SECRET_KEY,
+        .buffer = out_keys->secret_key,
+        .buffer_capacity = sizeof(out_keys->secret_key),
+        .buffer_size_ptr = &out_keys->secret_key_size
     };
 
+    const value_def_t *const values[] = { &PK_OR_IDENTITY_VALUE,
+                                          &SERVER_PK_OR_IDENTITY_VALUE,
+                                          &SECRET_KEY_VALUE };
+
     for (size_t i = 0; i < AVS_ARRAY_SIZE(values); ++i) {
+        if (values[i]->status == SKIP) {
+            continue;
+        }
         const anjay_uri_path_t path =
                 MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                                   values[i].rid);
-        if (_anjay_dm_read_resource(anjay, &path, values[i].buffer,
-                                    values[i].buffer_capacity,
-                                    values[i].buffer_size_ptr)
-                && values[i].required) {
+                                   values[i]->rid);
+        if (_anjay_dm_read_resource(anjay, &path, values[i]->buffer,
+                                    values[i]->buffer_capacity,
+                                    values[i]->buffer_size_ptr)
+                && values[i]->status == REQUIRED) {
             anjay_log(WARNING, _("read ") "%s" _(" failed"),
                       ANJAY_DEBUG_MAKE_PATH(&path));
             return -1;
@@ -213,6 +223,7 @@ static int init_security(avs_net_security_info_t *security,
         return _anjay_connection_init_psk_security(security, keys);
         break;
     case ANJAY_SECURITY_CERTIFICATE:
+    case ANJAY_SECURITY_EST:
         return init_cert_security(security, keys);
     case ANJAY_SECURITY_RPK:
     default:

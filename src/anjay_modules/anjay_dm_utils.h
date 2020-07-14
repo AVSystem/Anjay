@@ -191,6 +191,26 @@ typedef enum anjay_request_action {
     ANJAY_ACTION_BOOTSTRAP_FINISH
 } anjay_request_action_t;
 
+typedef enum {
+    ANJAY_DM_WRITE_TYPE_INVALID = -1,
+    ANJAY_DM_WRITE_TYPE_UPDATE,
+    ANJAY_DM_WRITE_TYPE_REPLACE
+} anjay_dm_write_type_t;
+
+static inline anjay_dm_write_type_t _anjay_dm_write_type_from_request_action(
+        anjay_request_action_t request_action) {
+    switch (request_action) {
+    case ANJAY_ACTION_WRITE:
+        return ANJAY_DM_WRITE_TYPE_REPLACE;
+    case ANJAY_ACTION_WRITE_UPDATE:
+    case ANJAY_ACTION_CREATE:
+        return ANJAY_DM_WRITE_TYPE_UPDATE;
+    default:
+        AVS_UNREACHABLE("Unexpected request action");
+        return ANJAY_DM_WRITE_TYPE_INVALID;
+    }
+}
+
 int _anjay_dm_read_resource(anjay_t *anjay,
                             const anjay_uri_path_t *path,
                             char *buffer,

@@ -25,6 +25,8 @@ assert __name__ == '__main__'
 check_command = os.getenv('CHECK_COMMAND', 'make check')
 os.environ['CHECK_COMMAND'] = check_command
 
+no_cache = os.getenv('NO_CACHE', None)
+
 docker_image = os.getenv('DOCKER_IMAGE', '')
 if docker_image != '':
     with open('travis/%s/Dockerfile' % (docker_image,), 'r') as f:
@@ -41,7 +43,11 @@ if docker_image != '':
         image_uuid = str(uuid.uuid4()).lower()
         image_name = '%s-%s' % (docker_image, image_uuid)
 
-        subprocess.check_call(['docker', 'build', '--no-cache', '--tag', image_name, '--file', dockerfile_path, '.'])
+        args = ['docker', 'build', '--tag', image_name, '--file', dockerfile_path ]
+        if no_cache is not None:
+            args += ['--no-cache']
+
+        subprocess.check_call(args + ['.'])
 
         try:
             subprocess.check_call(['docker', 'run',

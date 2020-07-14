@@ -85,6 +85,7 @@ typedef struct binary_app_data_container_instance_struct {
 typedef struct binary_app_data_container_struct {
     const anjay_dm_object_def_t *def;
     AVS_LIST(binary_app_data_container_instance_t) instances;
+    AVS_LIST(binary_app_data_container_instance_t) saved_instances;
 } binary_app_data_container_t;
 
 static inline binary_app_data_container_t *
@@ -367,6 +368,71 @@ static int list_resource_instances(anjay_t *anjay,
     }
 }
 
+static int transaction_begin(anjay_t *anjay,
+                             const anjay_dm_object_def_t *const *obj_ptr) {
+    (void) anjay;
+    binary_app_data_container_t *repr = get_obj(obj_ptr);
+    if (!repr->instances) {
+        return 0;
+    }
+
+    AVS_LIST(binary_app_data_container_instance_t) *saved_instances_tail =
+            &repr->saved_instances;
+    AVS_LIST(binary_app_data_container_instance_t) instance;
+    bool failed = false;
+    AVS_LIST_FOREACH(instance, repr->instances) {
+        AVS_LIST(binary_app_data_container_instance_t) saved_instance =
+                AVS_LIST_APPEND_NEW(binary_app_data_container_instance_t,
+                                    saved_instances_tail);
+        if (!saved_instance) {
+            demo_log(ERROR, "cannot allocate a new instance");
+            failed = true;
+            break;
+        }
+        if (instance->data_list) {
+            saved_instance->data_list =
+                    AVS_LIST_SIMPLE_CLONE(instance->data_list);
+            if (!saved_instance->data_list) {
+                demo_log(ERROR, "cannot clone resource instances list");
+                failed = true;
+                break;
+            }
+        }
+        saved_instance->iid = instance->iid;
+        AVS_LIST_ADVANCE_PTR(&saved_instances_tail);
+    }
+
+    if (failed) {
+        AVS_LIST_CLEAR(&repr->saved_instances) {
+            AVS_LIST_CLEAR(&repr->saved_instances->data_list);
+        }
+        return ANJAY_ERR_INTERNAL;
+    }
+    return 0;
+}
+
+static int transaction_commit(anjay_t *anjay,
+                              const anjay_dm_object_def_t *const *obj_ptr) {
+    (void) anjay;
+    binary_app_data_container_t *repr = get_obj(obj_ptr);
+    AVS_LIST_CLEAR(&repr->saved_instances) {
+        AVS_LIST_CLEAR(&repr->saved_instances->data_list);
+    }
+    return 0;
+}
+
+static int transaction_rollback(anjay_t *anjay,
+                                const anjay_dm_object_def_t *const *obj_ptr) {
+    (void) anjay;
+    binary_app_data_container_t *repr = get_obj(obj_ptr);
+    AVS_LIST_CLEAR(&repr->instances) {
+        AVS_LIST_CLEAR(&repr->instances->data_list);
+    }
+    repr->instances = repr->saved_instances;
+    repr->saved_instances = NULL;
+    return 0;
+}
+
 static const anjay_dm_object_def_t OBJ_DEF = {
     .oid = 19,
     .handlers = {
@@ -381,11 +447,10 @@ static const anjay_dm_object_def_t OBJ_DEF = {
         .resource_reset = resource_reset,
         .list_resource_instances = list_resource_instances,
 
-        // TODO: implement these if transactional write/create is required
-        .transaction_begin = anjay_dm_transaction_NOOP,
+        .transaction_begin = transaction_begin,
         .transaction_validate = anjay_dm_transaction_NOOP,
-        .transaction_commit = anjay_dm_transaction_NOOP,
-        .transaction_rollback = anjay_dm_transaction_NOOP
+        .transaction_commit = transaction_commit,
+        .transaction_rollback = transaction_rollback
     }
 };
 

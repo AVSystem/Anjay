@@ -25,6 +25,7 @@
 #include <avsystem/coap/code.h>
 #include <avsystem/coap/streaming.h>
 
+#include <anjay_modules/anjay_bootstrap.h>
 #include <anjay_modules/anjay_notify.h>
 #include <anjay_modules/anjay_time_defs.h>
 
@@ -68,6 +69,17 @@ static int suspend_nonbootstrap_server(anjay_t *anjay,
 
 static void start_bootstrap_if_not_already_started(
         anjay_t *anjay, anjay_connection_ref_t bootstrap_connection) {
+    if (bootstrap_connection.server) {
+        anjay->bootstrap.bootstrap_session_token =
+                _anjay_server_primary_session_token(
+                        bootstrap_connection.server);
+        if (avs_coap_exchange_id_valid(
+                    anjay->bootstrap.outgoing_request_exchange_id)) {
+            avs_coap_exchange_cancel(
+                    _anjay_connection_get_coap(bootstrap_connection),
+                    anjay->bootstrap.outgoing_request_exchange_id);
+        }
+    }
     if (!anjay->bootstrap.in_progress) {
         // clear inactive servers so that they won't attempt to retry; they will
         // be recreated during _anjay_schedule_reload_servers() after bootstrap
@@ -79,32 +91,7 @@ static void start_bootstrap_if_not_already_started(
         _anjay_dm_transaction_begin(anjay);
         avs_sched_del(&anjay->bootstrap.purge_bootstrap_handle);
     }
-    if (bootstrap_connection.server) {
-        anjay->bootstrap.bootstrap_session_token =
-                _anjay_server_primary_session_token(
-                        bootstrap_connection.server);
-        if (avs_coap_exchange_id_valid(
-                    anjay->bootstrap.bootstrap_request_exchange_id)) {
-            avs_coap_exchange_cancel(
-                    _anjay_connection_get_coap(bootstrap_connection),
-                    anjay->bootstrap.bootstrap_request_exchange_id);
-        }
-    }
     anjay->bootstrap.in_progress = true;
-}
-
-static int commit_bootstrap(anjay_t *anjay) {
-    if (anjay->bootstrap.in_progress) {
-        if (_anjay_dm_transaction_validate(anjay)) {
-            return ANJAY_ERR_NOT_ACCEPTABLE;
-        } else {
-            anjay->bootstrap.in_progress = false;
-            _anjay_conn_session_token_reset(
-                    &anjay->bootstrap.bootstrap_session_token);
-            return _anjay_dm_transaction_finish_without_validation(anjay, 0);
-        }
-    }
-    return 0;
 }
 
 static void abort_bootstrap(anjay_t *anjay) {
@@ -529,15 +516,24 @@ static int schedule_bootstrap_timeout(anjay_t *anjay) {
     return 0;
 }
 
+static int validate_bootstrap_configuration(anjay_t *anjay) {
+    cancel_client_initiated_bootstrap(anjay);
+    start_bootstrap_if_not_already_started(anjay, anjay->current_connection);
+    if (_anjay_dm_transaction_validate(anjay)) {
+        anjay_log(WARNING, _("Bootstrap configuration is invalid, rejecting"));
+        return ANJAY_ERR_NOT_ACCEPTABLE;
+    }
+    return 0;
+}
+
 #    define BOOTSTRAP_FINISH_PERFORM_TIMEOUT (1 << 0)
 #    define BOOTSTRAP_FINISH_DISABLE_SERVER (1 << 1)
 
 static int bootstrap_finish_impl(anjay_t *anjay, int flags) {
     anjay_log(TRACE, _("Bootstrap Sequence finished"));
-
-    cancel_client_initiated_bootstrap(anjay);
-    start_bootstrap_if_not_already_started(anjay, anjay->current_connection);
-    int retval = commit_bootstrap(anjay);
+    anjay->bootstrap.in_progress = false;
+    _anjay_conn_session_token_reset(&anjay->bootstrap.bootstrap_session_token);
+    int retval = _anjay_dm_transaction_finish_without_validation(anjay, 0);
     if (retval) {
         anjay_log(
                 WARNING,
@@ -571,6 +567,10 @@ static int bootstrap_finish_impl(anjay_t *anjay, int flags) {
 }
 
 static int bootstrap_finish(anjay_t *anjay) {
+    int result = validate_bootstrap_configuration(anjay);
+    if (result) {
+        return result;
+    }
     return bootstrap_finish_impl(anjay,
                                  BOOTSTRAP_FINISH_PERFORM_TIMEOUT
                                          | BOOTSTRAP_FINISH_DISABLE_SERVER);
@@ -585,7 +585,7 @@ reset_client_initiated_bootstrap_backoff(anjay_bootstrap_t *bootstrap) {
 
 int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay) {
     if (avs_coap_exchange_id_valid(
-                anjay->bootstrap.bootstrap_request_exchange_id)) {
+                anjay->bootstrap.outgoing_request_exchange_id)) {
         // Let the bootstrap request finish. When a response comes, bootstrap
         // procedure will be started, which will suspend all non-bootstrap
         // connections, including the one whose readiness is being notified
@@ -594,7 +594,9 @@ int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay) {
     }
     int result = 0;
     if (anjay->bootstrap.in_progress) {
-        result = bootstrap_finish_impl(anjay, BOOTSTRAP_FINISH_DISABLE_SERVER);
+        (void) ((result = validate_bootstrap_configuration(anjay))
+                || (result = bootstrap_finish_impl(
+                            anjay, BOOTSTRAP_FINISH_DISABLE_SERVER)));
     } else {
         cancel_client_initiated_bootstrap(anjay);
     }
@@ -716,7 +718,7 @@ static void bootstrap_request_response_handler(
         void *anjay_) {
     anjay_t *anjay = (anjay_t *) anjay_;
     if (result != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
-        anjay->bootstrap.bootstrap_request_exchange_id =
+        anjay->bootstrap.outgoing_request_exchange_id =
                 AVS_COAP_EXCHANGE_ID_INVALID;
     }
 
@@ -804,10 +806,10 @@ static void send_request_bootstrap(anjay_t *anjay,
         _anjay_server_on_server_communication_error(connection.server, err);
     } else {
         assert(!avs_coap_exchange_id_valid(
-                anjay->bootstrap.bootstrap_request_exchange_id));
+                anjay->bootstrap.outgoing_request_exchange_id));
         if (avs_is_err((err = avs_coap_client_send_async_request(
                                 coap,
-                                &anjay->bootstrap.bootstrap_request_exchange_id,
+                                &anjay->bootstrap.outgoing_request_exchange_id,
                                 &request, NULL, NULL,
                                 bootstrap_request_response_handler, anjay)))) {
             anjay_log(WARNING, _("could not send Request Bootstrap: ") "%s",
@@ -960,7 +962,7 @@ void _anjay_bootstrap_init(anjay_bootstrap_t *bootstrap,
 
 void _anjay_bootstrap_cleanup(anjay_t *anjay) {
     assert(!avs_coap_exchange_id_valid(
-            anjay->bootstrap.bootstrap_request_exchange_id));
+            anjay->bootstrap.outgoing_request_exchange_id));
     cancel_client_initiated_bootstrap(anjay);
     reset_client_initiated_bootstrap_backoff(&anjay->bootstrap);
     abort_bootstrap(anjay);

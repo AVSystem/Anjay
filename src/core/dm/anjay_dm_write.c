@@ -44,7 +44,8 @@ static int write_multiple_resource(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj,
                                    const anjay_uri_path_t *first_path,
                                    bool is_array,
-                                   anjay_input_ctx_t *in_ctx) {
+                                   anjay_input_ctx_t *in_ctx,
+                                   anjay_dm_write_type_t write_type) {
     anjay_uri_path_t path = *first_path;
     assert(_anjay_uri_path_has(&path, ANJAY_ID_RID));
     if (!is_array && _anjay_uri_path_leaf_is(&path, ANJAY_ID_RID)) {
@@ -55,9 +56,15 @@ static int write_multiple_resource(anjay_t *anjay,
         return ANJAY_ERR_BAD_REQUEST;
     }
 
-    int result =
-            _anjay_dm_call_resource_reset(anjay, obj, path.ids[ANJAY_ID_IID],
-                                          path.ids[ANJAY_ID_RID], NULL);
+    int result = 0;
+
+    if (write_type != ANJAY_DM_WRITE_TYPE_UPDATE
+            && (result = _anjay_dm_call_resource_reset(
+                        anjay, obj, path.ids[ANJAY_ID_IID],
+                        path.ids[ANJAY_ID_RID], NULL))) {
+        return result;
+    }
+
     while (!result) {
         if (!_anjay_uri_path_leaf_is(&path, ANJAY_ID_RIID)
                 || (result = _anjay_dm_call_resource_write(
@@ -85,7 +92,8 @@ static int write_resource_impl(anjay_t *anjay,
                                const anjay_dm_object_def_t *const *obj,
                                anjay_input_ctx_t *in_ctx,
                                anjay_notify_queue_t *notify_queue,
-                               bool allow_non_writable) {
+                               bool allow_non_writable,
+                               anjay_dm_write_type_t write_type) {
     anjay_uri_path_t path;
     bool is_array;
     int result = _anjay_input_get_path(in_ctx, &path, &is_array);
@@ -111,7 +119,7 @@ static int write_resource_impl(anjay_t *anjay,
     if (!result) {
         if (_anjay_dm_res_kind_multiple(kind)) {
             result = write_multiple_resource(anjay, obj, &path, is_array,
-                                             in_ctx);
+                                             in_ctx, write_type);
         } else {
             result = write_single_resource(anjay, obj, &path, is_array, in_ctx);
         }
@@ -129,15 +137,18 @@ static int write_resource_impl(anjay_t *anjay,
 static int write_resource(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj,
                           anjay_input_ctx_t *in_ctx,
-                          anjay_notify_queue_t *notify_queue) {
-    return write_resource_impl(anjay, obj, in_ctx, notify_queue, false);
+                          anjay_notify_queue_t *notify_queue,
+                          anjay_dm_write_type_t write_type) {
+    return write_resource_impl(anjay, obj, in_ctx, notify_queue, false,
+                               write_type);
 }
 
 int _anjay_dm_write_resource(anjay_t *anjay,
                              const anjay_dm_object_def_t *const *obj,
                              anjay_input_ctx_t *in_ctx,
                              anjay_notify_queue_t *notify_queue) {
-    return write_resource_impl(anjay, obj, in_ctx, notify_queue, true);
+    return write_resource_impl(anjay, obj, in_ctx, notify_queue, true,
+                               ANJAY_DM_WRITE_TYPE_REPLACE);
 }
 
 typedef enum {
@@ -154,7 +165,8 @@ static int write_instance(anjay_t *anjay,
                           anjay_iid_t iid,
                           anjay_input_ctx_t *in_ctx,
                           anjay_notify_queue_t *notify_queue,
-                          write_instance_hint_t hint) {
+                          write_instance_hint_t hint,
+                          anjay_dm_write_type_t write_type) {
     int result;
     do {
         anjay_uri_path_t path;
@@ -173,7 +185,7 @@ static int write_instance(anjay_t *anjay,
             /* no resources, meaning the instance is empty */
             break;
         }
-        result = write_resource(anjay, obj, in_ctx, notify_queue);
+        result = write_resource(anjay, obj, in_ctx, notify_queue, write_type);
         if (result == ANJAY_ERR_NOT_FOUND
                 && hint == WRITE_INSTANCE_IGNORE_UNSUPPORTED) {
             result = 0;
@@ -202,8 +214,10 @@ int _anjay_dm_write(anjay_t *anjay,
     }
 
     anjay_notify_queue_t notify_queue = NULL;
+    anjay_dm_write_type_t write_type =
+            _anjay_dm_write_type_from_request_action(request->action);
     if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_IID)) {
-        if (request->action != ANJAY_ACTION_WRITE_UPDATE
+        if (write_type != ANJAY_DM_WRITE_TYPE_UPDATE
                 && (result = _anjay_dm_call_instance_reset(
                             anjay, obj, request->uri.ids[ANJAY_ID_IID],
                             NULL))) {
@@ -211,9 +225,9 @@ int _anjay_dm_write(anjay_t *anjay,
         }
         result = write_instance(anjay, obj, request->uri.ids[ANJAY_ID_IID],
                                 in_ctx, &notify_queue,
-                                WRITE_INSTANCE_FAIL_ON_UNSUPPORTED);
+                                WRITE_INSTANCE_FAIL_ON_UNSUPPORTED, write_type);
     } else if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RID)) {
-        result = write_resource(anjay, obj, in_ctx, &notify_queue);
+        result = write_resource(anjay, obj, in_ctx, &notify_queue, write_type);
     } else if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RIID)) {
         dm_log(ERROR, _("Write on Resource Instances is not supported in this "
                         "version of Anjay"));
@@ -230,6 +244,7 @@ int _anjay_dm_write_created_instance(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj,
                                      anjay_iid_t iid,
                                      anjay_input_ctx_t *in_ctx) {
-    return write_instance(anjay, obj, iid, in_ctx, NULL,
-                          WRITE_INSTANCE_IGNORE_UNSUPPORTED);
+    return write_instance(
+            anjay, obj, iid, in_ctx, NULL, WRITE_INSTANCE_IGNORE_UNSUPPORTED,
+            _anjay_dm_write_type_from_request_action(ANJAY_ACTION_CREATE));
 }

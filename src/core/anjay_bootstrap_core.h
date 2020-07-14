@@ -34,7 +34,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 typedef struct {
     bool allow_legacy_server_initiated_bootstrap;
     bool bootstrap_trigger;
-    avs_coap_exchange_id_t bootstrap_request_exchange_id;
+    avs_coap_exchange_id_t outgoing_request_exchange_id;
     bool in_progress;
     anjay_conn_session_token_t bootstrap_session_token;
     anjay_notify_queue_t notification_queue;

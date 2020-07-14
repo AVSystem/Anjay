@@ -105,11 +105,11 @@ class BootstrapTest:
                     print(self.bootstrap_server.recv(timeout_s=no_message_s))
 
             # We should get Bootstrap Request now
-            if bootstrap_request_timeout_s is not None:
+            if bootstrap_request_timeout_s is None:
+                self.assertDemoRequestsBootstrap(endpoint=endpoint)
+            elif bootstrap_request_timeout_s >= 0:
                 self.assertDemoRequestsBootstrap(
                     endpoint=endpoint, timeout_s=bootstrap_request_timeout_s)
-            else:
-                self.assertDemoRequestsBootstrap(endpoint=endpoint)
 
             if clear_everything:
                 req = Lwm2mDelete('/')

@@ -55,15 +55,10 @@ static int restore_etag(FILE *fp, anjay_etag_t **out_etag) {
     if (fread(&size, sizeof(size), 1, fp) != 1 || size == 0) {
         return -1;
     }
-    // NOTE: anjay_etag_t is a flexible array member, which means it
-    // has an array of runtime-allocated size at the end of it. That's
-    // why it is created using avs_malloc().
-    anjay_etag_t *etag =
-            (anjay_etag_t *) avs_malloc(offsetof(anjay_etag_t, value) + size);
+    anjay_etag_t *etag = anjay_etag_new(size);
     if (!etag) {
         return -1;
     }
-    etag->size = size;
 
     if (fread(etag->value, size, 1, fp) != 1) {
         avs_free(etag);
@@ -172,14 +167,10 @@ static int fw_stream_open(void *user_ptr,
         }
         anjay_etag_t *etag_copy = NULL;
         if (!result && package_etag) {
-            const size_t etag_size =
-                    offsetof(anjay_etag_t, value) + package_etag->size;
-            etag_copy = (anjay_etag_t *) avs_malloc(etag_size);
+            etag_copy = anjay_etag_clone(package_etag);
             if (!etag_copy) {
                 fprintf(stderr, "Could not duplicate package ETag\n");
                 result = -1;
-            } else {
-                memcpy(etag_copy, package_etag, etag_size);
             }
         }
         if (!result) {

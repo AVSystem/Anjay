@@ -50,10 +50,11 @@ def run_configuration(root_dir, configuration):
 
     with scoped_chdir(root_dir):
         logging.info('Running configuration: %s' % (configuration['env'],))
-        run_env = configuration['env'] + ' CHECK_COMMAND="make -j"'
+        run_env = configuration['env'] + \
+            ' CHECK_COMMAND="make -j && make -j anjay_check avs_commons_check avs_coap_check"'
         try:
             subprocess.run('{env} {run}'.format(env=run_env, run=run_script),
-                           shell=True, check=True)
+                           shell=True, check=True, env={'NO_CACHE': '1'})
         except:
             logging.error('Failed configuration %s' % (configuration['env'],))
             raise

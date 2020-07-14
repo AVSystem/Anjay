@@ -330,16 +330,18 @@ static int preprocess_firmware(fw_update_logic_t *fw) {
     return result;
 }
 
-static int store_etag(avs_persistence_context_t *ctx,
-                      const anjay_etag_t *etag) {
-    // UINT16_MAX is a magic value that means "there is no ETag"
-    uint16_t size16 = (etag ? etag->size : UINT16_MAX);
-    avs_error_t err = avs_persistence_u16(ctx, &size16);
-    if (avs_is_ok(err) && etag) {
-        err = avs_persistence_bytes(ctx, (uint8_t *) (intptr_t) etag->value,
-                                    etag->size);
-    }
-    return avs_is_ok(err) ? 0 : -1;
+static avs_error_t store_etag(avs_persistence_context_t *ctx,
+                              const anjay_etag_t *etag) {
+    bool use_etag = (etag != NULL);
+    avs_error_t err;
+
+    (void) (avs_is_err((err = avs_persistence_bool(ctx, &use_etag))) || !etag
+            || avs_is_err((err = avs_persistence_u8(
+                                   ctx, (uint8_t *) (intptr_t) &etag->size)))
+            || avs_is_err((err = avs_persistence_bytes(
+                                   ctx, (uint8_t *) (intptr_t) etag->value,
+                                   etag->size))));
+    return err;
 }
 
 static int write_persistence_file(const char *path,
@@ -360,7 +362,7 @@ static int write_persistence_file(const char *path,
             || avs_is_err(avs_persistence_string(&ctx, &download_file))
             || avs_is_err(avs_persistence_bool(&ctx,
                                                &filename_administratively_set))
-            || store_etag(&ctx, etag)) {
+            || avs_is_err(store_etag(&ctx, etag))) {
         demo_log(ERROR, "Could not write firmware state persistence file");
         retval = -1;
     }
@@ -563,24 +565,25 @@ static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .get_coap_tx_params = fw_get_coap_tx_params
 };
 
-static int restore_etag(avs_persistence_context_t *ctx, anjay_etag_t **etag) {
+static avs_error_t restore_etag(avs_persistence_context_t *ctx,
+                                anjay_etag_t **etag) {
     assert(etag && !*etag);
-    uint16_t size16;
-    avs_error_t err = avs_persistence_u16(ctx, &size16);
-    if (avs_is_ok(err) && size16 <= UINT8_MAX) {
-        *etag = (anjay_etag_t *) avs_malloc(offsetof(anjay_etag_t, value)
-                                            + size16);
-        if (!*etag) {
-            return -1;
-        }
-        (*etag)->size = (uint8_t) size16;
-        if (avs_is_err((err = avs_persistence_bytes(ctx, (*etag)->value,
-                                                    size16)))) {
-            avs_free(*etag);
-            *etag = NULL;
-        }
+    bool use_etag;
+    avs_error_t err;
+    uint8_t size8;
+    if (avs_is_err((err = avs_persistence_bool(ctx, &use_etag))) || !use_etag
+            || avs_is_err((err = avs_persistence_u8(ctx, &size8)))
+            || avs_is_err((err = ((*etag = anjay_etag_new(size8))
+                                          ? avs_errno(AVS_NO_ERROR)
+                                          : avs_errno(AVS_ENOMEM))))) {
+        return err;
     }
-    return avs_is_ok(err) ? 0 : -1;
+
+    if (avs_is_err(err = avs_persistence_bytes(ctx, (*etag)->value, size8))) {
+        avs_free(*etag);
+        *etag = NULL;
+    }
+    return err;
 }
 
 static bool is_valid_result(int8_t result) {
@@ -623,7 +626,7 @@ static persistence_file_data_t read_persistence_file(const char *path) {
             || avs_is_err(avs_persistence_string(&ctx, &data.download_file))
             || avs_is_err(avs_persistence_bool(
                        &ctx, &data.filename_administratively_set))
-            || restore_etag(&ctx, &data.etag)) {
+            || avs_is_err(restore_etag(&ctx, &data.etag))) {
         demo_log(WARNING,
                  "Invalid data in the firmware state persistence file");
         avs_free(data.uri);

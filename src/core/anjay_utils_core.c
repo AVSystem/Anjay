@@ -425,7 +425,11 @@ static bool url_service_matches(const avs_url_t *left,
 
 typedef union {
     anjay_security_config_t *security;
-    avs_coap_ctx_t *coap;
+    struct {
+        avs_coap_ctx_t *coap;
+        // socket used by the `coap` instance above
+        avs_net_socket_t *socket;
+    } socket_info;
 } security_or_socket_info_t;
 
 typedef int

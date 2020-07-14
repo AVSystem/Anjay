@@ -191,7 +191,7 @@ int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid) {
     } else {
         anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
         if (!server) {
-            anjay_log(ERROR, _("no active server with SSID = ") "%u", ssid);
+            anjay_log(WARNING, _("no active server with SSID = ") "%u", ssid);
             result = -1;
         } else {
             result = reschedule_update_for_server(server);

@@ -88,23 +88,33 @@ static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     _anjay_url_cleanup(&ctx->uri);
 
     anjay_t *anjay = _anjay_downloader_get_anjay(ctx->dl);
-    /**
-     * HACK: this is necessary, because CoAP context may be destroyed while
-     * handling a response, and when the control returns, it may access some of
-     * its internal fields.
-     */
+
     const cleanup_coap_context_args_t args = {
         .anjay = anjay,
         .coap_ctx = ctx->coap,
         .socket = ctx->socket
     };
-    if (ctx->coap
-            && (!anjay->sched
+    if (ctx->coap) {
+        ctx->aborting = true;
+        /**
+         * HACK: this is necessary, because if the download is canceled
+         * externally, cleanup_coap_context() would be called after "ctx_ptr" is
+         * freed. The problem is: cleanup_coap_context() leads to exchange
+         * cancelation, which calls handle_coap_response, and that'd use already
+         * freed memory (i.e. from "ctx_ptr"). It's also non-trivial to move the
+         * AVS_LIST_DELETE(ctx_ptr) to cleanup_coap_context().
+         */
+        avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
+        /**
+         * HACK: this is necessary, because CoAP context may be destroyed while
+         * handling a response, and when the control returns, it may access some
+         * of its internal fields.
+         */
+        if (!anjay->sched
                 || AVS_SCHED_NOW(anjay->sched, NULL, cleanup_coap_context,
-                                 &args, sizeof(args)))) {
-        dl_log(WARNING, _("could not schedule cleanup of CoAP context, "
-                          "cleaning it up immediately"));
-        cleanup_coap_context(NULL, &args);
+                                 &args, sizeof(args))) {
+            cleanup_coap_context(NULL, &args);
+        }
     }
     AVS_LIST_DELETE(ctx_ptr);
 }
@@ -431,6 +441,7 @@ static void suspend_coap_transfer(anjay_downloader_t *dl,
                                   anjay_download_ctx_t *ctx_) {
     (void) dl;
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) ctx_;
+    dl_log(INFO, _("suspending download ") "%" PRIuPTR, ctx->common.id);
     ctx->reconnecting = true;
     avs_sched_del(&ctx->job_start);
     if (avs_coap_exchange_id_valid(ctx->exchange_id)) {
@@ -454,6 +465,8 @@ static avs_error_t sched_download_resumption(anjay_downloader_t *dl,
                ctx->common.id);
         return avs_errno(AVS_ENOMEM);
     }
+    dl_log(INFO, _("scheduling download ") "%" PRIuPTR _(" resumption"),
+           ctx->common.id);
     return AVS_OK;
 }
 

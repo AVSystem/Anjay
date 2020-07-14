@@ -67,6 +67,9 @@ struct anjay_struct {
 #ifdef ANJAY_WITH_BOOTSTRAP
     anjay_bootstrap_t bootstrap;
 #endif
+#ifdef ANJAY_WITH_EST
+    anjay_est_state_t est_state;
+#endif // ANJAY_WITH_EST
 #ifdef WITH_AVS_COAP_UDP
     avs_coap_udp_response_cache_t *udp_response_cache;
     avs_coap_udp_tx_params_t udp_tx_params;

@@ -28,6 +28,7 @@ The project has been created and is actively maintained by [AVSystem](https://ww
     * [Alternative build systems](#alternative-build-systems)
   * [Use a Dockerfile](#use-a-dockerfile)
 * [Mbed OS port](#mbed-os-port)
+* [Zephyr OS port](#zephyr-os-port)
 * [License](#license)
   * [Commercial support](#commercial-support)
 * [Contributing](#contributing)
@@ -80,6 +81,7 @@ This version includes full support for OMA LwM2M TS 1.0 features. Version that s
     - any embedded platform (e.g. FreeRTOS, ThreadX) with lwIP networking stack
     - porting is possible for any other platform that has ISO C99 compiler available, see [Porting guide for non-POSIX platforms](https://avsystem.github.io/Anjay-doc/PortingGuideForNonPOSIXPlatforms.html) for details
         - preimplemented [integration layer for Arm Mbed OS](https://github.com/AVSystem/Anjay-mbedos) and an [example client based on it](https://github.com/AVSystem/Anjay-mbedos-client) are available
+        - [example client](https://github.com/AVSystem/Anjay-zephyr-client) based on Zephyr OS is available
 
 - CoAP data formats:
     - TLV
@@ -265,6 +267,10 @@ docker run -it anjay
 ## Mbed OS port
 
 If you want to use Anjay on Mbed OS, you might be interested in the [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) and [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) repositories, which contain basic integration with that system.
+
+## Zephyr OS port
+
+If you want to use Anjay on Zephyr OS, you might want to check our [example client](https://github.com/AVSystem/Anjay-zephyr-client) based on it.
 
 ## License
 

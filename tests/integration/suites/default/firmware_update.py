@@ -783,6 +783,36 @@ class FirmwareUpdateHttpsCancelPackageUriTest(FirmwareUpdate.TestWithPartialDown
         self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
 
 
+class FirmwareUpdateCoapCancelPackageUriTest(FirmwareUpdate.TestWithPartialDownload,
+                                             FirmwareUpdate.TestWithCoapServer):
+    def runTest(self):
+        with self.file_server as file_server:
+            file_server.set_resource('/firmware',
+                                     make_firmware_package(self.FIRMWARE_SCRIPT_CONTENT))
+            fw_uri = file_server.get_resource_uri('/firmware')
+
+            # Write /5/0/1 (Firmware URI)
+            req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, fw_uri)
+            self.serv.send(req)
+            self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                                self.serv.recv())
+
+            # Handle one GET
+            file_server.handle_request()
+
+        self.assertEqual(self.get_socket_count(), 2)
+
+        # Cancel download
+        req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, b'')
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        self.wait_until_socket_count(expected=1, timeout_s=5)
+
+        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
+        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+
+
 class FirmwareUpdateHttpsOfflineTest(FirmwareUpdate.TestWithPartialDownloadAndRestart,
                                      FirmwareUpdate.TestWithHttpServer):
     RESPONSE_DELAY = 0.5

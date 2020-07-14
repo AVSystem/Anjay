@@ -113,7 +113,8 @@ static int validate_instance(sec_instance_t *it) {
                 it->server_uri);
         return -1;
     }
-    if (it->security_mode != ANJAY_SECURITY_NOSEC) {
+    if (it->security_mode != ANJAY_SECURITY_NOSEC
+            && it->security_mode != ANJAY_SECURITY_EST) {
         if (!it->public_cert_or_psk_identity.data
                 || !it->private_cert_or_psk_key.data) {
             LOG_VALIDATION_FAILED(it,

@@ -75,6 +75,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_DOWNLOADER
     _anjay_log(anjay, TRACE, "ANJAY_WITH_DOWNLOADER = OFF");
 #endif // ANJAY_WITH_DOWNLOADER
+#ifdef ANJAY_WITH_EST
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_EST = ON");
+#else // ANJAY_WITH_EST
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_EST = OFF");
+#endif // ANJAY_WITH_EST
 #ifdef ANJAY_WITH_HTTP_DOWNLOAD
     _anjay_log(anjay, TRACE, "ANJAY_WITH_HTTP_DOWNLOAD = ON");
 #else // ANJAY_WITH_HTTP_DOWNLOAD

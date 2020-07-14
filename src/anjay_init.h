@@ -35,6 +35,7 @@
 #endif
 
 #ifdef AVS_COMMONS_WITH_AVS_LOG
+#    include <avsystem/commons/avs_log.h>
 #    define _(Arg) AVS_DISPOSABLE_LOG(Arg)
 #else // AVS_COMMONS_WITH_AVS_LOG
 #    define _(Arg) Arg

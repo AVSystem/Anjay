@@ -31,6 +31,7 @@ class SecurityMode(enum.Enum):
     RawPublicKey = 1
     Certificate = 2
     NoSec = 3
+    CertificateWithEst = 4
 
     def __str__(self):
         if self == SecurityMode.PreSharedKey:
@@ -39,6 +40,8 @@ class SecurityMode(enum.Enum):
             return 'rpk'
         elif self == SecurityMode.Certificate:
             return 'cert'
+        elif self == SecurityMode.CertificateWithEst:
+            return 'est'
         else:
             return 'nosec'
 

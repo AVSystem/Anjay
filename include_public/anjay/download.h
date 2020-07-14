@@ -36,6 +36,27 @@ typedef struct anjay_etag {
 } anjay_etag_t;
 
 /**
+ * Allocates ETag with a given size.
+ * The new ETag can be freed using @c avs_free.
+ *
+ * @param etag_size The number of bytes to be available in the returned
+ *                  anjay_etag_t::value array.
+ *
+ * @return Pointer to created ETag, NULL on failure
+ */
+anjay_etag_t *anjay_etag_new(uint8_t etag_size);
+
+/**
+ * Given one ETag, creates a new one, with the same size and value.
+ * The new ETag can be freed using @c avs_free.
+ *
+ * @param old_etag Pointer to old ETag copy
+ *
+ * @return Pointer to created ETag copy, NULL on failure
+ */
+anjay_etag_t *anjay_etag_clone(const anjay_etag_t *old_etag);
+
+/**
  * Called each time a chunk of data is received from remote host.
  * It is guaranteed to be called with consecutive chunks of data, starting
  * from @ref anjay_download_config_t#start_offset.

@@ -476,8 +476,9 @@ unique_ptr<Socket> ServerSocket::accept(py::object handshake_timeouts_s) {
             call_method<py::tuple>(py_socket_, "recvfrom", 1, (int) MSG_PEEK);
     py::tuple remote_addr = py::cast<py::tuple>(data__remote_addr[1]);
 
-    py::object client_py_sock =
-            py::eval("socket.socket(socket.AF_INET, socket.SOCK_DGRAM)");
+    py::object client_py_sock = py::eval(
+            "socket.socket")(py_socket_.attr("family"), py_socket_.attr("type"),
+                             py_socket_.attr("proto"));
     enable_reuse(client_py_sock);
 
     call_method<void>(client_py_sock, "bind", bound_addr);

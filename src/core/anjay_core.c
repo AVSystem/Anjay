@@ -52,7 +52,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.4.4"
+#    define ANJAY_VERSION "2.5.0"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
@@ -824,6 +824,31 @@ int anjay_sched_calculate_wait_time_ms(anjay_t *anjay, int limit_ms) {
 
 void anjay_sched_run(anjay_t *anjay) {
     avs_sched_run(anjay->sched);
+}
+
+anjay_etag_t *anjay_etag_new(uint8_t etag_size) {
+    anjay_etag_t *result = (anjay_etag_t *) avs_calloc(
+            offsetof(anjay_etag_t, value) + etag_size, sizeof(char));
+
+    if (result) {
+        result->size = (uint8_t) etag_size;
+    }
+
+    return result;
+}
+
+anjay_etag_t *anjay_etag_clone(const anjay_etag_t *old_etag) {
+    if (old_etag == NULL) {
+        return NULL;
+    }
+
+    anjay_etag_t *result = anjay_etag_new(old_etag->size);
+
+    if (result) {
+        memcpy(result->value, old_etag->value, result->size);
+    }
+
+    return result;
 }
 
 avs_error_t anjay_download(anjay_t *anjay,

@@ -116,9 +116,9 @@ class Lwm2mMsg(coap.Packet):
             return ''
 
         decoders = {
-            coap.ContentFormat.TEXT_PLAIN:               Lwm2mMsg._decode_text_content,
-            coap.ContentFormat.APPLICATION_LINK:         Lwm2mMsg._decode_text_content,
-            coap.ContentFormat.APPLICATION_LWM2M_TLV:    Lwm2mMsg._decode_tlv_content,
+            coap.ContentFormat.TEXT_PLAIN: Lwm2mMsg._decode_text_content,
+            coap.ContentFormat.APPLICATION_LINK: Lwm2mMsg._decode_text_content,
+            coap.ContentFormat.APPLICATION_LWM2M_TLV: Lwm2mMsg._decode_tlv_content,
             coap.ContentFormat.APPLICATION_OCTET_STREAM: Lwm2mMsg._decode_binary_content,
         }
 
@@ -251,8 +251,40 @@ class Lwm2mBootstrapFinish(Lwm2mMsg):
                          content=content)
 
     def summary(self):
-        return ('Request Bootstrap %s: %s' % (self.get_full_uri(),
-                                              self.content_summary()))
+        return ('Bootstrap Finish %s: %s' % (self.get_full_uri(),
+                                             self.content_summary()))
+
+
+class EstCoapsSimpleEnroll(Lwm2mMsg):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        """Checks if the PKT is a LWM2M Request Bootstrap message."""
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_POST
+                and pkt.get_full_uri().endswith('/est/sen'))
+
+    def __init__(self,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 uri_path: str = '',
+                 uri_query: List[str] = None,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
+        if not uri_query:
+            uri_query = []
+        super().__init__(type=coap.Type.CONFIRMABLE,
+                         code=coap.Code.REQ_POST,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             CoapPath(uri_path + '/est/sen').to_uri_options(),
+                             [coap.Option.URI_QUERY(query) for query in uri_query],
+                             options),
+                         content=content)
+
+    def summary(self):
+        return ('EST-coaps Simple Enroll %s: %s' % (self.get_full_uri(),
+                                                    self.content_summary()))
 
 
 def _split_string_path(path: str,
@@ -483,7 +515,8 @@ class Lwm2mObserve(Lwm2mRead):
             elif opt.content_to_int() == 1:
                 text = 'Cancel Observation ' + self.get_full_uri()
             else:
-                text = 'Observe %s (invalid Observe value: %d)' % (self.get_full_uri(), opt.content_to_int())
+                text = 'Observe %s (invalid Observe value: %d)' % (
+                self.get_full_uri(), opt.content_to_int())
 
         accept = self.get_options(coap.Option.ACCEPT)
         if accept:
@@ -845,7 +878,8 @@ class Lwm2mChanged(Lwm2mResponse):
                  msg_id: int,
                  token: EscapedBytes,
                  location: str or CoapPath = ANY,
-                 options: List[coap.Option] = ANY):
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
         if location is not ANY and isinstance(location, str):
             location = CoapPath(location)
 
@@ -855,7 +889,8 @@ class Lwm2mChanged(Lwm2mResponse):
                          token=token,
                          options=concat_if_not_any(
                              location.to_uri_options(coap.Option.LOCATION_PATH),
-                             options))
+                             options),
+                         content=content)
 
     def summary(self):
         location = self.get_location_path()
@@ -883,7 +918,8 @@ class Lwm2mErrorResponse(Lwm2mResponse):
                          options=options)
 
     def summary(self):
-        content_str = shorten(hexlify_nonprintable(self.content)) if self.content else '(no details available)'
+        content_str = shorten(
+            hexlify_nonprintable(self.content)) if self.content else '(no details available)'
         return '%s: %s' % (str(self.code), content_str)
 
 
