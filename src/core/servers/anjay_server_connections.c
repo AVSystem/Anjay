@@ -280,18 +280,67 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
     }
 }
 
+static void cancel_exchanges(anjay_connection_ref_t conn_ref) {
+    anjay_server_connection_t *conn = _anjay_get_server_connection(conn_ref);
+    if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY) {
+#ifdef ANJAY_WITH_BOOTSTRAP
+        if (conn_ref.server->ssid == ANJAY_SSID_BOOTSTRAP) {
+            if (avs_coap_exchange_id_valid(
+                        conn_ref.server->anjay->bootstrap
+                                .outgoing_request_exchange_id)) {
+                avs_coap_exchange_cancel(conn->coap_ctx,
+                                         conn_ref.server->anjay->bootstrap
+                                                 .outgoing_request_exchange_id);
+            }
+        } else
+#endif // ANJAY_WITH_BOOTSTRAP
+                if (avs_coap_exchange_id_valid(
+                            conn_ref.server->registration_exchange_state
+                                    .exchange_id)) {
+            avs_coap_exchange_cancel(
+                    conn->coap_ctx,
+                    conn_ref.server->registration_exchange_state.exchange_id);
+        }
+    }
+    _anjay_observe_interrupt(conn_ref);
+}
+
+void _anjay_servers_interrupt_offline(anjay_t *anjay) {
+    AVS_LIST(anjay_server_info_t) it;
+    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+        anjay_connection_type_t conn_type;
+        ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+            anjay_connection_ref_t ref = {
+                .server = it,
+                .conn_type = conn_type
+            };
+            anjay_server_connection_t *conn = _anjay_get_server_connection(ref);
+            avs_net_socket_t *socket =
+                    _anjay_connection_internal_get_socket(conn);
+            if (socket
+                    && !_anjay_socket_transport_is_online(anjay,
+                                                          conn->transport)) {
+                cancel_exchanges(ref);
+                _anjay_observe_interrupt(ref);
+                if (conn_type == ANJAY_CONNECTION_PRIMARY) {
+                    avs_sched_del(&it->next_action_handle);
+#ifdef ANJAY_WITH_BOOTSTRAP
+                    if (it->ssid == ANJAY_SSID_BOOTSTRAP) {
+                        avs_sched_del(
+                                &anjay->bootstrap
+                                         .client_initiated_bootstrap_handle);
+                    }
+#endif // ANJAY_WITH_BOOTSTRAP
+                }
+            }
+        }
+    }
+}
+
 void _anjay_connection_suspend(anjay_connection_ref_t conn_ref) {
     anjay_server_connection_t *conn = _anjay_get_server_connection(conn_ref);
     avs_net_socket_t *socket = _anjay_connection_internal_get_socket(conn);
-    if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY
-            && avs_coap_exchange_id_valid(
-                       conn_ref.server->registration_exchange_state
-                               .exchange_id)) {
-        avs_coap_exchange_cancel(
-                conn->coap_ctx,
-                conn_ref.server->registration_exchange_state.exchange_id);
-    }
-    _anjay_observe_interrupt(conn_ref);
+    cancel_exchanges(conn_ref);
     if (socket) {
         avs_net_socket_shutdown(socket);
         avs_net_socket_close(socket);
@@ -316,15 +365,24 @@ void _anjay_connection_mark_stable(anjay_connection_ref_t ref) {
 
 void _anjay_connection_bring_online(anjay_connection_ref_t ref) {
     anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
+    (void) connection;
     assert(connection);
     assert(!_anjay_connection_is_online(connection));
-    (void) connection;
-    _anjay_server_on_refreshed(ref.server,
-                               _anjay_connection_get(&ref.server->connections,
-                                                     ANJAY_CONNECTION_PRIMARY)
-                                       ->state,
-                               _anjay_server_connection_internal_bring_online(
-                                       ref.server, ref.conn_type, NULL));
+    assert(_anjay_socket_transport_supported(ref.server->anjay,
+                                             connection->transport));
+    if (!_anjay_socket_transport_is_online(ref.server->anjay,
+                                           connection->transport)) {
+        anjay_log(DEBUG, _("transport is entering offline mode, not bringing "
+                           "the socket online"));
+    } else {
+        _anjay_server_on_refreshed(
+                ref.server,
+                _anjay_connection_get(&ref.server->connections,
+                                      ANJAY_CONNECTION_PRIMARY)
+                        ->state,
+                _anjay_server_connection_internal_bring_online(
+                        ref.server, ref.conn_type, NULL));
+    }
 }
 
 static void queue_mode_close_socket(avs_sched_t *sched, const void *ref_ptr) {

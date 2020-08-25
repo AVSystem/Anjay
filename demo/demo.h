@@ -53,6 +53,7 @@ struct anjay_demo_struct {
     AVS_LIST(anjay_demo_string_t) allocated_strings;
     server_connection_args_t *connection_args;
     const char *attr_storage_file;
+    const char *dm_persistence_file;
 
     iosched_t *iosched;
     fw_update_logic_t fw_update;

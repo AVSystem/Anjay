@@ -86,6 +86,7 @@ public:
     void send(const std::string &data);
     py::bytes recv(int);
     void settimeout(py::object timeout_s_or_none);
+    py::bytes peer_cert();
     py::object __getattr__(py::object name);
     void __setattr__(py::object name, py::object value);
 };

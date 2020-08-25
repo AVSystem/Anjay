@@ -500,6 +500,33 @@ AVS_UNIT_TEST(tlv_in_path,
     TEST_TEARDOWN;
 }
 
+AVS_UNIT_TEST(tlv_in_path, fail_on_path_with_invalid_iid) {
+    // IID(ANJAY_ID_INVALID, [ RID(1)=1 ])
+    TEST_ENV("\x23\xff\xff\xc1\x01\x0a", MAKE_ROOT_PATH());
+    anjay_uri_path_t path;
+    ASSERT_FAIL(_anjay_input_get_path(in, &path, NULL));
+
+    TEST_TEARDOWN;
+}
+
+AVS_UNIT_TEST(tlv_in_path, fail_on_path_with_invalid_rid) {
+    // IID(5, [ RID(1)=ANJAY_ID_INVALID ])
+    TEST_ENV("\x04\x05\xe1\xff\xff\x0a", MAKE_ROOT_PATH());
+    anjay_uri_path_t path;
+    ASSERT_FAIL(_anjay_input_get_path(in, &path, NULL));
+
+    TEST_TEARDOWN;
+}
+
+AVS_UNIT_TEST(tlv_in_path, fail_on_path_with_invalid_riid) {
+    // RIID=ANJAY_ID_INVALID
+    TEST_ENV("\x61\xff\xff\x0a", MAKE_RESOURCE_PATH(5, 0, 1));
+    anjay_uri_path_t path;
+    ASSERT_FAIL(_anjay_input_get_path(in, &path, NULL));
+
+    TEST_TEARDOWN;
+}
+
 AVS_UNIT_TEST(tlv_in_path, payload_write_on_instance_with_rids) {
     // IID(4, [ RID(1)=10, RID(2)=10 ])
     TEST_ENV("\x06\x04\xc1\x01\x0a\xc1\x02\x0a", MAKE_INSTANCE_PATH(3, 4));

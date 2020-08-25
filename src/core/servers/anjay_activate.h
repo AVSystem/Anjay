@@ -114,7 +114,7 @@ AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_t *anjay,
  * @returns true if all requirements for Client Initiated Bootstrap are met,
  *          false otherwise.
  */
-bool _anjay_should_retry_bootstrap(anjay_t *anjay);
+anjay_bootstrap_action_t _anjay_requested_bootstrap_action(anjay_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

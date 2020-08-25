@@ -292,6 +292,20 @@ static size_t current_nstart(const avs_coap_udp_ctx_t *ctx) {
     return started;
 }
 
+static size_t effective_nstart(const avs_coap_udp_ctx_t *ctx) {
+    // equivalent to:
+    // AVS_MIN(ctx->tx_params.nstart, AVS_LIST_SIZE(ctx->unconfirmed_messages))
+    size_t result = 0;
+    AVS_LIST(avs_coap_udp_unconfirmed_msg_t) msg;
+    AVS_LIST_FOREACH(msg, ctx->unconfirmed_messages) {
+        ++result;
+        if (result >= ctx->tx_params.nstart) {
+            break;
+        }
+    }
+    return result;
+}
+
 static void _log_udp_msg_summary(const char *file,
                                  const int line,
                                  const char *info,
@@ -397,7 +411,10 @@ static avs_error_t coap_udp_send_serialized_msg(avs_coap_udp_ctx_t *ctx,
 }
 
 static avs_time_monotonic_t get_first_retransmit_time(avs_coap_udp_ctx_t *ctx) {
-    avs_coap_retry_state_t initial_state;
+    avs_coap_retry_state_t initial_state = {
+        .retry_count = 0,
+        .recv_timeout = AVS_TIME_DURATION_ZERO
+    };
     if (avs_is_err(_avs_coap_udp_initial_retry_state(
                 &ctx->tx_params, ctx->base.prng_ctx, &initial_state))) {
         return AVS_TIME_MONOTONIC_INVALID;
@@ -442,10 +459,17 @@ find_first_held_unconfirmed_ptr(avs_coap_udp_ctx_t *ctx) {
 
 static void reschedule_retransmission_job(avs_coap_udp_ctx_t *ctx) {
     if (ctx->unconfirmed_messages) {
-        avs_coap_udp_unconfirmed_msg_t *msg =
-                (avs_coap_udp_unconfirmed_msg_t *) ctx->unconfirmed_messages;
+        avs_time_monotonic_t target_time;
+        if (current_nstart(ctx) < effective_nstart(ctx)) {
+            // There are requests we need to send ASAP
+            target_time = avs_time_monotonic_now();
+        } else {
+            target_time = ((avs_coap_udp_unconfirmed_msg_t *)
+                                   ctx->unconfirmed_messages)
+                                  ->next_retransmit;
+        }
         _avs_coap_reschedule_retry_or_request_expired_job(
-                (avs_coap_ctx_t *) ctx, msg->next_retransmit);
+                (avs_coap_ctx_t *) ctx, target_time);
     }
 }
 
@@ -571,12 +595,7 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
         // the msg may need to be retransmitted before other started ones
         AVS_LIST_INSERT(find_unconfirmed_insert_ptr(ctx, unconfirmed),
                         unconfirmed);
-        reschedule_retransmission_job(ctx);
     } while (unconfirmed_ptr && avs_is_err(send_err));
-
-    assert(current_nstart(ctx)
-           == AVS_MIN(AVS_LIST_SIZE(ctx->unconfirmed_messages),
-                      ctx->tx_params.nstart));
 }
 
 static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
@@ -604,20 +623,12 @@ static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
     // site, so I'm just leaving a comment instead in hopes it will help in
     // debugging if the starving case happens at some point.
 
-    for (size_t i = 0; i < msgs_to_resume; ++i) {
+    // resume_next_unconfirmed() might call handlers which may resume messages
+    // themselves, so
+    while (current_nstart(ctx) < effective_nstart(ctx)) {
         resume_next_unconfirmed(ctx);
     }
-}
-
-static void finish_unconfirmed(avs_coap_udp_ctx_t *ctx) {
-    // In some cases user-defined handler may end up freeing more than one
-    // NSTART "slots" and we may resume more than just one unconfirmed message.
-    resume_unconfirmed_messages(ctx);
-
-    reschedule_retransmission_job(ctx);
-    assert(current_nstart(ctx)
-           == AVS_MIN(AVS_LIST_SIZE(ctx->unconfirmed_messages),
-                      ctx->tx_params.nstart));
+    assert(current_nstart(ctx) == effective_nstart(ctx));
 }
 
 static void try_cleanup_unconfirmed(avs_coap_udp_ctx_t *ctx,
@@ -642,7 +653,7 @@ static void try_cleanup_unconfirmed(avs_coap_udp_ctx_t *ctx,
         AVS_LIST_INSERT(find_unconfirmed_insert_ptr(ctx, unconfirmed),
                         unconfirmed);
     } else {
-        finish_unconfirmed(ctx);
+        reschedule_retransmission_job(ctx);
         AVS_LIST_DELETE(&unconfirmed);
     }
 }
@@ -859,14 +870,15 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
 
 static avs_time_monotonic_t coap_udp_on_timeout(avs_coap_ctx_t *ctx_) {
     avs_coap_udp_ctx_t *ctx = (avs_coap_udp_ctx_t *) ctx_;
+    resume_unconfirmed_messages(ctx);
     retransmit_next_message_without_reschedule(ctx);
 
     if (ctx->unconfirmed_messages) {
         avs_coap_udp_unconfirmed_msg_t *unconfirmed = ctx->unconfirmed_messages;
 
-        LOG(DEBUG, _("next UDP retransmission: ") "%" PRIi64 ".%09" PRId32,
-            unconfirmed->next_retransmit.since_monotonic_epoch.seconds,
-            unconfirmed->next_retransmit.since_monotonic_epoch.nanoseconds);
+        LOG(DEBUG, _("next UDP retransmission: ") "%s",
+            AVS_TIME_DURATION_AS_STRING(
+                    unconfirmed->next_retransmit.since_monotonic_epoch));
         return ctx->unconfirmed_messages->next_retransmit;
     } else {
         return AVS_TIME_MONOTONIC_INVALID;

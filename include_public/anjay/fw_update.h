@@ -393,9 +393,21 @@ typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
  * @ref anjay_delete .
  *
  * If this handler is not implemented at all (with the corresponding field set
- * to <c>NULL</c>), @ref anjay_fw_update_load_security_from_dm will be used as
- * a default way to get security information. You may also use that function
- * yourself, for example as a fallback mechanism.
+ * to <c>NULL</c>), @ref anjay_security_config_from_dm will be used as a default
+ * way to get security information.
+ *
+ * In that (no user-defined handler) case, in the commercial version,
+ * <c>anjay_security_config_pkix()</c> will be used as an additional fallback if
+ * <c>ANJAY_WITH_LWM2M11</c> is enabled and a valid trust store is available
+ * (either specified through <c>use_system_trust_store</c>,
+ * <c>trust_store_certs</c> or <c>trust_store_crls</c> fields in
+ * <c>anjay_configuration_t</c>, or obtained via <c>/est/crts</c> request if
+ * <c>est_cacerts_policy</c> is set to
+ * <c>ANJAY_EST_CACERTS_IF_EST_CONFIGURED</c> or
+ * <c>ANJAY_EST_CACERTS_ALWAYS</c>).
+ *
+ * You may also use these functions yourself, for example as a fallback
+ * mechanism.
  *
  * @param user_ptr            Opaque pointer to user data, as passed to
  *                            @ref anjay_fw_update_install
@@ -554,30 +566,13 @@ int anjay_fw_update_install(
  * Helper function that is used as a default implementation of security
  * information querying for PULL-mode downloads from (D)TLS-encrypted URIs.
  *
- * Given a URI, the Security object is scanned for instances with Server URI
- * resource matching it in the following way:
- * - if there is at least one instance with matching hostname, protocol and port
- *   number, and valid secure connection configuration, the first such instance
- *   (in the order as returned via @ref anjay_dm_list_instances_t) is used
- * - otherwise, if there is at least one instance with matching hostname and
- *   valid secure connection configuration, the first such instance (in the
- *   order as returned via @ref anjay_dm_list_instances_t) is used
- *
- * The returned security information is exactly the same configuration that is
- * used for LwM2M connection with the server chosen with the rules described
- * above.
- *
- * @param anjay Anjay object whose data model shall be queried.
- *
- * @param uri   URI for which to find security configuration.
- *
- * @returns Security configuration found, or <c>NULL</c> if no suitable LwM2M
- *          Security Object instance could be found. The returned structure is
- *          heap-allocated; to release all memory allocated for it, it is enough
- *          to call <c>avs_free()</c> on the returned pointer.
+ * This is an alias for @ref anjay_security_config_from_dm, kept for backwards
+ * compatibility.
  */
-anjay_security_config_t *anjay_fw_update_load_security_from_dm(anjay_t *anjay,
-                                                               const char *uri);
+static inline anjay_security_config_t *
+anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *uri) {
+    return anjay_security_config_from_dm(anjay, uri);
+}
 
 /**
  * Sets the Firmware Update Result to @p result, interrupting the update

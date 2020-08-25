@@ -24,6 +24,11 @@
 #include <inttypes.h>
 #include <string.h>
 
+#ifndef _WIN32
+#    include <sys/ioctl.h>
+#    include <unistd.h>
+#endif // _WIN32
+
 #include <avsystem/commons/avs_memory.h>
 
 #define DEFAULT_PSK_IDENTITY "sesame"
@@ -52,6 +57,7 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
         .mode = (avs_net_security_mode_t) -1
     },
     .attr_storage_file = NULL,
+    .dm_persistence_file = NULL,
     .disable_legacy_server_initiated_bootstrap = false,
     .tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
     .dtls_hs_tx_params = ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS,
@@ -106,20 +112,46 @@ static int parse_security_mode(const char *mode_string,
     return -1;
 }
 
-static const char *help_arg_list(const struct option *opt) {
-    switch (opt->has_arg) {
-    case required_argument:
-        return " ARG";
-    case optional_argument:
-        return "[=ARG]";
-    case no_argument:
-        return " ";
-    default:
-        return " <ERROR>";
+static size_t get_screen_width(void) {
+#ifndef _WIN32
+    struct winsize ws;
+    if (!ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws)) {
+        return ws.ws_col;
     }
+#endif // _WIN32
+    // fallback to 80 columns as default
+    return 80;
 }
 
-static void print_option_help(const struct option *opt) {
+static void
+print_wrapped(const char *str, size_t padding, size_t screen_width) {
+    const char *str_end = str + strlen(str);
+    do {
+        for (size_t i = 0; i < padding; ++i) {
+            putchar(' ');
+        }
+
+        const char *line_start = str;
+        const char *line_end;
+        bool first_word = true;
+        while (str < str_end) {
+            str += strspn(str, AVS_SPACES);
+            str += strcspn(str, AVS_SPACES);
+            if (first_word
+                    || (size_t) (str - line_start) + padding < screen_width) {
+                line_end = str;
+                first_word = false;
+            } else {
+                break;
+            }
+        }
+        str = line_end + strspn(line_end, AVS_SPACES);
+        fwrite(line_start, 1, (size_t) (line_end - line_start), stdout);
+        putchar('\n');
+    } while (str < str_end);
+}
+
+static void print_help(const struct option *options) {
     const struct {
         int opt_val;
         const char *args;
@@ -252,44 +284,42 @@ static void print_option_help(const struct option *opt) {
           "Configures preference of re-using existing LwM2M CoAP contexts for "
           "firmware download" },
         { 284, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
+        { 289, "PERSISTENCE_FILE", NULL,
+          "File to load Server, Security and Access Control object contents at "
+          "startup, and store it at shutdown" },
     };
 
-    int description_offset = 25;
+    const size_t screen_width = get_screen_width();
 
-    fprintf(stderr, "  ");
-    if (isprint(opt->val)) {
-        fprintf(stderr, "-%c, ", opt->val);
-        description_offset -= 4;
-    }
+    puts("Available options:");
+    for (size_t i = 0; options[i].name || options[i].val; ++i) {
+        assert(i < AVS_ARRAY_SIZE(HELP_INFO));
+        assert(HELP_INFO[i].opt_val == options[i].val);
 
-    int chars_written = 0;
-    fprintf(stderr, "--%s%n", opt->name, &chars_written);
+        printf("\n  ");
+        if (isprint(options[i].val)) {
+            printf("-%c, ", options[i].val);
+        }
 
-    int padding = description_offset - chars_written - 1;
-    for (size_t i = 0; i < AVS_ARRAY_SIZE(HELP_INFO); ++i) {
-        if (opt->val == HELP_INFO[i].opt_val) {
-            const char *args = HELP_INFO[i].args ? HELP_INFO[i].args : "";
-            const char *arg_prefix = "";
-            const char *arg_suffix = "";
-            if (opt->has_arg == required_argument) {
-                arg_prefix = " ";
-            } else if (opt->has_arg == optional_argument) {
-                arg_prefix = "[=";
-                arg_suffix = "]";
-            }
-            padding -= (int) (strlen(arg_prefix) + strlen(args));
-            fprintf(stderr, "%s%s%*s - %s", arg_prefix, args,
-                    padding > 0 ? -padding : 0, arg_suffix, HELP_INFO[i].help);
-            if (HELP_INFO[i].default_value) {
-                fprintf(stderr, " (default: %s)", HELP_INFO[i].default_value);
-            }
-            fprintf(stderr, "\n");
-            return;
+        int chars_written = 0;
+        printf("--%s%n", options[i].name, &chars_written);
+
+        const char *args = HELP_INFO[i].args ? HELP_INFO[i].args : "";
+        const char *arg_prefix = "";
+        const char *arg_suffix = "";
+        if (options[i].has_arg == required_argument) {
+            arg_prefix = " ";
+        } else if (options[i].has_arg == optional_argument) {
+            arg_prefix = "[=";
+            arg_suffix = "]";
+        }
+        printf("%s%s%s\n", arg_prefix, args, arg_suffix);
+
+        print_wrapped(HELP_INFO[i].help, 6, screen_width);
+        if (HELP_INFO[i].default_value) {
+            printf("      (default: %s)\n", HELP_INFO[i].default_value);
         }
     }
-
-    fprintf(stderr, "%*s - [NO DESCRIPTION]\n", padding > 0 ? -padding : 0,
-            help_arg_list(opt));
 }
 
 static int parse_i32(const char *str, int32_t *out_value) {
@@ -499,10 +529,10 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "key-file",                      required_argument, 0, 'K' },
         { "server-public-key-file",        required_argument, 0, 'P' },
         { "binding",                       required_argument, 0, 'q' },
-        { "security-iid",                  required_argument, 0, 'D' },
         { "security-mode",                 required_argument, 0, 's' },
-        { "server-iid",                    required_argument, 0, 'd' },
         { "server-uri",                    required_argument, 0, 'u' },
+        { "security-iid",                  required_argument, 0, 'D' },
+        { "server-iid",                    required_argument, 0, 'd' },
         { "inbuf-size",                    required_argument, 0, 'I' },
         { "outbuf-size",                   required_argument, 0, 'O' },
         { "cache-size",                    required_argument, 0, '$' },
@@ -526,6 +556,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "use-connection-id",             no_argument,       0, 277 },
         { "ciphersuites",                  required_argument, 0, 278 },
         { "nstart",                        required_argument, 0, 284 },
+        { "dm-persistence-file",           required_argument, 0, 289 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -626,10 +657,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->endpoint_name = optarg;
             break;
         case 'h':
-            fprintf(stderr, "Available options:\n");
-            for (size_t i = 0; options[i].name || options[i].val; ++i) {
-                print_option_help(&options[i]);
-            }
+            print_help(options);
             goto finish;
 #ifndef _WIN32
         case 't':
@@ -702,12 +730,31 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             server_public_key_path = optarg;
             break;
         case 'q': {
-            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (num_servers == 0) {
+                demo_log(ERROR, "Undefined server. Use --server-uri/-u first");
+                goto finish;
+            }
+            int idx = num_servers - 1;
+            if (parsed_args->connection_args.servers[idx].binding_mode
+                    != NULL) {
+                demo_log(ERROR,
+                         "Binding mode already defined for the current server");
+                goto finish;
+            }
             parsed_args->connection_args.servers[idx].binding_mode = optarg;
             break;
         }
         case 'D': {
-            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (num_servers == 0) {
+                demo_log(ERROR, "Undefined server. Use --server-uri/-u first");
+                goto finish;
+            }
+            int idx = num_servers - 1;
+            if (parsed_args->connection_args.servers[idx].security_iid
+                    != ANJAY_ID_INVALID) {
+                demo_log(ERROR, "Security IID already defined");
+                goto finish;
+            }
             if (parse_u16(optarg,
                           &parsed_args->connection_args.servers[idx]
                                    .security_iid)) {
@@ -722,7 +769,16 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         case 'd': {
-            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (num_servers == 0) {
+                demo_log(ERROR, "Undefined server. Use --server-uri/-u first");
+                goto finish;
+            }
+            int idx = num_servers - 1;
+            if (parsed_args->connection_args.servers[idx].server_iid
+                    != ANJAY_ID_INVALID) {
+                demo_log(ERROR, "Server IID already defined");
+                goto finish;
+            }
             if (parse_u16(optarg,
                           &parsed_args->connection_args.servers[idx]
                                    .server_iid)) {
@@ -743,6 +799,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 memcpy(entry, prev_entry, sizeof(*prev_entry));
                 entry->security_iid = ANJAY_ID_INVALID;
                 entry->server_iid = ANJAY_ID_INVALID;
+                entry->binding_mode = NULL;
                 entry->is_bootstrap = false;
             }
 
@@ -989,6 +1046,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                          optarg);
                 goto finish;
             }
+            break;
+        case 289:
+            parsed_args->dm_persistence_file = optarg;
             break;
         case 0:
             goto process;

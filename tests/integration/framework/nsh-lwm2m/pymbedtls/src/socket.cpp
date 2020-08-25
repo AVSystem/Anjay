@@ -416,6 +416,15 @@ void Socket::settimeout(py::object timeout_s_or_none) {
     mbedtls_ssl_conf_read_timeout(&config_, timeout_ms);
 }
 
+py::bytes Socket::peer_cert() {
+    const mbedtls_x509_crt *cert = mbedtls_ssl_get_peer_cert(&mbedtls_context_);
+    if (cert) {
+        return py::bytes(reinterpret_cast<const char *>(cert->raw.p),
+                         cert->raw.len);
+    }
+    return py::bytes();
+}
+
 py::object Socket::__getattr__(py::object name) {
     if (py::cast<string>(name) == "py_socket") {
         return py_socket_;

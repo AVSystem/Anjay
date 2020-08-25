@@ -19,6 +19,7 @@
 #ifdef WITH_AVS_COAP_STREAMING_API
 
 #    include <avsystem/commons/avs_errno.h>
+#    include <avsystem/commons/avs_utils.h>
 
 #    include <avsystem/coap/code.h>
 #    include <avsystem/coap/streaming.h>
@@ -145,8 +146,9 @@ try_enter_sending_state(avs_coap_streaming_request_ctx_t *ctx) {
     if (avs_is_ok(err)) {
         if (avs_buffer_data_size(ctx->server_ctx.chunk_buffer) > 0) {
             LOG(WARNING,
-                _("Ignoring ") "%" PRIu64 _(" unread bytes of request"),
-                (uint64_t) avs_buffer_data_size(ctx->server_ctx.chunk_buffer));
+                _("Ignoring ") "%s" _(" unread bytes of request"),
+                AVS_UINT64_AS_STRING(
+                        avs_buffer_data_size(ctx->server_ctx.chunk_buffer)));
             avs_buffer_reset(ctx->server_ctx.chunk_buffer);
         }
         ctx->server_ctx.state =
@@ -382,11 +384,12 @@ try_wait_for_next_chunk_request(const avs_coap_streaming_server_ctx_t *ctx,
     }
 
     avs_net_socket_t *socket = _avs_coap_get_base(ctx->coap_ctx)->socket;
+    avs_time_duration_t recv_timeout =
+            avs_time_monotonic_diff(next_deadline, avs_time_monotonic_now());
+    assert(avs_time_duration_valid(recv_timeout));
     avs_net_socket_opt_value_t orig_recv_timeout;
-    avs_error_t err = update_recv_timeout(
-            socket,
-            avs_time_monotonic_diff(next_deadline, avs_time_monotonic_now()),
-            &orig_recv_timeout);
+    avs_error_t err =
+            update_recv_timeout(socket, recv_timeout, &orig_recv_timeout);
     if (avs_is_ok(err)) {
         // In a normal flow, this will receive the request for another BLOCK2
         // chunk, and send the response. This does not require interaction with
@@ -600,11 +603,12 @@ static avs_error_t ensure_data_is_available_to_read(
                 streaming_req_ctx->err = _avs_coap_err(AVS_COAP_ERR_TIMEOUT);
                 return streaming_req_ctx->err;
             }
+            avs_time_duration_t recv_timeout =
+                    avs_time_monotonic_diff(next_deadline,
+                                            avs_time_monotonic_now());
+            assert(avs_time_duration_valid(recv_timeout));
             if (avs_is_err((streaming_req_ctx->err = handle_incoming_packet(
-                                    streaming_req_ctx,
-                                    avs_time_monotonic_diff(
-                                            next_deadline,
-                                            avs_time_monotonic_now()))))) {
+                                    streaming_req_ctx, recv_timeout)))) {
                 return streaming_req_ctx->err;
             }
         }
@@ -683,13 +687,6 @@ static avs_error_t handle_incoming_packet_with_acquired_in_buffer(
         size_t acquired_in_buffer_size,
         avs_coap_streaming_request_handler_t *handle_request,
         void *handler_arg) {
-    // recv() from within handle_incoming_packet() will be called in a blocking
-    // mode. We're blocking the event loop, including the scheduler, and we are
-    // not allowed to do this for longer than the time the next timeout job is
-    // scheduled to.
-    avs_time_duration_t next_timeout = avs_time_monotonic_diff(
-            _avs_coap_retry_or_request_expired_job(coap_ctx),
-            avs_time_monotonic_now());
     while (true) {
         avs_coap_streaming_request_ctx_t streaming_req_ctx = {
             .vtable = &_AVS_COAP_STREAMING_REQUEST_CTX_VTABLE,
@@ -705,7 +702,7 @@ static avs_error_t handle_incoming_packet_with_acquired_in_buffer(
         // user code is handling an incoming _request_. See inside for more
         // details.
         if (avs_is_ok((streaming_req_ctx.err = handle_incoming_packet(
-                               &streaming_req_ctx, next_timeout)))) {
+                               &streaming_req_ctx, AVS_TIME_DURATION_ZERO)))) {
             if (!streaming_req_ctx.server_ctx.chunk_buffer) {
                 // Timeout - as the contract of this function does not mandate
                 // that we must always receive anything, we just return success.
@@ -758,10 +755,6 @@ static avs_error_t handle_incoming_packet_with_acquired_in_buffer(
             // error
             return streaming_req_ctx.err;
         }
-        // We might handle more packets, but after the initial blocking receive,
-        // now we only want to flush the internal socket buffers, if any, so we
-        // receive with zero timeout.
-        next_timeout = AVS_TIME_DURATION_ZERO;
     }
 }
 

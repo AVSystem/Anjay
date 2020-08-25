@@ -31,9 +31,8 @@ extern "C" {
 #endif
 
 /**
- * Receives some data from the socket associated with @p ctx and handles it as
- * appropriately. If more than one message can be received without blocking,
- * all of them will be handled.
+ * Receives as much data from the socket associated with @p ctx as possible to
+ * receive in a non-blocking way, and handles it as appropriate.
  *
  * [TCP] If received data is not a complete CoAP message or if it doesn't
  * contain at least a part of payload, this function does nothing except of
@@ -46,6 +45,10 @@ extern "C" {
  *
  * This function should be called every time when user detect new data arrived
  * on the socket assigned to @p ctx .
+ *
+ * When this function calls the receive method on the socket, the receive
+ * timeout is always set to zero. If you wish to perform a blocking receive
+ * operation, please use <c>poll()</c> or a similar system API first.
  *
  * @param ctx                     CoAP context associated with the socket to
  *                                receive the message from.

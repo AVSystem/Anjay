@@ -20,6 +20,8 @@
 
 #include "../anjay_access_utils.h"
 
+#include <avsystem/commons/avs_stream_inbuf.h>
+
 VISIBILITY_SOURCE_BEGIN
 
 static int write_single_resource(anjay_t *anjay,

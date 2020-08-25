@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.5.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.6.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -112,6 +112,7 @@ endmacro()
 
 ################# FEATURES THAT REQUIRE LIBRARY CONFIGURATION ##################
 
+option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
 option(WITH_DOWNLOADER "Enable support for downloader API" ON)
 cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF "WITH_DOWNLOADER" OFF)
 
@@ -231,13 +232,15 @@ endif()
 ################# FEATURES #####################################################
 
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
-option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
 option(WITH_DISCOVER "Enable support for LwM2M Discover operation" ON)
 cmake_dependent_option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe)" ON "WITH_AVS_COAP_OBSERVE" OFF)
 cmake_dependent_option(WITH_CON_ATTR "Enable support for a custom attribute that controls Confirmable notifications" OFF WITH_OBSERVE OFF)
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_LWM2M_JSON "Enable support for LwM2M 1.0 JSON (output only)" ON)
+option(WITHOUT_TLV "Disable support for TLV content format" OFF)
+option(WITHOUT_PLAINTEXT "Disable support for Plain Text content format" OFF)
+option(WITHOUT_DEREGISTER "Disable use of the Deregister message" OFF)
 
 cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
@@ -417,6 +420,9 @@ set(ANJAY_WITH_HTTP_DOWNLOAD "${WITH_HTTP_DOWNLOAD}")
 set(ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT "${WITH_LEGACY_CONTENT_FORMAT_SUPPORT}")
 set(ANJAY_WITH_LOGS "${WITH_ANJAY_LOGS}")
 set(ANJAY_WITH_LWM2M_JSON "${WITH_LWM2M_JSON}")
+set(ANJAY_WITHOUT_TLV "${WITHOUT_TLV}")
+set(ANJAY_WITHOUT_PLAINTEXT "${WITHOUT_PLAINTEXT}")
+set(ANJAY_WITHOUT_DEREGISTER "${WITHOUT_DEREGISTER}")
 set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
 set(ANJAY_WITH_MODULE_ATTR_STORAGE "${WITH_MODULE_attr_storage}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")

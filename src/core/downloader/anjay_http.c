@@ -18,6 +18,11 @@
 
 #ifdef ANJAY_WITH_HTTP_DOWNLOAD
 
+#    ifndef ANJAY_WITH_DOWNLOADER
+#        error "ANJAY_WITH_HTTP_DOWNLOAD requires ANJAY_WITH_DOWNLOADER to be enabled"
+#    endif // ANJAY_WITH_DOWNLOADER
+
+#    include <errno.h>
 #    include <inttypes.h>
 
 #    include <avsystem/commons/avs_errno.h>
@@ -35,6 +40,7 @@ VISIBILITY_SOURCE_BEGIN
 typedef struct {
     anjay_download_ctx_common_t common;
     avs_net_ssl_configuration_t ssl_configuration;
+    const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
     avs_net_resolved_endpoint_t preferred_endpoint;
     avs_http_t *client;
     avs_url_t *parsed_url;
@@ -51,23 +57,38 @@ typedef struct {
     // boundaries; we would then need to ignore 176 bytes without writing them.
 } anjay_http_download_ctx_t;
 
-static int read_start_byte_from_content_range(const char *content_range,
-                                              uint64_t *out_start_byte) {
-    uint64_t end_byte;
-    long long complete_length;
-    int after_slash = 0;
-    if (avs_match_token(&content_range, "bytes", AVS_SPACES)
-            || sscanf(content_range, "%" SCNu64 "-%" SCNu64 "/%n",
-                      out_start_byte, &end_byte, &after_slash)
-                           < 2
-            || after_slash <= 0) {
+static int parse_number(const char **inout_ptr, unsigned long long *out_value) {
+    assert(inout_ptr);
+    if (**inout_ptr == '-') {
         return -1;
     }
-    return (strcmp(&content_range[after_slash], "*") == 0
-            || (!_anjay_safe_strtoll(&content_range[after_slash],
-                                     &complete_length)
-                && complete_length >= 1
-                && (uint64_t) (complete_length - 1) == end_byte))
+    char *endptr;
+    *out_value = strtoull(*inout_ptr, &endptr, 10);
+    if (endptr == *inout_ptr || (*out_value == ULLONG_MAX && errno == ERANGE)) {
+        return -1;
+    }
+    *inout_ptr = endptr;
+    return 0;
+}
+
+static int read_start_byte_from_content_range(const char *content_range,
+                                              uint64_t *out_start_byte) {
+    unsigned long long complete_length;
+    unsigned long long start;
+    unsigned long long end;
+    if (avs_match_token(&content_range, "bytes", AVS_SPACES)
+            || parse_number(&content_range, &start) || *content_range++ != '-'
+            || parse_number(&content_range, &end) || *content_range++ != '/'
+            || *content_range == '\0') {
+        return -1;
+    }
+
+    *out_start_byte = start;
+
+    return (strcmp(content_range, "*") == 0
+            || (*content_range != '-'
+                && !_anjay_safe_strtoull(content_range, &complete_length)
+                && complete_length >= 1 && complete_length - 1 == end))
                    ? 0
                    : -1;
 }
@@ -362,11 +383,42 @@ reconnect_http_transfer(anjay_downloader_t *dl,
     return AVS_OK;
 }
 
+static avs_error_t http_ssl_pre_connect_cb(avs_http_t *http,
+                                           avs_net_socket_t *socket,
+                                           const char *hostname,
+                                           const char *port,
+                                           void *ctx_) {
+    (void) http;
+    (void) port;
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
+    if (!hostname || !ctx->dane_tlsa_record) {
+        return AVS_OK;
+    }
+    const char *configured_hostname = avs_url_host(ctx->parsed_url);
+    if (!configured_hostname || strcmp(configured_hostname, hostname)) {
+        // non-original hostname - we're after redirection; do nothing
+        return AVS_OK;
+    }
+    return avs_net_socket_set_opt(socket, AVS_NET_SOCKET_OPT_DANE_TLSA_ARRAY,
+                                  (avs_net_socket_opt_value_t) {
+                                      .dane_tlsa_array = {
+                                          .array_ptr = ctx->dane_tlsa_record,
+                                          .array_element_count = 1
+                                      }
+                                  });
+}
+
 avs_error_t
 _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
                                AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
                                const anjay_download_config_t *cfg,
                                uintptr_t id) {
+
+    if (!cfg->on_next_block || !cfg->on_download_finished) {
+        dl_log(ERROR, _("invalid download config: handlers not set up"));
+        return avs_errno(AVS_EINVAL);
+    }
+
     anjay_t *anjay = _anjay_downloader_get_anjay(dl);
     AVS_LIST(anjay_http_download_ctx_t) ctx =
             AVS_LIST_NEW_ELEMENT(anjay_http_download_ctx_t);
@@ -406,6 +458,8 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
             &ctx->preferred_endpoint;
     ctx->ssl_configuration.prng_ctx = anjay->prng_ctx.ctx;
     avs_http_ssl_configuration(ctx->client, &ctx->ssl_configuration);
+    ctx->dane_tlsa_record = cfg->security_config.dane_tlsa_record;
+    avs_http_ssl_pre_connect_cb(ctx->client, http_ssl_pre_connect_cb, ctx);
 
     if (!(ctx->parsed_url = avs_url_parse(cfg->url))) {
         err = avs_errno(AVS_EINVAL);

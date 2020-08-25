@@ -46,8 +46,8 @@ in Anjay gets security configuration in one of two following ways.
 
     It may seem as the described methods are mutually
     exclusive. However, in ``get_security_config`` callback one can use
-    ``anjay_fw_update_load_security_from_dm()`` to attempt URI matching
-    with entities already configured in Security Object Instances.
+    ``anjay_security_config_from_dm()`` to attempt URI matching with entities
+    already configured in Security Object Instances.
 
 Supported security modes
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -66,6 +66,16 @@ Security information is configured in Anjay through a structure:
          * DTLS keys or certificates.
          */
         avs_net_security_info_t security_info;
+
+        /**
+         * Single DANE TLSA record to use for certificate verification, if
+         * applicable.
+         *
+         * NOTE: If used with @ref anjay_download, this pointer, as well as its
+         * <c>association_data</c> field, need to remain valid until the download is
+         * finished, aborted or cancelled.
+         */
+        const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
 
         /**
          * TLS ciphersuites to use.
@@ -137,24 +147,61 @@ is:
 .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_socket.h
 
     /**
-     * Certificate and key information may be read from files or passed as raw data.
-     *
-     * User should initialize:
-     *  - @ref avs_crypto_certificate_info_t#client_cert,
-     *  - @ref avs_crypto_certificate_info_t#client_key,
-     *  - @ref avs_crypto_certificate_info_t#trusted_certs
-     * via helper functions:
-     *  - @ref avs_crypto_client_cert_from_*
-     *  - @ref avs_crypto_client_key_from_*
-     *  - @ref avs_crypto_trusted_cert_source_from_*
-     *
-     * Moreover, to enable CA chain validation one MUST set @ref
-     * avs_net_certificate_info_t#server_cert_validation to true.
+     * Configuration for certificate-mode (D)TLS connection.
      */
     typedef struct {
+        /**
+         * Enables validation of peer certificate chain. If disabled,
+         * #ignore_system_trust_store and #trusted_certs are ignored.
+         */
         bool server_cert_validation;
+
+        /**
+         * Setting this flag to true disables the usage of system-wide trust store
+         * (e.g. <c>/etc/ssl/certs</c> on most Unix-like systems).
+         *
+         * NOTE: System-wide trust store is currently supported only by the OpenSSL
+         * backend. This field is ignored by the Mbed TLS backend.
+         */
+        bool ignore_system_trust_store;
+
+        /**
+         * Enable use of DNS-based Authentication of Named Entities (DANE) if
+         * possible.
+         *
+         * If this field is set to true, but #server_cert_validation is disabled,
+         * "opportunistic DANE" is used.
+         */
+        bool dane;
+
+        /**
+         * Store of trust anchor certificates. This field is optional and can be
+         * left zero-initialized. If used, it shall be initialized using one of the
+         * <c>avs_crypto_trusted_cert_info_from_*</c> helper functions.
+         */
         avs_crypto_trusted_cert_info_t trusted_certs;
+
+        /**
+         * Store of certificate revocation lists. This field is optional and can be
+         * left zero-initialized. If used, it shall be initialized using one of the
+         * <c>avs_crypto_cert_revocation_list_info_from_*</c> helper functions.
+         */
+        avs_crypto_cert_revocation_list_info_t cert_revocation_lists;
+
+        /**
+         * Local certificate to use for authenticating with the peer. This field is
+         * optional and can be left zero-initialized. If used, it shall be
+         * initialized using one of the <c>avs_crypto_client_cert_info_from_*</c>
+         * helper functions.
+         */
         avs_crypto_client_cert_info_t client_cert;
+
+        /**
+         * Private key matching #client_cert to use for authenticating with the
+         * peer. This field is optional and can be left zero-initialized, unless
+         * #client_cert is also specified. If used, it shall be initialized using
+         * one of the <c>avs_crypto_client_key_info_from_*</c> helper functions.
+         */
         avs_crypto_client_key_info_t client_key;
     } avs_net_certificate_info_t;
 
@@ -245,7 +292,7 @@ by the user:
     } anjay_fw_update_handlers_t;
 
 Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
-``anjay_security_config_t`` properly. This structure consists of two fields:
+``anjay_security_config_t`` properly. This structure consists of three fields:
 
 .. highlight:: c
 .. snippet-source:: include_public/anjay/core.h
@@ -255,6 +302,16 @@ Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
          * DTLS keys or certificates.
          */
         avs_net_security_info_t security_info;
+
+        /**
+         * Single DANE TLSA record to use for certificate verification, if
+         * applicable.
+         *
+         * NOTE: If used with @ref anjay_download, this pointer, as well as its
+         * <c>association_data</c> field, need to remain valid until the download is
+         * finished, aborted or cancelled.
+         */
+        const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
 
         /**
          * TLS ciphersuites to use.
@@ -268,7 +325,7 @@ Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
 
 We've already seen in previous sections how to configure
 ``security_info``. Also, for now there is no need to worry about
-``tls_ciphersuites`` - they can be reset to zero.
+``dane_tlsa_record`` or ``tls_ciphersuites`` - they can be reset to zero.
 
 Implementation
 ^^^^^^^^^^^^^^
@@ -292,11 +349,10 @@ Our implementation will use the following strategy:
     long as necessary. The documentation describes this in more detail,
     and we recommend to have a glance at it.
 
-Our simplified implementation uses either
-``anjay_fw_update_load_security_from_dm()`` which already returns a pointer
-to the heap allocated space, or when the fallback to certificates is needed,
-only literal c-strings are used, thus the lifetime of security configuration
-in both cases is just right.
+Our simplified implementation uses either ``anjay_security_config_from_dm()``
+which already returns a pointer to the heap allocated space, or when the
+fallback to certificates is needed, only literal c-strings are used, thus the
+lifetime of security configuration in both cases is just right.
 
 The implementation is presented below. Changes made since :doc:`last time <FU2>`
 are highlighted:
@@ -427,7 +483,7 @@ are highlighted:
             FW_STATE.dm_security_config = NULL;
         }
         FW_STATE.dm_security_config =
-                anjay_fw_update_load_security_from_dm(FW_STATE.anjay, download_uri);
+                anjay_security_config_from_dm(FW_STATE.anjay, download_uri);
         if (FW_STATE.dm_security_config) {
             // found a match
             memcpy(out_security_info,

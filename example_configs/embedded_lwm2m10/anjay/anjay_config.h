@@ -250,6 +250,27 @@
 #define ANJAY_WITH_LWM2M_JSON
 
 /**
+ * Disable support for TLV format as specified in LwM2M TS 1.0.
+ *
+ * NOTE: LwM2M Client using LwM2M 1.0 MUST support this format. It may be
+ * disabled if LwM2M 1.1 is used and SenML JSON or SenML CBOR is enabled.
+ */
+/* #undef ANJAY_WITHOUT_TLV */
+
+/**
+ * Disable support for Plain Text format as specified in LwM2M TS 1.0 and 1.1.
+ *
+ * NOTE: LwM2M Client SHOULD support this format. It may be disabled to reduce
+ * library size if LwM2M Server is configured to not use it in requests.
+ */
+/* #undef ANJAY_WITHOUT_PLAINTEXT */
+
+/**
+ * Disable use of the Deregister message.
+ */
+/* #undef ANJAY_WITHOUT_DEREGISTER */
+
+/**
  * Enable support for SenML JSON format, as specified in LwM2M TS 1.1.
  *
  * NOTE: As opposed to <c>ANJAY_WITH_LWM2M_JSON</c>, both generating and parsing

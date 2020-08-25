@@ -183,11 +183,13 @@ static int read_resource_dim(anjay_t *anjay,
     return result;
 }
 
+#    if defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_BOOTSTRAP)
 static anjay_lwm2m_version_t current_lwm2m_version(anjay_t *anjay) {
     assert(anjay->current_connection.server);
     return _anjay_server_registration_info(anjay->current_connection.server)
             ->lwm2m_version;
 }
+#    endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_BOOTSTRAP)
 
 static int discover_resource(anjay_t *anjay,
                              avs_stream_t *stream,

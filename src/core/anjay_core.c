@@ -52,14 +52,17 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.5.0"
+#    define ANJAY_VERSION "2.6.0"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
 
+#ifdef ANJAY_WITH_BOOTSTRAP
     bool legacy_server_initiated_bootstrap =
             !config->disable_legacy_server_initiated_bootstrap;
     _anjay_bootstrap_init(&anjay->bootstrap, legacy_server_initiated_bootstrap);
+#endif // ANJAY_WITH_BOOTSTRAP
+
     anjay->dtls_version = config->dtls_version;
     if (anjay->dtls_version == AVS_NET_SSL_VERSION_DEFAULT) {
         anjay->dtls_version = AVS_NET_SSL_VERSION_TLSv1_2;
@@ -201,6 +204,7 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     if (deregister) {
         _anjay_servers_deregister(anjay);
     }
+
     // Make sure to deregister from all servers *before* cleaning up the
     // scheduler. That prevents us from updating a registration even though
     // we're about to deregister anyway.
@@ -231,6 +235,7 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
 
     avs_free(anjay->in_shared_buffer);
     avs_free(anjay->out_shared_buffer);
+
     avs_free(anjay);
 }
 

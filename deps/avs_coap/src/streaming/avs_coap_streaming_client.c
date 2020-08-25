@@ -22,6 +22,7 @@
 
 #    include <avsystem/commons/avs_errno.h>
 #    include <avsystem/commons/avs_stream_v_table.h>
+#    include <avsystem/commons/avs_utils.h>
 
 #    include "async/avs_coap_async_client.h"
 #    include "async/avs_coap_async_server.h"
@@ -226,10 +227,9 @@ acquire_in_buffer_and_handle_incoming_packet(coap_stream_t *stream) {
 
 static avs_error_t try_wait_for_response(coap_stream_t *stream) {
     LOG(TRACE,
-        _("waiting for response to ") "%s" _(" (exchange ID ") "%" PRIu64 _(
-                ")"),
+        _("waiting for response to ") "%s" _(" (exchange ID ") "%s" _(")"),
         AVS_COAP_CODE_STRING(stream->request_header.code),
-        stream->exchange_id.value);
+        AVS_UINT64_AS_STRING(stream->exchange_id.value));
 
     avs_coap_ctx_t *ctx = coap_stream_owner_ctx(stream);
     // We are outside of the event loop, so we need to call the timeout handlers

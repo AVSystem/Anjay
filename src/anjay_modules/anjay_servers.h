@@ -69,6 +69,7 @@ avs_coap_ctx_t *_anjay_connection_get_coap(anjay_connection_ref_t ref);
  * security information from the data model when it's not explicitly specified.
  */
 anjay_security_config_t *_anjay_get_security_config(anjay_t *anjay,
+                                                    anjay_ssid_t ssid,
                                                     anjay_iid_t security_iid);
 
 /**

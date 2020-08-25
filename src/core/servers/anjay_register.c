@@ -92,10 +92,8 @@ get_server_update_interval_margin(anjay_server_info_t *server) {
 
 static int schedule_update(anjay_server_info_t *server,
                            avs_time_duration_t delay) {
-    anjay_log(DEBUG,
-              _("scheduling update for SSID ") "%u" _(" after ") "%" PRId64
-                                                                 ".%09" PRId32,
-              server->ssid, delay.seconds, delay.nanoseconds);
+    anjay_log(DEBUG, _("scheduling update for SSID ") "%u" _(" after ") "%s",
+              server->ssid, AVS_TIME_DURATION_AS_STRING(delay));
 
     return AVS_SCHED_DELAYED(server->anjay->sched, &server->next_action_handle,
                              delay, send_update_sched_job, &server->ssid,
@@ -995,6 +993,7 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
     }
 }
 
+#ifndef ANJAY_WITHOUT_DEREGISTER
 static avs_error_t
 setup_deregister_request(avs_coap_request_header_t *out_request,
                          AVS_LIST(const anjay_string_t) endpoint_path) {
@@ -1077,6 +1076,7 @@ avs_error_t _anjay_server_deregister(anjay_server_info_t *server) {
     }
     return err;
 }
+#endif // ANJAY_WITHOUT_DEREGISTER
 
 const anjay_registration_info_t *
 _anjay_server_registration_info(anjay_server_info_t *server) {

@@ -18,6 +18,8 @@
 
 #include <string.h>
 
+#include <avsystem/commons/avs_utils.h>
+
 #include <avsystem/coap/code.h>
 #include <avsystem/coap/option.h>
 
@@ -122,10 +124,9 @@ bool _avs_coap_options_valid_until_payload_marker(
     }
 
     if (opts->size > opts->capacity) {
-        LOG(DEBUG,
-            _("unexpected size (") "%" PRIu64 _(") > capacity (") "%" PRIu64 _(
-                    ")"),
-            (uint64_t) opts->size, (uint64_t) opts->capacity);
+        LOG(DEBUG, _("unexpected size (") "%s" _(") > capacity (") "%s" _(")"),
+            AVS_UINT64_AS_STRING(opts->size),
+            AVS_UINT64_AS_STRING(opts->capacity));
         return false;
     }
 

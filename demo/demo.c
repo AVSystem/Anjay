@@ -29,8 +29,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include <avsystem/commons/avs_base64.h>
@@ -139,6 +141,20 @@ static void demo_delete(anjay_demo_t *demo) {
                 || avs_is_err(anjay_attr_storage_persist(demo->anjay, data))) {
             demo_log(ERROR, "Cannot persist attribute storage to file %s",
                      demo->attr_storage_file);
+        }
+        avs_stream_cleanup(&data);
+    }
+
+    if (demo->anjay && demo->dm_persistence_file) {
+        avs_stream_t *data = avs_stream_file_create(demo->dm_persistence_file,
+                                                    AVS_STREAM_FILE_WRITE);
+        if (!data
+                || avs_is_err(anjay_security_object_persist(demo->anjay, data))
+                || avs_is_err(anjay_server_object_persist(demo->anjay, data))
+                || avs_is_err(
+                           anjay_access_control_persist(demo->anjay, data))) {
+            demo_log(ERROR, "Cannot persist data model to file %s",
+                     demo->dm_persistence_file);
         }
         avs_stream_cleanup(&data);
     }
@@ -331,6 +347,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 
     demo->connection_args = &cmdline_args->connection_args;
     demo->attr_storage_file = cmdline_args->attr_storage_file;
+    demo->dm_persistence_file = cmdline_args->dm_persistence_file;
     demo->anjay = anjay_new(&config);
     demo->iosched = iosched_create();
     if (!demo->anjay || !demo->iosched
@@ -404,7 +421,27 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         return -1;
     }
 
-    demo_reload_servers(demo);
+    bool dm_persistence_restored = false;
+    if (cmdline_args->dm_persistence_file) {
+        avs_stream_t *data =
+                avs_stream_file_create(cmdline_args->dm_persistence_file,
+                                       AVS_STREAM_FILE_READ);
+        if (!data
+                || avs_is_err(anjay_security_object_restore(demo->anjay, data))
+                || avs_is_err(anjay_server_object_restore(demo->anjay, data))
+                || avs_is_err(
+                           anjay_access_control_restore(demo->anjay, data))) {
+            demo_log(ERROR, "Cannot restore data model from file %s",
+                     cmdline_args->dm_persistence_file);
+        } else {
+            dm_persistence_restored = true;
+        }
+        avs_stream_cleanup(&data);
+    }
+
+    if (!dm_persistence_restored) {
+        demo_reload_servers(demo);
+    }
 
     // Install Firmware Update Object at the end, because installed Device
     // Object and Server Object's instances may be needed.
@@ -418,8 +455,9 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         return -1;
     }
 
-    if (add_default_access_entries(demo)
-            || add_access_entries(demo, cmdline_args)) {
+    if (!dm_persistence_restored
+            && (add_default_access_entries(demo)
+                || add_access_entries(demo, cmdline_args))) {
         return -1;
     }
 

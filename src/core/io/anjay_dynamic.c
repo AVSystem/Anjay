@@ -39,16 +39,20 @@ static anjay_output_ctx_t *spawn_opaque(avs_stream_t *stream,
     return _anjay_output_opaque_create(stream);
 }
 
+#ifndef ANJAY_WITHOUT_PLAINTEXT
 static anjay_output_ctx_t *spawn_text(avs_stream_t *stream,
                                       const anjay_uri_path_t *uri) {
     (void) uri;
     return _anjay_output_text_create(stream);
 }
+#endif // ANJAY_WITHOUT_PLAINTEXT
 
+#ifndef ANJAY_WITHOUT_TLV
 static anjay_output_ctx_t *spawn_tlv(avs_stream_t *stream,
                                      const anjay_uri_path_t *uri) {
     return _anjay_output_tlv_create(stream, uri);
 }
+#endif // ANJAY_WITHOUT_TLV
 
 #ifdef ANJAY_WITH_LWM2M_JSON
 static anjay_output_ctx_t *spawn_json(avs_stream_t *stream,
@@ -67,17 +71,24 @@ typedef struct {
 
 static const dynamic_format_def_t SUPPORTED_SIMPLE_FORMATS[] = {
     { AVS_COAP_FORMAT_OCTET_STREAM, _anjay_input_opaque_create, spawn_opaque },
+#ifndef ANJAY_WITHOUT_PLAINTEXT
     { AVS_COAP_FORMAT_PLAINTEXT, _anjay_input_text_create, spawn_text },
+#endif // ANJAY_WITHOUT_PLAINTEXT
     { AVS_COAP_FORMAT_NONE, NULL, NULL }
 };
 
 static const dynamic_format_def_t SUPPORTED_HIERARCHICAL_FORMATS[] = {
+#ifndef ANJAY_WITHOUT_TLV
     { AVS_COAP_FORMAT_OMA_LWM2M_TLV, _anjay_input_tlv_create, spawn_tlv },
+#endif // ANJAY_WITHOUT_TLV
 #ifdef ANJAY_WITH_LWM2M_JSON
     { AVS_COAP_FORMAT_OMA_LWM2M_JSON, NULL, spawn_json },
 #endif // ANJAY_WITH_LWM2M_JSON
     { AVS_COAP_FORMAT_NONE, NULL, NULL }
 };
+
+AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(SUPPORTED_HIERARCHICAL_FORMATS) > 1,
+                  at_least_one_hierarchical_format_must_be_enabled);
 
 static const dynamic_format_def_t *
 find_format(const dynamic_format_def_t *supported_formats, uint16_t format) {
@@ -162,10 +173,8 @@ int _anjay_input_dynamic_construct(anjay_input_ctx_t **out,
         break;
     }
     case ANJAY_ACTION_EXECUTE:
-        if (format == AVS_COAP_FORMAT_PLAINTEXT) {
-            constructor = _anjay_input_text_create;
-        }
-        break;
+        *out = NULL;
+        return 0;
     default:
         // Nothing to prepare - the action does not need an input context.
         return 0;

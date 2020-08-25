@@ -113,6 +113,7 @@ static int instance_reset(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr,
                           anjay_iid_t iid) {
     (void) anjay;
+    (void) iid;
 
     event_log_t *obj = get_obj(obj_ptr);
     assert(obj);
@@ -150,6 +151,8 @@ static int resource_read(anjay_t *anjay,
                          anjay_riid_t riid,
                          anjay_output_ctx_t *ctx) {
     (void) anjay;
+    (void) iid;
+    (void) riid;
 
     event_log_t *obj = get_obj(obj_ptr);
     assert(obj);
@@ -182,6 +185,8 @@ static int resource_write(anjay_t *anjay,
                           anjay_riid_t riid,
                           anjay_input_ctx_t *ctx) {
     (void) anjay;
+    (void) iid;
+    (void) riid;
 
     event_log_t *obj = get_obj(obj_ptr);
     assert(obj);
@@ -331,6 +336,7 @@ static int resource_execute(anjay_t *anjay,
                             anjay_execute_ctx_t *arg_ctx) {
     (void) arg_ctx;
     (void) anjay;
+    (void) iid;
 
     event_log_t *obj = get_obj(obj_ptr);
     assert(obj);

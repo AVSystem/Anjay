@@ -137,6 +137,7 @@ typedef struct {
  */
 anjay_servers_t *_anjay_servers_create(void);
 
+#ifndef ANJAY_WITHOUT_DEREGISTER
 /**
  * Deregisters from every active server. It is currently only ever called from
  * anjay_delete_impl(), because there are two flavours of anjay_delete() - the
@@ -149,6 +150,9 @@ anjay_servers_t *_anjay_servers_create(void);
  * having a separate function for de-registration is more elegant.
  */
 void _anjay_servers_deregister(anjay_t *anjay);
+#else // ANJAY_WITHOUT_DEREGISTER
+#    define _anjay_servers_deregister(Anjay) ((void) (Anjay))
+#endif // ANJAY_WITHOUT_DEREGISTER
 
 /**
  * Clears up the servers struct, and releases any allocated resources.
@@ -353,6 +357,15 @@ int _anjay_servers_foreach_active(anjay_t *anjay,
  * 3. Schedule reactivation after the specified amount of time.
  */
 int _anjay_schedule_reload_servers(anjay_t *anjay);
+
+/**
+ * Interrupts any ongoing communication with connections that are
+ * administratively set to be offline.
+ *
+ * Intended to be calling when entering offline mode, to prevent data being sent
+ * between scheduler ticks.
+ */
+void _anjay_servers_interrupt_offline(anjay_t *anjay);
 
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON ACTIVE SERVERS ///////////////////////////////////////////////////

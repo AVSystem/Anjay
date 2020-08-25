@@ -18,7 +18,7 @@
 #define AVS_COMMONS_CONFIG_H
 
 /**
- * @file avs_avs_commons_config.h
+ * @file avs_commons_config.h
  *
  * avs_commons library configuration.
  *
@@ -137,6 +137,13 @@
  * replaced with a path to such file.
  */
 #define AVS_COMMONS_POSIX_COMPAT_HEADER "avsystem/commons/lwip-posix-compat.h"
+
+/**
+ * Set if printf implementation doesn't support 64-bit format specifiers.
+ * If defined, custom implementation of conversion is used in
+ * @c AVS_UINT64_AS_STRING instead of using @c snprintf .
+ */
+/* #undef AVS_COMMONS_WITHOUT_64BIT_FORMAT_SPECIFIERS */
 /**@}*/
 
 /**

@@ -18,13 +18,14 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "anjay_utils_core.h"
+#include "anjay_core.h"
 
 #include <anjay_modules/anjay_dm_utils.h>
 #include <anjay_modules/anjay_servers.h>
@@ -32,10 +33,6 @@
 #include <avsystem/commons/avs_errno.h>
 #include <avsystem/commons/avs_url.h>
 #include <avsystem/commons/avs_utils.h>
-
-#ifdef ANJAY_WITH_MODULE_FW_UPDATE
-#    include <anjay/fw_update.h>
-#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -289,8 +286,8 @@ avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
     assert(lifetime == NULL || *lifetime > 0);
     if (lifetime
             && avs_is_err((err = avs_coap_options_add_string_f(
-                                   opts, AVS_COAP_OPTION_URI_QUERY,
-                                   "lt=%" PRId64, *lifetime)))) {
+                                   opts, AVS_COAP_OPTION_URI_QUERY, "lt=%s",
+                                   AVS_INT64_AS_STRING(*lifetime))))) {
         return err;
     }
 
@@ -435,6 +432,7 @@ typedef union {
 typedef int
 try_security_instance_callback_t(anjay_t *anjay,
                                  security_or_socket_info_t *out_info,
+                                 anjay_ssid_t ssid,
                                  anjay_iid_t security_iid,
                                  const avs_url_t *url,
                                  const avs_url_t *server_url);
@@ -444,8 +442,6 @@ typedef struct {
     const avs_url_t *url;
     try_security_instance_callback_t *clb;
 } try_security_instance_args_t;
-
-#ifdef ANJAY_WITH_MODULE_FW_UPDATE
 
 static bool has_valid_keys(const avs_net_security_info_t *info) {
     switch (info->mode) {
@@ -462,17 +458,19 @@ static bool has_valid_keys(const avs_net_security_info_t *info) {
 static int
 try_security_instance_read_security(anjay_t *anjay,
                                     security_or_socket_info_t *out_info,
+                                    anjay_ssid_t ssid,
                                     anjay_iid_t security_iid,
                                     const avs_url_t *url,
                                     const avs_url_t *server_url) {
     anjay_security_config_t *new_result =
-            _anjay_get_security_config(anjay, security_iid);
+            _anjay_get_security_config(anjay, ssid, security_iid);
     if (!new_result) {
         anjay_log(WARNING,
                   _("Could not read security information for "
                     "server ") "/%" PRIu16 "/%" PRIu16,
                   ANJAY_DM_OID_SECURITY, security_iid);
-    } else if (!has_valid_keys(&new_result->security_info)) {
+    } else if (!has_valid_keys(&new_result->security_info)
+               && !new_result->dane_tlsa_record) {
         anjay_log(DEBUG,
                   _("Server ") "/%" PRIu16
                                "/%" PRIu16 _(" does not use encrypted "
@@ -492,7 +490,6 @@ try_security_instance_read_security(anjay_t *anjay,
     avs_free(new_result);
     return ANJAY_FOREACH_CONTINUE;
 }
-#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 static bool optional_strings_equal(const char *left, const char *right) {
     if (left && right) {
@@ -531,8 +528,11 @@ static int try_security_instance(anjay_t *anjay,
     int retval = ANJAY_FOREACH_CONTINUE;
     if (optional_strings_equal(avs_url_host(server_url),
                                avs_url_host(args->url))) {
-        retval = args->clb(anjay, args->info, security_iid, args->url,
-                           server_url);
+        anjay_ssid_t ssid;
+        if (!_anjay_ssid_from_security_iid(anjay, security_iid, &ssid)) {
+            retval = args->clb(anjay, args->info, ssid, security_iid, args->url,
+                               server_url);
+        }
     }
 
     avs_url_free(server_url);
@@ -567,9 +567,8 @@ static void try_get_info_from_dm(anjay_t *anjay,
     avs_url_free(url);
 }
 
-#ifdef ANJAY_WITH_MODULE_FW_UPDATE
-anjay_security_config_t *
-anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
+anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
+                                                       const char *raw_url) {
     security_or_socket_info_t info;
     memset(&info, 0, sizeof(info));
     try_get_info_from_dm(anjay, raw_url, &info,
@@ -583,7 +582,34 @@ anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *raw_url) {
     }
     return info.security;
 }
-#endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+static int map_str_conversion_result(const char *input, const char *endptr) {
+    return (!*input || isspace((unsigned char) *input) || errno || !endptr
+            || *endptr)
+                   ? -1
+                   : 0;
+}
+
+int _anjay_safe_strtoll(const char *in, long long *value) {
+    errno = 0;
+    char *endptr = NULL;
+    *value = strtoll(in, &endptr, 0);
+    return map_str_conversion_result(in, endptr);
+}
+
+int _anjay_safe_strtoull(const char *in, unsigned long long *value) {
+    errno = 0;
+    char *endptr = NULL;
+    *value = strtoull(in, &endptr, 0);
+    return map_str_conversion_result(in, endptr);
+}
+
+int _anjay_safe_strtod(const char *in, double *value) {
+    errno = 0;
+    char *endptr = NULL;
+    *value = strtod(in, &endptr);
+    return map_str_conversion_result(in, endptr);
+}
 
 #ifdef ANJAY_TEST
 #    include "tests/core/utils.c"

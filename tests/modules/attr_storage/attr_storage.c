@@ -105,7 +105,7 @@ AVS_UNIT_TEST(attr_storage, resource_execute) {
     DM_ATTR_STORAGE_TEST_INIT;
     avs_stream_inbuf_t null_stream = AVS_STREAM_INBUF_STATIC_INITIALIZER;
     anjay_execute_ctx_t *ctx =
-            _anjay_execute_ctx_create((anjay_input_ctx_t *) &null_stream);
+            _anjay_execute_ctx_create((avs_stream_t *) &null_stream);
     AVS_UNIT_ASSERT_NOT_NULL(ctx);
     _anjay_mock_dm_expect_resource_execute(anjay, &OBJ, 514, 42, NULL, 0);
     AVS_UNIT_ASSERT_SUCCESS(

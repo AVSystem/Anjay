@@ -16,18 +16,20 @@
 
 #include <anjay_init.h>
 
-#include <assert.h>
-#include <string.h>
+#ifndef ANJAY_WITHOUT_TLV
 
-#include <avsystem/commons/avs_list.h>
-#include <avsystem/commons/avs_memory.h>
-#include <avsystem/commons/avs_stream.h>
-#include <avsystem/commons/avs_utils.h>
+#    include <assert.h>
+#    include <string.h>
 
-#include "../anjay_io_core.h"
-#include "../coap/anjay_content_format.h"
-#include "anjay_tlv.h"
-#include "anjay_vtable.h"
+#    include <avsystem/commons/avs_list.h>
+#    include <avsystem/commons/avs_memory.h>
+#    include <avsystem/commons/avs_stream.h>
+#    include <avsystem/commons/avs_utils.h>
+
+#    include "../anjay_io_core.h"
+#    include "../coap/anjay_content_format.h"
+#    include "anjay_tlv.h"
+#    include "anjay_vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -36,7 +38,7 @@ typedef struct {
     uint16_t id;
 } tlv_id_t;
 
-#define TLV_MAX_LENGTH ((1 << 24) - 1)
+#    define TLV_MAX_LENGTH ((1 << 24) - 1)
 
 typedef struct {
     size_t data_length;
@@ -289,15 +291,16 @@ static int tlv_ret_string(anjay_output_ctx_t *ctx, const char *value) {
     return anjay_ret_bytes(ctx, value, strlen(value));
 }
 
-#define DEF_IRET(Half, Bits)                                                   \
-    static int tlv_ret_i##Bits(anjay_output_ctx_t *ctx, int##Bits##_t value) { \
-        if (value == (int##Half##_t) value) {                                  \
-            return tlv_ret_i##Half(ctx, (int##Half##_t) value);                \
-        }                                                                      \
-        uint##Bits##_t portable =                                              \
-                avs_convert_be##Bits((uint##Bits##_t) value);                  \
-        return anjay_ret_bytes(ctx, &portable, sizeof(portable));              \
-    }
+#    define DEF_IRET(Half, Bits)                                      \
+        static int tlv_ret_i##Bits(anjay_output_ctx_t *ctx,           \
+                                   int##Bits##_t value) {             \
+            if (value == (int##Half##_t) value) {                     \
+                return tlv_ret_i##Half(ctx, (int##Half##_t) value);   \
+            }                                                         \
+            uint##Bits##_t portable =                                 \
+                    avs_convert_be##Bits((uint##Bits##_t) value);     \
+            return anjay_ret_bytes(ctx, &portable, sizeof(portable)); \
+        }
 
 static int tlv_ret_i8(anjay_output_ctx_t *ctx, int8_t value) {
     return anjay_ret_bytes(ctx, &value, 1);
@@ -554,6 +557,8 @@ anjay_output_ctx_t *_anjay_output_tlv_create(avs_stream_t *stream,
     return (anjay_output_ctx_t *) ctx;
 }
 
-#ifdef ANJAY_TEST
-#    include "tests/core/io/tlv_out.c"
-#endif
+#    ifdef ANJAY_TEST
+#        include "tests/core/io/tlv_out.c"
+#    endif
+
+#endif // ANJAY_WITHOUT_TLV

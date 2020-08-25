@@ -226,6 +226,7 @@ avs_error_t _anjay_socket_cleanup(anjay_t *anjay, avs_net_socket_t **socket) {
         anjay->closed_connections_stats.socket_stats.bytes_received +=
                 get_socket_stats(*socket, NET_STATS_BYTES_RECEIVED);
 #endif // ANJAY_WITH_NET_STATS
+        (void) anjay;
     }
     return avs_net_socket_cleanup(socket);
 }

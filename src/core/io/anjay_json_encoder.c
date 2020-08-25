@@ -20,6 +20,7 @@
 
 #    include <avsystem/commons/avs_base64.h>
 #    include <avsystem/commons/avs_log.h>
+#    include <avsystem/commons/avs_utils.h>
 
 #    include "../anjay_io_core.h"
 #    include "../coap/anjay_content_format.h"
@@ -236,7 +237,8 @@ static int begin_pair(json_encoder_t *ctx, senml_like_data_type_t type) {
 static int encode_uint(anjay_senml_like_encoder_t *ctx_, uint64_t value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
     if (begin_pair(ctx, SENML_LIKE_DATA_VALUE)
-            || avs_is_err(avs_stream_write_f(ctx->stream, "%" PRIu64, value))) {
+            || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
+                                             AVS_UINT64_AS_STRING(value)))) {
         return -1;
     }
     return 0;
@@ -245,7 +247,8 @@ static int encode_uint(anjay_senml_like_encoder_t *ctx_, uint64_t value) {
 static int encode_int(anjay_senml_like_encoder_t *ctx_, int64_t value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
     if (begin_pair(ctx, SENML_LIKE_DATA_VALUE)
-            || avs_is_err(avs_stream_write_f(ctx->stream, "%" PRIi64, value))) {
+            || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
+                                             AVS_INT64_AS_STRING(value)))) {
         return -1;
     }
     return 0;

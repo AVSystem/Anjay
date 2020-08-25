@@ -412,8 +412,12 @@ static int dm_discover(anjay_t *anjay,
 
 static int dm_execute(anjay_t *anjay,
                       const anjay_dm_object_def_t *const *obj,
-                      const anjay_request_t *request,
-                      anjay_input_ctx_t *in_ctx) {
+                      const anjay_request_t *request) {
+    // Treat not specified format as implicit Plain Text
+    if (request->content_format != AVS_COAP_FORMAT_PLAINTEXT
+            && request->content_format != AVS_COAP_FORMAT_NONE) {
+        return AVS_COAP_CODE_UNSUPPORTED_CONTENT_FORMAT;
+    }
     dm_log(LAZY_DEBUG, _("Execute ") "%s",
            ANJAY_DEBUG_MAKE_PATH(&request->uri));
     if (!_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RID)) {
@@ -439,7 +443,8 @@ static int dm_execute(anjay_t *anjay,
         }
     }
     if (!retval) {
-        anjay_execute_ctx_t *execute_ctx = _anjay_execute_ctx_create(in_ctx);
+        anjay_execute_ctx_t *execute_ctx =
+                _anjay_execute_ctx_create(request->payload_stream);
         retval = _anjay_dm_call_resource_execute(anjay, obj,
                                                  request->uri.ids[ANJAY_ID_IID],
                                                  request->uri.ids[ANJAY_ID_RID],
@@ -523,8 +528,8 @@ static int invoke_action(anjay_t *anjay,
     case ANJAY_ACTION_WRITE_ATTRIBUTES:
         return _anjay_dm_write_attributes(anjay, obj, request);
     case ANJAY_ACTION_EXECUTE:
-        assert(in_ctx);
-        return dm_execute(anjay, obj, request, in_ctx);
+        AVS_ASSERT(!in_ctx, "in_ctx should be NULL for Execute");
+        return dm_execute(anjay, obj, request);
     default:
         dm_log(ERROR, _("Invalid action for Management Interface"));
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -559,13 +564,6 @@ int _anjay_dm_perform_action(anjay_t *anjay, const anjay_request_t *request) {
         return ANJAY_ERR_INTERNAL;
     }
 
-    anjay_input_ctx_t *in_ctx = NULL;
-    int result =
-            prepare_input_context(request->payload_stream, request, &in_ctx);
-    if (result) {
-        return result;
-    }
-
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_OID)
             && (request->uri.ids[ANJAY_ID_OID] == ANJAY_DM_OID_SECURITY)) {
         /**
@@ -579,11 +577,18 @@ int _anjay_dm_perform_action(anjay_t *anjay, const anjay_request_t *request) {
          * Note that other, per-instance security checks are performed via
          * _anjay_instance_action_allowed().
          */
-        result = ANJAY_ERR_UNAUTHORIZED;
+        return ANJAY_ERR_UNAUTHORIZED;
     }
-    if (!result) {
-        result = invoke_action(anjay, obj, request, in_ctx);
+
+    anjay_input_ctx_t *in_ctx = NULL;
+    int result =
+            prepare_input_context(request->payload_stream, request, &in_ctx);
+    if (result) {
+        return result;
     }
+
+    result = invoke_action(anjay, obj, request, in_ctx);
+
     int destroy_result = _anjay_input_ctx_destroy(&in_ctx);
     return result ? result : destroy_result;
 }

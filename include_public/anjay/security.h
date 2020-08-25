@@ -94,7 +94,7 @@ int anjay_security_object_add_instance(
 void anjay_security_object_purge(anjay_t *anjay);
 
 /**
- * Dumps Security Object Instance to the @p out_stream.
+ * Dumps Security Object Instances to the @p out_stream.
  *
  * @param anjay         Anjay instance with Security Object installed.
  * @param out_stream    Stream to write to.

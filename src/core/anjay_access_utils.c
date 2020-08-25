@@ -47,9 +47,9 @@ read_u16(anjay_t *anjay, anjay_iid_t iid, anjay_rid_t rid, uint16_t *out) {
         return result;
     } else if (ret != (uint16_t) ret) {
         anjay_log(WARNING,
-                  _("cannot read ") "%s" _(" = ") "%" PRId64 _(
+                  _("cannot read ") "%s" _(" = ") "%s" _(
                           " as uint16: value overflow"),
-                  ANJAY_DEBUG_MAKE_PATH(&uri), ret);
+                  ANJAY_DEBUG_MAKE_PATH(&uri), AVS_INT64_AS_STRING(ret));
         return -1;
     }
     *out = (uint16_t) ret;

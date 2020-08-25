@@ -175,7 +175,11 @@ struct anjay_server_info_struct {
     uint32_t registration_sequences_performed;
 };
 
+#ifndef ANJAY_WITHOUT_DEREGISTER
 void _anjay_servers_internal_deregister(anjay_servers_t *servers);
+#else // ANJAY_WITHOUT_DEREGISTER
+#    define _anjay_servers_internal_deregister(Servers) ((void) (Servers))
+#endif // ANJAY_WITHOUT_DEREGISTER
 
 void _anjay_servers_internal_cleanup(anjay_servers_t *servers);
 

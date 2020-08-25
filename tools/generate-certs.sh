@@ -36,6 +36,21 @@ if [ -z "$OPENSSL" ]; then
     fi
 fi
 
+OPENSSL_VERSION="$("$OPENSSL" version | awk '{print $2}')"
+OPENSSL_VERSION_MAJOR="${OPENSSL_VERSION%%.*}"
+OPENSSL_VERSION_TMP="${OPENSSL_VERSION:${#OPENSSL_VERSION_MAJOR}+1}"
+OPENSSL_VERSION_MINOR="${OPENSSL_VERSION_TMP%%.*}"
+OPENSSL_VERSION_TMP="${OPENSSL_VERSION_TMP:${#OPENSSL_VERSION_MINOR}+1}"
+OPENSSL_VERSION_PATCH="${OPENSSL_VERSION_TMP%%.*}"
+# remove non-numeric suffix
+OPENSSL_VERSION_PATCH="$(echo "$OPENSSL_VERSION_PATCH" | sed -e 's/[^0-9]*$//')"
+
+openssl_packed_version() {
+    echo "$(($3 + 256 * ($2 + 256 * $1)))"
+}
+
+OPENSSL_PACKED_VERSION="$(openssl_packed_version $OPENSSL_VERSION_MAJOR $OPENSSL_VERSION_MINOR $OPENSSL_VERSION_PATCH)"
+
 if [[ "$#" < 1 ]]; then
     CERTS_DIR="$(pwd)/certs"
 else
@@ -60,7 +75,15 @@ export MSYS2_ARG_CONV_EXCL='*'
 
 "$OPENSSL" ecparam -name prime256v1 -genkey -out server.key
 "$OPENSSL" ecparam -name prime256v1 -genkey -out client.key
-"$OPENSSL" req -batch -new -subj '/CN=127.0.0.1' -key server.key -x509 -sha256 -days 9999 -out server.crt
+
+if [ "$OPENSSL_PACKED_VERSION" -ge "$(openssl_packed_version 1 1 1)" ]; then
+    # OpenSSL >= 1.1.1, we have -addext
+    ADDEXT_OPT=(-addext 'subjectAltName = DNS:127.0.0.1,IP:127.0.0.1')
+else
+    # OpenSSL <= 1.1.0, skip -addext
+    ADDEXT_OPT=()
+fi
+"$OPENSSL" req -batch -new -subj '/CN=127.0.0.1' "${ADDEXT_OPT[@]}" -key server.key -x509 -sha256 -days 9999 -out server.crt
 "$OPENSSL" req -batch -new -subj '/CN=localhost' -key client.key -x509 -sha256 -days 9999 -out client.crt
 "$OPENSSL" x509 -in server.crt -outform der > server.crt.der
 "$OPENSSL" x509 -in client.crt -outform der > client.crt.der
@@ -74,18 +97,32 @@ echo "* generating root cert"
 "$OPENSSL" x509 -in root.crt -outform der > root.crt.der
 echo "* generating root cert - done"
 
-for NAME in client server; do
-    echo "* generating $NAME cert"
-    "$OPENSSL" ecparam -name prime256v1 -genkey -out "${NAME}.key"
-    "$OPENSSL" req -batch -new -subj '/CN=localhost' -key "${NAME}.key" -sha256 -out "${NAME}.csr"
-    "$OPENSSL" x509 -sha256 -req -in "${NAME}.csr" -CA root.crt -CAkey root.key -out "${NAME}.crt" -days 9999 -CAcreateserial
-    cat "${NAME}.crt" root.crt > "${NAME}-and-root.crt"
-    echo "* generating $NAME cert - done"
-    "$OPENSSL" x509 -in "${NAME}.crt" -outform der > "${NAME}.crt.der"
-done
-
+echo "* generating client cert"
+"$OPENSSL" ecparam -name prime256v1 -genkey -out client.key
+"$OPENSSL" req -batch -new -subj '/CN=localhost' -key client.key -sha256 -out client.csr
+"$OPENSSL" x509 -sha256 -req -in client.csr -CA root.crt -CAkey root.key -out client.crt -days 9999 -CAcreateserial
+cat client.crt root.crt > client-and-root.crt
+echo "* generating client cert - done"
+"$OPENSSL" x509 -in client.crt -outform der > client.crt.der
 "$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der \
     -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client.key.der
+
+echo "* generating server_ca cert"
+"$OPENSSL" ecparam -name prime256v1 -genkey -out server_ca.key
+"$OPENSSL" req -batch -new -subj '/CN=localhost' -key server_ca.key -sha256 -out server_ca.csr
+"$OPENSSL" x509 -sha256 -req -in server_ca.csr -CA root.crt -CAkey root.key -out server_ca.crt -days 9999 -extfile <(echo 'basicConstraints = CA:TRUE') -CAcreateserial
+cat server_ca.crt root.crt > server_ca-and-root.crt
+echo "* generating server_ca cert - done"
+"$OPENSSL" x509 -in server_ca.crt -outform der > server_ca.crt.der
+
+echo "* generating server cert"
+"$OPENSSL" ecparam -name prime256v1 -genkey -out server.key
+"$OPENSSL" req -batch -new -subj '/CN=127.0.0.1' -key server.key -sha256 -out server.csr
+"$OPENSSL" x509 -sha256 -req -in server.csr -CA server_ca.crt -CAkey server_ca.key -out server.crt -days 9999 -extfile <(echo 'subjectAltName = DNS:127.0.0.1,IP:127.0.0.1') -CAcreateserial
+cat server.crt server_ca.crt > server-and-ca.crt
+cat server-and-ca.crt root.crt > server-full-path.crt
+echo "* generating server cert - done"
+"$OPENSSL" x509 -in server.crt -outform der > server.crt.der
 
 generate_java_keystores() {
     set -e

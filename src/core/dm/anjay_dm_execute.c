@@ -30,15 +30,26 @@ static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t *ctx,
                                                  int ch);
 
 static int get_next_char(anjay_execute_ctx_t *ctx) {
-    int cached_char = ctx->cached_char;
-    char buf[2];
-    if (anjay_get_string(ctx->input_ctx, buf, sizeof(buf)) < 0
-            || buf[0] == '\0') {
-        ctx->cached_char = EOF;
-    } else {
-        ctx->cached_char = (int) (uint8_t) buf[0];
+    char read_char;
+    avs_error_t err = avs_stream_read_reliably(
+            ctx->payload_stream, &read_char, sizeof(read_char));
+
+    if (avs_is_ok(err)) {
+        return read_char;
     }
-    return cached_char;
+
+    return EOF;
+}
+
+static int peek_next_char(anjay_execute_ctx_t *ctx) {
+    char peeked_char;
+    avs_error_t err = avs_stream_peek(ctx->payload_stream, 0, &peeked_char);
+
+    if (avs_is_ok(err)) {
+        return peeked_char;
+    }
+
+    return EOF;
 }
 
 static bool is_arg_separator(int byte) {
@@ -151,7 +162,7 @@ int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
 
             if (ctx->state == STATE_READ_VALUE) {
                 out_buf[read_bytes++] = (char) ch;
-                value_finished = is_value_delimiter(ctx->cached_char);
+                value_finished = is_value_delimiter(peek_next_char(ctx));
             } else {
                 value_finished = true;
                 break;
@@ -173,14 +184,13 @@ int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
     }
 }
 
-anjay_execute_ctx_t *_anjay_execute_ctx_create(anjay_input_ctx_t *ctx) {
+anjay_execute_ctx_t *_anjay_execute_ctx_create(avs_stream_t *payload_stream) {
     anjay_execute_ctx_t *ret =
             (anjay_execute_ctx_t *) avs_calloc(1, sizeof(anjay_execute_ctx_t));
     if (ret) {
-        ret->input_ctx = ctx;
+        ret->payload_stream = payload_stream;
         ret->arg = -1;
         ret->state = STATE_READ_ARGUMENT;
-        get_next_char(ret); // cache first character
     }
     return ret;
 }

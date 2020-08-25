@@ -32,8 +32,6 @@ typedef int anjay_input_ctx_constructor_t(anjay_input_ctx_t **out,
                                           avs_stream_t **stream_ptr,
                                           const anjay_uri_path_t *request_uri);
 
-anjay_input_ctx_constructor_t _anjay_input_tlv_create;
-
 int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr);
 
 /**

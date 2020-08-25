@@ -99,11 +99,11 @@ void anjay_server_object_purge(anjay_t *anjay);
 AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay);
 
 /**
- * Dumps Server Object Instance into the @p out_stream .
+ * Dumps Server Object Instances into the @p out_stream .
  *
  * @param anjay         Anjay instance with Server Object installed.
  * @param out_stream    Stream to write to.
- * @return 0 in case of success, negative value in case of an error.
+ * @return AVS_OK in case of success, or an error code.
  */
 avs_error_t anjay_server_object_persist(anjay_t *anjay,
                                         avs_stream_t *out_stream);
@@ -116,7 +116,7 @@ avs_error_t anjay_server_object_persist(anjay_t *anjay,
  *
  * @param anjay     Anjay instance with Server Object installed.
  * @param in_stream Stream to read from.
- * @return 0 in case of success, negative value in case of an error.
+ * @return AVS_OK in case of success, or an error code.
  */
 avs_error_t anjay_server_object_restore(anjay_t *anjay,
                                         avs_stream_t *in_stream);

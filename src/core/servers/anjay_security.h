@@ -26,6 +26,7 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {
+    anjay_ssid_t ssid;
     anjay_iid_t security_iid;
     avs_url_t *uri;
     const anjay_transport_info_t *transport_info;

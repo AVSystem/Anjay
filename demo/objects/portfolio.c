@@ -269,6 +269,7 @@ static int resource_reset(anjay_t *anjay,
                           anjay_iid_t iid,
                           anjay_rid_t rid) {
     (void) anjay;
+    (void) rid;
 
     portfolio_t *obj = get_obj(obj_ptr);
     assert(obj);

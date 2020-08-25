@@ -222,6 +222,9 @@ void _anjay_connection_internal_clean_socket(
 anjay_conn_session_token_t
 _anjay_connections_get_primary_session_token(anjay_connections_t *connections);
 
+void _anjay_connection_internal_invalidate_session(
+        anjay_server_connection_t *connection);
+
 static inline bool
 _anjay_connection_is_online(anjay_server_connection_t *connection) {
     return _anjay_socket_is_online(

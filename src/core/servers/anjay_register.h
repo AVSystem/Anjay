@@ -65,7 +65,9 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server);
 
 int _anjay_server_reschedule_update_job(anjay_server_info_t *server);
 
+#ifndef ANJAY_WITHOUT_DEREGISTER
 avs_error_t _anjay_server_deregister(anjay_server_info_t *server);
+#endif // ANJAY_WITHOUT_DEREGISTER
 
 VISIBILITY_PRIVATE_HEADER_END
 

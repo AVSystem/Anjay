@@ -29,7 +29,7 @@ bool _anjay_bootstrap_in_progress(anjay_t *anjay);
 
 #else
 
-#    define _anjay_bootstrap_in_progress(...) (false)
+#    define _anjay_bootstrap_in_progress(anjay) ((void) (anjay), false)
 
 #endif
 

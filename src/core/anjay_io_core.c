@@ -230,10 +230,6 @@ int _anjay_output_ctx_destroy_and_process_result(
     }
 }
 
-struct anjay_input_ctx_struct {
-    const anjay_input_ctx_vtable_t *vtable;
-};
-
 static int get_some_bytes(anjay_input_ctx_t *ctx,
                           size_t *out_bytes_read,
                           bool *out_message_finished,

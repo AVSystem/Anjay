@@ -29,6 +29,11 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+typedef enum {
+    ANJAY_BOOTSTRAP_ACTION_NONE = 0,
+    ANJAY_BOOTSTRAP_ACTION_REQUEST,
+} anjay_bootstrap_action_t;
+
 #ifdef ANJAY_WITH_BOOTSTRAP
 
 typedef struct {
@@ -52,7 +57,10 @@ bool _anjay_bootstrap_legacy_server_initiated_allowed(anjay_t *anjay);
 int _anjay_bootstrap_perform_action(anjay_t *anjay,
                                     const anjay_request_t *request);
 
-int _anjay_bootstrap_request_if_appropriate(anjay_t *anjay);
+int _anjay_perform_bootstrap_action_if_appropriate(
+        anjay_t *anjay,
+        anjay_server_info_t *bootstrap_server,
+        anjay_bootstrap_action_t action);
 
 void _anjay_bootstrap_init(anjay_bootstrap_t *bootstrap,
                            bool allow_legacy_server_initiated_bootstrap);
@@ -68,9 +76,9 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay);
 
 #    define _anjay_bootstrap_perform_action(...) (-1)
 
-#    define _anjay_bootstrap_request_if_appropriate(anjay) (-1)
-
-#    define _anjay_bootstrap_init(...) ((void) 0)
+#    define _anjay_perform_bootstrap_action_if_appropriate(bootstrap_server, \
+                                                           action)           \
+        (-1)
 
 #    define _anjay_bootstrap_cleanup(anjay) ((void) 0)
 

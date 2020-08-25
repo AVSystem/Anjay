@@ -600,6 +600,7 @@ Equivalent new code:
                               anjay_iid_t iid,
                               anjay_rid_t rid) {
         (void) anjay;
+        (void) rid;
 
         portfolio_t *obj = get_obj(obj_ptr);
         assert(obj);
@@ -880,6 +881,16 @@ The new type is declared as follows:
         avs_net_security_info_t security_info;
 
         /**
+         * Single DANE TLSA record to use for certificate verification, if
+         * applicable.
+         *
+         * NOTE: If used with @ref anjay_download, this pointer, as well as its
+         * <c>association_data</c> field, need to remain valid until the download is
+         * finished, aborted or cancelled.
+         */
+        const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
+
+        /**
          * TLS ciphersuites to use.
          *
          * A value with <c>num_ids == 0</c> (default) will cause defaults configured
@@ -981,12 +992,16 @@ The following APIs are affected by the change:
 
   * **New API:**
 
-    .. snippet-source:: include_public/anjay/fw_update.h
+    .. snippet-source:: include_public/anjay/core.h
 
-        anjay_security_config_t *anjay_fw_update_load_security_from_dm(anjay_t *anjay,
-                                                                       const char *uri);
+        anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
+                                                               const char *uri);
 
-  * No changes aside from changing the return type.
+  * The equivalent function is now declared in ``anjay/core.h`` instead of
+    ``anjay/fw_update.h``, and has a different return type.
+
+    The old name is still available, but its return type has also been altered
+    so that it returns ``anjay_security_config_t *`` as well.
 
 Changes to CMake option variables
 ---------------------------------

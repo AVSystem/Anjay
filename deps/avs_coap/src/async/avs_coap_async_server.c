@@ -68,6 +68,7 @@
 #include <avs_coap_init.h>
 
 #include <avsystem/commons/avs_errno.h>
+#include <avsystem/commons/avs_utils.h>
 
 #include <avsystem/coap/async_server.h>
 #include <avsystem/coap/option.h>
@@ -393,8 +394,8 @@ _avs_coap_async_server_abort_timedout_exchanges(avs_coap_ctx_t *ctx) {
            && avs_time_monotonic_before(coap_base->server_exchanges->by_type
                                                 .server.exchange_deadline,
                                         avs_time_monotonic_now())) {
-        LOG(DEBUG, _("exchange ") "%" PRIu64 _(" timed out"),
-            coap_base->server_exchanges->id.value);
+        LOG(DEBUG, _("exchange ") "%s" _(" timed out"),
+            AVS_UINT64_AS_STRING(coap_base->server_exchanges->id.value));
 
         _avs_coap_server_exchange_cleanup(
                 ctx, AVS_LIST_DETACH(&coap_base->server_exchanges),
@@ -523,8 +524,8 @@ avs_coap_server_setup_async_response(avs_coap_request_ctx_t *ctx,
             _avs_coap_find_server_exchange_ptr_by_id(coap_ctx,
                                                      ctx->exchange_id);
     if (!response_exchange_ptr) {
-        LOG(ERROR, _("invalid exchange ID: ") "%" PRIu64,
-            ctx->exchange_id.value);
+        LOG(ERROR, _("invalid exchange ID: ") "%s",
+            AVS_UINT64_AS_STRING(ctx->exchange_id.value));
         return avs_errno(AVS_EINVAL);
     }
 
@@ -761,8 +762,8 @@ int _avs_coap_async_incoming_packet_call_request_handler(
         .payload_size = coap_base->request_ctx.request.payload_size
     };
 
-    LOG(DEBUG, _("exchange ") "%" PRIu64 _(": request_handler, ") "%s",
-        exchange->id.value,
+    LOG(DEBUG, _("exchange ") "%s" _(": request_handler, ") "%s",
+        AVS_UINT64_AS_STRING(exchange->id.value),
         entire_request_finished ? "full request" : "partial content");
 
     return exchange->by_type.server.request_handler(
@@ -884,18 +885,17 @@ static int validate_request_exchange_state(avs_coap_ctx_t *ctx) {
     avs_coap_base_t *coap_base = _avs_coap_get_base(ctx);
     if (!_avs_coap_find_server_exchange_ptr_by_id(
                 ctx, coap_base->request_ctx.exchange_id)) {
-        LOG(DEBUG, _("exchange ") "%" PRIu64 _(" canceled by user handler"),
-            coap_base->request_ctx.exchange_id.value);
+        LOG(DEBUG, _("exchange ") "%s" _(" canceled by user handler"),
+            AVS_UINT64_AS_STRING(coap_base->request_ctx.exchange_id.value));
         return AVS_COAP_CODE_INTERNAL_SERVER_ERROR;
     }
 
     if (!coap_base->request_ctx.response_setup
             && is_entire_request_finished(&coap_base->request_ctx.request)) {
         LOG(DEBUG,
-            _("request ") "%" PRIu64 _(
-                    " finished, but response still not set up and "
-                    "request handler returned 0"),
-            coap_base->request_ctx.exchange_id.value);
+            _("request ") "%s" _(" finished, but response still not set up and "
+                                 "request handler returned 0"),
+            AVS_UINT64_AS_STRING(coap_base->request_ctx.exchange_id.value));
         return AVS_COAP_CODE_INTERNAL_SERVER_ERROR;
     }
 
@@ -1016,9 +1016,9 @@ handle_new_request(avs_coap_ctx_t *ctx,
     if (!(*out_exchange = _avs_coap_find_server_exchange_by_id(
                   ctx, server_ctx.exchange_id))) {
         LOG(DEBUG,
-            _("on_new_request handler canceled exchange ") "%" PRIu64 _(
+            _("on_new_request handler canceled exchange ") "%s" _(
                     " immediately after accepting it"),
-            server_ctx.exchange_id.value);
+            AVS_UINT64_AS_STRING(server_ctx.exchange_id.value));
     }
     return AVS_OK;
 }
@@ -1206,17 +1206,9 @@ avs_error_t avs_coap_async_handle_incoming_packet(
         return err;
     }
 
-    // This function is supposed to be called conceptually in place of
-    // recv(), so we honour the socket timeout for the first packet.
-    err = _avs_coap_async_incoming_packet_simple_handle_single(
+    err = _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
             ctx, acquired_in_buffer, acquired_in_buffer_size, on_new_request,
             on_new_request_arg);
-
-    if (avs_is_ok(err)) {
-        err = _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
-                ctx, acquired_in_buffer, acquired_in_buffer_size,
-                on_new_request, on_new_request_arg);
-    }
     _avs_coap_in_buffer_release(ctx);
     return err;
 }
@@ -1232,8 +1224,8 @@ void _avs_coap_server_exchange_cleanup(avs_coap_ctx_t *ctx,
     avs_coap_server_exchange_data_t *server = &exchange->by_type.server;
 
     if (server->request_handler) {
-        LOG(DEBUG, _("exchange ") "%" PRIu64 _(": request_handler, cleanup"),
-            exchange->id.value);
+        LOG(DEBUG, _("exchange ") "%s" _(": request_handler, cleanup"),
+            AVS_UINT64_AS_STRING(exchange->id.value));
 
         server->request_handler(NULL, exchange->id,
                                 AVS_COAP_SERVER_REQUEST_CLEANUP, NULL, NULL,

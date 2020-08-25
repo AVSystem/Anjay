@@ -283,7 +283,7 @@ static int fw_get_security_config(void *user_ptr,
         FW_STATE.dm_security_config = NULL;
     }
     FW_STATE.dm_security_config =
-            anjay_fw_update_load_security_from_dm(FW_STATE.anjay, download_uri);
+            anjay_security_config_from_dm(FW_STATE.anjay, download_uri);
     if (FW_STATE.dm_security_config) {
         // found a match
         memcpy(out_security_info,

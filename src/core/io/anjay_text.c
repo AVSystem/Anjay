@@ -16,24 +16,26 @@
 
 #include <anjay_init.h>
 
-#include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <limits.h>
-#include <stdlib.h>
-#include <string.h>
+#ifndef ANJAY_WITHOUT_PLAINTEXT
 
-#include <avsystem/commons/avs_base64.h>
-#include <avsystem/commons/avs_stream.h>
-#include <avsystem/commons/avs_utils.h>
+#    include <ctype.h>
+#    include <errno.h>
+#    include <inttypes.h>
+#    include <limits.h>
+#    include <stdlib.h>
+#    include <string.h>
 
-#include <anjay/core.h>
+#    include <avsystem/commons/avs_base64.h>
+#    include <avsystem/commons/avs_stream.h>
+#    include <avsystem/commons/avs_utils.h>
 
-#include "../anjay_utils_core.h"
-#include "../coap/anjay_content_format.h"
-#include "anjay_base64_out.h"
-#include "anjay_common.h"
-#include "anjay_vtable.h"
+#    include <anjay/core.h>
+
+#    include "../anjay_utils_core.h"
+#    include "../coap/anjay_content_format.h"
+#    include "anjay_base64_out.h"
+#    include "anjay_common.h"
+#    include "anjay_vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -82,7 +84,8 @@ static int text_ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
     }
 
     if (ctx->state == STATE_PATH_SET
-            && avs_is_ok(avs_stream_write_f(ctx->stream, "%" PRId64, value))) {
+            && avs_is_ok(avs_stream_write_f(ctx->stream, "%s",
+                                            AVS_INT64_AS_STRING(value)))) {
         ctx->state = STATE_FINISHED;
         return 0;
     }
@@ -287,27 +290,6 @@ text_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
     return in->msg_finished ? 0 : ANJAY_BUFFER_TOO_SHORT;
 }
 
-static int map_str_conversion_result(const char *input, const char *endptr) {
-    return (!*input || isspace((unsigned char) *input) || errno || !endptr
-            || *endptr)
-                   ? -1
-                   : 0;
-}
-
-int _anjay_safe_strtoll(const char *in, long long *value) {
-    errno = 0;
-    char *endptr = NULL;
-    *value = strtoll(in, &endptr, 0);
-    return map_str_conversion_result(in, endptr);
-}
-
-int _anjay_safe_strtod(const char *in, double *value) {
-    errno = 0;
-    char *endptr = NULL;
-    *value = strtod(in, &endptr);
-    return map_str_conversion_result(in, endptr);
-}
-
 static int map_get_string_error(int retval) {
     /**
      * NOTE: this function should be used ONLY when getting data to a fixed
@@ -327,9 +309,9 @@ static int text_get_integer(anjay_input_ctx_t *ctx, int64_t *value) {
     }
     long long ll;
     if (_anjay_safe_strtoll(buf, &ll)
-#if LLONG_MAX != INT64_MAX
+#    if LLONG_MAX != INT64_MAX
             || ll < INT64_MIN || ll > INT64_MAX
-#endif
+#    endif
     ) {
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -433,6 +415,8 @@ int _anjay_input_text_create(anjay_input_ctx_t **out,
     return 0;
 }
 
-#ifdef ANJAY_TEST
-#    include "tests/core/io/text.c"
-#endif
+#    ifdef ANJAY_TEST
+#        include "tests/core/io/text.c"
+#    endif
+
+#endif // ANJAY_WITHOUT_PLAINTEXT

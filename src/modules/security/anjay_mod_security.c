@@ -69,6 +69,11 @@ static int assign_iid(sec_repr_t *repr, anjay_iid_t *inout_iid) {
     return 0;
 }
 
+static void init_instance(sec_instance_t *instance, anjay_iid_t iid) {
+    memset(instance, 0, sizeof(sec_instance_t));
+    instance->iid = iid;
+}
+
 static int add_instance(sec_repr_t *repr,
                         const anjay_security_instance_t *instance,
                         anjay_iid_t *inout_iid) {
@@ -85,7 +90,7 @@ static int add_instance(sec_repr_t *repr,
         security_log(ERROR, _("out of memory"));
         return -1;
     }
-    new_instance->iid = *inout_iid;
+    init_instance(new_instance, *inout_iid);
     new_instance->server_uri = avs_strdup(instance->server_uri);
     if (!new_instance->server_uri) {
         goto error;
@@ -388,7 +393,7 @@ static int sec_instance_create(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
 
-    created->iid = iid;
+    init_instance(created, iid);
 
     AVS_LIST(sec_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -443,8 +448,7 @@ static int sec_instance_reset(anjay_t *anjay,
     assert(inst);
 
     _anjay_sec_destroy_instance_fields(inst);
-    memset(inst, 0, sizeof(sec_instance_t));
-    inst->iid = iid;
+    init_instance(inst, iid);
     return 0;
 }
 

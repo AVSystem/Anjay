@@ -86,7 +86,7 @@ typedef int (*anjay_input_ctx_get_path_t)(anjay_input_ctx_t *,
 typedef int (*anjay_input_ctx_update_root_path_t)(anjay_input_ctx_t *,
                                                   const anjay_uri_path_t *);
 
-typedef struct {
+struct anjay_input_ctx_vtable_struct {
     anjay_input_ctx_bytes_t some_bytes;
     anjay_input_ctx_string_t string;
     anjay_input_ctx_integer_t integer;
@@ -97,7 +97,7 @@ typedef struct {
     anjay_input_ctx_next_entry_t next_entry;
     anjay_input_ctx_update_root_path_t update_root_path;
     anjay_input_ctx_close_t close;
-} anjay_input_ctx_vtable_t;
+};
 
 VISIBILITY_PRIVATE_HEADER_END
 

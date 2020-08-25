@@ -390,6 +390,16 @@ AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay);
 /**
  * Reads a message from given @p ready_socket and handles it appropriately.
  *
+ * Initially, the receive method on the underlying socket is called with receive
+ * timeout set to zero. Subsequent receive requests may block with non-zero
+ * timeout values when e.g. waiting for retransmissions or subsequent BLOCK
+ * chunks - this is necessary to hide this complexity from the user callbacks in
+ * streaming mode.
+ *
+ * This function may handle more than one request at once. Upon successful
+ * return, it is guaranteed that there is no more data to be received on the
+ * socket at the moment.
+ *
  * @param anjay        Anjay object to operate on.
  * @param ready_socket A socket to read the message from.
  *
@@ -834,6 +844,16 @@ typedef struct {
     avs_net_security_info_t security_info;
 
     /**
+     * Single DANE TLSA record to use for certificate verification, if
+     * applicable.
+     *
+     * NOTE: If used with @ref anjay_download, this pointer, as well as its
+     * <c>association_data</c> field, need to remain valid until the download is
+     * finished, aborted or cancelled.
+     */
+    const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
+
+    /**
      * TLS ciphersuites to use.
      *
      * A value with <c>num_ids == 0</c> (default) will cause defaults configured
@@ -842,6 +862,34 @@ typedef struct {
      */
     avs_net_socket_tls_ciphersuites_t tls_ciphersuites;
 } anjay_security_config_t;
+
+/**
+ * Queries security configuration appropriate for a specified URI.
+ *
+ * Given a URI, the Security object is scanned for instances with Server URI
+ * resource matching it in the following way:
+ * - if there is at least one instance with matching hostname, protocol and port
+ *   number, and valid secure connection configuration, the first such instance
+ *   (in the order as returned via @ref anjay_dm_list_instances_t) is used
+ * - otherwise, if there is at least one instance with matching hostname and
+ *   valid secure connection configuration, the first such instance (in the
+ *   order as returned via @ref anjay_dm_list_instances_t) is used
+ *
+ * The returned security information is exactly the same configuration that is
+ * used for LwM2M connection with the server chosen with the rules described
+ * above.
+ *
+ * @param anjay Anjay object whose data model shall be queried.
+ *
+ * @param uri   URI for which to find security configuration.
+ *
+ * @returns Security configuration found, or <c>NULL</c> if no suitable LwM2M
+ *          Security Object instance could be found. The returned structure is
+ *          heap-allocated; to release all memory allocated for it, it is enough
+ *          to call <c>avs_free()</c> on the returned pointer.
+ */
+anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
+                                                       const char *uri);
 
 /**
  * Returns @c false if registration to all LwM2M Servers either succeeded or

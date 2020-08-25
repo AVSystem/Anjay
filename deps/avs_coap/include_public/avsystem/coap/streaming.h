@@ -147,8 +147,18 @@ avs_coap_streaming_setup_response(avs_coap_streaming_request_ctx_t *ctx,
                                   const avs_coap_response_header_t *response);
 
 /**
- * Receives a single CoAP message from the socket associated with @p ctx and
- * handles it as appropriate.
+ * Receives a CoAP messages from the socket associated with @p ctx and handles
+ * them as appropriate.
+ *
+ * Initially, the receive method on the underlying socket is called with receive
+ * timeout set to zero. Subsequent receive requests may block with non-zero
+ * timeout values when e.g. waiting for retransmissions or subsequent BLOCK
+ * chunks - this is necessary to hide this complexity from the user callbacks in
+ * streaming mode.
+ *
+ * This function may handle more than one request at once, possibly calling
+ * @p handle_request multiple times. Upon successful return, it is guaranteed
+ * that there is no more data to be received on the socket at the moment.
  *
  * If the packet is recognized as a response to an asynchronous request, such
  * message is handled internally without calling @p handle_request . Otherwise,

@@ -18,6 +18,10 @@
 
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
 
+#    ifndef ANJAY_WITH_DOWNLOADER
+#        error "ANJAY_WITH_MODULE_FW_UPDATE requires ANJAY_WITH_DOWNLOADER to be enabled"
+#    endif // ANJAY_WITH_DOWNLOADER
+
 #    include <string.h>
 
 #    include <anjay/download.h>
@@ -206,8 +210,8 @@ static int get_security_config(anjay_t *anjay,
                 fw->user_state.arg, out_security_config, fw->package_uri);
     } else {
         assert(!fw->security_from_dm);
-        if (!(fw->security_from_dm = anjay_fw_update_load_security_from_dm(
-                      anjay, fw->package_uri))) {
+        if (!(fw->security_from_dm =
+                      anjay_security_config_from_dm(anjay, fw->package_uri))) {
             return -1;
         }
         *out_security_config = *fw->security_from_dm;

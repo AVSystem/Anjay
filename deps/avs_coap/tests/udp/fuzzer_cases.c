@@ -112,10 +112,12 @@ AVS_UNIT_TEST(udp_fuzzer, send_in_response_handler_while_message_is_held) {
     // until we receive response to requests[1] instead.
     avs_unit_mocksock_input(env.mocksock, malformed_response,
                             malformed_response_size);
-    expect_send(&env, requests[1]);
     expect_timeout(&env);
 
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    expect_send(&env, requests[1]);
+    avs_sched_run(env.sched);
 
     // It doesn't matter much, but why are these cleaned up in reverse order?
     expect_handler_call(&env, &ids[2], AVS_COAP_CLIENT_REQUEST_CANCEL, NULL);

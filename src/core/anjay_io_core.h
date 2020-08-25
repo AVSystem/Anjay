@@ -42,7 +42,14 @@ int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,
                                     anjay_request_action_t action);
 
 anjay_input_ctx_constructor_t _anjay_input_opaque_create;
+
+#ifndef ANJAY_WITHOUT_PLAINTEXT
 anjay_input_ctx_constructor_t _anjay_input_text_create;
+#endif // ANJAY_WITHOUT_PLAINTEXT
+
+#ifndef ANJAY_WITHOUT_TLV
+anjay_input_ctx_constructor_t _anjay_input_tlv_create;
+#endif // ANJAY_WITHOUT_TLV
 
 #ifdef ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 uint16_t _anjay_translate_legacy_content_format(uint16_t format);
@@ -67,12 +74,22 @@ struct anjay_output_ctx_struct {
     int error;
 };
 
+typedef struct anjay_input_ctx_vtable_struct anjay_input_ctx_vtable_t;
+
+struct anjay_input_ctx_struct {
+    const anjay_input_ctx_vtable_t *vtable;
+};
+
 anjay_output_ctx_t *_anjay_output_opaque_create(avs_stream_t *stream);
 
+#ifndef ANJAY_WITHOUT_PLAINTEXT
 anjay_output_ctx_t *_anjay_output_text_create(avs_stream_t *stream);
+#endif // ANJAY_WITHOUT_PLAINTEXT
 
+#ifndef ANJAY_WITHOUT_TLV
 anjay_output_ctx_t *_anjay_output_tlv_create(avs_stream_t *stream,
                                              const anjay_uri_path_t *uri);
+#endif // ANJAY_WITHOUT_TLV
 
 #if defined(ANJAY_WITH_LWM2M_JSON) || defined(ANJAY_WITH_SENML_JSON) \
         || defined(ANJAY_WITH_CBOR)
@@ -139,6 +156,13 @@ typedef struct anjay_output_buf_ctx {
 } anjay_output_buf_ctx_t;
 
 anjay_output_buf_ctx_t _anjay_output_buf_ctx_init(avs_stream_t *stream);
+
+typedef struct anjay_input_buf_ctx {
+    anjay_input_ctx_t base;
+    avs_stream_t *stream;
+    bool msg_finished;
+    anjay_uri_path_t path;
+} anjay_input_buf_ctx_t;
 
 bool _anjay_is_supported_hierarchical_format(uint16_t content_format);
 

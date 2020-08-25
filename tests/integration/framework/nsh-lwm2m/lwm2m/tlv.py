@@ -36,6 +36,9 @@ class TLVType:
         assert len(matching) == 1
         return matching[0]
 
+    def __hash__(self):
+        return hash(str(self))
+
 
 TLVType.INSTANCE = TLVType(0)
 TLVType.RESOURCE_INSTANCE = TLVType(1)
@@ -256,6 +259,16 @@ class TLV:
             return 'resource instance %d = %s' % (self.identifier, self._get_resource_value())
         elif self.tlv_type == TLVType.RESOURCE:
             return 'resource %d = %s' % (self.identifier, self._get_resource_value())
+
+    def to_string_without_id(self):
+        if self.tlv_type == TLVType.INSTANCE:
+            return 'instance (%d resources)' % len(self.value)
+        elif self.tlv_type == TLVType.MULTIPLE_RESOURCE:
+            return 'multiple resource (%d instances)' % len(self.value)
+        elif self.tlv_type == TLVType.RESOURCE_INSTANCE:
+            return 'resource instance = %s' % self._get_resource_value()
+        elif self.tlv_type == TLVType.RESOURCE:
+            return 'resource = %s' % self._get_resource_value()
 
     def __eq__(self, other):
         return (isinstance(other, TLV)

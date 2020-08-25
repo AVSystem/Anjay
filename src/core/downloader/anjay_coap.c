@@ -18,6 +18,10 @@
 
 #ifdef ANJAY_WITH_COAP_DOWNLOAD
 
+#    ifndef ANJAY_WITH_DOWNLOADER
+#        error "ANJAY_WITH_COAP_DOWNLOAD requires ANJAY_WITH_DOWNLOADER to be enabled"
+#    endif // ANJAY_WITH_DOWNLOADER
+
 #    include <inttypes.h>
 
 #    include <avsystem/commons/avs_errno.h>
@@ -290,6 +294,7 @@ get_coap_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
 
 static inline size_t initial_block2_option_size(anjay_coap_download_ctx_t *ctx,
                                                 uint8_t code) {
+    assert(ctx->bytes_downloaded > 0);
     char buffer[64];
     avs_coap_options_t expected_options =
             avs_coap_options_create_empty(buffer, sizeof(buffer));
@@ -302,12 +307,13 @@ static inline size_t initial_block2_option_size(anjay_coap_download_ctx_t *ctx,
                                     .seq_num = UINT16_MAX,
                                     .size = AVS_COAP_BLOCK_MAX_SIZE
                                 })))
-            || avs_is_err((err = avs_coap_options_add_etag(
-                                   &expected_options,
-                                   &(avs_coap_etag_t) {
-                                       .size = AVS_COAP_MAX_ETAG_LENGTH,
-                                       .bytes = { 0 }
-                                   }))));
+            || (ctx->etag.size > 0
+                && avs_is_err((err = avs_coap_options_add_etag(
+                                       &expected_options,
+                                       &(avs_coap_etag_t) {
+                                           .size = ctx->etag.size,
+                                           .bytes = { 0 }
+                                       })))));
     assert(avs_is_ok(err));
 
     size_t block_size = avs_max_power_of_2_not_greater_than(
@@ -336,7 +342,6 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
     avs_error_t err;
     avs_coap_options_t options;
     const uint8_t code = AVS_COAP_CODE_GET;
-    const size_t block_size = initial_block2_option_size(ctx, code);
     if (avs_is_err((err = avs_coap_options_dynamic_init(&options)))) {
         dl_log(ERROR,
                _("download id = ") "%" PRIuPTR _(
@@ -364,9 +369,9 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
     // When we start the download, there is no need to ask for a blockwise
     // transfer (by adding a BLOCK option explicitly). If the incoming payload
     // is too large, CoAP layer will negotiate smaller block sizes.
-    if (ctx->bytes_downloaded != 0
-            && avs_is_err(
-                       (err = avs_coap_options_add_block(
+    if (ctx->bytes_downloaded != 0) {
+        const size_t block_size = initial_block2_option_size(ctx, code);
+        if (avs_is_err((err = avs_coap_options_add_block(
                                 &options,
                                 &(avs_coap_option_block_t) {
                                     .type = AVS_COAP_BLOCK2,
@@ -374,7 +379,8 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
                                                            / block_size),
                                     .size = (uint16_t) block_size
                                 })))) {
-        goto end;
+            goto end;
+        }
     }
 
     assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
@@ -614,6 +620,21 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         }
         if (avs_is_err(err)) {
             dl_log(ERROR, _("could not create CoAP socket"));
+        } else if (cfg->security_config.dane_tlsa_record
+                   && avs_is_err((
+                              err = avs_net_socket_set_opt(
+                                      ctx->socket,
+                                      AVS_NET_SOCKET_OPT_DANE_TLSA_ARRAY,
+                                      (avs_net_socket_opt_value_t) {
+                                          .dane_tlsa_array = {
+                                              .array_ptr =
+                                                      cfg->security_config
+                                                              .dane_tlsa_record,
+                                              .array_element_count = 1
+                                          }
+                                      })))) {
+            anjay_log(ERROR, _("could not configure DANE TLSA record"));
+            _anjay_socket_cleanup(anjay, &ctx->socket);
         } else if (avs_is_err((err = avs_net_socket_connect(ctx->socket,
                                                             ctx->uri.host,
                                                             ctx->uri.port)))) {

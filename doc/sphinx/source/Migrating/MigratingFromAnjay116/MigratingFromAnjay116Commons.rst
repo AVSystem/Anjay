@@ -600,6 +600,7 @@ Additional changes in public ``avs_net`` APIs:
         avs_net_tcp_socket_create(avs_net_socket_t **socket,
                                   const avs_net_socket_configuration_t *config);
 
+        #ifdef AVS_COMMONS_WITH_AVS_CRYPTO
         avs_error_t
         avs_net_dtls_socket_create(avs_net_socket_t **socket,
                                    const avs_net_ssl_configuration_t *config);
@@ -607,6 +608,7 @@ Additional changes in public ``avs_net`` APIs:
         avs_error_t
         avs_net_ssl_socket_create(avs_net_socket_t **socket,
                                   const avs_net_ssl_configuration_t *config);
+        #endif // AVS_COMMONS_WITH_AVS_CRYPTO
 
   * The ``avs_net_socket_type_t`` enum is no longer used for socket creation.
     Separate functions are used instead, allowing for type-safe passing of the

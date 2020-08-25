@@ -95,6 +95,7 @@ PYBIND11_MODULE(pymbedtls, m) {
                     .def("recvfrom", &method_unimplemented<int>)
                     .def("recvfrom_into", &method_unimplemented<py::object>)
                     .def("settimeout", &Socket::settimeout)
+                    .def("peer_cert", &Socket::peer_cert)
                     .def("__getattr__", &Socket::__getattr__)
                     .def("__setattr__", &Socket::__setattr__);
 

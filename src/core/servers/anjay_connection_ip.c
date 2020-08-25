@@ -40,6 +40,7 @@ static avs_error_t
 prepare_connection(anjay_t *anjay,
                    anjay_server_connection_t *out_conn,
                    const avs_net_ssl_configuration_t *socket_config,
+                   const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record,
                    const anjay_connection_info_t *info) {
     (void) anjay;
 
@@ -57,6 +58,7 @@ prepare_connection(anjay_t *anjay,
 
     out_conn->stateful = true;
     avs_net_socket_t *socket = NULL;
+    bool is_tls = false;
     switch (*info->transport_info->socket_type) {
     case AVS_NET_TCP_SOCKET:
         avs_net_tcp_socket_create(&socket,
@@ -68,9 +70,11 @@ prepare_connection(anjay_t *anjay,
         out_conn->stateful = false;
         break;
     case AVS_NET_SSL_SOCKET:
+        is_tls = true;
         avs_net_ssl_socket_create(&socket, socket_config);
         break;
     case AVS_NET_DTLS_SOCKET:
+        is_tls = true;
         avs_net_dtls_socket_create(&socket, socket_config);
         break;
     default:
@@ -79,6 +83,22 @@ prepare_connection(anjay_t *anjay,
     if (!socket) {
         anjay_log(ERROR, _("could not create CoAP socket"));
         return avs_errno(AVS_ENOMEM);
+    }
+
+    avs_error_t err = AVS_OK;
+    if (is_tls && dane_tlsa_record
+            && avs_is_err((err = avs_net_socket_set_opt(
+                                   socket, AVS_NET_SOCKET_OPT_DANE_TLSA_ARRAY,
+                                   (avs_net_socket_opt_value_t) {
+                                       .dane_tlsa_array = {
+                                           .array_ptr = dane_tlsa_record,
+                                           .array_element_count = 1
+                                       }
+                                   })))) {
+        _anjay_socket_cleanup(anjay, &socket);
+        anjay_log(ERROR, _("could not configure DANE TLSA record: ") "%s",
+                  AVS_COAP_STRERROR(err));
+        return err;
     }
 
     out_conn->conn_socket_ = socket;

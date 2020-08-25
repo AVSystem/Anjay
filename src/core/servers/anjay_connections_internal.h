@@ -40,11 +40,12 @@ _anjay_connection_info_cleanup(anjay_connection_info_t *info) {
 typedef const avs_net_dtls_handshake_timeouts_t *
 anjay_connection_get_dtls_handshake_timeouts_t(anjay_t *anjay);
 
-typedef avs_error_t
-anjay_connection_prepare_t(anjay_t *anjay,
-                           anjay_server_connection_t *out_connection,
-                           const avs_net_ssl_configuration_t *socket_config,
-                           const anjay_connection_info_t *info);
+typedef avs_error_t anjay_connection_prepare_t(
+        anjay_t *anjay,
+        anjay_server_connection_t *out_connection,
+        const avs_net_ssl_configuration_t *socket_config,
+        const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record,
+        const anjay_connection_info_t *info);
 
 typedef avs_error_t
 anjay_connection_connect_socket_t(anjay_t *anjay,

@@ -44,14 +44,6 @@ static void refresh_server_job(avs_sched_t *sched, const void *server_ptr) {
         return;
     }
 
-    anjay_connection_type_t conn_type;
-    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
-        _anjay_observe_interrupt((anjay_connection_ref_t) {
-            .server = server,
-            .conn_type = conn_type
-        });
-    }
-
     _anjay_active_server_refresh(server);
 }
 
@@ -275,6 +267,7 @@ static bool transport_set_empty(anjay_transport_set_t set) {
 anjay_transport_set_t
 _anjay_transport_set_remove_unavailable(anjay_t *anjay,
                                         anjay_transport_set_t set) {
+    (void) anjay;
     return (anjay_transport_set_t) {
         .udp = set.udp,
         .tcp = set.tcp
@@ -337,7 +330,9 @@ int anjay_transport_set_online(anjay_t *anjay,
 #else  // ANJAY_WITH_DOWNLOADER
     (void) reload_was_scheduled;
 #endif // ANJAY_WITH_DOWNLOADER
-    if (result) {
+    if (!result) {
+        _anjay_servers_interrupt_offline(anjay);
+    } else {
         anjay->online_transports = orig_online_transports;
     }
     return result;

@@ -49,8 +49,10 @@ typedef struct {
     bool has_default_min_period;
     int32_t default_max_period;
     bool has_default_max_period;
+#ifndef ANJAY_WITHOUT_DEREGISTER
     int32_t disable_timeout;
     bool has_disable_timeout;
+#endif // ANJAY_WITHOUT_DEREGISTER
     bool notification_storing;
     bool has_notification_storing;
 

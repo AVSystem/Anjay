@@ -43,25 +43,20 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
         anjay_log(DEBUG,
                   _("Bootstrap Server: ") "%s" _(
-                          ". Disabling all communication."),
+                          ". Disabling it indefinitely."),
                   debug_msg);
         // Abort any further bootstrap retries.
         _anjay_bootstrap_cleanup(server->anjay);
     } else {
         // Either a failure not due to registration, or the number of
         // registration attempts already exceeded communication retry counter.
-        if (_anjay_should_retry_bootstrap(server->anjay)) {
-            if (_anjay_servers_find_active(server->anjay,
-                                           ANJAY_SSID_BOOTSTRAP)) {
-                _anjay_bootstrap_request_if_appropriate(server->anjay);
-            } else {
-                anjay_enable_server(server->anjay, ANJAY_SSID_BOOTSTRAP);
-            }
-        } else {
-            anjay_log(DEBUG,
-                      _("Non-Bootstrap Server ") "%" PRIu16 _(": ") "%s" _("."),
-                      server->ssid, debug_msg);
-        }
+        anjay_log(DEBUG,
+                  _("Non-Bootstrap Server ") "%" PRIu16 _(": ") "%s" _("."),
+                  server->ssid, debug_msg);
+        (void) _anjay_perform_bootstrap_action_if_appropriate(
+                server->anjay,
+                _anjay_servers_find_active(server->anjay, ANJAY_SSID_BOOTSTRAP),
+                _anjay_requested_bootstrap_action(server->anjay));
     }
     // make sure that the server will not be reactivated at next refresh
     server->reactivate_time = AVS_TIME_REAL_INVALID;
@@ -134,11 +129,12 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
         }
     } else if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
         assert(avs_is_ok(err));
-        if (_anjay_should_retry_bootstrap(server->anjay)) {
-            server->refresh_failed =
-                    !!_anjay_bootstrap_request_if_appropriate(server->anjay);
-        } else {
-            server->refresh_failed = false;
+        anjay_bootstrap_action_t action =
+                _anjay_requested_bootstrap_action(server->anjay);
+        server->refresh_failed =
+                !!_anjay_perform_bootstrap_action_if_appropriate(
+                        server->anjay, server, action);
+        if (action == ANJAY_BOOTSTRAP_ACTION_NONE) {
             _anjay_connection_mark_stable((anjay_connection_ref_t) {
                 .server = server,
                 .conn_type = ANJAY_CONNECTION_PRIMARY
@@ -186,13 +182,8 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
     }
 }
 
-bool _anjay_should_retry_bootstrap(anjay_t *anjay) {
 #ifdef ANJAY_WITH_BOOTSTRAP
-    if (avs_coap_exchange_id_valid(
-                anjay->bootstrap.outgoing_request_exchange_id)) {
-        // Bootstrap attempt already ongoing, no need to retry
-        return false;
-    }
+static bool should_retry_bootstrap(anjay_t *anjay) {
     if (anjay->bootstrap.bootstrap_trigger) {
         return true;
     }
@@ -216,10 +207,21 @@ bool _anjay_should_retry_bootstrap(anjay_t *anjay) {
     return bootstrap_server_exists
            && (!possibly_active_server_exists
                || registration_failure_must_trigger_bootstrap);
-#else  // ANJAY_WITH_BOOTSTRAP
-    (void) anjay;
-    return false;
+}
 #endif // ANJAY_WITH_BOOTSTRAP
+
+anjay_bootstrap_action_t _anjay_requested_bootstrap_action(anjay_t *anjay) {
+#ifdef ANJAY_WITH_BOOTSTRAP
+    // if Bootstrap attempt is already ongoing, there's no need to do anything
+    if (!avs_coap_exchange_id_valid(
+                anjay->bootstrap.outgoing_request_exchange_id)) {
+        if (should_retry_bootstrap(anjay)) {
+            return ANJAY_BOOTSTRAP_ACTION_REQUEST;
+        }
+    }
+#endif // ANJAY_WITH_BOOTSTRAP
+    (void) anjay;
+    return ANJAY_BOOTSTRAP_ACTION_NONE;
 }
 
 /**
@@ -295,6 +297,7 @@ int _anjay_server_deactivate(anjay_t *anjay,
         return -1;
     }
 
+#ifndef ANJAY_WITHOUT_DEREGISTER
     if (ssid != ANJAY_SSID_BOOTSTRAP && !_anjay_bootstrap_in_progress(anjay)
             && _anjay_server_active(*server_ptr)
             && !_anjay_server_registration_expired(*server_ptr)) {
@@ -303,8 +306,14 @@ int _anjay_server_deactivate(anjay_t *anjay,
         // optional anyway. _anjay_serve_deregister logs the error cause.
         _anjay_server_deregister(*server_ptr);
     }
+#endif // ANJAY_WITHOUT_DEREGISTER
     _anjay_server_clean_active_data(*server_ptr);
     (*server_ptr)->registration_info.expire_time = AVS_TIME_REAL_INVALID;
+    anjay_connection_type_t conn_type;
+    ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+        _anjay_connection_internal_invalidate_session(
+                _anjay_connection_get(&(*server_ptr)->connections, conn_type));
+    }
     if (avs_time_duration_valid(reactivate_delay)
             && _anjay_server_sched_activate(*server_ptr, reactivate_delay)) {
         // not much we can do other than removing the server altogether
@@ -386,12 +395,8 @@ static void disable_server_with_timeout_job(avs_sched_t *sched,
                   data->ssid);
     } else {
         if (avs_time_duration_valid(data->timeout)) {
-            anjay_log(INFO,
-                      _("server ") "%" PRIu16 _(
-                              " disabled for ") "%" PRId64
-                                                ".%09" PRId32 _(" seconds"),
-                      data->ssid, data->timeout.seconds,
-                      data->timeout.nanoseconds);
+            anjay_log(INFO, _("server ") "%" PRIu16 _(" disabled for ") "%s",
+                      data->ssid, AVS_TIME_DURATION_AS_STRING(data->timeout));
         } else {
             anjay_log(INFO, _("server ") "%" PRIu16 _(" disabled"), data->ssid);
         }
@@ -461,7 +466,8 @@ int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid) {
 
     if (ssid == ANJAY_SSID_BOOTSTRAP
             && !_anjay_bootstrap_legacy_server_initiated_allowed(anjay)
-            && !_anjay_should_retry_bootstrap(anjay)) {
+            && _anjay_requested_bootstrap_action(anjay)
+                           == ANJAY_BOOTSTRAP_ACTION_NONE) {
         anjay_log(DEBUG,
                   _("1.0-style Server-Initiated Bootstrap is disabled and "
                     "Client - Initiated Bootstrap is currently not allowed, "

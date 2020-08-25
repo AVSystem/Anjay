@@ -145,6 +145,12 @@ _anjay_connections_get_primary_session_token(anjay_connections_t *connections) {
             ->session_token;
 }
 
+void _anjay_connection_internal_invalidate_session(
+        anjay_server_connection_t *connection) {
+    memset(connection->nontransient_state.dtls_session_buffer, 0,
+           sizeof(connection->nontransient_state.dtls_session_buffer));
+}
+
 static avs_error_t
 recreate_socket(anjay_t *anjay,
                 const anjay_connection_type_definition_t *def,
@@ -187,6 +193,7 @@ recreate_socket(anjay_t *anjay,
     socket_config.security = security_config->security_info;
     socket_config.ciphersuites = security_config->tls_ciphersuites;
     avs_error_t err = def->prepare_connection(anjay, connection, &socket_config,
+                                              security_config->dane_tlsa_record,
                                               inout_info);
     if (avs_is_err(err) && connection->conn_socket_) {
         avs_net_socket_shutdown(connection->conn_socket_);
@@ -260,6 +267,7 @@ void _anjay_server_connections_refresh(
         bool trigger_requested,
         const anjay_server_name_indication_t *sni) {
     anjay_connection_info_t server_info = {
+        .ssid = server->ssid,
         .security_iid = security_iid,
     };
     if (*move_uri) {
@@ -328,8 +336,10 @@ void _anjay_server_connections_refresh(
 }
 
 anjay_security_config_t *_anjay_get_security_config(anjay_t *anjay,
+                                                    anjay_ssid_t ssid,
                                                     anjay_iid_t security_iid) {
     anjay_connection_info_t info = {
+        .ssid = ssid,
         .security_iid = security_iid
     };
     anjay_security_config_t *result =

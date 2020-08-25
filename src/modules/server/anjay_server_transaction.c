@@ -92,10 +92,12 @@ static int validate_instance(server_instance_t *it) {
         LOG_VALIDATION_FAILED(it, _("Default Min Period is negative"));
         return -1;
     }
+#    ifndef ANJAY_WITHOUT_DEREGISTER
     if (it->has_disable_timeout && it->disable_timeout < 0) {
         LOG_VALIDATION_FAILED(it, _("Disable Timeout is negative"));
         return -1;
     }
+#    endif // ANJAY_WITHOUT_DEREGISTER
     if (!anjay_binding_mode_valid(it->binding)) {
         LOG_VALIDATION_FAILED(it, _("Incorrect binding mode ") "%s",
                               it->binding);

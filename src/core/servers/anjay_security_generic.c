@@ -18,6 +18,8 @@
 
 #include <inttypes.h>
 
+#include <avsystem/commons/avs_utils.h>
+
 #define ANJAY_SERVERS_CONNECTION_SOURCE
 #define ANJAY_SERVERS_INTERNALS
 
@@ -81,7 +83,8 @@ static int get_security_mode(anjay_t *anjay,
 
     switch (mode) {
     case ANJAY_SECURITY_RPK:
-        anjay_log(ERROR, _("unsupported security mode: ") "%" PRId64, mode);
+        anjay_log(ERROR, _("unsupported security mode: ") "%s",
+                  AVS_INT64_AS_STRING(mode));
         return -1;
     case ANJAY_SECURITY_NOSEC:
     case ANJAY_SECURITY_PSK:
@@ -90,7 +93,8 @@ static int get_security_mode(anjay_t *anjay,
         *out_mode = (anjay_security_mode_t) mode;
         return 0;
     default:
-        anjay_log(ERROR, _("invalid security mode: ") "%" PRId64, mode);
+        anjay_log(ERROR, _("invalid security mode: ") "%s",
+                  AVS_INT64_AS_STRING(mode));
         return -1;
     }
 }
@@ -185,8 +189,14 @@ static int get_dtls_keys(anjay_t *anjay,
     return 0;
 }
 
-static int init_cert_security(avs_net_security_info_t *security,
-                              const anjay_server_dtls_keys_t *keys) {
+static int
+init_cert_security(anjay_t *anjay,
+                   anjay_ssid_t ssid,
+                   anjay_security_config_t *security,
+                   avs_net_socket_dane_tlsa_record_t *dane_tlsa_record,
+                   anjay_security_mode_t security_mode,
+                   const anjay_server_dtls_keys_t *keys) {
+    (void) anjay;
     avs_crypto_client_cert_info_t client_cert =
             avs_crypto_client_cert_info_from_buffer(keys->pk_or_identity,
                                                     keys->pk_or_identity_size);
@@ -195,36 +205,48 @@ static int init_cert_security(avs_net_security_info_t *security,
             avs_crypto_client_key_info_from_buffer(keys->secret_key,
                                                    keys->secret_key_size, NULL);
 
-    const void *raw_cert_der = keys->server_pk_or_identity_size > 0
-                                       ? keys->server_pk_or_identity
-                                       : NULL;
-    avs_crypto_trusted_cert_info_t ca =
-            avs_crypto_trusted_cert_info_from_buffer(
-                    raw_cert_der, keys->server_pk_or_identity_size);
+    avs_net_certificate_info_t certificate_info = {
+        .ignore_system_trust_store = true,
+        .client_cert = client_cert,
+        .client_key = private_key
+    };
 
-    *security = avs_net_security_info_from_certificates(
-            (avs_net_certificate_info_t) {
-                .server_cert_validation = !!raw_cert_der,
-                .trusted_certs = ca,
-                .client_cert = client_cert,
-                .client_key = private_key
-            });
+    if (keys->server_pk_or_identity_size > 0) {
+        certificate_info.server_cert_validation = true;
+        certificate_info.dane = true;
+
+        security->dane_tlsa_record = dane_tlsa_record;
+        dane_tlsa_record->association_data = keys->server_pk_or_identity;
+        dane_tlsa_record->association_data_size =
+                keys->server_pk_or_identity_size;
+    }
+
+    (void) ssid;
+    (void) security_mode;
+
+    security->security_info =
+            avs_net_security_info_from_certificates(certificate_info);
 
     return 0;
 }
 
-static int init_security(avs_net_security_info_t *security,
+static int init_security(anjay_t *anjay,
+                         anjay_ssid_t ssid,
+                         anjay_security_config_t *security,
+                         avs_net_socket_dane_tlsa_record_t *dane_tlsa_record,
                          anjay_security_mode_t security_mode,
                          const anjay_server_dtls_keys_t *keys) {
     switch (security_mode) {
     case ANJAY_SECURITY_NOSEC:
         return 0;
     case ANJAY_SECURITY_PSK:
-        return _anjay_connection_init_psk_security(security, keys);
+        return _anjay_connection_init_psk_security(&security->security_info,
+                                                   keys);
         break;
     case ANJAY_SECURITY_CERTIFICATE:
     case ANJAY_SECURITY_EST:
-        return init_cert_security(security, keys);
+        return init_cert_security(anjay, ssid, security, dane_tlsa_record,
+                                  security_mode, keys);
     case ANJAY_SECURITY_RPK:
     default:
         anjay_log(ERROR, _("unsupported security mode: ") "%d",
@@ -236,6 +258,7 @@ static int init_security(avs_net_security_info_t *security,
 typedef struct {
     anjay_security_config_t security_config;
     anjay_server_dtls_keys_t dtls_keys;
+    avs_net_socket_dane_tlsa_record_t dane_tlsa_record;
 } security_config_with_data_t;
 
 anjay_security_config_t *_anjay_connection_security_generic_get_config(
@@ -247,6 +270,8 @@ anjay_security_config_t *_anjay_connection_security_generic_get_config(
                  1, security_config_size))) {
         result->security_config.tls_ciphersuites =
                 anjay->default_tls_ciphersuites;
+        result->dane_tlsa_record.certificate_usage =
+                AVS_NET_SOCKET_DANE_DOMAIN_ISSUED_CERTIFICATE;
     }
 
     anjay_security_mode_t security_mode;
@@ -258,8 +283,9 @@ anjay_security_config_t *_anjay_connection_security_generic_get_config(
                                                inout_info->transport_info))
             || get_dtls_keys(anjay, inout_info->security_iid, security_mode,
                              &result->dtls_keys)
-            || init_security(&result->security_config.security_info,
-                             security_mode, &result->dtls_keys)) {
+            || init_security(anjay, inout_info->ssid, &result->security_config,
+                             &result->dane_tlsa_record, security_mode,
+                             &result->dtls_keys)) {
         goto error;
     }
     inout_info->is_encrypted = (security_mode != ANJAY_SECURITY_NOSEC);

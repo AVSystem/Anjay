@@ -124,10 +124,12 @@ static int add_instance(server_repr_t *repr,
     if (new_instance->has_default_max_period) {
         new_instance->default_max_period = instance->default_max_period;
     }
+#    ifndef ANJAY_WITHOUT_DEREGISTER
     new_instance->has_disable_timeout = (instance->disable_timeout >= 0);
     if (new_instance->has_disable_timeout) {
         new_instance->disable_timeout = instance->disable_timeout;
     }
+#    endif // ANJAY_WITHOUT_DEREGISTER
     new_instance->has_notification_storing = true;
     new_instance->notification_storing = instance->notification_storing;
 
@@ -231,11 +233,13 @@ static int serv_list_resources(anjay_t *anjay,
     anjay_dm_emit_res(ctx, SERV_RES_DEFAULT_MAX_PERIOD, ANJAY_DM_RES_RW,
                       inst->has_default_max_period ? ANJAY_DM_RES_PRESENT
                                                    : ANJAY_DM_RES_ABSENT);
+#    ifndef ANJAY_WITHOUT_DEREGISTER
     anjay_dm_emit_res(ctx, SERV_RES_DISABLE, ANJAY_DM_RES_E,
                       ANJAY_DM_RES_PRESENT);
     anjay_dm_emit_res(ctx, SERV_RES_DISABLE_TIMEOUT, ANJAY_DM_RES_RW,
                       inst->has_disable_timeout ? ANJAY_DM_RES_PRESENT
                                                 : ANJAY_DM_RES_ABSENT);
+#    endif // ANJAY_WITHOUT_DEREGISTER
     anjay_dm_emit_res(ctx,
                       SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE,
                       ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
@@ -270,8 +274,10 @@ static int serv_read(anjay_t *anjay,
         return anjay_ret_i32(ctx, inst->default_min_period);
     case SERV_RES_DEFAULT_MAX_PERIOD:
         return anjay_ret_i32(ctx, inst->default_max_period);
+#    ifndef ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_DISABLE_TIMEOUT:
         return anjay_ret_i32(ctx, inst->disable_timeout);
+#    endif // ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE:
         return anjay_ret_bool(ctx, inst->notification_storing);
     case SERV_RES_BINDING:
@@ -323,12 +329,14 @@ static int serv_write(anjay_t *anjay,
             inst->has_default_max_period = true;
         }
         return retval;
+#    ifndef ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_DISABLE_TIMEOUT:
         if (!(retval = _anjay_serv_fetch_validated_i32(
                       ctx, 0, INT32_MAX, &inst->disable_timeout))) {
             inst->has_disable_timeout = true;
         }
         return retval;
+#    endif // ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_BINDING:
         if (!(retval = _anjay_serv_fetch_binding(ctx, &inst->binding))) {
             inst->has_binding = true;
@@ -358,6 +366,7 @@ static int serv_execute(anjay_t *anjay,
     assert(inst);
 
     switch ((server_rid_t) rid) {
+#    ifndef ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_DISABLE: {
         avs_time_duration_t disable_timeout = avs_time_duration_from_scalar(
                 inst->has_disable_timeout ? inst->disable_timeout : 86400,
@@ -365,6 +374,7 @@ static int serv_execute(anjay_t *anjay,
         return anjay_disable_server_with_timeout(anjay, inst->ssid,
                                                  disable_timeout);
     }
+#    endif // ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_REGISTRATION_UPDATE_TRIGGER:
         return anjay_schedule_registration_update(anjay, inst->ssid)
                        ? ANJAY_ERR_BAD_REQUEST

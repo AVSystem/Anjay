@@ -22,6 +22,7 @@
 #include <avs_coap_init.h>
 
 #include <avsystem/commons/avs_errno.h>
+#include <avsystem/commons/avs_utils.h>
 
 #include <avsystem/coap/async_client.h>
 
@@ -188,7 +189,8 @@ call_exchange_response_handler(avs_coap_ctx_t *ctx,
     assert(ctx);
     assert(exchange);
 
-    LOG(TRACE, _("exchange ") "%" PRIu64 _(": ") "%s", exchange->id.value,
+    LOG(TRACE, _("exchange ") "%s" _(": ") "%s",
+        AVS_UINT64_AS_STRING(exchange->id.value),
         request_state_string(request_state.state));
 
     // TODO: T2243
@@ -515,7 +517,8 @@ handle_final_response(avs_coap_exchange_t *exchange,
         // TODO T2123: check that all options other than BLOCK2 are identical
         // across responses
 
-        LOG(TRACE, _("exchange ") "%" PRIu64 _(": ") "%s", exchange->id.value,
+        LOG(TRACE, _("exchange ") "%s" _(": ") "%s",
+            AVS_UINT64_AS_STRING(exchange->id.value),
             _AVS_COAP_OPTION_BLOCK_STRING(&response_block2));
 
         if (response_block2.has_more) {

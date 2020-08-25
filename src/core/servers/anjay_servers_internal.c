@@ -55,6 +55,7 @@ anjay_servers_t *_anjay_servers_create(void) {
     return (anjay_servers_t *) avs_calloc(1, sizeof(anjay_servers_t));
 }
 
+#ifndef ANJAY_WITHOUT_DEREGISTER
 void _anjay_servers_internal_deregister(anjay_servers_t *servers) {
     AVS_LIST(anjay_server_info_t) server;
     AVS_LIST_FOREACH(server, servers->servers) {
@@ -64,6 +65,7 @@ void _anjay_servers_internal_deregister(anjay_servers_t *servers) {
         }
     }
 }
+#endif // ANJAY_WITHOUT_DEREGISTER
 
 void _anjay_servers_internal_cleanup(anjay_servers_t *servers) {
     anjay_log(TRACE, _("cleaning up ") "%lu" _(" servers"),
@@ -75,11 +77,13 @@ void _anjay_servers_internal_cleanup(anjay_servers_t *servers) {
     AVS_LIST_CLEAR(&servers->public_sockets);
 }
 
+#ifndef ANJAY_WITHOUT_DEREGISTER
 void _anjay_servers_deregister(anjay_t *anjay) {
     if (anjay->servers) {
         _anjay_servers_internal_deregister(anjay->servers);
     }
 }
+#endif // ANJAY_WITHOUT_DEREGISTER
 
 void _anjay_servers_cleanup(anjay_t *anjay) {
     if (anjay->servers) {

@@ -229,8 +229,9 @@ class FirmwareUpdate:
 
     class TestWithTlsServer(Test):
         @staticmethod
-        def _generate_pem_cert_and_key(cn=None):
+        def _generate_pem_cert_and_key(cn='127.0.0.1', alt_ip='127.0.0.1'):
             import datetime
+            import ipaddress
             from cryptography import x509
             from cryptography.x509.oid import NameOID
             from cryptography.hazmat.backends import default_backend
@@ -239,25 +240,34 @@ class FirmwareUpdate:
 
             key = rsa.generate_private_key(public_exponent=65537, key_size=2048,
                                            backend=default_backend())
-            name = x509.Name(
-                [x509.NameAttribute(NameOID.COMMON_NAME, cn or '127.0.0.1')])
+            name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
             now = datetime.datetime.utcnow()
-            cert = (x509.CertificateBuilder().
-                    subject_name(name).
-                    issuer_name(name).
-                    public_key(key.public_key()).
-                    serial_number(1000).
-                    not_valid_before(now).
-                    not_valid_after(now + datetime.timedelta(days=1)).
-                    sign(key, hashes.SHA256(), default_backend()))
+            cert_builder = (x509.CertificateBuilder().
+                            subject_name(name).
+                            issuer_name(name).
+                            public_key(key.public_key()).
+                            serial_number(1000).
+                            not_valid_before(now).
+                            not_valid_after(now + datetime.timedelta(days=1)))
+            if alt_ip is not None:
+                cert_builder = cert_builder.add_extension(x509.SubjectAlternativeName(
+                    [x509.DNSName(cn), x509.IPAddress(ipaddress.IPv4Address(alt_ip))]),
+                    critical=False)
+            cert = cert_builder.sign(key, hashes.SHA256(), default_backend())
             cert_pem = cert.public_bytes(encoding=serialization.Encoding.PEM)
             key_pem = key.private_bytes(encoding=serialization.Encoding.PEM,
                                         format=serialization.PrivateFormat.TraditionalOpenSSL,
                                         encryption_algorithm=serialization.NoEncryption())
             return cert_pem, key_pem
 
-        def setUp(self, pass_cert_to_demo=True, cn=None, *args, **kwargs):
-            cert_pem, key_pem = self._generate_pem_cert_and_key(cn=cn)
+        def setUp(self, pass_cert_to_demo=True, **kwargs):
+            cert_kwargs = {}
+            for key in ('cn', 'alt_ip'):
+                if key in kwargs:
+                    cert_kwargs[key] = kwargs[key]
+                    del kwargs[key]
+            cert_pem, key_pem = self._generate_pem_cert_and_key(**cert_kwargs)
+
             with tempfile.NamedTemporaryFile(delete=False) as cert_file, \
                     tempfile.NamedTemporaryFile(delete=False) as key_file:
                 cert_file.write(cert_pem)
@@ -275,7 +285,7 @@ class FirmwareUpdate:
                 del kwargs['extra_cmdline_args']
             if pass_cert_to_demo:
                 extra_cmdline_args += ['--fw-cert-file', self._cert_file]
-            super().setUp(extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
+            super().setUp(extra_cmdline_args=extra_cmdline_args, **kwargs)
 
         def tearDown(self):
             def unlink_without_err(fname):
@@ -948,7 +958,7 @@ class FirmwareUpdateUnconfiguredHttpsWithFallbackAttemptTest(FirmwareUpdate.Test
 
 class FirmwareUpdateInvalidHttpsTest(FirmwareUpdate.TestWithHttpsServer):
     def setUp(self):
-        super().setUp(cn='invalid_cn')
+        super().setUp(cn='invalid_cn', alt_ip=None)
 
     def runTest(self):
         # disable minimum notification period
@@ -1080,7 +1090,7 @@ class FirmwareUpdateRestartWithDownloading(FirmwareUpdate.TestWithPartialCoapDow
 
 
 class FirmwareUpdateRestartWithDownloadingETagChange(
-        FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
     def runTest(self):
         # Write /5/0/1 (Firmware URI)
         req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, self.fw_uri)
@@ -1128,7 +1138,7 @@ class FirmwareUpdateRestartWithDownloadingETagChange(
 
 
 class FirmwareUpdateRestartWithDownloadingOverHttp(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def get_etag(self, response_content):
         return None
 
@@ -1230,7 +1240,7 @@ class FirmwareUpdateResumeDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttp
 
 
 class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def _get_valgrind_args(self):
         # we don't kill the process here, so we want Valgrind
         return FirmwareUpdate.TestWithHttpServer._get_valgrind_args(self)
@@ -1281,7 +1291,7 @@ class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
 
 
 class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def runTest(self):
         self.provide_response()
         # Write /5/0/1 (Firmware URI)
@@ -1321,7 +1331,7 @@ class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(
 
 
 class FirmwareUpdateRestartAfter412WithDownloadingOverHttp(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def check_success(self, handler, response_content, response_etag):
         if 'If-Match' in handler.headers:
             self.assertEqual(handler.headers['If-Match'], response_etag)

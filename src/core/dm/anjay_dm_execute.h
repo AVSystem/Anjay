@@ -30,8 +30,7 @@ typedef enum {
 } anjay_execute_state_t;
 
 struct anjay_execute_ctx_struct {
-    anjay_input_ctx_t *input_ctx;
-    int cached_char;
+    avs_stream_t *payload_stream;
     anjay_execute_state_t state;
     int arg;
     bool arg_has_value;

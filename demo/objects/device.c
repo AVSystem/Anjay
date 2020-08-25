@@ -173,6 +173,7 @@ static int dev_read(anjay_t *anjay,
                     anjay_output_ctx_t *ctx) {
     (void) anjay;
     (void) iid;
+    (void) riid;
 
     dev_repr_t *dev = get_dev(obj_ptr);
 
@@ -461,8 +462,7 @@ static void extract_device_info(const char *endpoint_name,
     } else {
         AVS_ASSERT(serial_length < serial_size,
                    "serial number part of endpoint name too long");
-        (void) serial_size;
-        strncpy(out_serial, at, serial_length);
+        strcpy(out_serial, at);
     }
 
     demo_log(DEBUG, "manufacturer: %s; serial number: %s", out_manufacturer,

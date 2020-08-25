@@ -304,18 +304,22 @@ AVS_UNIT_TEST(udp_async_client, send_request_multiple_with_nstart) {
 
     // handlers should be called only after receiving responses
     expect_recv(&env, responses[0]);
-    expect_send(&env, requests[1]);
     expect_handler_call(&env, &ids[0], AVS_COAP_CLIENT_REQUEST_OK,
                         responses[0]);
     expect_timeout(&env);
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
 
+    expect_send(&env, requests[1]);
+    avs_sched_run(env.sched);
+
     expect_recv(&env, responses[1]);
-    expect_send(&env, requests[2]);
     expect_handler_call(&env, &ids[1], AVS_COAP_CLIENT_REQUEST_OK,
                         responses[1]);
     expect_timeout(&env);
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    expect_send(&env, requests[2]);
+    avs_sched_run(env.sched);
 
     expect_recv(&env, responses[2]);
     expect_handler_call(&env, &ids[2], AVS_COAP_CLIENT_REQUEST_FAIL, NULL);

@@ -16,18 +16,20 @@
 
 #include <anjay_init.h>
 
-#include <avsystem/commons/avs_stream_v_table.h>
-#include <avsystem/commons/avs_utils.h>
+#ifndef ANJAY_WITHOUT_TLV
 
-#include "../anjay_utils_core.h"
+#    include <avsystem/commons/avs_stream_v_table.h>
+#    include <avsystem/commons/avs_utils.h>
 
-#include "anjay_common.h"
-#include "anjay_tlv.h"
-#include "anjay_vtable.h"
+#    include "../anjay_utils_core.h"
+
+#    include "anjay_common.h"
+#    include "anjay_tlv.h"
+#    include "anjay_vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-#define LOG(...) _anjay_log(tlv_in, __VA_ARGS__)
+#    define LOG(...) _anjay_log(tlv_in, __VA_ARGS__)
 
 typedef struct {
     anjay_id_type_t type;
@@ -224,19 +226,19 @@ static int tlv_get_objlnk(anjay_input_ctx_t *ctx,
     return 0;
 }
 
-#define DEF_READ_SHORTENED(Type)                                           \
-    static int read_shortened_##Type(avs_stream_t *stream, size_t length,  \
-                                     Type *out) {                          \
-        uint8_t bytes[sizeof(Type)];                                       \
-        if (avs_is_err(avs_stream_read_reliably(stream, bytes, length))) { \
-            return -1;                                                     \
-        }                                                                  \
-        *out = 0;                                                          \
-        for (size_t i = 0; i < length; ++i) {                              \
-            *out = (Type) ((*out << 8) + bytes[i]);                        \
-        }                                                                  \
-        return 0;                                                          \
-    }
+#    define DEF_READ_SHORTENED(Type)                                           \
+        static int read_shortened_##Type(avs_stream_t *stream, size_t length,  \
+                                         Type *out) {                          \
+            uint8_t bytes[sizeof(Type)];                                       \
+            if (avs_is_err(avs_stream_read_reliably(stream, bytes, length))) { \
+                return -1;                                                     \
+            }                                                                  \
+            *out = 0;                                                          \
+            for (size_t i = 0; i < length; ++i) {                              \
+                *out = (Type) ((*out << 8) + bytes[i]);                        \
+            }                                                                  \
+            return 0;                                                          \
+        }
 
 DEF_READ_SHORTENED(uint16_t)
 DEF_READ_SHORTENED(size_t)
@@ -329,6 +331,9 @@ static int tlv_get_path(anjay_input_ctx_t *ctx,
         if ((result = get_id(in, &type, &id, &has_value, &header_len,
                              &in->is_array))) {
             break;
+        }
+        if (id == ANJAY_ID_INVALID) {
+            return ANJAY_ERR_BAD_REQUEST;
         }
         if (parent) {
             // Assume the child entry is fully read (which is in fact necessary
@@ -445,6 +450,8 @@ int _anjay_input_tlv_create(anjay_input_ctx_t **out,
     return 0;
 }
 
-#ifdef ANJAY_TEST
-#    include "tests/core/io/tlv_in.c"
-#endif
+#    ifdef ANJAY_TEST
+#        include "tests/core/io/tlv_in.c"
+#    endif
+
+#endif // ANJAY_WITHOUT_TLV

@@ -37,6 +37,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define anjay_log(...) _anjay_log(anjay, __VA_ARGS__)
 
 int _anjay_safe_strtoll(const char *in, long long *value);
+int _anjay_safe_strtoull(const char *in, unsigned long long *value);
 int _anjay_safe_strtod(const char *in, double *value);
 
 AVS_LIST(const anjay_string_t)

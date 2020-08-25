@@ -255,36 +255,6 @@ class Lwm2mBootstrapFinish(Lwm2mMsg):
                                              self.content_summary()))
 
 
-class EstCoapsSimpleEnroll(Lwm2mMsg):
-    @staticmethod
-    def _pkt_matches(pkt: coap.Packet):
-        """Checks if the PKT is a LWM2M Request Bootstrap message."""
-        return (pkt.type in (None, coap.Type.CONFIRMABLE)
-                and pkt.code == coap.Code.REQ_POST
-                and pkt.get_full_uri().endswith('/est/sen'))
-
-    def __init__(self,
-                 msg_id: int = ANY,
-                 token: EscapedBytes = ANY,
-                 uri_path: str = '',
-                 uri_query: List[str] = None,
-                 options: List[coap.Option] = ANY,
-                 content: EscapedBytes = ANY):
-        if not uri_query:
-            uri_query = []
-        super().__init__(type=coap.Type.CONFIRMABLE,
-                         code=coap.Code.REQ_POST,
-                         msg_id=msg_id,
-                         token=token,
-                         options=concat_if_not_any(
-                             CoapPath(uri_path + '/est/sen').to_uri_options(),
-                             [coap.Option.URI_QUERY(query) for query in uri_query],
-                             options),
-                         content=content)
-
-    def summary(self):
-        return ('EST-coaps Simple Enroll %s: %s' % (self.get_full_uri(),
-                                                    self.content_summary()))
 
 
 def _split_string_path(path: str,
@@ -516,7 +486,7 @@ class Lwm2mObserve(Lwm2mRead):
                 text = 'Cancel Observation ' + self.get_full_uri()
             else:
                 text = 'Observe %s (invalid Observe value: %d)' % (
-                self.get_full_uri(), opt.content_to_int())
+                    self.get_full_uri(), opt.content_to_int())
 
         accept = self.get_options(coap.Option.ACCEPT)
         if accept:

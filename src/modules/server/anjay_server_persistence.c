@@ -87,15 +87,22 @@ static avs_error_t handle_legacy_sized_fields(avs_persistence_context_t *ctx,
             || avs_is_err((
                        err = avs_persistence_u32(
                                ctx, (uint32_t *) &element->default_max_period)))
-            || avs_is_err(
-                       (err = avs_persistence_u32(
-                                ctx, (uint32_t *) &element->disable_timeout)))
+            || avs_is_err((err = avs_persistence_u32(
+                                   ctx,
+#        ifndef ANJAY_WITHOUT_DEREGISTER
+                                   (uint32_t *) &element->disable_timeout
+#        else  // ANJAY_WITHOUT_DEREGISTER
+                                   (uint32_t *) &(int32_t) { -1 }
+#        endif // ANJAY_WITHOUT_DEREGISTER
+                                   )))
             || avs_is_err((err = avs_persistence_bool(
                                    ctx, &element->notification_storing))));
     if (avs_is_ok(err)) {
         element->has_default_min_period = (element->default_min_period >= 0);
         element->has_default_max_period = (element->default_max_period >= 0);
+#        ifndef ANJAY_WITHOUT_DEREGISTER
         element->has_disable_timeout = (element->disable_timeout >= 0);
+#        endif // ANJAY_WITHOUT_DEREGISTER
         element->has_notification_storing = true;
     }
     return err;
@@ -190,8 +197,14 @@ static avs_error_t handle_sized_fields(avs_persistence_context_t *ctx,
                                    ctx, &element->has_default_min_period)))
             || avs_is_err((err = avs_persistence_bool(
                                    ctx, &element->has_default_max_period)))
-            || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->has_disable_timeout)))
+            || avs_is_err(
+                       (err = avs_persistence_bool(ctx,
+#        ifndef ANJAY_WITHOUT_DEREGISTER
+                                                   &element->has_disable_timeout
+#        else  // ANJAY_WITHOUT_DEREGISTER
+                                                   &(bool) { false }
+#        endif // ANJAY_WITHOUT_DEREGISTER
+                                                   )))
             || avs_is_err((err = avs_persistence_bool(
                                    ctx, &element->has_notification_storing)))
             || avs_is_err((err = avs_persistence_u16(ctx, &element->ssid)))
@@ -203,9 +216,14 @@ static avs_error_t handle_sized_fields(avs_persistence_context_t *ctx,
             || avs_is_err((
                        err = avs_persistence_u32(
                                ctx, (uint32_t *) &element->default_max_period)))
-            || avs_is_err(
-                       (err = avs_persistence_u32(
-                                ctx, (uint32_t *) &element->disable_timeout)))
+            || avs_is_err((err = avs_persistence_u32(
+                                   ctx,
+#        ifndef ANJAY_WITHOUT_DEREGISTER
+                                   (uint32_t *) &element->disable_timeout
+#        else  // ANJAY_WITHOUT_DEREGISTER
+                                   (uint32_t *) &(int32_t) { -1 }
+#        endif // ANJAY_WITHOUT_DEREGISTER
+                                   )))
             || avs_is_err((err = avs_persistence_bool(
                                    ctx, &element->notification_storing)))
             || avs_is_err((err = handle_lwm2m11_sized_fields(ctx, element))));

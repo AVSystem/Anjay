@@ -57,6 +57,8 @@ typedef struct cmdline_args {
      */
     anjay_fw_update_result_t fw_update_delayed_result;
     const char *attr_storage_file;
+    const char *dm_persistence_file;
+
     bool disable_legacy_server_initiated_bootstrap;
     avs_coap_udp_tx_params_t tx_params;
     avs_net_dtls_handshake_timeouts_t dtls_hs_tx_params;
