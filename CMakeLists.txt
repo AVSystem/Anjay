@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.6.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.6.1" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -615,9 +615,9 @@ if(WITH_TEST)
     add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
 
     if(BUILD_SHARED_LIBS)
-        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_)
+        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ "__odr_asan[.]")
     else()
-        add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ _anjay_ _ANJAY_)
+        add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ _anjay_ _ANJAY_ "__odr_asan[.]")
     endif()
     add_dependencies(symbols_check anjay)
     add_dependencies(anjay_unit_check symbols_check)

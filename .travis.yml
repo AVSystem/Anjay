@@ -32,75 +32,75 @@ matrix:
   include:
   # - stage: test
   #   os: osx
-  #   env: DEVCONFIG_FLAGS="--with-asan --without-analysis -DWITH_POISONING=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+  #   env: DEVCONFIG_FLAGS="--with-asan --without-analysis -DWITH_POISONING=OFF -DWITH_URL_CHECK=OFF"
 
   - stage: test
     os: linux
     env: ANJAY_CC=gcc-4.7
          ANJAY_CXX=g++
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=gcc-4.8
          ANJAY_CXX=g++
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=gcc-4.9
          ANJAY_CXX=g++
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=gcc-5
          ANJAY_CXX=g++-5
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=clang-3.5
          ANJAY_CXX=clang++-3.5
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=clang-3.6
          ANJAY_CXX=clang++-3.6
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=clang-3.7
          ANJAY_CXX=clang++-3.7
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=clang-3.8
          ANJAY_CXX=clang++-3.8
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=ubuntu-16.04
 
   - stage: test
     os: linux
     env: ANJAY_CC=gcc
          ANJAY_CXX=g++
-         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF"
          DOCKER_IMAGE=centos-7
 
   - stage: coverity
     os: linux
     env: DOCKER_IMAGE=coverity
-         DEVCONFIG_FLAGS="--without-analysis -DWITH_URL_CHECK=OFF -DNPROC=1"
+         DEVCONFIG_FLAGS="--without-analysis -DWITH_URL_CHECK=OFF"
 
 before_script:
   - source travis/prepare.sh

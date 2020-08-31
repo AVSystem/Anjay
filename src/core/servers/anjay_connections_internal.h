@@ -67,8 +67,20 @@ typedef struct {
 extern const anjay_connection_type_definition_t ANJAY_CONNECTION_DEF_UDP;
 #endif // WITH_AVS_COAP_UDP
 
-int _anjay_connection_init_psk_security(avs_net_security_info_t *security,
-                                        const anjay_server_dtls_keys_t *keys);
+const void *_anjay_connection_security_read_key(anjay_t *anjay,
+                                                anjay_iid_t security_iid,
+                                                anjay_rid_t security_rid,
+                                                char **data_buffer_ptr,
+                                                const char *data_buffer_end,
+                                                size_t *out_size);
+
+int _anjay_connection_init_psk_security(anjay_t *anjay,
+                                        anjay_iid_t security_iid,
+                                        anjay_rid_t identity_rid,
+                                        anjay_rid_t secret_key_rid,
+                                        avs_net_security_info_t *security,
+                                        char **data_buffer_ptr,
+                                        const char *data_buffer_end);
 
 VISIBILITY_PRIVATE_HEADER_END
 

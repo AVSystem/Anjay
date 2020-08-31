@@ -33,15 +33,6 @@ typedef enum {
     for ((Var) = (anjay_connection_type_t) 0; (Var) < ANJAY_CONNECTION_LIMIT_; \
          (Var) = (anjay_connection_type_t) ((Var) + 1))
 
-typedef struct {
-    char pk_or_identity[ANJAY_MAX_PK_OR_IDENTITY_SIZE];
-    size_t pk_or_identity_size;
-    char server_pk_or_identity[ANJAY_MAX_SERVER_PK_OR_IDENTITY_SIZE];
-    size_t server_pk_or_identity_size;
-    char secret_key[ANJAY_MAX_SECRET_KEY_SIZE];
-    size_t secret_key_size;
-} anjay_server_dtls_keys_t;
-
 // inactive servers include administratively disabled ones
 // as well as those which were unreachable at connect attempt
 struct anjay_server_info_struct;

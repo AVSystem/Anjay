@@ -53,14 +53,54 @@ void _anjay_connection_internal_clean_socket(
     avs_sched_del(&connection->queue_mode_close_socket_clb);
 }
 
-int _anjay_connection_init_psk_security(avs_net_security_info_t *security,
-                                        const anjay_server_dtls_keys_t *keys) {
-    *security = avs_net_security_info_from_psk((avs_net_psk_info_t) {
-        .psk = keys->secret_key,
-        .psk_size = keys->secret_key_size,
-        .identity = keys->pk_or_identity,
-        .identity_size = keys->pk_or_identity_size
-    });
+const void *_anjay_connection_security_read_key(anjay_t *anjay,
+                                                anjay_iid_t security_iid,
+                                                anjay_rid_t security_rid,
+                                                char **data_buffer_ptr,
+                                                const char *data_buffer_end,
+                                                size_t *out_size) {
+    assert(anjay);
+    assert(data_buffer_ptr);
+    assert(*data_buffer_ptr);
+    assert(data_buffer_end);
+    assert(*data_buffer_ptr <= data_buffer_end);
+    assert(out_size);
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               security_rid);
+    if (_anjay_dm_read_resource(anjay, &path, *data_buffer_ptr,
+                                (size_t) (data_buffer_end - *data_buffer_ptr),
+                                out_size)) {
+        anjay_log(WARNING, _("read ") "%s" _(" failed"),
+                  ANJAY_DEBUG_MAKE_PATH(&path));
+        return NULL;
+    }
+    const char *result = *data_buffer_ptr;
+    *data_buffer_ptr += *out_size;
+    assert(*data_buffer_ptr <= data_buffer_end);
+    return result;
+}
+
+int _anjay_connection_init_psk_security(anjay_t *anjay,
+                                        anjay_iid_t security_iid,
+                                        anjay_rid_t identity_rid,
+                                        anjay_rid_t secret_key_rid,
+                                        avs_net_security_info_t *security,
+                                        char **data_buffer_ptr,
+                                        const char *data_buffer_end) {
+    avs_net_psk_info_t result;
+    memset(&result, 0, sizeof(result));
+
+    if (!(result.identity = _anjay_connection_security_read_key(
+                  anjay, security_iid, identity_rid, data_buffer_ptr,
+                  data_buffer_end, &result.identity_size))
+            || !(result.psk = _anjay_connection_security_read_key(
+                         anjay, security_iid, secret_key_rid, data_buffer_ptr,
+                         data_buffer_end, &result.psk_size))) {
+        return -1;
+    }
+
+    *security = avs_net_security_info_from_psk(result);
     return 0;
 }
 

@@ -15,11 +15,11 @@
 # limitations under the License.
 
 set -e
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-. "$SCRIPT_DIR/../../tools/utils.sh"
+. "$(dirname "$0")/../../tools/utils.sh"
+SCRIPT_DIR="$(dirname "$(canonicalize "$0")")"
 OBJECT_REGISTRY_SCRIPT="$SCRIPT_DIR/../../tools/lwm2m_object_registry.py"
 CODEGEN_SCRIPT="$SCRIPT_DIR/../../tools/anjay_codegen.py"
-TEMP_DIR=`mktemp --directory`
+TEMP_DIR="$(mktemp -d)"
 atexit "rm -r $TEMP_DIR"
 
 if [ "$1" == "--c++" ]; then

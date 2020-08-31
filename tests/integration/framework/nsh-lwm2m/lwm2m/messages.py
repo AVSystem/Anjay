@@ -528,12 +528,13 @@ class Lwm2mWrite(Lwm2mMsg):
 
     def __init__(self,
                  path: str or Lwm2mNonemptyPath,
-                 content: EscapedBytes or str or bytes,
+                 content: EscapedBytes,
                  format: coap.ContentFormatOption = coap.ContentFormat.TEXT_PLAIN,
                  update: bool = False,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
                  options: List[coap.Option] = ANY):
+
         if isinstance(path, str):
             path = Lwm2mNonemptyPath(path)
         if isinstance(content, str):
@@ -920,7 +921,7 @@ class Lwm2mReset(Lwm2mEmpty):
         return (Lwm2mEmpty._pkt_matches(pkt)
                 and pkt.type == coap.Type.RESET)
 
-    def __init__(self, msg_id: int):
+    def __init__(self, msg_id: int = ANY):
         super().__init__(msg_id=msg_id, type=coap.Type.RESET)
 
     def summary(self):
