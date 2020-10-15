@@ -65,6 +65,16 @@ static bool uri_protocol_matching(anjay_security_mode_t security_mode,
     return is_secure_uri == needs_secure_uri;
 }
 
+static bool sec_key_or_data_valid(const sec_key_or_data_t *value) {
+    switch (value->type) {
+    case SEC_KEY_AS_DATA:
+        return value->value.data.data;
+    default:
+        AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+        return false;
+    }
+}
+
 #    define LOG_VALIDATION_FAILED(SecInstance, ...)                     \
         do {                                                            \
             char buffer[256];                                           \
@@ -115,8 +125,8 @@ static int validate_instance(sec_instance_t *it) {
     }
     if (it->security_mode != ANJAY_SECURITY_NOSEC
             && it->security_mode != ANJAY_SECURITY_EST) {
-        if (!it->public_cert_or_psk_identity.data
-                || !it->private_cert_or_psk_key.data) {
+        if (!sec_key_or_data_valid(&it->public_cert_or_psk_identity)
+                || !sec_key_or_data_valid(&it->private_cert_or_psk_key)) {
             LOG_VALIDATION_FAILED(it,
                                   "security credentials not fully configured");
             return -1;

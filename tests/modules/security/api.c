@@ -85,3 +85,18 @@ AVS_UNIT_TEST(security_object_api, add_instances_with_duplicated_ssids) {
     AVS_UNIT_ASSERT_FAILED(
             anjay_security_object_add_instance(env->anjay, &instance2, &iid));
 }
+
+AVS_UNIT_TEST(security_object_api, add_instance_with_null_uri) {
+    SCOPED_SERVER_TEST_ENV(env);
+    anjay_iid_t iid = 1;
+    static const anjay_security_instance_t instance = {
+        .ssid = 0,
+        .server_uri = NULL,
+        .bootstrap_server = false,
+        .security_mode = ANJAY_SECURITY_NOSEC,
+        .client_holdoff_s = -1,
+        .bootstrap_timeout_s = -1
+    };
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_security_object_add_instance(env->anjay, &instance, &iid));
+}

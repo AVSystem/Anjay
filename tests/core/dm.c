@@ -3079,7 +3079,7 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
                     ANJAY_MOCK_DM_RES_END });
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 42, 3, ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_STRING(0, ""));
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_read_resource(
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_read_resource_into_buffer(
             anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 42, 3), NULL, 0, NULL));
 
     _anjay_mock_dm_expect_list_resources(
@@ -3095,7 +3095,7 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
                     ANJAY_MOCK_DM_RES_END });
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 514, 4, ANJAY_ID_INVALID,
                                         -1, ANJAY_MOCK_DM_STRING(-1, "Hello"));
-    AVS_UNIT_ASSERT_FAILED(_anjay_dm_read_resource(
+    AVS_UNIT_ASSERT_FAILED(_anjay_dm_read_resource_into_buffer(
             anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 514, 4), NULL, 0, NULL));
 
     char fake_string = 42;

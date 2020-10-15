@@ -171,6 +171,18 @@ void _anjay_find_matching_coap_context_and_socket(
         avs_coap_ctx_t **out_coap,
         avs_net_socket_t **out_socket);
 
+typedef struct {
+    void *psk_buffer;
+    avs_crypto_certificate_chain_info_t *trusted_certs_array;
+    avs_crypto_cert_revocation_list_info_t *cert_revocation_lists_array;
+    avs_crypto_certificate_chain_info_t *client_cert_array;
+    avs_crypto_private_key_info_t *client_key;
+    avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
+    avs_net_socket_tls_ciphersuites_t ciphersuites;
+} anjay_security_config_cache_t;
+
+void _anjay_security_config_cache_cleanup(anjay_security_config_cache_t *cache);
+
 VISIBILITY_PRIVATE_HEADER_END
 
 #endif /* ANJAY_INCLUDE_ANJAY_MODULES_UTILS_CORE_H */

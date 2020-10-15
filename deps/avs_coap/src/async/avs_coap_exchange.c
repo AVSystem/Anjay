@@ -296,22 +296,6 @@ avs_error_t _avs_coap_exchange_get_next_outgoing_chunk_payload_size(
 }
 
 #ifdef WITH_AVS_COAP_BLOCK
-static bool
-exchange_needs_initial_block_option(const avs_coap_exchange_t *exchange) {
-    if (avs_coap_code_is_request(exchange->code)) {
-        // sending request?
-        return !_avs_coap_option_exists(&exchange->options,
-                                        AVS_COAP_OPTION_BLOCK1);
-    } else if (avs_coap_code_is_response(exchange->code)) {
-        // sending response?
-        return !_avs_coap_option_exists(&exchange->options,
-                                        AVS_COAP_OPTION_BLOCK2);
-    }
-
-    AVS_UNREACHABLE("exchange is neither a request nor response");
-    return false;
-}
-
 static avs_error_t get_payload_offset(const avs_coap_exchange_t *exchange,
                                       size_t *out_offset) {
     avs_coap_option_block_t block;
@@ -335,7 +319,6 @@ exchange_add_initial_block_option(avs_coap_exchange_t *exchange,
                                   size_t payload_offset,
                                   size_t payload_size) {
     assert(!exchange->eof_cache.empty);
-    assert(exchange_needs_initial_block_option(exchange));
     assert(payload_size <= UINT16_MAX);
     assert(_avs_coap_is_valid_block_size((uint16_t) payload_size));
     assert(payload_offset % payload_size == 0);
@@ -355,26 +338,33 @@ exchange_add_initial_block_option(avs_coap_exchange_t *exchange,
     return AVS_OK;
 }
 
-static avs_error_t exchange_mark_block_as_last(avs_coap_exchange_t *exchange) {
-    assert(exchange->eof_cache.empty);
-
+static avs_error_t exchange_update_block_option(avs_coap_exchange_t *exchange,
+                                                size_t payload_offset,
+                                                size_t payload_size) {
     avs_coap_option_block_t block;
     bool has_block;
     avs_error_t err = _avs_coap_options_get_block_by_code(
             &exchange->options, exchange->code, &block, &has_block);
     if (avs_is_err(err)) {
         return err;
-    } else if (!has_block) {
-        // non-BLOCK message, nothing to do
-        return AVS_OK;
     }
 
-    uint16_t opt_num = (block.type == AVS_COAP_BLOCK1 ? AVS_COAP_OPTION_BLOCK1
-                                                      : AVS_COAP_OPTION_BLOCK2);
-    block.has_more = false;
-    avs_coap_options_remove_by_number(&exchange->options, opt_num);
-    if (avs_is_err(avs_coap_options_add_block(&exchange->options, &block))) {
-        return _avs_coap_err(AVS_COAP_ERR_MESSAGE_TOO_BIG);
+    if (!has_block) {
+        if (!exchange->eof_cache.empty) {
+            // cache not empty and no BLOCK option yet
+            return exchange_add_initial_block_option(exchange, payload_offset,
+                                                     payload_size);
+        }
+    } else if (block.has_more == exchange->eof_cache.empty) {
+        uint16_t opt_num =
+                (block.type == AVS_COAP_BLOCK1 ? AVS_COAP_OPTION_BLOCK1
+                                               : AVS_COAP_OPTION_BLOCK2);
+        avs_coap_options_remove_by_number(&exchange->options, opt_num);
+        block.has_more = !exchange->eof_cache.empty;
+        if (avs_is_err(
+                    avs_coap_options_add_block(&exchange->options, &block))) {
+            return _avs_coap_err(AVS_COAP_ERR_MESSAGE_TOO_BIG);
+        }
     }
     return AVS_OK;
 }
@@ -425,13 +415,7 @@ avs_error_t _avs_coap_exchange_send_next_chunk(
     exchange->eof_cache = eof_cache;
 
 #ifdef WITH_AVS_COAP_BLOCK
-    if (exchange->eof_cache.empty) {
-        err = exchange_mark_block_as_last(exchange);
-    } else if (exchange_needs_initial_block_option(exchange)) {
-        // cache not empty and no BLOCK option yet
-        err = exchange_add_initial_block_option(exchange, payload_offset,
-                                                payload_size);
-    }
+    err = exchange_update_block_option(exchange, payload_offset, payload_size);
 #else  // WITH_AVS_COAP_BLOCK
     if (!exchange->eof_cache.empty) {
         err = _avs_coap_err(AVS_COAP_ERR_MESSAGE_TOO_BIG);

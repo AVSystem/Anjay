@@ -54,6 +54,8 @@ int _anjay_sec_validate_sms_security_mode(int32_t security_mode);
  */
 int _anjay_sec_fetch_short_server_id(anjay_input_ctx_t *ctx, anjay_ssid_t *out);
 
+void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value);
+
 /**
  * Frees all resources held in the @p instance.
  */

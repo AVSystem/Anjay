@@ -128,7 +128,7 @@ static void payload_writer_fail_case(bool cancel_exchange) {
 
     test_payload_writer_args_t response_payload = {
         .coap_ctx = env.coap_ctx,
-        .fail = true,
+        .messages_until_fail = 1,
         .cancel_exchange = cancel_exchange
     };
 
@@ -334,11 +334,13 @@ AVS_UNIT_TEST(udp_async_server, truncated_response_full_token) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, full_token_req);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &full_token_req->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, full_token_req);
+    avs_sched_run(env.sched);
 
     // receiving response should make the context call handler
     expect_recv(&env, full_token_res);
@@ -361,11 +363,13 @@ AVS_UNIT_TEST(udp_async_server, truncated_response_incomplete_token) {
 
     avs_coap_exchange_id_t id;
 
-    expect_send(&env, truncated_token_req);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &truncated_token_req->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, truncated_token_req);
+    avs_sched_run(env.sched);
 
     expect_recv(&env, truncated_token_res);
 

@@ -123,7 +123,8 @@ void avs_coap_exchange_cancel(avs_coap_ctx_t *ctx, avs_coap_exchange_id_t id) {
 
     exchange_ptr = _avs_coap_find_client_exchange_ptr_by_id(ctx, id);
     if (exchange_ptr) {
-        _avs_coap_client_exchange_cleanup(ctx, AVS_LIST_DETACH(exchange_ptr));
+        _avs_coap_client_exchange_cleanup(ctx, AVS_LIST_DETACH(exchange_ptr),
+                                          AVS_OK);
         return;
     }
 
@@ -248,6 +249,36 @@ void _avs_coap_reschedule_retry_or_request_expired_job(
 avs_time_monotonic_t
 _avs_coap_retry_or_request_expired_job(avs_coap_ctx_t *ctx) {
     avs_sched_del(&_avs_coap_get_base(ctx)->retry_or_request_expired_job);
+
+    AVS_LIST(avs_coap_exchange_t) *exchange_head =
+            &_avs_coap_get_base(ctx)->client_exchanges;
+    AVS_LIST(avs_coap_exchange_t) *exchange_ptr = exchange_head;
+    while (*exchange_ptr
+           && !_avs_coap_client_exchange_request_sent(*exchange_ptr)) {
+        AVS_LIST(avs_coap_exchange_t) *exchange_ptr_copy = exchange_ptr;
+        avs_error_t err =
+                _avs_coap_client_exchange_send_first_chunk(ctx,
+                                                           &exchange_ptr_copy);
+        if (avs_is_err(err) && exchange_ptr_copy) {
+            _avs_coap_client_exchange_cleanup(
+                    ctx, AVS_LIST_DETACH(exchange_ptr_copy), err);
+            exchange_ptr_copy = NULL;
+        }
+        if (exchange_ptr_copy) {
+            exchange_ptr = exchange_ptr_copy;
+            AVS_LIST_ADVANCE_PTR(&exchange_ptr);
+        } else {
+            // ANY exchange pointers may have been invalidated. We need to find
+            // our iteration pointer anew. Please note that if we have already
+            // sent some packets during this iteration, the portion of the list
+            // with unsent messages may be temporarily in the middle.
+            exchange_ptr = exchange_head;
+            while (*exchange_ptr
+                   && _avs_coap_client_exchange_request_sent(*exchange_ptr)) {
+                AVS_LIST_ADVANCE_PTR(&exchange_ptr);
+            }
+        }
+    }
 
     avs_time_monotonic_t next_timeout =
             _avs_coap_async_server_abort_timedout_exchanges(ctx);

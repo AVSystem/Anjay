@@ -382,3 +382,15 @@ int anjay_transport_schedule_reconnect(anjay_t *anjay,
 #endif // ANJAY_WITH_DOWNLOADER
     return result;
 }
+
+void _anjay_security_config_cache_cleanup(
+        anjay_security_config_cache_t *cache) {
+    avs_free(cache->client_key);
+    avs_free(cache->client_cert_array);
+    avs_free(cache->cert_revocation_lists_array);
+    avs_free(cache->trusted_certs_array);
+    avs_free(cache->psk_buffer);
+    avs_free(cache->dane_tlsa_record);
+    avs_free(cache->ciphersuites.ids);
+    memset(cache, 0, sizeof(*cache));
+}

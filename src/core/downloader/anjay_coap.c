@@ -217,24 +217,19 @@ handle_coap_response(avs_coap_ctx_t *ctx,
             abort_download_transfer(dl_ctx, _anjay_download_status_expired());
             return;
         }
-        const void *payload = response->payload;
-        size_t payload_size = response->payload_size;
-        // Resumption from a non-multiple block-size
-        size_t offset = dl_ctx->bytes_downloaded - response->payload_offset;
-        if (offset) {
-            payload = (const char *) payload + offset;
-            payload_size -= offset;
-        }
-
+        assert(dl_ctx->bytes_downloaded == response->payload_offset);
         if (avs_is_err((err = dl_ctx->common.on_next_block(
                                 _anjay_downloader_get_anjay(dl_ctx->dl),
-                                (const uint8_t *) payload, payload_size,
+                                (const uint8_t *) response->payload,
+                                response->payload_size,
                                 (const anjay_etag_t *) &etag,
                                 dl_ctx->common.user_data)))) {
             abort_download_transfer(dl_ctx, _anjay_download_status_failed(err));
             return;
         }
-        dl_ctx->bytes_downloaded += payload_size;
+        if (dl_ctx->bytes_downloaded == response->payload_offset) {
+            dl_ctx->bytes_downloaded += response->payload_size;
+        }
         if (result == AVS_COAP_CLIENT_REQUEST_OK) {
             dl_log(INFO, _("transfer id = ") "%" PRIuPTR _(" finished"),
                    dl_ctx->common.id);
@@ -292,41 +287,6 @@ get_coap_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
 #        include "tests/core/downloader/downloader_mock.h"
 #    endif // ANJAY_TEST
 
-static inline size_t initial_block2_option_size(anjay_coap_download_ctx_t *ctx,
-                                                uint8_t code) {
-    assert(ctx->bytes_downloaded > 0);
-    char buffer[64];
-    avs_coap_options_t expected_options =
-            avs_coap_options_create_empty(buffer, sizeof(buffer));
-    avs_error_t err;
-    // We expect BLOCK2 and ETag in response.
-    (void) (avs_is_err((err = avs_coap_options_add_block(
-                                &expected_options,
-                                &(avs_coap_option_block_t) {
-                                    .type = AVS_COAP_BLOCK2,
-                                    .seq_num = UINT16_MAX,
-                                    .size = AVS_COAP_BLOCK_MAX_SIZE
-                                })))
-            || (ctx->etag.size > 0
-                && avs_is_err((err = avs_coap_options_add_etag(
-                                       &expected_options,
-                                       &(avs_coap_etag_t) {
-                                           .size = ctx->etag.size,
-                                           .bytes = { 0 }
-                                       })))));
-    assert(avs_is_ok(err));
-
-    size_t block_size = avs_max_power_of_2_not_greater_than(
-            avs_coap_max_incoming_message_payload(ctx->coap, &expected_options,
-                                                  code));
-    if (block_size > AVS_COAP_BLOCK_MAX_SIZE) {
-        block_size = AVS_COAP_BLOCK_MAX_SIZE;
-    } else if (block_size < AVS_COAP_BLOCK_MIN_SIZE) {
-        block_size = AVS_COAP_BLOCK_MIN_SIZE;
-    }
-    return block_size;
-}
-
 static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
     anjay_t *anjay = _anjay_get_from_sched(sched);
     uintptr_t id = *(const uintptr_t *) id_ptr;
@@ -366,31 +326,19 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
         }
     }
 
-    // When we start the download, there is no need to ask for a blockwise
-    // transfer (by adding a BLOCK option explicitly). If the incoming payload
-    // is too large, CoAP layer will negotiate smaller block sizes.
-    if (ctx->bytes_downloaded != 0) {
-        const size_t block_size = initial_block2_option_size(ctx, code);
-        if (avs_is_err((err = avs_coap_options_add_block(
-                                &options,
-                                &(avs_coap_option_block_t) {
-                                    .type = AVS_COAP_BLOCK2,
-                                    .seq_num = (uint32_t) (ctx->bytes_downloaded
-                                                           / block_size),
-                                    .size = (uint16_t) block_size
-                                })))) {
-            goto end;
-        }
-    }
-
     assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
-    err = avs_coap_client_send_async_request(ctx->coap, &ctx->exchange_id,
-                                             &(avs_coap_request_header_t) {
-                                                 .code = code,
-                                                 .options = options
-                                             },
-                                             NULL, NULL, handle_coap_response,
-                                             (void *) ctx);
+    (void) (avs_is_err(
+                    (err = avs_coap_client_send_async_request(
+                             ctx->coap, &ctx->exchange_id,
+                             &(avs_coap_request_header_t) {
+                                 .code = code,
+                                 .options = options
+                             },
+                             NULL, NULL, handle_coap_response, (void *) ctx)))
+            || avs_is_err(
+                       (err = avs_coap_client_set_next_response_payload_offset(
+                                ctx->coap, ctx->exchange_id,
+                                ctx->bytes_downloaded))));
 
 end:
     avs_coap_options_cleanup(&options);
@@ -515,6 +463,22 @@ reconnect_coap_transfer(anjay_downloader_t *dl,
     return AVS_OK;
 }
 
+static avs_error_t set_next_coap_block_offset(anjay_downloader_t *dl,
+                                              anjay_download_ctx_t *ctx_,
+                                              size_t next_block_offset) {
+    (void) dl;
+    anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) ctx_;
+    avs_error_t err = AVS_OK;
+    if (avs_coap_exchange_id_valid(ctx->exchange_id)) {
+        err = avs_coap_client_set_next_response_payload_offset(
+                ctx->coap, ctx->exchange_id, next_block_offset);
+    }
+    if (avs_is_ok(err)) {
+        ctx->bytes_downloaded = next_block_offset;
+    }
+    return err;
+}
+
 avs_error_t
 _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
                                AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
@@ -537,7 +501,8 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         .handle_packet = handle_coap_message,
         .cleanup = cleanup_coap_transfer,
         .suspend = suspend_coap_transfer,
-        .reconnect = reconnect_coap_transfer
+        .reconnect = reconnect_coap_transfer,
+        .set_next_block_offset = set_next_coap_block_offset
     };
     ctx->common.vtable = &VTABLE;
 

@@ -172,14 +172,6 @@ coap_msg__(uint8_t *buf, size_t buf_size, const struct coap_msg_args *args) {
 #    define ACK AVS_COAP_UDP_TYPE_ACKNOWLEDGEMENT
 #    define RST AVS_COAP_UDP_TYPE_RESET
 
-/* Convenience macro for use in COAP_MSG, to allow skipping AVS_COAP_CODE_
- * prefix */
-#    define CODE__(x) AVS_COAP_CODE_##x
-
-/* Convenience macro for use in COAP_MSG, to allow skipping AVS_COAP_FORMAT_
- * prefix */
-#    define FORMAT__(x) AVS_COAP_FORMAT_##x
-
 /* Allocates a 64k buffer on the stack, constructs a message inside it and
  * returns the message pointer.
  *
@@ -205,9 +197,6 @@ coap_msg__(uint8_t *buf, size_t buf_size, const struct coap_msg_args *args) {
                        __VA_ARGS__                              \
                    })
 
-/* Used in COAP_MSG() to pass message token. */
-#    define TOKEN(Token) .token = (Token)
-
 /* Used in COAP_MSG() to define message ID. */
 #    define ID(MsgId) .id = (MsgId)
 
@@ -221,14 +210,8 @@ coap_msg__(uint8_t *buf, size_t buf_size, const struct coap_msg_args *args) {
 /* Used in COAP_MSG() to specify a list of Location-Path options. */
 #    define LOCATION_PATH(... /* Segments */) .location_path = { __VA_ARGS__ }
 
-/* Used in COAP_MSG() to specify a list of Uri-Path options. */
-#    define PATH(... /* Segments */) .uri_path = { __VA_ARGS__ }
-
 /* Used in COAP_MSG() to specify a list of Uri-Query options. */
 #    define QUERY(... /* Segments */) .uri_query = { __VA_ARGS__ }
-
-/* Used in COAP_MSG() to specify an Uri-Host option. */
-#    define HOST(Host) .uri_host = Host
 
 /* Used in COAP_MSG() to specify the Content-Format option even with
  * unsupported value. */
@@ -241,234 +224,12 @@ coap_msg__(uint8_t *buf, size_t buf_size, const struct coap_msg_args *args) {
  * constants. */
 #    define CONTENT_FORMAT(Format) CONTENT_FORMAT_VALUE(FORMAT__(Format))
 
-/* Used in COAP_MSG() to specify the Accept option. */
-#    define ACCEPT(Format)              \
-        .accept = (const uint16_t[1]) { \
-            (Format)                    \
-        }
-
-#    define DUPLICATED_ACCEPT(Format)              \
-        .duplicated_accept = (const uint16_t[1]) { \
-            (Format)                               \
-        }
-
-/* Used in COAP_MSG() to specify the Observe option. */
-#    define OBSERVE(Value)               \
-        .observe = (const uint32_t[1]) { \
-            (Value)                      \
-        }
-
-/* Used in COAP_MSG() to define a message with no payload or BLOCK options. */
-#    define NO_PAYLOAD   \
-        .payload = NULL, \
-        .payload_size = 0
-
-/* Used in COAP_MSG() to define a non-block message payload from external
- * variable (not only string literal). */
-#    define PAYLOAD_EXTERNAL(Payload, PayloadSize) \
-        .payload = Payload,                        \
-        .payload_size = PayloadSize,
-
-/* Used in COAP_MSG() to define a non-block message payload (string literal).
- * Terminating nullbyte is not considered part of the payload. */
-#    define PAYLOAD(Payload) PAYLOAD_EXTERNAL(Payload, sizeof(Payload) - 1)
-
-#    define _BLOCK_WITH_PAYLOAD(N, Seq, Size, Payload)                         \
-        .block1 = {                                                            \
-            .type = AVS_COAP_BLOCK1,                                           \
-            .seq_num = (assert((Seq) < (1 << 23)), (uint32_t) (Seq)),          \
-            .size = (uint16_t) (((N) == 1)                                     \
-                                        ? (assert((Size) < (1 << 15)), (Size)) \
-                                        : 0),                                  \
-            .has_more = ((Seq + 1) * (Size) + 1 < sizeof(Payload))             \
-        },                                                                     \
-        .block2 = {                                                            \
-            .type = AVS_COAP_BLOCK2,                                           \
-            .seq_num = (assert((Seq) < (1 << 23)), (uint32_t) (Seq)),          \
-            .size = (uint16_t) (((N) == 2)                                     \
-                                        ? (assert((Size) < (1 << 15)), (Size)) \
-                                        : 0),                                  \
-            .has_more = ((Seq + 1) * (Size) + 1 < sizeof(Payload))             \
-        },                                                                     \
-        .payload = ((const uint8_t *) (Payload)) + (Seq) * (Size),             \
-        .payload_size =                                                        \
-                sizeof(Payload) == sizeof("")                                  \
-                        ? 0                                                    \
-                        : ((((Seq) + 1) * (Size) + 1 < sizeof(Payload))        \
-                                   ? (Size)                                    \
-                                   : (sizeof(Payload) - 1 - (Seq) * (Size)))
-
-#    define _BLOCK_WITH_UNSPECIFIED_PAYLOAD(N, Seq, Size, HasMore)             \
-        .block1 = {                                                            \
-            .type = AVS_COAP_BLOCK1,                                           \
-            .seq_num = (assert((Seq) < (1 << 23)), (uint32_t) (Seq)),          \
-            .size = (uint16_t) (((N) == 1)                                     \
-                                        ? (assert((Size) < (1 << 15)), (Size)) \
-                                        : 0),                                  \
-            .has_more = (HasMore)                                              \
-        },                                                                     \
-        .block2 = {                                                            \
-            .type = AVS_COAP_BLOCK2,                                           \
-            .seq_num = (assert((Seq) < (1 << 23)), (uint32_t) (Seq)),          \
-            .size = (uint16_t) (((N) == 2)                                     \
-                                        ? (assert((Size) < (1 << 15)), (Size)) \
-                                        : 0),                                  \
-            .has_more = (HasMore)                                              \
-        }
-
-#    define _BLOCK_WITHOUT_PAYLOAD(N, Seq, Size, HasMore)               \
-        _BLOCK_WITH_UNSPECIFIED_PAYLOAD((N), (Seq), (Size), (HasMore)), \
-                .payload = NULL,                                        \
-                .payload_size = 0
-
-#    define _BLOCK_12_WITH_PAYLOAD(Seq1, Size1, Size2, Payload)         \
-        .block1 = {                                                     \
-            .type = AVS_COAP_BLOCK1,                                    \
-            .seq_num = (assert((Seq1) < (1 << 23)), (uint32_t) (Seq1)), \
-            .size = (uint16_t) (assert((Size1) < (1 << 15)), (Size1)),  \
-            .has_more = false                                           \
-        },                                                              \
-        .block2 = {                                                     \
-            .type = AVS_COAP_BLOCK2,                                    \
-            .seq_num = 0,                                               \
-            .size = (uint16_t) (assert((Size2) < (1 << 15)), (Size2)),  \
-            .has_more = ((Size2) + 1 < sizeof(Payload))                 \
-        },                                                              \
-        .payload = ((const uint8_t *) (Payload)),                       \
-        .payload_size = sizeof(Payload) == sizeof("")                   \
-                                ? 0                                     \
-                                : ((Size2) + 1 < sizeof(Payload))       \
-                                          ? (Size2)                     \
-                                          : (sizeof(Payload) - 1)
-
-/**
- * Used in COAP_MSG to define BLOCK1 option and define request payload.
- * @p Seq     - the block sequence number.
- * @p Size    - block size.
- * @p Payload - if specified, FULL PAYLOAD OF WHOLE BLOCK-WISE TRANSFER (!).
- *              The macro will extract the portion of it based on Seq and Size.
- *              Terminating nullbyte is not considered part of the payload.
- */
-#    define BLOCK1_REQ(Seq, Size, ... /* Payload */) \
-        _BLOCK_WITH_PAYLOAD(1, (Seq), (Size), __VA_ARGS__)
-
-/**
- * Used in COAP_MSG to define BLOCK1 option for use in responses to BLOCK
- * requests.
- *
- * @p Seq     - the block sequence number.
- * @p Size    - block size.
- * @p HasMore - false if the packet is a response to last request block,
- *              true otherwise.
- */
-#    define BLOCK1_RES(Seq, Size, HasMore) \
-        _BLOCK_WITH_UNSPECIFIED_PAYLOAD(1, (Seq), (Size), (HasMore))
-
-/**
- * Used in COAP_MSG to define BLOCK2 option for use in requests for BLOCK
- * payloads.
- *
- * @p Seq     - the block sequence number.
- * @p Size    - block size.
- */
-#    define BLOCK2_REQ(Seq, Size) \
-        _BLOCK_WITHOUT_PAYLOAD(2, (Seq), (Size), false)
-
-/**
- * Used in COAP_MSG to define BLOCK2 option for use in requests for BLOCK
- * payloads. Also, it allows to set some unrelated payload in the message.
- *
- * @p Seq     - the block sequence number.
- * @p Size    - block size.
- * @p Payload - message payload.
- */
-#    define BLOCK2_REQ_WITH_REGULAR_PAYLOAD(Seq, Size, Payload)       \
-        .block2 = {                                                   \
-            .type = AVS_COAP_BLOCK2,                                  \
-            .seq_num = (assert((Seq) < (1 << 23)), (uint32_t) (Seq)), \
-            .size = (uint16_t) (assert((Size) < (1 << 15)), (Size)),  \
-            .has_more = false                                         \
-        },                                                            \
-        .payload = ((const uint8_t *) (Payload)),                     \
-        .payload_size =                                               \
-                sizeof(Payload) == sizeof("") ? 0 : (sizeof(Payload) - 1)
-
-/**
- * Used in COAP_MSG to define BLOCK2 option and define response payload.
- * @p Seq     - the block sequence number.
- * @p Size    - block size.
- * @p Payload - if specified, FULL PAYLOAD OF WHOLE BLOCK-WISE TRANSFER (!).
- *              The macro will extract the portion of it based on Seq and Size.
- *              Terminating nullbyte is not considered part of the payload.
- */
-#    define BLOCK2_RES(Seq, Size, ... /* Payload */) \
-        _BLOCK_WITH_PAYLOAD(2, (Seq), (Size), __VA_ARGS__)
-
-/**
- * Used in COAP_MSG to define final BLOCK1, initial BLOCK2 and payload.
- *
- * Implies:
- * - BLOCK1.has_more == false
- * - BLOCK2.seq_num == 0
- *
- * @p Seq1    - the BLOCK1 sequence number.
- * @p Size1   - request block size.
- * @p Size2   - response block size.
- * @p Payload - if specified, FULL PAYLOAD OF WHOLE BLOCK-WISE RESPONSE (!),
- *              given as a string literal. The macro will extract the
- *              first portion based on Size. Terminating nullbyte is not
- *              considered part of the payload.
- */
-#    define BLOCK1_AND_2_RES(Seq1, Size1, Size2, ... /* Payload */) \
-        _BLOCK_12_WITH_PAYLOAD((Seq1), (Size1), (Size2), "" __VA_ARGS__)
-
-/**
- * Used in COAP_MSG to define not-necessairly final BLOCK1 with payload, and
- * some BLOCK2.
- *
- * Implies:
- * - BLOCK2.has_more == false
- *
- * @p Seq1     - the BLOCK1 sequence number.
- * @p Size1    - request block size.
- * @p Size2    - response block size.
- * @p Payload1 - if specified, FULL PAYLOAD OF WHOLE BLOCK-WISE RESPONSE (!),
- *               given as a string literal. The macro will extract the
- *               first portion based on Size. Terminating nullbyte is not
- *               considered part of the payload.
- */
-#    define BLOCK1_REQ_AND_2_RES(Seq1, Size1, Size2, Payload1)             \
-        .block1 = {                                                        \
-            .type = AVS_COAP_BLOCK1,                                       \
-            .seq_num = (assert((Seq1) < (1 << 23)), (uint32_t) (Seq1)),    \
-            .size = (uint16_t) (assert((Size1) < (1 << 15)), (Size1)),     \
-            .has_more = ((Seq1 + 1) * (Size1) + 1 < sizeof(Payload1))      \
-        },                                                                 \
-        .block2 = {                                                        \
-            .type = AVS_COAP_BLOCK2,                                       \
-            .seq_num = 0,                                                  \
-            .size = (uint16_t) (assert((Size2) < (1 << 15)), (Size2)),     \
-            .has_more = false                                              \
-        },                                                                 \
-        .payload = ((const uint8_t *) (Payload1)) + (Seq1) * (Size1),      \
-        .payload_size =                                                    \
-                sizeof(Payload1) == sizeof("")                             \
-                        ? 0                                                \
-                        : ((((Seq1) + 1) * (Size1) + 1 < sizeof(Payload1)) \
-                                   ? (Size1)                               \
-                                   : (sizeof(Payload1) - 1                 \
-                                      - (Seq1) * (Size1)))
-
-#    define DATA_16B "123456789abcdef "
-#    define DATA_64B DATA_16B DATA_16B DATA_16B DATA_16B
-#    define DATA_256B DATA_64B DATA_64B DATA_64B DATA_64B
-#    define DATA_1KB DATA_256B DATA_256B DATA_256B DATA_256B
-
 typedef struct {
     avs_coap_exchange_id_t exchange_id;
     avs_coap_client_request_state_t result;
     bool has_response;
     avs_coap_client_async_response_t response;
+    size_t next_response_payload_offset;
 } test_response_handler_expected_t;
 
 typedef struct {
@@ -478,7 +239,7 @@ typedef struct {
     avs_coap_ctx_t *coap_ctx;
     avs_coap_exchange_id_t exchange_id;
     bool cancel_exchange;
-    bool fail;
+    size_t messages_until_fail;
 } test_payload_writer_args_t;
 
 typedef struct {
@@ -657,31 +418,51 @@ static inline void expect_timeout(test_env_t *env) {
     avs_unit_mocksock_input_fail(env->mocksock, avs_errno(AVS_ETIMEDOUT));
 }
 
-static inline void expect_handler_call(test_env_t *env,
-                                       const avs_coap_exchange_id_t *id,
-                                       avs_coap_client_request_state_t result,
-                                       const test_msg_t *msg) {
+typedef struct {
+    test_env_t *env;
+    const avs_coap_exchange_id_t *id;
+    avs_coap_client_request_state_t result;
+    const test_msg_t *msg;
+    size_t next_response_payload_offset;
+    size_t expected_payload_offset;
+} expect_handler_call_args_t;
+
+static inline void
+expect_handler_call_impl(const expect_handler_call_args_t *args) {
     test_handler_expected_t *expect =
             AVS_LIST_NEW_ELEMENT(test_handler_expected_t);
 
     expect->type = EXPECT_RESPONSE_HANDLER;
-    expect->impl.response_handler.exchange_id = *id;
-    expect->impl.response_handler.result = result;
-    expect->impl.response_handler.has_response = (msg != NULL);
-    if (msg) {
+    expect->impl.response_handler.exchange_id = *args->id;
+    expect->impl.response_handler.result = args->result;
+    expect->impl.response_handler.has_response = (args->msg != NULL);
+    if (args->msg) {
+        assert(args->expected_payload_offset <= args->msg->msg.payload_size);
         expect->impl.response_handler.response =
                 (avs_coap_client_async_response_t) {
                     .header = {
-                        .code = msg->msg.header.code,
-                        .options = msg->msg.options
+                        .code = args->msg->msg.header.code,
+                        .options = args->msg->msg.options
                     },
-                    .payload = msg->msg.payload,
-                    .payload_size = msg->msg.payload_size
+                    .payload = (const char *) args->msg->msg.payload
+                               + args->expected_payload_offset,
+                    .payload_size = args->msg->msg.payload_size
+                                    - args->expected_payload_offset
                 };
     }
+    expect->impl.response_handler.next_response_payload_offset =
+            args->next_response_payload_offset;
 
-    AVS_LIST_APPEND(&env->expects_list, expect);
+    AVS_LIST_APPEND(&args->env->expects_list, expect);
 }
+
+#    define expect_handler_call(Env, Id, Result, ... /* Msg */)        \
+        expect_handler_call_impl(&(const expect_handler_call_args_t) { \
+            .env = (Env),                                              \
+            .id = (Id),                                                \
+            .result = (Result),                                        \
+            .msg = __VA_ARGS__                                         \
+        })
 
 static inline void
 test_response_handler(avs_coap_ctx_t *ctx,
@@ -720,6 +501,10 @@ test_response_handler(avs_coap_ctx_t *ctx,
         ASSERT_NULL(response);
     }
 
+    if (expected->next_response_payload_offset) {
+        ASSERT_OK(avs_coap_client_set_next_response_payload_offset(
+                ctx, exchange_id, expected->next_response_payload_offset));
+    }
     AVS_LIST_DELETE(expects_list);
 }
 
@@ -754,7 +539,10 @@ static inline int test_payload_writer(size_t payload_offset,
     if (args->cancel_exchange) {
         avs_coap_exchange_cancel(args->coap_ctx, args->exchange_id);
     }
-    return args->fail ? -1 : 0;
+    if (args->messages_until_fail && !--args->messages_until_fail) {
+        return -1;
+    }
+    return 0;
 }
 
 static inline void

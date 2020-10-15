@@ -45,13 +45,22 @@ typedef enum {
     SEC_RES_BOOTSTRAP_TIMEOUT = 12,
 } security_resource_t;
 
+typedef enum { SEC_KEY_AS_DATA, SEC_KEY_AS_KEY } sec_key_or_data_type_t;
+
+typedef struct {
+    sec_key_or_data_type_t type;
+    union {
+        anjay_raw_buffer_t data;
+    } value;
+} sec_key_or_data_t;
+
 typedef struct {
     anjay_iid_t iid;
     char *server_uri;
     bool is_bootstrap;
     anjay_security_mode_t security_mode;
-    anjay_raw_buffer_t public_cert_or_psk_identity;
-    anjay_raw_buffer_t private_cert_or_psk_key;
+    sec_key_or_data_t public_cert_or_psk_identity;
+    sec_key_or_data_t private_cert_or_psk_key;
     anjay_raw_buffer_t server_public_key;
 
     anjay_ssid_t ssid;

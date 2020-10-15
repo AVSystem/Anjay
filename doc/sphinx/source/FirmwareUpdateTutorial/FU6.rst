@@ -118,7 +118,7 @@ the state from persistent storage:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
-    :emphasize-lines: 1, 10-119, 128-130
+    :emphasize-lines: 1, 10-116, 122-127
 
     #define _DEFAULT_SOURCE // for fileno()
     #include "./firmware_update.h"
@@ -241,9 +241,6 @@ the state from persistent storage:
         FILE *firmware_file;
         // anjay instance this firmware update singleton is associated with
         anjay_t *anjay;
-        // pointer to configuration loaded from data model, we need to keep it
-        // to be able to avs_free() it later
-        anjay_security_config_t *dm_security_config;
         // Current state of the download. It is updated and persited on each
         // fw_stream_write() call.
         download_state_t download_state;
@@ -409,7 +406,7 @@ The next step is to make sure that ``fw_reset`` resets the download state as wel
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
-    :emphasize-lines: 15-16
+    :emphasize-lines: 11-12
 
     static void fw_reset(void *user_ptr) {
         // Reset can be issued even if the download never started.
@@ -418,10 +415,6 @@ The next step is to make sure that ``fw_reset`` resets the download state as wel
             (void) fclose(FW_STATE.firmware_file);
             // and reset our global state to initial value.
             FW_STATE.firmware_file = NULL;
-        }
-        if (FW_STATE.dm_security_config) {
-            avs_free(FW_STATE.dm_security_config);
-            FW_STATE.dm_security_config = NULL;
         }
         // Finally, let's remove any downloaded payload
         unlink(FW_IMAGE_DOWNLOAD_NAME);

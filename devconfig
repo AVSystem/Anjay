@@ -99,7 +99,6 @@ while [ $# -gt 0 ]; do
             ;;
         '--tiny')
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_PK_OR_IDENTITY_SIZE=256"
-            EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_SERVER_PK_OR_IDENTITY_SIZE=256"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_SECRET_KEY_SIZE=128"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_DOUBLE_STRING_SIZE=64"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_URI_SEGMENT_SIZE=64"

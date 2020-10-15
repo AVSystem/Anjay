@@ -52,7 +52,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.6.1"
+#    define ANJAY_VERSION "2.7.0"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
@@ -235,6 +235,7 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
 
     avs_free(anjay->in_shared_buffer);
     avs_free(anjay->out_shared_buffer);
+    _anjay_security_config_cache_cleanup(&anjay->security_config_from_dm_cache);
 
     avs_free(anjay);
 }
@@ -779,6 +780,8 @@ static int serve_connection(anjay_t *anjay, anjay_connection_ref_t connection) {
 }
 
 int anjay_serve(anjay_t *anjay, avs_net_socket_t *ready_socket) {
+    _anjay_security_config_cache_cleanup(&anjay->security_config_from_dm_cache);
+
 #ifdef ANJAY_WITH_DOWNLOADER
     if (!_anjay_downloader_handle_packet(&anjay->downloader, ready_socket)) {
         return 0;
@@ -865,6 +868,22 @@ avs_error_t anjay_download(anjay_t *anjay,
     (void) anjay;
     (void) config;
     (void) out_handle;
+    anjay_log(ERROR, _("CoAP download support disabled"));
+    return avs_errno(AVS_ENOTSUP);
+#endif // ANJAY_WITH_DOWNLOADER
+}
+
+avs_error_t
+anjay_download_set_next_block_offset(anjay_t *anjay,
+                                     anjay_download_handle_t dl_handle,
+                                     size_t next_block_offset) {
+#ifdef ANJAY_WITH_DOWNLOADER
+    return _anjay_downloader_set_next_block_offset(
+            &anjay->downloader, dl_handle, next_block_offset);
+#else  // ANJAY_WITH_DOWNLOADER
+    (void) anjay;
+    (void) dl_handle;
+    (void) next_block_offset;
     anjay_log(ERROR, _("CoAP download support disabled"));
     return avs_errno(AVS_ENOTSUP);
 #endif // ANJAY_WITH_DOWNLOADER

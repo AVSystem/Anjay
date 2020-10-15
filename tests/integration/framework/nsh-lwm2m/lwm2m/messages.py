@@ -945,7 +945,8 @@ class Lwm2mContinue(Lwm2mResponse):
                          options=options)
 
     def summary(self):
-        return 'Continue, msg_id = %d, token = %s' % (self.msg_id, self.token)
+        return 'Continue, msg_id = %d, token = %s' \
+            % (self.msg_id if self.msg_id is not None else 'None', self.token)
 
 
 def _get_ordered_types_list():

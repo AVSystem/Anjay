@@ -58,6 +58,7 @@ struct anjay_struct {
     avs_net_socket_configuration_t socket_config;
     avs_sched_t *sched;
     anjay_dm_t dm;
+    anjay_security_config_cache_t security_config_from_dm_cache;
     uint16_t udp_listen_port;
     anjay_servers_t *servers;
     avs_sched_handle_t reload_servers_sched_job_handle;

@@ -547,7 +547,14 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
 
         // We can't rely on getting valid times for any held job. Fail all
         // of them immediately.
-        do {
+
+        // Detach held messages so that they can't get unheld in the send result
+        // handler
+        AVS_LIST(avs_coap_udp_unconfirmed_msg_t) held_messages =
+                *unconfirmed_ptr;
+        *unconfirmed_ptr = NULL;
+
+        while (held_messages) {
             // Do not use fail_unconfirmed - it indirectly calls this function
             // again, which may result in
             // AVS_LIST_SIZE(ctx->unconfirmed_messages) recursive calls .
@@ -558,44 +565,37 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
             // avs_coap_client_send_async_request, adding a new held entry to
             // the context.
             avs_coap_udp_unconfirmed_msg_t *unconfirmed =
-                    AVS_LIST_DETACH(unconfirmed_ptr);
+                    AVS_LIST_DETACH(&held_messages);
             (void) call_send_result_handler(
                     ctx, unconfirmed, NULL, AVS_COAP_SEND_RESULT_FAIL,
                     _avs_coap_err(AVS_COAP_ERR_TIME_INVALID));
             AVS_LIST_DELETE(&unconfirmed);
-
-            unconfirmed_ptr = find_first_held_unconfirmed_ptr(ctx);
-        } while (unconfirmed_ptr);
+        }
 
         return;
     }
 
-    avs_error_t send_err;
-    do {
-        AVS_LIST(avs_coap_udp_unconfirmed_msg_t) unconfirmed =
-                AVS_LIST_DETACH(unconfirmed_ptr);
-        unconfirmed->hold = false;
-        unconfirmed->next_retransmit = next_retransmit;
+    AVS_LIST(avs_coap_udp_unconfirmed_msg_t) unconfirmed =
+            AVS_LIST_DETACH(unconfirmed_ptr);
+    unconfirmed->hold = false;
+    unconfirmed->next_retransmit = next_retransmit;
 
-        LOG(DEBUG, _("msg ") "%s" _(" resumed"),
-            AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token));
+    LOG(DEBUG, _("msg ") "%s" _(" resumed"),
+        AVS_COAP_TOKEN_HEX(&unconfirmed->msg.token));
 
-        send_err = coap_udp_send_serialized_msg(ctx, &unconfirmed->msg,
-                                                unconfirmed->packet,
-                                                unconfirmed->packet_size);
-        if (avs_is_err(send_err)) {
-            (void) call_send_result_handler(ctx, unconfirmed, NULL,
-                                            AVS_COAP_SEND_RESULT_FAIL,
-                                            send_err);
-            AVS_LIST_DELETE(&unconfirmed);
-            unconfirmed_ptr = find_first_held_unconfirmed_ptr(ctx);
-            continue;
-        }
-
+    avs_error_t send_err =
+            coap_udp_send_serialized_msg(ctx, &unconfirmed->msg,
+                                         unconfirmed->packet,
+                                         unconfirmed->packet_size);
+    if (avs_is_err(send_err)) {
+        (void) call_send_result_handler(ctx, unconfirmed, NULL,
+                                        AVS_COAP_SEND_RESULT_FAIL, send_err);
+        AVS_LIST_DELETE(&unconfirmed);
+    } else {
         // the msg may need to be retransmitted before other started ones
         AVS_LIST_INSERT(find_unconfirmed_insert_ptr(ctx, unconfirmed),
                         unconfirmed);
-    } while (unconfirmed_ptr && avs_is_err(send_err));
+    }
 }
 
 static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
@@ -953,20 +953,23 @@ static avs_error_t create_unconfirmed(
         .packet_size = msg_size
     };
 
-    avs_error_t err = _avs_coap_udp_initial_retry_state(
-            &ctx->tx_params, ctx->base.prng_ctx, &unconfirmed_msg->retry_state);
+    avs_error_t err;
 
-    if (avs_is_err(err)) {
+    if (avs_is_err((err = _avs_coap_udp_initial_retry_state(
+                            &ctx->tx_params, ctx->base.prng_ctx,
+                            &unconfirmed_msg->retry_state)))) {
         LOG(ERROR, _("PRNG failed"));
         AVS_LIST_CLEAR(&unconfirmed_msg);
         return err;
     }
 
-    if (avs_is_err(_avs_coap_udp_msg_copy(msg, &unconfirmed_msg->msg,
-                                          unconfirmed_msg->packet, msg_size))) {
-        AVS_UNREACHABLE("library created a malformed avs_coap_udp_msg_t");
+    if (avs_is_err((err = _avs_coap_udp_msg_copy(msg, &unconfirmed_msg->msg,
+                                                 unconfirmed_msg->packet,
+                                                 msg_size)))) {
+        LOG(ERROR,
+            _("Could not serialize the message as a valid CoAP/UDP packet"));
         AVS_LIST_CLEAR(&unconfirmed_msg);
-        return _avs_coap_err(AVS_COAP_ERR_ASSERT_FAILED);
+        return err;
     }
 
     *out_unconfirmed_msg = unconfirmed_msg;
@@ -1088,6 +1091,7 @@ coap_udp_send_message(avs_coap_ctx_t *ctx_,
             goto end;
         }
 
+        assert(unconfirmed);
         err = enqueue_unconfirmed(ctx, unconfirmed);
         if (avs_is_err(err)) {
             // don't call try_cleanup_unconfirmed to avoid calling user-defined

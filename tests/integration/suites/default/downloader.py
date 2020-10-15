@@ -320,6 +320,37 @@ class CoapDownloadOffline(CoapDownload.ReconnectTest):
             ctx.transferData()
 
 
+class CoapDownloadBlocks(CoapDownload.Test):
+    def runTest(self):
+        blocks = [slice(0, 1), slice(2, 4), slice(6, 10), slice(14, 22), slice(30, 46),
+                  slice(62, 94), slice(126, 190), slice(254, 382), slice(510, 766),
+                  slice(1022, 1534), slice(2046, 3070), slice(4094, 6142), slice(8190, 12286),
+                  slice(16382, None)]
+
+        self.communicate('download-blocks %s %s %s' % (
+            self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name,
+            ' '.join(('%s-%s' % (s.start, s.stop or '')) for s in blocks)))
+        self.wait_until_downloads_finished()
+
+        with open(self.tempfile.name, 'rb') as f:
+            self.assertEqual(f.read(), b''.join(DUMMY_PAYLOAD[s] for s in blocks))
+
+
+class CoapDownloadBlocksAlt(CoapDownload.Test):
+    def runTest(self):
+        blocks = [slice(1, 2), slice(4, 6), slice(10, 14), slice(22, 30), slice(46, 62),
+                  slice(94, 126), slice(190, 254), slice(382, 510), slice(766, 1022),
+                  slice(1534, 2046), slice(3070, 4094), slice(6142, 8190), slice(12286, 16382)]
+
+        self.communicate('download-blocks %s %s %s' % (
+            self.register_resource('/', DUMMY_PAYLOAD), self.tempfile.name,
+            ' '.join(('%s-%s' % (s.start, s.stop)) for s in blocks)))
+        self.wait_until_downloads_finished()
+
+        with open(self.tempfile.name, 'rb') as f:
+            self.assertEqual(f.read(), b''.join(DUMMY_PAYLOAD[s] for s in blocks))
+
+
 class CoapsDownloadReconnect(CoapDownload.ReconnectTest):
     PSK_IDENTITY = '1d3nt17y'
     PSK_KEY = 's3cr3tk3y'

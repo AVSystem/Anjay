@@ -72,7 +72,6 @@ typedef struct fw_repr {
     const anjay_dm_object_def_t *def;
 
     fw_user_state_t user_state;
-    anjay_security_config_t *security_from_dm;
 
     fw_update_state_t state;
     anjay_fw_update_result_t result;
@@ -185,8 +184,6 @@ static int finish_user_stream(fw_repr_t *fw) {
     int result = fw->user_state.handlers->stream_finish(fw->user_state.arg);
     if (result) {
         set_user_state(&fw->user_state, UPDATE_STATE_IDLE);
-        avs_free(fw->security_from_dm);
-        fw->security_from_dm = NULL;
     } else {
         set_user_state(&fw->user_state, UPDATE_STATE_DOWNLOADED);
     }
@@ -196,8 +193,6 @@ static int finish_user_stream(fw_repr_t *fw) {
 static void reset_user_state(fw_repr_t *fw) {
     fw->user_state.handlers->reset(fw->user_state.arg);
     set_user_state(&fw->user_state, UPDATE_STATE_IDLE);
-    avs_free(fw->security_from_dm);
-    fw->security_from_dm = NULL;
 }
 
 static int get_security_config(anjay_t *anjay,
@@ -209,13 +204,11 @@ static int get_security_config(anjay_t *anjay,
         return fw->user_state.handlers->get_security_config(
                 fw->user_state.arg, out_security_config, fw->package_uri);
     } else {
-        assert(!fw->security_from_dm);
-        if (!(fw->security_from_dm =
-                      anjay_security_config_from_dm(anjay, fw->package_uri))) {
-            return -1;
+        if (!anjay_security_config_from_dm(anjay, out_security_config,
+                                           fw->package_uri)) {
+            return 0;
         }
-        *out_security_config = *fw->security_from_dm;
-        return 0;
+        return -1;
     }
 }
 
@@ -858,7 +851,6 @@ fw_on_notify(anjay_t *anjay, anjay_notify_queue_t incoming_queue, void *fw_) {
 static void fw_delete(void *fw_) {
     fw_repr_t *fw = (fw_repr_t *) fw_;
     avs_sched_del(&fw->update_job);
-    avs_free(fw->security_from_dm);
     avs_free((void *) (intptr_t) fw->package_uri);
     avs_free(fw);
 }

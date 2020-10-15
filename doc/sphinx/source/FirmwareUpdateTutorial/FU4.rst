@@ -70,10 +70,6 @@ Security information is configured in Anjay through a structure:
         /**
          * Single DANE TLSA record to use for certificate verification, if
          * applicable.
-         *
-         * NOTE: If used with @ref anjay_download, this pointer, as well as its
-         * <c>association_data</c> field, need to remain valid until the download is
-         * finished, aborted or cancelled.
          */
         const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
 
@@ -177,9 +173,9 @@ is:
         /**
          * Store of trust anchor certificates. This field is optional and can be
          * left zero-initialized. If used, it shall be initialized using one of the
-         * <c>avs_crypto_trusted_cert_info_from_*</c> helper functions.
+         * <c>avs_crypto_certificate_chain_info_from_*</c> helper functions.
          */
-        avs_crypto_trusted_cert_info_t trusted_certs;
+        avs_crypto_certificate_chain_info_t trusted_certs;
 
         /**
          * Store of certificate revocation lists. This field is optional and can be
@@ -191,18 +187,18 @@ is:
         /**
          * Local certificate to use for authenticating with the peer. This field is
          * optional and can be left zero-initialized. If used, it shall be
-         * initialized using one of the <c>avs_crypto_client_cert_info_from_*</c>
-         * helper functions.
+         * initialized using one of the
+         * <c>avs_crypto_certificate_chain_info_from_*</c> helper functions.
          */
-        avs_crypto_client_cert_info_t client_cert;
+        avs_crypto_certificate_chain_info_t client_cert;
 
         /**
          * Private key matching #client_cert to use for authenticating with the
          * peer. This field is optional and can be left zero-initialized, unless
          * #client_cert is also specified. If used, it shall be initialized using
-         * one of the <c>avs_crypto_client_key_info_from_*</c> helper functions.
+         * one of the <c>avs_crypto_private_key_info_from_*</c> helper functions.
          */
-        avs_crypto_client_key_info_t client_key;
+        avs_crypto_private_key_info_t client_key;
     } avs_net_certificate_info_t;
 
 To populate it properly, we're gonna need at least two pieces of information
@@ -225,8 +221,8 @@ from files, we could do something like this:
 
     const avs_net_certificate_info_t cert_info = {
         .server_cert_validation = true,
-        .trusted_certs = avs_crypto_trusted_cert_info_from_path("./CA.crt"),
-        .client_cert = avs_crypto_client_cert_info_from_file("./client.crt"),
+        .trusted_certs = avs_crypto_certificate_chain_info_from_path("./CA.crt"),
+        .client_cert = avs_crypto_certificate_chain_info_from_file("./client.crt"),
         // NOTE: "password" may be NULL if no password is required
         .client_key =
                 avs_crypto_client_key_info_from_file("./client.key", "password")
@@ -306,10 +302,6 @@ Now, the ``anjay_fw_update_get_security_config_t`` job is to fill
         /**
          * Single DANE TLSA record to use for certificate verification, if
          * applicable.
-         *
-         * NOTE: If used with @ref anjay_download, this pointer, as well as its
-         * <c>association_data</c> field, need to remain valid until the download is
-         * finished, aborted or cancelled.
          */
         const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
 
@@ -350,15 +342,16 @@ Our implementation will use the following strategy:
     and we recommend to have a glance at it.
 
 Our simplified implementation uses either ``anjay_security_config_from_dm()``
-which already returns a pointer to the heap allocated space, or when the
-fallback to certificates is needed, only literal c-strings are used, thus the
-lifetime of security configuration in both cases is just right.
+which caches the buffers inside the Anjay object in a way that is compatible
+with the firmware update object implementation, or when the fallback to
+certificates is needed, only literal c-strings are used, thus the lifetime of
+security configuration in both cases is just right.
 
 The implementation is presented below. Changes made since :doc:`last time <FU2>`
 are highlighted:
 
 .. snippet-source:: examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
-    :emphasize-lines: 11-15, 73-76, 113-146, 153, 169-171
+    :emphasize-lines: 11-12, 106-133, 141, 155-157
 
     #include "./firmware_update.h"
 
@@ -372,9 +365,6 @@ are highlighted:
         FILE *firmware_file;
         // anjay instance this firmware update singleton is associated with
         anjay_t *anjay;
-        // pointer to configuration loaded from data model, we need to keep it
-        // to be able to avs_free() it later
-        anjay_security_config_t *dm_security_config;
     } FW_STATE;
 
     static const char *FW_IMAGE_DOWNLOAD_NAME = "/tmp/firmware_image.bin";
@@ -432,10 +422,6 @@ are highlighted:
             // and reset our global state to initial value.
             FW_STATE.firmware_file = NULL;
         }
-        if (FW_STATE.dm_security_config) {
-            avs_free(FW_STATE.dm_security_config);
-            FW_STATE.dm_security_config = NULL;
-        }
         // Finally, let's remove any downloaded payload
         unlink(FW_IMAGE_DOWNLOAD_NAME);
     }
@@ -473,33 +459,25 @@ are highlighted:
     }
 
     static int fw_get_security_config(void *user_ptr,
-                                    anjay_security_config_t *out_security_info,
-                                    const char *download_uri) {
+                                      anjay_security_config_t *out_security_info,
+                                      const char *download_uri) {
         (void) user_ptr;
-        memset(out_security_info, 0, sizeof(*out_security_info));
-
-        if (FW_STATE.dm_security_config) {
-            avs_free(FW_STATE.dm_security_config);
-            FW_STATE.dm_security_config = NULL;
-        }
-        FW_STATE.dm_security_config =
-                anjay_security_config_from_dm(FW_STATE.anjay, download_uri);
-        if (FW_STATE.dm_security_config) {
+        if (!anjay_security_config_from_dm(FW_STATE.anjay, out_security_info,
+                                           download_uri)) {
             // found a match
-            memcpy(out_security_info,
-                FW_STATE.dm_security_config,
-                sizeof(*out_security_info));
             return 0;
         }
+
         // no match found, fallback to loading certificates from given paths
+        memset(out_security_info, 0, sizeof(*out_security_info));
         const avs_net_certificate_info_t cert_info = {
             .server_cert_validation = true,
             .trusted_certs =
-                    avs_crypto_trusted_cert_info_from_path("./certs/CA.crt"),
-            .client_cert =
-                    avs_crypto_client_cert_info_from_file("./certs/client.crt"),
-            .client_key =
-                    avs_crypto_client_key_info_from_file("./certs/client.key", NULL)
+                    avs_crypto_certificate_chain_info_from_path("./certs/CA.crt"),
+            .client_cert = avs_crypto_certificate_chain_info_from_path(
+                    "./certs/client.crt"),
+            .client_key = avs_crypto_private_key_info_from_file(
+                    "./certs/client.key", NULL)
         };
         // NOTE: this assignment is safe, because cert_info contains pointers to
         // string literals only. If the configuration were to load certificate info

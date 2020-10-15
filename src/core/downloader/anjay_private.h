@@ -39,6 +39,9 @@ typedef struct {
     void (*suspend)(anjay_downloader_t *dl, anjay_download_ctx_t *ctx);
     avs_error_t (*reconnect)(anjay_downloader_t *dl,
                              AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    avs_error_t (*set_next_block_offset)(anjay_downloader_t *dl,
+                                         anjay_download_ctx_t *ctx,
+                                         size_t next_block_offset);
 } anjay_download_ctx_vtable_t;
 
 typedef struct {

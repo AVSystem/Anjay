@@ -148,11 +148,6 @@ def remove_tests_logs(tests):
                 pass
 
 
-def is_file_executable(file_path):
-    file_path = os.path.abspath(file_path)
-    return os.path.isfile(file_path) and os.access(file_path, os.X_OK)
-
-
 if __name__ == "__main__":
     LOG_LEVEL = os.getenv('LOGLEVEL', 'info').upper()
     try:
@@ -205,11 +200,6 @@ if __name__ == "__main__":
                         help='regex used to filter test cases. See REGEX MATCH RULES for details.')
 
     cmdline_args = parser.parse_args(sys.argv[1:])
-
-    if not is_file_executable(cmdline_args.client):
-        parser.print_usage(file=sys.stderr)
-        print('error: client must be an existing executable file', file=sys.stderr)
-        sys.exit(-1)
 
     with tempfile.TemporaryDirectory() as tmp_log_dir:
         class TestConfig:

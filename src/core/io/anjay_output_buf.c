@@ -20,13 +20,6 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int output_buf_set_path(anjay_output_ctx_t *ctx,
-                               const anjay_uri_path_t *path) {
-    (void) ctx;
-    (void) path;
-    return 0;
-}
-
 static int output_buf_ret_bytes(anjay_output_ctx_t *ctx_,
                                 const void *data,
                                 size_t data_size) {
@@ -81,8 +74,7 @@ static const anjay_output_ctx_vtable_t BUF_OUT_VTABLE = {
     .integer = output_buf_ret_integer,
     .floating = output_buf_ret_double,
     .boolean = output_buf_ret_bool,
-    .objlnk = output_buf_ret_objlnk,
-    .set_path = output_buf_set_path
+    .objlnk = output_buf_ret_objlnk
 };
 
 static const anjay_ret_bytes_ctx_vtable_t BUF_BYTES_VTABLE = {

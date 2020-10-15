@@ -349,7 +349,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
         # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
         args = ['--endpoint-name', endpoint_name, '--ciphersuites', '0xC030,0xC0A8,0xC0AE',
-                '--fw-updated-marker-path', fw_updated_marker_path, '--security-mode', security_mode]
+                '--security-mode', security_mode]
+        if fw_updated_marker_path is not None:
+            args += ['--fw-updated-marker-path', fw_updated_marker_path]
 
         for serv in servers:
             args += ['--server-uri', '%s://127.0.0.1:%d' %
@@ -383,6 +385,13 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         """
         demo_executable = os.path.join(
             self.config.demo_path, self.config.demo_cmd)
+
+        def is_file_executable(file_path):
+            return os.path.isfile(file_path) and os.access(file_path, os.X_OK)
+
+        if not is_file_executable(demo_executable):
+            print('ERROR: %s is NOT executable' % (demo_executable,), file=sys.stderr)
+            sys.exit(-1)
 
         args_prefix = []
         if (os.environ.get('RR')
@@ -602,6 +611,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             self._start_demo(demo_args)
 
             if auto_register:
+                for serv in servers_passed:
+                    if serv.security_mode() != 'nosec':
+                        serv.listen()
                 for serv in servers_passed:
                     self.assertDemoRegisters(serv,
                                              lifetime=lifetime,
@@ -831,18 +843,18 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
     def runTest(self):
         pass
 
-    def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None,
-              server_crt_file=None, server_key_file=None, binding=None, *args, **kwargs):
+    def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None, client_ca_path=None,
+              client_ca_file=None, server_crt_file=None, server_key_file=None, binding=None,
+              *args, **kwargs):
         assert((psk_identity is None) == (psk_key is None))
         extra_args = []
         if psk_identity:
             extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
                            '--key', str(binascii.hexlify(psk_key), 'ascii')]
-            coap_server = coap.DtlsServer(
-                psk_identity=psk_identity, psk_key=psk_key)
+            coap_server = coap.DtlsServer(psk_identity=psk_identity, psk_key=psk_key)
         elif server_crt_file:
-            coap_server = coap.DtlsServer(
-                crt_file=server_crt_file, key_file=server_key_file)
+            coap_server = coap.DtlsServer(ca_path=client_ca_path, ca_file=client_ca_file,
+                                          crt_file=server_crt_file, key_file=server_key_file)
         else:
             coap_server = coap.Server()
         if extra_cmdline_args is not None:

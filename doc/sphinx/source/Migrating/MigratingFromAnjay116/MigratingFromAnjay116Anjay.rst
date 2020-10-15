@@ -883,10 +883,6 @@ The new type is declared as follows:
         /**
          * Single DANE TLSA record to use for certificate verification, if
          * applicable.
-         *
-         * NOTE: If used with @ref anjay_download, this pointer, as well as its
-         * <c>association_data</c> field, need to remain valid until the download is
-         * finished, aborted or cancelled.
          */
         const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
 
@@ -994,14 +990,17 @@ The following APIs are affected by the change:
 
     .. snippet-source:: include_public/anjay/core.h
 
-        anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
-                                                               const char *uri);
+        int anjay_security_config_from_dm(anjay_t *anjay,
+                                          anjay_security_config_t *out_config,
+                                          const char *raw_url);
 
   * The equivalent function is now declared in ``anjay/core.h`` instead of
-    ``anjay/fw_update.h``, and has a different return type.
+    ``anjay/fw_update.h``, and has a different signature.
 
-    The old name is still available, but its return type has also been altered
-    so that it returns ``anjay_security_config_t *`` as well.
+    The security configuration is now returned through an output argument with
+    any necessary internal buffers cached inside the Anjay object instead of
+    using heap allocation. Please refer to the Doxygen-based documenation of
+    this function for details.
 
 Changes to CMake option variables
 ---------------------------------

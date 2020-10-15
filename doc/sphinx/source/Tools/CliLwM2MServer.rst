@@ -17,7 +17,8 @@ LwM2M testing shell
 -------------------
 
 For the purpose of early testing of Anjay-based clients, we provide a simple CLI implementation of
-LwM2M that supports only the UDP protocol. It is written in Python using `powercmd` library.
+LwM2M that supports the UDP and TCP (although the TCP support is in a very early stage, and it may
+not be as stable as UDP) protocols. It is written in Python using `powercmd` library.
 You can find it in commercial version of Anjay in `bootstrap/framework/nsh_lwm2m/` directory.
 
 Running the server
@@ -29,7 +30,9 @@ with the following optional arguments:
 --help, -h            Show help.
 --ipv6, -6            Use IPv6 by default.
 --listen PORT, -l PORT
-                      Immediately starts listening on the proper CoAP port, so it uses `PORT` if it is specified and the default one (5683 for CoAP, 5684 for CoAP/DTLS) otherwise.
+                      Immediately starts listening on specified CoAP port. Default UDP, can be TCP if --tcp is passed. If `PORT` is not specified, default one is used (5683 for CoAP, 5684 for CoAP/(D)TLS)
+--tcp, -t
+                      Listen on TCP port
 --psk-identity IDENTITY, -i IDENTITY
                       PSK identity to use for DTLS connection (literal string).
 --psk-key KEY, -k KEY

@@ -91,32 +91,43 @@ static int add_instance(sec_repr_t *repr,
         return -1;
     }
     init_instance(new_instance, *inout_iid);
-    new_instance->server_uri = avs_strdup(instance->server_uri);
-    if (!new_instance->server_uri) {
-        goto error;
+    if (instance->server_uri) {
+        new_instance->server_uri = avs_strdup(instance->server_uri);
+        if (!new_instance->server_uri) {
+            goto error;
+        }
     }
     new_instance->is_bootstrap = instance->bootstrap_server;
     new_instance->security_mode = instance->security_mode;
     new_instance->holdoff_s = instance->client_holdoff_s;
     new_instance->bs_timeout_s = instance->bootstrap_timeout_s;
-    if (_anjay_raw_buffer_clone(
-                &new_instance->public_cert_or_psk_identity,
-                &(const anjay_raw_buffer_t) {
-                    .data = (void *) (intptr_t)
-                                    instance->public_cert_or_psk_identity,
-                    .size = instance->public_cert_or_psk_identity_size
-                })) {
-        goto error;
+
+    {
+        new_instance->public_cert_or_psk_identity.type = SEC_KEY_AS_DATA;
+        if (_anjay_raw_buffer_clone(
+                    &new_instance->public_cert_or_psk_identity.value.data,
+                    &(const anjay_raw_buffer_t) {
+                        .data = (void *) (intptr_t)
+                                        instance->public_cert_or_psk_identity,
+                        .size = instance->public_cert_or_psk_identity_size
+                    })) {
+            goto error;
+        }
     }
-    if (_anjay_raw_buffer_clone(
-                &new_instance->private_cert_or_psk_key,
-                &(const anjay_raw_buffer_t) {
-                    .data = (void *) (intptr_t)
-                                    instance->private_cert_or_psk_key,
-                    .size = instance->private_cert_or_psk_key_size
-                })) {
-        goto error;
+
+    {
+        new_instance->private_cert_or_psk_key.type = SEC_KEY_AS_DATA;
+        if (_anjay_raw_buffer_clone(
+                    &new_instance->private_cert_or_psk_key.value.data,
+                    &(const anjay_raw_buffer_t) {
+                        .data = (void *) (intptr_t)
+                                        instance->private_cert_or_psk_key,
+                        .size = instance->private_cert_or_psk_key_size
+                    })) {
+            goto error;
+        }
     }
+
     if (_anjay_raw_buffer_clone(
                 &new_instance->server_public_key,
                 &(const anjay_raw_buffer_t) {
@@ -272,11 +283,25 @@ static int sec_read(anjay_t *anjay,
         return anjay_ret_bytes(ctx, inst->server_public_key.data,
                                inst->server_public_key.size);
     case SEC_RES_PK_OR_IDENTITY:
-        return anjay_ret_bytes(ctx, inst->public_cert_or_psk_identity.data,
-                               inst->public_cert_or_psk_identity.size);
+        switch (inst->public_cert_or_psk_identity.type) {
+        case SEC_KEY_AS_DATA:
+            return anjay_ret_bytes(
+                    ctx, inst->public_cert_or_psk_identity.value.data.data,
+                    inst->public_cert_or_psk_identity.value.data.size);
+        default:
+            AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+            return ANJAY_ERR_INTERNAL;
+        }
     case SEC_RES_SECRET_KEY:
-        return anjay_ret_bytes(ctx, inst->private_cert_or_psk_key.data,
-                               inst->private_cert_or_psk_key.size);
+        switch (inst->private_cert_or_psk_key.type) {
+        case SEC_KEY_AS_DATA:
+            return anjay_ret_bytes(
+                    ctx, inst->private_cert_or_psk_key.value.data.data,
+                    inst->private_cert_or_psk_key.value.data.size);
+        default:
+            AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+            return ANJAY_ERR_INTERNAL;
+        }
     case SEC_RES_SHORT_SERVER_ID:
         return anjay_ret_i32(ctx, (int32_t) inst->ssid);
     case SEC_RES_CLIENT_HOLD_OFF_TIME:
@@ -330,11 +355,17 @@ static int sec_write(anjay_t *anjay,
         }
         return retval;
     case SEC_RES_PK_OR_IDENTITY:
-        return _anjay_io_fetch_bytes(ctx, &inst->public_cert_or_psk_identity);
+        _anjay_sec_key_or_data_cleanup(&inst->public_cert_or_psk_identity);
+        assert(inst->public_cert_or_psk_identity.type == SEC_KEY_AS_DATA);
+        return _anjay_io_fetch_bytes(
+                ctx, &inst->public_cert_or_psk_identity.value.data);
     case SEC_RES_SERVER_PK:
         return _anjay_io_fetch_bytes(ctx, &inst->server_public_key);
     case SEC_RES_SECRET_KEY:
-        return _anjay_io_fetch_bytes(ctx, &inst->private_cert_or_psk_key);
+        _anjay_sec_key_or_data_cleanup(&inst->private_cert_or_psk_key);
+        assert(inst->private_cert_or_psk_key.type == SEC_KEY_AS_DATA);
+        return _anjay_io_fetch_bytes(ctx,
+                                     &inst->private_cert_or_psk_key.value.data);
     case SEC_RES_SHORT_SERVER_ID:
         if (!(retval = _anjay_sec_fetch_short_server_id(ctx, &inst->ssid))) {
             inst->has_ssid = true;

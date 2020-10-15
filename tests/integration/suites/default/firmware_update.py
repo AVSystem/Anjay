@@ -100,6 +100,8 @@ class FirmwareUpdate:
                     # Write /5/0/1 (Firmware URI)
                     req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, '')
                     self.serv.send(req)
+                    self.assertMsgEqual(
+                        Lwm2mChanged.matching(req)(), self.serv.recv())
                     if expect_send_after_state_machine_reset:
                         pkt = self.serv.recv()
                         self.assertMsgEqual(Lwm2mSend(), pkt)
@@ -109,8 +111,6 @@ class FirmwareUpdate:
                                                                   ResPath.FirmwareUpdate.UpdateResult: UPDATE_RESULT_INITIAL
                                                               })
                         self.serv.send(Lwm2mChanged.matching(pkt)())
-                    self.assertMsgEqual(
-                        Lwm2mChanged.matching(req)(), self.serv.recv())
                 super().tearDown(auto_deregister=auto_deregister)
 
         def read_update_result(self):
@@ -1268,8 +1268,8 @@ class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
         # reconnect
         self.serv.reset()
         self.communicate('reconnect')
-        self.assertDemoRegisters(self.serv)
         self.provide_response()
+        self.assertDemoRegisters(self.serv)
 
         # wait until client downloads the firmware
         deadline = time.time() + 20

@@ -211,11 +211,19 @@ static inline anjay_dm_write_type_t _anjay_dm_write_type_from_request_action(
     }
 }
 
-int _anjay_dm_read_resource(anjay_t *anjay,
-                            const anjay_uri_path_t *path,
-                            char *buffer,
-                            size_t buffer_size,
-                            size_t *out_bytes_read);
+int _anjay_dm_read_resource_into_ctx(anjay_t *anjay,
+                                     const anjay_uri_path_t *path,
+                                     anjay_output_ctx_t *ctx);
+
+int _anjay_dm_read_resource_into_stream(anjay_t *anjay,
+                                        const anjay_uri_path_t *path,
+                                        avs_stream_t *stream);
+
+int _anjay_dm_read_resource_into_buffer(anjay_t *anjay,
+                                        const anjay_uri_path_t *path,
+                                        char *buffer,
+                                        size_t buffer_size,
+                                        size_t *out_bytes_read);
 
 static inline int _anjay_dm_read_resource_string(anjay_t *anjay,
                                                  const anjay_uri_path_t *path,
@@ -223,8 +231,9 @@ static inline int _anjay_dm_read_resource_string(anjay_t *anjay,
                                                  size_t buffer_size) {
     assert(buffer && buffer_size > 0);
     size_t bytes_read;
-    int result = _anjay_dm_read_resource(anjay, path, buffer, buffer_size - 1,
-                                         &bytes_read);
+    int result =
+            _anjay_dm_read_resource_into_buffer(anjay, path, buffer,
+                                                buffer_size - 1, &bytes_read);
     if (!result) {
         buffer[bytes_read] = '\0';
     }
@@ -235,8 +244,8 @@ static inline int _anjay_dm_read_resource_i64(anjay_t *anjay,
                                               const anjay_uri_path_t *path,
                                               int64_t *out_value) {
     size_t bytes_read;
-    int result = _anjay_dm_read_resource(anjay, path, (char *) out_value,
-                                         sizeof(*out_value), &bytes_read);
+    int result = _anjay_dm_read_resource_into_buffer(
+            anjay, path, (char *) out_value, sizeof(*out_value), &bytes_read);
     if (result) {
         return result;
     }
@@ -262,8 +271,8 @@ static inline int _anjay_dm_read_resource_bool(anjay_t *anjay,
                                                const anjay_uri_path_t *path,
                                                bool *out_value) {
     size_t bytes_read;
-    int result = _anjay_dm_read_resource(anjay, path, (char *) out_value,
-                                         sizeof(*out_value), &bytes_read);
+    int result = _anjay_dm_read_resource_into_buffer(
+            anjay, path, (char *) out_value, sizeof(*out_value), &bytes_read);
     if (result) {
         return result;
     }
@@ -276,8 +285,10 @@ static inline int _anjay_dm_read_resource_objlnk(anjay_t *anjay,
                                                  anjay_iid_t *out_iid) {
     size_t bytes_read;
     uint32_t objlnk_encoded;
-    int result = _anjay_dm_read_resource(anjay, path, (char *) &objlnk_encoded,
-                                         sizeof(objlnk_encoded), &bytes_read);
+    int result = _anjay_dm_read_resource_into_buffer(anjay, path,
+                                                     (char *) &objlnk_encoded,
+                                                     sizeof(objlnk_encoded),
+                                                     &bytes_read);
     if (result) {
         return result;
     }

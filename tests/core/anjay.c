@@ -747,7 +747,9 @@ AVS_UNIT_TEST(queue_mode, change) {
                      PAYLOAD("</1>,</42>"));
     avs_unit_mocksock_expect_output(mocksocks[0], update->content,
                                     update->length);
-    anjay_sched_run(anjay);
+    while (anjay_sched_calculate_wait_time_ms(anjay, INT_MAX) == 0) {
+        anjay_sched_run(anjay);
+    }
 
     const coap_test_msg_t *update_response =
             COAP_MSG(ACK, CHANGED, ID_TOKEN_RAW(0x0000, nth_token(0)),

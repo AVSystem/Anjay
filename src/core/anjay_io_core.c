@@ -172,7 +172,9 @@ int _anjay_output_start_aggregate(anjay_output_ctx_t *ctx) {
 
 int _anjay_output_set_path(anjay_output_ctx_t *ctx,
                            const anjay_uri_path_t *path) {
-    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    // NOTE: We explicitly consider NULL set_path() to be always successful,
+    // to simplify implementation of outbuf_ctx and the like.
+    int result = 0;
     if (ctx->vtable->set_path) {
         result = ctx->vtable->set_path(ctx, path);
     }

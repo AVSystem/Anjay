@@ -421,7 +421,11 @@ static bool url_service_matches(const avs_url_t *left,
 }
 
 typedef union {
-    anjay_security_config_t *security;
+    struct {
+        anjay_security_config_t *out;
+        anjay_security_config_cache_t *cache;
+        bool config_found;
+    } security;
     struct {
         avs_coap_ctx_t *coap;
         // socket used by the `coap` instance above
@@ -462,32 +466,37 @@ try_security_instance_read_security(anjay_t *anjay,
                                     anjay_iid_t security_iid,
                                     const avs_url_t *url,
                                     const avs_url_t *server_url) {
-    anjay_security_config_t *new_result =
-            _anjay_get_security_config(anjay, ssid, security_iid);
-    if (!new_result) {
+    anjay_security_config_t new_result;
+    anjay_security_config_cache_t cache_backup = *out_info->security.cache;
+    memset(out_info->security.cache, 0, sizeof(*out_info->security.cache));
+    if (avs_is_err(_anjay_get_security_config(anjay, &new_result,
+                                              out_info->security.cache, ssid,
+                                              security_iid))) {
         anjay_log(WARNING,
                   _("Could not read security information for "
                     "server ") "/%" PRIu16 "/%" PRIu16,
                   ANJAY_DM_OID_SECURITY, security_iid);
-    } else if (!has_valid_keys(&new_result->security_info)
-               && !new_result->dane_tlsa_record) {
+    } else if (!has_valid_keys(&new_result.security_info)
+               && !new_result.dane_tlsa_record) {
         anjay_log(DEBUG,
                   _("Server ") "/%" PRIu16
                                "/%" PRIu16 _(" does not use encrypted "
                                              "connection, ignoring"),
                   ANJAY_DM_OID_SECURITY, security_iid);
     } else {
-        avs_free(out_info->security);
-        out_info->security = new_result;
-        new_result = NULL;
+        _anjay_security_config_cache_cleanup(&cache_backup);
+        *out_info->security.out = new_result;
+        out_info->security.config_found = true;
         if (url_service_matches(server_url, url, DEFAULT_COAPS_PORT)) {
             // this is the best match we could get
             return ANJAY_FOREACH_BREAK;
         }
         // and here we are left with "some match", not necessarily the best
         // one, and thus we'll continue looking
+        return ANJAY_FOREACH_CONTINUE;
     }
-    avs_free(new_result);
+    _anjay_security_config_cache_cleanup(out_info->security.cache);
+    *out_info->security.cache = cache_backup;
     return ANJAY_FOREACH_CONTINUE;
 }
 
@@ -567,20 +576,25 @@ static void try_get_info_from_dm(anjay_t *anjay,
     avs_url_free(url);
 }
 
-anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
-                                                       const char *raw_url) {
-    security_or_socket_info_t info;
-    memset(&info, 0, sizeof(info));
+int anjay_security_config_from_dm(anjay_t *anjay,
+                                  anjay_security_config_t *out_config,
+                                  const char *raw_url) {
+    security_or_socket_info_t info = {
+        .security = {
+            .out = out_config,
+            .cache = &anjay->security_config_from_dm_cache
+        }
+    };
     try_get_info_from_dm(anjay, raw_url, &info,
                          try_security_instance_read_security);
-
-    if (!info.security) {
+    if (!info.security.config_found) {
         anjay_log(WARNING,
                   _("Matching security information not found in data model for "
                     "URL: ") "%s",
                   raw_url);
+        return -1;
     }
-    return info.security;
+    return 0;
 }
 
 static int map_str_conversion_result(const char *input, const char *endptr) {

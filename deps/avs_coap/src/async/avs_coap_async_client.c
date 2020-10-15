@@ -60,65 +60,93 @@ static inline state_with_error_t failure_state(avs_error_t error) {
     };
 }
 
-static avs_error_t
-client_exchange_send_next_chunk(avs_coap_ctx_t *ctx,
-                                avs_coap_exchange_t *exchange) {
+static avs_error_t client_exchange_send_next_chunk(
+        avs_coap_ctx_t *ctx, AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr) {
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
     AVS_ASSERT(AVS_LIST_FIND_PTR(&_avs_coap_get_base(ctx)->client_exchanges,
-                                 exchange)
+                                 **exchange_ptr_ptr)
                        != NULL,
                "not a started client exchange");
 
+    avs_coap_exchange_id_t id = (**exchange_ptr_ptr)->id;
+
     // every request needs to have an unique token
+    avs_coap_token_t old_token = (**exchange_ptr_ptr)->token;
     avs_error_t err =
             _avs_coap_ctx_generate_token(_avs_coap_get_base(ctx)->prng_ctx,
-                                         &exchange->token);
-    if (avs_is_err(err)) {
-        return err;
+                                         &(**exchange_ptr_ptr)->token);
+    if (avs_is_ok(err)) {
+        err = _avs_coap_exchange_send_next_chunk(
+                ctx, **exchange_ptr_ptr,
+                (**exchange_ptr_ptr)->by_type.client.send_result_handler,
+                (**exchange_ptr_ptr)->by_type.client.send_result_handler_arg);
+        *exchange_ptr_ptr = _avs_coap_find_client_exchange_ptr_by_id(ctx, id);
+        assert(!*exchange_ptr_ptr || **exchange_ptr_ptr);
     }
-
-    return _avs_coap_exchange_send_next_chunk(
-            ctx, exchange, exchange->by_type.client.send_result_handler,
-            exchange->by_type.client.send_result_handler_arg);
-}
-
-static avs_error_t client_exchange_send_all(avs_coap_ctx_t *ctx,
-                                            avs_coap_exchange_t *exchange) {
-    assert(exchange->by_type.client.handle_response == NULL);
-
-    avs_coap_exchange_id_t id = exchange->id;
-    avs_error_t err;
-
-    do {
-        err = client_exchange_send_next_chunk(ctx, exchange);
-        exchange = _avs_coap_find_client_exchange_by_id(ctx, id);
-    } while (exchange && !exchange->eof_cache.empty);
-
-    if (exchange) {
-        avs_coap_exchange_cancel(ctx, id);
+    if (*exchange_ptr_ptr && avs_is_err(err)) {
+        (**exchange_ptr_ptr)->token = old_token;
     }
     return err;
 }
 
-static avs_error_t
-client_exchange_start(avs_coap_ctx_t *ctx,
-                      AVS_LIST(avs_coap_exchange_t) *exchange_ptr,
-                      avs_coap_exchange_id_t *out_id) {
-    assert(exchange_ptr);
-    assert(*exchange_ptr);
+#ifdef WITH_AVS_COAP_BLOCK
+static inline size_t
+initial_block2_option_size(avs_coap_ctx_t *ctx,
+                           const avs_coap_exchange_t *exchange) {
+    assert(exchange->by_type.client.next_response_payload_offset > 0);
+    char buffer[64];
+    avs_coap_options_t expected_options =
+            avs_coap_options_create_empty(buffer, sizeof(buffer));
+    avs_error_t err =
+            avs_coap_options_add_block(&expected_options,
+                                       &(avs_coap_option_block_t) {
+                                           .type = AVS_COAP_BLOCK2,
+                                           .seq_num = UINT16_MAX,
+                                           .size = AVS_COAP_BLOCK_MAX_SIZE
+                                       });
+    assert(avs_is_ok(err));
 
-    AVS_LIST_INSERT(&_avs_coap_get_base(ctx)->client_exchanges, *exchange_ptr);
-    (*exchange_ptr)->id = _avs_coap_generate_exchange_id(ctx);
-
-    avs_error_t err;
-    if ((*exchange_ptr)->by_type.client.handle_response) {
-        *out_id = (*exchange_ptr)->id;
-        err = client_exchange_send_next_chunk(ctx, *exchange_ptr);
-    } else {
-        *out_id = AVS_COAP_EXCHANGE_ID_INVALID;
-        err = client_exchange_send_all(ctx, *exchange_ptr);
+    size_t block_size = avs_max_power_of_2_not_greater_than(
+            avs_coap_max_incoming_message_payload(ctx, &expected_options,
+                                                  AVS_COAP_CODE_CONTENT));
+    if (block_size > AVS_COAP_BLOCK_MAX_SIZE) {
+        block_size = AVS_COAP_BLOCK_MAX_SIZE;
+    } else if (block_size < AVS_COAP_BLOCK_MIN_SIZE) {
+        block_size = AVS_COAP_BLOCK_MIN_SIZE;
     }
+    return block_size;
+}
+#endif // WITH_AVS_COAP_BLOCK
 
-    *exchange_ptr = NULL;
+avs_error_t _avs_coap_client_exchange_send_first_chunk(
+        avs_coap_ctx_t *ctx, AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr) {
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
+    avs_error_t err = AVS_OK;
+#ifdef WITH_AVS_COAP_BLOCK
+    if ((**exchange_ptr_ptr)->by_type.client.next_response_payload_offset > 0
+            && !_avs_coap_options_find_first_opt(&(**exchange_ptr_ptr)->options,
+                                                 AVS_COAP_OPTION_BLOCK2)) {
+        const size_t block_size =
+                initial_block2_option_size(ctx, **exchange_ptr_ptr);
+        if ((**exchange_ptr_ptr)->by_type.client.next_response_payload_offset
+                >= block_size) {
+            err = avs_coap_options_add_block(
+                    &(**exchange_ptr_ptr)->options,
+                    &(avs_coap_option_block_t) {
+                        .type = AVS_COAP_BLOCK2,
+                        .seq_num =
+                                (uint32_t) ((**exchange_ptr_ptr)
+                                                    ->by_type.client
+                                                    .next_response_payload_offset
+                                            / block_size),
+                        .size = (uint16_t) block_size
+                    });
+        }
+    }
+#endif // WITH_AVS_COAP_BLOCK
+    if (avs_is_ok(err)) {
+        err = client_exchange_send_next_chunk(ctx, exchange_ptr_ptr);
+    }
     return err;
 }
 
@@ -185,6 +213,7 @@ static void
 call_exchange_response_handler(avs_coap_ctx_t *ctx,
                                avs_coap_exchange_t *exchange,
                                const avs_coap_borrowed_msg_t *response_msg,
+                               size_t response_payload_offset,
                                state_with_error_t request_state) {
     assert(ctx);
     assert(exchange);
@@ -199,23 +228,71 @@ call_exchange_response_handler(avs_coap_ctx_t *ctx,
         return;
     }
 
+    size_t expected_payload_offset =
+            AVS_MIN(exchange->by_type.client.next_response_payload_offset,
+                    response_payload_offset
+                            + (response_msg ? response_msg->payload_size : 0));
+    assert(expected_payload_offset >= response_payload_offset);
+    assert(expected_payload_offset - response_payload_offset
+           <= (response_msg ? response_msg->payload_size : 0));
     const avs_coap_client_async_response_t *exchange_response =
-            !response_msg
-                    ? NULL
-                    : &(const avs_coap_client_async_response_t) {
-                          .header = (const avs_coap_response_header_t) {
-                              .code = response_msg->code,
-                              .options = response_msg->options
-                          },
-                          .payload_offset =
-                                  get_response_payload_offset(response_msg),
-                          .payload = response_msg->payload,
-                          .payload_size = response_msg->payload_size
-                      };
+            !response_msg ? NULL
+                          : &(const avs_coap_client_async_response_t) {
+                                .header = (const avs_coap_response_header_t) {
+                                    .code = response_msg->code,
+                                    .options = response_msg->options
+                                },
+                                .payload_offset = expected_payload_offset,
+                                .payload = (const char *) response_msg->payload
+                                           + (expected_payload_offset
+                                              - response_payload_offset),
+                                .payload_size = response_msg->payload_size
+                                                - (expected_payload_offset
+                                                   - response_payload_offset)
+                            };
 
     exchange->by_type.client.handle_response(
             ctx, exchange->id, request_state.state, exchange_response,
             request_state.error, exchange->by_type.client.handle_response_arg);
+}
+
+static void
+call_partial_response_handler(avs_coap_ctx_t *ctx,
+                              AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr,
+                              const avs_coap_borrowed_msg_t *response) {
+    assert(response);
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
+
+    avs_coap_exchange_id_t exchange_id = (**exchange_ptr_ptr)->id;
+    size_t response_payload_offset = get_response_payload_offset(response);
+
+    // do not report PARTIAL_CONTENT unless there is some actual content
+    // this avoids calling the handler for empty 2.31 Continue responses
+    if (response->payload) {
+        while (*exchange_ptr_ptr
+               && response_payload_offset + response->payload_size
+                          > (**exchange_ptr_ptr)
+                                    ->by_type.client
+                                    .next_response_payload_offset) {
+            size_t expected_payload_offset =
+                    (**exchange_ptr_ptr)
+                            ->by_type.client.next_response_payload_offset;
+            call_exchange_response_handler(
+                    ctx, **exchange_ptr_ptr, response, response_payload_offset,
+                    success_state(AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT));
+            if ((*exchange_ptr_ptr = _avs_coap_find_client_exchange_ptr_by_id(
+                         ctx, exchange_id))
+                    && response
+                    && (**exchange_ptr_ptr)
+                                       ->by_type.client
+                                       .next_response_payload_offset
+                                   == expected_payload_offset) {
+                (**exchange_ptr_ptr)
+                        ->by_type.client.next_response_payload_offset =
+                        response_payload_offset + response->payload_size;
+            }
+        }
+    }
 }
 
 static void cleanup_exchange(avs_coap_ctx_t *ctx,
@@ -230,7 +307,10 @@ static void cleanup_exchange(avs_coap_ctx_t *ctx,
     AVS_ASSERT(request_state.state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT,
                "cleanup_exchange must not be used for intermediate responses");
 
-    call_exchange_response_handler(ctx, exchange, final_msg, request_state);
+    size_t response_payload_offset =
+            final_msg ? get_response_payload_offset(final_msg) : 0;
+    call_exchange_response_handler(ctx, exchange, final_msg,
+                                   response_payload_offset, request_state);
     AVS_LIST_DELETE(&exchange);
 }
 
@@ -297,8 +377,7 @@ static avs_error_t update_exchange_for_next_request_block(
         avs_coap_exchange_t *exchange,
         const avs_coap_option_block_t *response_block1) {
     assert(exchange_expects_continue_response(exchange));
-    assert(response_block1);
-    assert(response_block1->type == AVS_COAP_BLOCK1);
+    assert(!response_block1 || response_block1->type == AVS_COAP_BLOCK1);
 
     // Sending another block of a request requires keeping the same
     // set of CoAP options as the previous one, except for BLOCK1, whose
@@ -316,8 +395,9 @@ static avs_error_t update_exchange_for_next_request_block(
 
     ++request_block1.seq_num;
     avs_error_t err;
-    if (avs_is_err((err = handle_request_block_size_renegotiation(
-                            &request_block1, response_block1)))) {
+    if (response_block1
+            && avs_is_err((err = handle_request_block_size_renegotiation(
+                                   &request_block1, response_block1)))) {
         return err;
     }
 
@@ -342,21 +422,35 @@ static avs_error_t update_exchange_for_next_request_block(
 }
 
 static state_with_error_t
-handle_continue_response(avs_coap_exchange_t *exchange,
-                         const avs_coap_borrowed_msg_t *msg) {
+handle_continue_response(avs_coap_ctx_t *ctx,
+                         AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr,
+                         const avs_coap_borrowed_msg_t *response) {
     avs_coap_option_block_t response_block1;
-    switch (avs_coap_options_get_block(&msg->options, AVS_COAP_BLOCK1,
+    switch (avs_coap_options_get_block(&response->options, AVS_COAP_BLOCK1,
                                        &response_block1)) {
     case 0: {
+        assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
         // TODO: T2172 check that response_block1 matches request block1;
         // FAIL if it doesn't
 
         // TODO: should other response options be checked?
 
         avs_error_t err =
-                update_exchange_for_next_request_block(exchange,
+                update_exchange_for_next_request_block(**exchange_ptr_ptr,
                                                        &response_block1);
         if (avs_is_err(err)) {
+            return failure_state(err);
+        }
+
+        call_partial_response_handler(ctx, exchange_ptr_ptr, response);
+
+        // the call might have canceled the exchange
+        // If we're finished with a single response packet, but not with the
+        // whole exchange, then request more data from the server.
+        assert(!*exchange_ptr_ptr || **exchange_ptr_ptr);
+        if (*exchange_ptr_ptr
+                && avs_is_err((err = client_exchange_send_next_chunk(
+                                       ctx, exchange_ptr_ptr)))) {
             return failure_state(err);
         }
 
@@ -365,12 +459,12 @@ handle_continue_response(avs_coap_exchange_t *exchange,
 
     case AVS_COAP_OPTION_MISSING:
         LOG(DEBUG, _("BLOCK1 option missing in ") "%s" _(" response"),
-            AVS_COAP_CODE_STRING(msg->code));
+            AVS_COAP_CODE_STRING(response->code));
         return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
 
     default:
         LOG(DEBUG, _("malformed BLOCK1 option in ") "%s" _(" response"),
-            AVS_COAP_CODE_STRING(msg->code));
+            AVS_COAP_CODE_STRING(response->code));
         return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
     }
 }
@@ -423,10 +517,6 @@ static avs_error_t update_request_for_next_response_block(
                                       AVS_COAP_OPTION_BLOCK1);
     avs_coap_options_remove_by_number(&exchange->options,
                                       AVS_COAP_OPTION_BLOCK2);
-    AVS_ASSERT(exchange->by_type.client.next_response_payload_offset
-                               % response_block2->size
-                       == 0,
-               "bug: next payload offset should be aligned to the block size");
     block2 = (avs_coap_option_block_t) {
         .type = AVS_COAP_BLOCK2,
         .seq_num = (uint32_t) (exchange->by_type.client
@@ -435,11 +525,15 @@ static avs_error_t update_request_for_next_response_block(
         .size = response_block2->size,
         .is_bert = response_block2->is_bert
     };
-    AVS_ASSERT(block2.is_bert || block2.seq_num == response_block2->seq_num + 1,
+    AVS_ASSERT(block2.is_bert || block2.seq_num > response_block2->seq_num,
                "bug: invalid seq_num");
-    if (avs_is_err(avs_coap_options_add_block(&exchange->options, &block2))) {
-        AVS_UNREACHABLE("exchange is supposed to have enough space for adding "
-                        "extra BLOCK option");
+    if (avs_is_err((err = avs_coap_options_add_block(&exchange->options,
+                                                     &block2)))) {
+        AVS_ASSERT(err.category != AVS_COAP_ERR_CATEGORY
+                           || err.code != AVS_COAP_ERR_MESSAGE_TOO_BIG,
+                   "exchange is supposed to have enough space for adding extra "
+                   "BLOCK option");
+        return err;
     }
 
     // do not include payload any more
@@ -472,30 +566,31 @@ static bool etag_matches(avs_coap_exchange_t *exchange,
 }
 
 static state_with_error_t
-handle_final_response(avs_coap_exchange_t *exchange,
-                      const avs_coap_borrowed_msg_t *msg) {
-    assert(exchange);
-    assert(msg);
+handle_final_response(avs_coap_ctx_t *ctx,
+                      AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr,
+                      const avs_coap_borrowed_msg_t *response) {
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
+    assert(response);
 
     // do not include any more payload in further requests
-    exchange->write_payload = NULL;
-    exchange->write_payload_arg = NULL;
-    exchange->eof_cache.empty = true;
+    (**exchange_ptr_ptr)->write_payload = NULL;
+    (**exchange_ptr_ptr)->write_payload_arg = NULL;
+    (**exchange_ptr_ptr)->eof_cache.empty = true;
 
-    if (!etag_matches(exchange, msg)) {
+    if (!etag_matches(**exchange_ptr_ptr, response)) {
         return failure_state(_avs_coap_err(AVS_COAP_ERR_ETAG_MISMATCH));
     }
 
     avs_coap_option_block_t request_block2;
     int opts_result =
-            avs_coap_options_get_block(&exchange->options, AVS_COAP_BLOCK2,
-                                       &request_block2);
+            avs_coap_options_get_block(&(**exchange_ptr_ptr)->options,
+                                       AVS_COAP_BLOCK2, &request_block2);
     AVS_ASSERT(opts_result == 0 || opts_result == AVS_COAP_OPTION_MISSING,
                "library allowed for construction of a malformed request");
     bool request_has_block2 = (opts_result != AVS_COAP_OPTION_MISSING);
 
     avs_coap_option_block_t response_block2;
-    switch (avs_coap_options_get_block(&msg->options, AVS_COAP_BLOCK2,
+    switch (avs_coap_options_get_block(&response->options, AVS_COAP_BLOCK2,
                                        &response_block2)) {
     case 0: {
         // BLOCK response to a request, which may or may not have had an
@@ -518,16 +613,32 @@ handle_final_response(avs_coap_exchange_t *exchange,
         // across responses
 
         LOG(TRACE, _("exchange ") "%s" _(": ") "%s",
-            AVS_UINT64_AS_STRING(exchange->id.value),
+            AVS_UINT64_AS_STRING((**exchange_ptr_ptr)->id.value),
             _AVS_COAP_OPTION_BLOCK_STRING(&response_block2));
 
         if (response_block2.has_more) {
-            avs_error_t err =
-                    update_request_for_next_response_block(exchange,
-                                                           &response_block2);
-            if (avs_is_err(err)) {
-                return failure_state(err);
+            call_partial_response_handler(ctx, exchange_ptr_ptr, response);
+
+            // the call might have canceled the exchange
+            assert(!*exchange_ptr_ptr || **exchange_ptr_ptr);
+            if (*exchange_ptr_ptr) {
+                // We're finished with a single response packet, but not with
+                // the whole exchange. Request more data from the server.
+                avs_error_t err = update_request_for_next_response_block(
+                        **exchange_ptr_ptr, &response_block2);
+                if (err.category == AVS_ERRNO_CATEGORY
+                        && err.code == AVS_ERANGE) {
+                    // Requested offset larger than allowed by CoAP spec -
+                    // treat this as the end of the transfer
+                    return success_state(AVS_COAP_CLIENT_REQUEST_OK);
+                }
+                if (avs_is_err(err)
+                        || avs_is_err((err = client_exchange_send_next_chunk(
+                                               ctx, exchange_ptr_ptr)))) {
+                    return failure_state(err);
+                }
             }
+
             return success_state(AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT);
         } else {
             // final block of a BLOCK2 response
@@ -554,36 +665,121 @@ handle_final_response(avs_coap_exchange_t *exchange,
     }
 }
 #else  // WITH_AVS_COAP_BLOCK
-static state_with_error_t
-handle_final_response(avs_coap_exchange_t *exchange,
-                      const avs_coap_borrowed_msg_t *msg) {
-    assert(exchange);
-    assert(msg);
+static avs_error_t update_exchange_for_next_request_block(
+        avs_coap_exchange_t *exchange,
+        const avs_coap_option_block_t *response_block1) {
+    (void) exchange;
+    (void) response_block1;
 
-    exchange->write_payload = NULL;
-    exchange->write_payload_arg = NULL;
-    exchange->eof_cache.empty = true;
+    AVS_UNREACHABLE(
+            "More data to send even though BLOCK is disabled - this should be "
+            "handled in _avs_coap_exchange_send_next_chunk()");
+    return _avs_coap_err(AVS_COAP_ERR_ASSERT_FAILED);
+}
+
+static state_with_error_t
+handle_final_response(avs_coap_ctx_t *ctx,
+                      AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr,
+                      const avs_coap_borrowed_msg_t *response) {
+    (void) ctx;
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
+    assert(response);
+
+    (**exchange_ptr_ptr)->write_payload = NULL;
+    (**exchange_ptr_ptr)->write_payload_arg = NULL;
+    (**exchange_ptr_ptr)->eof_cache.empty = true;
 
     return success_state(AVS_COAP_CLIENT_REQUEST_OK);
 }
 #endif // WITH_AVS_COAP_BLOCK
 
+static avs_error_t
+client_exchange_send_all(avs_coap_ctx_t *ctx,
+                         AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr) {
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
+    assert((**exchange_ptr_ptr)->by_type.client.handle_response == NULL);
+
+    avs_error_t err = client_exchange_send_next_chunk(ctx, exchange_ptr_ptr);
+    while (avs_is_ok(err) && *exchange_ptr_ptr
+           && !(**exchange_ptr_ptr)->eof_cache.empty) {
+        (void) (avs_is_err((err = update_exchange_for_next_request_block(
+                                    **exchange_ptr_ptr, NULL)))
+                || avs_is_err((err = client_exchange_send_next_chunk(
+                                       ctx, exchange_ptr_ptr))));
+    }
+
+    if (*exchange_ptr_ptr) {
+        if (avs_is_err(err)) {
+            cleanup_exchange(ctx, AVS_LIST_DETACH(*exchange_ptr_ptr), NULL,
+                             failure_state(err));
+        } else {
+            avs_coap_exchange_cancel(ctx, (**exchange_ptr_ptr)->id);
+        }
+        *exchange_ptr_ptr = NULL;
+    }
+    return err;
+}
+
+bool _avs_coap_client_exchange_request_sent(
+        const avs_coap_exchange_t *exchange) {
+    // Token is initialized in _avs_coap_client_exchange_send_next_chunk() and
+    // zero-length tokens are never used. Hence, zero-length token means that
+    // no request packets have been sent yet.
+    return exchange->token.size > 0;
+}
+
+static avs_error_t
+client_exchange_start(avs_coap_ctx_t *ctx,
+                      AVS_LIST(avs_coap_exchange_t) *exchange_ptr,
+                      avs_coap_exchange_id_t *out_id) {
+    assert(exchange_ptr);
+    assert(*exchange_ptr);
+
+    AVS_LIST(avs_coap_exchange_t) *insert_ptr =
+            &_avs_coap_get_base(ctx)->client_exchanges;
+    // client_exchanges list containts exchanges for which the first request
+    // packet has not been sent yet at the beginning. Add the new exchange after
+    // all such existing exchanges, but before any others.
+    while (*insert_ptr
+           && !_avs_coap_client_exchange_request_sent(*insert_ptr)) {
+        AVS_LIST_ADVANCE_PTR(&insert_ptr);
+    }
+    AVS_LIST_INSERT(insert_ptr, *exchange_ptr);
+    assert(*insert_ptr == *exchange_ptr);
+    (*exchange_ptr)->id = _avs_coap_generate_exchange_id(ctx);
+
+    avs_error_t err = AVS_OK;
+    if ((*exchange_ptr)->by_type.client.handle_response) {
+        *out_id = (*exchange_ptr)->id;
+        _avs_coap_reschedule_retry_or_request_expired_job(
+                ctx, avs_time_monotonic_now());
+    } else {
+        *out_id = AVS_COAP_EXCHANGE_ID_INVALID;
+        err = client_exchange_send_all(ctx, &insert_ptr);
+    }
+
+    *exchange_ptr = NULL;
+    return err;
+}
+
 static state_with_error_t
-handle_response(avs_coap_exchange_t *exchange,
+handle_response(avs_coap_ctx_t *ctx,
+                AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr,
                 const avs_coap_borrowed_msg_t *response) {
     assert(response);
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
 
     switch (response->code) {
     case AVS_COAP_CODE_CONTINUE:
 #ifdef WITH_AVS_COAP_BLOCK
-        if (!exchange_expects_continue_response(exchange)) {
+        if (!exchange_expects_continue_response(**exchange_ptr_ptr)) {
             LOG(DEBUG, _("unexpected ") "%s" _(" response"),
                 AVS_COAP_CODE_STRING(response->code));
             return failure_state(
                     _avs_coap_err(AVS_COAP_ERR_UNEXPECTED_CONTINUE_RESPONSE));
         }
 
-        return handle_continue_response(exchange, response);
+        return handle_continue_response(ctx, exchange_ptr_ptr, response);
 #else  // WITH_AVS_COAP_BLOCK
         LOG(DEBUG, _("unexpected ") "%s" _(" response"),
             AVS_COAP_CODE_STRING(response->code));
@@ -595,16 +791,17 @@ handle_response(avs_coap_exchange_t *exchange,
         return failure_state(_avs_coap_err(AVS_COAP_ERR_NOT_IMPLEMENTED));
 
     default:
-        return handle_final_response(exchange, response);
+        return handle_final_response(ctx, exchange_ptr_ptr, response);
     }
 }
 
 #ifdef WITH_AVS_COAP_BLOCK
 static state_with_error_t
 handle_failure(avs_coap_ctx_t *ctx,
-               avs_coap_exchange_t *exchange,
+               AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr,
                const avs_coap_borrowed_msg_t *response,
                avs_error_t fail_err) {
+    assert(exchange_ptr_ptr && *exchange_ptr_ptr && **exchange_ptr_ptr);
     if (fail_err.category != AVS_COAP_ERR_CATEGORY
             || fail_err.code != AVS_COAP_ERR_TRUNCATED_MESSAGE_RECEIVED
             || !response) {
@@ -641,21 +838,23 @@ handle_failure(avs_coap_ctx_t *ctx,
     }
     assert(new_max_block_size != block2.size);
 
-    size_t byte_offset = block2.size * block2.seq_num;
     assert(block2.type == AVS_COAP_BLOCK2);
     block2.size = (uint16_t) new_max_block_size;
-    block2.seq_num = (uint32_t) (byte_offset / new_max_block_size);
+    block2.seq_num =
+            (uint32_t) ((**exchange_ptr_ptr)
+                                ->by_type.client.next_response_payload_offset
+                        / new_max_block_size);
 
     // Replace or add BLOCK2 option to our request, so that the response would
     // likely fit into the input buffer.
-    avs_coap_options_remove_by_number(&exchange->options,
+    avs_coap_options_remove_by_number(&(**exchange_ptr_ptr)->options,
                                       AVS_COAP_OPTION_BLOCK2);
 
     avs_error_t send_err;
-    if (avs_is_err((send_err = avs_coap_options_add_block(&exchange->options,
-                                                          &block2)))
+    if (avs_is_err((send_err = avs_coap_options_add_block(
+                            &(**exchange_ptr_ptr)->options, &block2)))
             || avs_is_err((send_err = client_exchange_send_next_chunk(
-                                   ctx, exchange)))) {
+                                   ctx, exchange_ptr_ptr)))) {
         return failure_state(avs_is_ok(fail_err) ? send_err : fail_err);
     }
     return success_state(AVS_COAP_CLIENT_REQUEST_OK);
@@ -663,11 +862,11 @@ handle_failure(avs_coap_ctx_t *ctx,
 #else  // WITH_AVS_COAP_BLOCK
 static state_with_error_t
 handle_failure(avs_coap_ctx_t *ctx,
-               avs_coap_exchange_t *exchange,
+               AVS_LIST(avs_coap_exchange_t) **exchange_ptr_ptr,
                const avs_coap_borrowed_msg_t *response,
                avs_error_t fail_err) {
     (void) ctx;
-    (void) exchange;
+    (void) exchange_ptr_ptr;
     (void) response;
     return failure_state(fail_err);
 }
@@ -690,23 +889,21 @@ on_request_delivery_finished(avs_coap_ctx_t *ctx,
     }
     assert(*exchange_ptr == exchange);
 
-    if (response) {
-        (*exchange_ptr)->by_type.client.next_response_payload_offset +=
-                response->payload_size;
-    }
-
     state_with_error_t request_state;
     switch (result) {
     case AVS_COAP_SEND_RESULT_PARTIAL_CONTENT:
-        request_state = success_state(AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT);
-        break;
+        call_partial_response_handler(ctx, &exchange_ptr, response);
+        return AVS_COAP_RESPONSE_ACCEPTED;
 
     case AVS_COAP_SEND_RESULT_OK:
-        request_state = handle_response(*exchange_ptr, response);
+        request_state = handle_response(ctx, &exchange_ptr, response);
+        if (request_state.state == AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
+            return AVS_COAP_RESPONSE_ACCEPTED;
+        }
         break;
 
     case AVS_COAP_SEND_RESULT_FAIL:
-        request_state = handle_failure(ctx, *exchange_ptr, response, fail_err);
+        request_state = handle_failure(ctx, &exchange_ptr, response, fail_err);
         if (request_state.state == AVS_COAP_CLIENT_REQUEST_OK) {
             // we recovered from failure
             return AVS_COAP_RESPONSE_ACCEPTED;
@@ -718,38 +915,6 @@ on_request_delivery_finished(avs_coap_ctx_t *ctx,
         break;
     }
 
-    exchange_ptr = _avs_coap_find_client_exchange_ptr_by_id(ctx, exchange_id);
-    if (!exchange_ptr) {
-        return AVS_COAP_RESPONSE_ACCEPTED;
-    }
-
-    if (request_state.state == AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
-        assert(response);
-
-        // do not report PARTIAL_CONTENT unless there is some actual content
-        // this avoids calling the handler for empty 2.31 Continue responses
-        if (response->payload && response->payload_size > 0) {
-            call_exchange_response_handler(ctx, *exchange_ptr, response,
-                                           request_state);
-            // the call might have canceled the exchange
-            exchange_ptr =
-                    _avs_coap_find_client_exchange_ptr_by_id(ctx, exchange_id);
-        }
-
-        if (exchange_ptr && result == AVS_COAP_SEND_RESULT_OK) {
-            // We're finished with a single response packet, but not with the
-            // whole exchange. Request more data from the server.
-            avs_error_t err =
-                    client_exchange_send_next_chunk(ctx, *exchange_ptr);
-            if (avs_is_err(err)) {
-                request_state = failure_state(err);
-            }
-            // the call might have canceled the exchange
-            exchange_ptr =
-                    _avs_coap_find_client_exchange_ptr_by_id(ctx, exchange_id);
-        }
-    }
-
     if (request_state.state == AVS_COAP_CLIENT_REQUEST_FAIL) {
         // We may end up here if a response was received, but during handling
         // at this layer we realize it is not well-formed, or that we cannot
@@ -757,8 +922,8 @@ on_request_delivery_finished(avs_coap_ctx_t *ctx,
         response = NULL;
     }
 
-    if (exchange_ptr
-            && request_state.state != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
+    assert(!exchange_ptr || *exchange_ptr);
+    if (exchange_ptr) {
         cleanup_exchange(ctx, AVS_LIST_DETACH(exchange_ptr), response,
                          request_state);
     }
@@ -904,15 +1069,46 @@ avs_error_t avs_coap_client_send_async_request(
 }
 
 void _avs_coap_client_exchange_cleanup(avs_coap_ctx_t *ctx,
-                                       avs_coap_exchange_t *exchange) {
+                                       avs_coap_exchange_t *exchange,
+                                       avs_error_t err) {
     AVS_ASSERT(!AVS_LIST_FIND_PTR(&_avs_coap_get_base(ctx)->client_exchanges,
                                   exchange),
                "exchange must be detached");
     assert(avs_coap_code_is_request(exchange->code));
 
-    ctx->vtable->abort_delivery(ctx, AVS_COAP_EXCHANGE_CLIENT_REQUEST,
-                                &exchange->token, AVS_COAP_SEND_RESULT_CANCEL,
-                                AVS_OK);
+    if (_avs_coap_client_exchange_request_sent(exchange)) {
+        ctx->vtable->abort_delivery(ctx, AVS_COAP_EXCHANGE_CLIENT_REQUEST,
+                                    &exchange->token,
+                                    avs_is_err(err)
+                                            ? AVS_COAP_SEND_RESULT_FAIL
+                                            : AVS_COAP_SEND_RESULT_CANCEL,
+                                    err);
+    }
     cleanup_exchange(ctx, exchange, NULL,
-                     success_state(AVS_COAP_CLIENT_REQUEST_CANCEL));
+                     avs_is_err(err)
+                             ? failure_state(err)
+                             : success_state(AVS_COAP_CLIENT_REQUEST_CANCEL));
+}
+
+avs_error_t avs_coap_client_set_next_response_payload_offset(
+        avs_coap_ctx_t *ctx,
+        avs_coap_exchange_id_t exchange_id,
+        size_t next_response_payload_offset) {
+    avs_coap_exchange_t *exchange = NULL;
+    if (avs_coap_exchange_id_valid(exchange_id)) {
+        exchange = _avs_coap_find_client_exchange_by_id(ctx, exchange_id);
+    }
+    if (!exchange) {
+        return avs_errno(AVS_ENOENT);
+    }
+    // NOTE: The second clause creates a special exception that allows
+    // explicitly setting offset to 0 if the first request has not been sent yet
+    if (next_response_payload_offset
+                    <= exchange->by_type.client.next_response_payload_offset
+            && (next_response_payload_offset > 0 || exchange->token.size > 0)) {
+        return avs_errno(AVS_EINVAL);
+    }
+    exchange->by_type.client.next_response_payload_offset =
+            next_response_payload_offset;
+    return AVS_OK;
 }

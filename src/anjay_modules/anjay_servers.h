@@ -59,9 +59,11 @@ avs_coap_ctx_t *_anjay_connection_get_coap(anjay_connection_ref_t ref);
  * It's currently only used in the Firmware Update module, to allow deriving the
  * security information from the data model when it's not explicitly specified.
  */
-anjay_security_config_t *_anjay_get_security_config(anjay_t *anjay,
-                                                    anjay_ssid_t ssid,
-                                                    anjay_iid_t security_iid);
+avs_error_t _anjay_get_security_config(anjay_t *anjay,
+                                       anjay_security_config_t *out_config,
+                                       anjay_security_config_cache_t *cache,
+                                       anjay_ssid_t ssid,
+                                       anjay_iid_t security_iid);
 
 /**
  * Returns an active server object associated with given @p socket .

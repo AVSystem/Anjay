@@ -93,27 +93,27 @@ bool _anjay_dm_handler_implemented(anjay_t *anjay,
     return get_handler(anjay, obj_ptr, current_module, handler_offset) != NULL;
 }
 
-#define CHECKED_TAIL_CALL_HANDLER(Anjay, ObjPtr, Current, HandlerName, ...)  \
-    do {                                                                     \
-        const anjay_dm_handlers_t *handler =                                 \
-                get_handler((Anjay), (ObjPtr), (Current),                    \
-                            offsetof(anjay_dm_handlers_t, HandlerName));     \
-        if (handler) {                                                       \
-            int AVS_CONCAT(result, __LINE__) =                               \
-                    handler->HandlerName(__VA_ARGS__);                       \
-            if (AVS_CONCAT(result, __LINE__)) {                              \
-                dm_log(DEBUG, #HandlerName _(" failed with code") "%d (%s)", \
-                       AVS_CONCAT(result, __LINE__),                         \
-                       AVS_COAP_CODE_STRING(_anjay_make_error_response_code( \
-                               AVS_CONCAT(result, __LINE__))));              \
-            }                                                                \
-            return AVS_CONCAT(result, __LINE__);                             \
-        } else {                                                             \
-            dm_log(DEBUG,                                                    \
-                   #HandlerName _(" handler not set for object ") "/%u",     \
-                   (*(ObjPtr))->oid);                                        \
-            return ANJAY_ERR_METHOD_NOT_ALLOWED;                             \
-        }                                                                    \
+#define CHECKED_TAIL_CALL_HANDLER(Anjay, ObjPtr, Current, HandlerName, ...)   \
+    do {                                                                      \
+        const anjay_dm_handlers_t *handler =                                  \
+                get_handler((Anjay), (ObjPtr), (Current),                     \
+                            offsetof(anjay_dm_handlers_t, HandlerName));      \
+        if (handler) {                                                        \
+            int AVS_CONCAT(result, __LINE__) =                                \
+                    handler->HandlerName(__VA_ARGS__);                        \
+            if (AVS_CONCAT(result, __LINE__)) {                               \
+                dm_log(DEBUG, #HandlerName _(" failed with code ") "%d (%s)", \
+                       AVS_CONCAT(result, __LINE__),                          \
+                       AVS_COAP_CODE_STRING(_anjay_make_error_response_code(  \
+                               AVS_CONCAT(result, __LINE__))));               \
+            }                                                                 \
+            return AVS_CONCAT(result, __LINE__);                              \
+        } else {                                                              \
+            dm_log(DEBUG,                                                     \
+                   #HandlerName _(" handler not set for object ") "/%u",      \
+                   (*(ObjPtr))->oid);                                         \
+            return ANJAY_ERR_METHOD_NOT_ALLOWED;                              \
+        }                                                                     \
     } while (0)
 
 int _anjay_dm_call_object_read_default_attrs(

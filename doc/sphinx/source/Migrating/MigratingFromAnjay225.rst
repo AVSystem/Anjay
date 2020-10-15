@@ -80,6 +80,29 @@ Other changes
   * ``MAX_OBSERVABLE_RESOURCE_SIZE``
   * ``WITH_ATTR_STORAGE``
 
+* **Getter function for retrieving security information from data model**
+
+  * **Old API:**
+    ::
+
+        anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
+                                                               const char *uri);
+  * **New API:**
+
+    .. snippet-source:: include_public/anjay/core.h
+
+        int anjay_security_config_from_dm(anjay_t *anjay,
+                                          anjay_security_config_t *out_config,
+                                          const char *raw_url);
+
+  * The security configuration is now returned through an output argument with
+    any necessary internal buffers cached inside the Anjay object instead of
+    using heap allocation. Please refer to the Doxygen-based documenation of
+    this function for details.
+
+    Due to the change in lifetime requirements, no compatibility variant is
+    provided.
+
 
 Changes in avs_coap
 -------------------
@@ -405,33 +428,33 @@ Public key cryptography APIs, previously defined in
 ``avsystem/commons/socket.h``, have been moved into a new header called
 ``avsystem/commons/avs_crypto_pki.h``.
 
-Additionally, the following types and functions have been renamed:
+Additionally, client-side and server-side certificate info structures are no
+longer separate, and both have been merged into a single type.
 
-+------------------------------------------------+------------------------------------------------+
-| Old symbol name                                | New symbol name                                |
-+================================================+================================================+
-| ``avs_net_client_cert_info_t``                 | ``avs_crypto_client_cert_info_t``              |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_client_key_info_t``                  | ``avs_crypto_client_key_info_t``               |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_security_info_union_t``              | ``avs_crypto_security_info_union_t``           |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_trusted_cert_info_t``                | ``avs_crypto_trusted_cert_info_t``             |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_client_cert_info_from_buffer()``     | ``avs_crypto_client_cert_info_from_buffer()``  |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_client_cert_info_from_file()``       | ``avs_crypto_client_cert_info_from_file()``    |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_client_key_info_from_buffer()``      | ``avs_crypto_client_key_info_from_buffer()``   |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_client_key_info_from_file()``        | ``avs_crypto_client_key_info_from_file()``     |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_trusted_cert_info_from_buffer()``    | ``avs_crypto_trusted_cert_info_from_buffer()`` |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_trusted_cert_info_from_file()``      | ``avs_crypto_trusted_cert_info_from_file()``   |
-+------------------------------------------------+------------------------------------------------+
-| ``avs_net_trusted_cert_info_from_path()``      | ``avs_crypto_trusted_cert_info_from_path()``   |
-+------------------------------------------------+------------------------------------------------+
+Here is a summary of renames:
+
++-----------------------------------------------+-----------------------------------------------------+
+| Old symbol name                               | New symbol name                                     |
++===============================================+=====================================================+
+| | ``avs_net_trusted_cert_info_t``             | ``avs_crypto_certificate_chain_info_t``             |
+| | ``avs_net_client_cert_info_t``              |                                                     |
++-----------------------------------------------+-----------------------------------------------------+
+| ``avs_net_client_key_info_t``                 | ``avs_crypto_private_key_info_t``                   |
++-----------------------------------------------+-----------------------------------------------------+
+| ``avs_net_security_info_union_t``             | ``avs_crypto_security_info_union_t``                |
++-----------------------------------------------+-----------------------------------------------------+
+| | ``avs_net_trusted_cert_info_from_buffer()`` | ``avs_crypto_certificate_chain_info_from_buffer()`` |
+| | ``avs_net_client_cert_info_from_buffer()``  |                                                     |
++-----------------------------------------------+-----------------------------------------------------+
+| | ``avs_net_trusted_cert_info_from_file()``   | ``avs_crypto_certificate_chain_info_from_file()``   |
+| | ``avs_net_client_cert_info_from_file()``    |                                                     |
++-----------------------------------------------+-----------------------------------------------------+
+| ``avs_net_client_key_info_from_buffer()``     | ``avs_crypto_private_key_info_from_buffer()``       |
++-----------------------------------------------+-----------------------------------------------------+
+| ``avs_net_client_key_info_from_file()``       | ``avs_crypto_private_key_info_from_file()``         |
++-----------------------------------------------+-----------------------------------------------------+
+| ``avs_net_trusted_cert_info_from_path()``     | ``avs_crypto_certificate_chain_info_from_path()``   |
++-----------------------------------------------+-----------------------------------------------------+
 
 Changes to public configuration macros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

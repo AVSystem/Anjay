@@ -20,6 +20,7 @@
 
 #include <avsystem/commons/avs_errno.h>
 #include <avsystem/commons/avs_stream_inbuf.h>
+#include <avsystem/commons/avs_stream_membuf.h>
 #include <avsystem/commons/avs_utils.h>
 
 #include <avsystem/coap/udp.h>
@@ -53,55 +54,53 @@ void _anjay_connection_internal_clean_socket(
     avs_sched_del(&connection->queue_mode_close_socket_clb);
 }
 
-const void *_anjay_connection_security_read_key(anjay_t *anjay,
-                                                anjay_iid_t security_iid,
-                                                anjay_rid_t security_rid,
-                                                char **data_buffer_ptr,
-                                                const char *data_buffer_end,
-                                                size_t *out_size) {
+avs_error_t
+_anjay_connection_init_psk_security(anjay_t *anjay,
+                                    anjay_iid_t security_iid,
+                                    anjay_rid_t identity_rid,
+                                    anjay_rid_t secret_key_rid,
+                                    avs_net_security_info_t *security,
+                                    void **out_psk_buffer) {
     assert(anjay);
-    assert(data_buffer_ptr);
-    assert(*data_buffer_ptr);
-    assert(data_buffer_end);
-    assert(*data_buffer_ptr <= data_buffer_end);
-    assert(out_size);
-    const anjay_uri_path_t path =
-            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                               security_rid);
-    if (_anjay_dm_read_resource(anjay, &path, *data_buffer_ptr,
-                                (size_t) (data_buffer_end - *data_buffer_ptr),
-                                out_size)) {
+    assert(out_psk_buffer && !*out_psk_buffer);
+    avs_stream_t *membuf = avs_stream_membuf_create();
+    if (!membuf) {
+        anjay_log(ERROR, _("out of memory"));
+        return avs_errno(AVS_ENOMEM);
+    }
+
+    avs_error_t err = AVS_OK;
+    avs_off_t psk_offset;
+    anjay_uri_path_t path;
+    if (((path = MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                                    identity_rid)),
+         _anjay_dm_read_resource_into_stream(anjay, &path, membuf))
+            || avs_is_err((err = avs_stream_offset(membuf, &psk_offset)))
+            || psk_offset < 0
+            || ((path = MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                                           secret_key_rid)),
+                _anjay_dm_read_resource_into_stream(anjay, &path, membuf))) {
         anjay_log(WARNING, _("read ") "%s" _(" failed"),
                   ANJAY_DEBUG_MAKE_PATH(&path));
-        return NULL;
-    }
-    const char *result = *data_buffer_ptr;
-    *data_buffer_ptr += *out_size;
-    assert(*data_buffer_ptr <= data_buffer_end);
-    return result;
-}
-
-int _anjay_connection_init_psk_security(anjay_t *anjay,
-                                        anjay_iid_t security_iid,
-                                        anjay_rid_t identity_rid,
-                                        anjay_rid_t secret_key_rid,
-                                        avs_net_security_info_t *security,
-                                        char **data_buffer_ptr,
-                                        const char *data_buffer_end) {
-    avs_net_psk_info_t result;
-    memset(&result, 0, sizeof(result));
-
-    if (!(result.identity = _anjay_connection_security_read_key(
-                  anjay, security_iid, identity_rid, data_buffer_ptr,
-                  data_buffer_end, &result.identity_size))
-            || !(result.psk = _anjay_connection_security_read_key(
-                         anjay, security_iid, secret_key_rid, data_buffer_ptr,
-                         data_buffer_end, &result.psk_size))) {
-        return -1;
+        if (avs_is_ok(err)) {
+            err = avs_errno(AVS_EPROTO);
+        }
     }
 
-    *security = avs_net_security_info_from_psk(result);
-    return 0;
+    size_t buffer_size;
+    if (avs_is_ok(err)
+            && avs_is_ok((err = avs_stream_membuf_take_ownership(
+                                  membuf, out_psk_buffer, &buffer_size)))) {
+        *security = avs_net_security_info_from_psk((avs_net_psk_info_t) {
+            .identity = *out_psk_buffer,
+            .identity_size = (size_t) psk_offset,
+            .psk = (char *) *out_psk_buffer + psk_offset,
+            .psk_size = buffer_size - (size_t) psk_offset
+        });
+    }
+
+    avs_stream_cleanup(&membuf);
+    return err;
 }
 
 static const anjay_connection_type_definition_t *
@@ -217,29 +216,31 @@ recreate_socket(anjay_t *anjay,
 
     // At this point, inout_info has "global" settings filled,
     // but transport-specific (i.e. UDP or SMS) fields are not
-    anjay_security_config_t *security_config;
+    anjay_security_config_t security_config;
+    anjay_security_config_cache_t security_config_cache;
+    memset(&security_config_cache, 0, sizeof(security_config_cache));
+    avs_error_t err;
     {
-        security_config =
-                _anjay_connection_security_generic_get_config(anjay,
-                                                              inout_info);
+        err = _anjay_connection_security_generic_get_config(
+                anjay, &security_config, &security_config_cache, inout_info);
     }
-    if (!security_config) {
+    if (avs_is_err(err)) {
         anjay_log(DEBUG,
                   _("could not get ") "%s" _(
                           " security config for server ") "/%u/%u",
                   def->name, ANJAY_DM_OID_SECURITY, inout_info->security_iid);
-        return avs_errno(AVS_EPROTO);
+    } else {
+        socket_config.security = security_config.security_info;
+        socket_config.ciphersuites = security_config.tls_ciphersuites;
+        if (avs_is_err((err = def->prepare_connection(
+                                anjay, connection, &socket_config,
+                                security_config.dane_tlsa_record, inout_info)))
+                && connection->conn_socket_) {
+            avs_net_socket_shutdown(connection->conn_socket_);
+            avs_net_socket_close(connection->conn_socket_);
+        }
     }
-    socket_config.security = security_config->security_info;
-    socket_config.ciphersuites = security_config->tls_ciphersuites;
-    avs_error_t err = def->prepare_connection(anjay, connection, &socket_config,
-                                              security_config->dane_tlsa_record,
-                                              inout_info);
-    if (avs_is_err(err) && connection->conn_socket_) {
-        avs_net_socket_shutdown(connection->conn_socket_);
-        avs_net_socket_close(connection->conn_socket_);
-    }
-    avs_free(security_config);
+    _anjay_security_config_cache_cleanup(&security_config_cache);
     return err;
 }
 
@@ -375,17 +376,20 @@ void _anjay_server_connections_refresh(
     _anjay_connection_info_cleanup(&server_info);
 }
 
-anjay_security_config_t *_anjay_get_security_config(anjay_t *anjay,
-                                                    anjay_ssid_t ssid,
-                                                    anjay_iid_t security_iid) {
+avs_error_t _anjay_get_security_config(anjay_t *anjay,
+                                       anjay_security_config_t *out_config,
+                                       anjay_security_config_cache_t *cache,
+                                       anjay_ssid_t ssid,
+                                       anjay_iid_t security_iid) {
     anjay_connection_info_t info = {
         .ssid = ssid,
         .security_iid = security_iid
     };
-    anjay_security_config_t *result =
-            _anjay_connection_security_generic_get_config(anjay, &info);
+    avs_error_t err =
+            _anjay_connection_security_generic_get_config(anjay, out_config,
+                                                          cache, &info);
     _anjay_connection_info_cleanup(&info);
-    return result;
+    return err;
 }
 
 bool _anjay_socket_transport_supported(anjay_t *anjay,

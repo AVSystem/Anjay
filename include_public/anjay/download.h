@@ -224,6 +224,57 @@ avs_error_t anjay_download(anjay_t *anjay,
                            anjay_download_handle_t *out_handle);
 
 /**
+ * Changes the offset of the remote resource that the user wants to receive the
+ * next response data block from.
+ *
+ * This function is only intended to be called from within an implementation of
+ * @ref anjay_download_next_block_handler_t.
+ *
+ * The offset can only be moved forward relative to the last known starting
+ * offset. Attempting to set it to an offset of byte that was already received
+ * in a previously finished call to @ref anjay_download_next_block_handler_t, or
+ * is smaller than an offset already passed to this function, will result in an
+ * error.
+ *
+ * When called from within @ref anjay_download_next_block_handler_t,
+ * @p next_block_offset may be set to a position that lies after or within the
+ * <c>data</c> buffer passed to it (but further than the current offset). If a
+ * position within the buffer is passed, the block handler will be called again
+ * with a portion of the same buffer, starting at the desired offset.
+ *
+ * If this function is never called during a call to
+ * @ref anjay_download_next_block_handler_t, the file pointer is implicitly
+ * moved by the whole size of the buffer passed to it.
+ *
+ * It is guaranteed that if there will be a next call to
+ * @ref anjay_download_next_block_handler_t for the given download, it will be
+ * passed data from the specified offset.
+ *
+ * NOTE: Actual efficient skipping of already downloaded data is currently only
+ * supported for CoAP. Using this function with HTTP downloads will only
+ * suppress passing the skipped data; full file will still be transmitted over
+ * the network.
+ *
+ * @param anjay             Anjay object managing the download process.
+ * @param dl_handle         Download handle previously returned by
+ *                          @ref anjay_download.
+ * @param next_block_offset Block offset to set.
+ *
+ * @returns
+ *  - @ref AVS_OK for success
+ *  - <c>avs_errno(AVS_ENOENT)</c> if @p dl_handle does not refer to an existing
+ *    download process
+ *  - <c>avs_errno(AVS_EINVAL)</c> if @p next_block_offset is smaller than the
+ *    currently recognized value
+ *  - <c>avs_errno(AVS_ENOTSUP</c> if Anjay has been compiled without support
+ *    for downloads
+ */
+avs_error_t
+anjay_download_set_next_block_offset(anjay_t *anjay,
+                                     anjay_download_handle_t dl_handle,
+                                     size_t next_block_offset);
+
+/**
  * Aborts a download identified by @p dl_handle. Does nothing if @p dl_handle
  * does not represent a valid download handle.
  *

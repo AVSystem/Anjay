@@ -247,6 +247,13 @@
 /**@}*/
 
 /**
+ * Enables support of some HSM features in OpenSSL (using PKCS11 API) and tests
+ * of that features. To make the tests pass, softhsm and pkcs11-tool must be
+ * installed.
+ */
+/* #undef AVS_COMMONS_WITH_OPENSSL_PKCS11_ENGINE */
+
+/**
  * Options related to avs_crypto.
  */
 /**@{*/

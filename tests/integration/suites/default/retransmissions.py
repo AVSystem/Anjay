@@ -386,8 +386,9 @@ class DtlsRequestBootstrapTimeoutFallbacksToHsTest(RetransmissionTest.TestMixin,
     def setUp(self):
         super().setUp(bootstrap_server=Lwm2mServer(coap.DtlsServer(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY)),
                       auto_register=False)
-        self.assertDemoRegisters(self.serv)
+        self.serv.listen()
         self.bootstrap_server.listen()
+        self.assertDemoRegisters(self.serv)
 
     def tearDown(self):
         super().teardown_demo_with_servers(auto_deregister=False)
@@ -462,8 +463,9 @@ class DtlsRequestBootstrapFailsOnIcmpTest(test_suite.PcapEnabledTest,
         super().teardown_demo_with_servers(auto_deregister=False)
 
     def runTest(self):
-        pkt = self.assertDemoRegisters(respond=False)
+        self.serv.listen()
         self.bootstrap_server.listen()
+        pkt = self.assertDemoRegisters(respond=False)
         # Give dumpcap a little bit of time to write to dump file.
         time.sleep(self.ACK_TIMEOUT / 2)
         num_initial_dtls_hs_packets = self.count_dtls_client_hello_packets()

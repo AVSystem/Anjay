@@ -312,15 +312,19 @@ static avs_error_t flush_chunk(coap_stream_t *stream) {
     avs_coap_ctx_t *ctx = coap_stream_owner_ctx(stream);
     if (!avs_coap_exchange_id_valid(stream->exchange_id)) {
         // We need to send the first (or only) request chunk, so we need to
-        // create the underlying async exchange.
-        // feed_payload_chunk() will be called during this call;
+        // create the underlying async exchange. feed_payload_chunk() will be
+        // called during _avs_coap_retry_or_request_expired_job();
         // handle_response() is just configured, but not called just yet - the
         // response is received and handled later, within
         // try_wait_for_response() - see comments there for details.
         avs_error_t err = avs_coap_client_send_async_request(
                 ctx, &stream->exchange_id, &stream->request_header,
                 feed_payload_chunk, stream, handle_response, stream);
-        coap_stream_set_error(stream, err);
+        if (avs_is_err(err)) {
+            coap_stream_set_error(stream, err);
+        } else {
+            _avs_coap_retry_or_request_expired_job(ctx);
+        }
         return stream->err;
     }
 

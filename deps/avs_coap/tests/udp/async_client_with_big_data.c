@@ -63,12 +63,14 @@ AVS_UNIT_TEST(udp_async_client_with_big_data,
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     // Block size renegotiation should be ignored and the request should
     // continue with previous block size.

@@ -1025,8 +1025,8 @@ AVS_UNIT_TEST(coap_options, observe) {
     ASSERT_OK(avs_coap_options_get_observe(&opts, &value));
     ASSERT_EQ(value, 0xFFFFFF);
 }
-#    endif // WITH_AVS_COAP_OBSERVE
 
+#        ifdef WITH_AVS_COAP_BLOCK
 static avs_coap_request_header_t request_header_init(uint8_t coap_code) {
     static uint8_t buf[64];
     memset(buf, 0, sizeof(buf));
@@ -1055,7 +1055,6 @@ static bool critical_option_validator(uint8_t msg_code, uint32_t optnum) {
     }
 }
 
-#    if defined(WITH_AVS_COAP_OBSERVE) && defined(WITH_AVS_COAP_BLOCK)
 AVS_UNIT_TEST(coap_options, critical_option_validator) {
     avs_coap_request_header_t req_header;
 
@@ -1106,6 +1105,8 @@ AVS_UNIT_TEST(coap_options, critical_option_validator) {
     ASSERT_FAIL(avs_coap_options_validate_critical(&req_header,
                                                    critical_option_validator));
 }
-#    endif // defined(WITH_AVS_COAP_OBSERVE) && defined(WITH_AVS_COAP_BLOCK)
+#        endif // WITH_AVS_COAP_BLOCK
+
+#    endif // WITH_AVS_COAP_OBSERVE
 
 #endif // AVS_UNIT_TESTING

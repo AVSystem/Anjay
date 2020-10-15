@@ -27,23 +27,29 @@ from suites.default import bootstrap_client
 
 class CertificatesTest:
     class Test(test_suite.Lwm2mSingleServerTest):
-        def setUp(self, server_crt=None, server_key=None, client_crt_der=None, client_key_der=None, server_crt_der=None, *args, **kwargs):
+        def _cert_file(self, filename):
             # demo_path = 'anjay/output/bin'
-            certs_dir = os.path.join(os.path.dirname(self.config.demo_path), 'certs')
-            extra_cmdline_args = []
+            return os.path.join(os.path.dirname(self.config.demo_path), 'certs', filename)
+
+        def setUp(self, client_ca_file=None, server_crt=None, server_key=None, client_crt_file=None,
+                  client_key_file=None, server_crt_file=None, extra_cmdline_args=None,
+                  *args, **kwargs):
+            extra_cmdline_args = [*extra_cmdline_args] if extra_cmdline_args is not None else []
+            if client_ca_file is not None:
+                client_ca_file = self._cert_file(client_ca_file)
             if server_crt is not None:
-                server_crt = os.path.join(certs_dir, server_crt)
+                server_crt = self._cert_file(server_crt)
             if server_key is not None:
-                server_key = os.path.join(certs_dir, server_key)
-            if (client_crt_der is not None):
-                extra_cmdline_args += ['-C' + os.path.join(certs_dir, client_crt_der)]
-            if (client_key_der is not None):
-                extra_cmdline_args += ['-K' + os.path.join(certs_dir, client_key_der)]
-            if (server_crt_der is not None):
-                extra_cmdline_args += ['-P' + os.path.join(certs_dir, server_crt_der)]
-            super().setUp(server_crt_file=server_crt,
-                          server_key_file=server_key,
-                          extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
+                server_key = self._cert_file(server_key)
+            if (client_crt_file is not None):
+                extra_cmdline_args += ['-C' + self._cert_file(client_crt_file)]
+            if (client_key_file is not None):
+                extra_cmdline_args += ['-K' + self._cert_file(client_key_file)]
+            if (server_crt_file is not None):
+                extra_cmdline_args += ['-P' + self._cert_file(server_crt_file)]
+            super().setUp(client_ca_file=client_ca_file, server_crt_file=server_crt,
+                          server_key_file=server_key, extra_cmdline_args=extra_cmdline_args,
+                          *args, **kwargs)
 
 
 class RegisterWithCertificates(CertificatesTest.Test):
@@ -54,24 +60,25 @@ class RegisterWithCertificates(CertificatesTest.Test):
 class RegisterWithSelfSignedCertificatesAndServerPublicKey(CertificatesTest.Test):
     def setUp(self):
         super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
-                      client_crt_der='self-signed/client.crt.der', client_key_der='self-signed/client.key.der',
-                      server_crt_der='self-signed/server.crt.der')
+                      client_crt_file='self-signed/client.crt.der',
+                      client_key_file='self-signed/client.key.der',
+                      server_crt_file='self-signed/server.crt.der')
 
 
 class RegisterWithMismatchedServerPublicKey(CertificatesTest.Test):
     def setUp(self):
         super().setUp(server_crt='self-signed/server.crt', server_key='self-signed/server.key',
-                      client_crt_der='self-signed/client.crt.der',
-                      client_key_der='self-signed/client.key.der',
+                      client_crt_file='self-signed/client.crt.der',
+                      client_key_file='self-signed/client.key.der',
                       # Use server.crt.der generated from different server.crt (not self-signed/server.crt)
-                      server_crt_der='server.crt.der', auto_register=False)
+                      server_crt_file='server.crt.der', auto_register=False)
 
     def runTest(self):
         from framework.test_suite import read_until_match
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises((RuntimeError, socket.timeout)):
             self.assertDemoRegisters(self.serv)
-            # -9984 == -0x2700 == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
-            read_until_match(self.demo_process.log_file, 'handshake failed: -9984', 1)
+        # -9984 == -0x2700 == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
+        read_until_match(self.demo_process.log_file, b'handshake failed: -9984', 1)
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)
@@ -81,7 +88,7 @@ class RegisterWithMismatchedServerPublicKey(CertificatesTest.Test):
 class RegisterWithCertificatesAndServerPublicKey(CertificatesTest.Test):
     def setUp(self):
         super().setUp(server_crt='server.crt', server_key='server.key',
-                      client_crt_der=None, client_key_der=None, server_crt_der='server.crt.der')
+                      client_crt_file=None, client_key_file=None, server_crt_file='server.crt.der')
 
 
 class BlockRegister:
@@ -117,8 +124,6 @@ class Register:
 class RegisterUdp:
     class TestCase(Register.TestCase, test_suite.Lwm2mSingleServerTest):
         pass
-
-
 
 
 def expected_content():
@@ -240,7 +245,7 @@ class ConcurrentRequestWhileWaitingForResponse:
 
 
 class ConcurrentRequestWhileWaitingForResponseUdp(
-        ConcurrentRequestWhileWaitingForResponse.TestMixin, RegisterUdp.TestCase):
+    ConcurrentRequestWhileWaitingForResponse.TestMixin, RegisterUdp.TestCase):
     pass
 
 

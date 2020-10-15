@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.6.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.7.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -81,8 +81,6 @@ endif()
 
 set(MAX_PK_OR_IDENTITY_SIZE 2048 CACHE STRING
     "Maximum supported size (in bytes) of 'PK or Identity' Resource in Security object.")
-set(MAX_SERVER_PK_OR_IDENTITY_SIZE 2048 CACHE STRING
-    "Maximum supported size (in bytes) of 'Security PK or Identity' Resource in Security object.")
 set(MAX_SECRET_KEY_SIZE 256 CACHE STRING
     "Maximum supported size (in bytes) of 'Secret Key' Resource in Security object.")
 

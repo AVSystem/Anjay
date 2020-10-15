@@ -291,12 +291,12 @@ static void print_help(const struct option *options) {
 
     const size_t screen_width = get_screen_width();
 
-    puts("Available options:");
+    puts("Available options:\n");
     for (size_t i = 0; options[i].name || options[i].val; ++i) {
         assert(i < AVS_ARRAY_SIZE(HELP_INFO));
         assert(HELP_INFO[i].opt_val == options[i].val);
 
-        printf("\n  ");
+        printf("  ");
         if (isprint(options[i].val)) {
             printf("-%c, ", options[i].val);
         }
@@ -319,6 +319,7 @@ static void print_help(const struct option *options) {
         if (HELP_INFO[i].default_value) {
             printf("      (default: %s)\n", HELP_INFO[i].default_value);
         }
+        printf("\n");
     }
 }
 
@@ -853,7 +854,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 
             const avs_net_certificate_info_t cert_info = {
                 .server_cert_validation = true,
-                .trusted_certs = avs_crypto_trusted_cert_info_from_file(optarg)
+                .trusted_certs =
+                        avs_crypto_certificate_chain_info_from_file(optarg)
             };
             parsed_args->fw_security_info =
                     avs_net_security_info_from_certificates(cert_info);
@@ -868,7 +870,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             const avs_net_certificate_info_t cert_info = {
                 .server_cert_validation = true,
-                .trusted_certs = avs_crypto_trusted_cert_info_from_path(optarg)
+                .trusted_certs =
+                        avs_crypto_certificate_chain_info_from_path(optarg)
             };
             parsed_args->fw_security_info =
                     avs_net_security_info_from_certificates(cert_info);
@@ -1061,7 +1064,12 @@ process:
                  "Endpoint name not specified, please use the -e option");
         retval = -1;
     }
-    if (num_servers == 0) {
+    if (num_servers == 0
+            && !(parsed_args->dm_persistence_file
+#ifndef _WIN32
+                 && !access(parsed_args->dm_persistence_file, R_OK)
+#endif // _WIN32
+                         )) {
         demo_log(ERROR, "At least one LwM2M Server URI needs to be specified, "
                         "please use the -u option");
         retval = -1;
@@ -1113,23 +1121,27 @@ process:
                             "other way around) makes little sense");
             retval = -1;
         } else if (!identity_set) {
-            if (load_buffer_from_file(
-                        &parsed_args->connection_args
-                                 .public_cert_or_psk_identity,
-                        &parsed_args->connection_args
-                                 .public_cert_or_psk_identity_size,
-                        cert_path)) {
-                demo_log(ERROR, "Could not load certificate from %s",
-                         cert_path);
-                retval = -1;
-            }
-            if (load_buffer_from_file(
-                        &parsed_args->connection_args.private_cert_or_psk_key,
-                        &parsed_args->connection_args
-                                 .private_cert_or_psk_key_size,
-                        key_path)) {
-                demo_log(ERROR, "Could not load private key from %s", key_path);
-                retval = -1;
+            {
+                if (load_buffer_from_file(
+                            &parsed_args->connection_args
+                                     .public_cert_or_psk_identity,
+                            &parsed_args->connection_args
+                                     .public_cert_or_psk_identity_size,
+                            cert_path)) {
+                    demo_log(ERROR, "Could not load certificate from %s",
+                             cert_path);
+                    retval = -1;
+                }
+                if (load_buffer_from_file(
+                            &parsed_args->connection_args
+                                     .private_cert_or_psk_key,
+                            &parsed_args->connection_args
+                                     .private_cert_or_psk_key_size,
+                            key_path)) {
+                    demo_log(ERROR, "Could not load private key from %s",
+                             key_path);
+                    retval = -1;
+                }
             }
         }
         if (server_public_key_path

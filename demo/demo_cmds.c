@@ -337,16 +337,56 @@ static void cmd_reregister_object(anjay_demo_t *demo, char *args_string) {
     demo_log(ERROR, "No such object to register: %d", oid);
 }
 
-static avs_error_t dl_write_next_block(anjay_t *anjay,
-                                       const uint8_t *data,
-                                       size_t data_size,
-                                       const anjay_etag_t *etag,
-                                       void *user_data) {
-    (void) anjay;
+typedef struct {
+    size_t skip_at;
+    size_t skip_to;
+} demo_download_skip_def_t;
+
+typedef struct {
+    anjay_download_handle_t handle;
+    FILE *f;
+    AVS_LIST(demo_download_skip_def_t) skips;
+    size_t current_offset;
+} demo_download_user_data_t;
+
+static void demo_download_user_data_destroy(demo_download_user_data_t *data) {
+    if (data) {
+        if (data->f) {
+            fclose(data->f);
+        }
+        AVS_LIST_CLEAR(&data->skips);
+        avs_free(data);
+    }
+}
+
+static avs_error_t dl_write_next_block_new(anjay_t *anjay,
+                                           const uint8_t *data,
+                                           size_t data_size,
+                                           const anjay_etag_t *etag,
+                                           void *user_data_) {
+    demo_download_user_data_t *user_data =
+            (demo_download_user_data_t *) user_data_;
     (void) etag;
 
-    FILE *f = (FILE *) user_data;
-    if (fwrite(data, data_size, 1, f) != 1) {
+    size_t to_write = data_size;
+    if (user_data->skips
+            && user_data->skips->skip_at
+                           <= user_data->current_offset + data_size) {
+        to_write = user_data->skips->skip_at - user_data->current_offset;
+        user_data->current_offset = user_data->skips->skip_to;
+        AVS_LIST_DELETE(&user_data->skips);
+        avs_error_t err =
+                anjay_download_set_next_block_offset(anjay, user_data->handle,
+                                                     user_data->current_offset);
+        if (avs_is_err(err)) {
+            demo_log(ERROR, "anjay_download_set_next_block_offset() failed");
+            return err;
+        }
+    } else {
+        user_data->current_offset += to_write;
+    }
+
+    if (fwrite(data, to_write, 1, user_data->f) != 1) {
         demo_log(ERROR, "fwrite() failed");
         return avs_errno(AVS_UNKNOWN_ERROR);
     }
@@ -354,10 +394,11 @@ static avs_error_t dl_write_next_block(anjay_t *anjay,
     return AVS_OK;
 }
 
-static void
-dl_finished(anjay_t *anjay, anjay_download_status_t status, void *user_data) {
+static void dl_finished_new(anjay_t *anjay,
+                            anjay_download_status_t status,
+                            void *user_data) {
     (void) anjay;
-    fclose((FILE *) user_data);
+    demo_download_user_data_destroy((demo_download_user_data_t *) user_data);
     demo_log(INFO, "download finished, result == %d", (int) status.result);
 }
 
@@ -374,9 +415,12 @@ static void cmd_download(anjay_demo_t *demo, char *args_string) {
         return;
     }
 
-    FILE *f = fopen(target_file, "wb");
-    if (!f) {
+    demo_download_user_data_t *user_data =
+            (demo_download_user_data_t *) avs_calloc(
+                    1, sizeof(demo_download_user_data_t));
+    if (!user_data || !(user_data->f = fopen(target_file, "wb"))) {
         demo_log(ERROR, "could not open file: %s", target_file);
+        demo_download_user_data_destroy(user_data);
         return;
     }
 
@@ -388,19 +432,105 @@ static void cmd_download(anjay_demo_t *demo, char *args_string) {
     };
     anjay_download_config_t cfg = {
         .url = url,
-        .on_next_block = dl_write_next_block,
-        .on_download_finished = dl_finished,
-        .user_data = f,
+        .on_next_block = dl_write_next_block_new,
+        .on_download_finished = dl_finished_new,
+        .user_data = user_data,
         .security_config = {
             .security_info = avs_net_security_info_from_psk(psk)
         }
     };
 
-    if (avs_is_err(anjay_download(demo->anjay, &cfg,
-                                  &(anjay_download_handle_t) { NULL }))) {
+    if (avs_is_err(anjay_download(demo->anjay, &cfg, &user_data->handle))) {
         demo_log(ERROR, "could not schedule download");
-        fclose(f);
+        demo_download_user_data_destroy(user_data);
     }
+}
+
+static void cmd_download_blocks(anjay_demo_t *demo, char *args_string) {
+    char url[256];
+    char target_file[256];
+    int offsets_offset;
+
+    if (sscanf(args_string, "%255s %255s %n", url, target_file, &offsets_offset)
+            < 2) {
+        demo_log(ERROR, "invalid URL or target file in: %s", args_string);
+        return;
+    }
+
+    demo_download_user_data_t *user_data =
+            (demo_download_user_data_t *) avs_calloc(
+                    1, sizeof(demo_download_user_data_t));
+    if (!user_data || !(user_data->f = fopen(target_file, "wb"))) {
+        demo_log(ERROR, "could not open file: %s", target_file);
+        demo_download_user_data_destroy(user_data);
+        return;
+    }
+
+    anjay_download_config_t cfg = {
+        .url = url,
+        .on_next_block = dl_write_next_block_new,
+        .on_download_finished = dl_finished_new,
+        .user_data = user_data
+    };
+
+    long last_end_offset = -1;
+    AVS_LIST(demo_download_skip_def_t) last_skip = NULL;
+
+    char *offsets_text = &args_string[offsets_offset];
+    char *saveptr = NULL;
+    const char *token = NULL;
+    while ((token = avs_strtok(offsets_text, AVS_SPACES, &saveptr))) {
+        offsets_text = NULL;
+        char *endptr;
+        long start_offset = strtol(token, &endptr, 0);
+        if (start_offset <= last_end_offset
+                || (endptr && *endptr && *endptr != '-')) {
+            goto parse_error;
+        }
+        long end_offset = LONG_MAX;
+        if (endptr && endptr[0] == '-' && endptr[1]) {
+            end_offset = strtol(&endptr[1], &endptr, 0);
+            if (end_offset <= start_offset || (endptr && *endptr)) {
+                goto parse_error;
+            }
+        }
+
+        if (last_skip) {
+            last_skip->skip_to = (size_t) start_offset;
+        } else {
+            cfg.start_offset = (size_t) start_offset;
+            user_data->current_offset = cfg.start_offset;
+        }
+        if (end_offset < LONG_MAX) {
+            AVS_LIST(demo_download_skip_def_t) skip =
+                    AVS_LIST_NEW_ELEMENT(demo_download_skip_def_t);
+            if (!skip) {
+                demo_log(ERROR, "out of memory");
+                demo_download_user_data_destroy(user_data);
+                return;
+            }
+            skip->skip_at = (size_t) end_offset;
+            skip->skip_to = SIZE_MAX;
+            AVS_LIST_APPEND(&last_skip, skip);
+            if (!user_data->skips) {
+                user_data->skips = skip;
+            } else {
+                AVS_LIST_ADVANCE(&last_skip);
+            }
+            assert(last_skip == skip);
+        }
+
+        last_end_offset = end_offset;
+    }
+
+    if (avs_is_err(anjay_download(demo->anjay, &cfg, &user_data->handle))) {
+        demo_log(ERROR, "could not schedule download");
+        demo_download_user_data_destroy(user_data);
+    }
+    return;
+parse_error:
+    demo_log(ERROR, "Invalid block definition: %s", token);
+    demo_download_user_data_destroy(user_data);
 }
 
 static void cmd_set_attrs(anjay_demo_t *demo, char *args_string) {
@@ -650,9 +780,13 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Unregister an LwM2M Object"),
     CMD_HANDLER("reregister-object", "oid", cmd_reregister_object,
                 "Re-register a previously unregistered LwM2M Object"),
+    CMD_HANDLER("download-blocks",
+                "url target_file [offset1-offset2 [offset3-[offset4 [...]]]]",
+                cmd_download_blocks,
+                "Download portions of a given URL to target_file."),
     CMD_HANDLER("download", "url target_file [psk_identity psk_key]",
                 cmd_download,
-                "Download a file from given CoAP URL to target_file."),
+                "Download a file from given URL to target_file."),
     CMD_HANDLER("set-attrs", "", cmd_set_attrs, "Syntax [/a [/b [/c [/d] ] ] ] "
                 "ssid [pmin,pmax,lt,gt,st,epmin,epmax] "
                 "- e.g. /a/b 1 pmin=3,pmax=4"),

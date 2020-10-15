@@ -24,6 +24,7 @@
 
 #include "../anjay_access_utils.h"
 #include "../coap/anjay_content_format.h"
+#include "../io/anjay_vtable.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -349,11 +350,9 @@ int _anjay_dm_read_or_observe(anjay_t *anjay,
             anjay, obj, &path_info, _anjay_dm_current_ssid(anjay), &out_ctx);
 }
 
-int _anjay_dm_read_resource(anjay_t *anjay,
-                            const anjay_uri_path_t *path,
-                            char *buffer,
-                            size_t buffer_size,
-                            size_t *out_bytes_read) {
+int _anjay_dm_read_resource_into_ctx(anjay_t *anjay,
+                                     const anjay_uri_path_t *path,
+                                     anjay_output_ctx_t *ctx) {
     assert(_anjay_uri_path_leaf_is(path, ANJAY_ID_RID));
     const anjay_dm_object_def_t *const *obj =
             _anjay_dm_find_object_by_oid(anjay, path->ids[ANJAY_ID_OID]);
@@ -363,23 +362,35 @@ int _anjay_dm_read_resource(anjay_t *anjay,
         return -1;
     }
 
+    anjay_dm_resource_kind_t kind;
+    int result;
+    (void) ((result = _anjay_dm_verify_resource_present(
+                     anjay, obj, path->ids[ANJAY_ID_IID],
+                     path->ids[ANJAY_ID_RID], &kind))
+            || (result = read_resource_internal(
+                        anjay, obj, path->ids[ANJAY_ID_IID],
+                        path->ids[ANJAY_ID_RID], kind, ctx)));
+    return result;
+}
+
+int _anjay_dm_read_resource_into_stream(anjay_t *anjay,
+                                        const anjay_uri_path_t *path,
+                                        avs_stream_t *stream) {
+    anjay_output_buf_ctx_t ctx = _anjay_output_buf_ctx_init(stream);
+    return _anjay_dm_read_resource_into_ctx(anjay, path,
+                                            (anjay_output_ctx_t *) &ctx);
+}
+
+int _anjay_dm_read_resource_into_buffer(anjay_t *anjay,
+                                        const anjay_uri_path_t *path,
+                                        char *buffer,
+                                        size_t buffer_size,
+                                        size_t *out_bytes_read) {
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, buffer_size);
 
-    anjay_output_buf_ctx_t ctx =
-            _anjay_output_buf_ctx_init((avs_stream_t *) &stream);
-
-    anjay_dm_resource_kind_t kind;
-    int result =
-            _anjay_dm_verify_resource_present(anjay, obj,
-                                              path->ids[ANJAY_ID_IID],
-                                              path->ids[ANJAY_ID_RID], &kind);
-    if (result) {
-        return result;
-    }
-    result = read_resource_internal(anjay, obj, path->ids[ANJAY_ID_IID],
-                                    path->ids[ANJAY_ID_RID], kind,
-                                    (anjay_output_ctx_t *) &ctx);
+    int result = _anjay_dm_read_resource_into_stream(anjay, path,
+                                                     (avs_stream_t *) &stream);
     if (out_bytes_read) {
         *out_bytes_read = avs_stream_outbuf_offset(&stream);
     }

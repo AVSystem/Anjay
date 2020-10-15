@@ -306,6 +306,22 @@ avs_error_t _anjay_downloader_download(anjay_downloader_t *dl,
     }
 }
 
+avs_error_t
+_anjay_downloader_set_next_block_offset(anjay_downloader_t *dl,
+                                        anjay_download_handle_t handle,
+                                        size_t next_block_offset) {
+    uintptr_t id = (uintptr_t) handle;
+
+    AVS_LIST(anjay_download_ctx_t) *ctx =
+            _anjay_downloader_find_ctx_ptr_by_id(dl, id);
+    if (!ctx) {
+        dl_log(DEBUG, _("download id = ") "%" PRIuPTR _(" not found"), id);
+        return avs_errno(AVS_ENOENT);
+    }
+    return (*ctx)->common.vtable->set_next_block_offset(dl, *ctx,
+                                                        next_block_offset);
+}
+
 void _anjay_downloader_abort(anjay_downloader_t *dl,
                              anjay_download_handle_t handle) {
     uintptr_t id = (uintptr_t) handle;

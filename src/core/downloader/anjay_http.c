@@ -40,7 +40,7 @@ VISIBILITY_SOURCE_BEGIN
 typedef struct {
     anjay_download_ctx_common_t common;
     avs_net_ssl_configuration_t ssl_configuration;
-    const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
+    anjay_security_config_cache_t security_config_cache;
     avs_net_resolved_endpoint_t preferred_endpoint;
     avs_http_t *client;
     avs_url_t *parsed_url;
@@ -134,10 +134,12 @@ handle_http_packet_with_locked_buffer(anjay_t *anjay,
         }
         if (bytes_read) {
             assert(ctx->bytes_written >= ctx->bytes_downloaded);
-            if (ctx->bytes_downloaded + bytes_read > ctx->bytes_written) {
+            ctx->bytes_downloaded += bytes_read;
+            while (ctx->bytes_downloaded > ctx->bytes_written) {
                 size_t bytes_to_write =
-                        ctx->bytes_downloaded + bytes_read - ctx->bytes_written;
+                        ctx->bytes_downloaded - ctx->bytes_written;
                 assert(bytes_read >= bytes_to_write);
+                size_t original_offset = ctx->bytes_written;
                 if (avs_is_err((err = ctx->common.on_next_block(
                                         anjay,
                                         &buffer[bytes_read - bytes_to_write],
@@ -148,9 +150,10 @@ handle_http_packet_with_locked_buffer(anjay_t *anjay,
                             _anjay_download_status_failed(err));
                     return;
                 }
-                ctx->bytes_written += bytes_to_write;
+                if (ctx->bytes_written == original_offset) {
+                    ctx->bytes_written += bytes_to_write;
+                }
             }
-            ctx->bytes_downloaded += bytes_read;
         }
         if (message_finished) {
             dl_log(INFO, _("HTTP transfer id = ") "%" PRIuPTR _(" finished"),
@@ -356,8 +359,8 @@ static void cleanup_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     avs_free(ctx->etag);
     avs_stream_cleanup(&ctx->stream);
     avs_url_free(ctx->parsed_url);
-    avs_free(ctx->ssl_configuration.ciphersuites.ids);
     avs_http_free(ctx->client);
+    _anjay_security_config_cache_cleanup(&ctx->security_config_cache);
     AVS_LIST_DELETE(ctx_ptr);
 }
 
@@ -383,6 +386,117 @@ reconnect_http_transfer(anjay_downloader_t *dl,
     return AVS_OK;
 }
 
+static avs_error_t set_next_http_block_offset(anjay_downloader_t *dl,
+                                              anjay_download_ctx_t *ctx_,
+                                              size_t next_block_offset) {
+    (void) dl;
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
+    if (next_block_offset <= ctx->bytes_written) {
+        dl_log(DEBUG, _("attempted to move download offset backwards"));
+        return avs_errno(AVS_EINVAL);
+    }
+    ctx->bytes_written = next_block_offset;
+    return AVS_OK;
+}
+
+static avs_error_t copy_psk_info(avs_net_psk_info_t *dest,
+                                 const avs_net_psk_info_t *src,
+                                 anjay_security_config_cache_t *cache) {
+    *dest = *src;
+    size_t psk_buffer_size = 0;
+    if (src->identity) {
+        psk_buffer_size += src->identity_size;
+    }
+    if (src->psk) {
+        psk_buffer_size += src->psk_size;
+    }
+    assert(!cache->psk_buffer);
+    if (!(cache->psk_buffer = avs_malloc(psk_buffer_size))) {
+        dl_log(ERROR, _("Out of memory"));
+        return avs_errno(AVS_ENOMEM);
+    }
+    char *psk_buffer_ptr = (char *) cache->psk_buffer;
+    if (src->identity) {
+        memcpy(psk_buffer_ptr, src->identity, src->identity_size);
+        dest->identity = psk_buffer_ptr;
+        psk_buffer_ptr += src->identity_size;
+    }
+    if (src->psk) {
+        memcpy(psk_buffer_ptr, src->psk, src->psk_size);
+        dest->psk = psk_buffer_ptr;
+    }
+    return AVS_OK;
+}
+
+static avs_error_t
+copy_certificate_chain(avs_crypto_certificate_chain_info_t *dest,
+                       const avs_crypto_certificate_chain_info_t *src,
+                       avs_crypto_certificate_chain_info_t **cache_ptr) {
+    if (src->desc.source == AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+        *dest = *src;
+        return AVS_OK;
+    }
+    size_t element_count;
+    avs_error_t err = avs_crypto_certificate_chain_info_copy_as_array(
+            cache_ptr, &element_count, *src);
+    if (avs_is_err(err)) {
+        return err;
+    }
+    *dest = avs_crypto_certificate_chain_info_from_array(*cache_ptr,
+                                                         element_count);
+    return AVS_OK;
+}
+
+static avs_error_t copy_cert_info(avs_net_certificate_info_t *dest,
+                                  const avs_net_certificate_info_t *src,
+                                  anjay_security_config_cache_t *cache) {
+    *dest = *src;
+    avs_error_t err;
+    if (avs_is_err((err = copy_certificate_chain(&dest->trusted_certs,
+                                                 &src->trusted_certs,
+                                                 &cache->trusted_certs_array)))
+            || avs_is_err((
+                       err = copy_certificate_chain(&dest->client_cert,
+                                                    &src->client_cert,
+                                                    &cache->client_cert_array)))
+            || avs_is_err((err = avs_crypto_private_key_info_copy(
+                                   &cache->client_key, src->client_key)))) {
+        return err;
+    }
+    dest->client_key = *cache->client_key;
+    if (src->cert_revocation_lists.desc.source
+            == AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+        dest->cert_revocation_lists = src->cert_revocation_lists;
+    } else {
+        size_t element_count;
+        if (avs_is_err(
+                    (err = avs_crypto_cert_revocation_list_info_copy_as_array(
+                             &cache->cert_revocation_lists_array,
+                             &element_count, src->cert_revocation_lists)))) {
+            return err;
+        }
+        dest->cert_revocation_lists =
+                avs_crypto_cert_revocation_list_info_from_array(
+                        cache->cert_revocation_lists_array, element_count);
+    }
+    return AVS_OK;
+}
+
+static avs_error_t copy_security_info(avs_net_security_info_t *dest,
+                                      const avs_net_security_info_t *src,
+                                      anjay_security_config_cache_t *cache) {
+    dest->mode = src->mode;
+    switch (src->mode) {
+    case AVS_NET_SECURITY_PSK:
+        return copy_psk_info(&dest->data.psk, &src->data.psk, cache);
+    case AVS_NET_SECURITY_CERTIFICATE:
+        return copy_cert_info(&dest->data.cert, &src->data.cert, cache);
+    default:
+        dl_log(ERROR, _("Invalid security mode: ") "%d", (int) src->mode);
+        return avs_errno(AVS_EINVAL);
+    }
+}
+
 static avs_error_t http_ssl_pre_connect_cb(avs_http_t *http,
                                            avs_net_socket_t *socket,
                                            const char *hostname,
@@ -391,7 +505,7 @@ static avs_error_t http_ssl_pre_connect_cb(avs_http_t *http,
     (void) http;
     (void) port;
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
-    if (!hostname || !ctx->dane_tlsa_record) {
+    if (!hostname || !ctx->security_config_cache.dane_tlsa_record) {
         return AVS_OK;
     }
     const char *configured_hostname = avs_url_host(ctx->parsed_url);
@@ -399,13 +513,14 @@ static avs_error_t http_ssl_pre_connect_cb(avs_http_t *http,
         // non-original hostname - we're after redirection; do nothing
         return AVS_OK;
     }
-    return avs_net_socket_set_opt(socket, AVS_NET_SOCKET_OPT_DANE_TLSA_ARRAY,
-                                  (avs_net_socket_opt_value_t) {
-                                      .dane_tlsa_array = {
-                                          .array_ptr = ctx->dane_tlsa_record,
-                                          .array_element_count = 1
-                                      }
-                                  });
+    return avs_net_socket_set_opt(
+            socket, AVS_NET_SOCKET_OPT_DANE_TLSA_ARRAY,
+            (avs_net_socket_opt_value_t) {
+                .dane_tlsa_array = {
+                    .array_ptr = ctx->security_config_cache.dane_tlsa_record,
+                    .array_element_count = 1
+                }
+            });
 }
 
 avs_error_t
@@ -433,7 +548,8 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
         .handle_packet = handle_http_packet,
         .cleanup = cleanup_http_transfer,
         .suspend = suspend_http_transfer,
-        .reconnect = reconnect_http_transfer
+        .reconnect = reconnect_http_transfer,
+        .set_next_block_offset = set_next_http_block_offset
     };
     ctx->common.vtable = &VTABLE;
 
@@ -444,21 +560,39 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
     }
 
     avs_error_t err = AVS_OK;
-    if (!(ctx->client = avs_http_new(&http_buffer_sizes))
-            || _anjay_copy_tls_ciphersuites(
-                       &ctx->ssl_configuration.ciphersuites,
-                       cfg->security_config.tls_ciphersuites.num_ids
-                               ? &cfg->security_config.tls_ciphersuites
-                               : &anjay->default_tls_ciphersuites)) {
+    if (!(ctx->client = avs_http_new(&http_buffer_sizes))) {
         err = avs_errno(AVS_ENOMEM);
         goto error;
     }
-    ctx->ssl_configuration.security = cfg->security_config.security_info;
+    if (avs_is_err(
+                (err = copy_security_info(&ctx->ssl_configuration.security,
+                                          &cfg->security_config.security_info,
+                                          &ctx->security_config_cache)))) {
+        goto error;
+    }
+    ctx->ssl_configuration.ciphersuites = anjay->default_tls_ciphersuites;
+    if (cfg->security_config.tls_ciphersuites.num_ids) {
+        if (_anjay_copy_tls_ciphersuites(
+                    &ctx->security_config_cache.ciphersuites,
+                    &cfg->security_config.tls_ciphersuites)) {
+            err = avs_errno(AVS_ENOMEM);
+            goto error;
+        }
+        ctx->security_config_cache = ctx->security_config_cache;
+    }
+    if (cfg->security_config.dane_tlsa_record
+            && !(ctx->security_config_cache.dane_tlsa_record =
+                         avs_net_socket_dane_tlsa_array_copy((
+                                 const avs_net_socket_dane_tlsa_array_t) {
+                             .array_ptr = cfg->security_config.dane_tlsa_record,
+                             .array_element_count = 1
+                         }))) {
+        goto error;
+    }
     ctx->ssl_configuration.backend_configuration.preferred_endpoint =
             &ctx->preferred_endpoint;
     ctx->ssl_configuration.prng_ctx = anjay->prng_ctx.ctx;
     avs_http_ssl_configuration(ctx->client, &ctx->ssl_configuration);
-    ctx->dane_tlsa_record = cfg->security_config.dane_tlsa_record;
     avs_http_ssl_pre_connect_cb(ctx->client, http_ssl_pre_connect_cb, ctx);
 
     if (!(ctx->parsed_url = avs_url_parse(cfg->url))) {

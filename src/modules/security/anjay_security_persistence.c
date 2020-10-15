@@ -82,26 +82,45 @@ static avs_error_t handle_raw_buffer(avs_persistence_context_t *ctx,
     return err;
 }
 
+static avs_error_t handle_public_key(avs_persistence_context_t *ctx,
+                                     sec_key_or_data_t *value,
+                                     intptr_t stream_version) {
+    (void) stream_version;
+    assert(value->type == SEC_KEY_AS_DATA);
+    return handle_raw_buffer(ctx, &value->value.data);
+}
+
+static avs_error_t handle_private_key(avs_persistence_context_t *ctx,
+                                      sec_key_or_data_t *value,
+                                      intptr_t stream_version) {
+    (void) stream_version;
+    assert(value->type == SEC_KEY_AS_DATA);
+    return handle_raw_buffer(ctx, &value->value.data);
+}
+
 static avs_error_t handle_instance(avs_persistence_context_t *ctx,
                                    void *element_,
                                    void *stream_version_) {
     sec_instance_t *element = (sec_instance_t *) element_;
+    const intptr_t stream_version = (intptr_t) stream_version_;
+
     avs_error_t err = AVS_OK;
     uint16_t security_mode = (uint16_t) element->security_mode;
     if (avs_is_err((err = handle_sized_v0_fields(ctx, element)))
             || avs_is_err((err = avs_persistence_u16(ctx, &security_mode)))
             || avs_is_err((
                        err = avs_persistence_string(ctx, &element->server_uri)))
-            || avs_is_err((err = handle_raw_buffer(
-                                   ctx, &element->public_cert_or_psk_identity)))
-            || avs_is_err((err = handle_raw_buffer(
-                                   ctx, &element->private_cert_or_psk_key)))
+            || avs_is_err((err = handle_public_key(
+                                   ctx, &element->public_cert_or_psk_identity,
+                                   stream_version)))
+            || avs_is_err((err = handle_private_key(
+                                   ctx, &element->private_cert_or_psk_key,
+                                   stream_version)))
             || avs_is_err((err = handle_raw_buffer(
                                    ctx, &element->server_public_key)))) {
         return err;
     }
     element->security_mode = (anjay_security_mode_t) security_mode;
-    const intptr_t stream_version = (intptr_t) stream_version_;
     if (stream_version >= 1) {
         uint16_t sms_security_mode = (uint16_t) element->sms_security_mode;
         if (avs_is_err((err = handle_sized_v1_fields(ctx, element)))

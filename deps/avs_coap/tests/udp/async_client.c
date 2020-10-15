@@ -37,11 +37,13 @@ AVS_UNIT_TEST(udp_async_client, send_request_empty_get) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // receiving response should make the context call handler
     expect_recv(&env, response);
@@ -93,11 +95,13 @@ AVS_UNIT_TEST(udp_async_client, send_request_multiple_response_in_order) {
 
     for (size_t i = 0; i < AVS_ARRAY_SIZE(requests); ++i) {
         // send each request
-        expect_send(&env, requests[i]);
         ASSERT_OK(avs_coap_client_send_async_request(
                 env.coap_ctx, &ids[i], &requests[i]->request_header, NULL, NULL,
                 test_response_handler, &env.expects_list));
         ASSERT_TRUE(avs_coap_exchange_id_valid(ids[i]));
+
+        expect_send(&env, requests[i]);
+        avs_sched_run(env.sched);
     }
 
     expect_recv(&env, responses[0]);
@@ -131,11 +135,13 @@ AVS_UNIT_TEST(udp_async_client, send_request_separate_response) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // receiving separate ACK should not call the handler yet
     expect_recv(&env, separate_ack0);
@@ -163,11 +169,13 @@ AVS_UNIT_TEST(udp_async_client, send_request_separate_response_failed_to_send) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // receiving separate ACK should not call the handler yet
     expect_recv(&env, separate_ack0);
@@ -196,11 +204,13 @@ AVS_UNIT_TEST(udp_async_client, send_request_separate_response_without_ack) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // handler should be called after receiving the actual response even if
     // it's a Separate Response and separate ACK was not seen
@@ -224,11 +234,13 @@ AVS_UNIT_TEST(udp_async_client, send_request_separate_non_response) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // handler should be called after receiving the actual response even if
     // it's a Separate Response and separate ACK was not seen
@@ -258,11 +270,13 @@ AVS_UNIT_TEST(udp_async_client, send_request_put_with_payload) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, test_payload_writer,
             &test_payload, test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // receiving response should make the context call handler
     expect_recv(&env, response);
@@ -293,14 +307,15 @@ AVS_UNIT_TEST(udp_async_client, send_request_multiple_with_nstart) {
     avs_coap_exchange_id_t ids[AVS_ARRAY_SIZE(requests)];
 
     // Start all requests. Only the first one should be sent because of NSTART.
-    expect_send(&env, requests[0]);
-
     for (size_t i = 0; i < AVS_ARRAY_SIZE(requests); ++i) {
         ASSERT_OK(avs_coap_client_send_async_request(
                 env.coap_ctx, &ids[i], &requests[i]->request_header, NULL, NULL,
                 test_response_handler, &env.expects_list));
         ASSERT_TRUE(avs_coap_exchange_id_valid(ids[i]));
     }
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     // handlers should be called only after receiving responses
     expect_recv(&env, responses[0]);
@@ -405,11 +420,13 @@ AVS_UNIT_TEST(udp_async_client, cancel_single) {
     avs_coap_exchange_id_t id;
 
     // send original request
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // a retransmission job should be scheduled
     ASSERT_TRUE(avs_time_monotonic_valid(avs_sched_time_of_next(env.sched)));
@@ -451,11 +468,13 @@ AVS_UNIT_TEST(udp_async_client, malformed_packets_are_ignored) {
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // garbage should be ignored
     avs_unit_mocksock_input(env.mocksock, "\x00", 1);
@@ -486,7 +505,6 @@ AVS_UNIT_TEST(udp_async_client, cancels_all_exchanges_on_cleanup) {
 
     // only the first one should be sent; others are suspended because of
     // NSTART = 1
-    expect_send(&env, requests[0]);
     for (size_t i = 0; i < AVS_ARRAY_SIZE(requests); ++i) {
         ASSERT_OK(avs_coap_client_send_async_request(
                 env.coap_ctx, &ids[i], &requests[i]->request_header, NULL, NULL,
@@ -494,10 +512,12 @@ AVS_UNIT_TEST(udp_async_client, cancels_all_exchanges_on_cleanup) {
         ASSERT_TRUE(avs_coap_exchange_id_valid(ids[i]));
     }
 
-    // IMPLEMENTATION DETAIL: exchanges are cleaned up in reverse order
-    expect_handler_call(&env, &ids[2], AVS_COAP_CLIENT_REQUEST_CANCEL, NULL);
-    expect_handler_call(&env, &ids[1], AVS_COAP_CLIENT_REQUEST_CANCEL, NULL);
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
+
     expect_handler_call(&env, &ids[0], AVS_COAP_CLIENT_REQUEST_CANCEL, NULL);
+    expect_handler_call(&env, &ids[1], AVS_COAP_CLIENT_REQUEST_CANCEL, NULL);
+    expect_handler_call(&env, &ids[2], AVS_COAP_CLIENT_REQUEST_CANCEL, NULL);
     // test_teardown will call avs_coap_ctx_cleanup() that fullfills expected
     // handler calls. If it does not, this test will fail on ASSERT_NULL()
     // in test_teardown.
@@ -519,11 +539,13 @@ AVS_UNIT_TEST(udp_async_client,
     avs_coap_exchange_id_t id;
 
     // a request should be sent
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // Piggybacked Response with mismatched message ID or token should be
     // ignored as invalid
@@ -559,9 +581,6 @@ AVS_UNIT_TEST(udp_async_client,
             COAP_MSG(ACK, CONTENT, ID(0), TOKEN(nth_token(0)), ACCEPT(1),
                      DUPLICATED_ACCEPT(2));
 
-    expect_send(&env, request);
-    expect_recv(&env, response);
-
     avs_coap_exchange_id_t id;
     avs_coap_client_send_async_request(env.coap_ctx, &id,
                                        &(avs_coap_request_header_t) {
@@ -570,6 +589,10 @@ AVS_UNIT_TEST(udp_async_client,
                                        NULL, NULL, test_response_handler,
                                        &env.expects_list);
 
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
+
+    expect_recv(&env, response);
     expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_FAIL, NULL);
     expect_timeout(&env);
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
@@ -588,11 +611,6 @@ AVS_UNIT_TEST(udp_async_client,
                      DUPLICATED_ACCEPT(2));
     const test_msg_t *reset = COAP_MSG(RST, EMPTY, ID(0));
 
-    expect_send(&env, request);
-    expect_recv(&env, ack);
-    expect_recv(&env, response);
-    expect_send(&env, reset);
-
     avs_coap_exchange_id_t id;
     avs_coap_client_send_async_request(env.coap_ctx, &id,
                                        &(avs_coap_request_header_t) {
@@ -601,6 +619,12 @@ AVS_UNIT_TEST(udp_async_client,
                                        NULL, NULL, test_response_handler,
                                        &env.expects_list);
 
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
+
+    expect_recv(&env, ack);
+    expect_recv(&env, response);
+    expect_send(&env, reset);
     expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_FAIL, NULL);
     expect_timeout(&env);
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
@@ -614,11 +638,13 @@ AVS_UNIT_TEST(udp_async_client, invalid_ack_should_be_ignored) {
     const test_msg_t *request_ack =
             COAP_MSG(ACK, EMPTY, ID(0), TOKEN(nth_token(0)));
 
-    expect_send(&env, request);
     avs_coap_exchange_id_t id;
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     expect_recv(&env, request_ack);
     expect_timeout(&env);
@@ -639,10 +665,13 @@ AVS_UNIT_TEST(udp_async_client, send_error) {
     const test_msg_t *request = COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)));
     avs_coap_exchange_id_t id;
 
-    avs_unit_mocksock_output_fail(env.mocksock, avs_errno(AVS_ECONNREFUSED));
-    ASSERT_FAIL(avs_coap_client_send_async_request(
+    ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
+
+    avs_unit_mocksock_output_fail(env.mocksock, avs_errno(AVS_ECONNREFUSED));
+    expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_FAIL, NULL);
+    avs_sched_run(env.sched);
 }
 
 #    ifdef WITH_AVS_COAP_BLOCK
@@ -679,12 +708,14 @@ AVS_UNIT_TEST(udp_async_client, block_response) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     // handlers should be called only after receiving responses
 
@@ -724,11 +755,13 @@ AVS_UNIT_TEST(udp_async_client, block_response_interrupt) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_abort_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // the used-defined handler aborts the exchange, causing another handler
     // call
@@ -767,12 +800,14 @@ AVS_UNIT_TEST(udp_async_client, block_response_last_block_without_block2_opt) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     // handlers should be called only after receiving responses
 
@@ -828,12 +863,88 @@ AVS_UNIT_TEST(udp_async_client, block_request_with_explicit_block1) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
+
+    // first Continue
+    expect_recv(&env, responses[0]);
+    expect_send(&env, requests[1]);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    // second Continue
+    expect_recv(&env, responses[1]);
+    expect_send(&env, requests[2]);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    // upon receiving the response, handler should be called and no more
+    // retransmissions scheduled
+    expect_recv(&env, responses[2]);
+    expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_OK, responses[2]);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+#        undef REQUEST_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_async_client, block_request_with_broken_block1) {
+#        define REQUEST_PAYLOAD DATA_1KB DATA_1KB "?"
+
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_with_max_retransmit(0);
+
+    test_payload_writer_args_t test_payload = {
+        .payload = REQUEST_PAYLOAD,
+        .payload_size = sizeof(REQUEST_PAYLOAD) - 1
+    };
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, GET, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_REQ(1, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, GET, ID(2), TOKEN(nth_token(2)),
+                 BLOCK1_REQ(2, 1024, REQUEST_PAYLOAD)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTINUE, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_RES(0, 1024, true)),
+        COAP_MSG(ACK, CONTINUE, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_RES(1, 1024, true)),
+        COAP_MSG(ACK, CONTENT, ID(2), TOKEN(nth_token(2)),
+                 BLOCK1_RES(2, 1024, false)),
+    };
+    AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(requests) == AVS_ARRAY_SIZE(responses),
+                      mismatched_requests_responses_lists);
+
+    avs_coap_exchange_id_t id;
+
+    // set "has_more" flag to false in the requested header, even though there
+    // actually is more data - this flag will be overwritten before sending
+    ASSERT_OK(avs_coap_client_send_async_request(
+            env.coap_ctx, &id,
+            &COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)),
+                      .block1 = {
+                          .type = AVS_COAP_BLOCK1,
+                          .seq_num = 0,
+                          .size = 1024,
+                          .has_more = false
+                      },
+                      PAYLOAD(REQUEST_PAYLOAD))
+                     ->request_header,
+            test_payload_writer, &test_payload, test_response_handler,
+            &env.expects_list));
+    ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     // first Continue
     expect_recv(&env, responses[0]);
@@ -894,12 +1005,14 @@ AVS_UNIT_TEST(udp_async_client, block_request_without_explicit_block1) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, request_header_without_block1,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     // first Continue
     expect_recv(&env, responses[0]);
@@ -920,6 +1033,39 @@ AVS_UNIT_TEST(udp_async_client, block_request_without_explicit_block1) {
     expect_timeout(&env);
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
 
+#        undef REQUEST_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_async_client, nonconfirmable_block_request) {
+#        define REQUEST_PAYLOAD DATA_1KB DATA_1KB "?"
+
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_with_max_retransmit(0);
+
+    test_payload_writer_args_t test_payload = {
+        .payload = REQUEST_PAYLOAD,
+        .payload_size = sizeof(REQUEST_PAYLOAD) - 1
+    };
+
+    const avs_coap_request_header_t *request_header_without_block1 =
+            &COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)), NO_PAYLOAD)
+                     ->request_header;
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(NON, GET, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(NON, GET, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_REQ(1, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(NON, GET, ID(2), TOKEN(nth_token(2)),
+                 BLOCK1_REQ(2, 1024, REQUEST_PAYLOAD)),
+    };
+
+    expect_send(&env, requests[0]);
+    expect_send(&env, requests[1]);
+    expect_send(&env, requests[2]);
+    ASSERT_OK(avs_coap_client_send_async_request(
+            env.coap_ctx, NULL, request_header_without_block1,
+            test_payload_writer, &test_payload, NULL, NULL));
 #        undef REQUEST_PAYLOAD
 }
 
@@ -945,14 +1091,16 @@ AVS_UNIT_TEST(udp_async_client, block_request_with_cancel_in_payload_writer) {
                      BLOCK1_RES(0, 1024, true));
 
     // start the request
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, test_payload_writer,
             &test_payload, test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
-    test_payload.exchange_id = id;
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     // first Continue
+    test_payload.exchange_id = id;
     test_payload.cancel_exchange = true;
 
     expect_recv(&env, response);
@@ -996,12 +1144,14 @@ AVS_UNIT_TEST(udp_async_client, block_request_block1_renegotiation) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
@@ -1044,11 +1194,13 @@ AVS_UNIT_TEST(udp_async_client, block_request_block2_renegotiation) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
@@ -1105,12 +1257,14 @@ AVS_UNIT_TEST(udp_async_client, block_request_early_block2_response) {
     avs_coap_exchange_id_t id;
 
     // start the request
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
@@ -1144,11 +1298,13 @@ AVS_UNIT_TEST(udp_async_client, request_for_non_first_block_of_payload) {
     };
 
     avs_coap_exchange_id_t id;
-    expect_send(&env, requests[0]);
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
 
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
@@ -1196,6 +1352,7 @@ AVS_UNIT_TEST(udp_async_client, block2_request_and_too_big_response) {
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
+    avs_sched_run(env.sched);
 
     // the library sent a retry request with smaller block size, and we need to
     // handle response to it
@@ -1227,11 +1384,6 @@ AVS_UNIT_TEST(udp_async_client, valid_etag_in_blocks) {
                  BLOCK2_RES(1, 1024, RESPONSE_PAYLOAD), ETAG("tag"))
     };
 
-    expect_send(&env, requests[0]);
-    expect_recv(&env, responses[0]);
-    expect_send(&env, requests[1]);
-    expect_recv(&env, responses[1]);
-
     avs_coap_exchange_id_t id;
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id,
@@ -1239,6 +1391,13 @@ AVS_UNIT_TEST(udp_async_client, valid_etag_in_blocks) {
                 .code = requests[0]->request_header.code
             },
             NULL, NULL, test_response_handler, &env.expects_list));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
+
+    expect_recv(&env, responses[0]);
+    expect_send(&env, requests[1]);
+    expect_recv(&env, responses[1]);
 
     expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT,
                         responses[0]);
@@ -1282,6 +1441,7 @@ AVS_UNIT_TEST(udp_async_client, regular_request_and_too_big_response) {
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
+    avs_sched_run(env.sched);
 
     // the library sent a retry request with smaller block size, and we need to
     // handle response to it
@@ -1339,6 +1499,7 @@ AVS_UNIT_TEST(udp_async_client,
             env.coap_ctx, &id, &requests[0]->request_header,
             test_payload_writer, &test_payload, test_response_handler,
             &env.expects_list));
+    avs_sched_run(env.sched);
 
     test_payload.expected_payload_offset = 0;
     test_payload.exchange_id = id;
@@ -1391,6 +1552,7 @@ AVS_UNIT_TEST(udp_async_client, regular_request_and_too_big_nonblock_response) {
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &requests[0]->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
+    avs_sched_run(env.sched);
 
     // the library sent a retry request with smaller block size, and we need to
     // handle response to it
@@ -1422,11 +1584,6 @@ AVS_UNIT_TEST(udp_async_client, invalid_etag_in_blocks) {
                  BLOCK2_RES(1, 1024, RESPONSE_PAYLOAD), ETAG("nje"))
     };
 
-    expect_send(&env, requests[0]);
-    expect_recv(&env, responses[0]);
-    expect_send(&env, requests[1]);
-    expect_recv(&env, responses[1]);
-
     avs_coap_exchange_id_t id;
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id,
@@ -1434,6 +1591,13 @@ AVS_UNIT_TEST(udp_async_client, invalid_etag_in_blocks) {
                 .code = requests[0]->request_header.code
             },
             NULL, NULL, test_response_handler, &env.expects_list));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
+
+    expect_recv(&env, responses[0]);
+    expect_send(&env, requests[1]);
+    expect_recv(&env, responses[1]);
 
     expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT,
                         responses[0]);
@@ -1462,11 +1626,6 @@ AVS_UNIT_TEST(udp_async_client, etag_in_not_all_responses) {
                  BLOCK2_RES(1, 1024, RESPONSE_PAYLOAD))
     };
 
-    expect_send(&env, requests[0]);
-    expect_recv(&env, responses[0]);
-    expect_send(&env, requests[1]);
-    expect_recv(&env, responses[1]);
-
     avs_coap_exchange_id_t id;
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id,
@@ -1474,6 +1633,13 @@ AVS_UNIT_TEST(udp_async_client, etag_in_not_all_responses) {
                 .code = requests[0]->request_header.code
             },
             NULL, NULL, test_response_handler, &env.expects_list));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
+
+    expect_recv(&env, responses[0]);
+    expect_send(&env, requests[1]);
+    expect_recv(&env, responses[1]);
 
     expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT,
                         responses[0]);
@@ -1507,17 +1673,138 @@ AVS_UNIT_TEST(udp_async_client, invalid_block_opt_in_response) {
             COAP_MSG(ACK, BAD_OPTION, ID(0), TOKEN(nth_token(0)),
                      INVALID_BLOCK2(0, 1024, "test"));
 
-    expect_send(&env, request);
-    expect_recv(&env, response);
-
     avs_coap_exchange_id_t id;
     ASSERT_OK(avs_coap_client_send_async_request(
             env.coap_ctx, &id, &request->request_header, NULL, NULL,
             test_response_handler, &env.expects_list));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
+
+    expect_recv(&env, response);
     expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_FAIL, NULL);
     expect_timeout(&env);
     ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
     ASSERT_NULL(env.expects_list);
+}
+
+AVS_UNIT_TEST(udp_async_client, block_response_skip) {
+#        define REQUEST_PAYLOAD "gib payload pls"
+#        define DATA_49B "123456789 123456789 123456789 123456789 123456789"
+
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    test_payload_writer_args_t test_payload = {
+        .payload = REQUEST_PAYLOAD,
+        .payload_size = sizeof(REQUEST_PAYLOAD) - 1
+    };
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)),
+                 PAYLOAD(REQUEST_PAYLOAD)),
+        COAP_MSG(CON, GET, ID(1), TOKEN(nth_token(1)), BLOCK2_REQ(2, 16)),
+        COAP_MSG(CON, GET, ID(2), TOKEN(nth_token(2)), BLOCK2_REQ(3, 16)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK2_RES(0, 16, DATA_49B)),
+        COAP_MSG(ACK, CONTENT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK2_RES(2, 16, DATA_49B)),
+        COAP_MSG(ACK, CONTENT, ID(2), TOKEN(nth_token(2)),
+                 BLOCK2_RES(3, 16, DATA_49B)),
+    };
+    AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(requests) == AVS_ARRAY_SIZE(responses),
+                      mismatched_requests_responses_lists);
+
+    avs_coap_exchange_id_t id;
+
+    // start the request
+    ASSERT_OK(avs_coap_client_send_async_request(
+            env.coap_ctx, &id, &requests[0]->request_header,
+            test_payload_writer, &test_payload, test_response_handler,
+            &env.expects_list));
+    ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
+
+    // handlers should be called only after receiving responses
+
+    expect_recv(&env, responses[0]);
+    expect_send(&env, requests[1]);
+    expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT,
+                        responses[0],
+                        .next_response_payload_offset = 40);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    expect_recv(&env, responses[1]);
+    expect_send(&env, requests[2]);
+    expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT,
+                        responses[1],
+                        .expected_payload_offset = 8);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    expect_recv(&env, responses[2]);
+    expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_OK, responses[2]);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+#        undef DATA_49B
+#        undef REQUEST_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_async_client, block_response_initial_skip) {
+    static const char RESPONSE_PAYLOAD[] = DATA_1KB DATA_1KB DATA_1KB "?";
+
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)), BLOCK2_REQ(1, 1024)),
+        COAP_MSG(CON, GET, ID(1), TOKEN(nth_token(1)), BLOCK2_REQ(3, 1024))
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK2_RES(1, 1024, RESPONSE_PAYLOAD)),
+        COAP_MSG(ACK, CONTENT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK2_RES(3, 1024, RESPONSE_PAYLOAD))
+    };
+    AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(requests) == AVS_ARRAY_SIZE(responses),
+                      mismatched_requests_responses_lists);
+
+    avs_coap_exchange_id_t id;
+
+    // start the request
+    ASSERT_OK(avs_coap_client_send_async_request(
+            env.coap_ctx, &id,
+            &(const avs_coap_request_header_t) {
+                .code = AVS_COAP_CODE_GET
+            },
+            NULL, NULL, test_response_handler, &env.expects_list));
+    ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    ASSERT_OK(avs_coap_client_set_next_response_payload_offset(env.coap_ctx, id,
+                                                               1500));
+
+    expect_send(&env, requests[0]);
+    avs_sched_run(env.sched);
+
+    expect_recv(&env, responses[0]);
+    expect_send(&env, requests[1]);
+    expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT,
+                        responses[0],
+                        .next_response_payload_offset = 3072,
+                        .expected_payload_offset = 476);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
+
+    expect_recv(&env, responses[1]);
+    expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_OK, responses[1]);
+    expect_timeout(&env);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(env.coap_ctx, NULL, NULL));
 }
 
 #    else // WITH_AVS_COAP_BLOCK
@@ -1539,7 +1826,6 @@ AVS_UNIT_TEST(udp_async_client_no_block, block2_response) {
                                  0xFF, 0x74, 0x65, 0x73, 0x74 };
     avs_coap_exchange_id_t id;
 
-    expect_send(&env, request);
     ASSERT_OK(avs_coap_client_send_async_request(env.coap_ctx,
                                                  &id,
                                                  &request->request_header,
@@ -1548,6 +1834,9 @@ AVS_UNIT_TEST(udp_async_client_no_block, block2_response) {
                                                  test_response_handler,
                                                  &env.expects_list));
     ASSERT_TRUE(avs_coap_exchange_id_valid(id));
+
+    expect_send(&env, request);
+    avs_sched_run(env.sched);
 
     avs_unit_mocksock_input(env.mocksock, response, sizeof(response));
     expect_handler_call(&env, &id, AVS_COAP_CLIENT_REQUEST_FAIL, NULL);

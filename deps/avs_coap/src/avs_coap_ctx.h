@@ -65,6 +65,9 @@ struct avs_coap_base {
     /**
      * All unfinished asynchronous request exchanges initiated by us acting
      * as a CoAP client (outgoing requests/incoming responses).
+     *
+     * NOTE: Exchanges for which the initial request packet has not yet been
+     * sent are always kept at the beginning of this list.
      */
     AVS_LIST(struct avs_coap_exchange) client_exchanges;
 
@@ -151,6 +154,8 @@ static inline void _avs_coap_base_init(avs_coap_base_t *base,
     base->sched = sched;
 #ifdef WITH_AVS_COAP_STREAMING_API
     _avs_coap_stream_init(&base->coap_stream, coap_ctx);
+#else  // WITH_AVS_COAP_STREAMING_API
+    (void) coap_ctx;
 #endif // WITH_AVS_COAP_STREAMING_API
 }
 

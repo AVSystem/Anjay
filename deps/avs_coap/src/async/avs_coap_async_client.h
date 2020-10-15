@@ -60,9 +60,17 @@ typedef struct avs_coap_client_exchange_data {
 
 struct avs_coap_exchange;
 
+avs_error_t _avs_coap_client_exchange_send_first_chunk(
+        avs_coap_ctx_t *ctx,
+        AVS_LIST(struct avs_coap_exchange) **exchange_ptr_ptr);
+
+bool _avs_coap_client_exchange_request_sent(
+        const struct avs_coap_exchange *exchange);
+
 /** Cleans up any resources associated with client-side @p exchange . */
 void _avs_coap_client_exchange_cleanup(avs_coap_ctx_t *ctx,
-                                       struct avs_coap_exchange *exchange);
+                                       struct avs_coap_exchange *exchange,
+                                       avs_error_t err);
 
 VISIBILITY_PRIVATE_HEADER_END
 

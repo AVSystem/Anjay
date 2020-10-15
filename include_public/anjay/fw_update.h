@@ -308,7 +308,7 @@ typedef void anjay_fw_update_reset_t(void *user_ptr);
  *                 @ref anjay_fw_update_install
  *
  * @returns The callback shall return a pointer to a null-terminated string
- *          containing tha package name, or <c>NULL</c> if it is not currently
+ *          containing the package name, or <c>NULL</c> if it is not currently
  *          available.
  */
 typedef const char *anjay_fw_update_get_name_t(void *user_ptr);
@@ -419,10 +419,13 @@ typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
  *                            <strong>valid, but very insecure</strong>: it will
  *                            cause any server certificate to be accepted
  *                            without validation. Any pointers used within the
- *                            supplied structure shall remain valid until a call
- *                            to @ref anjay_fw_update_reset_t . Anjay will
- *                            <strong>not</strong> attempt to deallocate
- *                            anything automatically.
+ *                            supplied structure shall remain valid until either
+ *                            a call to @ref anjay_fw_update_reset_t, or exit to
+ *                            the event loop (from either @ref anjay_serve,
+ *                            @ref anjay_sched_run or
+ *                            @ref anjay_fw_update_install), whichever happens
+ *                            first. Anjay will <strong>not</strong> attempt to
+ *                            deallocate anything automatically.
  *
  * @returns The callback shall return 0 if successful or a negative value in
  *          case of error. If one of the <c>ANJAY_FW_UPDATE_ERR_*</c> value is
@@ -561,18 +564,6 @@ int anjay_fw_update_install(
         const anjay_fw_update_handlers_t *handlers,
         void *user_arg,
         const anjay_fw_update_initial_state_t *initial_state);
-
-/**
- * Helper function that is used as a default implementation of security
- * information querying for PULL-mode downloads from (D)TLS-encrypted URIs.
- *
- * This is an alias for @ref anjay_security_config_from_dm, kept for backwards
- * compatibility.
- */
-static inline anjay_security_config_t *
-anjay_fw_update_load_security_from_dm(anjay_t *anjay, const char *uri) {
-    return anjay_security_config_from_dm(anjay, uri);
-}
 
 /**
  * Sets the Firmware Update Result to @p result, interrupting the update

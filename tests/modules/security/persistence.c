@@ -113,10 +113,14 @@ static void assert_instances_equal(const sec_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->is_bootstrap, b->is_bootstrap);
     AVS_UNIT_ASSERT_EQUAL((uint32_t) a->security_mode,
                           (uint32_t) b->security_mode);
-    assert_raw_buffers_equal(&a->public_cert_or_psk_identity,
-                             &b->public_cert_or_psk_identity);
-    assert_raw_buffers_equal(&a->private_cert_or_psk_key,
-                             &b->private_cert_or_psk_key);
+    AVS_UNIT_ASSERT_EQUAL(a->public_cert_or_psk_identity.type, SEC_KEY_AS_DATA);
+    AVS_UNIT_ASSERT_EQUAL(b->public_cert_or_psk_identity.type, SEC_KEY_AS_DATA);
+    assert_raw_buffers_equal(&a->public_cert_or_psk_identity.value.data,
+                             &b->public_cert_or_psk_identity.value.data);
+    AVS_UNIT_ASSERT_EQUAL(a->private_cert_or_psk_key.type, SEC_KEY_AS_DATA);
+    AVS_UNIT_ASSERT_EQUAL(b->private_cert_or_psk_key.type, SEC_KEY_AS_DATA);
+    assert_raw_buffers_equal(&a->private_cert_or_psk_key.value.data,
+                             &b->private_cert_or_psk_key.value.data);
     assert_raw_buffers_equal(&a->server_public_key, &b->server_public_key);
     AVS_UNIT_ASSERT_EQUAL(a->ssid, b->ssid);
     AVS_UNIT_ASSERT_EQUAL(a->holdoff_s, b->holdoff_s);

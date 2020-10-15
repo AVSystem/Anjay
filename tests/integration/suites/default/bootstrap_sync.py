@@ -30,8 +30,9 @@ class ClientIgnoresNonBootstrapTrafficDuringBootstrap(test_suite.Lwm2mSingleServ
                                                          '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
                                      auto_register=False)
 
-        self.assertDemoRegisters(self.serv)
+        self.serv.listen()
         self.bootstrap_server.listen()
+        self.assertDemoRegisters(self.serv)
 
     def runTest(self):
         req = Lwm2mCreate('/%d' % (OID.Test,))

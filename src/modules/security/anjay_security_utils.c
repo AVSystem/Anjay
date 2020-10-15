@@ -99,13 +99,25 @@ int _anjay_sec_fetch_short_server_id(anjay_input_ctx_t *ctx,
     return retval;
 }
 
+void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value) {
+    switch (value->type) {
+    case SEC_KEY_AS_DATA:
+        _anjay_raw_buffer_clear(&value->value.data);
+        break;
+    default:
+        AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+    }
+    memset(value, 0, sizeof(*value));
+    assert(value->type == SEC_KEY_AS_DATA);
+}
+
 void _anjay_sec_destroy_instance_fields(sec_instance_t *instance) {
     if (!instance) {
         return;
     }
     avs_free((char *) (intptr_t) instance->server_uri);
-    _anjay_raw_buffer_clear(&instance->public_cert_or_psk_identity);
-    _anjay_raw_buffer_clear(&instance->private_cert_or_psk_key);
+    _anjay_sec_key_or_data_cleanup(&instance->public_cert_or_psk_identity);
+    _anjay_sec_key_or_data_cleanup(&instance->private_cert_or_psk_key);
     _anjay_raw_buffer_clear(&instance->server_public_key);
     _anjay_raw_buffer_clear(&instance->sms_key_params);
     _anjay_raw_buffer_clear(&instance->sms_secret_key);
@@ -118,26 +130,42 @@ void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr) {
     }
 }
 
+static int sec_key_or_data_clone(sec_key_or_data_t *dest,
+                                 const sec_key_or_data_t *src) {
+    memset(dest, 0, sizeof(*dest));
+    int result = -1;
+    switch (src->type) {
+    case SEC_KEY_AS_DATA:
+        result = _anjay_raw_buffer_clone(&dest->value.data, &src->value.data);
+        break;
+    default:
+        AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+    }
+    if (!result) {
+        dest->type = src->type;
+    }
+    return result;
+}
+
 static int _anjay_sec_clone_instance(sec_instance_t *dest,
                                      const sec_instance_t *src) {
     *dest = *src;
 
+    assert(src->server_uri);
     dest->server_uri = avs_strdup(src->server_uri);
     if (!dest->server_uri) {
         security_log(ERROR, _("Cannot clone Server Uri resource"));
         return -1;
     }
 
-    dest->public_cert_or_psk_identity = ANJAY_RAW_BUFFER_EMPTY;
-    if (_anjay_raw_buffer_clone(&dest->public_cert_or_psk_identity,
-                                &src->public_cert_or_psk_identity)) {
+    if (sec_key_or_data_clone(&dest->public_cert_or_psk_identity,
+                              &src->public_cert_or_psk_identity)) {
         security_log(ERROR, _("Cannot clone Pk Or Identity resource"));
         return -1;
     }
 
-    dest->private_cert_or_psk_key = ANJAY_RAW_BUFFER_EMPTY;
-    if (_anjay_raw_buffer_clone(&dest->private_cert_or_psk_key,
-                                &src->private_cert_or_psk_key)) {
+    if (sec_key_or_data_clone(&dest->private_cert_or_psk_key,
+                              &src->private_cert_or_psk_key)) {
         security_log(ERROR, _("Cannot clone Secret Key resource"));
         return -1;
     }

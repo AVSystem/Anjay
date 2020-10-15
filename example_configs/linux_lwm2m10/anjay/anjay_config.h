@@ -325,18 +325,6 @@
 #define ANJAY_MAX_PK_OR_IDENTITY_SIZE 2048
 
 /**
- * Maximum size in bytes supported for the "Server Public Key" resource in the
- * LwM2M Security object.
- *
- * If editing this file manually, <c>2048</c> shall
- * be replaced with a positive integer literal.
- *
- * The default value defined in CMake build scripts is 2048.
- * Minimal suggested setting for low-resource builds is 256.
- */
-#define ANJAY_MAX_SERVER_PK_OR_IDENTITY_SIZE 2048
-
-/**
  * Maximum size in bytes supported for the "Secret Key" resource in the LwM2M
  * Security Object.
  *

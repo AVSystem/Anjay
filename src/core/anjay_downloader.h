@@ -88,6 +88,11 @@ int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
 int _anjay_downloader_handle_packet(anjay_downloader_t *dl,
                                     avs_net_socket_t *socket);
 
+avs_error_t
+_anjay_downloader_set_next_block_offset(anjay_downloader_t *dl,
+                                        anjay_download_handle_t handle,
+                                        size_t next_block_offset);
+
 void _anjay_downloader_abort(anjay_downloader_t *dl,
                              anjay_download_handle_t handle);
 

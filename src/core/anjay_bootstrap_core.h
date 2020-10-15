@@ -76,9 +76,7 @@ void _anjay_bootstrap_cleanup(anjay_t *anjay);
 
 #    define _anjay_bootstrap_perform_action(...) (-1)
 
-#    define _anjay_perform_bootstrap_action_if_appropriate(bootstrap_server, \
-                                                           action)           \
-        (-1)
+#    define _anjay_perform_bootstrap_action_if_appropriate(...) (-1)
 
 #    define _anjay_bootstrap_cleanup(anjay) ((void) 0)
 

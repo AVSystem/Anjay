@@ -713,7 +713,7 @@ int firmware_update_install(anjay_t *anjay,
             .delayed_result = delayed_result
         };
         if (iosched_instant_entry_new(iosched, set_delayed_fw_update_result,
-                                      args, free)
+                                      args, avs_free)
                 == NULL) {
             avs_free(args);
             goto exit;

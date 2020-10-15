@@ -10,9 +10,6 @@ static struct fw_state_t {
     FILE *firmware_file;
     // anjay instance this firmware update singleton is associated with
     anjay_t *anjay;
-    // pointer to configuration loaded from data model, we need to keep it
-    // to be able to avs_free() it later
-    anjay_security_config_t *dm_security_config;
 } FW_STATE;
 
 static const char *FW_IMAGE_DOWNLOAD_NAME = "/tmp/firmware_image.bin";
@@ -70,10 +67,6 @@ static void fw_reset(void *user_ptr) {
         // and reset our global state to initial value.
         FW_STATE.firmware_file = NULL;
     }
-    if (FW_STATE.dm_security_config) {
-        avs_free(FW_STATE.dm_security_config);
-        FW_STATE.dm_security_config = NULL;
-    }
     // Finally, let's remove any downloaded payload
     unlink(FW_IMAGE_DOWNLOAD_NAME);
 }
@@ -114,30 +107,22 @@ static int fw_get_security_config(void *user_ptr,
                                   anjay_security_config_t *out_security_info,
                                   const char *download_uri) {
     (void) user_ptr;
-    memset(out_security_info, 0, sizeof(*out_security_info));
-
-    if (FW_STATE.dm_security_config) {
-        avs_free(FW_STATE.dm_security_config);
-        FW_STATE.dm_security_config = NULL;
-    }
-    FW_STATE.dm_security_config =
-            anjay_security_config_from_dm(FW_STATE.anjay, download_uri);
-    if (FW_STATE.dm_security_config) {
+    if (!anjay_security_config_from_dm(FW_STATE.anjay, out_security_info,
+                                       download_uri)) {
         // found a match
-        memcpy(out_security_info,
-               FW_STATE.dm_security_config,
-               sizeof(*out_security_info));
         return 0;
     }
+
     // no match found, fallback to loading certificates from given paths
+    memset(out_security_info, 0, sizeof(*out_security_info));
     const avs_net_certificate_info_t cert_info = {
         .server_cert_validation = true,
         .trusted_certs =
-                avs_crypto_trusted_cert_info_from_path("./certs/CA.crt"),
-        .client_cert =
-                avs_crypto_client_cert_info_from_file("./certs/client.crt"),
-        .client_key =
-                avs_crypto_client_key_info_from_file("./certs/client.key", NULL)
+                avs_crypto_certificate_chain_info_from_path("./certs/CA.crt"),
+        .client_cert = avs_crypto_certificate_chain_info_from_path(
+                "./certs/client.crt"),
+        .client_key = avs_crypto_private_key_info_from_file(
+                "./certs/client.key", NULL)
     };
     // NOTE: this assignment is safe, because cert_info contains pointers to
     // string literals only. If the configuration were to load certificate info

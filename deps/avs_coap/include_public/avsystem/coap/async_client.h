@@ -201,6 +201,63 @@ avs_error_t avs_coap_client_send_async_request(
         avs_coap_client_async_response_handler_t *response_handler,
         void *response_handler_arg);
 
+/**
+ * Changes the offset of the remote resource that the user wants to receive the
+ * next response data chunk from.
+ *
+ * This function is only intended to be called from within an implementation
+ * of @ref avs_coap_client_async_response_handler_t, or immediately after a
+ * successful call to @ref avs_coap_client_send_async_request (before executing
+ * any subsequent scheduler jobs).
+ *
+ * The offset can only be moved forward relative to the last known starting
+ * offset. Attempting to set it to an offset of byte that was either already
+ * received in a previously finished call to
+ * @ref avs_coap_client_async_response_handler_t during this exchange, or is
+ * smaller than an offset already passed to this function, will result in an
+ * error.
+ *
+ * When called from within @ref avs_coap_client_async_response_handler_t, it is
+ * permitted to set @p next_response_payload_offset to a position that lies
+ * within the <c>response-&gt;payload</c> buffer passed to it (but further than
+ * the current offset). If a position within the buffer is passed, the response
+ * handler will be called again with a portion of the same buffer, starting at
+ * the desired offset.
+ *
+ * If this function is never called during a call to
+ * @ref avs_coap_client_async_response_handler_t, the pointer is implicitly
+ * moved by the whole size of the buffer passed to it.
+ *
+ * As an additional exception, when called immediately after
+ * @ref avs_coap_client_send_async_request, it is permitted to specify
+ * @p next_response_payload_offset equal to zero. This is treated as a no-op.
+ *
+ * It is guaranteed that the next response chunk passed to the user code will
+ * either start exactly on @p next_response_payload_offset, be empty (in case if
+ * EOF is before the requested offset) or NULL (if no content is received from
+ * the server).
+ *
+ * @param ctx                          CoAP context to operate on.
+ *
+ * @param exchange_id                  ID of the exchange to operate on. Note
+ *                                     that passing an exchange other than the
+ *                                     one currently handled may result in
+ *                                     unexpected behavior.
+ *
+ * @param next_response_payload_offset Response payload offset to set.
+ *
+ * @returns
+ *  - @ref AVS_OK for success
+ *  - <c>avs_errno(AVS_ENOENT)</c> if @p exchange_id is not an ID of existing
+ *    client exchange
+ *  - <c>avs_errno(AVS_EINVAL)</c> if @p next_response_payload_offset is smaller
+ *    than the currently recognized value
+ */
+avs_error_t avs_coap_client_set_next_response_payload_offset(
+        avs_coap_ctx_t *ctx,
+        avs_coap_exchange_id_t exchange_id,
+        size_t next_response_payload_offset);
+
 #ifdef __cplusplus
 }
 #endif

@@ -846,10 +846,6 @@ typedef struct {
     /**
      * Single DANE TLSA record to use for certificate verification, if
      * applicable.
-     *
-     * NOTE: If used with @ref anjay_download, this pointer, as well as its
-     * <c>association_data</c> field, need to remain valid until the download is
-     * finished, aborted or cancelled.
      */
     const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record;
 
@@ -879,17 +875,27 @@ typedef struct {
  * used for LwM2M connection with the server chosen with the rules described
  * above.
  *
- * @param anjay Anjay object whose data model shall be queried.
+ * @param anjay      Anjay object whose data model shall be queried.
  *
- * @param uri   URI for which to find security configuration.
+ * @param out_config Pointer to an @ref anjay_security_config_t structure that
+ *                   will be filled with the appropriate information, if found.
  *
- * @returns Security configuration found, or <c>NULL</c> if no suitable LwM2M
- *          Security Object instance could be found. The returned structure is
- *          heap-allocated; to release all memory allocated for it, it is enough
- *          to call <c>avs_free()</c> on the returned pointer.
+ * @param uri        URI for which to find security configuration.
+ *
+ * @returns 0 for success, or a negative value in case of error, including if
+ *          no suitable LwM2M Security Object instance could be found.
+ *
+ * <strong>NOTE:</strong> The returned structure will contain pointers to
+ * buffers allocated within the @p anjay object. They will only be valid until
+ * next call to <c>anjay_security_config_from_dm()</c> or @ref anjay_serve.
+ * Note that this is enough for direct use in
+ * @ref anjay_fw_update_get_security_config_t implementations. If you need this
+ * information for a longer period, you will need to manually create a deep
+ * copy.
  */
-anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
-                                                       const char *uri);
+int anjay_security_config_from_dm(anjay_t *anjay,
+                                  anjay_security_config_t *out_config,
+                                  const char *raw_url);
 
 /**
  * Returns @c false if registration to all LwM2M Servers either succeeded or
