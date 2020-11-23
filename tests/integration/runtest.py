@@ -31,7 +31,8 @@ import logging
 
 from framework.pretty_test_runner import PrettyTestRunner
 from framework.pretty_test_runner import COLOR_DEFAULT, COLOR_YELLOW, COLOR_GREEN, COLOR_RED
-from framework.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, test_or_suite_matches_query_regex, LogType
+from framework.test_suite import Lwm2mTest, ensure_dir, get_full_test_name, get_suite_name, \
+    test_or_suite_matches_query_regex, LogType
 
 if sys.version_info[0] >= 3:
     sys.stderr = os.fdopen(2, 'w', 1)  # force line buffering
@@ -96,7 +97,8 @@ def run_tests(suites, config):
 
     print('\nFinished in %f s; %s%d/%d successes%s, %s%d/%d errors%s, %s%d/%d failures%s\n'
           % (seconds_elapsed,
-             COLOR_GREEN if successes == all_tests else COLOR_YELLOW, successes, all_tests, COLOR_DEFAULT,
+             COLOR_GREEN if successes == all_tests else COLOR_YELLOW, successes, all_tests,
+             COLOR_DEFAULT,
              COLOR_RED if errors else COLOR_GREEN, errors, all_tests, COLOR_DEFAULT,
              COLOR_RED if failures else COLOR_GREEN, failures, all_tests, COLOR_DEFAULT))
 
@@ -152,6 +154,7 @@ if __name__ == "__main__":
     LOG_LEVEL = os.getenv('LOGLEVEL', 'info').upper()
     try:
         import coloredlogs
+
         coloredlogs.install(level=LOG_LEVEL)
     except ImportError:
         logging.basicConfig(level=LOG_LEVEL)
@@ -184,7 +187,7 @@ if __name__ == "__main__":
         textwrap.dedent(
             test_or_suite_matches_query_regex.__doc__),
         prefix=' ' * 8))),
-    formatter_class=argparse.RawDescriptionHelpFormatter)
+        formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('--list', '-l',
                         action='store_true',
@@ -195,6 +198,8 @@ if __name__ == "__main__":
     parser.add_argument('--keep-success-logs',
                         action='store_true',
                         help='keep logs from all tests, including ones that passed')
+    parser.add_argument('--target-logs-path', type=str,
+                        help='path where to leave the logs stored')
     parser.add_argument('query_regex',
                         type=str, default=DEFAULT_SUITE_REGEX, nargs='?',
                         help='regex used to filter test cases. See REGEX MATCH RULES for details.')
@@ -208,7 +213,8 @@ if __name__ == "__main__":
             logs_path = tmp_log_dir
             suite_root_path = os.path.abspath(UNITTEST_PATH)
 
-            target_logs_path = os.path.abspath(os.path.join(demo_path, '../test/integration/log'))
+            target_logs_path = os.path.abspath(
+                cmdline_args.target_logs_path or os.path.join(demo_path, '../test/integration/log'))
 
 
         def config_to_string(cfg):
@@ -217,7 +223,8 @@ if __name__ == "__main__":
 
             max_key_len = max(len(k) for k, _ in config)
 
-            return '\n  '.join(['Test config:'] + ['%%-%ds = %%s' % max_key_len % kv for kv in config])
+            return '\n  '.join(
+                ['Test config:'] + ['%%-%ds = %%s' % max_key_len % kv for kv in config])
 
 
         test_suites = discover_test_suites(TestConfig)
@@ -225,7 +232,8 @@ if __name__ == "__main__":
 
         if cmdline_args.query_regex:
             test_suites = filter_tests(test_suites, cmdline_args.query_regex)
-            header = '%d tests match pattern %s:' % (test_suites.countTestCases(), cmdline_args.query_regex)
+            header = '%d tests match pattern %s:' % (
+                test_suites.countTestCases(), cmdline_args.query_regex)
 
         list_tests(test_suites, header=header)
 

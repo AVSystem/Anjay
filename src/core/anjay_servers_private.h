@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANJAY_SERVERS_H
-#define ANJAY_SERVERS_H
+#ifndef ANJAY_SERVERS_PRIVATE_H
+#define ANJAY_SERVERS_PRIVATE_H
 
 #include <anjay/core.h>
 
@@ -27,7 +27,7 @@
 
 #include <avsystem/coap/ctx.h>
 
-#include "anjay_utils_core.h"
+#include "anjay_utils_private.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -513,4 +513,4 @@ _anjay_connection_transport(anjay_connection_ref_t conn_ref);
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif // ANJAY_SERVERS_H
+#endif // ANJAY_SERVERS_PRIVATE_H

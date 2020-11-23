@@ -22,7 +22,7 @@
 #include <avsystem/commons/avs_sched.h>
 #include <avsystem/commons/avs_stream.h>
 
-#include "anjay_utils_core.h"
+#include "anjay_utils_private.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

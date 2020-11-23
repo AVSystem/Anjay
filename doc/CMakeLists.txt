@@ -79,6 +79,14 @@ if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
     # semicolon-separated strings
     string(REPLACE ";" " " DOXYGEN_INPUT_PATHS "${DOXYGEN_INPUT_PATHS}")
 
+    execute_process(COMMAND ${ANJAY_SOURCE_DIR}/tools/anjay_config_log_tool.py list_flags
+                    RESULT_VARIABLE LIST_FLAGS_RESULT
+                    OUTPUT_VARIABLE DOXYFILE_PREDEFINED_MACROS)
+    if(NOT LIST_FLAGS_RESULT EQUAL 0)
+        message(WARNING "Could not enumerate configuration macros")
+    endif()
+    string(REPLACE "\n" " " DOXYFILE_PREDEFINED_MACROS "${DOXYFILE_PREDEFINED_MACROS}")
+
     set(DOXYGEN_OUTPUT_DIR ${ANJAY_BUILD_OUTPUT_DIR}/doc/doxygen)
 
     # configure_file does not expand CMake generator expressions; file(GENERATE) does
@@ -98,4 +106,3 @@ if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
     endif()
     add_dependencies(doc doc_doxygen)
 endif()
-

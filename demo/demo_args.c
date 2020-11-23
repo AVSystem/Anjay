@@ -280,9 +280,6 @@ static void print_help(const struct option *options) {
         { 278, "CIPHERSUITE[,CIPHERSUITE...]", "TLS library defaults",
           "Sets the ciphersuites to be used by default for (D)TLS "
           "connections." },
-        { 283, NULL, NULL,
-          "Configures preference of re-using existing LwM2M CoAP contexts for "
-          "firmware download" },
         { 284, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
         { 289, "PERSISTENCE_FILE", NULL,
           "File to load Server, Security and Access Control object contents at "

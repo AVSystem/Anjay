@@ -66,27 +66,6 @@ def read_some_with_timeout(fd, timeout_s):
                 return buf
 
 
-def read_until_match(fd, regex, timeout_s):
-    deadline = time.time() + timeout_s
-    out = bytearray()
-    while True:
-        # Retain only the last two lines - two, because the regexes sometimes check for the end-of-line
-        last_lf = out.rfind(b'\n')
-        if last_lf >= 0:
-            second_to_last_lf = out.rfind(b'\n', 0, last_lf)
-            if second_to_last_lf >= 0:
-                del out[0:second_to_last_lf + 1]
-
-        partial_timeout = deadline - time.time()
-        if partial_timeout < 0:
-            return None
-        out += read_some_with_timeout(fd, partial_timeout)
-
-        match = re.search(regex, out)
-        if match:
-            return match
-
-
 def ensure_dir(dir_path):
     try:
         os.makedirs(dir_path)
@@ -96,10 +75,7 @@ def ensure_dir(dir_path):
 
 
 class CleanupList(list):
-    def __enter__(self):
-        return self
-
-    def __exit__(self, _type, value, _traceback):
+    def __call__(self):
         def merge_exceptions(old, new):
             """
             Adds the "old" exception as a context of the "new" one and returns
@@ -142,6 +118,12 @@ class CleanupList(list):
         if exc is not None:
             raise exc
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, _traceback):
+        return self()
+
 
 class Lwm2mDmOperations(Lwm2mAsserts):
     DEFAULT_OPERATION_TIMEOUT_S = 5
@@ -162,8 +144,10 @@ class Lwm2mDmOperations(Lwm2mAsserts):
         else:
             return Lwm2mErrorResponse.matching(req)(code=expect_error_code)
 
-    def create_instance_with_arbitrary_payload(self, server, oid, format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
-                                               iid=None, payload=b'', expect_error_code=None, **kwargs):
+    def create_instance_with_arbitrary_payload(self, server, oid,
+                                               format=coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                                               iid=None, payload=b'', expect_error_code=None,
+                                               **kwargs):
         if iid is None:
             raise ValueError("IID cannot be None")
 
@@ -172,14 +156,16 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mCreated, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
-    def create_instance_with_payload(self, server, oid, iid=None, payload=b'', expect_error_code=None, **kwargs):
+    def create_instance_with_payload(self, server, oid, iid=None, payload=b'',
+                                     expect_error_code=None, **kwargs):
         if iid is None:
             raise ValueError("IID cannot be None")
 
         instance_tlv = TLV.make_instance(
             instance_id=iid, content=payload).serialize()
         return self.create_instance_with_arbitrary_payload(server=server, oid=oid, iid=iid,
-                                                           payload=instance_tlv, expect_error_code=expect_error_code,
+                                                           payload=instance_tlv,
+                                                           expect_error_code=expect_error_code,
                                                            **kwargs)
 
     def create_instance(self, server, oid, iid=None, expect_error_code=None, **kwargs):
@@ -208,7 +194,6 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
-
     def read_resource(self, server, oid, iid, rid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d/%d/%d' % (oid, iid, rid), expect_error_code,
                               accept=accept, **kwargs)
@@ -219,7 +204,6 @@ class Lwm2mDmOperations(Lwm2mAsserts):
 
     def read_object(self, server, oid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d' % oid, expect_error_code, accept=accept, **kwargs)
-
 
     def write_object(self, server, oid, content=b'', expect_error_code=None,
                      format=coap.ContentFormat.APPLICATION_LWM2M_TLV, **kwargs):
@@ -246,8 +230,8 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
-
-    def execute_resource(self, server, oid, iid, rid, content=b'', expect_error_code=None, **kwargs):
+    def execute_resource(self, server, oid, iid, rid, content=b'', expect_error_code=None,
+                         **kwargs):
         req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid), content=content)
         expected_res = self._make_expected_res(
             req, Lwm2mChanged, expect_error_code)
@@ -271,14 +255,16 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
-    def observe(self, server, oid=None, iid=None, rid=None, riid=None, expect_error_code=None, **kwargs):
+    def observe(self, server, oid=None, iid=None, rid=None, riid=None, expect_error_code=None,
+                **kwargs):
         req = Lwm2mObserve(
             Lwm2mDmOperations.make_path(oid, iid, rid, riid), **kwargs)
         expected_res = self._make_expected_res(
             req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res)
 
-    def write_attributes(self, server, oid=None, iid=None, rid=None, query=[], expect_error_code=None, **kwargs):
+    def write_attributes(self, server, oid=None, iid=None, rid=None, query=[],
+                         expect_error_code=None, **kwargs):
         req = Lwm2mWriteAttributes(
             Lwm2mDmOperations.make_path(oid, iid, rid), query=query)
         expected_res = self._make_expected_res(
@@ -329,10 +315,16 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def make_demo_args(self,
                        endpoint_name,
                        servers,
-                       fw_updated_marker_path):
+                       fw_updated_marker_path,
+                       ciphersuites=(0xC030, 0xC0A8, 0xC0AE)):
         """
         Helper method for easy generation of demo executable arguments.
         """
+        # 0xC030 = TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 - used by TLS (over TCP, including HTTPS) in tests
+        # Default ciphersuites mandated by LwM2M:
+        # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
+        # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
+
         security_modes = set(serv.security_mode() for serv in servers)
 
         self.assertLessEqual(len(security_modes), 1,
@@ -344,14 +336,12 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         else:
             protocol = 'coaps'
 
-        # 0xC030 = TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 - used by TLS (over TCP, including HTTPS) in tests
-        # Default ciphersuites mandated by LwM2M:
-        # 0xC0A8 = TLS_PSK_WITH_AES_128_CCM_8
-        # 0xC0AE = TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
-        args = ['--endpoint-name', endpoint_name, '--ciphersuites', '0xC030,0xC0A8,0xC0AE',
+        args = ['--endpoint-name', endpoint_name,
                 '--security-mode', security_mode]
         if fw_updated_marker_path is not None:
             args += ['--fw-updated-marker-path', fw_updated_marker_path]
+        if ciphersuites is not None:
+            args += ['--ciphersuites', ','.join(map(hex, ciphersuites))]
 
         for serv in servers:
             args += ['--server-uri', '%s://127.0.0.1:%d' %
@@ -369,6 +359,29 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         ensure_dir(os.path.dirname(log_path))
         return log_path
 
+    def read_log_until_match(self, regex, timeout_s):
+        deadline = time.time() + timeout_s
+        out = bytearray()
+        while True:
+            # Retain only the last two lines - two, because the regexes sometimes check for the end-of-line
+            last_lf = out.rfind(b'\n')
+            if last_lf >= 0:
+                second_to_last_lf = out.rfind(b'\n', 0, last_lf)
+                if second_to_last_lf >= 0:
+                    del out[0:second_to_last_lf + 1]
+
+            partial_timeout = min(deadline - time.time(), 1.0)
+            if partial_timeout < 0:
+                return None
+            out += read_some_with_timeout(self.demo_process.log_file, partial_timeout)
+
+            match = re.search(regex, out)
+            if match:
+                return match
+
+            if self.demo_process.poll() is not None:
+                return None
+
     def _get_valgrind_args(self):
         import shlex
 
@@ -379,7 +392,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         return valgrind_list
 
-    def _start_demo(self, cmdline_args, timeout_s=30):
+    def _start_demo(self, cmdline_args, timeout_s=30, prepend_args=None):
         """
         Starts the demo executable with given CMDLINE_ARGS.
         """
@@ -403,7 +416,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         else:
             args_prefix = self._get_valgrind_args()
 
-        demo_args = args_prefix + [demo_executable] + cmdline_args
+        demo_args = (prepend_args or []) + args_prefix + [demo_executable] + cmdline_args
 
         import shlex
         console_log_path = self.logs_path(LogType.Console)
@@ -427,10 +440,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         if timeout_s is not None:
             # wait until demo process starts
-            if read_until_match(self.demo_process.log_file,
-                                regex=re.escape(
-                                    b'*** ANJAY DEMO STARTUP FINISHED ***'),
-                                timeout_s=timeout_s) is None:
+            if self.read_log_until_match(regex=re.escape(b'*** ANJAY DEMO STARTUP FINISHED ***'),
+                                         timeout_s=timeout_s) is None:
                 raise self.failureException(
                     'demo executable did not start in time')
 
@@ -476,8 +487,10 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             #   - icmp[28:2] is the source UDP port of the original packet
             #   - icmp[30:2] is the destination UDP port of the original packet
             icmp_pu_filter = ' or '.join(
-                '(icmp[28:2] = 0x%04x) or (icmp[30:2] = 0x%04x)' % (port, port) for port in udp_ports)
-            return '%s or ((icmp[0] = 3) and (icmp[1] = 3) and (icmp[17] = 17) and (%s))' % (udp_filter, icmp_pu_filter)
+                '(icmp[28:2] = 0x%04x) or (icmp[30:2] = 0x%04x)' % (port, port) for port in
+                udp_ports)
+            return '%s or ((icmp[0] = 3) and (icmp[1] = 3) and (icmp[17] = 17) and (%s))' % (
+                udp_filter, icmp_pu_filter)
 
         self.dumpcap_file_path = self.logs_path(LogType.Pcap)
         dumpcap_command = [self.DUMPCAP_COMMAND, '-w',
@@ -531,7 +544,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 endpoint_name=DEMO_ENDPOINT_NAME,
                                 lifetime=None,
                                 binding=None,
-                                fw_updated_marker_path=None):
+                                fw_updated_marker_path=None,
+                                **kwargs):
         """
         Starts the demo process and creates any required auxiliary objects (such as Lwm2mServer objects) or processes.
 
@@ -587,7 +601,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             self.bootstrap_server = None
 
         if self.bootstrap_server is not None:
-            demo_args += ['--bootstrap' if legacy_server_initiated_bootstrap_allowed else '--bootstrap=client-initiated-only']
+            demo_args += [
+                '--bootstrap' if legacy_server_initiated_bootstrap_allowed else '--bootstrap=client-initiated-only']
             all_servers = [self.bootstrap_server] + self.servers
             all_servers_passed = [self.bootstrap_server] + servers_passed
         else:
@@ -598,8 +613,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             fw_updated_marker_path = generate_temp_filename(
                 dir='/tmp', prefix='anjay-fw-updated-')
 
-        demo_args += self.make_demo_args(endpoint_name, all_servers_passed,
-                                         fw_updated_marker_path)
+        demo_args += self.make_demo_args(
+            endpoint_name, all_servers_passed,
+            fw_updated_marker_path, **kwargs)
         demo_args += extra_cmdline_args
         if lifetime is not None:
             demo_args += ['--lifetime', str(lifetime)]
@@ -696,8 +712,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.demo_process.stdin.flush()
 
         if match_regex:
-            result = read_until_match(
-                self.demo_process.log_file, match_regex.encode(), timeout_s=timeout)
+            result = self.read_log_until_match(match_regex.encode(), timeout_s=timeout)
             if result is not None:
                 # we need to convert bytes-based match object to string-based one...
                 return re.search(match_regex, result.group(0).decode(errors='replace'))
@@ -789,7 +804,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         logging.debug('demo terminated')
 
     def get_socket_count(self):
-        return int(self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
+        return int(
+            self.communicate('socket-count', match_regex='SOCKET_COUNT==([0-9]+)\n').group(1))
 
     def wait_until_socket_count(self, expected, timeout_s):
         deadline = time.time() + timeout_s
@@ -805,17 +821,21 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def get_demo_port(self, server_index=None):
         if server_index is None:
             server_index = -1
-        return int(self.communicate('get-port %s' % (server_index,), match_regex='PORT==([0-9]+)\n').group(1))
+        return int(
+            self.communicate('get-port %s' % (server_index,), match_regex='PORT==([0-9]+)\n').group(
+                1))
 
     def get_transport(self, socket_index=-1):
-        return self.communicate('get-transport %s' % (socket_index,), match_regex='TRANSPORT==([0-9a-zA-Z]+)\n').group(1)
+        return self.communicate('get-transport %s' % (socket_index,),
+                                match_regex='TRANSPORT==([0-9a-zA-Z]+)\n').group(1)
 
     def get_all_connections_failed(self):
-        return bool(int(self.communicate('get-all-connections-failed', match_regex='ALL_CONNECTIONS_FAILED==([0-9])\n').group(1)))
-
+        return bool(int(self.communicate('get-all-connections-failed',
+                                         match_regex='ALL_CONNECTIONS_FAILED==([0-9])\n').group(1)))
 
     def ongoing_registration_exists(self):
-        result = self.communicate('ongoing-registration-exists', match_regex='ONGOING_REGISTRATION==(true|false)\n').group(1)
+        result = self.communicate('ongoing-registration-exists',
+                                  match_regex='ONGOING_REGISTRATION==(true|false)\n').group(1)
         if result == "true":
             return True
         elif result == "false":
@@ -837,8 +857,6 @@ class SingleServerAccessor:
         del self.servers[0]
 
 
-
-
 class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
     def runTest(self):
         pass
@@ -846,15 +864,20 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
     def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None, client_ca_path=None,
               client_ca_file=None, server_crt_file=None, server_key_file=None, binding=None,
               *args, **kwargs):
-        assert((psk_identity is None) == (psk_key is None))
+        assert ((psk_identity is None) == (psk_key is None))
         extra_args = []
+        dtls_server_kwargs = {}
+        if 'ciphersuites' in kwargs:
+            dtls_server_kwargs['ciphersuites'] = kwargs['ciphersuites']
         if psk_identity:
             extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
                            '--key', str(binascii.hexlify(psk_key), 'ascii')]
-            coap_server = coap.DtlsServer(psk_identity=psk_identity, psk_key=psk_key)
+            coap_server = coap.DtlsServer(psk_identity=psk_identity, psk_key=psk_key,
+                                          **dtls_server_kwargs)
         elif server_crt_file:
             coap_server = coap.DtlsServer(ca_path=client_ca_path, ca_file=client_ca_file,
-                                          crt_file=server_crt_file, key_file=server_key_file)
+                                          crt_file=server_crt_file, key_file=server_key_file,
+                                          **dtls_server_kwargs)
         else:
             coap_server = coap.Server()
         if extra_cmdline_args is not None:
@@ -928,8 +951,8 @@ class PcapEnabledTest(Lwm2mTest):
     @staticmethod
     def is_icmp_unreachable(pkt):
         return isinstance(pkt, dpkt.ip.IP) \
-            and isinstance(pkt.data, dpkt.icmp.ICMP) \
-            and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
+               and isinstance(pkt.data, dpkt.icmp.ICMP) \
+               and isinstance(pkt.data.data, dpkt.icmp.ICMP.Unreach)
 
     @staticmethod
     def is_dtls_client_hello(pkt):
@@ -962,6 +985,7 @@ class PcapEnabledTest(Lwm2mTest):
     def wait_until_icmp_unreachable_count(self, value, timeout_s=None, step_s=0.1):
         def count_of_icmps_is_expected(pkts):
             return self.count_icmp_unreachable_packets() >= value
+
         try:
             self._wait_until_condition(
                 timeout_s=timeout_s, step_s=step_s, condition=count_of_icmps_is_expected)

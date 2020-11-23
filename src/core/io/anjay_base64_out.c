@@ -20,7 +20,7 @@
 
 #include <anjay/core.h>
 
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 #include "anjay_base64_out.h"
 #include "anjay_vtable.h"
 

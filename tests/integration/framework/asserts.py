@@ -176,7 +176,7 @@ class Lwm2mAsserts:
             serv.send(Lwm2mChanged.matching(pkt)())
         return pkt
 
-    def assertDemoDeregisters(self, server=None, path=DEFAULT_REGISTER_ENDPOINT, timeout_s=1, reset=True):
+    def assertDemoDeregisters(self, server=None, path=DEFAULT_REGISTER_ENDPOINT, timeout_s=2, reset=True):
         serv = server or self.serv
 
         pkt = serv.recv(timeout_s=timeout_s)

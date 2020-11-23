@@ -18,7 +18,7 @@
 
 #include "anjay_dm_write_attrs.h"
 
-#include "../anjay_access_utils.h"
+#include "../anjay_access_utils_private.h"
 
 VISIBILITY_SOURCE_BEGIN
 

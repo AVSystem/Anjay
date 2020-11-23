@@ -119,12 +119,14 @@ Running tests on Ubuntu 16.04 or later: ::
 Running tests on CentOS 7 or later: ::
 
     # Install these for tests:
-    sudo yum install -y valgrind valgrind-devel openssl openssl-devel python35u python35u-devel python35u-pip python-sphinx python-sphinx_rtd_theme clang-analyzer
+    # (IUS is required for Python 3.5)
+    sudo yum install -y https://repo.ius.io/ius-release-el7.rpm
+    sudo yum install -y valgrind valgrind-devel openssl openssl-devel python35u python35u-devel python35u-pip clang-analyzer
     # Some test scripts expect Python >=3.5 to be available via `python3` command
     # Use update-alternatives to create a /usr/bin/python3 symlink with priority 0
     # (lowest possible)
     sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.5 0
-    sudo python3 -m pip install cryptography jinja2 requests
+    sudo python3 -m pip install cryptography jinja2 requests sphinx sphinx_rtd_theme
 
     # Configure and run check target
     # NOTE: clang-3.4 static analyzer (default version for CentOS) gives false

@@ -25,7 +25,7 @@
 #include <avsystem/commons/avs_stream_outbuf.h>
 
 #include "anjay_dm_core.h"
-#include "anjay_servers.h"
+#include "anjay_servers_private.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

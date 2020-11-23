@@ -72,9 +72,14 @@ def find_unused_code(jobs, ignores):
                         '-DWITH_STATIC_ANALYSIS=OFF'],
                        stdout=out, stderr=out, check=True)
 
+    with open('CMakeCache.txt', 'r') as f:
+        cmake_binary_candidates = [line for line in f.readlines() if line.startswith('CMAKE_COMMAND')]
+        assert len(cmake_binary_candidates) == 1
+        cmake_binary = cmake_binary_candidates[0].split('=')[-1].strip()
+
     logging.info('compiling: %s/%s', os.getcwd(), MAKE_OUT_FNAME)
     with open(MAKE_OUT_FNAME, 'w') as out:
-        subprocess.run(['cmake', '--build', '.', '--', '-j%d' % (jobs,)], stdout=out, stderr=out,
+        subprocess.run([cmake_binary, '--build', '.', '--', '-j%d' % (jobs,)], stdout=out, stderr=out,
                        check=True)
 
     # examples of lines we're looking for in ld output:

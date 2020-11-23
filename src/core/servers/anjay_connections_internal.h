@@ -17,7 +17,7 @@
 #ifndef ANJAY_SERVERS_CONNECTIONS_INTERNAL_H
 #define ANJAY_SERVERS_CONNECTIONS_INTERNAL_H
 
-#include "../anjay_servers.h"
+#include "../anjay_servers_private.h"
 
 #include "anjay_connections.h"
 #include "anjay_security.h"

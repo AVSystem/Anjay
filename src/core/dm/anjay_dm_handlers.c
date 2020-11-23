@@ -21,7 +21,7 @@
 #include <anjay_modules/anjay_dm_utils.h>
 
 #include "../anjay_core.h"
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 
 VISIBILITY_SOURCE_BEGIN
 

@@ -738,6 +738,16 @@ mentioned in :ref:`avs-commons-type-renames`):
 * ``_avs_net_create_udp_socket()``
 * ``_avs_net_initialize_global_compat_state()``
 
+Refactor of avs_net_validate_ip_address()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``avs_net_validate_ip_address()`` is now no longer used by Anjay or
+``avs_commons``. It was previously necessary to implement it as part of the
+socket implementation. This is no longer required, and in fact, keeping that
+implementation might lead to problems - for compatibility, the function has been
+reimplemented as a ``static inline`` function that wraps
+``avs_net_addrinfo_*()`` APIs.
+
 .. _avs-commons-pki-move-116:
 
 Move of public-key cryptography APIs from avs_net to avs_crypto

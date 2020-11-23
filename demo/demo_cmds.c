@@ -231,6 +231,7 @@ static void cmd_get_transport(anjay_demo_t *demo, char *args_string) {
     if (index < 0 || index >= num_sockets) {
         demo_log(ERROR, "Index out of range: %d; num_sockets == %d", index,
                  num_sockets);
+        return;
     }
     AVS_LIST(const anjay_socket_entry_t) entry =
             AVS_LIST_NTH(entries, (size_t) index);

@@ -30,9 +30,9 @@
 
 #include "anjay_bootstrap_core.h"
 #include "anjay_downloader.h"
-#include "anjay_servers.h"
+#include "anjay_servers_private.h"
 #include "anjay_stats.h"
-#include "anjay_utils_core.h"
+#include "anjay_utils_private.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

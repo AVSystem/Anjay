@@ -17,7 +17,7 @@
 #ifndef ANJAY_COAP_MSG_DETAILS_H
 #define ANJAY_COAP_MSG_DETAILS_H
 
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 
 #include <avsystem/coap/streaming.h>
 

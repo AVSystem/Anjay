@@ -87,6 +87,7 @@ Other changes
 
         anjay_security_config_t *anjay_security_config_from_dm(anjay_t *anjay,
                                                                const char *uri);
+
   * **New API:**
 
     .. snippet-source:: include_public/anjay/core.h
@@ -503,6 +504,16 @@ adjustments.
     the CMake variable names have not changed - the renames affect **only** the
     C preprocessor.
 
+Refactor of avs_net_validate_ip_address()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``avs_net_validate_ip_address()`` is now no longer used by Anjay or
+``avs_commons``. It was previously necessary to implement it as part of the
+socket implementation. This is no longer required, and in fact, keeping that
+implementation might lead to problems - for compatibility, the function has been
+reimplemented as a ``static inline`` function that wraps
+``avs_net_addrinfo_*()`` APIs.
+
 Changes in component dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -517,6 +528,12 @@ Changes in component dependencies
     option.
 
 * ``avs_vector`` is no longer compiled by default when building Anjay
+
+* URL handling routines, previously a part of ``avs_net``, are now a separate
+  component called ``avs_url``
+
+  * You may need to add ``-lavs_url`` to your link command if you're not using
+    CMake to handle dependencies between your project and Anjay
 
 Removal of the legacy CoAP component
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

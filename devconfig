@@ -104,6 +104,17 @@ while [ $# -gt 0 ]; do
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_URI_SEGMENT_SIZE=64"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_URI_QUERY_SEGMENT_SIZE=64"
             ;;
+        -DDTLS_BACKEND=*)
+            DTLS_BACKEND="${1#-DDTLS_BACKEND=}"
+            ;;
+        -D)
+            if [[ $# -gt 1 && $2 =~ ^DTLS_BACKEND= ]]; then
+                DTLS_BACKEND="${2#DTLS_BACKEND=}"
+                shift
+            else
+                EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="$1"
+            fi
+            ;;
         *)
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="$1"
             ;;
@@ -141,5 +152,5 @@ ${CMAKE_COMMAND} \
     -D CMAKE_CXX_FLAGS="${EXTRA_C_FLAGS}" \
     -D ANJAY_VERSION="${ANJAY_VERSION}" \
     "${EXTRA_FLAGS[@]}" \
-    "$@" -H"$(dirname "$0")" -B. &&
+    -H"$(dirname "$0")" -B. &&
 make clean

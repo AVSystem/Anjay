@@ -58,6 +58,7 @@ typedef struct {
     const anjay_dm_object_def_t *obj_def;
     access_control_state_t current;
     access_control_state_t saved_state;
+    bool in_transaction;
     access_control_instance_t *last_accessed_instance;
     bool needs_validation;
     bool sync_in_progress;

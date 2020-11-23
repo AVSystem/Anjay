@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.4.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.7.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.8.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -120,7 +120,7 @@ option(WITH_AVS_LOG "Enable logging support" ON)
 option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
 
 # avs_commons required components.
-set(AVS_COMMONS_COMPONENTS algorithm crypto list rbtree buffer net sched stream stream_net utils compat_threading)
+set(AVS_COMMONS_COMPONENTS algorithm crypto list rbtree buffer net sched stream stream_net url utils compat_threading)
 if(WITH_HTTP_DOWNLOAD)
     list(APPEND AVS_COMMONS_COMPONENTS http)
 endif()
@@ -325,17 +325,17 @@ add_library(anjay
             src/modules/server/anjay_server_utils.c
             src/anjay_config_log.h
             src/anjay_init.h
-            src/core/anjay_access_utils.h
+            src/core/anjay_access_utils_private.h
             src/core/anjay_bootstrap_core.h
             src/core/anjay_core.h
             src/core/anjay_dm_core.h
             src/core/anjay_downloader.h
             src/core/anjay_io_core.h
-            src/core/anjay_servers.h
             src/core/anjay_servers_inactive.h
+            src/core/anjay_servers_private.h
             src/core/anjay_servers_utils.h
             src/core/anjay_stats.h
-            src/core/anjay_utils_core.h
+            src/core/anjay_utils_private.h
             src/core/coap/anjay_content_format.h
             src/core/coap/anjay_msg_details.h
             src/core/dm/anjay_discover.h
@@ -626,6 +626,7 @@ if(WITH_TEST)
 
     add_custom_target(anjay_filename_check
                       COMMAND ! find src -name "'*.[ch]'" | sed -e "'s|^.*/||'" | grep -v "'^anjay_'"
+                      COMMAND ! find src -name "'*.[ch]'" | sed -e "'s|^.*/||'" | sort | uniq -c | grep -v "'^ *1 '"
                       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     add_dependencies(anjay_check anjay_filename_check)
 

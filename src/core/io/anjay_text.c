@@ -31,7 +31,7 @@
 
 #    include <anjay/core.h>
 
-#    include "../anjay_utils_core.h"
+#    include "../anjay_utils_private.h"
 #    include "../coap/anjay_content_format.h"
 #    include "anjay_base64_out.h"
 #    include "anjay_common.h"
@@ -102,7 +102,8 @@ static int text_ret_double(anjay_output_ctx_t *ctx_, double value) {
     // As printing floating-point numbers in C as pure decimal with sane
     // precision is tricky, let's take the spec a bit loosely for now.
     if (ctx->state == STATE_PATH_SET
-            && avs_is_ok(avs_stream_write_f(ctx->stream, "%.17g", value))) {
+            && avs_is_ok(avs_stream_write_f(ctx->stream, "%s",
+                                            AVS_DOUBLE_AS_STRING(value, 17)))) {
         ctx->state = STATE_FINISHED;
         return 0;
     }

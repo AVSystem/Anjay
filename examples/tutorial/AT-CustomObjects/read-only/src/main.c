@@ -1,6 +1,7 @@
 #include <poll.h>
 
 #include <anjay/anjay.h>
+#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
 
@@ -165,7 +166,8 @@ int main(int argc, char *argv[]) {
 
     int result = 0;
 
-    if (setup_security_object(anjay) || setup_server_object(anjay)) {
+    if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
+            || setup_server_object(anjay)) {
         result = -1;
         goto cleanup;
     }

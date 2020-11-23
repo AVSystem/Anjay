@@ -141,7 +141,7 @@ static avs_error_t
 restore(anjay_t *anjay, access_control_t *ac, avs_stream_t *in) {
     avs_persistence_context_t restore_ctx =
             avs_persistence_restore_context_create(in);
-    access_control_state_t state = { NULL };
+    access_control_state_t state = { NULL, false };
     avs_error_t err = restore_instances(anjay, &state.instances, &restore_ctx);
     if (avs_is_err(err)) {
         _anjay_access_control_clear_state(&state);
@@ -167,9 +167,12 @@ avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
         return err;
     }
     avs_persistence_context_t ctx = avs_persistence_store_context_create(out);
-    err = avs_persistence_list(&ctx, (AVS_LIST(void) *) &ac->current.instances,
-                               sizeof(*ac->current.instances), persist_instance,
-                               NULL, NULL);
+    AVS_LIST(access_control_instance_t) *list_ptr =
+            ac->in_transaction ? &ac->saved_state.instances
+                               : &ac->current.instances;
+    err = avs_persistence_list(&ctx, (AVS_LIST(void) *) list_ptr,
+                               sizeof(**list_ptr), persist_instance, NULL,
+                               NULL);
     if (avs_is_ok(err)) {
         ac_log(INFO, _("Access Control state persisted"));
         _anjay_access_control_clear_modified(ac);
@@ -181,6 +184,12 @@ avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
         ac_log(ERROR, _("Access Control not installed in this Anjay object"));
+        return avs_errno(AVS_EBADF);
+    }
+
+    if (ac->in_transaction) {
+        ac_log(ERROR, _("Cannot restore Access Control state while the object "
+                        "is in transaction"));
         return avs_errno(AVS_EBADF);
     }
 

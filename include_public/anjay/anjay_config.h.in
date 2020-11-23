@@ -50,6 +50,7 @@
  * - All components required by avs_coap, see <c>avs_coap_config.h</c>
  * - @c avs_algorithm
  * - @c avs_stream
+ * - @c avs_url
  * - @c avs_persistence is highly recommended
  * - @c avs_http (if @c ANJAY_WITH_HTTP_DOWNLOAD is enabled)
  * - @c avs_rbtree (if @c ANJAY_WITH_OBSERVE or

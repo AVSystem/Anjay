@@ -87,6 +87,7 @@ typedef struct {
     AVS_LIST(sec_instance_t) saved_instances;
     bool modified_since_persist;
     bool saved_modified_since_persist;
+    bool in_transaction;
 } sec_repr_t;
 
 static inline void _anjay_sec_mark_modified(sec_repr_t *repr) {

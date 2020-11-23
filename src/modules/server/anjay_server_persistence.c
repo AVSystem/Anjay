@@ -358,11 +358,12 @@ avs_error_t anjay_server_object_persist(anjay_t *anjay,
         return err;
     }
     server_persistence_version_t persistence_version = PERSISTENCE_VERSION_2;
-    err = avs_persistence_list(&persist_ctx,
-                               (AVS_LIST(void) *) &repr->instances,
-                               sizeof(server_instance_t),
-                               server_instance_persistence_handler,
-                               &persistence_version, NULL);
+    err = avs_persistence_list(
+            &persist_ctx,
+            (AVS_LIST(void) *) (repr->in_transaction ? &repr->saved_instances
+                                                     : &repr->instances),
+            sizeof(server_instance_t), server_instance_persistence_handler,
+            &persistence_version, NULL);
     if (avs_is_ok(err)) {
         _anjay_serv_clear_modified(repr);
         persistence_log(INFO, _("Server Object state persisted"));
@@ -394,7 +395,7 @@ avs_error_t anjay_server_object_restore(anjay_t *anjay,
     const anjay_dm_object_def_t *const *server_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
     server_repr_t *repr = _anjay_serv_get(server_obj);
-    if (!repr) {
+    if (!repr || repr->in_transaction) {
         return avs_errno(AVS_EBADF);
     }
     server_repr_t backup = *repr;

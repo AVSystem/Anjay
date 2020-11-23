@@ -107,6 +107,25 @@ echo "* generating client cert - done"
 "$OPENSSL" pkcs8 -topk8 -in client.key -inform pem -outform der \
     -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client.key.der
 
+echo "* generating client2_ca cert"
+"$OPENSSL" ecparam -name prime256v1 -genkey -out client2_ca.key
+"$OPENSSL" req -batch -new -subj '/CN=intermediate' -key client2_ca.key -sha256 -out client2_ca.csr
+"$OPENSSL" x509 -sha256 -req -in client2_ca.csr -CA root.crt -CAkey root.key -out client2_ca.crt -days 9999 -extfile <(echo 'basicConstraints = CA:TRUE') -CAcreateserial
+cat client2_ca.crt root.crt > client2_ca-and-root.crt
+echo "* generating client2_ca cert - done"
+"$OPENSSL" x509 -in client2_ca.crt -outform der > client2_ca.crt.der
+
+echo "* generating client2 cert"
+"$OPENSSL" ecparam -name prime256v1 -genkey -out client2.key
+"$OPENSSL" req -batch -new -subj '/CN=client2' -key client2.key -sha256 -out client2.csr
+"$OPENSSL" x509 -sha256 -req -in client2.csr -CA client2_ca.crt -CAkey client2_ca.key -out client2.crt -days 9999 -CAcreateserial
+cat client2.crt client2_ca.crt > client2-and-ca.crt
+cat client2-and-ca.crt root.crt > client2-full-path.crt
+echo "* generating client2 cert - done"
+"$OPENSSL" x509 -in client2.crt -outform der > client2.crt.der
+"$OPENSSL" pkcs8 -topk8 -in client2.key -inform pem -outform der \
+    -passin "pass:$KEYSTORE_PASSWORD" -nocrypt > client2.key.der
+
 echo "* generating server_ca cert"
 "$OPENSSL" ecparam -name prime256v1 -genkey -out server_ca.key
 "$OPENSSL" req -batch -new -subj '/CN=localhost' -key server_ca.key -sha256 -out server_ca.csr

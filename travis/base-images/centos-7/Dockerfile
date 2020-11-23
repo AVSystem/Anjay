@@ -16,8 +16,8 @@ FROM centos:7
 # Work around issue described in https://sourceware.org/ml/libc-alpha/2014-07/msg00200.html
 COPY ./valgrind.supp /tmp/valgrind.supp
 # required for mbedtls-devel and python3.5
-RUN yum install -y https://centos7.iuscommunity.org/ius-release.rpm
-RUN yum install -y which git make cmake3 boost-python-devel mbedtls-devel openssl openssl-devel valgrind valgrind-devel gcc gcc-c++
+RUN yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+RUN yum install -y which git make cmake3 boost-python-devel mbedtls-devel openssl openssl-devel valgrind valgrind-devel gcc gcc-c++ zlib-devel
 RUN ln -s /usr/bin/cmake3 /usr/bin/cmake
 # required to compile pybind11
 RUN yum install -y python-tools

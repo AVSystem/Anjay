@@ -34,11 +34,11 @@
 
 #include "coap/anjay_content_format.h"
 
-#include "anjay_access_utils.h"
+#include "anjay_access_utils_private.h"
 #include "anjay_core.h"
 #include "anjay_dm_core.h"
 #include "anjay_io_core.h"
-#include "anjay_utils_core.h"
+#include "anjay_utils_private.h"
 #include "dm/anjay_discover.h"
 #include "dm/anjay_dm_create.h"
 #include "dm/anjay_dm_execute.h"

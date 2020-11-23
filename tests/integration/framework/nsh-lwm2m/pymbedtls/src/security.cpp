@@ -26,6 +26,15 @@ using namespace std;
 
 namespace ssl {
 
+void SecurityInfo::configure(Socket &socket) {
+    if (!ciphersuites_.empty()) {
+        socket.ciphersuites_ = ciphersuites_;
+        socket.ciphersuites_.push_back(0);
+        mbedtls_ssl_conf_ciphersuites(&socket.config_,
+                                      socket.ciphersuites_.data());
+    }
+}
+
 void PskSecurity::configure(Socket &socket) {
     mbedtls_ssl_conf_psk(&socket.config_,
                          reinterpret_cast<const unsigned char *>(key_.data()),
@@ -34,8 +43,7 @@ void PskSecurity::configure(Socket &socket) {
                                  identity_.data()),
                          identity_.size());
 
-    static int psk_ciphersuites[2] = { MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8, 0 };
-    mbedtls_ssl_conf_ciphersuites(&socket.config_, psk_ciphersuites);
+    SecurityInfo::configure(socket);
 }
 
 string PskSecurity::name() const {
@@ -46,7 +54,8 @@ CertSecurity::CertSecurity(const char *ca_path,
                            const char *ca_file,
                            const char *crt_file,
                            const char *key_file)
-        : configure_ca_(ca_path || ca_file),
+        : SecurityInfo({ MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 }),
+          configure_ca_(ca_path || ca_file),
           configure_crt_(crt_file && key_file) {
     mbedtls_pk_init(&pk_ctx_);
     mbedtls_x509_crt_init(&ca_certs_);
@@ -85,10 +94,7 @@ CertSecurity::~CertSecurity() {
 }
 
 void CertSecurity::configure(Socket &socket) {
-    static int cert_ciphersuites[2] = {
-        MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8, 0
-    };
-    mbedtls_ssl_conf_ciphersuites(&socket.config_, cert_ciphersuites);
+    SecurityInfo::configure(socket);
     mbedtls_ssl_conf_authmode(&socket.config_, MBEDTLS_SSL_VERIFY_NONE);
 
     if (configure_ca_) {

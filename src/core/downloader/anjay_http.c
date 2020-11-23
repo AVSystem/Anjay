@@ -578,7 +578,8 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
             err = avs_errno(AVS_ENOMEM);
             goto error;
         }
-        ctx->security_config_cache = ctx->security_config_cache;
+        ctx->ssl_configuration.ciphersuites =
+                ctx->security_config_cache.ciphersuites;
     }
     if (cfg->security_config.dane_tlsa_record
             && !(ctx->security_config_cache.dane_tlsa_record =

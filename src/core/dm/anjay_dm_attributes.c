@@ -20,7 +20,7 @@
 #include <stdint.h>
 
 #include "../anjay_core.h"
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 
 #include "anjay_dm_attributes.h"
 #include "anjay_query.h"

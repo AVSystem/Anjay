@@ -33,9 +33,9 @@ conditions happen while performing each of the client-initiated RPC methods.
 | **Timeout       | Retry DTLS       | Retry DTLS       | Fall back        | Ignored     | Ignored; will be  |
 | (DTLS)** [#t]_  | handshake [#hs]_ | handshake [#hs]_ | to Register      |             | retried whenever  |
 +-----------------+------------------+------------------+                  |             | next notification |
-| **Timeout       | Abort [#a]_      | Fall back to     |                  |             | (either           |
-| (NoSec)** [#t]_ |                  | Client-Initiated |                  |             | confirmable or    |
-|                 |                  | Bootstrap [#bs]_ |                  |             | not) is scheduled |
+| **Timeout       | Abort all        | :ref:`Abort      |                  |             | (either           |
+| (NoSec)** [#t]_ | communication    | registration     |                  |             | confirmable or    |
+|                 | [#a]_            | <err-abort-reg>` |                  |             | not) is scheduled |
 +-----------------+                  |                  +------------------+             +-------------------+
 | **Network       |                  |                  | Fall back to     |             | Fall back to      |
 | (e.g. ICMP)     |                  |                  | Client-Initiated |             | Client-Initiated  |
@@ -53,6 +53,43 @@ conditions happen while performing each of the client-initiated RPC methods.
 |                 |                  |                  |                  |             | storing" is       |
 |                 |                  |                  |                  |             | disabled          |
 +-----------------+------------------+------------------+------------------+-------------+-------------------+
+
+.. _err-abort-reg:
+
+The "Abort registration" condition
+----------------------------------
+
+This condition corresponds to the registration failure as used in the
+`Bootstrap and LwM2M Server Registration Mechanisms
+<http://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#6-2-1-1-0-6211-Bootstrap-and-LwM2M-Server-Registration-Mechanisms>`_
+section of LwM2M Core TS 1.1.
+
+If using the commercial version of Anjay, with the ``ANJAY_WITH_LWM2M11``
+compile-time configuration option enabled, the retry procedures as described in
+that section of the 1.1 TS will be performed, with respect to settings stored in
+the appropriate Server object instance, or the defaults values listen in the
+`"Registration Procedures Default Values" table
+<http://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#Table-6211-1-Registration-Procedures-Default-Values>`_.
+According to this configuration, further failures may result in the "abort all
+communication" [#a]_ or "fall back to Client-Initiated Bootstrap" [#bs]_
+condition.
+
+In builds of Anjay that do not support LwM2M 1.1, the "abort registration"
+condition is equivalent with the "fall back to Client-Initiated Bootstrap"
+[#bs]_ condition.
+
+.. note::
+
+    In accordance with the description above, the default behavior in case of
+    the "abort registration" condition is **different between the open source
+    and commercial versions of Anjay**:
+
+    * The commercial version will perform 5 retry attempts with exponential
+      back-off starting with 1 minute initial delay, as mandated by the LwM2M
+      1.1 defaults, and if all of them are unsuccessful, only then fall back to
+      Client-Initiated Bootstrap [#bs]_
+    * The open source version will fall back to Client-Initiated Bootstrap
+      [#bs]_ immediately after the initial failure
 
 Other error conditions
 ----------------------
@@ -86,7 +123,7 @@ Other error conditions
 .. [#t]  Retransmissions, as specified in
          `RFC 7252, Section 4.2.  Messages Transmitted Reliably
          <https://tools.ietf.org/html/rfc7252#section-4.2>`_, are attempted
-         before performing the actions described in the table. The `transmission
+         before performing the actions described above. The `transmission
          parameters <https://tools.ietf.org/html/rfc7252#section-4.8>`_ that
          affect specific retransmission timing can be customized during Anjay
          initialization, by setting the `udp_tx_params

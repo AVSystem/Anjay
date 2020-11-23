@@ -353,10 +353,12 @@ static int ac_list_resource_instances(anjay_t *anjay,
 static int ac_transaction_begin(anjay_t *anjay, obj_ptr_t obj_ptr) {
     (void) anjay;
     access_control_t *ac = _anjay_access_control_from_obj_ptr(obj_ptr);
+    assert(!ac->in_transaction);
     if (_anjay_access_control_clone_state(&ac->saved_state, &ac->current)) {
         ac_log(ERROR, _("out of memory"));
         return ANJAY_ERR_INTERNAL;
     }
+    ac->in_transaction = true;
     return 0;
 }
 
@@ -395,6 +397,7 @@ int _anjay_access_control_validate_ssid(anjay_t *anjay, anjay_ssid_t ssid) {
 static int ac_transaction_validate(anjay_t *anjay, obj_ptr_t obj_ptr) {
     access_control_t *access_control =
             _anjay_access_control_from_obj_ptr(obj_ptr);
+    assert(access_control->in_transaction);
     int result = 0;
     anjay_acl_ref_validation_ctx_t validation_ctx =
             _anjay_acl_ref_validation_ctx_new();
@@ -447,18 +450,22 @@ finish:
 static int ac_transaction_commit(anjay_t *anjay, obj_ptr_t obj_ptr) {
     (void) anjay;
     access_control_t *ac = _anjay_access_control_from_obj_ptr(obj_ptr);
+    assert(ac->in_transaction);
     _anjay_access_control_clear_state(&ac->saved_state);
     ac->needs_validation = false;
+    ac->in_transaction = false;
     return 0;
 }
 
 static int ac_transaction_rollback(anjay_t *anjay, obj_ptr_t obj_ptr) {
     (void) anjay;
     access_control_t *ac = _anjay_access_control_from_obj_ptr(obj_ptr);
+    assert(ac->in_transaction);
     _anjay_access_control_clear_state(&ac->current);
     ac->current = ac->saved_state;
     memset(&ac->saved_state, 0, sizeof(ac->saved_state));
     ac->needs_validation = false;
+    ac->in_transaction = false;
     ac->last_accessed_instance = NULL;
     return 0;
 }
@@ -485,7 +492,9 @@ void anjay_access_control_purge(anjay_t *anjay) {
 
 bool anjay_access_control_is_modified(anjay_t *anjay) {
     assert(anjay);
-    return _anjay_access_control_get(anjay)->current.modified_since_persist;
+    access_control_t *ac = _anjay_access_control_get(anjay);
+    return ac->in_transaction ? ac->saved_state.modified_since_persist
+                              : ac->current.modified_since_persist;
 }
 
 static const anjay_dm_module_t ACCESS_CONTROL_MODULE = {

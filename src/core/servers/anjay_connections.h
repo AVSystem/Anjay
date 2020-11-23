@@ -18,7 +18,7 @@
 #define ANJAY_SERVERS_CONNECTIONS_H
 
 #include "../anjay_core.h"
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 
 #include <avsystem/commons/avs_url.h>
 

@@ -21,7 +21,7 @@
 #include <anjay_modules/anjay_access_utils.h>
 #include <anjay_modules/anjay_raw_buffer.h>
 
-#include "anjay_access_utils.h"
+#include "anjay_access_utils_private.h"
 #include "anjay_dm_core.h"
 #include "anjay_io_core.h"
 #include "anjay_servers_utils.h"

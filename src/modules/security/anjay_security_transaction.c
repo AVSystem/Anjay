@@ -209,28 +209,35 @@ finish:
 
 int _anjay_sec_transaction_begin_impl(sec_repr_t *repr) {
     assert(!repr->saved_instances);
+    assert(!repr->in_transaction);
     repr->saved_instances = _anjay_sec_clone_instances(repr);
     if (!repr->saved_instances && repr->instances) {
         return ANJAY_ERR_INTERNAL;
     }
     repr->saved_modified_since_persist = repr->modified_since_persist;
+    repr->in_transaction = true;
     return 0;
 }
 
 int _anjay_sec_transaction_commit_impl(sec_repr_t *repr) {
+    assert(repr->in_transaction);
     _anjay_sec_destroy_instances(&repr->saved_instances);
+    repr->in_transaction = false;
     return 0;
 }
 
 int _anjay_sec_transaction_validate_impl(anjay_t *anjay, sec_repr_t *repr) {
+    assert(repr->in_transaction);
     return _anjay_sec_object_validate(anjay, repr);
 }
 
 int _anjay_sec_transaction_rollback_impl(sec_repr_t *repr) {
+    assert(repr->in_transaction);
     _anjay_sec_destroy_instances(&repr->instances);
     repr->instances = repr->saved_instances;
     repr->saved_instances = NULL;
     repr->modified_since_persist = repr->saved_modified_since_persist;
+    repr->in_transaction = false;
     return 0;
 }
 

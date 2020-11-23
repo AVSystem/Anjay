@@ -23,7 +23,7 @@
 #include "anjay_register.h"
 
 #include "../anjay_core.h"
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 
 #ifndef ANJAY_SERVERS_INTERNALS
 #    error "Headers from servers/ are not meant to be included from outside"

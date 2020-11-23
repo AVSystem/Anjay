@@ -39,7 +39,8 @@ PYBIND11_MODULE(pymbedtls, m) {
     using namespace ssl;
 
     py::class_<SecurityInfo, shared_ptr<SecurityInfo>>(m, "SecurityInfo")
-            .def("name", &SecurityInfo::name);
+            .def("name", &SecurityInfo::name)
+            .def("set_ciphersuites", &SecurityInfo::set_ciphersuites);
 
     py::class_<PskSecurity, SecurityInfo, shared_ptr<PskSecurity>>(
             m, "PskSecurity")

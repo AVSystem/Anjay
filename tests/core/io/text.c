@@ -100,33 +100,44 @@ AVS_UNIT_TEST(text_out, i64) {
 
 #undef TEST_i64
 
-#define TEST_FLOAT(Val)                                                       \
+#define TEST_FLOAT_IMPL(Val, Str)                                             \
     do {                                                                      \
         TEST_ENV(512);                                                        \
         AVS_UNIT_ASSERT_SUCCESS(                                              \
                 anjay_ret_float((anjay_output_ctx_t *) &out, (float) (Val))); \
         stringify_buf(&outbuf);                                               \
-        AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val);                              \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, Str);                               \
     } while (false)
+
+#define TEST_FLOAT(Val) TEST_FLOAT_IMPL(Val, #Val)
 
 AVS_UNIT_TEST(text_out, f32) {
     TEST_FLOAT(0);
     TEST_FLOAT(1);
     TEST_FLOAT(1.3125);
     TEST_FLOAT(10000.5);
+#ifdef AVS_COMMONS_WITHOUT_FLOAT_FORMAT_SPECIFIERS
+    // NOTE: This variant of AVS_DOUBLE_AS_STRING() is slightly inaccurate in
+    // order to keep the implementation simpler. This level of inaccuracy is
+    // unlikely to cause problems in real-world applications.
+    TEST_FLOAT_IMPL(4.2229999965160742e+37, "4.2229999965160736e+37");
+#else  // AVS_COMMONS_WITHOUT_FLOAT_FORMAT_SPECIFIERS
     TEST_FLOAT(4.2229999965160742e+37);
+#endif // AVS_COMMONS_WITHOUT_FLOAT_FORMAT_SPECIFIERS
 }
 
 #undef TEST_FLOAT
 
-#define TEST_DOUBLE(Val)                                             \
+#define TEST_DOUBLE_IMPL(Val, Str)                                   \
     do {                                                             \
         TEST_ENV(512);                                               \
         AVS_UNIT_ASSERT_SUCCESS(                                     \
                 anjay_ret_double((anjay_output_ctx_t *) &out, Val)); \
         stringify_buf(&outbuf);                                      \
-        AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val);                     \
+        AVS_UNIT_ASSERT_EQUAL_STRING(buf, Str);                      \
     } while (false)
+
+#define TEST_DOUBLE(Val) TEST_DOUBLE_IMPL(Val, #Val)
 
 AVS_UNIT_TEST(text_out, f64) {
     TEST_DOUBLE(0);

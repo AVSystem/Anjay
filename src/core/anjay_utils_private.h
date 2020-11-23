@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANJAY_UTILS_H
-#define ANJAY_UTILS_H
+#ifndef ANJAY_UTILS_PRIVATE_H
+#define ANJAY_UTILS_PRIVATE_H
 
 #include <avsystem/commons/avs_list.h>
 #include <avsystem/commons/avs_socket.h>
@@ -123,4 +123,4 @@ bool _anjay_socket_transport_is_online(anjay_t *anjay,
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif // ANJAY_UTILS_H
+#endif // ANJAY_UTILS_PRIVATE_H

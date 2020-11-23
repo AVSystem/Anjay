@@ -41,6 +41,7 @@ class Context;
 enum class SocketType { Client, Server };
 
 class Socket {
+    friend class SecurityInfo;
     friend class PskSecurity;
     friend class CertSecurity;
 
@@ -53,6 +54,7 @@ class Socket {
     mbedtls_entropy_context entropy_;
     mbedtls_ctr_drbg_context rng_;
     mbedtls_timing_delay_context timer_;
+    std::vector<int> ciphersuites_;
 
     SocketType type_;
     py::object py_socket_;

@@ -18,7 +18,7 @@
 
 #include "anjay_dm_write.h"
 
-#include "../anjay_access_utils.h"
+#include "../anjay_access_utils_private.h"
 
 #include <avsystem/commons/avs_stream_inbuf.h>
 

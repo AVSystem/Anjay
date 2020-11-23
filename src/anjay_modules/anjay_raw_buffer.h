@@ -66,6 +66,12 @@ int _anjay_raw_buffer_clone(anjay_raw_buffer_t *dst,
                             const anjay_raw_buffer_t *src);
 
 /**
+ * Creates heap raw buffer.
+ * @returns 0 on success, negative value if no memory is available
+ */
+int _anjay_raw_buffer_alloc(anjay_raw_buffer_t *dst, size_t capacity);
+
+/**
  * Creates heap raw buffer by copying data pointed by @p data.
  * @returns 0 on success, negative value if no memory is available
  */

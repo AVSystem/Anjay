@@ -22,7 +22,7 @@
 #include <avsystem/commons/avs_utils.h>
 
 #include "../anjay_servers_utils.h"
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 #include "../dm/anjay_query.h"
 
 #define ANJAY_SERVERS_INTERNALS

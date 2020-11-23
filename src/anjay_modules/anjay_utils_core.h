@@ -21,6 +21,9 @@
 #include <avsystem/commons/avs_url.h>
 
 #ifdef ANJAY_WITH_LOGS
+#    ifndef AVS_COMMONS_WITH_AVS_LOG
+#        error "ANJAY_WITH_LOGS requires avs_log to be enabled"
+#    endif
 // these macros interfere with avs_log() macro implementation
 #    ifdef TRACE
 #        undef TRACE

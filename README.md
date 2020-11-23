@@ -136,9 +136,9 @@ sudo apt-get install git build-essential cmake libmbedtls-dev zlib1g-dev
 #### CentOS 7 or later
 
 ``` sh
-# Required for mbedtls-devel and python3.5
-sudo yum install -y https://centos7.iuscommunity.org/ius-release.rpm
-sudo yum install -y which git make cmake mbedtls-devel gcc gcc-c++
+# EPEL is required for mbedtls-devel and cmake3
+sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+sudo yum install -y which git make cmake3 mbedtls-devel gcc gcc-c++ zlib-devel
 ```
 
 #### macOS Sierra or later, with [Homebrew](https://brew.sh/)
@@ -163,6 +163,8 @@ git clone https://github.com/AVSystem/Anjay.git \
     && ./output/bin/demo --endpoint-name $(hostname) --server-uri coap://try-anjay.avsystem.com:5683
 ```
 <!-- compile_instruction_end -->
+
+**NOTE**: On some older systems like CentOS 7, you may need to use `cmake3` instead of `cmake`.
 
 **NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://avsystem.github.io/Anjay-doc/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Try Anjay platform, you will need to enter the endpoint name into the server UI first.
 

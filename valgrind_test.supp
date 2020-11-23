@@ -69,3 +69,19 @@
     obj:*/libssl.so.*
     fun:receive_ssl
 }
+{
+   engine-private-key
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:ENGINE_load_private_key
+   fun:_avs_crypto_openssl_engine_load_private_key
+}
+{
+   engine-cert
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:ENGINE_ctrl_cmd
+   fun:_avs_crypto_openssl_engine_load_certs
+}

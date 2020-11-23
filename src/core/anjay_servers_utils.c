@@ -21,7 +21,7 @@
 #include <anjay_modules/anjay_dm_utils.h>
 
 #include "anjay_core.h"
-#include "anjay_servers.h"
+#include "anjay_servers_private.h"
 #include "anjay_servers_utils.h"
 
 #include "dm/anjay_query.h"

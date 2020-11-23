@@ -47,12 +47,12 @@
 #include "anjay_downloader.h"
 #include "anjay_io_core.h"
 #include "anjay_servers_utils.h"
-#include "anjay_utils_core.h"
+#include "anjay_utils_private.h"
 
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.7.0"
+#    define ANJAY_VERSION "2.8.0"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {

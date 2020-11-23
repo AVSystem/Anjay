@@ -28,28 +28,35 @@ from suites.default import bootstrap_client
 class CertificatesTest:
     class Test(test_suite.Lwm2mSingleServerTest):
         def _cert_file(self, filename):
-            # demo_path = 'anjay/output/bin'
-            return os.path.join(os.path.dirname(self.config.demo_path), 'certs', filename)
+            if os.path.isabs(filename):
+                return filename
+            else:
+                # demo_path = 'anjay/output/bin'
+                return os.path.join(os.path.dirname(self.config.demo_path), 'certs', filename)
 
         def setUp(self, client_ca_file=None, server_crt=None, server_key=None, client_crt_file=None,
                   client_key_file=None, server_crt_file=None, extra_cmdline_args=None,
                   *args, **kwargs):
             extra_cmdline_args = [*extra_cmdline_args] if extra_cmdline_args is not None else []
             if client_ca_file is not None:
-                client_ca_file = self._cert_file(client_ca_file)
+                self.client_ca_file = self._cert_file(client_ca_file)
             if server_crt is not None:
-                server_crt = self._cert_file(server_crt)
+                self.server_crt = self._cert_file(server_crt)
             if server_key is not None:
-                server_key = self._cert_file(server_key)
+                self.server_key = self._cert_file(server_key)
             if (client_crt_file is not None):
-                extra_cmdline_args += ['-C' + self._cert_file(client_crt_file)]
+                self.client_crt_file = self._cert_file(client_crt_file)
+                extra_cmdline_args += ['-C' + self.client_crt_file]
             if (client_key_file is not None):
-                extra_cmdline_args += ['-K' + self._cert_file(client_key_file)]
+                self.client_key_file = self._cert_file(client_key_file)
+                extra_cmdline_args += ['-K' + self.client_key_file]
             if (server_crt_file is not None):
-                extra_cmdline_args += ['-P' + self._cert_file(server_crt_file)]
-            super().setUp(client_ca_file=client_ca_file, server_crt_file=server_crt,
-                          server_key_file=server_key, extra_cmdline_args=extra_cmdline_args,
-                          *args, **kwargs)
+                self.server_crt_file = self._cert_file(server_crt_file)
+                extra_cmdline_args += ['-P' + self.server_crt_file]
+            super().setUp(client_ca_file=getattr(self, 'client_ca_file', None),
+                          server_crt_file=getattr(self, 'server_crt', None),
+                          server_key_file=getattr(self, 'server_key', None),
+                          extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
 
 
 class RegisterWithCertificates(CertificatesTest.Test):
@@ -74,11 +81,10 @@ class RegisterWithMismatchedServerPublicKey(CertificatesTest.Test):
                       server_crt_file='server.crt.der', auto_register=False)
 
     def runTest(self):
-        from framework.test_suite import read_until_match
         with self.assertRaises((RuntimeError, socket.timeout)):
             self.assertDemoRegisters(self.serv)
         # -9984 == -0x2700 == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
-        read_until_match(self.demo_process.log_file, b'handshake failed: -9984', 1)
+        self.read_log_until_match(b'handshake failed: -9984', 1)
 
     def tearDown(self):
         super().tearDown(auto_deregister=False)

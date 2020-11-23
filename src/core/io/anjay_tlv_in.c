@@ -21,7 +21,7 @@
 #    include <avsystem/commons/avs_stream_v_table.h>
 #    include <avsystem/commons/avs_utils.h>
 
-#    include "../anjay_utils_core.h"
+#    include "../anjay_utils_private.h"
 
 #    include "anjay_common.h"
 #    include "anjay_tlv.h"

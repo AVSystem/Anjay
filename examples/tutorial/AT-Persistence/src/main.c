@@ -194,8 +194,9 @@ int main(int argc, char *argv[]) {
 
     int result = 0;
 
-    // Install necessary objects
-    if (anjay_security_object_install(anjay)
+    // Install Attribute storage and necessary objects
+    if (anjay_attr_storage_install(anjay)
+            || anjay_security_object_install(anjay)
             || anjay_server_object_install(anjay)) {
         result = -1;
         goto cleanup;

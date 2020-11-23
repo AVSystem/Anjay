@@ -25,7 +25,7 @@
 #    include "anjay_discover.h"
 #    include "anjay_query.h"
 
-#    include "../anjay_access_utils.h"
+#    include "../anjay_access_utils_private.h"
 #    include "../anjay_core.h"
 #    include "../anjay_dm_core.h"
 
@@ -61,8 +61,10 @@ print_double_attr(avs_stream_t *stream, const char *name, double value) {
     if (isnan(value)) {
         return 0;
     }
-    return avs_is_ok(avs_stream_write_f(stream, ";%s=%.17g", name, value)) ? 0
-                                                                           : -1;
+    return avs_is_ok(avs_stream_write_f(stream, ";%s=%s", name,
+                                        AVS_DOUBLE_AS_STRING(value, 17)))
+                   ? 0
+                   : -1;
 }
 
 static int print_oi_attrs(avs_stream_t *stream,

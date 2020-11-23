@@ -17,7 +17,7 @@
 #ifndef ANJAY_SERVERS_INACTIVE_H
 #define ANJAY_SERVERS_INACTIVE_H
 
-#include "anjay_servers.h"
+#include "anjay_servers_private.h"
 
 #if !defined(ANJAY_SERVERS_INTERNALS) && !defined(ANJAY_OBSERVE_SOURCE) \
         && !defined(ANJAY_TEST)

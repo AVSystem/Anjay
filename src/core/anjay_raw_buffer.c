@@ -38,19 +38,26 @@ int _anjay_raw_buffer_clone(anjay_raw_buffer_t *dst,
     return _anjay_raw_buffer_from_data(dst, src->data, src->size);
 }
 
-int _anjay_raw_buffer_from_data(anjay_raw_buffer_t *dst,
-                                const void *src,
-                                size_t size) {
+int _anjay_raw_buffer_alloc(anjay_raw_buffer_t *dst, size_t capacity) {
     assert(!dst->data && !dst->size);
-    if (!size) {
+    if (!capacity) {
         return 0;
     }
-    dst->data = avs_malloc(size);
+    dst->data = avs_malloc(capacity);
     if (!dst->data) {
         return -1;
     }
-    dst->size = size;
-    dst->capacity = size;
-    memcpy(dst->data, src, size);
+    dst->capacity = capacity;
     return 0;
+}
+
+int _anjay_raw_buffer_from_data(anjay_raw_buffer_t *dst,
+                                const void *src,
+                                size_t size) {
+    int result = _anjay_raw_buffer_alloc(dst, size);
+    if (!result) {
+        dst->size = size;
+        memcpy(dst->data, src, size);
+    }
+    return result;
 }

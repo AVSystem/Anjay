@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANJAY_ACCESS_UTILS_H
-#define ANJAY_ACCESS_UTILS_H
+#ifndef ANJAY_ACCESS_UTILS_PRIVATE_H
+#define ANJAY_ACCESS_UTILS_PRIVATE_H
 
 #include "anjay_core.h"
 #include "anjay_dm_core.h"
@@ -69,4 +69,4 @@ int _anjay_sync_access_control(anjay_t *anjay,
 
 VISIBILITY_PRIVATE_HEADER_END
 
-#endif /* ANJAY_ACCESS_UTILS_H */
+#endif /* ANJAY_ACCESS_UTILS_PRIVATE_H */

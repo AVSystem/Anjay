@@ -259,6 +259,7 @@ if(WITH_TEST)
 
     add_custom_target(avs_coap_filename_check
                       COMMAND ! find src -name "'*.[ch]'" | sed -e "'s|^.*/||'" | grep -v "'^avs_coap_'"
+                      COMMAND ! find src -name "'*.[ch]'" | sed -e "'s|^.*/||'" | sort | uniq -c | grep -v "'^ *1 '"
                       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     add_dependencies(avs_coap_check avs_coap_filename_check)
 

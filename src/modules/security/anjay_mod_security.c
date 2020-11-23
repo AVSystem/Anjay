@@ -569,9 +569,10 @@ void anjay_security_object_purge(anjay_t *anjay) {
 bool anjay_security_object_is_modified(anjay_t *anjay) {
     assert(anjay);
 
-    const anjay_dm_object_def_t *const *sec_obj =
-            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
-    return _anjay_sec_get(sec_obj)->modified_since_persist;
+    sec_repr_t *repr =
+            _anjay_sec_get(_anjay_dm_find_object_by_oid(anjay, SECURITY.oid));
+    return repr->in_transaction ? repr->saved_modified_since_persist
+                                : repr->modified_since_persist;
 }
 
 static const anjay_dm_module_t SECURITY_MODULE = {

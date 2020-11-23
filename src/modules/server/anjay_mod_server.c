@@ -516,9 +516,10 @@ AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay) {
 bool anjay_server_object_is_modified(anjay_t *anjay) {
     assert(anjay);
 
-    const anjay_dm_object_def_t *const *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
-    return _anjay_serv_get(server_obj)->modified_since_persist;
+    server_repr_t *repr =
+            _anjay_serv_get(_anjay_dm_find_object_by_oid(anjay, SERVER.oid));
+    return repr->in_transaction ? repr->saved_modified_since_persist
+                                : repr->modified_since_persist;
 }
 
 size_t _anjay_server_object_get_instances_count(anjay_t *anjay) {

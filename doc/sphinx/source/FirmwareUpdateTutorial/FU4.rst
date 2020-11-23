@@ -185,8 +185,8 @@ is:
         avs_crypto_cert_revocation_list_info_t cert_revocation_lists;
 
         /**
-         * Local certificate to use for authenticating with the peer. This field is
-         * optional and can be left zero-initialized. If used, it shall be
+         * Local certificate chain to use for authenticating with the peer. This
+         * field is optional and can be left zero-initialized. If used, it shall be
          * initialized using one of the
          * <c>avs_crypto_certificate_chain_info_from_*</c> helper functions.
          */
@@ -199,6 +199,17 @@ is:
          * one of the <c>avs_crypto_private_key_info_from_*</c> helper functions.
          */
         avs_crypto_private_key_info_t client_key;
+
+        /**
+         * Enable rebuilding of client certificate chain based on certificates in
+         * the trust store.
+         *
+         * If this field is set to <c>true</c>, and the last certificate in the
+         * #client_cert chain is not self-signed, the library will attempt to find
+         * its ancestors in #trusted_certs and append them to the chain presented
+         * during handshake.
+         */
+        bool rebuild_client_cert_chain;
     } avs_net_certificate_info_t;
 
 To populate it properly, we're gonna need at least two pieces of information

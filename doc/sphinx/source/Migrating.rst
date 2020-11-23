@@ -25,3 +25,4 @@ Migrating from older versions
    Migrating/MigratingCustomEntropy
    Migrating/MigratingFromAnjay24
    Migrating/MigratingFromAnjay26
+   Migrating/MigratingFromAnjay27

@@ -18,16 +18,27 @@
 #define PYMBEDTLS_SECURITY_H
 #include <mbedtls/ssl.h>
 
+#include <memory>
 #include <string>
+#include <vector>
 
 namespace ssl {
 class Socket;
 
 class SecurityInfo {
+protected:
+    std::vector<int> ciphersuites_;
+
+    SecurityInfo(std::vector<int> &&default_ciphersuites)
+            : ciphersuites_(std::move(default_ciphersuites)) {}
+
 public:
     virtual ~SecurityInfo() = default;
-    virtual void configure(Socket &socket) = 0;
+    virtual void configure(Socket &socket);
     virtual std::string name() const = 0;
+    void set_ciphersuites(const std::vector<int> &ciphersuites) {
+        ciphersuites_ = ciphersuites;
+    }
 };
 
 class PskSecurity : public SecurityInfo {
@@ -36,7 +47,9 @@ class PskSecurity : public SecurityInfo {
 
 public:
     PskSecurity(const std::string &key, const std::string &identity)
-            : key_(key), identity_(identity) {}
+            : SecurityInfo({ MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8 }),
+              key_(key),
+              identity_(identity) {}
 
     PskSecurity() = default;
     PskSecurity(const PskSecurity &) = default;

@@ -19,7 +19,7 @@
 
 #include <anjay/core.h>
 
-#include "../anjay_servers.h"
+#include "../anjay_servers_private.h"
 
 #include "anjay_connections.h"
 

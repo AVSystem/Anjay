@@ -29,7 +29,7 @@
 #include <anjay/download.h>
 #include <anjay_modules/anjay_utils_core.h>
 
-#include "src/core/anjay_utils_core.h"
+#include "src/core/anjay_utils_private.h"
 
 avs_coap_token_t nth_token(uint64_t k);
 avs_coap_token_t current_token(void);

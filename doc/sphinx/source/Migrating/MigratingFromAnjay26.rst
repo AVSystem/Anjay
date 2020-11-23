@@ -23,11 +23,15 @@ Migrating from Anjay 2.5.x or 2.6.x
 Introduction
 ------------
 
-Anjay 2.7 is a minor upgrade, but changes in certificate-based security support
-in Anjay 2.7 required additional redesign in ``avs_commons`` cryptography
-support libraries. While backwards compatibility should be maintained in most
-practical usages, there are some changes which might prove to be breaking if
-public-key cryptography APIs of ``avs_net`` have been used directly.
+Anjay 2.7 and 2.8 are minor upgrades, but changes in certificate-based security
+support required additional redesigns in ``avs_commons`` cryptography support
+libraries. While backwards compatibility should be maintained in most practical
+usages, there are some changes which might prove to be breaking if public-key
+cryptography APIs of ``avs_net`` have been used directly.
+
+Additional slight updates might be necessary if you are using any alternative
+build system instead of CMake to compile your project, of if you maintain your
+own implementation of the socket layer.
 
 Changes in Anjay proper
 -----------------------
@@ -106,3 +110,25 @@ Compatibility features
 
 The new ``avsystem/commons/avs_crypto_pki_compat.h`` header can be included,
 which aliases all the symbols mentioned in this chapter to their old names.
+
+Separation of avs_url module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+URL handling routines, previously a part of ``avs_net``, are now a separate
+component of ``avs_commons``. The specific consequences of that may vary
+depending on your build process, e.g.:
+
+* You will need to add ``#define AVS_COMMONS_WITH_AVS_URL`` to your
+  ``avs_commons_config.h`` if you specify it manually
+* You may need to add ``-lavs_url`` to your link command if you're using
+  ``avs_commons`` that has been manually compiled separately using CMake
+
+Refactor of avs_net_validate_ip_address()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``avs_net_validate_ip_address()`` is now no longer used by Anjay or
+``avs_commons``. It was previously necessary to implement it as part of the
+socket implementation. This is no longer required, and in fact, keeping that
+implementation might lead to problems - for compatibility, the function has been
+reimplemented as a ``static inline`` function that wraps
+``avs_net_addrinfo_*()`` APIs.

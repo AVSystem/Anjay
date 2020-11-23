@@ -17,7 +17,7 @@
 #ifndef ANJAY_SERVERS_UTILS_H
 #define ANJAY_SERVERS_UTILS_H
 
-#include "anjay_servers.h"
+#include "anjay_servers_private.h"
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 

@@ -20,7 +20,7 @@
 #include <avsystem/commons/avs_persistence.h>
 #include <avsystem/commons/avs_rbtree.h>
 
-#include "../anjay_servers.h"
+#include "../anjay_servers_private.h"
 #include "../coap/anjay_msg_details.h"
 #include "../io/anjay_batch_builder.h"
 

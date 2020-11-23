@@ -21,7 +21,7 @@
 
 #include "coap/anjay_content_format.h"
 
-#include "anjay_access_utils.h"
+#include "anjay_access_utils_private.h"
 #include "anjay_core.h"
 #include "anjay_servers_utils.h"
 #include "observe/anjay_observe_core.h"

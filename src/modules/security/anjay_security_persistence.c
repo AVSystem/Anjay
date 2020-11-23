@@ -156,9 +156,12 @@ avs_error_t anjay_security_object_persist(anjay_t *anjay,
     }
     avs_persistence_context_t ctx =
             avs_persistence_store_context_create(out_stream);
-    err = avs_persistence_list(&ctx, (AVS_LIST(void) *) &repr->instances,
-                               sizeof(sec_instance_t), handle_instance,
-                               (void *) (intptr_t) 0, NULL);
+    err = avs_persistence_list(
+            &ctx,
+            (AVS_LIST(void) *) (repr->in_transaction ? &repr->saved_instances
+                                                     : &repr->instances),
+            sizeof(sec_instance_t), handle_instance, (void *) (intptr_t) 0,
+            NULL);
     if (avs_is_ok(err)) {
         _anjay_sec_clear_modified(repr);
         persistence_log(INFO, _("Security Object state persisted"));
@@ -173,7 +176,7 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay,
     const anjay_dm_object_def_t *const *sec_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     sec_repr_t *repr = _anjay_sec_get(sec_obj);
-    if (!repr) {
+    if (!repr || repr->in_transaction) {
         return avs_errno(AVS_EBADF);
     }
     sec_repr_t backup = *repr;

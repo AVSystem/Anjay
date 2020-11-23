@@ -18,7 +18,7 @@
 #define ANJAY_SERVERS_SERVER_CONNECTIONS_H
 
 #include "../anjay_core.h"
-#include "../anjay_utils_core.h"
+#include "../anjay_utils_private.h"
 
 #if !defined(ANJAY_SERVERS_INTERNALS) && !defined(ANJAY_TEST)
 #    error "Headers from servers/ are not meant to be included from outside"

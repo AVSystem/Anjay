@@ -22,7 +22,7 @@
 
 #include "anjay_dm_read.h"
 
-#include "../anjay_access_utils.h"
+#include "../anjay_access_utils_private.h"
 #include "../coap/anjay_content_format.h"
 #include "../io/anjay_vtable.h"
 

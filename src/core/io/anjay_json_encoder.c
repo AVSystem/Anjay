@@ -129,8 +129,9 @@ static inline void nested_context_pop(json_encoder_t *ctx) {
 static inline int maybe_write_time(json_encoder_t *ctx, double time_s) {
     if (!isnan(time_s)) {
         if (begin_pair(ctx, SENML_LIKE_DATA_TIME)
-                || avs_is_err(
-                           avs_stream_write_f(ctx->stream, "%.17g", time_s))) {
+                || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
+                                                 AVS_DOUBLE_AS_STRING(time_s,
+                                                                      17)))) {
             return -1;
         }
     }
@@ -260,7 +261,8 @@ static int encode_int(anjay_senml_like_encoder_t *ctx_, int64_t value) {
 static int encode_double(anjay_senml_like_encoder_t *ctx_, double value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
     if (begin_pair(ctx, SENML_LIKE_DATA_VALUE)
-            || avs_is_err(avs_stream_write_f(ctx->stream, "%.17g", value))) {
+            || avs_is_err(avs_stream_write_f(
+                       ctx->stream, "%s", AVS_DOUBLE_AS_STRING(value, 17)))) {
         return -1;
     }
     return 0;

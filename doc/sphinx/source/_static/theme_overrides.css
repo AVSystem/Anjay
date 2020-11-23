@@ -36,3 +36,50 @@
         max-width: 960px !important;
     }
 }
+
+/* AVSystem color scheme */
+.wy-side-nav-search>a {
+    color: #000 !important;
+}
+
+.wy-side-nav-search>a:after {
+    content: "Anjay";
+}
+
+.wy-side-nav-search>div.version {
+    color: #000;
+}
+
+.wy-side-nav-search input[type=text] {
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.wy-menu-vertical a:active {
+    background-color: #ffd500;
+    color: #000;
+}
+
+a {
+    color: #000;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+}
+
+.wy-nav-content a:visited,
+.wy-nav-content a:hover {
+    color: #8a8a8a;
+}
+
+nav a {
+    text-decoration: none !important;
+}
+
+.highlight {
+    background: #ffffff;
+}
+
+.highlight .hll {
+    background: #f3f6f6;
+}

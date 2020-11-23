@@ -21,7 +21,7 @@
 #include "anjay_dm_create.h"
 #include "anjay_dm_write.h"
 
-#include "../anjay_access_utils.h"
+#include "../anjay_access_utils_private.h"
 #include "../io/anjay_vtable.h"
 
 #include <inttypes.h>

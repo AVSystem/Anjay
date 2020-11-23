@@ -18,7 +18,7 @@
 
 #if defined(ANJAY_WITH_OBSERVE) || defined(ANJAY_WITH_SEND)
 
-#    include "../anjay_access_utils.h"
+#    include "../anjay_access_utils_private.h"
 #    include "../dm/anjay_dm_read.h"
 #    include "anjay_batch_builder.h"
 #    include "anjay_vtable.h"
