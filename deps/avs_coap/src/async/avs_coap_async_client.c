@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,7 +282,6 @@ call_partial_response_handler(avs_coap_ctx_t *ctx,
                     success_state(AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT));
             if ((*exchange_ptr_ptr = _avs_coap_find_client_exchange_ptr_by_id(
                          ctx, exchange_id))
-                    && response
                     && (**exchange_ptr_ptr)
                                        ->by_type.client
                                        .next_response_payload_offset

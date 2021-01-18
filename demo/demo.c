@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@
 #include "demo_args.h"
 #include "demo_cmds.h"
 #include "demo_utils.h"
-#include "firmware_update.h"
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+#    include "firmware_update.h"
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 #include "iosched.h"
 
 #include "objects.h"
@@ -54,8 +56,10 @@ static int security_object_reload(anjay_demo_t *demo) {
         memset(&instance, 0, sizeof(instance));
         instance.ssid = ANJAY_SSID_ANY;
         if ((instance.bootstrap_server = server->is_bootstrap)) {
+#ifdef ANJAY_WITH_BOOTSTRAP
             instance.client_holdoff_s = args->bootstrap_holdoff_s;
             instance.bootstrap_timeout_s = args->bootstrap_timeout_s;
+#endif // ANJAY_WITH_BOOTSTRAP
         } else {
             instance.client_holdoff_s = -1;
             instance.bootstrap_timeout_s = -1;
@@ -135,6 +139,9 @@ void demo_reload_servers(anjay_demo_t *demo) {
 }
 
 static void demo_delete(anjay_demo_t *demo) {
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
     if (demo->anjay && demo->attr_storage_file) {
         avs_stream_t *data = avs_stream_file_create(demo->attr_storage_file,
                                                     AVS_STREAM_FILE_WRITE);
@@ -145,6 +152,7 @@ static void demo_delete(anjay_demo_t *demo) {
         }
         avs_stream_cleanup(&data);
     }
+#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
 
     if (demo->anjay && demo->dm_persistence_file) {
         avs_stream_t *data = avs_stream_file_create(demo->dm_persistence_file,
@@ -152,13 +160,17 @@ static void demo_delete(anjay_demo_t *demo) {
         if (!data
                 || avs_is_err(anjay_security_object_persist(demo->anjay, data))
                 || avs_is_err(anjay_server_object_persist(demo->anjay, data))
-                || avs_is_err(
-                           anjay_access_control_persist(demo->anjay, data))) {
+#    ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
+                || avs_is_err(anjay_access_control_persist(demo->anjay, data))
+#    endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
+        ) {
             demo_log(ERROR, "Cannot persist data model to file %s",
                      demo->dm_persistence_file);
         }
         avs_stream_cleanup(&data);
     }
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
     if (demo->schedule_update_on_exit) {
         demo_log(INFO, "forced registration update on exit");
@@ -175,7 +187,9 @@ static void demo_delete(anjay_demo_t *demo) {
     AVS_LIST_CLEAR(&demo->objects) {
         demo->objects->release_func(demo->objects->obj_ptr);
     }
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     firmware_update_destroy(&demo->fw_update);
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
     iosched_release(demo->iosched);
     AVS_LIST_CLEAR(&demo->allocated_strings);
@@ -203,6 +217,7 @@ static size_t count_non_bootstrap_servers(anjay_demo_t *demo) {
     return result;
 }
 
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
 static int add_default_access_entries(anjay_demo_t *demo) {
     if (has_bootstrap_server(demo) || count_non_bootstrap_servers(demo) <= 1) {
         // ACLs are not necessary
@@ -256,6 +271,7 @@ static int add_access_entries(anjay_demo_t *demo,
     }
     return 0;
 }
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
 
 static int get_single_instance(const anjay_dm_object_def_t **obj_ptr,
                                AVS_LIST(anjay_iid_t) *out) {
@@ -341,19 +357,32 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         },
     };
 
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     const avs_net_security_info_t *fw_security_info_ptr = NULL;
     if (cmdline_args->fw_security_info.mode != (avs_net_security_mode_t) -1) {
         fw_security_info_ptr = &cmdline_args->fw_security_info;
     }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
     demo->connection_args = &cmdline_args->connection_args;
+#ifdef AVS_COMMONS_STREAM_WITH_FILE
+#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
     demo->attr_storage_file = cmdline_args->attr_storage_file;
+#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     demo->dm_persistence_file = cmdline_args->dm_persistence_file;
+#    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
+#endif     // AVS_COMMONS_STREAM_WITH_FILE
     demo->anjay = anjay_new(&config);
     demo->iosched = iosched_create();
     if (!demo->anjay || !demo->iosched
+#ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
             || anjay_attr_storage_install(demo->anjay)
-            || anjay_access_control_install(demo->anjay)) {
+#endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
+            || anjay_access_control_install(demo->anjay)
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
+    ) {
         return -1;
     }
 
@@ -423,6 +452,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     }
 
     bool dm_persistence_restored = false;
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
     if (cmdline_args->dm_persistence_file) {
         avs_stream_t *data =
                 avs_stream_file_create(cmdline_args->dm_persistence_file,
@@ -430,8 +461,10 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         if (!data
                 || avs_is_err(anjay_security_object_restore(demo->anjay, data))
                 || avs_is_err(anjay_server_object_restore(demo->anjay, data))
-                || avs_is_err(
-                           anjay_access_control_restore(demo->anjay, data))) {
+#    ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
+                || avs_is_err(anjay_access_control_restore(demo->anjay, data))
+#    endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
+        ) {
             demo_log(ERROR, "Cannot restore data model from file %s",
                      cmdline_args->dm_persistence_file);
         } else {
@@ -439,11 +472,14 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         }
         avs_stream_cleanup(&data);
     }
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
     if (!dm_persistence_restored) {
         demo_reload_servers(demo);
     }
 
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     // Install Firmware Update Object at the end, because installed Device
     // Object and Server Object's instances may be needed.
     if (firmware_update_install(demo->anjay, demo->iosched, &demo->fw_update,
@@ -455,13 +491,18 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                                 cmdline_args->fw_update_delayed_result)) {
         return -1;
     }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
     if (!dm_persistence_restored
             && (add_default_access_entries(demo)
                 || add_access_entries(demo, cmdline_args))) {
         return -1;
     }
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
 
+#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
     if (cmdline_args->attr_storage_file) {
         avs_stream_t *data =
                 avs_stream_file_create(cmdline_args->attr_storage_file,
@@ -476,6 +517,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         // no success log there, as Attribute Storage module logs it by itself
         avs_stream_cleanup(&data);
     }
+#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
     return 0;
 }
@@ -646,7 +689,9 @@ static void cmdline_args_cleanup(cmdline_args_t *cmdline_args) {
     avs_free(cmdline_args->connection_args.public_cert_or_psk_identity);
     avs_free(cmdline_args->connection_args.private_cert_or_psk_key);
     avs_free(cmdline_args->connection_args.server_public_key);
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
     AVS_LIST_CLEAR(&cmdline_args->access_entries);
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
     avs_free(cmdline_args->default_ciphersuites);
 }
 

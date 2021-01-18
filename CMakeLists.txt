@@ -1,4 +1,4 @@
-# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.4.0)
+cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.8.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.9.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -116,9 +116,6 @@ cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads"
 
 ################# LIBRARIES ####################################################
 
-option(WITH_AVS_LOG "Enable logging support" ON)
-option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
-
 # avs_commons required components.
 set(AVS_COMMONS_COMPONENTS algorithm crypto list rbtree buffer net sched stream stream_net url utils compat_threading)
 if(WITH_HTTP_DOWNLOAD)
@@ -190,7 +187,12 @@ else()
     endif()
 
     message(STATUS "DTLS backend: ${_DTLS_BACKEND_LOWERCASE}")
+endif()
 
+option(WITH_AVS_LOG "Enable logging support" ON)
+option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
+
+if(NOT WITH_LOCAL_AVS_COMMONS)
     set(WITH_SCHEDULER_THREAD_SAFE OFF CACHE INTERNAL "")
 
     add_subdirectory(deps/avs_commons)
@@ -239,6 +241,7 @@ option(WITH_LWM2M_JSON "Enable support for LwM2M 1.0 JSON (output only)" ON)
 option(WITHOUT_TLV "Disable support for TLV content format" OFF)
 option(WITHOUT_PLAINTEXT "Disable support for Plain Text content format" OFF)
 option(WITHOUT_DEREGISTER "Disable use of the Deregister message" OFF)
+option(WITHOUT_IP_STICKINESS "Disable support for IP stickiness" OFF)
 
 cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
@@ -259,7 +262,7 @@ cmake_dependent_option(WITH_MODULE_attr_storage "Automatic attribute storage mod
 cmake_dependent_option(WITH_MODULE_access_control "Access control object implementation module" ON WITH_ACCESS_CONTROL OFF)
 option(WITH_MODULE_security "Security object module" ON)
 option(WITH_MODULE_server "Server object module" ON)
-cmake_dependent_option(WITH_MODULE_fw_update "Firmware Update object module" ON WITH_DOWNLOADER OFF)
+option(WITH_MODULE_fw_update "Firmware Update object module" ON)
 
 ################# CODE #########################################################
 
@@ -421,6 +424,7 @@ set(ANJAY_WITH_LWM2M_JSON "${WITH_LWM2M_JSON}")
 set(ANJAY_WITHOUT_TLV "${WITHOUT_TLV}")
 set(ANJAY_WITHOUT_PLAINTEXT "${WITHOUT_PLAINTEXT}")
 set(ANJAY_WITHOUT_DEREGISTER "${WITHOUT_DEREGISTER}")
+set(ANJAY_WITHOUT_IP_STICKINESS "${WITHOUT_IP_STICKINESS}")
 set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
 set(ANJAY_WITH_MODULE_ATTR_STORAGE "${WITH_MODULE_attr_storage}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
@@ -451,15 +455,7 @@ endif()
 ################# DEMO #########################################################
 
 set(DEMO_DEPENDENCIES
-    WITH_ACCESS_CONTROL
     WITH_AVS_LOG
-    WITH_AVS_PERSISTENCE
-    WITH_AVS_STREAM_FILE
-    WITH_BOOTSTRAP
-    WITH_OBSERVE
-    WITH_MODULE_access_control
-    WITH_MODULE_attr_storage
-    WITH_MODULE_fw_update
     WITH_MODULE_security
     WITH_MODULE_server)
 

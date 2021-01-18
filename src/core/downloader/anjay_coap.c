@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -403,9 +403,17 @@ static void suspend_coap_transfer(anjay_downloader_t *dl,
         avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
         assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
     }
-    avs_net_socket_shutdown(ctx->socket);
+    avs_error_t err = avs_net_socket_shutdown(ctx->socket);
     // not calling close because that might clean up remote hostname and
     // port fields that will be necessary for reconnection
+    if (_anjay_socket_is_online(ctx->socket)) {
+        // avs_net_socket_shutdown() failed - suspending the transfer is not
+        // supported, let's abort it instead
+        abort_download_transfer(
+                ctx,
+                _anjay_download_status_failed(
+                        avs_is_err(err) ? err : avs_errno(AVS_UNKNOWN_ERROR)));
+    }
 }
 
 static avs_error_t sched_download_resumption(anjay_downloader_t *dl,

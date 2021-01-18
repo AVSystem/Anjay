@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -23,10 +23,27 @@ Changes in avs_commons
 Introduction
 ------------
 
-``avs_commons`` 4.1 contains a number of breaking changes compared to version
-3.11 used by Anjay 1.16. If you are using any of the ``avs_commons`` APIs
-directly (which is especially likely for e.g. the logging API and querying
-sockets in the event loop), you will need to adjust your code.
+Current versions of ``avs_commons`` contain a number of breaking changes
+compared to version 3.11 used by Anjay 1.16. If you are using any of the
+``avs_commons`` APIs directly (which is especially likely for e.g. the logging
+API and querying sockets in the event loop), you will need to adjust your code.
+
+Change to minimum CMake version
+-------------------------------
+
+Declared minimum CMake version necessary for CMake-based compilation, as well as
+for importing the installed library through ``find_package()``, is now 3.6. If
+you're using some Linux distribution that only has an older version in its
+repositories (notably, Ubuntu 16.04), we recommend using one of the following
+install methods instead:
+
+* `Kitware APT Repository for Debian and Ubuntu <https://apt.kitware.com/>`_
+* `Snap Store <https://snapcraft.io/cmake>`_ (``snap install cmake``)
+* `Python Package Index <https://pypi.org/project/cmake/>`_
+  (``pip install cmake``)
+
+This change does not affect users who compile the library using some alternative
+approach, without using the provided CMake scripts.
 
 avs_commons header rename
 -------------------------
@@ -738,15 +755,24 @@ mentioned in :ref:`avs-commons-type-renames`):
 * ``_avs_net_create_udp_socket()``
 * ``_avs_net_initialize_global_compat_state()``
 
-Refactor of avs_net_validate_ip_address()
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Refactor of avs_net_validate_ip_address() and avs_net_local_address_for_target_host()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``avs_net_validate_ip_address()`` is now no longer used by Anjay or
 ``avs_commons``. It was previously necessary to implement it as part of the
-socket implementation. This is no longer required, and in fact, keeping that
-implementation might lead to problems - for compatibility, the function has been
-reimplemented as a ``static inline`` function that wraps
-``avs_net_addrinfo_*()`` APIs.
+socket implementation. This is no longer required. For compatibility, the
+function has been reimplemented as a ``static inline`` function that wraps
+``avs_net_addrinfo_*()`` APIs. Please remove your version of
+``avs_net_validate_ip_address()`` from your socket implementation if you have
+one, as having two alternative variants may lead to conflicts.
+
+Since Anjay 2.9 and ``avs_commons`` 4.6,
+``avs_net_local_address_for_target_host()`` underwent a similar refactor. It was
+previously a function to be optionally implemented as part of the socket
+implementation, but now it is a ``static inline`` function that wraps
+``avs_net_socket_*()`` APIs. Please remove your version of
+``avs_net_local_address_for_target_host()`` from your socket implementation if
+you have one, as having two alternative variants may lead to conflicts.
 
 .. _avs-commons-pki-move-116:
 
@@ -961,7 +987,7 @@ Below is a reference of related changes:
 Changes to public configuration macros
 --------------------------------------
 
-``avs_commons`` 4.1 introduces a new header file,
+``avs_commons`` 4.1 introduced a new header file,
 ``avsystem/commons/avs_commons_config.h``, that encapsulates all its
 compile-time configuration, allowing compiling the library without the use of
 CMake, among other improvements.

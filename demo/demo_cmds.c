@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@
 #include "demo_cmds.h"
 #include "demo.h"
 #include "demo_utils.h"
-#include "firmware_update.h"
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+#    include "firmware_update.h"
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 #include <ctype.h>
 #include <inttypes.h>
@@ -92,6 +94,7 @@ static void cmd_reconnect(anjay_demo_t *demo, char *args_string) {
     }
 }
 
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
 static void cmd_set_fw_package_path(anjay_demo_t *demo, char *args_string) {
     const char *path = args_string;
     while (isspace(*path)) {
@@ -100,6 +103,7 @@ static void cmd_set_fw_package_path(anjay_demo_t *demo, char *args_string) {
 
     firmware_update_set_package_path(&demo->fw_update, path);
 }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 static void cmd_open_location_csv(anjay_demo_t *demo, char *args_string) {
     const anjay_dm_object_def_t **location_obj =
@@ -534,6 +538,7 @@ parse_error:
     demo_download_user_data_destroy(user_data);
 }
 
+#ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
 static void cmd_set_attrs(anjay_demo_t *demo, char *args_string) {
     char *path = (char *) avs_malloc(strlen(args_string) + 1);
     if (!path) {
@@ -616,6 +621,7 @@ error:
 finish:
     avs_free(path);
 }
+#endif // ANJAY_WITH_MODULE_ATTR_STORAGE
 
 static void cmd_disable_server(anjay_demo_t *demo, char *args_string) {
     unsigned ssid;
@@ -715,6 +721,7 @@ static void cmd_set_event_log_data(anjay_demo_t *demo, char *args_string) {
     }
 }
 
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
 static void cmd_set_fw_update_result(anjay_demo_t *demo, char *args_string) {
     int result;
     if (sscanf(args_string, " %d", &result) != 1) {
@@ -723,6 +730,7 @@ static void cmd_set_fw_update_result(anjay_demo_t *demo, char *args_string) {
     }
     anjay_fw_update_set_result(demo->anjay, (anjay_fw_update_result_t) result);
 }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 static void cmd_ongoing_registration_exists(anjay_demo_t *demo,
                                             char *args_string) {
@@ -749,9 +757,11 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 cmd_send_update, "Sends Update messages to LwM2M servers"),
     CMD_HANDLER("reconnect", "[transports...]", cmd_reconnect,
                 "Reconnects to LwM2M servers and sends Update messages"),
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     CMD_HANDLER("set-fw-package-path", "", cmd_set_fw_package_path,
                 "Sets the path where the firmware package will be saved when "
                 "Write /5/0/0 is performed"),
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
     CMD_HANDLER("open-location-csv", "filename frequency=1",
                 cmd_open_location_csv,
                 "Opens a CSV file and starts using it for location information"),
@@ -788,9 +798,11 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("download", "url target_file [psk_identity psk_key]",
                 cmd_download,
                 "Download a file from given URL to target_file."),
+#ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
     CMD_HANDLER("set-attrs", "", cmd_set_attrs, "Syntax [/a [/b [/c [/d] ] ] ] "
                 "ssid [pmin,pmax,lt,gt,st,epmin,epmax] "
                 "- e.g. /a/b 1 pmin=3,pmax=4"),
+#endif // ANJAY_WITH_MODULE_ATTR_STORAGE
     CMD_HANDLER("disable-server", "ssid reactivate_timeout", cmd_disable_server,
                 "Disables a server with given SSID for a given time "
                 "(use -1 to disable idefinitely)."),
@@ -809,8 +821,10 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Writes new value to Binary App Data Container object"),
     CMD_HANDLER("set-event-log-data", "data", cmd_set_event_log_data,
                 "Sets LogData resource in Log Event object"),
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     CMD_HANDLER("set-fw-update-result", "RESULT", cmd_set_fw_update_result,
                 "Attempts to set Firmware Update Result at runtime"),
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
     CMD_HANDLER("ongoing-registration-exists", "",
                 cmd_ongoing_registration_exists,
                 "Display information about ongoing registrations"),

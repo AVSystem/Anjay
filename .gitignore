@@ -65,4 +65,4 @@ compile_commands.json
 !/doc/sphinx/Makefile
 
 # built tutorials
-examples/build
+examples/*-build

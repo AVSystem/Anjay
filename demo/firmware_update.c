@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -330,6 +330,8 @@ static int preprocess_firmware(fw_update_logic_t *fw) {
     return result;
 }
 
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
 static avs_error_t store_etag(avs_persistence_context_t *ctx,
                               const anjay_etag_t *etag) {
     bool use_etag = (etag != NULL);
@@ -378,6 +380,30 @@ static int write_persistence_file(const char *path,
 static void delete_persistence_file(const fw_update_logic_t *fw) {
     unlink(fw->persistence_file);
 }
+#else  // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
+static int write_persistence_file(const char *path,
+                                  anjay_fw_update_initial_result_t result,
+                                  const char *uri,
+                                  char *download_file,
+                                  bool filename_administratively_set,
+                                  const anjay_etag_t *etag) {
+    (void) path;
+    (void) result;
+    (void) uri;
+    (void) download_file;
+    (void) filename_administratively_set;
+    (void) etag;
+    demo_log(WARNING, "Persistence not compiled in");
+    return 0;
+}
+
+static void delete_persistence_file(const fw_update_logic_t *fw) {
+    (void) fw;
+    demo_log(WARNING, "Persistence not compiled in");
+}
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
 static void fw_reset(void *fw_) {
     fw_update_logic_t *fw = (fw_update_logic_t *) fw_;
@@ -565,6 +591,8 @@ static anjay_fw_update_handlers_t FW_UPDATE_HANDLERS = {
     .get_coap_tx_params = fw_get_coap_tx_params
 };
 
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
 static avs_error_t restore_etag(avs_persistence_context_t *ctx,
                                 anjay_etag_t **etag) {
     assert(etag && !*etag);
@@ -585,6 +613,8 @@ static avs_error_t restore_etag(avs_persistence_context_t *ctx,
     }
     return err;
 }
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
 static bool is_valid_result(int8_t result) {
     switch (result) {
@@ -608,6 +638,8 @@ typedef struct {
     anjay_etag_t *etag;
 } persistence_file_data_t;
 
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
 static persistence_file_data_t read_persistence_file(const char *path) {
     persistence_file_data_t data;
     memset(&data, 0, sizeof(data));
@@ -639,6 +671,17 @@ static persistence_file_data_t read_persistence_file(const char *path) {
     }
     return data;
 }
+#else  // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
+static persistence_file_data_t read_persistence_file(const char *path) {
+    (void) path;
+    demo_log(WARNING, "Persistence not compiled in");
+    persistence_file_data_t retval;
+    memset(&retval, 0, sizeof(retval));
+    return retval;
+}
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
 typedef struct {
     anjay_t *anjay;

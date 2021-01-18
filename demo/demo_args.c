@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,10 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
             .id = 1,
             .binding_mode = NULL,
         },
+#ifdef ANJAY_WITH_BOOTSTRAP
         .bootstrap_holdoff_s = 0,
         .bootstrap_timeout_s = 0,
+#endif // ANJAY_WITH_BOOTSTRAP
         .lifetime = 86400,
         .security_mode = ANJAY_SECURITY_NOSEC
     },
@@ -52,17 +54,32 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .inbuf_size = 4000,
     .outbuf_size = 4000,
     .msg_cache_size = 0,
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+#    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+            && defined(AVS_COMMONS_STREAM_WITH_FILE)
     .fw_updated_marker_path = "/tmp/anjay-fw-updated",
+#    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+           // defined(AVS_COMMONS_STREAM_WITH_FILE)
     .fw_security_info = {
         .mode = (avs_net_security_mode_t) -1
     },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+#ifdef AVS_COMMONS_STREAM_WITH_FILE
+#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
     .attr_storage_file = NULL,
+#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     .dm_persistence_file = NULL,
+#    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
+#endif     // AVS_COMMONS_STREAM_WITH_FILE
     .disable_legacy_server_initiated_bootstrap = false,
     .tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
     .dtls_hs_tx_params = ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS,
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     .fwu_tx_params_modified = false,
     .fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
     .prefer_hierarchical_formats = false
 };
 
@@ -158,8 +175,11 @@ static void print_help(const struct option *options) {
         const char *default_value;
         const char *help;
     } HELP_INFO[] = {
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
         { 'a', "/OID/IID,SSID,ACCESS_MASK", NULL,
           "create ACL entry for specified /OID/IID and SSID" },
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
+#ifdef ANJAY_WITH_BOOTSTRAP
         { 'b', "client-initiated-only", NULL,
           "treat first URI as Bootstrap Server. If the optional "
           "\"client-initiated-only\" option is specified, the legacy LwM2M "
@@ -170,6 +190,7 @@ static void print_help(const struct option *options) {
         { 'T', "SECONDS", "0",
           "number of seconds to keep the Bootstrap Server Account for after "
           "successful bootstrapping, or 0 for infinity." },
+#endif // ANJAY_WITH_BOOTSTRAP
         { 'e', "URN", DEFAULT_CMDLINE_ARGS.endpoint_name,
           "endpoint name to use." },
         { 'h', NULL, NULL, "show this message and exit." },
@@ -227,12 +248,17 @@ static void print_help(const struct option *options) {
           "mechanism." },
         { 'N', NULL, NULL,
           "Send notifications as Confirmable messages by default" },
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
         { 'r', "RESULT", NULL,
           "If specified and nonzero, initializes the Firmware Update object in "
           "UPDATING state, and sets the result to given value after a short "
           "while" },
+#    if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+            && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 256, "PATH", DEFAULT_CMDLINE_ARGS.fw_updated_marker_path,
           "File path to use as a marker for persisting firmware update state" },
+#    endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+           // defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 257, "CERT_FILE", NULL,
           "Require certificate validation against specified file when "
           "downloading firmware over encrypted channels" },
@@ -249,9 +275,14 @@ static void print_help(const struct option *options) {
           "Download firmware over encrypted channels using PSK-mode encryption "
           "with the specified key (provided as hexlified string); must be used "
           "together with --fw-psk-identity" },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 261, "PERSISTENCE_FILE", NULL,
           "File to load attribute storage data from at startup, and "
           "store it at shutdown" },
+#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 267, "ACK_RANDOM_FACTOR", "1.5",
           "Configures ACK_RANDOM_FACTOR (defined in RFC7252)" },
         { 268, "ACK_TIMEOUT", "2.0",
@@ -264,6 +295,7 @@ static void print_help(const struct option *options) {
         { 271, "DTLS_HS_RETRY_WAIT_MAX", "60",
           "Configures maximum period of time to wait (after last "
           "retransmission) before giving up on handshake completely" },
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
         { 272, "ACK_RANDOM_FACTOR", "1.5",
           "Configures ACK_RANDOM_FACTOR (defined in RFC7252) for firmware "
           "update" },
@@ -273,6 +305,7 @@ static void print_help(const struct option *options) {
         { 274, "MAX_RETRANSMIT", "4",
           "Configures MAX_RETRANSMIT (defined in RFC7252) for firmware "
           "update" },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
         { 275, NULL, NULL,
           "Sets the library to use hierarchical content formats by default for "
           "all responses." },
@@ -281,9 +314,13 @@ static void print_help(const struct option *options) {
           "Sets the ciphersuites to be used by default for (D)TLS "
           "connections." },
         { 284, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 289, "PERSISTENCE_FILE", NULL,
           "File to load Server, Security and Access Control object contents at "
           "startup, and store it at shutdown" },
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
     };
 
     const size_t screen_width = get_screen_width();
@@ -506,11 +543,15 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     int num_servers = 0;
 
     const struct option options[] = {
-        // clang-format off
+    // clang-format off
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
         { "access-entry",                  required_argument, 0, 'a' },
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
+#ifdef ANJAY_WITH_BOOTSTRAP
         { "bootstrap",                     optional_argument, 0, 'b' },
         { "bootstrap-holdoff",             required_argument, 0, 'H' },
         { "bootstrap-timeout",             required_argument, 0, 'T' },
+#endif // ANJAY_WITH_BOOTSTRAP
         { "endpoint-name",                 required_argument, 0, 'e' },
         { "help",                          no_argument,       0, 'h' },
 #ifndef _WIN32
@@ -535,26 +576,36 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "outbuf-size",                   required_argument, 0, 'O' },
         { "cache-size",                    required_argument, 0, '$' },
         { "confirmable-notifications",     no_argument,       0, 'N' },
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
         { "delayed-upgrade-result",        required_argument, 0, 'r' },
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "fw-updated-marker-path",        required_argument, 0, 256 },
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "fw-cert-file",                  required_argument, 0, 257 },
         { "fw-cert-path",                  required_argument, 0, 258 },
         { "fw-psk-identity",               required_argument, 0, 259 },
         { "fw-psk-key",                    required_argument, 0, 260 },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "attribute-storage-persistence-file", required_argument, 0, 261 },
+#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "ack-random-factor",             required_argument, 0, 267 },
         { "ack-timeout",                   required_argument, 0, 268 },
         { "max-retransmit",                required_argument, 0, 269 },
         { "dtls-hs-retry-wait-min",        required_argument, 0, 270 },
         { "dtls-hs-retry-wait-max",        required_argument, 0, 271 },
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
         { "fwu-ack-random-factor",         required_argument, 0, 272 },
         { "fwu-ack-timeout",               required_argument, 0, 273 },
         { "fwu-max-retransmit",            required_argument, 0, 274 },
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
         { "prefer-hierarchical-formats",   no_argument,       0, 275 },
         { "use-connection-id",             no_argument,       0, 277 },
         { "ciphersuites",                  required_argument, 0, 278 },
         { "nstart",                        required_argument, 0, 284 },
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "dm-persistence-file",           required_argument, 0, 289 },
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -599,6 +650,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             demo_log(ERROR, "unrecognized free argument: %s", argv[optind]);
             goto finish;
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
         case 'a': {
             uint16_t oid;
             uint16_t iid;
@@ -622,6 +674,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             AVS_LIST_INSERT(&parsed_args->access_entries, entry);
             break;
         }
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
+#ifdef ANJAY_WITH_BOOTSTRAP
         case 'b': {
             int idx = num_servers == 0 ? 0 : num_servers - 1;
             parsed_args->connection_args.servers[idx].is_bootstrap = true;
@@ -651,6 +705,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             break;
+#endif // ANJAY_WITH_BOOTSTRAP
         case 'e':
             parsed_args->endpoint_name = optarg;
             break;
@@ -826,6 +881,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'N':
             parsed_args->confirmable_notifications = true;
             break;
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
         case 'r': {
             int result;
             if (parse_i32(optarg, &result)
@@ -922,9 +978,14 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
             break;
         }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 261:
             parsed_args->attr_storage_file = optarg;
             break;
+#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 267:
             if (parse_double(optarg,
                              &parsed_args->tx_params.ack_random_factor)) {
@@ -974,6 +1035,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     avs_time_duration_from_fscalar(max_wait_s, AVS_TIME_S);
             break;
         }
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
         case 272:
             if (parse_double(optarg,
                              &parsed_args->fwu_tx_params.ack_random_factor)) {
@@ -1007,6 +1069,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             parsed_args->fwu_tx_params_modified = true;
             break;
         }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
         case 275:
             parsed_args->prefer_hierarchical_formats = true;
             break;
@@ -1047,9 +1110,13 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             break;
+#if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
+        && defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 289:
             parsed_args->dm_persistence_file = optarg;
             break;
+#endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
+       // defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 0:
             goto process;
         }
@@ -1062,11 +1129,16 @@ process:
         retval = -1;
     }
     if (num_servers == 0
+#ifdef AVS_COMMONS_STREAM_WITH_FILE
+#    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
             && !(parsed_args->dm_persistence_file
-#ifndef _WIN32
+#        ifndef _WIN32
                  && !access(parsed_args->dm_persistence_file, R_OK)
-#endif // _WIN32
-                         )) {
+#        endif // _WIN32
+                         )
+#    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
+#endif     // AVS_COMMONS_STREAM_WITH_FILE
+    ) {
         demo_log(ERROR, "At least one LwM2M Server URI needs to be specified, "
                         "please use the -u option");
         retval = -1;
@@ -1151,6 +1223,7 @@ process:
             retval = -1;
         }
     }
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
             && (!parsed_args->fw_security_info.data.psk.identity
                 || !parsed_args->fw_security_info.data.psk.psk)) {
@@ -1158,9 +1231,12 @@ process:
                         "for firmware upgrade security");
         retval = -1;
     }
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 finish:
     if (retval) {
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
         AVS_LIST_CLEAR(&parsed_args->access_entries);
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
         avs_free(parsed_args->default_ciphersuites);
         parsed_args->default_ciphersuites = NULL;
     }

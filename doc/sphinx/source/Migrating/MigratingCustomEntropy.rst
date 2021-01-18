@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -46,12 +46,12 @@ adding a custom entropy source at the time of mbed TLS initialization::
     }
 
 This mechanism has been removed in ``avs_commons`` 4.1, and as such is not
-available when using Anjay 2.3.
+available when using Anjay 2.3 or newer.
 
 To achieve a similar effect in the new version, you can provide your own custom
 PRNG context, for example as follows::
 
-    // Code compatible with Anjay >=2.3, avs_commons >=4.0
+    // Code compatible with Anjay >=2.3, avs_commons >=4.1
 
     #include <anjay/core.h>
     #include <avsystem/commons/avs_prng.h>

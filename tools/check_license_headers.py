@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ from argparse import ArgumentParser
 from io import StringIO
 
 
-EXPECTED_COPYRIGHT_HEADER = 'Copyright 2017-2020 AVSystem <avsystem@avsystem.com>'
+EXPECTED_COPYRIGHT_HEADER = 'Copyright 2017-2021 AVSystem <avsystem@avsystem.com>'
 
 ALLOWED_LICENSES = {
     (
@@ -52,6 +52,7 @@ IGNORE_PATTERNS = list(map(re.compile, [
     '^tests/fuzz/test_cases/',
     '^deps/avs_coap/tests/fuzz/input/',
     '^doc/sphinx/[Mm]ake',
+    '^doc/sphinx/snippet_sources\.md5$',
     '^doc/sphinx/source/conf\.py\.in$',
     '^Doxyfile\.in$',
     '^LICENSE$',

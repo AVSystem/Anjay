@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,8 +67,10 @@ typedef struct {
 
 typedef struct {
     server_entry_t servers[MAX_SERVERS];
+#ifdef ANJAY_WITH_BOOTSTRAP
     int32_t bootstrap_holdoff_s;
     int32_t bootstrap_timeout_s;
+#endif // ANJAY_WITH_BOOTSTRAP
     int32_t lifetime;
     anjay_security_mode_t security_mode;
     uint8_t *public_cert_or_psk_identity;

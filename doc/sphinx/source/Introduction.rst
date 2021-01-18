@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -79,5 +79,5 @@ library in turn may additionally depend either on
 or `tinydtls <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
 support.
 
-To build Anjay from source, `CMake <http://www.cmake.org/>`_ version 3.4.0 or
+To build Anjay from source, `CMake <http://www.cmake.org/>`_ version 3.6.0 or
 newer is necessary.

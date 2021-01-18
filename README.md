@@ -19,7 +19,7 @@ The project has been created and is actively maintained by [AVSystem](https://ww
 * [About OMA LwM2M](#about-oma-lwm2m)
 * [Quickstart guide](#quickstart-guide)
   * [Dependencies](#dependencies)
-    * [Ubuntu 16.04 LTS / Raspbian Buster or later](#ubuntu-1604-lts--raspbian-buster-or-later)
+    * [Ubuntu 18.04 LTS / Raspbian Buster or later](#ubuntu-1804-lts--raspbian-buster-or-later)
     * [CentOS 7 or later](#centos-7-or-later)
     * [macOS Sierra or later, with Homebrew](#macos-sierra-or-later-with-homebrew)
   * [Running the demo client](#running-the-demo-client)
@@ -27,8 +27,9 @@ The project has been created and is actively maintained by [AVSystem](https://ww
     * [Building using CMake](#building-using-cmake)
     * [Alternative build systems](#alternative-build-systems)
   * [Use a Dockerfile](#use-a-dockerfile)
-* [Mbed OS port](#mbed-os-port)
-* [Zephyr OS port](#zephyr-os-port)
+* [Embedded operating systems ports](#embedded-operating-systems-ports)
+* [Raspberry Pi client](#raspberry-pi-client)
+* [Java bindings](#java-bindings)
 * [License](#license)
   * [Commercial support](#commercial-support)
 * [Contributing](#contributing)
@@ -116,7 +117,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
     -   [mbed TLS 2.0+](https://tls.mbed.org/),
     -   [tinydtls 0.9+](https://projects.eclipse.org/projects/iot.tinydtls),
 -   Optional dependencies (required for tests):
-    -   [CMake 3.4+](https://cmake.org/) - non-mandatory, but preferred build system,
+    -   [CMake 3.6+](https://cmake.org/) - non-mandatory, but preferred build system,
     -   C++ compiler with C++11 support,
     -   [Python 3.5+](https://www.python.org/),
     -   [pybind11](https://github.com/pybind/pybind11) - included in the repository as a subproject,
@@ -125,7 +126,7 @@ More details about OMA LwM2M: [Brief introduction to LwM2M](https://AVSystem.git
     -   [Doxygen](http://www.doxygen.nl/),
     -   [Sphinx](https://www.sphinx-doc.org/en/master/).
 
-#### Ubuntu 16.04 LTS / Raspbian Buster or later
+#### Ubuntu 18.04 LTS / Raspbian Buster or later
 
 <!-- deps_install_begin -->
 ``` sh
@@ -262,17 +263,26 @@ Then, you can launch the built image and run the demo client:
 
 ```
 docker run -it anjay
-./output/bin/demo -e $(hostname) -u coap://try-anjay.avsystem.io:5683
+./output/bin/demo -e $(hostname) -u coap://try-anjay.avsystem.com:5683
 ```
 
+## Embedded operating systems ports
 
-## Mbed OS port
+If you want to use Anjay on Mbed OS, Zephyr OS or FreeRTOS, check our demo
+applications available in other repositories:
+- [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) (uses [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) integration layer)
+- [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client)
+- [Anjay-freertos-client](https://github.com/AVSystem/Anjay-freertos-client)
 
-If you want to use Anjay on Mbed OS, you might be interested in the [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) and [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) repositories, which contain basic integration with that system.
+## Raspberry Pi client
 
-## Zephyr OS port
+LwM2M Client for Raspberry Pi, with a feature allowing for implementing LwM2M Objects in Python, is available in [Svetovid-raspberry-client repository](https://github.com/AVSystem/Svetovid-raspberry-client).
 
-If you want to use Anjay on Zephyr OS, you might want to check our [example client](https://github.com/AVSystem/Anjay-zephyr-client) based on it.
+## Java bindings
+
+Maven Central repository contains [anjay-java](https://search.maven.org/artifact/com.avsystem.anjay/anjay-java) and [anjay-android](https://search.maven.org/artifact/com.avsystem.anjay/anjay-android) artifacts which allow to use Anjay in Java applications.
+
+In case of using `anjay-java`, check [Anjay-java repository](https://github.com/AVSystem/Anjay-java) for details how to compile the native library. This step isn't required if you want to use `anjay-android` in your Android application.
 
 ## License
 

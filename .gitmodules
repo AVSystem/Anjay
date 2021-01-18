@@ -5,3 +5,6 @@
 	path = tests/integration/framework/nsh-lwm2m/pymbedtls/src/pybind11
 	url = https://github.com/pybind/pybind11.git
 	ignore = untracked
+[submodule "tests/integration/framework/nsh-lwm2m/powercmd"]
+	path = tests/integration/framework/nsh-lwm2m/powercmd
+	url = https://github.com/dextero/powercmd

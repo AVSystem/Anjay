@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,7 +258,6 @@ static int senml_output_close(anjay_output_ctx_t *ctx_) {
     _anjay_update_ret(&result,
                       _anjay_senml_like_encoder_cleanup(&ctx->encoder));
     if (_anjay_uri_path_length(&ctx->path) > 0) {
-        senml_log(ERROR, _("set_path() called without returning a value"));
         _anjay_update_ret(&result, ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED);
     }
     return result;

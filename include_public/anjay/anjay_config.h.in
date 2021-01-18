@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,6 +258,12 @@
  * Disable use of the Deregister message.
  */
 #cmakedefine ANJAY_WITHOUT_DEREGISTER
+
+/**
+ * Disable support for "IP stickiness", i.e. preference of the same IP address
+ * when reconnecting to a server using a domain name.
+ */
+#cmakedefine ANJAY_WITHOUT_IP_STICKINESS
 
 /**
  * Enable support for SenML JSON format, as specified in LwM2M TS 1.1.

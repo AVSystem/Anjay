@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,6 +201,9 @@ try_bind_to_last_local_port(anjay_server_connection_t *connection,
 
 static const char *
 get_preferred_local_addr(const anjay_server_connection_t *connection) {
+#    ifdef ANJAY_WITHOUT_IP_STICKINESS
+    (void) connection;
+#    else  // ANJAY_WITHOUT_IP_STICKINESS
     /*
      * Whenever the socket is bound by connect(), the address family is set to
      * match the remote address. If the socket is bound by a bind() call with
@@ -234,6 +237,7 @@ get_preferred_local_addr(const anjay_server_connection_t *connection) {
             return "0.0.0.0";
         }
     }
+#    endif // ANJAY_WITHOUT_IP_STICKINESS
     return NULL;
 }
 

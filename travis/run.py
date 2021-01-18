@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ if docker_image != '':
         subprocess.check_call(args + ['.'])
 
         try:
-            subprocess.check_call(['docker', 'run',
+            subprocess.check_call(['docker', 'run', '--rm',
                                    '-e', 'CC=%s' % (os.getenv('ANJAY_CC', ''),),
                                    '-e', 'CXX=%s' % (os.getenv('ANJAY_CXX', ''),),
                                    image_name])

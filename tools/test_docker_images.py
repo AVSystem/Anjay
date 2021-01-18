@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
-import yaml
-import subprocess
 import contextlib
 import logging
+import multiprocessing
+import os
+import subprocess
+
+import yaml
 
 
 def parse_configurations(travis_yml_filename):
@@ -49,9 +51,11 @@ def run_configuration(root_dir, configuration):
     run_script = os.path.join(root_dir, 'travis/run.py')
 
     with scoped_chdir(root_dir):
+        nproc = multiprocessing.cpu_count()
         logging.info('Running configuration: %s' % (configuration['env'],))
-        run_env = configuration['env'] + \
-            ' CHECK_COMMAND="make -j && make -j anjay_check avs_commons_check avs_coap_check"'
+        run_env = configuration['env'] + (
+                ' CHECK_COMMAND="make -j%d && make -j%d anjay_check avs_commons_check avs_coap_check"' % (
+            nproc, nproc))
         try:
             subprocess.run('{env} {run}'.format(env=run_env, run=run_script),
                            shell=True, check=True, env={'NO_CACHE': '1'})
@@ -62,13 +66,12 @@ def run_configuration(root_dir, configuration):
 
 if __name__ == '__main__':
     import argparse
-    import subprocess
 
-    parser = argparse.ArgumentParser('Parses .travis.yml, extracting configurations, and then runs the travis images to check if they successfully compile.')
+    parser = argparse.ArgumentParser(
+        'Parses .travis.yml, extracting configurations, and then runs the travis images to check if they successfully compile.')
     parser.add_argument('-r', '--root-dir', type=str, help='Root directory of Anjay repo',
                         required=True)
     args = parser.parse_args()
 
     for configuration in parse_configurations(os.path.join(args.root_dir, '.travis.yml')):
         run_configuration(args.root_dir, configuration)
-

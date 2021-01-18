@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -17,14 +17,14 @@ LwM2M testing shell
 -------------------
 
 For the purpose of early testing of Anjay-based clients, we provide a simple CLI implementation of
-LwM2M that supports the UDP and TCP (although the TCP support is in a very early stage, and it may
-not be as stable as UDP) protocols. It is written in Python using `powercmd` library.
-You can find it in commercial version of Anjay in `bootstrap/framework/nsh_lwm2m/` directory.
+LwM2M. It is written in Python using `powercmd` library. You can find it in
+`tests/integration/framework/nsh-lwm2m <https://github.com/AVSystem/Anjay/tree/master/tests/integration/framework/nsh-lwm2m>`_
+directory in the Anjay repository.
 
 Running the server
 ~~~~~~~~~~~~~~~~~~
 
-You can start the server (from the main Anjay directory) by running `./bootstrap/framework/nsh-lwm2m/nsh_lwm2m.py`
+You can start the server (from the main Anjay directory) by running `./tests/integration/framework/nsh-lwm2m/nsh_lwm2m.py`
 with the following optional arguments:
 
 --help, -h            Show help.
@@ -32,7 +32,7 @@ with the following optional arguments:
 --listen PORT, -l PORT
                       Immediately starts listening on specified CoAP port. Default UDP, can be TCP if --tcp is passed. If `PORT` is not specified, default one is used (5683 for CoAP, 5684 for CoAP/(D)TLS)
 --tcp, -t
-                      Listen on TCP port
+                      Listen on TCP port *(only available in the commercial version)*
 --psk-identity IDENTITY, -i IDENTITY
                       PSK identity to use for DTLS connection (literal string).
 --psk-key KEY, -k KEY
@@ -177,8 +177,8 @@ serialize
 show
    Displays current element structure in a human-readable form.
 
-CBOR subshell
-"""""""""""""
+CBOR subshell (commercial version only)
+"""""""""""""""""""""""""""""""""""""""
 
 This subshell is entered by **cbor** command. The only extra command supported is:
 

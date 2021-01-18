@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITHOUT_DEREGISTER
     _anjay_log(anjay, TRACE, "ANJAY_WITHOUT_DEREGISTER = OFF");
 #endif // ANJAY_WITHOUT_DEREGISTER
+#ifdef ANJAY_WITHOUT_IP_STICKINESS
+    _anjay_log(anjay, TRACE, "ANJAY_WITHOUT_IP_STICKINESS = ON");
+#else // ANJAY_WITHOUT_IP_STICKINESS
+    _anjay_log(anjay, TRACE, "ANJAY_WITHOUT_IP_STICKINESS = OFF");
+#endif // ANJAY_WITHOUT_IP_STICKINESS
 #ifdef ANJAY_WITHOUT_PLAINTEXT
     _anjay_log(anjay, TRACE, "ANJAY_WITHOUT_PLAINTEXT = ON");
 #else // ANJAY_WITHOUT_PLAINTEXT

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,9 @@
 #include <avsystem/commons/avs_stream_file.h>
 #include <avsystem/commons/avs_time.h>
 
-#include "firmware_update.h"
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
+#    include "firmware_update.h"
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 #include "objects.h"
 
 typedef struct {
@@ -52,11 +54,19 @@ struct anjay_demo_struct {
 
     AVS_LIST(anjay_demo_string_t) allocated_strings;
     server_connection_args_t *connection_args;
+#ifdef AVS_COMMONS_STREAM_WITH_FILE
+#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
     const char *attr_storage_file;
+#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     const char *dm_persistence_file;
+#    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
+#endif     // AVS_COMMONS_STREAM_WITH_FILE
 
     iosched_t *iosched;
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     fw_update_logic_t fw_update;
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
 
     AVS_LIST(anjay_demo_object_t) objects;
 

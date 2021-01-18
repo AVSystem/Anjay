@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,9 @@ typedef struct cmdline_args {
     server_connection_args_t connection_args;
     const char *location_csv;
     time_t location_update_frequency_s;
+#ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
     AVS_LIST(access_entry_t) access_entries;
+#endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
     int32_t inbuf_size;
     int32_t outbuf_size;
     int32_t msg_cache_size;
@@ -46,6 +48,7 @@ typedef struct cmdline_args {
 #ifndef _WIN32
     bool disable_stdin;
 #endif // _WIN32
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     const char *fw_updated_marker_path;
     avs_net_security_info_t fw_security_info;
     /**
@@ -56,12 +59,21 @@ typedef struct cmdline_args {
      * which the client is restarted while upgrade is still in progress.
      */
     anjay_fw_update_result_t fw_update_delayed_result;
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
+
+#ifdef AVS_COMMONS_STREAM_WITH_FILE
+#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
     const char *attr_storage_file;
+#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     const char *dm_persistence_file;
+#    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
+#endif     // AVS_COMMONS_STREAM_WITH_FILE
 
     bool disable_legacy_server_initiated_bootstrap;
     avs_coap_udp_tx_params_t tx_params;
     avs_net_dtls_handshake_timeouts_t dtls_hs_tx_params;
+#ifdef ANJAY_WITH_MODULE_FW_UPDATE
     /**
      * This flag allows to enable callback providing tx_params for firmware
      * update only if some of parameters were changed by passing proper command
@@ -70,6 +82,7 @@ typedef struct cmdline_args {
      */
     bool fwu_tx_params_modified;
     avs_coap_udp_tx_params_t fwu_tx_params;
+#endif // ANJAY_WITH_MODULE_FW_UPDATE
     size_t stored_notification_limit;
 
     bool prefer_hierarchical_formats;

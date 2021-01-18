@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -16,6 +16,16 @@
 Migrating from older versions
 =============================
 
+.. note::
+
+    Each of these documents is intended to be stand-alone and complete guide for
+    migrating from the specified version to the newest one.
+
+    In other words, if you are migrating from e.g. Anjay 2.4, you **only** need
+    to follow :doc:`Migrating/MigratingFromAnjay24`. All the relevant
+    information from :doc:`Migrating/MigratingFromAnjay26` etc. is included
+    there as well.
+
 .. toctree::
    :glob:
    :titlesonly:
@@ -26,3 +36,4 @@ Migrating from older versions
    Migrating/MigratingFromAnjay24
    Migrating/MigratingFromAnjay26
    Migrating/MigratingFromAnjay27
+   Migrating/MigratingFromAnjay28

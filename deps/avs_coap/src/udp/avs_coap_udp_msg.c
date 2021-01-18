@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,10 +145,10 @@ validate_block_opt(avs_coap_options_t *opts,
 #    endif // WITH_AVS_COAP_BLOCK
 
 avs_error_t _avs_coap_udp_msg_parse(avs_coap_udp_msg_t *out_msg,
-                                    const uint8_t *packet,
+                                    const void *packet,
                                     size_t packet_size) {
     bytes_dispenser_t dispenser = {
-        .read_ptr = packet,
+        .read_ptr = (const uint8_t *) packet,
         .bytes_left = packet_size
     };
 

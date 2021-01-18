@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -23,10 +23,26 @@ Migrating from Anjay 2.2.5
 Introduction
 ------------
 
-Anjay 2.3 is a minor upgrade in terms of feature set, so no major changes in
-code flow are required when porting from Anjay 2.2. However, there has been a
-significant refactor in project structure, so some changes may be breaking for
-some users.
+Most changes since Anjay 2.2.5 are minor, so no major changes in code flow are
+required when porting from Anjay 2.2. However, there has been a significant
+refactor in project structure, so some changes may be breaking for some users.
+
+Change to minimum CMake version
+-------------------------------
+
+Declared minimum CMake version necessary for CMake-based compilation, as well as
+for importing the installed library through ``find_package()``, is now 3.6. If
+you're using some Linux distribution that only has an older version in its
+repositories (notably, Ubuntu 16.04), we recommend using one of the following
+install methods instead:
+
+* `Kitware APT Repository for Debian and Ubuntu <https://apt.kitware.com/>`_
+* `Snap Store <https://snapcraft.io/cmake>`_ (``snap install cmake``)
+* `Python Package Index <https://pypi.org/project/cmake/>`_
+  (``pip install cmake``)
+
+This change does not affect users who compile the library using some alternative
+approach, without using the provided CMake scripts.
 
 Changes in Anjay proper
 -----------------------
@@ -153,10 +169,10 @@ component:
 Changes in avs_commons
 ----------------------
 
-``avs_commons`` 4.1 contains a number of breaking changes compared to version
-4.0 used by Anjay 2.2. If you are using any of the ``avs_commons`` APIs directly
-(which is especially likely for e.g. the logging API and querying sockets in the
-event loop), you will need to adjust your code.
+``avs_commons`` 4.1 and later contain a number of breaking changes compared to
+version 4.0 used by Anjay 2.2. If you are using any of the ``avs_commons`` APIs
+directly (which is especially likely for e.g. the logging API and querying
+sockets in the event loop), you will need to adjust your code.
 
 avs_commons header rename
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -460,7 +476,7 @@ Here is a summary of renames:
 Changes to public configuration macros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``avs_commons`` 4.1 introduces a new header file,
+``avs_commons`` 4.1 introduced a new header file,
 ``avsystem/commons/avs_commons_config.h``, that encapsulates all its
 compile-time configuration, allowing compiling the library without the use of
 CMake, among other improvements.
@@ -504,15 +520,24 @@ adjustments.
     the CMake variable names have not changed - the renames affect **only** the
     C preprocessor.
 
-Refactor of avs_net_validate_ip_address()
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Refactor of avs_net_validate_ip_address() and avs_net_local_address_for_target_host()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``avs_net_validate_ip_address()`` is now no longer used by Anjay or
 ``avs_commons``. It was previously necessary to implement it as part of the
-socket implementation. This is no longer required, and in fact, keeping that
-implementation might lead to problems - for compatibility, the function has been
-reimplemented as a ``static inline`` function that wraps
-``avs_net_addrinfo_*()`` APIs.
+socket implementation. This is no longer required. For compatibility, the
+function has been reimplemented as a ``static inline`` function that wraps
+``avs_net_addrinfo_*()`` APIs. Please remove your version of
+``avs_net_validate_ip_address()`` from your socket implementation if you have
+one, as having two alternative variants may lead to conflicts.
+
+Since Anjay 2.9 and ``avs_commons`` 4.6,
+``avs_net_local_address_for_target_host()`` underwent a similar refactor. It was
+previously a function to be optionally implemented as part of the socket
+implementation, but now it is a ``static inline`` function that wraps
+``avs_net_socket_*()`` APIs. Please remove your version of
+``avs_net_local_address_for_target_host()`` from your socket implementation if
+you have one, as having two alternative variants may lead to conflicts.
 
 Changes in component dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -542,8 +567,8 @@ While the new ``avs_coap`` has been used as the CoAP implementation in all
 versions of Anjay 2.x, the old CoAP component of ``avs_commons`` remained in the
 repository in the 4.0 branch of ``avs_commons``.
 
-This has been removed in version 4.1 that Anjay 2.3 uses. If your code used the
-raw CoAP APIs of that component, you will need to migrate to either the new
+This has been removed in ``avs_commons`` 4.1 and Anjay 2.3. If your code used
+the raw CoAP APIs of that component, you will need to migrate to either the new
 ``avs_coap`` library or an entirely different CoAP implementation.
 
 .. note::

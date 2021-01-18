@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -694,8 +694,8 @@ bool anjay_transport_is_offline(anjay_t *anjay,
  * User code shall still interface normally with the library, even if all the
  * transports are in the offline state. This include regular calls to
  * @ref anjay_sched_run. Notifications (as reported using
- * @ref anjay_notify_changed and @ref anjay_notify_instance_changed) continue to
- * be tracked, and may be sent after reconnecting, depending on values of the
+ * @ref anjay_notify_changed and @ref anjay_notify_instances_changed) continue
+ * to be tracked, and may be sent after reconnecting, depending on values of the
  * "Notification Storing When Disabled or Offline" resource.
  *
  * @param anjay         Anjay object to operate on.

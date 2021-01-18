@@ -1,4 +1,4 @@
-# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
                      "ANJAY_SPHINX_DOC_CONF_DIR=${ANJAY_SPHINX_DOC_CONF_DIR}"
                      "ANJAY_SPHINX_DOC_ROOT_DIR=${ANJAY_SPHINX_DOC_ROOT_DIR}"
                      "CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
-                     "SNIPPET_SOURCE_MD5FILE=${ANJAY_SOURCE_DIR}/examples/test_examples.md5")
+                     "SNIPPET_SOURCE_MD5FILE=${CMAKE_CURRENT_SOURCE_DIR}/sphinx/snippet_sources.md5")
 
         add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc_.*$$'")
         add_dependencies(anjay_unit_check doc_check)

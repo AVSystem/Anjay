@@ -1,4 +1,4 @@
-# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ set(SOURCES
     demo_args.c
     demo_cmds.c
     demo_utils.c
-    firmware_update.c
     iosched.c
     objects/apn_conn_profile.c
     objects/binary_app_data_container.c
@@ -36,6 +35,10 @@ set(SOURCES
     objects/portfolio.c
     objects/test.c)
 
+if (${ANJAY_WITH_MODULE_FW_UPDATE})
+    set(SOURCES ${SOURCES} firmware_update.c)
+endif()
+
 if(NOT WIN32)
     set(SOURCES ${SOURCES} objects/ip_ping.c)
 endif()
@@ -45,9 +48,12 @@ set(HEADERS
     demo_args.h
     demo_cmds.h
     demo_utils.h
-    firmware_update.h
     iosched.h
     objects.h)
+
+if (${ANJAY_WITH_MODULE_FW_UPDATE})
+    set(HEADERS ${HEADERS} firmware_update.h)
+endif()
 
 set(ALL_SOURCES ${SOURCES} ${HEADERS})
 

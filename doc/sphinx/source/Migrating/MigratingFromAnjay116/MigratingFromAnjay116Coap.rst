@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ Replacement of CoAP implementation
 .. highlight:: c
 
 Anjay 2.x uses a completely new CoAP implementation called ``avs_coap``. The old
-CoAP component of ``avs_commons`` has been removed in ``avs_commons`` 4.1 that
-Anjay 2.3 uses. If your code used the raw CoAP APIs of that component, you will
+CoAP component of ``avs_commons`` has been removed in since ``avs_commons`` 4.1
+and Anjay 2.3. If your code used the raw CoAP APIs of that component, you will
 need to migrate to either the new ``avs_coap`` library or an entirely different
 CoAP implementation.
 

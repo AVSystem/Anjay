@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -224,10 +224,9 @@ int _anjay_output_ctx_destroy_and_process_result(
     } else if (result) {
         return result;
     } else {
-        anjay_log(
-                ERROR,
-                _("unable to determine resource type: anjay_ret_* not ") _(
-                        "called during successful resource_read handler call"));
+        anjay_log(ERROR,
+                  _("unable to determine resource type: anjay_ret_* not called "
+                    "during successful resource_read handler call"));
         return ANJAY_ERR_INTERNAL;
     }
 }

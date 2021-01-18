@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,9 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {
+#ifndef ANJAY_WITHOUT_IP_STICKINESS
     avs_net_resolved_endpoint_t preferred_endpoint;
+#endif // ANJAY_WITHOUT_IP_STICKINESS
     char dtls_session_buffer[ANJAY_DTLS_SESSION_BUFFER_SIZE];
     char last_local_port[ANJAY_MAX_URL_PORT_SIZE];
 } anjay_server_connection_nontransient_state_t;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,8 +201,10 @@ recreate_socket(anjay_t *anjay,
     assert(!_anjay_connection_internal_get_socket(connection));
     socket_config.backend_configuration = anjay->socket_config;
     socket_config.backend_configuration.reuse_addr = 1;
+#ifndef ANJAY_WITHOUT_IP_STICKINESS
     socket_config.backend_configuration.preferred_endpoint =
             &connection->nontransient_state.preferred_endpoint;
+#endif // ANJAY_WITHOUT_IP_STICKINESS
     socket_config.version = anjay->dtls_version;
     socket_config.session_resumption_buffer =
             connection->nontransient_state.dtls_session_buffer;

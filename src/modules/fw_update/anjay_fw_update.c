@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,6 @@
 #include <anjay_init.h>
 
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
-
-#    ifndef ANJAY_WITH_DOWNLOADER
-#        error "ANJAY_WITH_MODULE_FW_UPDATE requires ANJAY_WITH_DOWNLOADER to be enabled"
-#    endif // ANJAY_WITH_DOWNLOADER
 
 #    include <string.h>
 

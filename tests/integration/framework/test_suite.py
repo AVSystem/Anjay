@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,14 +56,14 @@ def read_some_with_timeout(fd, timeout_s):
     import select
     deadline = time.time() + timeout_s
     while True:
-        partial_timeout = deadline - time.time()
-        if partial_timeout < 0:
+        if timeout_s < 0:
             return b''
-        r, w, x = select.select([fd], [], [fd], partial_timeout)
+        r, w, x = select.select([fd], [], [fd], timeout_s)
         if len(r) > 0 or len(x) > 0:
             buf = fd.read(65536)
             if buf is not None and len(buf) > 0:
                 return buf
+        timeout_s = deadline - time.time()
 
 
 def ensure_dir(dir_path):
@@ -370,16 +370,17 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 if second_to_last_lf >= 0:
                     del out[0:second_to_last_lf + 1]
 
-            partial_timeout = min(deadline - time.time(), 1.0)
-            if partial_timeout < 0:
-                return None
+            if self.demo_process.poll() is not None:
+                partial_timeout = 0
+            else:
+                partial_timeout = min(max(deadline - time.time(), 0.0), 1.0)
+
             out += read_some_with_timeout(self.demo_process.log_file, partial_timeout)
 
             match = re.search(regex, out)
             if match:
                 return match
-
-            if self.demo_process.poll() is not None:
+            elif partial_timeout <= 0.0:
                 return None
 
     def _get_valgrind_args(self):
@@ -420,10 +421,11 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         import shlex
         console_log_path = self.logs_path(LogType.Console)
-        console = open(console_log_path, 'w')
-        console.write(
-            (' '.join(map(shlex.quote, demo_args)) + '\n\n'))
+        console = open(console_log_path, 'ab')
+        console.write((' '.join(map(shlex.quote, demo_args)) + '\n\n').encode('utf-8'))
         console.flush()
+
+        log_file_pos = console.tell()
 
         logging.debug('starting demo: %s', ' '.join(
             '"%s"' % arg for arg in demo_args))
@@ -437,6 +439,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.demo_process.log_file_path = console_log_path
         self.demo_process.log_file = open(
             console_log_path, mode='rb', buffering=0)
+        self.demo_process.log_file.seek(log_file_pos)
 
         if timeout_s is not None:
             # wait until demo process starts
@@ -765,14 +768,14 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         # wait until all packets are written
         last_size = -1
-        size = 0
+        size = -1
 
         MAX_DUMCAP_SHUTDOWN_WAIT_S = 30
         deadline = time.time() + MAX_DUMCAP_SHUTDOWN_WAIT_S
         while time.time() < deadline:
             if size != last_size:
                 break
-            time.sleep(0.5)
+            time.sleep(0.1)
             last_size = size
             size = os.stat(self.dumpcap_file_path).st_size
         else:
