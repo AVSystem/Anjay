@@ -221,6 +221,12 @@ class StringOption(Option):
         return 'coap.Option.%s(%s)' % (opt_name, repr(self.content_to_str()))
 
 
+class OpaqueOption(Option):
+    def __repr__(self):
+        opt_name = Option.get_name_by_number(self.number)
+        return 'coap.Option.%s(%s)' % (opt_name, repr(self.content_to_str()))
+
+
 class ContentFormatOption(IntOption):
     @staticmethod
     def powercmd_complete(text):
@@ -290,6 +296,44 @@ class BlockOption(IntOption):
                                                            self.has_more(),
                                                            self.block_size())
 
+class OscoreOption(OpaqueOption):
+    def __init__(self, number, content):
+        super().__init__(number, content)
+
+        piv_len = self.content[0] & int('111', 2)
+        has_kid = bool(self.content[0] & int('1000', 2))
+        has_kid_ctx = bool(self.content[0] & int('10000', 2))
+
+        if piv_len == 0:
+            self.piv = None
+        else:
+            self.piv = int.from_bytes(self.content[1:piv_len], byteorder='big', signed=False)
+
+        kid_ctx_len = 0
+        if has_kid_ctx:
+            kid_ctx_len = self.content[piv_len+1]
+            self.kid_ctx = self.content[piv_len+2:piv_len+2+kid_ctx_len]
+        else:
+            self.kid_ctx = None
+
+        if has_kid:
+            self.kid = self.content[(1 + piv_len + (1 + kid_ctx_len) if has_kid_ctx else 0):]
+        else:
+            self.kid = None
+
+    def content_to_str(self):
+        return 'piv=%d, kid=%a, kid_ctx=%a' \
+            % (self.piv, self.kid.hex() if self.kid else None, self.kid_ctx.hex() if self.kid_ctx else None)
+
+    def key_id(self):
+        return self.kid
+
+    def id_ctx(self):
+        return self.kid_ctx
+
+    def partial_iv(self):
+        return self.piv
+
 
 def is_power_of_2(num):
     return ((num & (num - 1)) == 0) and num > 0
@@ -330,7 +374,7 @@ Option.SIZE1           = OptionConstructor(IntOption, 60, lambda int32: struct.p
 Option.BLOCK1          = OptionConstructor(BlockOption, 27, pack_block)
 Option.BLOCK2          = OptionConstructor(BlockOption, 23, pack_block)
 
-Option.OSCORE          = OptionConstructor(StringOption, 9, lambda string: bytes(string, 'ascii'))
+Option.OSCORE          = OptionConstructor(OscoreOption, 9, lambda data: data)
 
 
 def pack_content_format(fmt: ContentFormat):

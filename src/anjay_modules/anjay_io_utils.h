@@ -32,6 +32,16 @@ typedef int anjay_input_ctx_constructor_t(anjay_input_ctx_t **out,
                                           avs_stream_t **stream_ptr,
                                           const anjay_uri_path_t *request_uri);
 
+anjay_input_ctx_constructor_t _anjay_input_opaque_create;
+
+#ifndef ANJAY_WITHOUT_PLAINTEXT
+anjay_input_ctx_constructor_t _anjay_input_text_create;
+#endif // ANJAY_WITHOUT_PLAINTEXT
+
+#ifndef ANJAY_WITHOUT_TLV
+anjay_input_ctx_constructor_t _anjay_input_tlv_create;
+#endif // ANJAY_WITHOUT_TLV
+
 int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr);
 
 /**

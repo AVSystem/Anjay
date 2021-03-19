@@ -326,3 +326,41 @@ size_t _avs_coap_option_serialize(uint8_t *buffer,
             opt_data_size);
     return header_bytes_written + opt_data_size;
 }
+
+size_t _avs_coap_get_opt_header_size(size_t opt_number_delta,
+                                     size_t opt_data_size) {
+    assert(opt_number_delta <= UINT16_MAX);
+    assert(opt_data_size <= UINT16_MAX);
+
+    size_t header_size = 1;
+
+    if (opt_number_delta >= _AVS_COAP_EXT_U16_BASE) {
+        header_size += 2;
+    } else if (opt_number_delta >= _AVS_COAP_EXT_U8_BASE) {
+        header_size += 1;
+    }
+
+    if (opt_data_size >= _AVS_COAP_EXT_U16_BASE) {
+        header_size += 2;
+    } else if (opt_data_size >= _AVS_COAP_EXT_U8_BASE) {
+        header_size += 1;
+    }
+
+    return header_size;
+}
+
+const char *
+_avs_coap_option_block_string(avs_coap_option_block_string_buf_t *buf,
+                              const avs_coap_option_block_t *block) {
+    assert(buf);
+    assert(block);
+    int result = avs_simple_snprintf(buf->str, sizeof(buf->str),
+                                     "BLOCK%d(seq_num %" PRIu32
+                                     ", size %" PRIu16 ", more %d)",
+                                     block->type == AVS_COAP_BLOCK1 ? 1 : 2,
+                                     block->seq_num, block->size,
+                                     (int) block->has_more);
+    assert(result >= 0);
+    (void) result;
+    return buf->str;
+}

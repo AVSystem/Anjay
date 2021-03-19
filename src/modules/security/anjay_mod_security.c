@@ -559,6 +559,11 @@ void anjay_security_object_purge(anjay_t *anjay) {
             _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
     sec_repr_t *repr = _anjay_sec_get(sec_obj);
 
+    if (!repr) {
+        security_log(ERROR, _("Security object is not registered"));
+        return;
+    }
+
     security_purge(repr);
 
     if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
@@ -571,6 +576,12 @@ bool anjay_security_object_is_modified(anjay_t *anjay) {
 
     sec_repr_t *repr =
             _anjay_sec_get(_anjay_dm_find_object_by_oid(anjay, SECURITY.oid));
+
+    if (!repr) {
+        security_log(ERROR, _("Security object is not registered"));
+        return false;
+    }
+
     return repr->in_transaction ? repr->saved_modified_since_persist
                                 : repr->modified_since_persist;
 }

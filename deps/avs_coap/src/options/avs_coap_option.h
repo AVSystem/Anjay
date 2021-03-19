@@ -294,41 +294,21 @@ static inline void _avs_coap_option_set_short_length(avs_coap_option_t *opt,
                    _AVS_COAP_OPTION_LENGTH_SHIFT, length);
 }
 
-static inline size_t _avs_coap_get_opt_header_size(size_t opt_number_delta,
-                                                   size_t opt_data_size) {
-    assert(opt_number_delta <= UINT16_MAX);
-    assert(opt_data_size <= UINT16_MAX);
+size_t _avs_coap_get_opt_header_size(size_t opt_number_delta,
+                                     size_t opt_data_size);
 
-    size_t header_size = 1;
+typedef struct {
+    char str[48];
+} avs_coap_option_block_string_buf_t;
 
-    if (opt_number_delta >= _AVS_COAP_EXT_U16_BASE) {
-        header_size += 2;
-    } else if (opt_number_delta >= _AVS_COAP_EXT_U8_BASE) {
-        header_size += 1;
-    }
+AVS_STATIC_ASSERT(
+        sizeof(avs_coap_option_block_string_buf_t)
+                >= sizeof("BLOCK1(seq_num 4294967295, size 65535, more 1)"),
+        avs_coap_option_block_string_buf_size_enough);
 
-    if (opt_data_size >= _AVS_COAP_EXT_U16_BASE) {
-        header_size += 2;
-    } else if (opt_data_size >= _AVS_COAP_EXT_U8_BASE) {
-        header_size += 1;
-    }
-
-    return header_size;
-}
-
-static inline const char *_avs_coap_option_block_string(
-        char *buf, size_t size, const avs_coap_option_block_t *block) {
-    assert(size >= sizeof("BLOCK1(seq_num 4294967295, size 65535, more 1)"));
-
-    snprintf(buf, size,
-             "BLOCK%d(seq_num %" PRIu32 ", size %" PRIu16 ", more %d)",
-             block->type == AVS_COAP_BLOCK1 ? 1 : 2, block->seq_num,
-             block->size, (int) block->has_more);
-    return buf;
-}
-
-#define _AVS_COAP_OPTION_BLOCK_STRING(Opt) \
-    _avs_coap_option_block_string(&(char[48]){ 0 }[0], 48, (Opt))
+const char *
+_avs_coap_option_block_string(avs_coap_option_block_string_buf_t *buf,
+                              const avs_coap_option_block_t *block);
 
 VISIBILITY_PRIVATE_HEADER_END
 

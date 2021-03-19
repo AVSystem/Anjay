@@ -105,14 +105,14 @@ int Socket::_recv(void *self,
 
     if (timeout_ms == 0) {
         timeout_ms = UINT32_MAX;
+    } else if (timeout_ms == UINT32_MAX) {
+        --timeout_ms;
     }
 
     int bytes_received = 0;
     do {
         try {
-            if (timeout_ms == UINT32_MAX) {
-                call_method<void>(socket->py_socket_, "settimeout", py::none());
-            } else {
+            if (timeout_ms != UINT32_MAX) {
                 call_method<void>(socket->py_socket_, "settimeout",
                                   timeout_ms / 1000.0);
             }
@@ -413,6 +413,7 @@ void Socket::settimeout(py::object timeout_s_or_none) {
         timeout_ms = (uint32_t) (py::cast<double>(timeout_s_or_none) * 1000.0);
     }
 
+    call_method<void>(py_socket_, "settimeout", timeout_s_or_none);
     mbedtls_ssl_conf_read_timeout(&config_, timeout_ms);
 }
 

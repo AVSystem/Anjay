@@ -1,0 +1,8 @@
+{
+    "": [
+        "avs_coap_init\\.h",
+        "avs_coap_x_log_config\\.h",
+        "avsystem/coap/[^.]*\\.h",
+        "avsystem/commons/[^.]*\\.h"
+    ]
+}

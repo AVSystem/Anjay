@@ -39,10 +39,9 @@ _anjay_servers_find_active_primary_connection(anjay_t *anjay,
                                               anjay_ssid_t ssid);
 
 /**
- * @returns Amount of time from now until the server registration expires.
+ * @returns Point in time at which the server registration expires.
  */
-avs_time_duration_t
-_anjay_register_time_remaining(const anjay_registration_info_t *info);
+avs_time_real_t _anjay_registration_expire_time(anjay_server_info_t *server);
 
 bool _anjay_server_registration_expired(anjay_server_info_t *server);
 

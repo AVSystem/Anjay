@@ -50,14 +50,14 @@ typedef AVS_LIST(anjay_notify_queue_object_entry_t) anjay_notify_queue_t;
  * Object require knowing which server (if any) performed the changes.
  * @ref _anjay_dm_current_ssid will be called to determine it.
  */
-int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue);
+int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t *queue_ptr);
 
 /**
  * Works like @ref _anjay_notify_perform but doesn't call
  * server_modified_notify().
  */
 int _anjay_notify_perform_without_servers(anjay_t *anjay,
-                                          anjay_notify_queue_t queue);
+                                          anjay_notify_queue_t *queue_ptr);
 
 /**
  * Calls @ref _anjay_notify_perform and @ref _anjay_notify_clear_queue

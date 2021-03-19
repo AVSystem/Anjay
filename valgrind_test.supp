@@ -85,3 +85,10 @@
    fun:ENGINE_ctrl_cmd
    fun:_avs_crypto_openssl_engine_load_certs
 }
+{
+   engine-new
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:ENGINE_new
+}

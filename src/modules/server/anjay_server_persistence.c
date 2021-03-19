@@ -58,16 +58,22 @@ typedef enum {
      * - 22: Preferred Transport
      * - 23: Mute Send
      */
-    PERSISTENCE_VERSION_2
+    PERSISTENCE_VERSION_2,
+
+    /**
+     * New resource: Trigger
+     */
+    PERSISTENCE_VERSION_3
 } server_persistence_version_t;
 
 typedef char magic_t[4];
 static const magic_t MAGIC_V0 = { 'S', 'R', 'V', PERSISTENCE_VERSION_0 };
 static const magic_t MAGIC_V1 = { 'S', 'R', 'V', PERSISTENCE_VERSION_1 };
 static const magic_t MAGIC_V2 = { 'S', 'R', 'V', PERSISTENCE_VERSION_2 };
+static const magic_t MAGIC_V3 = { 'S', 'R', 'V', PERSISTENCE_VERSION_3 };
 
-static avs_error_t handle_legacy_sized_fields(avs_persistence_context_t *ctx,
-                                              server_instance_t *element) {
+static avs_error_t handle_v0_v1_sized_fields(avs_persistence_context_t *ctx,
+                                             server_instance_t *element) {
     assert(avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE);
     avs_error_t err;
     (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->iid)))
@@ -108,8 +114,9 @@ static avs_error_t handle_legacy_sized_fields(avs_persistence_context_t *ctx,
     return err;
 }
 
-static avs_error_t handle_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
-                                               server_instance_t *element) {
+static avs_error_t
+handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
+                               server_instance_t *element) {
     (void) element;
     struct {
         bool has_last_bootstrapped_timestamp;
@@ -184,8 +191,8 @@ static avs_error_t handle_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
 #        undef element
 }
 
-static avs_error_t handle_sized_fields(avs_persistence_context_t *ctx,
-                                       server_instance_t *element) {
+static avs_error_t handle_v2_sized_fields(avs_persistence_context_t *ctx,
+                                          server_instance_t *element) {
     avs_error_t err;
     (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->iid)))
             || avs_is_err((err = avs_persistence_bool(ctx, &element->has_ssid)))
@@ -226,26 +233,37 @@ static avs_error_t handle_sized_fields(avs_persistence_context_t *ctx,
                                    )))
             || avs_is_err((err = avs_persistence_bool(
                                    ctx, &element->notification_storing)))
-            || avs_is_err((err = handle_lwm2m11_sized_fields(ctx, element))));
+            || avs_is_err(
+                       (err = handle_v2_lwm2m11_sized_fields(ctx, element))));
     return err;
 }
 
-static avs_error_t handle_binding_mode(avs_persistence_context_t *ctx,
-                                       server_instance_t *element) {
-    avs_error_t err = avs_persistence_bytes(ctx, element->binding,
-                                            sizeof(element->binding));
+static avs_error_t handle_v3_sized_fields(avs_persistence_context_t *ctx,
+                                          server_instance_t *element) {
+    avs_error_t err;
+    (void) (avs_is_err((err = handle_v2_sized_fields(ctx, element)))
+            || avs_is_err((err = avs_persistence_bool(ctx, &(bool) { false })))
+            || avs_is_err(
+                       (err = avs_persistence_bool(ctx, &(bool) { false }))));
+    return err;
+}
+
+static avs_error_t handle_v1_v2_v3_binding_mode(avs_persistence_context_t *ctx,
+                                                server_instance_t *element) {
+    avs_error_t err = avs_persistence_bytes(ctx, element->binding.data,
+                                            sizeof(element->binding.data));
     if (avs_is_err(err)) {
         return err;
     }
-    if (!memchr(element->binding, '\0', sizeof(element->binding))
-            || !anjay_binding_mode_valid(element->binding)) {
+    if (!memchr(element->binding.data, '\0', sizeof(element->binding.data))
+            || !anjay_binding_mode_valid(element->binding.data)) {
         return avs_errno(AVS_EBADMSG);
     }
     return AVS_OK;
 }
 
-static avs_error_t restore_legacy_binding_mode(avs_persistence_context_t *ctx,
-                                               server_instance_t *element) {
+static avs_error_t restore_v0_binding_mode(avs_persistence_context_t *ctx,
+                                           server_instance_t *element) {
     assert(avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE);
     uint32_t binding;
     avs_error_t err = avs_persistence_u32(ctx, &binding);
@@ -254,36 +272,36 @@ static avs_error_t restore_legacy_binding_mode(avs_persistence_context_t *ctx,
     }
 
     enum {
-        LEGACY_BINDING_NONE,
-        LEGACY_BINDING_U,
-        LEGACY_BINDING_UQ,
-        LEGACY_BINDING_S,
-        LEGACY_BINDING_SQ,
-        LEGACY_BINDING_US,
-        LEGACY_BINDING_UQS
+        V0_BINDING_NONE,
+        V0_BINDING_U,
+        V0_BINDING_UQ,
+        V0_BINDING_S,
+        V0_BINDING_SQ,
+        V0_BINDING_US,
+        V0_BINDING_UQS
     };
 
     const char *binding_str;
     switch (binding) {
-    case LEGACY_BINDING_NONE:
+    case V0_BINDING_NONE:
         binding_str = "";
         break;
-    case LEGACY_BINDING_U:
+    case V0_BINDING_U:
         binding_str = "U";
         break;
-    case LEGACY_BINDING_UQ:
+    case V0_BINDING_UQ:
         binding_str = "UQ";
         break;
-    case LEGACY_BINDING_S:
+    case V0_BINDING_S:
         binding_str = "S";
         break;
-    case LEGACY_BINDING_SQ:
+    case V0_BINDING_SQ:
         binding_str = "SQ";
         break;
-    case LEGACY_BINDING_US:
+    case V0_BINDING_US:
         binding_str = "US";
         break;
-    case LEGACY_BINDING_UQS:
+    case V0_BINDING_UQS:
         binding_str = "UQS";
         break;
     default:
@@ -293,8 +311,9 @@ static avs_error_t restore_legacy_binding_mode(avs_persistence_context_t *ctx,
         break;
     }
     if (avs_is_ok(err)
-            && avs_simple_snprintf(element->binding, sizeof(element->binding),
-                                   "%s", binding_str)
+            && avs_simple_snprintf(element->binding.data,
+                                   sizeof(element->binding.data), "%s",
+                                   binding_str)
                            < 0) {
         persistence_log(WARNING, _("Could not restore binding: ") "%s",
                         binding_str);
@@ -309,7 +328,7 @@ static avs_error_t server_instance_persistence_handler(
     server_persistence_version_t *version =
             (server_persistence_version_t *) version_;
     AVS_ASSERT(avs_persistence_direction(ctx) != AVS_PERSISTENCE_STORE
-                       || *version == PERSISTENCE_VERSION_2,
+                       || *version == PERSISTENCE_VERSION_3,
                "persistence storing is impossible in legacy mode");
 
     // Ensure every field initialized regardless of persistence version
@@ -320,17 +339,23 @@ static avs_error_t server_instance_persistence_handler(
     avs_error_t err;
     switch (*version) {
     case PERSISTENCE_VERSION_0:
-        (void) (avs_is_err((err = handle_legacy_sized_fields(ctx, element)))
-                || avs_is_err(
-                           (err = restore_legacy_binding_mode(ctx, element))));
+        (void) (avs_is_err((err = handle_v0_v1_sized_fields(ctx, element)))
+                || avs_is_err((err = restore_v0_binding_mode(ctx, element))));
         break;
     case PERSISTENCE_VERSION_1:
-        (void) (avs_is_err((err = handle_legacy_sized_fields(ctx, element)))
-                || avs_is_err((err = handle_binding_mode(ctx, element))));
+        (void) (avs_is_err((err = handle_v0_v1_sized_fields(ctx, element)))
+                || avs_is_err(
+                           (err = handle_v1_v2_v3_binding_mode(ctx, element))));
         break;
     case PERSISTENCE_VERSION_2:
-        (void) (avs_is_err((err = handle_sized_fields(ctx, element)))
-                || avs_is_err((err = handle_binding_mode(ctx, element))));
+        (void) (avs_is_err((err = handle_v2_sized_fields(ctx, element)))
+                || avs_is_err(
+                           (err = handle_v1_v2_v3_binding_mode(ctx, element))));
+        break;
+    case PERSISTENCE_VERSION_3:
+        (void) (avs_is_err((err = handle_v3_sized_fields(ctx, element)))
+                || avs_is_err(
+                           (err = handle_v1_v2_v3_binding_mode(ctx, element))));
         break;
     default:
         AVS_UNREACHABLE("invalid enum value");
@@ -352,12 +377,12 @@ avs_error_t anjay_server_object_persist(anjay_t *anjay,
             avs_persistence_store_context_create(out_stream);
 
     avs_error_t err =
-            avs_persistence_bytes(&persist_ctx, (void *) (intptr_t) MAGIC_V2,
-                                  sizeof(MAGIC_V2));
+            avs_persistence_bytes(&persist_ctx, (void *) (intptr_t) MAGIC_V3,
+                                  sizeof(MAGIC_V3));
     if (avs_is_err(err)) {
         return err;
     }
-    server_persistence_version_t persistence_version = PERSISTENCE_VERSION_2;
+    server_persistence_version_t persistence_version = PERSISTENCE_VERSION_3;
     err = avs_persistence_list(
             &persist_ctx,
             (AVS_LIST(void) *) (repr->in_transaction ? &repr->saved_instances
@@ -383,6 +408,10 @@ static int check_magic_header(magic_t magic_header,
     }
     if (!memcmp(magic_header, MAGIC_V2, sizeof(magic_t))) {
         *out_version = PERSISTENCE_VERSION_2;
+        return 0;
+    }
+    if (!memcmp(magic_header, MAGIC_V3, sizeof(magic_t))) {
+        *out_version = PERSISTENCE_VERSION_3;
         return 0;
     }
     return -1;

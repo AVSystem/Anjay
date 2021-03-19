@@ -21,11 +21,11 @@
 #define ANJAY_SERVERS_INTERNALS
 
 #include "../anjay_servers_inactive.h"
+#include "../anjay_servers_reload.h"
 #include "../dm/anjay_query.h"
 
 #include "anjay_activate.h"
 #include "anjay_register.h"
-#include "anjay_reload.h"
 #include "anjay_server_connections.h"
 #include "anjay_servers_internal.h"
 
@@ -281,6 +281,8 @@ bool _anjay_socket_transport_included(anjay_transport_set_t set,
         return set.udp;
     case ANJAY_SOCKET_TRANSPORT_TCP:
         return set.tcp;
+    case ANJAY_SOCKET_TRANSPORT_INVALID:
+        break;
     }
     AVS_UNREACHABLE("Invalid transport");
     return false;

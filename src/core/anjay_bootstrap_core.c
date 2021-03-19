@@ -547,7 +547,7 @@ static int bootstrap_finish_impl(anjay_t *anjay, int flags) {
         return retval;
     }
     if ((retval = _anjay_notify_perform_without_servers(
-                 anjay, anjay->bootstrap.notification_queue))) {
+                 anjay, &anjay->bootstrap.notification_queue))) {
         anjay_log(WARNING,
                   _("Could not post-process data model after bootstrap"));
     } else {

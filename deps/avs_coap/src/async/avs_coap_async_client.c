@@ -602,18 +602,26 @@ handle_final_response(avs_coap_ctx_t *ctx,
         if (request_off != response_off) {
             // We asked the server for one block of data, but it returned
             // another one. This is clearly a server-side error.
+            avs_coap_option_block_string_buf_t request_block2_str;
+            avs_coap_option_block_string_buf_t response_block2_str;
             LOG(WARNING, _("expected ") "%s" _(", got ") "%s",
-                _AVS_COAP_OPTION_BLOCK_STRING(&request_block2),
-                _AVS_COAP_OPTION_BLOCK_STRING(&response_block2));
+                _avs_coap_option_block_string(&request_block2_str,
+                                              &request_block2),
+                _avs_coap_option_block_string(&response_block2_str,
+                                              &response_block2));
             return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
         }
 
         // TODO T2123: check that all options other than BLOCK2 are identical
         // across responses
 
+#    ifdef AVS_LOG_WITH_TRACE
+        avs_coap_option_block_string_buf_t response_block2_str;
         LOG(TRACE, _("exchange ") "%s" _(": ") "%s",
             AVS_UINT64_AS_STRING((**exchange_ptr_ptr)->id.value),
-            _AVS_COAP_OPTION_BLOCK_STRING(&response_block2));
+            _avs_coap_option_block_string(&response_block2_str,
+                                          &response_block2));
+#    endif // AVS_LOG_WITH_TRACE
 
         if (response_block2.has_more) {
             call_partial_response_handler(ctx, exchange_ptr_ptr, response);
@@ -650,8 +658,10 @@ handle_final_response(avs_coap_ctx_t *ctx,
         // with a non-BLOCK response. This most likely indicates a server
         // error.
         if (request_has_block2) {
+            avs_coap_option_block_string_buf_t request_block2_str;
             LOG(DEBUG, _("expected ") "%s" _(", but BLOCK2 option not found"),
-                _AVS_COAP_OPTION_BLOCK_STRING(&request_block2));
+                _avs_coap_option_block_string(&request_block2_str,
+                                              &request_block2));
             return failure_state(_avs_coap_err(AVS_COAP_ERR_MALFORMED_OPTIONS));
         }
 

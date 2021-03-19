@@ -90,6 +90,10 @@ typedef struct {
      * CoAP transport layer type (UDP/TCP/SMS etc.). Initialized during socket
      * refresh, Used to select an appropriate connection_def and CoAP context
      * type.
+     *
+     * NOTE: At creation time, it is initialized to a special value of
+     * ANJAY_SOCKET_TRANSPORT_INVALID to avoid unconditionally treating newly
+     * created connections as UDP.
      */
     anjay_socket_transport_t transport;
 
@@ -260,12 +264,6 @@ typedef struct {
  *                          will take ownership of data allocated inside that
  *                          object.
  *
- * @param trigger_requested True if SMS Trigger connection is supposed to be
- *                          used in addition to the primary connection. In the
- *                          current version, the value of this argument will be
- *                          ignored if the primary connection uses SMS
- *                          transport.
- *
  * @param sni               Server Name Identification value to be used for
  *                          certificate validation during TLS handshake.
  */
@@ -273,7 +271,6 @@ void _anjay_server_connections_refresh(
         anjay_server_info_t *server,
         anjay_iid_t security_iid,
         avs_url_t **move_uri,
-        bool trigger_requested,
         const anjay_server_name_indication_t *sni);
 
 bool _anjay_socket_transport_supported(anjay_t *anjay,

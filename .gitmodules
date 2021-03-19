@@ -1,6 +1,3 @@
-[submodule "deps/avs_commons"]
-	path = deps/avs_commons
-	url = https://github.com/AVSystem/avs_commons
 [submodule "tests/integration/framework/nsh-lwm2m/pymbedtls/src/pybind11"]
 	path = tests/integration/framework/nsh-lwm2m/pymbedtls/src/pybind11
 	url = https://github.com/pybind/pybind11.git
@@ -8,3 +5,6 @@
 [submodule "tests/integration/framework/nsh-lwm2m/powercmd"]
 	path = tests/integration/framework/nsh-lwm2m/powercmd
 	url = https://github.com/dextero/powercmd
+[submodule "deps/avs_commons"]
+	path = deps/avs_commons
+	url = https://github.com/AVSystem/avs_commons.git

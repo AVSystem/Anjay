@@ -153,11 +153,6 @@ int _anjay_dm_write_resource(anjay_t *anjay,
                                ANJAY_DM_WRITE_TYPE_REPLACE);
 }
 
-typedef enum {
-    WRITE_INSTANCE_FAIL_ON_UNSUPPORTED,
-    WRITE_INSTANCE_IGNORE_UNSUPPORTED
-} write_instance_hint_t;
-
 /**
  * Writes to instance whose location is determined by the path extracted
  * from Input Context (@p in_ctx).
@@ -167,7 +162,6 @@ static int write_instance(anjay_t *anjay,
                           anjay_iid_t iid,
                           anjay_input_ctx_t *in_ctx,
                           anjay_notify_queue_t *notify_queue,
-                          write_instance_hint_t hint,
                           anjay_dm_write_type_t write_type) {
     int result;
     do {
@@ -189,7 +183,7 @@ static int write_instance(anjay_t *anjay,
         }
         result = write_resource(anjay, obj, in_ctx, notify_queue, write_type);
         if (result == ANJAY_ERR_NOT_FOUND
-                && hint == WRITE_INSTANCE_IGNORE_UNSUPPORTED) {
+                || result == ANJAY_ERR_NOT_IMPLEMENTED) {
             result = 0;
         }
     } while (!result);
@@ -226,8 +220,7 @@ int _anjay_dm_write(anjay_t *anjay,
             return result;
         }
         result = write_instance(anjay, obj, request->uri.ids[ANJAY_ID_IID],
-                                in_ctx, &notify_queue,
-                                WRITE_INSTANCE_FAIL_ON_UNSUPPORTED, write_type);
+                                in_ctx, &notify_queue, write_type);
     } else if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RID)) {
         result = write_resource(anjay, obj, in_ctx, &notify_queue, write_type);
     } else if (_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_RIID)) {
@@ -236,7 +229,7 @@ int _anjay_dm_write(anjay_t *anjay,
         result = ANJAY_ERR_BAD_REQUEST;
     }
     if (!result) {
-        result = _anjay_notify_perform(anjay, notify_queue);
+        result = _anjay_notify_perform(anjay, &notify_queue);
     }
     _anjay_notify_clear_queue(&notify_queue);
     return result;
@@ -246,7 +239,7 @@ int _anjay_dm_write_created_instance(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj,
                                      anjay_iid_t iid,
                                      anjay_input_ctx_t *in_ctx) {
-    return write_instance(
-            anjay, obj, iid, in_ctx, NULL, WRITE_INSTANCE_IGNORE_UNSUPPORTED,
-            _anjay_dm_write_type_from_request_action(ANJAY_ACTION_CREATE));
+    return write_instance(anjay, obj, iid, in_ctx, NULL,
+                          _anjay_dm_write_type_from_request_action(
+                                  ANJAY_ACTION_CREATE));
 }

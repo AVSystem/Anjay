@@ -39,7 +39,7 @@ git clone --recurse-submodules https://github.com/AVSystem/Anjay.git
 Run the following commands **in the MINGW shell**, after navigating to the directory created using Git above:
 
 ``` sh
-cmake -G"MSYS Makefiles" .
+cmake -G"MSYS Makefiles" -DDTLS_BACKEND="mbedtls" .
 make
 ```
 

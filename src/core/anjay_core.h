@@ -87,14 +87,12 @@ struct anjay_struct {
 #ifdef ANJAY_WITH_DOWNLOADER
     anjay_downloader_t downloader;
 #endif // ANJAY_WITH_DOWNLOADER
-#ifdef ANJAY_WITH_ACCESS_CONTROL
-    bool access_control_sync_in_progress;
-#endif // ANJAY_WITH_ACCESS_CONTROL
     bool prefer_hierarchical_formats;
 #ifdef ANJAY_WITH_NET_STATS
     closed_connections_stats_t closed_connections_stats;
 #endif // ANJAY_WITH_NET_STATS
     bool use_connection_id;
+    avs_ssl_additional_configuration_clb_t *additional_tls_config_clb;
 
     anjay_prng_ctx_t prng_ctx;
 };

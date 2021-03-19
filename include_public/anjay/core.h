@@ -18,7 +18,6 @@
 #define ANJAY_INCLUDE_ANJAY_CORE_H
 
 #include <stdint.h>
-#include <time.h>
 
 #include <avsystem/coap/udp.h>
 
@@ -262,6 +261,13 @@ typedef struct anjay_configuration {
      */
     avs_crypto_prng_ctx_t *prng_ctx;
 
+    /**
+     * Callback that will be executed when initializing TLS and DTLS
+     * connections, that can be used for additional configuration of the TLS
+     * backend.
+     */
+    avs_ssl_additional_configuration_clb_t *additional_tls_config_clb;
+
 } anjay_configuration_t;
 
 /**
@@ -325,7 +331,8 @@ void anjay_delete(anjay_t *anjay);
 AVS_LIST(avs_net_socket_t *const) anjay_get_sockets(anjay_t *anjay);
 
 typedef enum {
-    ANJAY_SOCKET_TRANSPORT_UDP,
+    ANJAY_SOCKET_TRANSPORT_INVALID = -1,
+    ANJAY_SOCKET_TRANSPORT_UDP = 0,
     ANJAY_SOCKET_TRANSPORT_TCP
 } anjay_socket_transport_t;
 
@@ -343,6 +350,9 @@ typedef struct {
 
     /**
      * Transport layer used by <c>socket</c>.
+     *
+     * Guaranteed to not be @ref ANJAY_SOCKET_TRANSPORT_INVALID, that value is
+     * only used internally.
      */
     anjay_socket_transport_t transport;
 
@@ -895,7 +905,7 @@ typedef struct {
  */
 int anjay_security_config_from_dm(anjay_t *anjay,
                                   anjay_security_config_t *out_config,
-                                  const char *raw_url);
+                                  const char *uri);
 
 /**
  * Returns @c false if registration to all LwM2M Servers either succeeded or

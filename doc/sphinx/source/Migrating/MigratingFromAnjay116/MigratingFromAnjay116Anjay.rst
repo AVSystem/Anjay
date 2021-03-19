@@ -992,7 +992,7 @@ The following APIs are affected by the change:
 
         int anjay_security_config_from_dm(anjay_t *anjay,
                                           anjay_security_config_t *out_config,
-                                          const char *raw_url);
+                                          const char *uri);
 
   * The equivalent function is now declared in ``anjay/core.h`` instead of
     ``anjay/fw_update.h``, and has a different signature.

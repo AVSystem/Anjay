@@ -147,7 +147,9 @@ int _anjay_url_parse(const char *raw_url, anjay_url_t *out_parsed_url);
  */
 void _anjay_url_cleanup(anjay_url_t *url);
 
-typedef char anjay_binding_mode_t[8];
+typedef struct {
+    char data[8];
+} anjay_binding_mode_t;
 
 static inline void _anjay_update_ret(int *var, int new_retval) {
     if (!*var) {

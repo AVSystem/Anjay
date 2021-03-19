@@ -137,18 +137,22 @@ static int write_header(avs_stream_t *stream,
     return 0;
 }
 
-static tlv_out_level_id_t root_level(const anjay_uri_path_t *root_path) {
+static int get_root_level(const anjay_uri_path_t *root_path,
+                          tlv_out_level_id_t *out) {
     switch (_anjay_uri_path_length(root_path)) {
     case 1: // object path
-        return TLV_OUT_LEVEL_IID;
+        *out = TLV_OUT_LEVEL_IID;
+        return 0;
     case 2: // instance path
     case 3: // resource path
-        return TLV_OUT_LEVEL_RID;
+        *out = TLV_OUT_LEVEL_RID;
+        return 0;
     case 4: // resource instance path
-        return TLV_OUT_LEVEL_RIID;
+        *out = TLV_OUT_LEVEL_RIID;
+        return 0;
     default:
         AVS_UNREACHABLE("Invalid root path");
-        return (tlv_out_level_id_t) -1;
+        return -1;
     }
 }
 
@@ -156,20 +160,22 @@ static inline tlv_out_level_t *current_level(tlv_out_t *ctx) {
     return &ctx->levels[ctx->level];
 }
 
-static tlv_id_type_t current_level_value_type(tlv_out_t *ctx) {
+static int get_current_level_value_type(tlv_out_t *ctx, tlv_id_type_t *out) {
     AVS_ASSERT(current_level(ctx)->next_id != ANJAY_ID_INVALID,
                "Attempted to serialize value without setting path. This is a "
                "bug in resource reading logic.");
     switch (ctx->level) {
     case TLV_OUT_LEVEL_RID:
-        return TLV_ID_RID;
+        *out = TLV_ID_RID;
+        return 0;
     case TLV_OUT_LEVEL_RIID:
-        return TLV_ID_RIID;
+        *out = TLV_ID_RIID;
+        return 0;
     default:
         AVS_UNREACHABLE("Attempted to serialize value with path set to neither "
                         "Resource nor Resource Instance. This is a bug in "
                         "resource reading logic.");
-        return (tlv_id_type_t) -1;
+        return -1;
     }
 }
 
@@ -255,10 +261,12 @@ static int buffered_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
 static anjay_ret_bytes_ctx_t *
 add_entry(tlv_out_t *ctx, tlv_id_type_t type, size_t length) {
     tlv_out_level_t *out_level = current_level(ctx);
-    if (length > TLV_MAX_LENGTH || out_level->bytes_ctx.bytes_left) {
+    tlv_out_level_id_t root_level;
+    if (length > TLV_MAX_LENGTH || out_level->bytes_ctx.bytes_left
+            || get_root_level(&ctx->root_path, &root_level)) {
         return NULL;
     }
-    if (ctx->level > root_level(&ctx->root_path)) {
+    if (ctx->level > root_level) {
         if ((out_level->bytes_ctx.output.buffer_ptr =
                      add_buffered_entry(ctx, type, length))) {
             out_level->bytes_ctx.vtable = &BUFFERED_BYTES_VTABLE;
@@ -283,8 +291,15 @@ static int tlv_ret_bytes(anjay_output_ctx_t *ctx_,
                          size_t length,
                          anjay_ret_bytes_ctx_t **out_bytes_ctx) {
     tlv_out_t *ctx = (tlv_out_t *) ctx_;
-    *out_bytes_ctx = add_entry(ctx, current_level_value_type(ctx), length);
-    return *out_bytes_ctx ? 0 : -1;
+    tlv_id_type_t current_level_value_type;
+    int result = get_current_level_value_type(ctx, &current_level_value_type);
+    if (!result) {
+        *out_bytes_ctx = add_entry(ctx, current_level_value_type, length);
+        if (!*out_bytes_ctx) {
+            result = -1;
+        }
+    }
+    return result;
 }
 
 static int tlv_ret_string(anjay_output_ctx_t *ctx, const char *value) {
@@ -338,7 +353,12 @@ tlv_ret_objlnk(anjay_output_ctx_t *ctx, anjay_oid_t oid, anjay_iid_t iid) {
 static void tlv_slave_start(tlv_out_t *ctx);
 
 static int tlv_slave_finish(tlv_out_t *ctx) {
-    assert(ctx->level > root_level(&ctx->root_path));
+    tlv_out_level_id_t root_level;
+    if (get_root_level(&ctx->root_path, &root_level)
+            || ctx->level <= root_level) {
+        AVS_UNREACHABLE("Already at root level of TLV structure");
+        return -1;
+    }
     size_t data_size = 0;
     {
         tlv_entry_t *entry = NULL;
@@ -405,8 +425,7 @@ static int tlv_start_aggregate(anjay_output_ctx_t *ctx_) {
             // iterating over resources, so to make it work, we just return
             // success.
         }
-    } else {
-        assert(ctx->level == TLV_OUT_LEVEL_IID);
+    } else if (ctx->level == TLV_OUT_LEVEL_IID) {
         assert(current_level(ctx)->next_id != ANJAY_ID_INVALID);
         // STARTING THE OBJECT INSTANCE
         // We have been called after set_path() on an Object Instance path -
@@ -415,34 +434,52 @@ static int tlv_start_aggregate(anjay_output_ctx_t *ctx_) {
         // - so we're starting the slave context that will expect Resource
         // entries, or serialize to an empty array if no Resources will follow.
         tlv_slave_start(ctx);
+    } else {
+        AVS_UNREACHABLE("tlv_start_aggregate called in invalid state");
+        return -1;
     }
     return 0;
 }
 
-static inline tlv_out_level_id_t leaf_level(const anjay_uri_path_t *path) {
+static inline int get_leaf_level(const anjay_uri_path_t *path,
+                                 tlv_out_level_id_t *out) {
     size_t path_length = _anjay_uri_path_length(path);
-    static const tlv_out_level_id_t MAPPING[] = {
-        // mapping from path length, length==2 means instance path
-        [2] = TLV_OUT_LEVEL_IID,
-        [3] = TLV_OUT_LEVEL_RID,
-        [4] = TLV_OUT_LEVEL_RIID
-    };
-    assert(path_length >= 2 && path_length <= 4);
-    return MAPPING[path_length];
+    switch (path_length) {
+    case 2: // instance path (OID, IID)
+        *out = TLV_OUT_LEVEL_IID;
+        return 0;
+    case 3: // resource path (OID, IID, RID)
+        *out = TLV_OUT_LEVEL_RID;
+        return 0;
+    case 4: // resource instance level (OID, IID, RID, RIID)
+        *out = TLV_OUT_LEVEL_RIID;
+        return 0;
+    default:
+        AVS_UNREACHABLE("Invalid target path");
+        return -1;
+    }
 }
 
-static inline uint16_t id_from_path(const anjay_uri_path_t *path,
-                                    tlv_out_level_id_t level) {
-    static const anjay_id_type_t LEVEL_MAPPING[] = {
-        [TLV_OUT_LEVEL_IID] = ANJAY_ID_IID,
-        [TLV_OUT_LEVEL_RID] = ANJAY_ID_RID,
-        [TLV_OUT_LEVEL_RIID] = ANJAY_ID_RIID
-    };
-    assert(level == TLV_OUT_LEVEL_IID || level == TLV_OUT_LEVEL_RID
-           || level == TLV_OUT_LEVEL_RIID);
-    anjay_id_type_t id_type = LEVEL_MAPPING[level];
-    assert(_anjay_uri_path_has(path, id_type));
-    return path->ids[id_type];
+static inline int get_id_from_path(const anjay_uri_path_t *path,
+                                   tlv_out_level_id_t level,
+                                   uint16_t *out_id) {
+    switch (level) {
+    case TLV_OUT_LEVEL_IID:
+        assert(_anjay_uri_path_has(path, ANJAY_ID_IID));
+        *out_id = path->ids[ANJAY_ID_IID];
+        return 0;
+    case TLV_OUT_LEVEL_RID:
+        assert(_anjay_uri_path_has(path, ANJAY_ID_RID));
+        *out_id = path->ids[ANJAY_ID_RID];
+        return 0;
+    case TLV_OUT_LEVEL_RIID:
+        assert(_anjay_uri_path_has(path, ANJAY_ID_RIID));
+        *out_id = path->ids[ANJAY_ID_RIID];
+        return 0;
+    default:
+        AVS_UNREACHABLE("Invalid level");
+        return -1;
+    }
 }
 
 static int tlv_set_path(anjay_output_ctx_t *ctx_,
@@ -453,8 +490,16 @@ static int tlv_set_path(anjay_output_ctx_t *ctx_,
                "Attempted to set path outside the context's root path. "
                "This is a bug in resource reading logic.");
 
-    tlv_out_level_id_t lowest_level = root_level(&ctx->root_path);
-    tlv_out_level_id_t new_level = leaf_level(path);
+    tlv_out_level_id_t lowest_level;
+    tlv_out_level_id_t new_level;
+    if (get_root_level(&ctx->root_path, &lowest_level)
+            || get_leaf_level(path, &new_level)
+            || (new_level >= lowest_level
+                && current_level(ctx)->next_id != ANJAY_ID_INVALID)) {
+        // path already set
+        return -1;
+    }
+
     // note that when the root path is an IID path,
     // lowest_level == TLV_OUT_LEVEL_RID. That's because the lowest level
     // entities we're serializing are Resources. However, read_instance()
@@ -462,37 +507,39 @@ static int tlv_set_path(anjay_output_ctx_t *ctx_,
     // lower than lowest_level. _anjay_uri_path_outside_base() call above makes
     // sure that we're not escaping the root, so we handle that just by
     // returning to the lowest level and not setting the ID.
-
-    if (new_level >= lowest_level
-            && current_level(ctx)->next_id != ANJAY_ID_INVALID) {
-        // path already set
-        return -1;
-    }
-
+    int result = 0;
     tlv_out_level_id_t finish_level = AVS_MAX(new_level, lowest_level);
     for (int i = lowest_level; i < (int) finish_level; ++i) {
-        if (ctx->levels[i].next_id
-                != id_from_path(path, (tlv_out_level_id_t) i)) {
+        uint16_t id;
+        if ((result = get_id_from_path(path, (tlv_out_level_id_t) i, &id))) {
+            return result;
+        }
+        if (ctx->levels[i].next_id != id) {
             finish_level = (tlv_out_level_id_t) i;
             break;
         }
     }
 
-    int result = 0;
     while (ctx->level > finish_level) {
         if ((result = tlv_slave_finish(ctx))) {
             return result;
         }
     }
     for (int i = ctx->level; i < (int) new_level; ++i) {
-        ctx->levels[i].next_id = id_from_path(path, (tlv_out_level_id_t) i);
+        if ((result = get_id_from_path(path, (tlv_out_level_id_t) i,
+                                       &ctx->levels[i].next_id))) {
+            return result;
+        }
         tlv_slave_start(ctx);
     }
     assert(ctx->level == AVS_MAX(new_level, lowest_level));
-    current_level(ctx)->next_id =
-            (new_level >= lowest_level ? id_from_path(path, ctx->level)
-                                       : ANJAY_ID_INVALID);
-    return 0;
+    if (new_level >= lowest_level) {
+        result = get_id_from_path(path, ctx->level,
+                                  &current_level(ctx)->next_id);
+    } else {
+        current_level(ctx)->next_id = ANJAY_ID_INVALID;
+    }
+    return result;
 }
 
 static int tlv_clear_path(anjay_output_ctx_t *ctx_) {
@@ -512,8 +559,11 @@ static int tlv_output_close(anjay_output_ctx_t *ctx_) {
         // path set but value not returned
         result = ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED;
     }
-    while (ctx->level > root_level(&ctx->root_path)) {
-        _anjay_update_ret(&result, tlv_slave_finish(ctx));
+    tlv_out_level_id_t root_level;
+    if (!get_root_level(&ctx->root_path, &root_level)) {
+        while (ctx->level > root_level) {
+            _anjay_update_ret(&result, tlv_slave_finish(ctx));
+        }
     }
     for (uint8_t i = 0; i < AVS_ARRAY_SIZE(ctx->levels); ++i) {
         AVS_LIST_CLEAR(&ctx->levels[i].entries);
@@ -546,14 +596,19 @@ anjay_output_ctx_t *_anjay_output_tlv_create(avs_stream_t *stream,
                                              const anjay_uri_path_t *uri) {
     assert(_anjay_uri_path_has(uri, ANJAY_ID_OID));
     tlv_out_t *ctx = (tlv_out_t *) avs_calloc(1, sizeof(tlv_out_t));
-    if (ctx) {
-        ctx->base.vtable = &TLV_OUT_VTABLE;
-        ctx->stream = stream;
-        ctx->root_path = *uri;
-        ctx->level = root_level(uri);
-        current_level(ctx)->next_entry_ptr = &current_level(ctx)->entries;
-        current_level(ctx)->next_id = ANJAY_ID_INVALID;
+    if (!ctx) {
+        return NULL;
     }
+    if (get_root_level(uri, &ctx->level)) {
+        AVS_UNREACHABLE("Invalid URI");
+        avs_free(ctx);
+        return NULL;
+    }
+    ctx->base.vtable = &TLV_OUT_VTABLE;
+    ctx->stream = stream;
+    ctx->root_path = *uri;
+    current_level(ctx)->next_entry_ptr = &current_level(ctx)->entries;
+    current_level(ctx)->next_id = ANJAY_ID_INVALID;
     return (anjay_output_ctx_t *) ctx;
 }
 

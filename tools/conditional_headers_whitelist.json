@@ -1,0 +1,12 @@
+{
+    "": [
+        "anjay_init\\.h",
+        "avsystem/commons/[^.]*\\.h",
+        "avsystem/coap/[^.]*\\.h",
+        "anjay/[^.]*\\.h",
+        "anjay_modules/[^.]*\\.h"
+    ],
+    "anjay_core\\.c": [
+        "anjay_config_log\\.h"
+    ]
+}

@@ -26,8 +26,6 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-#ifdef ANJAY_WITH_OBSERVE
-
 typedef struct anjay_observation_struct anjay_observation_t;
 typedef struct anjay_observe_connection_entry_struct
         anjay_observe_connection_entry_t;
@@ -59,6 +57,8 @@ typedef struct {
     anjay_batch_t *values[];
 } anjay_observation_value_t;
 
+#ifdef ANJAY_WITH_OBSERVE
+
 void _anjay_observe_init(anjay_observe_state_t *observe,
                          bool confirmable_notifications,
                          size_t stored_notification_limit);
@@ -70,6 +70,8 @@ void _anjay_observe_gc(anjay_t *anjay);
 int _anjay_observe_handle(anjay_t *anjay, const anjay_request_t *request);
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref);
+
+bool _anjay_observe_needs_flushing(anjay_connection_ref_t ref);
 
 int _anjay_observe_sched_flush(anjay_connection_ref_t ref);
 
@@ -91,6 +93,7 @@ anjay_resource_observation_status_t _anjay_observe_status(anjay_t *anjay,
 #    define _anjay_observe_cleanup(...) ((void) 0)
 #    define _anjay_observe_gc(...) ((void) 0)
 #    define _anjay_observe_interrupt(...) ((void) 0)
+#    define _anjay_observe_needs_flushing(...) false
 #    define _anjay_observe_sched_flush(...) 0
 
 #    ifdef ANJAY_WITH_OBSERVATION_STATUS

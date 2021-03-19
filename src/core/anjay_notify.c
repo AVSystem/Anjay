@@ -105,14 +105,15 @@ static int server_modified_notify(anjay_t *anjay,
 }
 
 static int anjay_notify_perform_impl(anjay_t *anjay,
-                                     anjay_notify_queue_t queue,
+                                     anjay_notify_queue_t *queue_ptr,
                                      bool server_notify) {
-    if (!queue) {
+    if (!queue_ptr || !*queue_ptr) {
         return 0;
     }
     int ret = 0;
+    _anjay_update_ret(&ret, _anjay_sync_access_control(anjay, queue_ptr));
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
-    AVS_LIST_FOREACH(it, queue) {
+    AVS_LIST_FOREACH(it, *queue_ptr) {
         if (it->oid > ANJAY_DM_OID_SERVER) {
             break;
         } else if (it->oid == ANJAY_DM_OID_SECURITY) {
@@ -121,30 +122,29 @@ static int anjay_notify_perform_impl(anjay_t *anjay,
             _anjay_update_ret(&ret, server_modified_notify(anjay, it));
         }
     }
-    _anjay_update_ret(&ret, observe_notify(anjay, queue));
-    _anjay_update_ret(&ret, _anjay_sync_access_control(anjay, queue));
+    _anjay_update_ret(&ret, observe_notify(anjay, *queue_ptr));
     AVS_LIST(anjay_dm_installed_module_t) module;
     AVS_LIST_FOREACH(module, anjay->dm.modules) {
         if (module->def->notify_callback) {
             _anjay_update_ret(&ret,
-                              module->def->notify_callback(anjay, queue,
+                              module->def->notify_callback(anjay, *queue_ptr,
                                                            module->arg));
         }
     }
     return ret;
 }
 
-int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t queue) {
-    return anjay_notify_perform_impl(anjay, queue, true);
+int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t *queue_ptr) {
+    return anjay_notify_perform_impl(anjay, queue_ptr, true);
 }
 
 int _anjay_notify_perform_without_servers(anjay_t *anjay,
-                                          anjay_notify_queue_t queue) {
-    return anjay_notify_perform_impl(anjay, queue, false);
+                                          anjay_notify_queue_t *queue_ptr) {
+    return anjay_notify_perform_impl(anjay, queue_ptr, false);
 }
 
 int _anjay_notify_flush(anjay_t *anjay, anjay_notify_queue_t *queue_ptr) {
-    int result = _anjay_notify_perform(anjay, *queue_ptr);
+    int result = _anjay_notify_perform(anjay, queue_ptr);
     _anjay_notify_clear_queue(queue_ptr);
     return result;
 }

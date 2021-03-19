@@ -602,7 +602,7 @@ class Lwm2mCmd(powercmd.Cmd):
         """
         Decodes a CoAP message and displays it in a human-readable form.
         """
-        print(get_lwm2m_msg(coap.Packet.parse(data.bytes)))
+        print(get_lwm2m_msg(coap.Packet.parse(data)))
 
     def do_coap_decode(self,
                        data: EscapedBytes):

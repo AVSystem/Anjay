@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+#ifdef _WIN32
+#    define WIN32_LEAN_AND_MEAN
+#    define _WIN32_WINNT \
+        0x600 // minimum requirement: Windows NT 6.0 a.k.a. Vista
+#    include <Ws2tcpip.h>
+#    undef ERROR
+#endif // _WIN32
+
 #include "demo.h"
 #include "demo_args.h"
 #include "demo_cmds.h"
@@ -32,7 +40,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <netinet/in.h>
+#ifndef _WIN32
+#    include <netinet/in.h>
+#endif // _WIN32
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -65,7 +75,14 @@ static int security_object_reload(anjay_demo_t *demo) {
             instance.bootstrap_timeout_s = -1;
             instance.ssid = server->id;
         }
-        instance.security_mode = args->security_mode;
+        static const char SECURE_PREFIX[] = "coaps";
+        if (server->uri
+                && strncmp(server->uri, SECURE_PREFIX, strlen(SECURE_PREFIX))
+                               == 0) {
+            instance.security_mode = args->security_mode;
+        } else {
+            instance.security_mode = ANJAY_SECURITY_NOSEC;
+        }
 
         /**
          * Note: we can assign pointers by value, as @ref

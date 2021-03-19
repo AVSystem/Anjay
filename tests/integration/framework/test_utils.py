@@ -320,6 +320,7 @@ class RID:
         AeadAlgorithm = 3
         HmacAlgorithm = 4
         MasterSalt = 5
+        IdContext = 6
 
     class BinaryAppDataContainer:
         Data = 0

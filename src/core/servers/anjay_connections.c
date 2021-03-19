@@ -25,18 +25,18 @@
 
 #include <avsystem/coap/udp.h>
 
+#define ANJAY_SERVERS_CONNECTION_SOURCE
+#define ANJAY_SERVERS_INTERNALS
+
 #include "../anjay_core.h"
 #include "../anjay_io_core.h"
+#include "../anjay_servers_reload.h"
 #include "../anjay_servers_utils.h"
 
 #include "../dm/anjay_query.h"
 
-#define ANJAY_SERVERS_CONNECTION_SOURCE
-#define ANJAY_SERVERS_INTERNALS
-
 #include "anjay_activate.h"
 #include "anjay_connections_internal.h"
-#include "anjay_reload.h"
 #include "anjay_security.h"
 #include "anjay_server_connections.h"
 
@@ -212,6 +212,8 @@ recreate_socket(anjay_t *anjay,
             sizeof(connection->nontransient_state.dtls_session_buffer);
     socket_config.dtls_handshake_timeouts =
             def->get_dtls_handshake_timeouts(anjay);
+    socket_config.additional_configuration_clb =
+            anjay->additional_tls_config_clb;
     socket_config.server_name_indication = inout_info->sni.sni;
     socket_config.use_connection_id = anjay->use_connection_id;
     socket_config.prng_ctx = anjay->prng_ctx.ctx;
@@ -272,6 +274,29 @@ ensure_socket_connected(anjay_server_info_t *server,
             server, conn_type, &inout_info->security_iid);
 }
 
+static bool should_primary_connection_be_online(anjay_server_info_t *server) {
+    anjay_connection_ref_t ref = {
+        .server = server,
+        .conn_type = ANJAY_CONNECTION_PRIMARY
+    };
+    anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
+    avs_net_socket_t *socket =
+            _anjay_connection_internal_get_socket(connection);
+    // Server is supposed to be active, so we need to create the socket
+    return !socket
+           // Bootstrap Server has no concept of queue mode
+           || server->ssid == ANJAY_SSID_BOOTSTRAP
+           // if connection is already online, no reason to disconnect it
+           || _anjay_connection_get_online_socket(ref)
+           // if registration expired, we need to connect to renew it
+           || server->registration_info.update_forced
+           || _anjay_server_registration_expired(server)
+           // if queue mode is not enabled, server shall always be online
+           || !server->registration_info.queue_mode
+           // if there are notifications to be sent, we need to send them
+           || _anjay_observe_needs_flushing(ref);
+}
+
 static avs_error_t refresh_connection(anjay_server_info_t *server,
                                       anjay_connection_type_t conn_type,
                                       bool enabled,
@@ -307,7 +332,6 @@ void _anjay_server_connections_refresh(
         anjay_server_info_t *server,
         anjay_iid_t security_iid,
         avs_url_t **move_uri,
-        bool trigger_requested,
         const anjay_server_name_indication_t *sni) {
     anjay_connection_info_t server_info = {
         .ssid = server->ssid,
@@ -342,18 +366,24 @@ void _anjay_server_connections_refresh(
     if (server_info.transport_info
             && primary_conn->transport
                            != server_info.transport_info->transport) {
+        char old_binding[] = "(none)";
+        if (primary_conn->transport != ANJAY_SOCKET_TRANSPORT_INVALID) {
+            old_binding[0] =
+                    _anjay_binding_info_by_transport(primary_conn->transport)
+                            ->letter;
+            old_binding[1] = '\0';
+        }
+        char new_binding = _anjay_binding_info_by_transport(
+                                   server_info.transport_info->transport)
+                                   ->letter;
         const char *host = avs_url_host(server_info.uri);
         const char *port = avs_url_port(server_info.uri);
         anjay_log(INFO,
-                  _("server /0/") "%u" _(": transport change ") "%c" _(
-                          " -> ") "%c" _(" (uri: ") "%s" _(":") "%s" _(")"),
-                  security_iid,
-                  _anjay_binding_info_by_transport(primary_conn->transport)
-                          ->letter,
-                  _anjay_binding_info_by_transport(
-                          server_info.transport_info->transport)
-                          ->letter,
-                  host ? host : "", port ? port : "");
+                  _("server /0/") "%u" _(": transport change: ") "%s" _(
+                          " -> ") "%c" _(" (uri: ") "%s://%s%s%s" _(")"),
+                  security_iid, old_binding, new_binding,
+                  server_info.transport_info->uri_scheme, host ? host : "",
+                  port ? ":" : "", port ? port : "");
         // change in transport binding requries creating a different type of
         // socket and possibly CoAP context
         connection_cleanup(server->anjay, primary_conn);
@@ -368,10 +398,11 @@ void _anjay_server_connections_refresh(
         connection->state = ANJAY_SERVER_CONNECTION_IN_PROGRESS;
         avs_sched_del(&connection->queue_mode_close_socket_clb);
     }
-    avs_error_t err =
-            refresh_connection(server, ANJAY_CONNECTION_PRIMARY,
-                               !!server_info.transport_info, &server_info);
-    (void) trigger_requested;
+    avs_error_t err = refresh_connection(
+            server, ANJAY_CONNECTION_PRIMARY,
+            !!server_info.transport_info
+                    && should_primary_connection_be_online(server),
+            &server_info);
 
     // TODO T2391: fall back to another transport if connection failed
     _anjay_server_on_refreshed(server, primary_conn->state, err);

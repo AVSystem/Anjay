@@ -52,7 +52,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.9.0"
+#    define ANJAY_VERSION "2.10.0"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
@@ -154,6 +154,7 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
 
     anjay->prefer_hierarchical_formats = config->prefer_hierarchical_formats;
     anjay->use_connection_id = config->use_connection_id;
+    anjay->additional_tls_config_clb = config->additional_tls_config_clb;
 
     if (config->prng_ctx) {
         anjay->prng_ctx.allocated_by_user = true;
@@ -706,6 +707,8 @@ avs_time_duration_t
 _anjay_max_transmit_wait_for_transport(anjay_t *anjay,
                                        anjay_socket_transport_t transport) {
     switch (transport) {
+    case ANJAY_SOCKET_TRANSPORT_INVALID:
+        return AVS_TIME_DURATION_INVALID;
 #ifdef WITH_AVS_COAP_UDP
     case ANJAY_SOCKET_TRANSPORT_UDP:
         return avs_coap_udp_max_transmit_wait(&anjay->udp_tx_params);
@@ -724,6 +727,7 @@ _anjay_exchange_lifetime_for_transport(anjay_t *anjay,
     case ANJAY_SOCKET_TRANSPORT_UDP:
         return avs_coap_udp_exchange_lifetime(&anjay->udp_tx_params);
 #endif // WITH_AVS_COAP_UDP
+    case ANJAY_SOCKET_TRANSPORT_INVALID:
     default:
         AVS_UNREACHABLE("Should never happen");
         return AVS_TIME_DURATION_INVALID;

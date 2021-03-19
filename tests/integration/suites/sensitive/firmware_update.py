@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import os
+import re
 import socket
 
 from framework.lwm2m.coap.server import SecurityMode
@@ -43,6 +44,11 @@ class FirmwareUpdateWithoutReboot(Block.Test):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
+
+        # Wait until internal state machine is updated
+        # We cannot rely on FirmwareUpdate.State resource because it is updated first
+        # and the user code is only notified later, via a scheduler job
+        self.read_log_until_match(regex=re.escape(b'*** FIRMWARE UPDATE:'), timeout_s=5)
 
         self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content.decode(),
                          str(UPDATE_STATE_UPDATING))

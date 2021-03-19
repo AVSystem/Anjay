@@ -398,16 +398,22 @@ static int print_enabler_version(avs_stream_t *stream,
                    : -1;
 }
 
+typedef struct {
+    avs_stream_t *stream;
+} bootstrap_discover_object_instance_args_t;
+
 static int
 bootstrap_discover_object_instance(anjay_t *anjay,
                                    const anjay_dm_object_def_t *const *obj,
                                    anjay_iid_t iid,
-                                   void *stream_) {
-    avs_stream_t *stream = (avs_stream_t *) stream_;
+                                   void *args_) {
+    bootstrap_discover_object_instance_args_t *args =
+            (bootstrap_discover_object_instance_args_t *) args_;
     int result = 0;
-    (void) ((result = print_separator(stream))
+    (void) ((result = print_separator(args->stream))
             || (result = print_discovered_instance(
-                        stream, obj, iid, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY)));
+                        args->stream, obj, iid,
+                        &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY)));
     if (result) {
         return result;
     }
@@ -415,13 +421,13 @@ bootstrap_discover_object_instance(anjay_t *anjay,
         anjay_ssid_t ssid;
         int query_result = _anjay_ssid_from_security_iid(anjay, iid, &ssid);
         if (!query_result && ssid != ANJAY_SSID_BOOTSTRAP) {
-            result = print_ssid_attr(stream, ssid);
+            result = print_ssid_attr(args->stream, ssid);
         }
     } else if ((*obj)->oid == ANJAY_DM_OID_SERVER) {
         anjay_ssid_t ssid;
         int query_result = _anjay_ssid_from_server_iid(anjay, iid, &ssid);
         if (!query_result) {
-            result = print_ssid_attr(stream, ssid);
+            result = print_ssid_attr(args->stream, ssid);
         }
     }
     return result;
@@ -430,14 +436,16 @@ bootstrap_discover_object_instance(anjay_t *anjay,
 static int bootstrap_discover_object(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj,
                                      void *stream_) {
-    avs_stream_t *stream = (avs_stream_t *) stream_;
+    bootstrap_discover_object_instance_args_t args = {
+        .stream = (avs_stream_t *) stream_
+    };
     int result;
-    (void) ((result = print_separator(stream))
+    (void) ((result = print_separator(args.stream))
             || (result = print_discovered_object(
-                        stream, obj, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY))
+                        args.stream, obj, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY))
             || (result = _anjay_dm_foreach_instance(
                         anjay, obj, bootstrap_discover_object_instance,
-                        stream)));
+                        &args)));
     return result;
 }
 

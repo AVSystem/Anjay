@@ -94,7 +94,7 @@ static void assert_observe(anjay_t *anjay,
                            const void *data,
                            size_t length) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
-            find_connection_state((anjay_connection_ref_t) {
+            _anjay_observe_find_connection_state((anjay_connection_ref_t) {
                 .server = *_anjay_servers_find_ptr(anjay->servers, ssid),
                 .conn_type = ANJAY_CONNECTION_PRIMARY
             });
@@ -215,6 +215,7 @@ static void expect_read_notif_storing(anjay_t *anjay,
                                     ID_TOKEN(0xFA3E, "SuccsTkn"), OBSERVE(0), \
                                     CONTENT_FORMAT(PLAINTEXT),                \
                                     PAYLOAD("514"));                          \
+            DM_TEST_EXPECT_READ_NULL_ATTRS(ssids[i], 69, 4);                  \
             AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[i]));        \
             assert_observe_size(anjay, i + 1);                                \
             ASSERT_SUCCESS_TEST_RESULT(ssids[i]);                             \
@@ -310,6 +311,8 @@ AVS_UNIT_TEST(observe, multiple_equivalent_observations) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res4"), OBSERVE(0),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("42"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 2);
@@ -365,6 +368,7 @@ AVS_UNIT_TEST(observe, overwrite) {
                             ID_TOKEN(0xFA3E, "SuccsTkn"), OBSERVE(0),
                             CONTENT_FORMAT(OMA_LWM2M_TLV),
                             PAYLOAD(TLV_RESPONSE));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 5);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 1);
@@ -416,6 +420,8 @@ AVS_UNIT_TEST(observe, instance_overwrite) {
                             ID_TOKEN(0xFA3E, "ObjToken"), OBSERVE(0),
                             CONTENT_FORMAT(OMA_LWM2M_TLV),
                             PAYLOAD(TLV_RESPONSE));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, -1);
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 2);
@@ -460,6 +466,7 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res6"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("Hello"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 1);
@@ -514,6 +521,8 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res5"), OBSERVE(0),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("42"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 5);
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 2);
@@ -540,6 +549,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res5"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("Good-bye"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 1);
@@ -1025,6 +1035,7 @@ AVS_UNIT_TEST(notify, confirmable) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -1912,6 +1923,7 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     assert_observe_size(anjay, 2);
     anjay->current_connection.server = anjay->servers->servers;
     anjay->current_connection.conn_type = ANJAY_CONNECTION_PRIMARY;
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_observe_sched_flush(anjay->current_connection);
     memset(&anjay->current_connection, 0, sizeof(anjay->current_connection));
 
@@ -2096,6 +2108,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
                                         ANJAY_MOCK_DM_STRING(0, "Mayu"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFB3E),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Mayu"));
+    DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     // ...but nothing should come

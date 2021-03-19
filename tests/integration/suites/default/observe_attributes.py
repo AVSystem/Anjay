@@ -276,6 +276,62 @@ class ObserveOfflineWithStoredNotificationLimitAndMultipleServers(test_suite.Lwm
             self.assertNotIn(str(int(observe.content.decode('utf-8')) + idx).encode('utf-8'), seen_values)
 
 
+class ObserveOfflineWithStoringDisabled(test_suite.Lwm2mDtlsSingleServerTest,
+                                        test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        self.write_resource(self.serv, OID.Server, 1, RID.Server.NotificationStoring, '0')
+        observe = self.observe(self.servers[0], OID.Device, 0, RID.Device.CurrentTime)
+
+        self.communicate('enter-offline')
+        # wait long enough to cause dropping and receive any outstanding notifications
+        deadline = time.time() + 2.0
+        while True:
+            timeout = deadline - time.time()
+            if timeout <= 0.0:
+                break
+            try:
+                self.assertMsgEqual(Lwm2mNotify(token=observe.token),
+                                    self.serv.recv(timeout_s=timeout))
+            except socket.timeout:
+                pass
+
+        time.sleep(5.0)
+
+        self.communicate('exit-offline')
+        self.assertDtlsReconnect()
+        pkt = self.serv.recv(timeout_s=2)
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), pkt)
+        self.assertAlmostEqual(float(pkt.content.decode('utf-8')), time.time(), delta=1.0)
+
+
+class ObserveOfflineUnchangingPmaxWithStoringDisabled(test_suite.Lwm2mDtlsSingleServerTest,
+                                                      test_suite.Lwm2mDmOperations):
+    def runTest(self):
+        self.write_resource(self.serv, OID.Server, 1, RID.Server.NotificationStoring, '0')
+        self.write_attributes(self.serv, OID.Device, 0, RID.Device.SerialNumber, ['pmax=1'])
+        observe = self.observe(self.servers[0], OID.Device, 0, RID.Device.SerialNumber)
+
+        self.communicate('enter-offline')
+        # wait long enough to cause dropping and receive any outstanding notifications
+        deadline = time.time() + 2.0
+        while True:
+            timeout = deadline - time.time()
+            if timeout <= 0.0:
+                break
+            try:
+                self.assertMsgEqual(Lwm2mNotify(token=observe.token),
+                                    self.serv.recv(timeout_s=timeout))
+            except socket.timeout:
+                pass
+
+        time.sleep(5.0)
+
+        self.communicate('exit-offline')
+        self.assertDtlsReconnect()
+        pkt = self.serv.recv(timeout_s=2)
+        self.assertMsgEqual(Lwm2mNotify(token=observe.token), pkt)
+
+
 class ResetWithoutMatchingObservation(test_suite.Lwm2mSingleServerTest):
     # T2359 - receiving a Reset message that cannot be matched to any existing
     # observation used to crash the application.

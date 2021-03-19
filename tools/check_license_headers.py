@@ -46,6 +46,7 @@ IGNORE_PATTERNS = list(map(re.compile, [
     '\.dockerignore$',
     '\.gitignore$',
     '\.gitmodules$',
+    'conditional_headers_whitelist\.json$',
     '^examples/',
     '^example_configs/',
     '^deps/avs_coap/examples/',

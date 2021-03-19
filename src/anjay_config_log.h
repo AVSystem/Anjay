@@ -245,6 +245,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // AVS_COMMONS_HAVE_BUILTIN_MUL_OVERFLOW
     _anjay_log(anjay, TRACE, "AVS_COMMONS_HAVE_BUILTIN_MUL_OVERFLOW = OFF");
 #endif // AVS_COMMONS_HAVE_BUILTIN_MUL_OVERFLOW
+#ifdef AVS_COMMONS_HAVE_DLSYM
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_HAVE_DLSYM = ON");
+#else // AVS_COMMONS_HAVE_DLSYM
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_HAVE_DLSYM = OFF");
+#endif // AVS_COMMONS_HAVE_DLSYM
 #ifdef AVS_COMMONS_HAVE_NET_IF_H
     _anjay_log(anjay, TRACE, "AVS_COMMONS_HAVE_NET_IF_H = ON");
 #else // AVS_COMMONS_HAVE_NET_IF_H
@@ -510,6 +515,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // AVS_COMMONS_WITH_MBEDTLS
     _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_MBEDTLS = OFF");
 #endif // AVS_COMMONS_WITH_MBEDTLS
+#ifdef AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE = ON");
+#else // AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE = OFF");
+#endif // AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE
 #ifdef AVS_COMMONS_WITH_MICRO_LOGS
     _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_MICRO_LOGS = ON");
 #else // AVS_COMMONS_WITH_MICRO_LOGS

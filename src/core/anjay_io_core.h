@@ -41,16 +41,6 @@ int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,
                                     uint16_t format,
                                     anjay_request_action_t action);
 
-anjay_input_ctx_constructor_t _anjay_input_opaque_create;
-
-#ifndef ANJAY_WITHOUT_PLAINTEXT
-anjay_input_ctx_constructor_t _anjay_input_text_create;
-#endif // ANJAY_WITHOUT_PLAINTEXT
-
-#ifndef ANJAY_WITHOUT_TLV
-anjay_input_ctx_constructor_t _anjay_input_tlv_create;
-#endif // ANJAY_WITHOUT_TLV
-
 #ifdef ANJAY_WITH_LEGACY_CONTENT_FORMAT_SUPPORT
 uint16_t _anjay_translate_legacy_content_format(uint16_t format);
 #else

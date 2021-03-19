@@ -24,12 +24,12 @@
 #define ANJAY_SERVERS_INTERNALS
 
 #include "../anjay_servers_inactive.h"
+#include "../anjay_servers_reload.h"
 #include "../anjay_servers_utils.h"
 #include "../dm/anjay_query.h"
 
 #include "anjay_activate.h"
 #include "anjay_register.h"
-#include "anjay_reload.h"
 #include "anjay_server_connections.h"
 #include "anjay_servers_internal.h"
 
@@ -114,16 +114,32 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
                                 anjay_server_connection_state_t state,
                                 avs_error_t err) {
     assert(server);
+    anjay_connection_ref_t primary_ref = {
+        .server = server,
+        .conn_type = ANJAY_CONNECTION_PRIMARY
+    };
+    anjay_server_connection_t *primary_conn =
+            _anjay_get_server_connection(primary_ref);
     if (state == ANJAY_SERVER_CONNECTION_OFFLINE) {
         if (avs_is_err(err)) {
             anjay_log(TRACE, _("could not initialize sockets for SSID ") "%u",
                       server->ssid);
             _anjay_server_on_server_communication_error(server, err);
+        } else if (_anjay_socket_transport_supported(server->anjay,
+                                                     primary_conn->transport)
+                   && _anjay_socket_transport_is_online(
+                              server->anjay, primary_conn->transport)) {
+            assert(server->registration_info.queue_mode);
+            anjay_log(TRACE,
+                      _("Server with SSID ") "%u" _(
+                              " is suspended due to queue mode"),
+                      server->ssid);
+            _anjay_server_reschedule_update_job(server);
         } else {
             anjay_log(TRACE, _("Server with SSID ") "%u" _(" is offline"),
                       server->ssid);
             if (!avs_time_real_valid(server->reactivate_time)) {
-                // make the server reactive when it comes back online
+                // make the server reactivate when it comes back online
                 server->reactivate_time = avs_time_real_now();
             }
         }
@@ -135,10 +151,7 @@ void _anjay_server_on_refreshed(anjay_server_info_t *server,
                 !!_anjay_perform_bootstrap_action_if_appropriate(
                         server->anjay, server, action);
         if (action == ANJAY_BOOTSTRAP_ACTION_NONE) {
-            _anjay_connection_mark_stable((anjay_connection_ref_t) {
-                .server = server,
-                .conn_type = ANJAY_CONNECTION_PRIMARY
-            });
+            _anjay_connection_mark_stable(primary_ref);
         }
         if (!server->refresh_failed) {
             server->reactivate_time = AVS_TIME_REAL_INVALID;
@@ -336,6 +349,8 @@ _anjay_servers_create_inactive(anjay_t *anjay, anjay_ssid_t ssid) {
     new_server->anjay = anjay;
     new_server->ssid = ssid;
     new_server->last_used_security_iid = ANJAY_ID_INVALID;
+    _anjay_connection_get(&new_server->connections, ANJAY_CONNECTION_PRIMARY)
+            ->transport = ANJAY_SOCKET_TRANSPORT_INVALID;
     new_server->reactivate_time = AVS_TIME_REAL_INVALID;
     new_server->registration_info.lwm2m_version = ANJAY_LWM2M_VERSION_1_0;
     return new_server;

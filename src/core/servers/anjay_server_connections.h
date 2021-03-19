@@ -35,8 +35,6 @@ _anjay_get_server_connection(anjay_connection_ref_t ref) {
     return _anjay_connection_get(&ref.server->connections, ref.conn_type);
 }
 
-bool _anjay_connections_is_trigger_requested(const char *binding_mode);
-
 void _anjay_active_server_refresh(anjay_server_info_t *server);
 
 void _anjay_connections_flush_notifications(anjay_connections_t *connections);

@@ -31,6 +31,7 @@
 #include "../anjay_core.h"
 #include "../anjay_servers_inactive.h"
 #include "../anjay_servers_private.h"
+#include "../anjay_servers_reload.h"
 #include "../anjay_servers_utils.h"
 #include "../dm/anjay_query.h"
 
@@ -38,7 +39,6 @@
 
 #include "anjay_activate.h"
 #include "anjay_register.h"
-#include "anjay_reload.h"
 #include "anjay_server_connections.h"
 #include "anjay_servers_internal.h"
 
@@ -100,20 +100,29 @@ static int schedule_update(anjay_server_info_t *server,
                              sizeof(server->ssid));
 }
 
-static int schedule_next_update(anjay_server_info_t *server) {
-    assert(_anjay_server_active(server));
-    avs_time_duration_t remaining =
-            _anjay_register_time_remaining(&server->registration_info);
+static avs_time_real_t time_of_next_update(anjay_server_info_t *server) {
+    avs_time_real_t expire_time = _anjay_registration_expire_time(server);
+    if (!avs_time_real_valid(expire_time)) {
+        return AVS_TIME_REAL_INVALID;
+    }
     avs_time_duration_t interval_margin =
             get_server_update_interval_margin(server);
-    remaining = avs_time_duration_diff(remaining, interval_margin);
+    return avs_time_real_add(expire_time,
+                             avs_time_duration_mul(interval_margin, -1));
+}
 
-    if (remaining.seconds < ANJAY_MIN_UPDATE_INTERVAL_S) {
-        remaining = avs_time_duration_from_scalar(ANJAY_MIN_UPDATE_INTERVAL_S,
-                                                  AVS_TIME_S);
+static int schedule_next_update(anjay_server_info_t *server) {
+    assert(_anjay_server_active(server));
+    avs_time_real_t update_time = time_of_next_update(server);
+    avs_time_duration_t min_margin =
+            avs_time_duration_from_scalar(ANJAY_MIN_UPDATE_INTERVAL_S,
+                                          AVS_TIME_S);
+    avs_time_duration_t delay =
+            avs_time_real_diff(update_time, avs_time_real_now());
+    if (avs_time_duration_less(delay, min_margin)) {
+        delay = min_margin;
     }
-
-    return schedule_update(server, remaining);
+    return schedule_update(server, delay);
 }
 
 bool _anjay_server_primary_connection_valid(anjay_server_info_t *server) {
@@ -347,10 +356,10 @@ get_binding_mode_for_version(anjay_server_info_t *server,
             _anjay_server_binding_mode(server);
     size_t out_ptr = 0;
     for (size_t in_ptr = 0; in_ptr < sizeof(*server_binding_mode) - 1
-                            && (*server_binding_mode)[in_ptr];
+                            && server_binding_mode->data[in_ptr];
          ++in_ptr) {
         (void) lwm2m_version;
-        (*out_binding_mode)[out_ptr++] = (*server_binding_mode)[in_ptr];
+        out_binding_mode->data[out_ptr++] = server_binding_mode->data[in_ptr];
     }
 }
 
@@ -396,7 +405,7 @@ static bool should_use_queue_mode(anjay_server_info_t *server,
                                   anjay_lwm2m_version_t lwm2m_version) {
     (void) server;
     (void) lwm2m_version;
-    return !!strchr(*_anjay_server_binding_mode(server), 'Q');
+    return !!strchr(_anjay_server_binding_mode(server)->data, 'Q');
 }
 
 static int get_endpoint_path(AVS_LIST(const anjay_string_t) *out_path,
@@ -470,7 +479,8 @@ setup_register_request_options(avs_coap_options_t *opts,
                                const char *msisdn,
                                const anjay_url_t *uri,
                                bool lwm2m11_queue_mode,
-                               const anjay_update_parameters_t *params) {
+                               int64_t lifetime_s,
+                               const anjay_binding_mode_t *binding_mode) {
     assert(opts->size == 0);
 
     avs_error_t err;
@@ -486,19 +496,14 @@ setup_register_request_options(avs_coap_options_t *opts,
                                    AVS_COAP_OPTION_URI_QUERY)))
             || avs_is_err((err = _anjay_coap_add_query_options(
                                    opts, &lwm2m_version, endpoint_name,
-                                   &params->lifetime_s,
-                                   strcmp(params->binding_mode, "U") == 0
+                                   &lifetime_s,
+                                   strcmp(binding_mode->data, "U") == 0
                                            ? NULL
-                                           : params->binding_mode,
+                                           : binding_mode->data,
                                    lwm2m11_queue_mode, msisdn)))) {
         anjay_log(ERROR, _("could not initialize request headers"));
     }
     return err;
-}
-
-static const char *get_local_msisdn(anjay_server_info_t *server) {
-    (void) server;
-    return NULL;
 }
 
 static anjay_registration_result_t
@@ -645,9 +650,10 @@ static void send_register(anjay_server_info_t *server,
     if (avs_is_err((err = avs_coap_options_dynamic_init(&request.options)))
             || avs_is_err((err = setup_register_request_options(
                                    &request.options, lwm2m_version,
-                                   server->anjay->endpoint_name,
-                                   get_local_msisdn(server), connection_uri,
-                                   lwm2m11_queue_mode, move_params)))) {
+                                   server->anjay->endpoint_name, NULL,
+                                   connection_uri, lwm2m11_queue_mode,
+                                   move_params->lifetime_s,
+                                   &move_params->binding_mode)))) {
         _anjay_server_on_updated_registration(
                 server, ANJAY_REGISTRATION_ERROR_OTHER, err);
         goto cleanup;
@@ -718,11 +724,13 @@ static inline bool dm_caches_equal(const char *left, const char *right) {
 }
 
 static avs_error_t
-setup_update_request_options(avs_coap_options_t *opts,
+setup_update_request_options(anjay_t *anjay,
+                             avs_coap_options_t *opts,
                              AVS_LIST(const anjay_string_t) endpoint_path,
                              const anjay_update_parameters_t *old_params,
                              const anjay_update_parameters_t *new_params,
                              bool *out_dm_changed_since_last_update) {
+    (void) anjay;
     assert(opts->size == 0);
 
     const int64_t *lifetime_s_ptr = NULL;
@@ -731,10 +739,12 @@ setup_update_request_options(avs_coap_options_t *opts,
         lifetime_s_ptr = &new_params->lifetime_s;
     }
 
-    const char *binding_mode =
-            (strcmp(old_params->binding_mode, new_params->binding_mode) == 0)
-                    ? NULL
-                    : new_params->binding_mode;
+    const char *binding_mode = (strcmp(old_params->binding_mode.data,
+                                       new_params->binding_mode.data)
+                                == 0)
+                                       ? NULL
+                                       : new_params->binding_mode.data;
+    const char *sms_msisdn = NULL;
     *out_dm_changed_since_last_update =
             !dm_caches_equal(old_params->dm, new_params->dm);
 
@@ -751,7 +761,7 @@ setup_update_request_options(avs_coap_options_t *opts,
                                    /* lifetime = */ lifetime_s_ptr,
                                    /* binding_mode = */ binding_mode,
                                    /* lwm2m11_queue_mode = */ false,
-                                   /* sms_msisdn = */ NULL))));
+                                   /* sms_msisdn = */ sms_msisdn))));
 
     return err;
 }
@@ -889,7 +899,8 @@ static void send_update(anjay_server_info_t *server,
     avs_error_t err;
     if (avs_is_err((err = avs_coap_options_dynamic_init(&request.options)))
             || avs_is_err((err = setup_update_request_options(
-                                   &request.options, old_info->endpoint_path,
+                                   server->anjay, &request.options,
+                                   old_info->endpoint_path,
                                    &old_info->last_update_params, move_params,
                                    &dm_changed_since_last_update)))) {
         anjay_log(ERROR, _("could not setup update request"));
@@ -938,7 +949,8 @@ needs_registration_update(anjay_server_info_t *server,
     const anjay_update_parameters_t *old_params = &info->last_update_params;
     return info->update_forced
            || old_params->lifetime_s != new_params->lifetime_s
-           || strcmp(old_params->binding_mode, new_params->binding_mode)
+           || strcmp(old_params->binding_mode.data,
+                     new_params->binding_mode.data)
            || !dm_caches_equal(old_params->dm, new_params->dm);
 }
 
@@ -980,16 +992,29 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
         on_registration_update_result(server, &new_params,
                                       ANJAY_REGISTRATION_ERROR_OTHER,
                                       avs_errno(AVS_EBADF));
-    } else if (_anjay_server_registration_expired(server)) {
-        on_registration_update_result(server, &new_params,
-                                      ANJAY_REGISTRATION_ERROR_REJECTED,
-                                      avs_errno(AVS_UNKNOWN_ERROR));
-    } else if (!needs_registration_update(server, &new_params)) {
-        update_parameters_cleanup(&new_params);
-        _anjay_server_on_updated_registration(
-                server, ANJAY_REGISTRATION_SUCCESS, AVS_OK);
     } else {
-        update_registration(server, &new_params);
+        bool registration_or_update_in_progress = avs_coap_exchange_id_valid(
+                server->registration_exchange_state.exchange_id);
+        bool registration_expired = _anjay_server_registration_expired(server);
+        bool needs_reregistration =
+                !registration_or_update_in_progress && registration_expired;
+        bool needs_update = !needs_reregistration
+                            && needs_registration_update(server, &new_params);
+        if (needs_reregistration
+                || (registration_or_update_in_progress && registration_expired
+                    && needs_update)) {
+            on_registration_update_result(server, &new_params,
+                                          ANJAY_REGISTRATION_ERROR_REJECTED,
+                                          avs_errno(AVS_UNKNOWN_ERROR));
+        } else if (!needs_update) {
+            update_parameters_cleanup(&new_params);
+            if (!registration_or_update_in_progress) {
+                _anjay_server_on_updated_registration(
+                        server, ANJAY_REGISTRATION_SUCCESS, AVS_OK);
+            }
+        } else {
+            update_registration(server, &new_params);
+        }
     }
 }
 

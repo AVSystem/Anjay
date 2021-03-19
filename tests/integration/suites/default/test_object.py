@@ -61,6 +61,29 @@ class CounterTest(TestObject.TestCase):
                             self.serv.recv())
 
 
+class NonconfirmableExecuteTest(TestObject.TestCase):
+    def runTest(self):
+        # ensure the counter is zero initially
+        req = Lwm2mRead(ResPath.Test[0].Counter, accept=coap.ContentFormat.TEXT_PLAIN)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mContent.matching(req)(content=b'0'),
+                            self.serv.recv())
+
+        # execute Increment Counter
+        req = Lwm2mMsg(type=coap.Type.NON_CONFIRMABLE, code=coap.Code.REQ_POST, msg_id=ANY,
+                       token=ANY, options=uri_path_to_options(ResPath.Test[0].IncrementCounter))
+        self.serv.send(req)
+        # It was a request, and the client will send a response even if it's non-confirmable
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # counter should be incremented by the execute
+        req = Lwm2mRead(ResPath.Test[0].Counter, accept=coap.ContentFormat.TEXT_PLAIN)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mContent.matching(req)(content=b'1'),
+                            self.serv.recv())
+
+
 class IntegerArrayTest(TestObject.TestCase):
     def runTest(self):
         # ensure the array is empty
@@ -113,7 +136,7 @@ class ExecArgsArrayTest(TestObject.TestCase):
             (1, b''),
             (2, b'1'),
             (3, b'12345'),
-            (9, b'0' * 512) # keep this value small, to avoid triggering blockwise transfers
+            (9, b'0' * 512)  # keep this value small, to avoid triggering blockwise transfers
         ]
 
         req = Lwm2mRead(ResPath.Test[0].LastExecArgsArray)
@@ -137,7 +160,8 @@ class ExecArgsArrayTest(TestObject.TestCase):
         self.serv.send(req)
 
         exec_args_tlv = TLV.make_multires(resource_id=RID.Test.LastExecArgsArray,
-                                          instances=sorted(dict((k, v or b'') for k, v in args).items()))
+                                          instances=sorted(
+                                              dict((k, v or b'') for k, v in args).items()))
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=exec_args_tlv.serialize()),
                             self.serv.recv())
 
@@ -165,8 +189,9 @@ class ExecArgsDuplicateTest(TestObject.TestCase):
         req = Lwm2mRead(ResPath.Test[0].LastExecArgsArray)
         self.serv.send(req)
 
-        self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_INTERNAL_SERVER_ERROR),
-                            self.serv.recv())
+        self.assertMsgEqual(
+            Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_INTERNAL_SERVER_ERROR),
+            self.serv.recv())
 
 
 class EmptyBytesTest(TestObject.TestCase, test_suite.Lwm2mDmOperations):
@@ -175,15 +200,18 @@ class EmptyBytesTest(TestObject.TestCase, test_suite.Lwm2mDmOperations):
         self.assertEqual(response.get_content_format(), coap.ContentFormat.TEXT_PLAIN)
         self.assertEqual(response.content, b'')
 
-        response = self.read_path(self.serv, ResPath.Test[0].ResBytes, accept=coap.ContentFormat.TEXT_PLAIN)
+        response = self.read_path(self.serv, ResPath.Test[0].ResBytes,
+                                  accept=coap.ContentFormat.TEXT_PLAIN)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.TEXT_PLAIN)
         self.assertEqual(response.content, b'')
 
-        response = self.read_path(self.serv, ResPath.Test[0].ResBytes, accept=coap.ContentFormat.APPLICATION_OCTET_STREAM)
+        response = self.read_path(self.serv, ResPath.Test[0].ResBytes,
+                                  accept=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.assertEqual(response.content, b'')
 
-        response = self.read_instance(self.serv, OID.Test, 0, accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        response = self.read_instance(self.serv, OID.Test, 0,
+                                      accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.APPLICATION_LWM2M_TLV)
         tlv = TLV.parse(response.content)
         self.assertEqual(tlv[0].tlv_type, TLVType.RESOURCE)
@@ -209,7 +237,8 @@ class EmptyBytesTest(TestObject.TestCase, test_suite.Lwm2mDmOperations):
         for i in range(len(expected_rest)):
             self.assertEqual(tlv[i + 1], expected_rest[i])
 
-        response = self.read_instance(self.serv, OID.Test, 0, accept=coap.ContentFormat.APPLICATION_LWM2M_JSON)
+        response = self.read_instance(self.serv, OID.Test, 0,
+                                      accept=coap.ContentFormat.APPLICATION_LWM2M_JSON)
         self.assertEqual(response.get_content_format(), coap.ContentFormat.APPLICATION_LWM2M_JSON)
         js = json.loads(response.content.decode('utf-8'))
         self.assertEqual(len(js), 2)
@@ -284,7 +313,7 @@ class UpdateResourceInstanceTest(TestObject.TestCase):
 
         self.assertMsgEqual(Lwm2mChanged.matching(req)(),
                             self.serv.recv())
-        
+
         # check updated content
         updated_array_tlv = TLV.make_multires(
             resource_id=RID.Test.IntArray,
@@ -299,3 +328,27 @@ class UpdateResourceInstanceTest(TestObject.TestCase):
         self.assertMsgEqual(Lwm2mContent.matching(req)(content=updated_array_tlv.serialize(),
                                                        format=coap.ContentFormat.APPLICATION_LWM2M_TLV),
                             self.serv.recv())
+
+
+class WriteNonexistent(TestObject.TestCase):
+    def runTest(self):
+        # Read the state of the object
+        req = Lwm2mRead('/%d' % (OID.Test,))
+        self.serv.send(req)
+        read_response1 = self.serv.recv()
+        self.assertMsgEqual(Lwm2mContent.matching(req)(), read_response1)
+
+        # Write on an Object Instance path with a
+        req = Lwm2mWrite('/%d/%d' % (OID.Test, 0), TLV.make_resource(213, b'7').serialize(),
+                         format=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        # Read the object again and assert that it hasn't changed
+        req = Lwm2mRead('/%d' % (OID.Test,))
+        self.serv.send(req)
+        read_response2 = self.serv.recv()
+        self.assertMsgEqual(Lwm2mContent.matching(req)(), read_response2)
+
+        self.assertEqual(read_response1.content, read_response2.content)

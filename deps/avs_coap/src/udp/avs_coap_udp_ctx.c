@@ -324,10 +324,19 @@ static void _log_udp_msg_summary(const char *file,
     bool has_block1 =
             (avs_coap_options_get_block(&msg->options, AVS_COAP_BLOCK1, &block1)
              == 0);
+    avs_coap_option_block_string_buf_t block1_str_buf = { "" };
+    if (has_block1) {
+        _avs_coap_option_block_string(&block1_str_buf, &block1);
+    }
+
     avs_coap_option_block_t block2;
     bool has_block2 =
             (avs_coap_options_get_block(&msg->options, AVS_COAP_BLOCK2, &block2)
              == 0);
+    avs_coap_option_block_string_buf_t block2_str_buf = { "" };
+    if (has_block2) {
+        _avs_coap_option_block_string(&block2_str_buf, &block2);
+    }
 
     avs_log_internal_l__(
             AVS_LOG_DEBUG, AVS_QUOTE_MACRO(MODULE_NAME), file, (unsigned) line,
@@ -335,9 +344,7 @@ static void _log_udp_msg_summary(const char *file,
             info, AVS_COAP_CODE_STRING(msg->header.code),
             _avs_coap_udp_header_get_id(&msg->header),
             AVS_COAP_TOKEN_HEX(&msg->token), has_block1 ? ", " : "",
-            has_block1 ? _AVS_COAP_OPTION_BLOCK_STRING(&block1) : "",
-            has_block2 ? ", " : "",
-            has_block2 ? _AVS_COAP_OPTION_BLOCK_STRING(&block2) : "",
+            block1_str_buf.str, has_block2 ? ", " : "", block2_str_buf.str,
             observe_str, (unsigned) msg->payload_size);
 #    else  // WITH_AVS_COAP_BLOCK
     avs_log_internal_l__(AVS_LOG_DEBUG, AVS_QUOTE_MACRO(MODULE_NAME), file,

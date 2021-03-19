@@ -932,12 +932,11 @@ validate_resources_to_write(anjay_t *anjay,
  */
 static int perform_adds(anjay_t *anjay,
                         const anjay_dm_object_def_t *const *ac_obj,
-                        anjay_notify_queue_t notifications_already_queued,
-                        anjay_notify_queue_t *new_notifications_queue) {
+                        anjay_notify_queue_t *notifications_queue) {
     const anjay_ssid_t origin_ssid = _anjay_dm_current_ssid(anjay);
 
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
-    AVS_LIST_FOREACH(it, notifications_already_queued) {
+    AVS_LIST_FOREACH(it, *notifications_queue) {
         if (it->oid == ANJAY_DM_OID_SECURITY
                 || it->oid == ANJAY_DM_OID_ACCESS_CONTROL) {
             continue;
@@ -975,7 +974,7 @@ static int perform_adds(anjay_t *anjay,
                                            ANJAY_DM_RID_ACCESS_CONTROL_OWNER,
                                            ANJAY_ID_INVALID, origin_ssid))
                     || (result = _anjay_notify_queue_instance_created(
-                                new_notifications_queue,
+                                notifications_queue,
                                 ANJAY_DM_OID_ACCESS_CONTROL, ac_iid))) {
                 return result;
             }
@@ -1001,11 +1000,9 @@ get_ac_notif_entry(anjay_notify_queue_t queue) {
 }
 
 static int generate_apparent_instance_set_change_notifications(
-        anjay_t *anjay,
-        anjay_notify_queue_t notifications_already_queued,
-        anjay_notify_queue_t *new_notifications_queue) {
+        anjay_t *anjay, anjay_notify_queue_t *notifications_queue) {
     const anjay_notify_queue_object_entry_t *ac_notif =
-            get_ac_notif_entry(notifications_already_queued);
+            get_ac_notif_entry(*notifications_queue);
     if (!ac_notif) {
         return 0;
     }
@@ -1025,7 +1022,7 @@ static int generate_apparent_instance_set_change_notifications(
         if ((result = read_ids_from_ac_instance(anjay, it->iid, &target_oid,
                                                 NULL, NULL))
                 || (result = _anjay_notify_queue_instance_set_unknown_change(
-                            new_notifications_queue, target_oid))) {
+                            notifications_queue, target_oid))) {
             return result;
         }
     }
@@ -1034,17 +1031,13 @@ static int generate_apparent_instance_set_change_notifications(
 
 #endif // ANJAY_WITH_ACCESS_CONTROL
 
-int _anjay_sync_access_control(
-        anjay_t *anjay, anjay_notify_queue_t notifications_already_queued) {
+int _anjay_sync_access_control(anjay_t *anjay,
+                               anjay_notify_queue_t *notifications_queue) {
 #ifndef ANJAY_WITH_ACCESS_CONTROL
     (void) anjay;
-    (void) notifications_already_queued;
+    (void) notifications_queue;
     return 0;
 #else  // ANJAY_WITH_ACCESS_CONTROL
-    if (anjay->access_control_sync_in_progress) {
-        return 0;
-    }
-
     const anjay_dm_object_def_t *const *ac_obj = get_access_control(anjay);
     if (!ac_obj) {
         return 0;
@@ -1052,34 +1045,24 @@ int _anjay_sync_access_control(
     bool might_caused_orphaned_ac_instances;
     bool have_adds;
     bool might_have_removes;
-    what_changed(_anjay_dm_current_ssid(anjay), notifications_already_queued,
+    what_changed(_anjay_dm_current_ssid(anjay), *notifications_queue,
                  &might_caused_orphaned_ac_instances, &have_adds,
                  &might_have_removes);
     int result = 0;
-    anjay->access_control_sync_in_progress = true;
     _anjay_dm_transaction_begin(anjay);
-    anjay_notify_queue_t new_notifications_queue = NULL;
     if (might_have_removes) {
-        result = perform_removes(anjay, ac_obj, &new_notifications_queue);
+        result = perform_removes(anjay, ac_obj, notifications_queue);
     }
     if (!result && might_caused_orphaned_ac_instances) {
-        result = remove_orphaned_instances(anjay, ac_obj,
-                                           &new_notifications_queue);
+        result = remove_orphaned_instances(anjay, ac_obj, notifications_queue);
     }
     if (!result && have_adds) {
-        result = perform_adds(anjay, ac_obj, notifications_already_queued,
-                              &new_notifications_queue);
+        result = perform_adds(anjay, ac_obj, notifications_queue);
     }
     if (!result) {
         result = generate_apparent_instance_set_change_notifications(
-                anjay, notifications_already_queued, &new_notifications_queue);
+                anjay, notifications_queue);
     }
-    if (!result) {
-        result = _anjay_notify_flush(anjay, &new_notifications_queue);
-    }
-    _anjay_notify_clear_queue(&new_notifications_queue);
-    result = _anjay_dm_transaction_finish(anjay, result);
-    anjay->access_control_sync_in_progress = false;
-    return result;
+    return _anjay_dm_transaction_finish(anjay, result);
 #endif // ANJAY_WITH_ACCESS_CONTROL
 }

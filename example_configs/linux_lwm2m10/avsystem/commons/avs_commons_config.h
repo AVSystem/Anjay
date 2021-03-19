@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -291,24 +291,72 @@
  * Enables high-level support for hardware-based security, i.e. loading,
  * generating and managing keys and certificates via external engines.
  *
- * An actual implementation is required to use this feature. You may use the
- * default one, based on OpenSSL and libp11 (see
+ * An actual implementation is required to use this feature. In the commercial
+ * version, you may use one of the default ones utilizing the PKCS#11 API (see
+ * @ref AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE and
  * @ref AVS_COMMONS_WITH_OPENSSL_PKCS11_ENGINE) or provide your own.
  *
- * Only OpenSSL-based external engines are currently supported (see also
- * @ref AVS_COMMONS_WITH_OPENSSL).
+ * The functions that need to be provided in case of a custom implementation:
+ * - <c>avs_crypto_pki_engine_certificate_rm()</c>
+ * - <c>avs_crypto_pki_engine_certificate_store()</c>
+ * - <c>avs_crypto_pki_engine_key_gen()</c>
+ * - <c>avs_crypto_pki_engine_key_rm()</c>
+ * - When targeting the Mbed TLS backend:
+ *   - <c>_avs_crypto_mbedtls_engine_initialize_global_state()</c>
+ *   - <c>_avs_crypto_mbedtls_engine_cleanup_global_state()</c>
+ *   - <c>_avs_crypto_mbedtls_engine_append_cert()</c>
+ *   - <c>_avs_crypto_mbedtls_engine_append_crl()</c>
+ *   - <c>_avs_crypto_mbedtls_engine_load_private_key()</c>
+ * - When targeting the OpenSSL backend:
+ *   - <c>_avs_crypto_openssl_engine_initialize_global_state()</c>
+ *   - <c>_avs_crypto_openssl_engine_cleanup_global_state()</c>
+ *   - <c>_avs_crypto_openssl_engine_load_certs()</c>
+ *   - <c>_avs_crypto_openssl_engine_load_crls()</c>
+ *   - <c>_avs_crypto_openssl_engine_load_private_key()</c>
+ *
+ * External engines are supported only in OpenSSL and Mbed TLS backends.
  */
 /* #undef AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE */
 
 /**
- * Enables the default implementation of avs_crypto engine, based on OpenSSL and
- * libp11.
+ * Enables the default implementation of avs_crypto engine, based on Mbed TLS
+ * and PKCS#11.
  *
  * Requires @ref AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE to be enabled.
  *
  * NOTE: The unit tests for this feature depend on SoftHSM and pkcs11-tool.
  * These must be installed for the tests to pass.
+ *
+ * IMPORTANT: Only available in the commercial version. Ignored in the open
+ * source version. */
+/* #undef AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE */
+
+/**
+ * Is the <c>dlsym()</c> function available?
+ *
+ * This is currently only used if @ref AVS_COMMONS_WITH_MBEDTLS_PKCS11_ENGINE is
+ * enabled. If enabled, the PKCS#11 module is loaded dynamically from a library
+ * specified by the <c>PKCS11_MODULE_PATH</c> environment variable. If disabled,
+ * a function with the following signature, realizing the PKCS#11
+ * <c>C_GetFunctionList</c> method, must be provided manually:
+ *
+ * <pre>
+ * CK_RV _avs_crypto_mbedtls_pkcs11_get_function_list(CK_FUNCTION_LIST_PTR_PTR);
+ * </pre>
  */
+#define AVS_COMMONS_HAVE_DLSYM
+
+/**
+ * Enables the default implementation of avs_crypto engine, based on OpenSSL and
+ * PKCS#11.
+ *
+ * Requires @ref AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE to be enabled.
+ *
+ * NOTE: The unit tests for this feature depend on SoftHSM and pkcs11-tool.
+ * These must be installed for the tests to pass.
+ *
+ * IMPORTANT: Only available in the commercial version. Ignored in the open
+ * source version. */
 /* #undef AVS_COMMONS_WITH_OPENSSL_PKCS11_ENGINE */
 /**@}*/
 

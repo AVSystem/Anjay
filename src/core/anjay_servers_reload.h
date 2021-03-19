@@ -17,9 +17,9 @@
 #ifndef ANJAY_SERVERS_RELOAD_H
 #define ANJAY_SERVERS_RELOAD_H
 
-#include <anjay/core.h>
+#include <anjay_modules/anjay_servers.h>
 
-#if !defined(ANJAY_SERVERS_INTERNALS) && !defined(ANJAY_TEST)
+#if !(defined(ANJAY_SERVERS_INTERNALS) || defined(ANJAY_TEST))
 #    error "Headers from servers/ are not meant to be included from outside"
 #endif
 

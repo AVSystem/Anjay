@@ -72,9 +72,9 @@ static int url_parse_chunks(const char **url,
 
                 if (chunk_len) {
                     memcpy(chunk, chunk_begin, chunk_len);
-
+                    size_t unescaped_length;
                     if (avs_url_percent_decode(chunk->c_str,
-                                               &(size_t[]){ 0 }[0])) {
+                                               &unescaped_length)) {
                         return -1;
                     }
                 }
@@ -302,8 +302,8 @@ avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
 
     if (sms_msisdn
             && avs_is_err((err = avs_coap_options_add_string_f(
-                                   opts, AVS_COAP_OPTION_URI_QUERY, "sms=%s",
-                                   sms_msisdn)))) {
+                                   opts, AVS_COAP_OPTION_URI_QUERY, "sms%s%s",
+                                   *sms_msisdn ? "=" : "", sms_msisdn)))) {
         return err;
     }
 

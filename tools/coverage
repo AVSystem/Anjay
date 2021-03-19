@@ -34,7 +34,11 @@ pushd "$PROJECT_ROOT/build/coverage"
     make check
 
     mkdir -p "$PROJECT_ROOT/coverage"
-    gcovr . --html --html-details -r "$PROJECT_ROOT" -o "$PROJECT_ROOT/coverage/coverage.html"
+    gcovr . --html --html-details -r "$PROJECT_ROOT" \
+            -f "$PROJECT_ROOT/src" -f "$PROJECT_ROOT/include_public" \
+            -f "$PROJECT_ROOT/deps/avs_coap/src" -f "$PROJECT_ROOT/deps/avs_coap/include_public" \
+            -f "$PROJECT_ROOT/deps/avs_commons/src" -f "$PROJECT_ROOT/deps/avs_commons/include_public" \
+            -o "$PROJECT_ROOT/coverage/coverage.html"
 popd
 
 cat <<EOF

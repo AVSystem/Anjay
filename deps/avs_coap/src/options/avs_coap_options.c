@@ -64,11 +64,10 @@ static bool is_block_option_content_valid(const avs_coap_option_t *block_opt,
                                           uint32_t opt_number) {
     // Attempt to parse the BLOCK1/BLOCK2 option. This operation will fail in
     // case the option content is not well-formed.
-    return (fill_block_data(block_opt, opt_number,
-                            &(avs_coap_option_block_t) {
-                                .type = AVS_COAP_BLOCK1
-                            })
-            == 0);
+    avs_coap_option_block_t opt = {
+        .type = AVS_COAP_BLOCK1
+    };
+    return (fill_block_data(block_opt, opt_number, &opt) == 0);
 }
 
 static avs_error_t

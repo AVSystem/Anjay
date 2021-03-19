@@ -33,7 +33,6 @@
 static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
     unsigned id;
     if (sscanf(text, "%u", &id) < 1 || id > UINT16_MAX) {
-        demo_log(ERROR, "invalid Short Server ID: %s", text);
         return -1;
     }
     *out_ssid = (uint16_t) id;
@@ -43,6 +42,7 @@ static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
 static void cmd_send_update(anjay_demo_t *demo, char *args_string) {
     anjay_ssid_t ssid = ANJAY_SSID_ANY;
     if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
         return;
     }
 
@@ -647,6 +647,7 @@ static void cmd_disable_server(anjay_demo_t *demo, char *args_string) {
 static void cmd_enable_server(anjay_demo_t *demo, char *args_string) {
     anjay_ssid_t ssid = ANJAY_SSID_ANY;
     if (*args_string && parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
         return;
     }
 

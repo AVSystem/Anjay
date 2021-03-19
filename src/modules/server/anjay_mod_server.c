@@ -101,8 +101,8 @@ static int add_instance(server_repr_t *repr,
     }
     if (instance->binding) {
         if (!anjay_binding_mode_valid(instance->binding)
-                || avs_simple_snprintf(new_instance->binding,
-                                       sizeof(new_instance->binding), "%s",
+                || avs_simple_snprintf(new_instance->binding.data,
+                                       sizeof(new_instance->binding.data), "%s",
                                        instance->binding)
                                < 0) {
             server_log(ERROR, _("Unsupported binding mode: ") "%s",
@@ -281,7 +281,7 @@ static int serv_read(anjay_t *anjay,
     case SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE:
         return anjay_ret_bool(ctx, inst->notification_storing);
     case SERV_RES_BINDING:
-        return anjay_ret_string(ctx, inst->binding);
+        return anjay_ret_string(ctx, inst->binding.data);
     default:
         AVS_UNREACHABLE(
                 "Read called on unknown or non-readable Server resource");
@@ -447,6 +447,11 @@ int anjay_server_object_add_instance(anjay_t *anjay,
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
     server_repr_t *repr = _anjay_serv_get(obj_ptr);
 
+    if (!repr) {
+        server_log(ERROR, _("Server object is not registered"));
+        return -1;
+    }
+
     const bool modified_since_persist = repr->modified_since_persist;
     int retval = add_instance(repr, instance, inout_iid);
     if (!retval && (retval = _anjay_serv_object_validate(repr))) {
@@ -486,6 +491,11 @@ void anjay_server_object_purge(anjay_t *anjay) {
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
     server_repr_t *repr = _anjay_serv_get(server_obj);
 
+    if (!repr) {
+        server_log(ERROR, _("Server object is not registered"));
+        return;
+    }
+
     server_purge(repr);
 
     if (anjay_notify_instances_changed(anjay, SERVER.oid)) {
@@ -518,6 +528,10 @@ bool anjay_server_object_is_modified(anjay_t *anjay) {
 
     server_repr_t *repr =
             _anjay_serv_get(_anjay_dm_find_object_by_oid(anjay, SERVER.oid));
+    if (!repr) {
+        server_log(ERROR, _("Server object is not registered"));
+        return false;
+    }
     return repr->in_transaction ? repr->saved_modified_since_persist
                                 : repr->modified_since_persist;
 }

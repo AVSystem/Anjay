@@ -15,11 +15,13 @@
 # limitations under the License.
 
 import socket
-import unittest
+import time
 
 from framework.lwm2m_test import *
+from . import retransmissions
 
 OFFLINE_INTERVAL = 4
+
 
 class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
     def runTest(self):
@@ -147,4 +149,94 @@ class OfflineWithRegistrationUpdateSchedule(test_suite.Lwm2mDtlsSingleServerTest
         self.communicate('exit-offline')
         self.assertDtlsReconnect()
         self.assertDemoUpdatesRegistration()
+
+
+class OfflineWithQueueMode(retransmissions.RetransmissionTest.TestMixin,
+                           test_suite.Lwm2mDtlsSingleServerTest):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], binding='UQ')
+
+    def runTest(self):
+        self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2)
+        self.communicate('enter-offline')
+        time.sleep(2)
+
+        # After exiting offline mode, the client shall not reconnect
+        self.communicate('exit-offline')
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=5)
+
+        # Something should happen only when there is something to send
+        self.communicate('send-update')
+        self.assertDtlsReconnect()
+        self.assertDemoUpdatesRegistration()
+
+
+class OfflineWithQueueModeScheduledUpdate(retransmissions.RetransmissionTest.TestMixin,
+                                          test_suite.Lwm2mDtlsSingleServerTest):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], lifetime=45, auto_register=False)
+
+    def runTest(self):
+        self.assertDemoRegisters(lifetime=45, binding='UQ')
+        next_planned_update = time.time() + 45.0 - self.max_transmit_wait()
+
+        self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2.0)
+        self.communicate('enter-offline')
+        time.sleep(2)
+
+        # After exiting offline mode, the client shall not reconnect
+        self.communicate('exit-offline')
+        timeout_s = next_planned_update - time.time() - 2.0
+        self.assertGreater(timeout_s, 0.0)
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=timeout_s)
+
+        # The Update message shall be delivered on time
+        self.assertDtlsReconnect(timeout_s=5)
+        self.assertDemoUpdatesRegistration()
+
+
+class OfflineWithQueueModeNotify(retransmissions.RetransmissionTest.TestMixin,
+                                 test_suite.Lwm2mDtlsSingleServerTest,
+                                 test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], binding='UQ')
+
+    def runTest(self):
+        token = self.observe(self.serv, OID.EventLog, 0, RID.EventLog.LogData).token
+        self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2)
+        self.communicate('enter-offline')
+        time.sleep(2)
+
+        # After exiting offline mode, the client shall not reconnect
+        self.communicate('exit-offline')
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=5)
+
+        # Something should happen only when there is something to send
+        self.communicate('set-event-log-data Papaya')
+        self.assertDtlsReconnect()
+        self.assertMsgEqual(Lwm2mNotify(token=token), self.serv.recv())
+
+
+class OfflineWithQueueModeScheduledNotify(retransmissions.RetransmissionTest.TestMixin,
+                                          test_suite.Lwm2mDtlsSingleServerTest,
+                                          test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], binding='UQ')
+
+    def runTest(self):
+        token = self.observe(self.serv, OID.EventLog, 0, RID.EventLog.LogData).token
+        self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2)
+        self.communicate('enter-offline')
+        time.sleep(2)
+
+        self.communicate('set-event-log-data Papaya')
+        time.sleep(1)
+        # After exiting offline mode, the client shall deliver the unsent notification
+        self.communicate('exit-offline')
+        self.assertDtlsReconnect()
+        self.assertMsgEqual(Lwm2mNotify(token=token), self.serv.recv())
+
 

@@ -48,10 +48,12 @@ int _anjay_serv_fetch_validated_i32(anjay_input_ctx_t *ctx,
 int _anjay_serv_fetch_binding(anjay_input_ctx_t *ctx,
                               anjay_binding_mode_t *out_binding) {
     int retval;
-    if ((retval = anjay_get_string(ctx, *out_binding, sizeof(*out_binding)))) {
+    if ((retval = anjay_get_string(
+                 ctx, out_binding->data, sizeof(out_binding->data)))) {
         return retval;
     }
-    return anjay_binding_mode_valid(*out_binding) ? 0 : ANJAY_ERR_BAD_REQUEST;
+    return anjay_binding_mode_valid(out_binding->data) ? 0
+                                                       : ANJAY_ERR_BAD_REQUEST;
 }
 
 AVS_LIST(server_instance_t)

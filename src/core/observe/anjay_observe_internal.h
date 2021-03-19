@@ -78,6 +78,8 @@ struct anjay_observe_connection_entry_struct {
     AVS_LIST(anjay_observation_value_t) unsent_last;
 };
 
+#ifdef ANJAY_WITH_OBSERVE
+
 static inline bool
 _anjay_observe_is_error_details(const anjay_msg_details_t *details) {
     return avs_coap_code_get_class(details->msg_code) >= 4;
@@ -103,7 +105,12 @@ int _anjay_observe_schedule_pmax_trigger(
         anjay_observe_connection_entry_t *conn_state,
         anjay_observation_t *entry);
 
+AVS_LIST(anjay_observe_connection_entry_t) *
+_anjay_observe_find_connection_state(anjay_connection_ref_t ref);
+
 void _anjay_observe_cancel_handler(avs_coap_observe_id_t id, void *ref_ptr);
+
+#endif // ANJAY_WITH_OBSERVE
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -110,6 +110,12 @@ class Lwm2mMsg(coap.Packet):
             return ('(malformed TLV: %s)\n' % (exc,)
                     + Lwm2mMsg._decode_binary_content(content))
 
+    @staticmethod
+    def _decode_json_content(content):
+        import json
+        import pprint
+        return str(pprint.pformat(json.loads(content)))
+
 
     def _decode_content(self):
         if self.content is ANY:
@@ -120,12 +126,15 @@ class Lwm2mMsg(coap.Packet):
             coap.ContentFormat.APPLICATION_LINK: Lwm2mMsg._decode_text_content,
             coap.ContentFormat.APPLICATION_LWM2M_TLV: Lwm2mMsg._decode_tlv_content,
             coap.ContentFormat.APPLICATION_OCTET_STREAM: Lwm2mMsg._decode_binary_content,
+            coap.ContentFormat.APPLICATION_LWM2M_JSON: Lwm2mMsg._decode_json_content,
+            coap.ContentFormat.APPLICATION_LWM2M_SENML_JSON: Lwm2mMsg._decode_json_content,
         }
 
         desired_decoders = set()
 
         for opt in self.get_options(coap.Option.CONTENT_FORMAT):
-            decoder = decoders.get(opt.content_to_int(), Lwm2mMsg._decode_binary_content)
+            decoder = decoders.get(opt.content_to_int(),
+                                   Lwm2mMsg._decode_binary_content)
             desired_decoders.add(decoder)
 
         if not desired_decoders:
@@ -219,7 +228,8 @@ class Lwm2mRequestBootstrap(Lwm2mMsg):
                          token=token,
                          options=concat_if_not_any(
                              CoapPath(uri_path + '/bs').to_uri_options(),
-                             [coap.Option.URI_QUERY(query) for query in uri_query],
+                             [coap.Option.URI_QUERY(query)
+                              for query in uri_query],
                              options),
                          content=content)
 
@@ -341,7 +351,8 @@ class Lwm2mUpdate(Lwm2mMsg):
                          options=concat_if_not_any(
                              path.to_uri_options(),
                              [coap.Option.URI_QUERY(q) for q in query],
-                             ([coap.Option.CONTENT_FORMAT.APPLICATION_LINK] if content else []),
+                             ([coap.Option.CONTENT_FORMAT.APPLICATION_LINK]
+                              if content else []),
                              options),
                          content=content)
 
@@ -412,7 +423,8 @@ class CoapGet(Lwm2mMsg):
         accept = self.get_options(coap.Option.ACCEPT)
         if accept:
             accept_vals = [x.content_to_int() for x in accept]
-            text += ': accept ' + ', '.join(map(coap.ContentFormat.to_str, accept_vals))
+            text += ': accept ' + \
+                ', '.join(map(coap.ContentFormat.to_str, accept_vals))
 
         return text
 
@@ -442,7 +454,8 @@ class Lwm2mRead(CoapGet):
         accept = self.get_options(coap.Option.ACCEPT)
         if accept:
             accept_vals = [x.content_to_int() for x in accept]
-            text += ': accept ' + ', '.join(map(coap.ContentFormat.to_str, accept_vals))
+            text += ': accept ' + \
+                ', '.join(map(coap.ContentFormat.to_str, accept_vals))
 
         return text
 
@@ -477,7 +490,8 @@ class Lwm2mObserve(Lwm2mRead):
     def summary(self):
         opt = self.get_options(coap.Option.OBSERVE)
         if len(opt) > 1:
-            text = 'Observe %s (multiple Observe options)' % (self.get_full_uri(),)
+            text = 'Observe %s (multiple Observe options)' % (
+                self.get_full_uri(),)
         else:
             opt = opt[0]
             if opt.content_to_int() == 0:
@@ -491,7 +505,8 @@ class Lwm2mObserve(Lwm2mRead):
         accept = self.get_options(coap.Option.ACCEPT)
         if accept:
             accept_vals = [x.content_to_int() for x in accept]
-            text += ': accept ' + ', '.join(map(coap.ContentFormat.to_str, accept_vals))
+            text += ': accept ' + \
+                ', '.join(map(coap.ContentFormat.to_str, accept_vals))
 
         return text
 
@@ -554,7 +569,8 @@ class Lwm2mWrite(Lwm2mMsg):
                          content=content)
 
     def summary(self):
-        fmt_vals = [x.content_to_int() for x in self.get_options(coap.Option.CONTENT_FORMAT)]
+        fmt_vals = [x.content_to_int()
+                    for x in self.get_options(coap.Option.CONTENT_FORMAT)]
         fmt = ', '.join(map(coap.ContentFormat.to_str, fmt_vals))
 
         return ('Write%s %s: %s, %d bytes'
@@ -613,7 +629,8 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
                          content=b'')
 
     def summary(self):
-        attrs = ', '.join(x.content_to_str() for x in self.get_options(coap.Option.URI_QUERY))
+        attrs = ', '.join(x.content_to_str()
+                          for x in self.get_options(coap.Option.URI_QUERY))
         return 'Write Attributes %s: %s' % (self.get_full_uri(), attrs)
 
 
@@ -701,7 +718,8 @@ class Lwm2mDelete(Lwm2mMsg):
         if isinstance(path, str):
             path = Lwm2mPath(path)
         if path.resource_id is not None:
-            raise ValueError('LWM2M Resource path is not applicable to a Delete: %s' % (path,))
+            raise ValueError(
+                'LWM2M Resource path is not applicable to a Delete: %s' % (path,))
 
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_DELETE,
@@ -806,7 +824,8 @@ class Lwm2mCreated(Lwm2mResponse):
                          msg_id=msg_id,
                          token=token,
                          options=concat_if_not_any(
-                             location.to_uri_options(opt=coap.Option.LOCATION_PATH),
+                             location.to_uri_options(
+                                 opt=coap.Option.LOCATION_PATH),
                              options))
 
     def summary(self):
@@ -832,7 +851,8 @@ class Lwm2mDeleted(Lwm2mResponse):
                          msg_id=msg_id,
                          token=token,
                          options=concat_if_not_any(
-                             location.to_uri_options(coap.Option.LOCATION_PATH),
+                             location.to_uri_options(
+                                 coap.Option.LOCATION_PATH),
                              options))
 
     def summary(self):
@@ -859,7 +879,8 @@ class Lwm2mChanged(Lwm2mResponse):
                          msg_id=msg_id,
                          token=token,
                          options=concat_if_not_any(
-                             location.to_uri_options(coap.Option.LOCATION_PATH),
+                             location.to_uri_options(
+                                 coap.Option.LOCATION_PATH),
                              options),
                          content=content)
 

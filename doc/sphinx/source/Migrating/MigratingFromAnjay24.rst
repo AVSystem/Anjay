@@ -71,7 +71,7 @@ Change of security configuration lifetime
 
         int anjay_security_config_from_dm(anjay_t *anjay,
                                           anjay_security_config_t *out_config,
-                                          const char *raw_url);
+                                          const char *uri);
 
   * The security configuration is now returned through an output argument with
     any necessary internal buffers cached inside the Anjay object instead of

@@ -98,9 +98,9 @@ static int validate_instance(server_instance_t *it) {
         return -1;
     }
 #    endif // ANJAY_WITHOUT_DEREGISTER
-    if (!anjay_binding_mode_valid(it->binding)) {
+    if (!anjay_binding_mode_valid(it->binding.data)) {
         LOG_VALIDATION_FAILED(it, _("Incorrect binding mode ") "%s",
-                              it->binding);
+                              it->binding.data);
         return -1;
     }
 

@@ -73,7 +73,7 @@ static void assert_instances_equal(const server_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->iid, b->iid);
     AVS_UNIT_ASSERT_EQUAL(a->has_binding, b->has_binding);
     if (a->has_binding) {
-        AVS_UNIT_ASSERT_EQUAL_STRING(a->binding, b->binding);
+        AVS_UNIT_ASSERT_EQUAL_STRING(a->binding.data, b->binding.data);
     }
     AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
     if (a->has_ssid) {
@@ -145,7 +145,9 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore_version_1) {
         .default_max_period = -1,
         .disable_timeout = -1,
         .has_binding = true,
-        .binding = "UQ",
+        .binding = {
+            .data = "UQ",
+        },
         .notification_storing = true,
         .has_ssid = true,
         .has_lifetime = true,
@@ -178,7 +180,9 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
     const server_instance_t expected_server_instance = {
         .iid = 1,
         .has_binding = true,
-        .binding = "UQ",
+        .binding = {
+            .data = "UQ",
+        },
         .has_ssid = true,
         .ssid = 42,
         .has_lifetime = true,

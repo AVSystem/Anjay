@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.9.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.10.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -99,15 +99,6 @@ set(MAX_URI_QUERY_SEGMENT_SIZE 256 CACHE STRING
 set(DTLS_SESSION_BUFFER_SIZE 1024 CACHE STRING
     "Size of the buffer that caches DTLS session information for resumption support.")
 
-################# CONVENIENCE SUPPORT ##########################################
-
-macro(make_absolute_sources ABSVAR)
-    set(${ABSVAR})
-    foreach(SRC ${ARGN})
-        set(${ABSVAR} ${${ABSVAR}} ${CMAKE_CURRENT_SOURCE_DIR}/${SRC})
-    endforeach()
-endmacro()
-
 ################# FEATURES THAT REQUIRE LIBRARY CONFIGURATION ##################
 
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
@@ -161,8 +152,8 @@ if(WITH_LOCAL_AVS_COMMONS)
         set(${OPTION_NAME} ${OPTION_VALUE} CACHE INTERNAL "")
     endfunction()
 
-    read_avs_coap_compile_time_option(AVS_COMMONS_HAVE_VISIBILITY)
-    read_avs_coap_compile_time_option(AVS_COMMONS_STREAM_WITH_FILE)
+    read_avs_commons_compile_time_option(AVS_COMMONS_HAVE_VISIBILITY)
+    read_avs_commons_compile_time_option(AVS_COMMONS_STREAM_WITH_FILE)
     set(WITH_AVS_STREAM_FILE "${AVS_COMMONS_STREAM_WITH_FILE}")
 else()
     set(_DTLS_BACKENDS "mbedtls" "openssl" "tinydtls")
@@ -336,6 +327,7 @@ add_library(anjay
             src/core/anjay_io_core.h
             src/core/anjay_servers_inactive.h
             src/core/anjay_servers_private.h
+            src/core/anjay_servers_reload.h
             src/core/anjay_servers_utils.h
             src/core/anjay_stats.h
             src/core/anjay_utils_private.h
@@ -363,7 +355,6 @@ add_library(anjay
             src/core/servers/anjay_connections.h
             src/core/servers/anjay_connections_internal.h
             src/core/servers/anjay_register.h
-            src/core/servers/anjay_reload.h
             src/core/servers/anjay_security.h
             src/core/servers/anjay_server_connections.h
             src/core/servers/anjay_servers_internal.h
@@ -563,23 +554,26 @@ if(WITH_TEST)
     endif()
 
     # Source validation
-    foreach(F ${ABSOLUTE_SOURCES})
-        add_test(NAME test_${F}_visibility COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_visibility.py ${F})
-        add_test(NAME test_${F}_headers COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_headers.py ${F})
-    endforeach()
-
-    add_custom_target(visibility_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_visibility$$'")
-    add_dependencies(anjay_unit_check visibility_check)
-
-    add_custom_target(headers_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_headers$$'")
-    add_dependencies(anjay_unit_check headers_check)
-
+    get_target_property(ANJAY_SOURCES anjay SOURCES)
     set(ABSOLUTE_HEADERS)
-    foreach(F ${ABSOLUTE_SOURCES})
+    foreach(F ${ANJAY_SOURCES})
+        add_test(NAME test_anjay_${F}_visibility
+                 COMMAND deps/avs_commons/test_visibility.py ${F}
+                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        add_test(NAME test_anjay_${F}_headers
+                 COMMAND deps/avs_commons/test_headers.py ${F} tools/conditional_headers_whitelist.json
+                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         if(F MATCHES [.]h$)
-            list(APPEND ABSOLUTE_HEADERS ${F})
+            list(APPEND ABSOLUTE_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/${F}")
         endif()
     endforeach()
+
+    add_custom_target(visibility_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_anjay_.*_visibility$$'")
+    add_dependencies(anjay_unit_check visibility_check)
+
+    add_custom_target(headers_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_anjay_.*_headers$$'")
+    add_dependencies(anjay_unit_check headers_check)
+
     add_test(NAME test_function_duplicates COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_duplicates.py ${ABSOLUTE_HEADERS})
     add_test(NAME test_markdown_toc COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/markdown-toc.py --check "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
     add_test(NAME test_config_log COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/anjay_config_log_tool.py validate)
@@ -609,15 +603,15 @@ if(WITH_TEST)
     add_custom_target(symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_.*_symbols$$'" --output-on-failure)
 
     if(BUILD_SHARED_LIBS)
-        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ "__odr_asan[.]")
+        add_test(NAME test_so_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ "__odr_asan[.]")
     else()
-        add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ _anjay_ _ANJAY_ "__odr_asan[.]")
+        add_test(NAME test_a_symbols COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/test_symbols.sh $<TARGET_FILE:anjay> anjay_ ANJAY_ _anjay_ _ANJAY_ "__odr_asan[.]")
     endif()
     add_dependencies(symbols_check anjay)
     add_dependencies(anjay_unit_check symbols_check)
 
     add_custom_target(anjay_extern_c_check COMMAND
-                      "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/tools/check-extern-c.py" --path "${CMAKE_CURRENT_SOURCE_DIR}")
+                      "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/tools/check_extern_c.py" --path "${CMAKE_CURRENT_SOURCE_DIR}")
     add_dependencies(anjay_unit_check anjay_extern_c_check)
 
     add_custom_target(anjay_filename_check

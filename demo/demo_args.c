@@ -225,11 +225,12 @@ static void print_help(const struct option *options) {
           "set the Binding Mode to use for the currently configured server."
           "If Binding Mode is not set by this flag, client tries to derive it"
           "from URI and if it cannot, it uses the default value 'U'" },
-        { 's', "MODE", NULL, "set security mode, one of: psk rpk cert nosec." },
+        { 's', "MODE", NULL,
+          "set security mode, one of: psk rpk cert nosec. "
+          "Note: only affects coaps:// and coaps+*:// URLs" },
         { 'u', "URI", NULL,
-          "server URI to use. Note: coap:// URIs require --security-mode nosec "
-          "to be set. N consecutive URIs will create N servers enumerated "
-          "from 1 to N." },
+          "server URI to use. N consecutive URIs will create N servers "
+          "enumerated from 1 to N." },
         { 'D', "IID", NULL,
           "enforce particular Security Instance IID for last configured "
           "server." },

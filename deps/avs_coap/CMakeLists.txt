@@ -229,6 +229,37 @@ if(WITH_TEST)
         add_dependencies(check avs_coap_check)
     endif()
 
+    # Source validation
+    if(DEFINED AVS_COMMONS_SOURCE_DIR)
+        set(ABSOLUTE_HEAEDERS)
+        foreach(F ${SOURCES})
+            add_test(NAME test_avs_coap_${F}_visibility
+                     COMMAND "${AVS_COMMONS_SOURCE_DIR}/test_visibility.py" "${F}"
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+            add_test(NAME test_avs_coap_${F}_headers
+                     COMMAND "${AVS_COMMONS_SOURCE_DIR}/test_headers.py" "${F}" tools/conditional_headers_whitelist.json
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+            if(F MATCHES [.]h$)
+                list(APPEND ABSOLUTE_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/${F}")
+            endif()
+        endforeach()
+
+        add_custom_target(avs_coap_visibility_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_avs_coap_.*_visibility$$'")
+        add_dependencies(avs_coap_check avs_coap_visibility_check)
+
+        add_custom_target(avs_coap_headers_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_avs_coap_.*_headers$$'")
+        add_dependencies(avs_coap_check avs_coap_headers_check)
+
+        set(ALLOWED_SYMBOLS avs_coap_ AVS_COAP_ "__odr_asan[.]")
+        if(NOT BUILD_SHARED_LIBS)
+            set(ALLOWED_SYMBOLS ${ALLOWED_SYMBOLS} _avs_coap_ _AVS_COAP_)
+        endif()
+        add_test(NAME test_avs_coap_symbols COMMAND "${AVS_COMMONS_SOURCE_DIR}/test_symbols.sh" $<TARGET_FILE:avs_coap> ${ALLOWED_SYMBOLS})
+        add_custom_target(avs_coap_symbols_check COMMAND ${CMAKE_CTEST_COMMAND} -R "'^test_avs_coap_symbols$$'" --output-on-failure)
+        add_dependencies(avs_coap_symbols_check avs_coap)
+        add_dependencies(avs_coap_check avs_coap_symbols_check)
+    endif()
+
     add_subdirectory(tests/fuzz)
 
     include(cmake/AddHeaderSelfSufficiencyTests.cmake)

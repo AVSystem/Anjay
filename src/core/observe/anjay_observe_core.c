@@ -299,36 +299,38 @@ static int schedule_trigger(anjay_observe_connection_entry_t *conn_state,
     avs_time_monotonic_t monotonic_now = avs_time_monotonic_now();
     avs_time_real_t real_now = avs_time_real_now();
 
-    avs_time_monotonic_t trigger_instant = avs_time_monotonic_add(
-            monotonic_now,
-            avs_time_duration_add(
-                    avs_time_real_diff(newest_value(observation)->timestamp,
-                                       real_now),
-                    avs_time_duration_from_scalar(period, AVS_TIME_S)));
-    if (avs_time_monotonic_before(trigger_instant, monotonic_now)) {
-        trigger_instant = monotonic_now;
+    avs_time_real_t trigger_instant_real = avs_time_real_add(
+            newest_value(observation)->timestamp,
+            avs_time_duration_from_scalar(period, AVS_TIME_S));
+    if (avs_time_real_before(trigger_instant_real, real_now)) {
+        trigger_instant_real = real_now;
     }
 
+    avs_time_monotonic_t trigger_instant_monotonic = avs_time_monotonic_add(
+            monotonic_now, avs_time_real_diff(trigger_instant_real, real_now));
     if (avs_time_monotonic_before(avs_sched_time(&observation->notify_task),
-                                  trigger_instant)) {
-        anjay_log(LAZY_TRACE,
-                  _("Notify for token ") "%s" _(" already scheduled earlier "
-                                                "than requested ") "%ld.%09lds",
-                  ANJAY_TOKEN_TO_STRING(observation->token),
-                  (long) trigger_instant.since_monotonic_epoch.seconds,
-                  (long) trigger_instant.since_monotonic_epoch.nanoseconds);
+                                  trigger_instant_monotonic)) {
+        anjay_log(
+                LAZY_TRACE,
+                _("Notify for token ") "%s" _(" already scheduled earlier "
+                                              "than requested ") "%ld.%09lds",
+                ANJAY_TOKEN_TO_STRING(observation->token),
+                (long) trigger_instant_monotonic.since_monotonic_epoch.seconds,
+                (long) trigger_instant_monotonic.since_monotonic_epoch
+                        .nanoseconds);
         return 0;
     }
 
-    anjay_log(LAZY_TRACE,
-              _("Notify for token ") "%s" _(" scheduled: ") "%ld.%09lds",
-              ANJAY_TOKEN_TO_STRING(observation->token),
-              (long) trigger_instant.since_monotonic_epoch.seconds,
-              (long) trigger_instant.since_monotonic_epoch.nanoseconds);
+    anjay_log(
+            LAZY_TRACE,
+            _("Notify for token ") "%s" _(" scheduled: ") "%ld.%09lds",
+            ANJAY_TOKEN_TO_STRING(observation->token),
+            (long) trigger_instant_monotonic.since_monotonic_epoch.seconds,
+            (long) trigger_instant_monotonic.since_monotonic_epoch.nanoseconds);
 
     int retval =
             AVS_SCHED_AT(_anjay_from_server(conn_state->conn_ref.server)->sched,
-                         &observation->notify_task, trigger_instant,
+                         &observation->notify_task, trigger_instant_monotonic,
                          trigger_observe,
                          (&(const trigger_observe_args_t) {
                              .conn_state = conn_state,
@@ -658,8 +660,8 @@ find_connection_state_insert_ptr(anjay_connection_ref_t ref) {
     return conn_ptr;
 }
 
-static AVS_LIST(anjay_observe_connection_entry_t) *
-find_connection_state(anjay_connection_ref_t ref) {
+AVS_LIST(anjay_observe_connection_entry_t) *
+_anjay_observe_find_connection_state(anjay_connection_ref_t ref) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             find_connection_state_insert_ptr(ref);
     if (*conn_ptr && connection_ref_cmp(&(*conn_ptr)->conn_ref, &ref) == 0) {
@@ -704,7 +706,7 @@ delete_observation(AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr,
 static void observe_remove_entry(anjay_connection_ref_t connection,
                                  const avs_coap_token_t *token) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
-            find_connection_state(connection);
+            _anjay_observe_find_connection_state(connection);
     if (!conn_ptr) {
         return;
     }
@@ -1196,13 +1198,16 @@ static void remove_all_unsent_values(anjay_observe_connection_entry_t *conn) {
     }
 }
 
-static void schedule_all_triggers(anjay_observe_connection_entry_t *conn) {
+static int schedule_all_triggers(anjay_observe_connection_entry_t *conn) {
+    int result = 0;
     AVS_RBTREE_ELEM(anjay_observation_t) observation;
     AVS_RBTREE_FOREACH(observation, conn->observations) {
         if (!observation->notify_task) {
-            _anjay_observe_schedule_pmax_trigger(conn, observation);
+            _anjay_update_ret(&result, _anjay_observe_schedule_pmax_trigger(
+                                               conn, observation));
         }
     }
+    return result;
 }
 
 static bool connection_exists(anjay_t *anjay,
@@ -1421,7 +1426,7 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
-            find_connection_state(ref);
+            _anjay_observe_find_connection_state(ref);
     if (!conn_ptr) {
         return;
     }
@@ -1443,19 +1448,33 @@ void _anjay_observe_interrupt(anjay_connection_ref_t ref) {
     }
 }
 
+bool _anjay_observe_needs_flushing(anjay_connection_ref_t ref) {
+    AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
+            _anjay_observe_find_connection_state(ref);
+    if (!conn_ptr) {
+        return false;
+    }
+    return (*conn_ptr)->unsent && !(*conn_ptr)->flush_task
+           && !avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id);
+}
+
 int _anjay_observe_sched_flush(anjay_connection_ref_t ref) {
     anjay_log(TRACE,
               _("scheduling notifications flush for server SSID ") "%u" _(
                       ", connection type ") "%d",
               _anjay_server_ssid(ref.server), ref.conn_type);
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
-            find_connection_state(ref);
+            _anjay_observe_find_connection_state(ref);
     if (!conn_ptr) {
         anjay_log(TRACE, _("skipping notification flush scheduling: no "
                            "appropriate connection found"));
         return 0;
     }
-    return sched_flush_send_queue(*conn_ptr);
+    if ((*conn_ptr)->unsent) {
+        return sched_flush_send_queue(*conn_ptr);
+    } else {
+        return schedule_all_triggers(*conn_ptr);
+    }
 }
 
 static int

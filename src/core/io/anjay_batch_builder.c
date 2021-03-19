@@ -126,6 +126,14 @@ static int make_data_with_duplicated_string(anjay_batch_data_t *batch_data,
     return 0;
 }
 
+static void batch_data_cleanup(anjay_batch_data_t *data) {
+    if (data->type == ANJAY_BATCH_DATA_STRING) {
+        avs_free((void *) (intptr_t) data->value.string);
+    } else if (data->type == ANJAY_BATCH_DATA_BYTES) {
+        avs_free((void *) (intptr_t) data->value.bytes.data);
+    }
+}
+
 static int batch_data_add(anjay_batch_builder_t *builder,
                           const anjay_uri_path_t *uri,
                           avs_time_real_t timestamp,
@@ -133,10 +141,12 @@ static int batch_data_add(anjay_batch_builder_t *builder,
     assert(builder);
     if (data.type != ANJAY_BATCH_DATA_START_AGGREGATE
             && !_anjay_uri_path_has(uri, ANJAY_ID_RID)) {
+        batch_data_cleanup(&data);
         return -1;
     }
     *builder->last_element = AVS_LIST_NEW_ELEMENT(anjay_batch_entry_t);
     if (!*builder->last_element) {
+        batch_data_cleanup(&data);
         return -1;
     }
     **builder->last_element = (anjay_batch_entry_t) {
@@ -217,11 +227,7 @@ int _anjay_batch_add_objlnk(anjay_batch_builder_t *builder,
 
 static void batch_entry_cleanup(void *entry_) {
     anjay_batch_entry_t *entry = (anjay_batch_entry_t *) entry_;
-    if (entry->data.type == ANJAY_BATCH_DATA_STRING) {
-        avs_free((void *) (intptr_t) entry->data.value.string);
-    } else if (entry->data.type == ANJAY_BATCH_DATA_BYTES) {
-        avs_free((void *) (intptr_t) entry->data.value.bytes.data);
-    }
+    batch_data_cleanup(&entry->data);
 }
 
 static void list_cleanup(AVS_LIST(anjay_batch_entry_t) list) {

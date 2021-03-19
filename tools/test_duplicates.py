@@ -114,10 +114,10 @@ def extract_function_names(filename):
     return filter(lambda item: item is not None, declarations)
 
 
-function_files = collections.defaultdict(lambda: [])
+function_files = collections.defaultdict(lambda: set())
 for file in sys.argv[1:]:
     for function in extract_function_names(file):
-        function_files[function].append(file)
+        function_files[function].add(file)
 
 result = 0
 for function in function_files:

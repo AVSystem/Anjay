@@ -135,12 +135,7 @@ _anjay_servers_find_active_primary_connection(anjay_t *anjay,
     return ref;
 }
 
-avs_time_duration_t
-_anjay_register_time_remaining(const anjay_registration_info_t *info) {
-    return avs_time_real_diff(info->expire_time, avs_time_real_now());
-}
-
-bool _anjay_server_registration_expired(anjay_server_info_t *server) {
+avs_time_real_t _anjay_registration_expire_time(anjay_server_info_t *server) {
     const anjay_registration_info_t *registration_info =
             _anjay_server_registration_info(server);
     assert(registration_info);
@@ -149,23 +144,26 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server) {
                                           registration_info->session_token)) {
         anjay_log(DEBUG,
                   _("Registration session changed for SSID = ") "%u" _(
-                          ", forcing re-register"),
+                          ", needs re-register"),
                   _anjay_server_ssid(server));
-        return true;
+        return AVS_TIME_REAL_INVALID;
     }
-    avs_time_duration_t remaining =
-            _anjay_register_time_remaining(registration_info);
-    // avs_time_duration_less() returns false when either argument is INVALID;
+    // avs_time_real_before() returns false when either argument is INVALID;
     // the direction of this comparison is chosen so that it causes the
-    // registration to be considered expired
-    if (!avs_time_duration_less(AVS_TIME_DURATION_ZERO, remaining)) {
+    // registration to be considered expired in such case
+    if (!avs_time_real_before(avs_time_real_now(),
+                              registration_info->expire_time)) {
         anjay_log(DEBUG,
                   _("Registration Lifetime expired for SSID = ") "%u" _(
-                          ", forcing re-register"),
+                          ", needs re-register"),
                   _anjay_server_ssid(server));
-        return true;
+        return AVS_TIME_REAL_INVALID;
     }
-    return false;
+    return registration_info->expire_time;
+}
+
+bool _anjay_server_registration_expired(anjay_server_info_t *server) {
+    return !avs_time_real_valid(_anjay_registration_expire_time(server));
 }
 
 int _anjay_schedule_socket_update(anjay_t *anjay, anjay_iid_t security_iid) {

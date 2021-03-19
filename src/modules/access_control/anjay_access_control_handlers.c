@@ -480,6 +480,11 @@ static void ac_delete(void *access_control_) {
 void anjay_access_control_purge(anjay_t *anjay) {
     assert(anjay);
     access_control_t *ac = _anjay_access_control_get(anjay);
+    if (!ac) {
+        ac_log(ERROR, _("Access Control object is not registered"));
+        return;
+    }
+
     _anjay_access_control_clear_state(&ac->current);
     _anjay_access_control_mark_modified(ac);
     ac->last_accessed_instance = NULL;
@@ -493,6 +498,10 @@ void anjay_access_control_purge(anjay_t *anjay) {
 bool anjay_access_control_is_modified(anjay_t *anjay) {
     assert(anjay);
     access_control_t *ac = _anjay_access_control_get(anjay);
+    if (!ac) {
+        ac_log(ERROR, _("Access Control object is not registered"));
+        return false;
+    }
     return ac->in_transaction ? ac->saved_state.modified_since_persist
                               : ac->current.modified_since_persist;
 }

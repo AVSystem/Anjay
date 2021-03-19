@@ -65,7 +65,7 @@ bool _anjay_instance_action_allowed(anjay_t *anjay,
  * Please refer to comments inside the implementation for details.
  */
 int _anjay_sync_access_control(anjay_t *anjay,
-                               anjay_notify_queue_t incoming_queue);
+                               anjay_notify_queue_t *notifications_queue);
 
 VISIBILITY_PRIVATE_HEADER_END
 

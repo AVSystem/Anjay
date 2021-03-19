@@ -124,11 +124,12 @@ class BootstrapDiscover:
                              discover_result.get_options(coap.Option.CONTENT_FORMAT))
             self.assertLinkListValid(discover_result.content.decode()[
                                      len(self.expected_enabler_version_string()):])
+            expected_parameters = 1
             self.assertIn(b'</%d>;ver="1.1"' % (OID.CellularConnectivity),
                           discover_result.content[len(self.expected_enabler_version_string()):])
             # No more parameters
             self.assertEqual(
-                2, len(discover_result.content[len(EXPECTED_PREFIX):].split(b';')))
+                expected_parameters + 1, len(discover_result.content[len(EXPECTED_PREFIX):].split(b';')))
             self.assertTrue(discover_result.content.startswith(EXPECTED_PREFIX))
 
 
@@ -169,3 +170,5 @@ class BootstrapDiscoverAfterEmptyInstancesWrite(bs.BootstrapServer.Test,
         self.assertEqual(
             'lwm2m="1.0",</{oid}>,</{oid}/0>,</{oid}/1>,</{oid}/2>'.format(oid=OID.Test),
             str(discover_result, 'ascii'))
+
+

@@ -19,7 +19,6 @@
 
 #include <assert.h>
 #include <stdint.h>
-#include <time.h>
 
 #include <avsystem/commons/avs_time.h>
 
