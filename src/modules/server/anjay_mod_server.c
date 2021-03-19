@@ -107,6 +107,7 @@ static int add_instance(server_repr_t *repr,
                                < 0) {
             server_log(ERROR, _("Unsupported binding mode: ") "%s",
                        instance->binding);
+            AVS_LIST_CLEAR(&new_instance);
             return -1;
         }
         new_instance->has_binding = true;
