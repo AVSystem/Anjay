@@ -32,7 +32,12 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  */
 #define SENML_TIME_SECONDS_THRESHOLD (1 << 28)
 
-typedef struct anjay_batch_builder_struct anjay_batch_builder_t;
+typedef struct anjay_batch_entry anjay_batch_entry_t;
+
+typedef struct anjay_batch_builder_struct {
+    AVS_LIST(anjay_batch_entry_t) list;
+    AVS_LIST(anjay_batch_entry_t) *append_ptr;
+} anjay_batch_builder_t;
 
 typedef struct anjay_batch_struct anjay_batch_t;
 
@@ -117,11 +122,14 @@ anjay_batch_t *_anjay_batch_acquire(const anjay_batch_t *batch);
  */
 void _anjay_batch_release(anjay_batch_t **batch);
 
+void _anjay_batch_entry_list_cleanup(AVS_LIST(anjay_batch_entry_t) list);
+
 int _anjay_dm_read_into_batch(anjay_batch_builder_t *builder,
                               anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj,
                               const anjay_dm_path_info_t *path_info,
-                              anjay_ssid_t requesting_ssid);
+                              anjay_ssid_t requesting_ssid,
+                              const avs_time_real_t *forced_timestamp);
 
 /**
  * Filters content of the batch for server with specified @p target_ssid

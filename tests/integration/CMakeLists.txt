@@ -47,6 +47,8 @@ foreach(DEMO_TEST ${DEMO_TESTS})
         # Tell python tests where to look for pymbedtls*.so
         set_property(TEST ${INTEGRATION_TEST_PREFIX}${DEMO_TEST}
                      APPEND PROPERTY ENVIRONMENT "PYTHONPATH=${PYMBEDTLS_MODULE_DIR}")
+        # Limit each test suite to 15 minutes
+        set_property(TEST ${INTEGRATION_TEST_PREFIX}${DEMO_TEST} PROPERTY TIMEOUT 900)
 
         add_valgrind(${INTEGRATION_TEST_PREFIX}${DEMO_TEST})
     endif()
@@ -82,7 +84,8 @@ add_custom_target(pymbedtls COMMAND
                   python3 "${NSH_LWM2M_DIR}/pymbedtls/setup.py" install --install-lib ${PYMBEDTLS_MODULE_DIR})
 
 add_custom_target(integration_check_st
-                  COMMAND ${CMAKE_CTEST_COMMAND} -R sensitive --output-on-failure
+                  COMMAND ${CMAKE_CTEST_COMMAND} -R sensitive ||
+                          ${CMAKE_CTEST_COMMAND} -R sensitive --rerun-failed --output-on-failure
                   DEPENDS demo pymbedtls)
 add_custom_target(integration_check
                   COMMAND ${CMAKE_CTEST_COMMAND} -E sensitive -j ${NPROC} ||

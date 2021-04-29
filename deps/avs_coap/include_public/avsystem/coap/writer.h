@@ -89,7 +89,7 @@ typedef int avs_coap_streaming_writer_t(struct avs_stream_struct *out_stream,
  * - A non-zero value in case of error. The library will cancel the exchange in
  *   a transport-specific way. In case of an outgoing request,
  *   @ref avs_coap_client_async_response_handler_t will be called with
- *   @ref AVS_COAP_EXCHANGE_CANCEL result argument.
+ *   @ref AVS_COAP_CLIENT_REQUEST_CANCEL result argument.
  */
 typedef int avs_coap_payload_writer_t(size_t payload_offset,
                                       void *payload_buf,

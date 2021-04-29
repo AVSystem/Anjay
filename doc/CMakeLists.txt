@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_custom_target(doc)
+add_custom_target(anjay_doc)
+if(NOT TARGET doc)
+    add_custom_target(doc)
+endif()
+add_dependencies(doc anjay_doc)
 
 set(ANJAY_SPHINX_DOC_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sphinx/source")
 set(ANJAY_SPHINX_DOC_CONF_DIR "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx")
@@ -29,19 +33,19 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
     configure_file(${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in
                    ${ANJAY_SPHINX_DOC_CONF_DIR}/conf.py
                    @ONLY)
-    add_custom_target(doc_sphinx
+    add_custom_target(anjay_doc_sphinx
                       COMMAND ${SPHINX_BUILD_EXECUTABLE}
                               -b html
                               -c ${ANJAY_SPHINX_DOC_CONF_DIR}
                               ${ANJAY_SPHINX_DOC_ROOT_DIR}
                               ${ANJAY_SPHINX_DOC_CONF_DIR}/html
                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sphinx)
-    add_custom_command(TARGET doc_sphinx POST_BUILD
+    add_custom_command(TARGET anjay_doc_sphinx POST_BUILD
                        COMMAND ${CMAKE_COMMAND} -E remove -f api
                        COMMAND ${CMAKE_COMMAND} -E create_symlink ../../doxygen/html api
                        WORKING_DIRECTORY "${ANJAY_BUILD_OUTPUT_DIR}/doc/sphinx/html")
 
-    add_dependencies(doc doc_sphinx)
+    add_dependencies(anjay_doc anjay_doc_sphinx)
 
     if(WITH_DOC_CHECK)
         if(NOT SPHINX_BUILD_EXECUTABLE)
@@ -66,8 +70,8 @@ if(EXISTS "${ANJAY_SPHINX_DOC_ROOT_DIR}/conf.py.in")
                      "CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
                      "SNIPPET_SOURCE_MD5FILE=${CMAKE_CURRENT_SOURCE_DIR}/sphinx/snippet_sources.md5")
 
-        add_custom_target(doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc_.*$$'")
-        add_dependencies(anjay_unit_check doc_check)
+        add_custom_target(anjay_doc_check COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'^test_doc_.*$$'")
+        add_dependencies(anjay_unit_check anjay_doc_check)
     endif()
 endif()
 
@@ -96,13 +100,13 @@ if(EXISTS "${ANJAY_SOURCE_DIR}/Doxyfile.in")
     file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
          INPUT ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile.with-cmake-generator-expressions)
 
-    add_custom_target(doc_doxygen
+    add_custom_target(anjay_doc_doxygen
                       COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile
                       WORKING_DIRECTORY ${ANJAY_SOURCE_DIR}
                       DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/doxygen/Doxyfile)
 
-    if(TARGET doc_sphinx)
-        add_dependencies(doc_sphinx doc_doxygen)
+    if(TARGET anjay_doc_sphinx)
+        add_dependencies(anjay_doc_sphinx anjay_doc_doxygen)
     endif()
-    add_dependencies(doc doc_doxygen)
+    add_dependencies(anjay_doc anjay_doc_doxygen)
 endif()

@@ -48,6 +48,7 @@ class SnippetSourceDirective(SphinxDirective):
     option_spec = {
         'emphasize-lines': directives.unchanged_required,
         'caption': directives.unchanged_required,
+        'commercial': directives.flag,
     }
 
     def run(self):
@@ -75,6 +76,8 @@ class SnippetSourceDirective(SphinxDirective):
             node['highlight_args'] = {
                 'hl_lines': hl_lines
             }
+
+        node['commercial'] = ('commercial' in self.options)
 
         caption = self.options.get('caption')
         if caption:

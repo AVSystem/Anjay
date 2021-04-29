@@ -793,7 +793,7 @@ static int read_as_batch(anjay_t *anjay,
     }
 
     int result = _anjay_dm_read_into_batch(builder, anjay, obj_ptr, path_info,
-                                           connection_ssid);
+                                           connection_ssid, NULL);
     (void) action;
     if (!result && !(*out_batch = _anjay_batch_builder_compile(&builder))) {
         anjay_log(ERROR, _("out of memory"));

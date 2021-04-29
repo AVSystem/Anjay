@@ -537,19 +537,6 @@ bool anjay_server_object_is_modified(anjay_t *anjay) {
                                 : repr->modified_since_persist;
 }
 
-size_t _anjay_server_object_get_instances_count(anjay_t *anjay) {
-    const anjay_dm_object_def_t *const *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(server_obj);
-
-    size_t count = 0;
-    server_instance_t *inst;
-    AVS_LIST_FOREACH(inst, repr->instances) {
-        count++;
-    }
-    return count;
-}
-
 static const anjay_dm_module_t SERVER_MODULE = {
     .deleter = server_delete
 };

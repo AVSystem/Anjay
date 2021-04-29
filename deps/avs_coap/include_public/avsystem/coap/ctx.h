@@ -107,7 +107,7 @@ typedef struct avs_coap_ctx avs_coap_ctx_t;
  *
  *               The socket MUST be in connected state.
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t avs_coap_ctx_set_socket(avs_coap_ctx_t *ctx,
@@ -122,7 +122,7 @@ bool avs_coap_ctx_has_socket(avs_coap_ctx_t *ctx);
 /**
  * Frees all resources associated with @p ctx .
  *
- * Calls <c>response_handler</c> with @ref AVS_COAP_EXCHANGE_CANCEL result
+ * Calls <c>response_handler</c> with @ref AVS_COAP_CLIENT_REQUEST_CANCEL result
  * for all unconfirmed asynchronous requests associated with the context.
  *
  * @param ctx Pointer to the CoAP context to delete. After the call to this
@@ -150,6 +150,7 @@ void avs_coap_ctx_cleanup(avs_coap_ctx_t **ctx);
  * network level overhead of BLOCK-wise renegotiations taking place underneath,
  * or if one can't predict in any way the response size from the peer.
  *
+ * @param ctx          CoAP context to operate on.
  * @param options      Option set expected to be received.
  * @param message_code Expected CoAP code to be received in message.
  */
@@ -158,7 +159,7 @@ size_t avs_coap_max_incoming_message_payload(avs_coap_ctx_t *ctx,
                                              uint8_t message_code);
 
 /**
- * <c>avs_error_t</c> category for values of type @ref avs_coap_error_runtime_t.
+ * <c>avs_error_t</c> category for values of type @ref avs_coap_error_t.
  */
 #define AVS_COAP_ERR_CATEGORY 22627 // 'acoap' on phone keypad
 
@@ -229,10 +230,7 @@ typedef enum avs_coap_error_class {
 } avs_coap_error_class_t;
 
 typedef enum {
-    /**
-     * @defgroup @ref AVS_COAP_ERR_CLASS_INPUT_RECOVERABLE class errors.
-     * @{
-     */
+    // AVS_COAP_ERR_CLASS_INPUT_RECOVERABLE class errors.
     /**
      * Received a CoAP/UDP Reset response to sent message. Remote host refuses
      * to accept the message, retransmitting it further is pointless. In case
@@ -282,12 +280,8 @@ typedef enum {
     AVS_COAP_ERR_MORE_DATA_REQUIRED,
     /** Incoming message doesn't contain an OSCORE option. */
     AVS_COAP_ERR_OSCORE_OPTION_MISSING,
-    /** @} */
 
-    /**
-     * @defgroup @ref AVS_COAP_ERR_CLASS_BUG_USER class errors.
-     * @{
-     */
+    // AVS_COAP_ERR_CLASS_BUG_USER class errors.
     /**
      * User requested an operation that requires large buffer space while the
      * shared message buffer associated with the context is already in use.
@@ -300,12 +294,8 @@ typedef enum {
     AVS_COAP_ERR_SOCKET_ALREADY_SET,
     /** User-defined payload_writer failed. Message could not be constructed. */
     AVS_COAP_ERR_PAYLOAD_WRITER_FAILED,
-    /** @} */
 
-    /**
-     * @defgroup @ref AVS_COAP_ERR_CLASS_RUNTIME class errors.
-     * @{
-     */
+    // AVS_COAP_ERR_CLASS_RUNTIME class errors.
     /**
      * A message could not be constructed because either the internal buffer or
      * socket MTU is too small; or incoming message is too large to fit in
@@ -325,12 +315,8 @@ typedef enum {
     AVS_COAP_ERR_OSCORE_DATA_TOO_BIG,
     /** Error caused by PRNG failure. */
     AVS_COAP_ERR_PRNG_FAIL,
-    /** @} */
 
-    /**
-     * @defgroup @ref AVS_COAP_ERR_CLASS_INPUT_FATAL class errors
-     * @{
-     */
+    // AVS_COAP_ERR_CLASS_INPUT_FATAL class errors
     /** CoAP/TCP: Abort message was sent because of an unrecoverable failure. */
     AVS_COAP_ERR_TCP_ABORT_SENT = AVS_COAP_ERR_CLASS_INPUT_FATAL,
     /** CoAP/TCP: Abort message was received. */
@@ -352,15 +338,10 @@ typedef enum {
      * sent using current keys. New parameters must be established.
      */
     AVS_COAP_ERR_OSCORE_NEEDS_RECREATE,
-    /** @} */
 
-    /**
-     * @defgroup @ref AVS_COAP_ERR_CLASS_BUG_LIBRARY class errors.
-     * @{
-     */
+    // AVS_COAP_ERR_CLASS_BUG_LIBRARY class errors.
     /** Assertion failure in release mode. */
     AVS_COAP_ERR_ASSERT_FAILED = AVS_COAP_ERR_CLASS_BUG_LIBRARY,
-    /** @} */
 
     /** User handler canceled an exchange the CoAP context was operating on. */
     AVS_COAP_ERR_EXCHANGE_CANCELED = AVS_COAP_ERR_CLASS_OTHER
@@ -397,12 +378,11 @@ avs_coap_error_recovery_action(avs_error_t err) {
  * @param buf      The buffer that may be used to stringify numeric values of an
  *                 unknown error into.
  *
- * @param buf_size Number of bytes available in @buf .
+ * @param buf_size Number of bytes available in @p buf .
  *
- * @returns a human-readable string for a value returned by
- *          @ref avs_coap_ctx_error . May be either @p buf (if the error is
- *          unknown and there is enough space there) or some
- *          statically allocated string.
+ * @returns a human-readable string for an error returned by any <c>avs_coap</c>
+ *          API. May be either @p buf (if the error is unknown and there is
+ *          enough space there) or some statically allocated string.
  */
 const char *avs_coap_strerror(avs_error_t error, char *buf, size_t buf_size);
 

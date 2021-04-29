@@ -334,7 +334,10 @@ static bool is_single_ssid_environment(anjay_t *anjay) {
 
 bool _anjay_instance_action_allowed(anjay_t *anjay,
                                     const anjay_action_info_t *info) {
-    assert(info->oid != ANJAY_DM_OID_SECURITY);
+    if (info->oid == ANJAY_DM_OID_SECURITY) {
+        return false;
+    }
+
     assert(info->iid != ANJAY_ID_INVALID
            || info->action == ANJAY_ACTION_CREATE);
 #ifndef ANJAY_WITH_ACCESS_CONTROL

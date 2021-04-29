@@ -1,0 +1,85 @@
+/*
+ * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * See: http://rackerlabs.github.io/docs-rackspace/tools/rtd-tables.html
+ */
+
+/* override table width restrictions */
+@media screen and (min-width: 767px) {
+
+   .wy-table-responsive table td {
+      /* !important prevents the common CSS stylesheets from overriding
+         this as on RTD they are loaded after this stylesheet */
+      white-space: normal !important;
+   }
+
+   .wy-table-responsive {
+      overflow: visible !important;
+   }
+
+   /* https://stackoverflow.com/questions/23211695/modifying-content-width-of-the-sphinx-theme-read-the-docs */
+   .wy-nav-content {
+        max-width: 960px !important;
+    }
+}
+
+/* AVSystem color scheme */
+.wy-side-nav-search>a {
+    color: #000 !important;
+}
+
+.wy-side-nav-search>a:after {
+    content: "avs_coap";
+}
+
+.wy-side-nav-search>div.version {
+    color: #000;
+}
+
+.wy-side-nav-search input[type=text] {
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.wy-menu-vertical a:active {
+    background-color: #ffd500;
+    color: #000;
+}
+
+a {
+    color: #000;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+}
+
+.wy-nav-content a:visited,
+.wy-nav-content a:hover {
+    color: #8a8a8a;
+}
+
+nav a {
+    text-decoration: none !important;
+}
+
+.highlight {
+    background: #ffffff;
+}
+
+.highlight .hll {
+    background: #f3f6f6;
+}

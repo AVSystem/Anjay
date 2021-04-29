@@ -47,7 +47,7 @@ typedef struct time_instance_struct {
     anjay_iid_t iid;
     char application_type[64];
     char application_type_backup[64];
-    uint64_t last_notify_timestamp;
+    int64_t last_notify_timestamp;
 } time_instance_t;
 
 typedef struct time_object_struct {
@@ -257,6 +257,7 @@ int transaction_begin(anjay_t *anjay,
     AVS_LIST_FOREACH(element, obj->instances) {
         strcpy(element->application_type_backup, element->application_type);
     }
+    return 0;
 }
 
 int transaction_rollback(anjay_t *anjay,
@@ -269,6 +270,7 @@ int transaction_rollback(anjay_t *anjay,
     AVS_LIST_FOREACH(element, obj->instances) {
         strcpy(element->application_type, element->application_type_backup);
     }
+    return 0;
 }
 
 static const anjay_dm_object_def_t OBJ_DEF = {
@@ -325,7 +327,7 @@ void time_object_notify(anjay_t *anjay, const anjay_dm_object_def_t **def) {
     }
     time_object_t *obj = get_obj(def);
 
-    uint64_t current_timestamp;
+    int64_t current_timestamp;
     if (avs_time_real_to_scalar(&current_timestamp, AVS_TIME_S,
                                 avs_time_real_now())) {
         return;

@@ -546,6 +546,31 @@ AVS_UNIT_TEST(dm_write, resource) {
     DM_TEST_FINISH;
 }
 
+AVS_UNIT_TEST(dm_write, resource_plaintext_integer_with_leading_zero) {
+    DM_TEST_INIT;
+    DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "514", "4"),
+                    CONTENT_FORMAT(PLAINTEXT), PAYLOAD("0101"));
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ, 0,
+            (const anjay_iid_t[]) { 14, 42, 69, 514, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ, 514, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { 0, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 1, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 2, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 3, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 4, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 5, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    { 6, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                    ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 4, ANJAY_ID_INVALID,
+                                         ANJAY_MOCK_DM_INT(0, 101), 0);
+    DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
+    DM_TEST_FINISH;
+}
+
 AVS_UNIT_TEST(dm_write, resource_unsupported_format) {
     DM_TEST_INIT;
     DM_TEST_REQUEST(mocksocks[0], CON, PUT, ID(0xFA3E), PATH("42", "514", "4"),

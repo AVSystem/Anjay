@@ -80,7 +80,7 @@ typedef enum {
 
     /**
      * The application requests cancellation of the exchange, either
-     * explicitly (@ref avs_coap_async_cancel) or by deleting the CoAP
+     * explicitly (@ref avs_coap_exchange_cancel) or by deleting the CoAP
      * context.
      */
     AVS_COAP_CLIENT_REQUEST_CANCEL
@@ -132,7 +132,7 @@ typedef void avs_coap_client_async_response_handler_t(
  *                             In case the intention was to download just a
  *                             single block of data, the @p response_handler
  *                             should cancel the exchange using
- *                             @ref avs_coap_async_cancel .
+ *                             @ref avs_coap_exchange_cancel .
  *                             to avoid downloading following blocks.
  *
  *                             NOTE: A deep-copy of this parameter is made,
@@ -160,7 +160,7 @@ typedef void avs_coap_client_async_response_handler_t(
  *                             @p response_handler .
  *
  * @returns
- *  - @ref AVS_OK for success
+ *  - <c>AVS_OK</c> for success
  *  - <c>avs_errno(AVS_EINVAL)</c> if an invalid header has been passed
  *  - <c>avs_errno(AVS_ENOMEM)</c> for an out-of-memory condition
  *  - error code cause by network communication error
@@ -247,7 +247,7 @@ avs_error_t avs_coap_client_send_async_request(
  * @param next_response_payload_offset Response payload offset to set.
  *
  * @returns
- *  - @ref AVS_OK for success
+ *  - <c>AVS_OK</c> for success
  *  - <c>avs_errno(AVS_ENOENT)</c> if @p exchange_id is not an ID of existing
  *    client exchange
  *  - <c>avs_errno(AVS_EINVAL)</c> if @p next_response_payload_offset is smaller

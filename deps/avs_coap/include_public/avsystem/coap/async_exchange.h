@@ -35,6 +35,10 @@ typedef struct {
     uint64_t value;
 } avs_coap_exchange_id_t;
 
+/**
+ * Placeholder exchange ID that is guaranteed <em>not</em> to identify any
+ * exchange existing at any point of time.
+ */
 static const avs_coap_exchange_id_t AVS_COAP_EXCHANGE_ID_INVALID = { 0 };
 
 static inline bool avs_coap_exchange_id_equal(avs_coap_exchange_id_t a,
@@ -48,8 +52,9 @@ static inline bool avs_coap_exchange_id_valid(avs_coap_exchange_id_t id) {
 
 /**
  * Releases all memory associated with not-yet-delivered request.
- * The <c>response_handler</c> is called with @ref AVS_COAP_EXCHANGE_CANCEL
- * if it was not NULL when creating the request.
+ * If the exchange is a request and <c>response_handler</c> has been set to
+ * non-NULL when creating it, it is called with
+ * @ref AVS_COAP_CLIENT_REQUEST_CANCEL .
  *
  * @param ctx         CoAP context to operate on.
  *

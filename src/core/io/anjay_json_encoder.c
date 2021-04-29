@@ -46,6 +46,7 @@ typedef enum {
     SENML_LIKE_DATA_STRING,
     SENML_LIKE_DATA_BOOL,
     SENML_LIKE_DATA_OPAQUE,
+    SENML_LIKE_DATA_BASETIME,
     SENML_LIKE_DATA_TIME,
     SENML_LIKE_DATA_OBJLNK
 } senml_like_data_type_t;
@@ -126,18 +127,6 @@ static inline void nested_context_pop(json_encoder_t *ctx) {
     ctx->level--;
 }
 
-static inline int maybe_write_time(json_encoder_t *ctx, double time_s) {
-    if (!isnan(time_s)) {
-        if (begin_pair(ctx, SENML_LIKE_DATA_TIME)
-                || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
-                                                 AVS_DOUBLE_AS_STRING(time_s,
-                                                                      17)))) {
-            return -1;
-        }
-    }
-    return 0;
-}
-
 static inline int maybe_write_name(json_encoder_t *ctx, const char *name) {
     int retval = 0;
     if (name) {
@@ -158,6 +147,18 @@ static int maybe_write_separator(json_encoder_t *ctx) {
 }
 
 #    ifdef ANJAY_WITH_LWM2M_JSON
+static inline int maybe_write_time(json_encoder_t *ctx, double time_s) {
+    if (!isnan(time_s)) {
+        if (begin_pair(ctx, SENML_LIKE_DATA_TIME)
+                || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
+                                                 AVS_DOUBLE_AS_STRING(time_s,
+                                                                      17)))) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int encode_key(json_encoder_t *ctx, senml_like_data_type_t type) {
     const char *key = NULL;
     switch (type) {
@@ -360,10 +361,10 @@ static const anjay_senml_like_encoder_vtable_t LWM2M_JSON_ENCODER_VTABLE = {
 #    endif // ANJAY_WITH_LWM2M_JSON
 
 static json_encoder_t *
-_anjay_json_encoder_new(avs_stream_t *stream,
-                        const anjay_senml_like_encoder_vtable_t *vtable,
-                        key_encoder_t key_encoder,
-                        avs_base64_config_t base64_config) {
+json_encoder_new(avs_stream_t *stream,
+                 const anjay_senml_like_encoder_vtable_t *vtable,
+                 key_encoder_t key_encoder,
+                 avs_base64_config_t base64_config) {
     if (!stream) {
         json_log(DEBUG, _("no stream provided"));
         return NULL;
@@ -398,9 +399,8 @@ static int write_lwm2m_json_response_preamble(json_encoder_t *ctx,
 anjay_senml_like_encoder_t *
 _anjay_lwm2m_json_encoder_new(avs_stream_t *stream, const char *basename) {
     json_encoder_t *ctx =
-            _anjay_json_encoder_new(stream, &LWM2M_JSON_ENCODER_VTABLE,
-                                    encode_key,
-                                    AVS_BASE64_DEFAULT_STRICT_CONFIG);
+            json_encoder_new(stream, &LWM2M_JSON_ENCODER_VTABLE, encode_key,
+                             AVS_BASE64_DEFAULT_STRICT_CONFIG);
     if (ctx && write_lwm2m_json_response_preamble(ctx, basename)) {
         avs_free(ctx);
         ctx = NULL;

@@ -453,7 +453,7 @@ AVS_UNIT_TEST(dm_batch, illegal_op) {
 
     AVS_UNIT_ASSERT_FAILED(add_current(builder, anjay, ILLEGAL_IMPL_RID));
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(builder->list), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(builder->list), 0);
 
     TEST_TEARDOWN();
 }
@@ -591,7 +591,7 @@ AVS_UNIT_TEST(dm_batch, serialize_one_resource_with_absolute_timestamp) {
     int expected_size =
             avs_simple_snprintf(expected, sizeof(expected),
                                 "[{\"n\":\"/%" PRIu16 "/%" PRIu16 "/%" PRIu16
-                                "\",\"t\":%.17g,\"v\":%" PRIi64 "}]",
+                                "\",\"bt\":%.17g,\"v\":%" PRIi64 "}]",
                                 TEST_OID, 0, INT_RID,
                                 MOCK_CLOCK_START_ABSOLUTE - 123.,
                                 (int64_t) INT_VALUE);
@@ -677,8 +677,8 @@ AVS_UNIT_TEST(dm_batch, serialize_two_resources_with_relative_timestamp) {
     int expected_size = avs_simple_snprintf(
             expected, sizeof(expected),
             "[{\"n\":\"/%" PRIu16 "/%" PRIu16 "/%" PRIu16
-            "\",\"t\":%.17g,\"v\":%" PRIi64 "},{\"n\":\"/%" PRIu16 "/%" PRIu16
-            "/%" PRIu16 "\",\"t\":%.17g,\"vs\":\"%s\"}]",
+            "\",\"bt\":%.17g,\"v\":%" PRIi64 "},{\"n\":\"/%" PRIu16 "/%" PRIu16
+            "/%" PRIu16 "\",\"bt\":%.17g,\"vs\":\"%s\"}]",
             TEST_OID, 0, INT_RID, 60. - MOCK_CLOCK_START_RELATIVE,
             (int64_t) INT_VALUE, TEST_OID, 0, STRING_RID,
             120. - MOCK_CLOCK_START_RELATIVE, STRING_VALUE);
@@ -876,7 +876,7 @@ AVS_UNIT_TEST(dm_batch, negative_timestamp) {
     int expected_size =
             avs_simple_snprintf(expected, sizeof(expected),
                                 "[{\"n\":\"/%" PRIu16 "/%" PRIu16 "/%" PRIu16
-                                "\",\"t\":%d,\"v\":%" PRIi64 "}]",
+                                "\",\"bt\":%d,\"v\":%" PRIi64 "}]",
                                 TEST_OID, 0, INT_RID,
                                 negative_timestamp - MOCK_CLOCK_START_RELATIVE,
                                 (int64_t) INT_VALUE);

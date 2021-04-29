@@ -27,8 +27,11 @@ class SnippetSourceListReferencesBuilder(DummyBuilder):
         self.referenced_docs = set()
 
     def write_doc(self, docname, doctree):
+        list_commercial = False
+
         for node in doctree.traverse(SnippetSourceNode):
-            self.referenced_docs.add(node.source_filepath)
+            if list_commercial or not node['commercial']:
+                self.referenced_docs.add(node.source_filepath)
 
     def finish(self):
         print('\n'.join(self.referenced_docs))

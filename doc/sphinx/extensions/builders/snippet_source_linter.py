@@ -157,7 +157,12 @@ class SnippetSourceLintBuilder(DummyBuilder):
         dirty_referenced_paths = set()
         missing_referenced_paths = collections.defaultdict(lambda: [])
 
+        check_commercial = False
+
         for node in doctree.traverse(SnippetSourceNode):
+            if node['commercial'] is True and check_commercial is False:
+                continue
+
             try:
                 snip = CodeSnippet(docname,
                                    node.line,

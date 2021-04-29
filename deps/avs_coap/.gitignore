@@ -41,7 +41,9 @@ Testing/
 /include_public/avsystem/coap/avs_coap_config.h
 
 # documentation
-!/doc/Doxyfile.in
+/doc/doxygen
+/doc/sphinx/conf.py
+/doc/sphinx/html
 
 # dist package
 *.tar.gz

@@ -149,7 +149,7 @@ print_wrapped(const char *str, size_t padding, size_t screen_width) {
         }
 
         const char *line_start = str;
-        const char *line_end;
+        const char *line_end = NULL;
         bool first_word = true;
         while (str < str_end) {
             str += strspn(str, AVS_SPACES);
@@ -222,8 +222,8 @@ static void print_help(const struct option *options) {
           "$(dirname $0)/../certs/server.crt.der",
           "DER-formatted server public key file to load." },
         { 'q', "BINDING_MODE=UQ", NULL,
-          "set the Binding Mode to use for the currently configured server."
-          "If Binding Mode is not set by this flag, client tries to derive it"
+          "set the Binding Mode to use for the currently configured server. "
+          "If Binding Mode is not set by this flag, client tries to derive it "
           "from URI and if it cannot, it uses the default value 'U'" },
         { 's', "MODE", NULL,
           "set security mode, one of: psk rpk cert nosec. "

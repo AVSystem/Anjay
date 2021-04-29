@@ -59,7 +59,7 @@ typedef struct {
 
     /**
      * Number of bytes available to read from
-     * @ref avs_coap_exchange_request_t#payload .
+     * @ref avs_coap_server_async_request_t#payload .
      */
     size_t payload_size;
 } avs_coap_server_async_request_t;
@@ -71,8 +71,8 @@ typedef enum {
     /**
      * Full request was received: either a non-block one, or the last block of
      * a multi-block request. There will be no more payload blocks, but the
-     * @ref avs_coap_request_handler_t will be called again with
-     * AVS_COAP_REQUEST_CLEANUP state.
+     * @ref avs_coap_server_async_request_handler_t will be called again with
+     * @ref AVS_COAP_SERVER_REQUEST_CLEANUP state.
      */
     AVS_COAP_SERVER_REQUEST_RECEIVED,
 
@@ -91,10 +91,10 @@ typedef enum {
 
 /**
  * This handler is always called with @p state equal to
- * @ref AVS_COAP_REQUEST_CLEANUP at the end of exchange.
+ * @ref AVS_COAP_SERVER_REQUEST_CLEANUP at the end of exchange.
  *
  * @param ctx        Pointer to request context. NULL if @p state is
- *                   @ref AVS_COAP_REQUEST_CLEANUP .
+ *                   @ref AVS_COAP_SERVER_REQUEST_CLEANUP .
  *
  * @param request_id ID that uniquely identifies incoming request.
  *
@@ -115,35 +115,38 @@ typedef enum {
  *
  * @returns:
  *
- *   @li If @p state was @ref AVS_COAP_REQUEST_PARTIAL_CONTENT or
- *       @ref AVS_COAP_REQUEST_RECEIVED:
+ *   @li If @p state was @ref AVS_COAP_SERVER_REQUEST_PARTIAL_CONTENT or
+ *       @ref AVS_COAP_SERVER_REQUEST_RECEIVED :
  *
  *       @li If one of @ref avs_coap_code_constants valid for responses is
  *           returned, a proper message is set up with this code and no payload.
- *           Response set up by calling @ref avs_coap_setup_response in handler
- *           is ignored.
+ *           Response set up by calling
+ *           @ref avs_coap_server_setup_async_response in handler is ignored.
  *
  *       @li Otherwise, if the return value is nonzero, an Internal Server
  *           Error response is sent with no payload. Response set up by calling
- *           @ref avs_coap_setup_response in handler is ignored.
+ *           @ref avs_coap_server_setup_async_response in handler is ignored.
  *
- *       @li Otherwise, if return value is 0 and @ref avs_coap_setup_response
- *           was called, that response is sent.
+ *       @li Otherwise, if return value is 0 and
+ *           @ref avs_coap_server_setup_async_response was called, that response
+ *           is sent.
  *
- *       @li Otherwise, if @p state was AVS_COAP_REQUEST_PARTIAL_CONTENT and
- *           return value is 0 and message wasn't set up, a 2.31 Continue
- *           response is sent if neccessary.
+ *       @li Otherwise, if @p state was
+ *           @ref AVS_COAP_SERVER_REQUEST_PARTIAL_CONTENT and return value is 0
+ *           and message wasn't set up, a 2.31 Continue response is sent if
+ *           neccessary.
  *
- *       @li Otherwise, if @p state was AVS_COAP_REQUEST_RECEIVED, return value
- *           is 0 and message wasn't set up, then Internal Server Error is sent.
+ *       @li Otherwise, if @p state was @ref AVS_COAP_SERVER_REQUEST_RECEIVED,
+ *           return value is 0 and message wasn't set up, then Internal Server
+ *           Error is sent.
  *
- *       If @p state was AVS_COAP_REQUEST_RECEIVED, response isn't set up and
- *       return value is 0, then this handler will be called again with
- *       more request payload chunks.
+ *       If @p state was @ref AVS_COAP_SERVER_REQUEST_RECEIVED, response isn't
+ *       set up and return value is 0, then this handler will be called again
+ *       with more request payload chunks.
  *
- *   @li Otherwise (if @p state was @ref AVS_COAP_REQUEST_CLEANUP) the return
- *       value is ignored. No message will be sent and the exchange will be
- *       terminated. This handler will not be called again.
+ *   @li Otherwise (if @p state was @ref AVS_COAP_SERVER_REQUEST_CLEANUP) the
+ *       return value is ignored. No message will be sent and the exchange will
+ *       be terminated. This handler will not be called again.
  */
 typedef int avs_coap_server_async_request_handler_t(
         avs_coap_request_ctx_t *ctx,
@@ -217,7 +220,7 @@ typedef int avs_coap_server_new_async_request_handler_t(
  * @param response_writer_arg An opaque argument passed to @p response_writer .
  *
  * @returns
- *  - @ref AVS_OK for success
+ *  - <c>AVS_OK</c> for success
  *  - <c>avs_errno(AVS_EINVAL)</c> if an invalid header has been passed
  *  - <c>avs_errno(AVS_ENOMEM)</c> for an out-of-memory condition
  *
@@ -267,7 +270,7 @@ avs_coap_server_setup_async_response(avs_coap_request_ctx_t *ctx,
  * @param handler_arg    Opaque argument to pass to @p cancel_handler.
  *
  * @returns
- *  - @ref AVS_OK for success
+ *  - <c>AVS_OK</c> for success
  *  - <c>avs_errno(AVS_EINVAL)</c> if an invalid @p ctx has been passed
  *  - <c>avs_errno(AVS_ENOMEM)</c> for an out-of-memory condition
  *  - @ref AVS_COAP_ERR_FEATURE_DISABLED if Observe support is not available in

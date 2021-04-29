@@ -35,8 +35,6 @@
 #include "../anjay_servers_utils.h"
 #include "../dm/anjay_query.h"
 
-#include "../../modules/server/anjay_mod_server.h"
-
 #include "anjay_activate.h"
 #include "anjay_register.h"
 #include "anjay_server_connections.h"
@@ -256,6 +254,7 @@ get_server_lifetime(anjay_t *anjay, anjay_ssid_t ssid, int64_t *out_lifetime) {
 typedef struct {
     bool first;
     avs_stream_t *stream;
+    anjay_lwm2m_version_t version;
 } query_dm_args_t;
 
 static int query_dm_instance(anjay_t *anjay,
@@ -289,15 +288,19 @@ static int query_dm_object(anjay_t *anjay,
     }
     bool obj_written = false;
     if ((*obj)->version) {
-        if (avs_is_err(avs_stream_write_f(args->stream, "</%u>;ver=\"%s\"",
-                                          (*obj)->oid, (*obj)->version))) {
+
+        const char *format = "</%u>;ver=\"%s\"";
+
+        if (avs_is_err(avs_stream_write_f(args->stream, format, (*obj)->oid,
+                                          (*obj)->version))) {
             return -1;
         }
         obj_written = true;
     }
     query_dm_args_t instance_args = {
         .first = !obj_written,
-        .stream = args->stream
+        .stream = args->stream,
+        .version = args->version
     };
     int result = _anjay_dm_foreach_instance(anjay, obj, query_dm_instance,
                                             &instance_args);
@@ -315,7 +318,7 @@ static int query_dm_object(anjay_t *anjay,
     return 0;
 }
 
-static int query_dm(anjay_t *anjay, char **out) {
+static int query_dm(anjay_t *anjay, anjay_lwm2m_version_t version, char **out) {
     assert(out);
     assert(!*out);
     avs_stream_t *stream = avs_stream_membuf_create();
@@ -328,7 +331,8 @@ static int query_dm(anjay_t *anjay, char **out) {
     if ((retval = _anjay_dm_foreach_object(anjay, query_dm_object,
                                            &(query_dm_args_t) {
                                                .first = true,
-                                               .stream = stream
+                                               .stream = stream,
+                                               .version = version
                                            }))
             || (retval =
                         (avs_is_ok(avs_stream_write(stream, "\0", 1)) ? 0 : -1))
@@ -366,7 +370,8 @@ get_binding_mode_for_version(anjay_server_info_t *server,
 static int update_parameters_init(anjay_server_info_t *server,
                                   anjay_update_parameters_t *out_params) {
     memset(out_params, 0, sizeof(*out_params));
-    if (query_dm(server->anjay, &out_params->dm)) {
+    if (query_dm(server->anjay, server->registration_info.lwm2m_version,
+                 &out_params->dm)) {
         goto error;
     }
     if (get_server_lifetime(server->anjay, _anjay_server_ssid(server),
@@ -1141,6 +1146,30 @@ void _anjay_server_update_registration_info(
     info->session_token = _anjay_server_primary_session_token(server);
 }
 
+static int
+server_object_instances_count_clb(anjay_t *anjay,
+                                  const anjay_dm_object_def_t *const *obj,
+                                  anjay_iid_t iid,
+                                  void *count_ptr) {
+    (void) anjay;
+    (void) obj;
+    (void) iid;
+    ++*(size_t *) count_ptr;
+    return 0;
+}
+
+static size_t server_object_instances_count(anjay_t *anjay) {
+    const anjay_dm_object_def_t *const *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+    if (!server_obj || !*server_obj) {
+        return 0;
+    }
+    size_t count = 0;
+    _anjay_dm_foreach_instance(anjay, server_obj,
+                               server_object_instances_count_clb, &count);
+    return count;
+}
+
 static bool registered_or_gave_up(anjay_server_info_t *server) {
     if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
         return false;
@@ -1155,7 +1184,7 @@ static bool registered_or_gave_up(anjay_server_info_t *server) {
 }
 
 bool anjay_ongoing_registration_exists(anjay_t *anjay) {
-    size_t dm_servers_count = _anjay_server_object_get_instances_count(anjay);
+    size_t dm_servers_count = server_object_instances_count(anjay);
     if (dm_servers_count == 0) {
         return false;
     }

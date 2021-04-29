@@ -62,11 +62,11 @@ typedef struct {
     } value;
 } anjay_batch_data_t;
 
-typedef struct {
+struct anjay_batch_entry {
     anjay_uri_path_t path;
     anjay_batch_data_t data;
     avs_time_real_t timestamp;
-} anjay_batch_entry_t;
+};
 
 struct anjay_batch_struct {
     AVS_LIST(anjay_batch_entry_t) list;
@@ -91,12 +91,9 @@ typedef struct builder_out_struct {
 
     anjay_uri_path_t root_path;
     anjay_uri_path_t path;
-} builder_out_ctx_t;
 
-struct anjay_batch_builder_struct {
-    AVS_LIST(anjay_batch_entry_t) list;
-    AVS_LIST(anjay_batch_entry_t) *last_element;
-};
+    avs_time_real_t timestamp;
+} builder_out_ctx_t;
 
 anjay_batch_builder_t *_anjay_batch_builder_new(void) {
     anjay_batch_builder_t *builder =
@@ -105,7 +102,7 @@ anjay_batch_builder_t *_anjay_batch_builder_new(void) {
     if (!builder) {
         return NULL;
     }
-    builder->last_element = &builder->list;
+    builder->append_ptr = &builder->list;
     return builder;
 }
 
@@ -144,17 +141,17 @@ static int batch_data_add(anjay_batch_builder_t *builder,
         batch_data_cleanup(&data);
         return -1;
     }
-    *builder->last_element = AVS_LIST_NEW_ELEMENT(anjay_batch_entry_t);
-    if (!*builder->last_element) {
+    *builder->append_ptr = AVS_LIST_NEW_ELEMENT(anjay_batch_entry_t);
+    if (!*builder->append_ptr) {
         batch_data_cleanup(&data);
         return -1;
     }
-    **builder->last_element = (anjay_batch_entry_t) {
+    **builder->append_ptr = (anjay_batch_entry_t) {
         .path = *uri,
         .timestamp = timestamp,
         .data = data
     };
-    AVS_LIST_ADVANCE_PTR(&builder->last_element);
+    AVS_LIST_ADVANCE_PTR(&builder->append_ptr);
     return 0;
 }
 
@@ -230,7 +227,7 @@ static void batch_entry_cleanup(void *entry_) {
     batch_data_cleanup(&entry->data);
 }
 
-static void list_cleanup(AVS_LIST(anjay_batch_entry_t) list) {
+void _anjay_batch_entry_list_cleanup(AVS_LIST(anjay_batch_entry_t) list) {
     AVS_LIST_CLEAR(&list) {
         batch_entry_cleanup(list);
     }
@@ -238,7 +235,7 @@ static void list_cleanup(AVS_LIST(anjay_batch_entry_t) list) {
 
 void _anjay_batch_builder_cleanup(anjay_batch_builder_t **builder) {
     if (builder && *builder) {
-        list_cleanup((*builder)->list);
+        _anjay_batch_entry_list_cleanup((*builder)->list);
         avs_free(*builder);
         *builder = NULL;
     }
@@ -271,7 +268,7 @@ void _anjay_batch_release(anjay_batch_t **batch) {
     assert((*batch)->ref_count);
 
     if (--((*batch)->ref_count) == 0) {
-        list_cleanup((*batch)->list);
+        _anjay_batch_entry_list_cleanup((*batch)->list);
         avs_free(*batch);
     }
     *batch = NULL;
@@ -331,7 +328,7 @@ static int bytes_begin(anjay_output_ctx_t *ctx_,
         }
     };
 
-    if (batch_data_add(ctx->builder, &ctx->path, avs_time_real_now(), data)) {
+    if (batch_data_add(ctx->builder, &ctx->path, ctx->timestamp, data)) {
         avs_free(buf);
         return -1;
     }
@@ -350,7 +347,7 @@ static int ret_string(anjay_output_ctx_t *ctx_, const char *str) {
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
         result = _anjay_batch_add_string(ctx->builder, &ctx->path,
-                                         avs_time_real_now(), str);
+                                         ctx->timestamp, str);
         value_returned(ctx);
     }
     return result;
@@ -360,8 +357,8 @@ static int ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
-        result = _anjay_batch_add_int(ctx->builder, &ctx->path,
-                                      avs_time_real_now(), value);
+        result = _anjay_batch_add_int(ctx->builder, &ctx->path, ctx->timestamp,
+                                      value);
         value_returned(ctx);
     }
     return result;
@@ -372,7 +369,7 @@ static int ret_double(anjay_output_ctx_t *ctx_, double value) {
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
         result = _anjay_batch_add_double(ctx->builder, &ctx->path,
-                                         avs_time_real_now(), value);
+                                         ctx->timestamp, value);
         value_returned(ctx);
     }
     return result;
@@ -382,8 +379,8 @@ static int ret_bool(anjay_output_ctx_t *ctx_, bool value) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
-        result = _anjay_batch_add_bool(ctx->builder, &ctx->path,
-                                       avs_time_real_now(), value);
+        result = _anjay_batch_add_bool(ctx->builder, &ctx->path, ctx->timestamp,
+                                       value);
         value_returned(ctx);
     }
     return result;
@@ -397,7 +394,7 @@ static int ret_objlnk(anjay_output_ctx_t *ctx_,
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
         result = _anjay_batch_add_objlnk(ctx->builder,
                                          &ctx->path,
-                                         avs_time_real_now(),
+                                         ctx->timestamp,
                                          objlnk_oid,
                                          objlnk_iid);
         value_returned(ctx);
@@ -473,7 +470,8 @@ static const anjay_output_ctx_vtable_t BUILDER_OUT_VTABLE = {
 
 static inline builder_out_ctx_t
 builder_out_ctx_new(anjay_batch_builder_t *builder,
-                    const anjay_uri_path_t *uri) {
+                    const anjay_uri_path_t *uri,
+                    const avs_time_real_t *forced_timestamp) {
     builder_out_ctx_t ctx = {
         .base = {
             .vtable = &BUILDER_OUT_VTABLE
@@ -484,24 +482,46 @@ builder_out_ctx_new(anjay_batch_builder_t *builder,
             .remaining_bytes = 0
         },
         .root_path = *uri,
-        .path = MAKE_ROOT_PATH()
+        .path = MAKE_ROOT_PATH(),
+        .timestamp = forced_timestamp ? *forced_timestamp : avs_time_real_now()
     };
     return ctx;
+}
+
+static int read_into_batch(anjay_batch_builder_t *builder,
+                           anjay_t *anjay,
+                           const anjay_dm_object_def_t *const *obj,
+                           const anjay_dm_path_info_t *path_info,
+                           anjay_ssid_t requesting_ssid,
+                           const avs_time_real_t *forced_timestamp) {
+    builder_out_ctx_t ctx =
+            builder_out_ctx_new(builder, &path_info->uri, forced_timestamp);
+    int retval = _anjay_dm_read(anjay, obj, path_info, requesting_ssid,
+                                (anjay_output_ctx_t *) &ctx);
+    int close_retval = output_close((anjay_output_ctx_t *) &ctx);
+    return close_retval ? close_retval : retval;
 }
 
 int _anjay_dm_read_into_batch(anjay_batch_builder_t *builder,
                               anjay_t *anjay,
                               const anjay_dm_object_def_t *const *obj,
                               const anjay_dm_path_info_t *path_info,
-                              anjay_ssid_t requesting_ssid) {
+                              anjay_ssid_t requesting_ssid,
+                              const avs_time_real_t *forced_timestamp) {
     assert(builder);
     assert(anjay);
     assert(!obj || path_info->uri.ids[ANJAY_ID_OID] == (*obj)->oid);
-    builder_out_ctx_t ctx = builder_out_ctx_new(builder, &path_info->uri);
-    int retval = _anjay_dm_read(anjay, obj, path_info, requesting_ssid,
-                                (anjay_output_ctx_t *) &ctx);
-    int close_retval = output_close((anjay_output_ctx_t *) &ctx);
-    return close_retval ? close_retval : retval;
+
+    AVS_LIST(anjay_batch_entry_t) *initial_append_ptr = builder->append_ptr;
+    int result = read_into_batch(builder, anjay, obj, path_info,
+                                 requesting_ssid, forced_timestamp);
+
+    // Despite of failure, the new element may be added. Remove it.
+    if (result) {
+        _anjay_batch_entry_list_cleanup(*initial_append_ptr);
+        *initial_append_ptr = NULL;
+    }
+    return result;
 }
 
 static bool is_timestamp_absolute(avs_time_real_t timestamp) {

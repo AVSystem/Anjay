@@ -77,8 +77,6 @@ static inline void _anjay_serv_clear_modified(server_repr_t *repr) {
     repr->modified_since_persist = false;
 }
 
-size_t _anjay_server_object_get_instances_count(anjay_t *anjay);
-
 #define server_log(level, ...) _anjay_log(server, level, __VA_ARGS__)
 
 VISIBILITY_PRIVATE_HEADER_END

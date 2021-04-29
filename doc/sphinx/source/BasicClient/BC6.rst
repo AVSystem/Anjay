@@ -82,7 +82,7 @@ perform some unnecessary actions (like calling read handler for example).
         anjay_iid_t iid;
         char application_type[64];
         char application_type_backup[64];
-        uint64_t last_notify_timestamp;
+        int64_t last_notify_timestamp;
     } time_instance_t;
 
 .. highlight:: c
@@ -94,7 +94,7 @@ perform some unnecessary actions (like calling read handler for example).
         }
         time_object_t *obj = get_obj(def);
 
-        uint64_t current_timestamp;
+        int64_t current_timestamp;
         if (avs_time_real_to_scalar(&current_timestamp, AVS_TIME_S,
                                     avs_time_real_now())) {
             return;

@@ -44,6 +44,7 @@ extern "C" {
 /** @} */
 
 /**
+ * @anchor avs_coap_code_constants
  * @name avs_coap_code_constants
  *
  * CoAP code constants, as defined in RFC7252/RFC7959.
@@ -149,7 +150,7 @@ bool avs_coap_code_is_response(uint8_t code);
 const char *avs_coap_code_to_string(uint8_t code, char *buf, size_t buf_size);
 
 /**
- * Convenience macro that calls @ref avs_coap_msg_code_to_string with
+ * Convenience macro that calls @ref avs_coap_code_to_string with
  * a stack-allocated buffer big enough to store any CoAP code string.
  */
 #define AVS_COAP_CODE_STRING(Code) \

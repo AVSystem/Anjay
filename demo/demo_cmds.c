@@ -30,6 +30,8 @@
 
 #include <avsystem/commons/avs_memory.h>
 
+#define MAX_SEND_RESOURCES 32
+
 static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
     unsigned id;
     if (sscanf(text, "%u", &id) < 1 || id > UINT16_MAX) {

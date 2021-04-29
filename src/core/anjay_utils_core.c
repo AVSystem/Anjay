@@ -607,14 +607,14 @@ static int map_str_conversion_result(const char *input, const char *endptr) {
 int _anjay_safe_strtoll(const char *in, long long *value) {
     errno = 0;
     char *endptr = NULL;
-    *value = strtoll(in, &endptr, 0);
+    *value = strtoll(in, &endptr, 10);
     return map_str_conversion_result(in, endptr);
 }
 
 int _anjay_safe_strtoull(const char *in, unsigned long long *value) {
     errno = 0;
     char *endptr = NULL;
-    *value = strtoull(in, &endptr, 0);
+    *value = strtoull(in, &endptr, 10);
     return map_str_conversion_result(in, endptr);
 }
 

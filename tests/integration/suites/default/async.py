@@ -251,7 +251,7 @@ class NonconfirmableNotificationsDuringRegister(test_suite.Lwm2mSingleServerTest
                 break
 
         end_time = time.time()
-        self.assertAlmostEqual(received_notifications, end_time - start_time, delta=1)
+        self.assertAlmostEqual(received_notifications, end_time - start_time, delta=1.1)
 
 
 class ConfirmableNotificationsDuringRegister(NonconfirmableNotificationsDuringRegister):

@@ -166,7 +166,7 @@ typedef struct avs_coap_options {
 
     /**
      * If true, @ref avs_coap_options#begin is a heap-allocated buffer owned
-     * by the options object (allocated using @ref avs_malloc ). This means
+     * by the options object (allocated using <c>avs_malloc()</c>). This means
      * avs_coap_options_add_* functions are free to reallocate it as necessary.
      * In that case, @ref avs_coap_options_cleanup MUST be used to free the
      * memory.
@@ -246,8 +246,8 @@ static inline void avs_coap_options_cleanup(avs_coap_options_t *opts) {
 
 /**
  * Initializes an @ref avs_coap_options_t object so that it is backed by a
- * buffer allocated with @ref avs_malloc , and can be resized as required when
- * adding new options.
+ * buffer allocated with <c>avs_malloc()</c>, and can be resized as required
+ * when adding new options.
  *
  * @param opts             Uninitialized options object. Note: this function
  *                         MUST NOT be called on an already initialized object.
@@ -255,9 +255,9 @@ static inline void avs_coap_options_cleanup(avs_coap_options_t *opts) {
  *
  * @param initial_capacity Desired initial capacity of the options object.
  *
- * @returns @ref AVS_OK for success, or <c>avs_errno(AVS_ENOMEM)</c> if there is
- *          not enough memory. After this function returns, it is safe to call
- *          @ref avs_coap_options_cleanup on @p opts , regardless of the
+ * @returns <c>AVS_OK</c> for success, or <c>avs_errno(AVS_ENOMEM)</c> if there
+ *          is not enough memory. After this function returns, it is safe to
+ *          call @ref avs_coap_options_cleanup on @p opts , regardless of the
  *          initialization result.
  */
 static inline avs_error_t
@@ -287,9 +287,9 @@ avs_coap_options_dynamic_init_with_size(avs_coap_options_t *opts,
  *             called on an already initialized object. Doing so MAY result in
  *             resource leaks.
  *
- * @returns @ref AVS_OK for success, or <c>avs_errno(AVS_ENOMEM)</c> if there is
- *          not enough memory. After this function returns, it is safe to call
- *          @ref avs_coap_options_cleanup on @p opts , regardless of the
+ * @returns <c>AVS_OK</c> for success, or <c>avs_errno(AVS_ENOMEM)</c> if there
+ *          is not enough memory. After this function returns, it is safe to
+ *          call @ref avs_coap_options_cleanup on @p opts , regardless of the
  *          initialization result.
  */
 static inline avs_error_t
@@ -305,6 +305,7 @@ void avs_coap_options_remove_by_number(avs_coap_options_t *opts,
                                        uint16_t option_number);
 
 /**
+ * @anchor avs_coap_options_add
  * @name avs_coap_options_add
  * Functions that may be used to set up CoAP options.
  *
@@ -312,7 +313,7 @@ void avs_coap_options_remove_by_number(avs_coap_options_t *opts,
  */
 
 /**
- * Sets a Content-Format Option (@ref AVS_COAP_OPT_CONTENT_FORMAT = 12) in
+ * Sets a Content-Format Option (@ref AVS_COAP_OPTION_CONTENT_FORMAT = 12) in
  * the options list.
  *
  * @param opts    Options object to operate on.
@@ -320,7 +321,7 @@ void avs_coap_options_remove_by_number(avs_coap_options_t *opts,
  *                AVS_COAP_FORMAT_* contants. Calling this function with
  *                @ref AVS_COAP_FORMAT_NONE removes the Content-Format option.
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t avs_coap_options_set_content_format(avs_coap_options_t *opts,
@@ -333,7 +334,7 @@ avs_error_t avs_coap_options_set_content_format(avs_coap_options_t *opts,
  * @param opts  Options object to operate on.
  * @param block BLOCK option content to set.
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t avs_coap_options_add_block(avs_coap_options_t *opts,
@@ -345,7 +346,7 @@ avs_error_t avs_coap_options_add_block(avs_coap_options_t *opts,
  * Adds the Observe option to @p opts . Options value is encoded as 24 least
  * significant bits of @p value , as defined in RFC7641.
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t avs_coap_options_add_observe(avs_coap_options_t *opts,
@@ -403,7 +404,7 @@ avs_error_t avs_coap_options_add_string(avs_coap_options_t *opts,
  * @param format     Format string to pass to snprintf().
  * @param ...        Format arguments.
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t avs_coap_options_add_string_f(avs_coap_options_t *opts,
@@ -442,7 +443,7 @@ avs_error_t avs_coap_options_add_empty(avs_coap_options_t *opts,
 avs_error_t avs_coap_options_add_etag(avs_coap_options_t *opts,
                                       const avs_coap_etag_t *etag);
 
-/** @{
+/**
  * Functions below add an arbitrary CoAP option with an integer value. The value
  * is encoded in the most compact way available, so e.g. for @p value equal to 0
  * the option has no payload when added using any of them.

@@ -109,13 +109,16 @@ static int print_r_attrs(avs_stream_t *stream,
 
 static int print_discovered_object(avs_stream_t *stream,
                                    const anjay_dm_object_def_t *const *obj,
-                                   const anjay_dm_internal_oi_attrs_t *attrs) {
+                                   const anjay_dm_internal_oi_attrs_t *attrs,
+                                   anjay_lwm2m_version_t version) {
     if (avs_is_err(avs_stream_write_f(stream, "</%" PRIu16 ">", (*obj)->oid))) {
         return -1;
     }
+    (void) version;
+    const char *format = ";ver=\"%s\"";
     if ((*obj)->version
-            && avs_is_err(avs_stream_write_f(stream, ";ver=\"%s\"",
-                                             (*obj)->version))) {
+            && avs_is_err(
+                       avs_stream_write_f(stream, format, (*obj)->version))) {
         return -1;
     }
     return print_oi_attrs(stream, attrs);
@@ -185,13 +188,11 @@ static int read_resource_dim(anjay_t *anjay,
     return result;
 }
 
-#    if defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_BOOTSTRAP)
 static anjay_lwm2m_version_t current_lwm2m_version(anjay_t *anjay) {
     assert(anjay->current_connection.server);
     return _anjay_server_registration_info(anjay->current_connection.server)
             ->lwm2m_version;
 }
-#    endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_BOOTSTRAP)
 
 static int discover_resource(anjay_t *anjay,
                              avs_stream_t *stream,
@@ -305,6 +306,7 @@ static int discover_object_instance(anjay_t *anjay,
 static int discover_object(anjay_t *anjay,
                            avs_stream_t *stream,
                            const anjay_dm_object_def_t *const *obj) {
+    anjay_lwm2m_version_t version = current_lwm2m_version(anjay);
     anjay_dm_internal_oi_attrs_t object_attributes =
             ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
     int result = 0;
@@ -312,7 +314,7 @@ static int discover_object(anjay_t *anjay,
                      anjay, obj, _anjay_dm_current_ssid(anjay),
                      &object_attributes, NULL))
             || (result = print_discovered_object(stream, obj,
-                                                 &object_attributes)));
+                                                 &object_attributes, version)));
     if (result) {
         return result;
     }
@@ -387,13 +389,10 @@ static int print_ssid_attr(avs_stream_t *stream, uint16_t ssid) {
 
 static int print_enabler_version(avs_stream_t *stream,
                                  anjay_lwm2m_version_t version) {
-    // Bug in specification.
-    // Technically it should be always with `</>;`, but we can't be sure 1.0
-    // servers will accept it, because it's defined in 1.1.1 TS.
-    const char *prefix = (version > ANJAY_LWM2M_VERSION_1_0) ? "</>;" : "";
-    return avs_is_ok(
-                   avs_stream_write_f(stream, "%slwm2m=\"%s\"", prefix,
-                                      _anjay_lwm2m_version_as_string(version)))
+    (void) version;
+    const char *format = "lwm2m=\"%s\"";
+    return avs_is_ok(avs_stream_write_f(
+                   stream, format, _anjay_lwm2m_version_as_string(version)))
                    ? 0
                    : -1;
 }
@@ -436,13 +435,15 @@ bootstrap_discover_object_instance(anjay_t *anjay,
 static int bootstrap_discover_object(anjay_t *anjay,
                                      const anjay_dm_object_def_t *const *obj,
                                      void *stream_) {
+    anjay_lwm2m_version_t version = current_lwm2m_version(anjay);
     bootstrap_discover_object_instance_args_t args = {
         .stream = (avs_stream_t *) stream_
     };
     int result;
     (void) ((result = print_separator(args.stream))
             || (result = print_discovered_object(
-                        args.stream, obj, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY))
+                        args.stream, obj, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY,
+                        version))
             || (result = _anjay_dm_foreach_instance(
                         anjay, obj, bootstrap_discover_object_instance,
                         &args)));

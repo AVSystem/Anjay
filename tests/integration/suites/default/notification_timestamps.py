@@ -37,7 +37,11 @@ class NotificationTimestampsInLegacyJsonTest(test_suite.Lwm2mSingleServerTest,
         self.assertEqual(res['e'][0]['v'], 0)
         self.assertAlmostEqual(res['e'][0]['t'], time.time(), 0)
 
-        self.execute_resource(self.serv, oid=OID.Test, iid=0, rid=RID.Test.IncrementCounter)
+        self.execute_resource(
+            self.serv,
+            oid=OID.Test,
+            iid=0,
+            rid=RID.Test.IncrementCounter)
         notification = self.serv.recv()
         self.assertIsInstance(notification, Lwm2mNotify)
         res2 = as_json(notification)

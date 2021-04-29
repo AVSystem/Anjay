@@ -380,6 +380,8 @@ it in Anjay and update ``CMakeLists.txt`` file.
     set(CMAKE_C_STANDARD 99)
     set(CMAKE_C_EXTENSIONS OFF)
 
+    add_compile_options(-Wall -Wextra)
+
     find_package(anjay REQUIRED)
 
     add_executable(${PROJECT_NAME}
@@ -414,7 +416,7 @@ This is why we need ``application_type_backup`` array.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC5/src/time_object.c
-    :emphasize-lines: 1-23,37,40
+    :emphasize-lines: 1-25,39,42
 
     int transaction_begin(anjay_t *anjay,
                           const anjay_dm_object_def_t *const *obj_ptr) {
@@ -426,6 +428,7 @@ This is why we need ``application_type_backup`` array.
         AVS_LIST_FOREACH(element, obj->instances) {
             strcpy(element->application_type_backup, element->application_type);
         }
+        return 0;
     }
 
     int transaction_rollback(anjay_t *anjay,
@@ -438,6 +441,7 @@ This is why we need ``application_type_backup`` array.
         AVS_LIST_FOREACH(element, obj->instances) {
             strcpy(element->application_type, element->application_type_backup);
         }
+        return 0;
     }
 
     static const anjay_dm_object_def_t OBJ_DEF = {

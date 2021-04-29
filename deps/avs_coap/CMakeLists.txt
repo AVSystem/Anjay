@@ -31,6 +31,8 @@ endif()
 
 set(AVS_COAP_VERSION "${DEFAULT_AVS_COAP_VERSION}" CACHE STRING "avs_coap library version")
 
+set(AVS_COAP_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 ### library options
 
 option(WITH_TEST "Compile unit tests" OFF)
@@ -326,6 +328,7 @@ if(WITH_TEST)
                                   INCLUDES ${PUBLIC_INCLUDES})
 endif()
 
+add_subdirectory(doc)
 
 ### distribution
 

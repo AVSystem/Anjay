@@ -61,7 +61,7 @@ extern "C" {
  * @param[in]  handle_request_arg An opaque argument passed to
  *                                @p handle_request .
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t avs_coap_async_handle_incoming_packet(

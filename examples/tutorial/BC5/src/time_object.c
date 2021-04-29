@@ -256,6 +256,7 @@ int transaction_begin(anjay_t *anjay,
     AVS_LIST_FOREACH(element, obj->instances) {
         strcpy(element->application_type_backup, element->application_type);
     }
+    return 0;
 }
 
 int transaction_rollback(anjay_t *anjay,
@@ -268,6 +269,7 @@ int transaction_rollback(anjay_t *anjay,
     AVS_LIST_FOREACH(element, obj->instances) {
         strcpy(element->application_type, element->application_type_backup);
     }
+    return 0;
 }
 
 static const anjay_dm_object_def_t OBJ_DEF = {

@@ -94,6 +94,8 @@ static inline size_t
 initial_block2_option_size(avs_coap_ctx_t *ctx,
                            const avs_coap_exchange_t *exchange) {
     assert(exchange->by_type.client.next_response_payload_offset > 0);
+    (void) exchange;
+
     char buffer[64];
     avs_coap_options_t expected_options =
             avs_coap_options_create_empty(buffer, sizeof(buffer));
@@ -105,6 +107,7 @@ initial_block2_option_size(avs_coap_ctx_t *ctx,
                                            .size = AVS_COAP_BLOCK_MAX_SIZE
                                        });
     assert(avs_is_ok(err));
+    (void) err;
 
     size_t block_size = avs_max_power_of_2_not_greater_than(
             avs_coap_max_incoming_message_payload(ctx, &expected_options,

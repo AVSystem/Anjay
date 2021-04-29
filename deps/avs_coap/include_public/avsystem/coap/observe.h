@@ -100,7 +100,7 @@ typedef void avs_coap_delivery_status_handler_t(avs_coap_ctx_t *ctx,
  * @param persistence   Persistence context to operate on.
  *
  * @returns
- *  - @ref AVS_OK for success
+ *  - <c>AVS_OK</c> for success
  *  - <c>avs_errno(AVS_EINVAL)</c> if there is no observation with such @p id
  *  - @ref AVS_COAP_ERR_NOT_IMPLEMENTED if observation options are too long
  *  - any I/O error forwarded from the underlying stream
@@ -135,7 +135,7 @@ avs_error_t avs_coap_observe_persist(avs_coap_ctx_t *ctx,
  * @param persistence    Persistence context to operate on.
  *
  * @returns
- *  - @ref AVS_OK for success
+ *  - <c>AVS_OK</c> for success
  *  - <c>avs_errno(AVS_EBADMSG)</c> for malformed stream data
  *  - <c>avs_errno(AVS_ENOMEM)</c> for an out-of-memory condition
  *  - <c>avs_errno(AVS_EINVAL)</c> if the CoAP context is already initialized
@@ -185,7 +185,7 @@ avs_coap_observe_restore(avs_coap_ctx_t *ctx,
  * @param handler_arg    Opaque argument to pass to @p cancel_handler.
  *
  * @returns
- *  - @ref AVS_OK for success
+ *  - <c>AVS_OK</c> for success
  *  - <c>avs_errno(AVS_EINVAL)</c> if an invalid @p ctx has been passed
  *  - <c>avs_errno(AVS_ENOMEM)</c> for an out-of-memory condition
  *  - @ref AVS_COAP_ERR_FEATURE_DISABLED if Observe support is not available in
@@ -243,13 +243,12 @@ avs_coap_observe_start(avs_coap_ctx_t *ctx,
  *                             calls the library may need to do.
  *
  *                             If @p reliability_hint is
- *                             @ref AVS_COAP_PREFER_NOTIFY_NON_CONFIRMABLE , the
- *                             <c>result</c> argument passed to this handler
- *                             will have a value of @ref AVS_COAP_NOTIFY_FAIL
- *                             only if there was a definite failure. Otherwise,
- *                             @ref AVS_COAP_NOTIFY_SUCCESS will be passed, even
- *                             if actual success or failure of the delivery
- *                             cannot be determined.
+ *                             @ref AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE , the
+ *                             <c>err</c> argument passed to this handler will
+ *                             have a non-success value only if there was a
+ *                             definite failure. Otherwise, <c>AVS_OK</c> will
+ *                             be passed, even if actual success or failure of
+ *                             the delivery cannot be determined.
  *
  *                             If @c NULL, @p reliability_hint MUST be set to
  *                             @ref AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE, and
@@ -258,7 +257,7 @@ avs_coap_observe_start(avs_coap_ctx_t *ctx,
  *
  * @param delivery_handler_arg An opaque argument passed to @p delivery_handler
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  *
  *          In case of an error, @p delivery_handler is NEVER called.
@@ -326,7 +325,7 @@ avs_coap_notify_async(avs_coap_ctx_t *ctx,
  *
  * @param write_payload_arg An opaque argument passed to @p write_payload .
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t

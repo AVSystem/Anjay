@@ -103,7 +103,7 @@ These tutorials have been written with readability in mind, designed only to
 work on a typical Linux system. The reference implementation, on the other hand,
 is designed to be highly portable and work not only on any POSIX-compliant
 system, but also e.g. on `lwIP <https://www.nongnu.org/lwip/>`_ and
-`Windows Sockets <http://msdn2.microsoft.com/en-us/library/ms740673.aspx>`_.
+`Windows Sockets <https://docs.microsoft.com/windows/desktop/WinSock/windows-sockets-start-page-2>`_.
 
 For this reason, the reference implementation includes multiple alternate
 implementations for various functions, selected as needed at compile time but

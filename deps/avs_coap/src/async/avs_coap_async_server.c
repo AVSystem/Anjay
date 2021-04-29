@@ -18,30 +18,41 @@
  * Implementation of server-side asynchronous operations on
  * @ref avs_coap_exchange_t .
  *
+ * Handling a request is a multi-step process.
+ *
+ * Step 1: _avs_coap_async_incoming_packet_handle_single()
+ *
  *                                 handle_request
  *                                  |    |    |
  *                                  |    |    | request for next
  *                     new request? |    |    | response block?
- *                   .--------------'    |    '----------------------.
- *                   v                   |                           |
- *          call on_new_request          |  next                     |
- *             |   |   |   |             | request                   |
- *      not    |  (E) (R)  |             |  block?                   |
- *   accepted? |           | accepted?   |                           |
- *             v           |             |                           |
- *        send empty       |             |                           |
- *         5.00 ISE        v             |                           |
- *                       create          |                           |
- *                avs_coap_exchange_t    |                           |
- *                         |             |                           |
- *                         '--------.    |                           |
- *                                  v    v                           |
- *                            call request_handler                   |
- *                              |    |    |    | response set up and |
- *       response not set up    |   (E)  (R)   | handler returned 0  |
- *       and handler returned 0 |              '--------------.      |
- *                              |                             |      |
- *          request has_more=1? | request complete?           v      v
+ *                   .--------------'    |    '----------------.
+ *                   v                   |  next               |
+ *          call on_new_request          | request             |
+ *             |   |   |   |             |  block?             |
+ *      not    |  (E) (R)  |             |                     v
+ *   accepted? |           | accepted?   |      server_exchange_send_next_chunk
+ *             v           |             |            call payload_writer
+ *        send empty       |             |               |          |
+ *         5.00 ISE        v             |               v         (E)
+ *                       create          |         send response    |
+ *                avs_coap_exchange_t    |          with payload    |
+ *                         |             |               |          |
+ *                         |    .--------'               v          v
+ *                         v    v                   exchange is NOT returned
+ *                  exchange is returned                PROCESSING ENDS
+ *
+ * Step 2: _avs_coap_async_incoming_packet_call_request_handler()
+ *         This calls request_handler provided by the user.
+ *
+ * Step 3: _avs_coap_async_incoming_packet_send_response()
+ *
+ *                            call request_handler
+ *                              |    |    |    | response set up and
+ *       response not set up    |   (E)  (R)   | handler returned 0
+ *       and handler returned 0 |              '--------------.
+ *                              |                             |
+ *          request has_more=1? | request complete?           v
  *                    .---------'--------.              call payload_writer
  *                    |                  |                 |          |
  *                    v                  v                 v         (E)

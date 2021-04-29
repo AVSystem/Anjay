@@ -59,33 +59,38 @@ prepare_connection(anjay_t *anjay,
     out_conn->stateful = true;
     avs_net_socket_t *socket = NULL;
     bool is_tls = false;
+    avs_error_t err;
     switch (*info->transport_info->socket_type) {
     case AVS_NET_TCP_SOCKET:
-        avs_net_tcp_socket_create(&socket,
-                                  &socket_config->backend_configuration);
+        err = avs_net_tcp_socket_create(&socket,
+                                        &socket_config->backend_configuration);
         break;
     case AVS_NET_UDP_SOCKET:
-        avs_net_udp_socket_create(&socket,
-                                  &socket_config->backend_configuration);
+        err = avs_net_udp_socket_create(&socket,
+                                        &socket_config->backend_configuration);
         out_conn->stateful = false;
         break;
     case AVS_NET_SSL_SOCKET:
         is_tls = true;
-        avs_net_ssl_socket_create(&socket, socket_config);
+        err = avs_net_ssl_socket_create(&socket, socket_config);
         break;
     case AVS_NET_DTLS_SOCKET:
         is_tls = true;
-        avs_net_dtls_socket_create(&socket, socket_config);
+        err = avs_net_dtls_socket_create(&socket, socket_config);
         break;
     default:
         break;
     }
-    if (!socket) {
+    if (socket) {
+        assert(avs_is_ok(err));
+    } else {
         anjay_log(ERROR, _("could not create CoAP socket"));
-        return avs_errno(AVS_ENOMEM);
+        if (avs_is_ok(err)) {
+            err = avs_errno(AVS_ENOMEM);
+        }
+        return err;
     }
 
-    avs_error_t err = AVS_OK;
     if (is_tls && dane_tlsa_record
             && avs_is_err((err = avs_net_socket_set_opt(
                                    socket, AVS_NET_SOCKET_OPT_DANE_TLSA_ARRAY,

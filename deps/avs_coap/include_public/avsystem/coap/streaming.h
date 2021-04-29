@@ -107,12 +107,12 @@ avs_coap_streaming_request_handler_t(avs_coap_streaming_request_ctx_t *ctx,
  *                                 The stream object is owned by the @p ctx
  *                                 object and MUST NOT be deleted.
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  *
  * Notes:
  *
- * - Using output methods (e.g. @ref avs_stream_write) on the payload stream
+ * - Using output methods (e.g. <c>avs_stream_write()</c>) on the payload stream
  *   associated with the returned response object is undefined.
  * - The function may return success even if @p write_payload failed, but some
  *   kind of valid response (e.g. to a partially sent payload) has been
@@ -134,7 +134,7 @@ avs_coap_streaming_send_request(avs_coap_ctx_t *ctx,
  * Sets up a response that should be sent in response to a previously received
  * request.
  *
- * @param request  Request to respond to.
+ * @param ctx      Context of a request to respond to.
  *
  * @param response Response object to set up.
  *
@@ -167,15 +167,13 @@ avs_coap_streaming_setup_response(avs_coap_streaming_request_ctx_t *ctx,
  * @param ctx            CoAP context associated with the socket to receive
  *                       the message from.
  *
- * @param start_observe  If not NULL, the caller declares
- *
  * @param handle_request Callback used to handle incoming requests. May be
  *                       NULL, in which case it will only handle responses
  *                       to asynchronous requests and ignore incoming requests.
  *
  * @param handler_arg    An opaque argument passed to @p handle_request .
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed.
  */
 avs_error_t avs_coap_streaming_handle_incoming_packet(
@@ -191,13 +189,13 @@ avs_error_t avs_coap_streaming_handle_incoming_packet(
  * @ref avs_coap_notify_streaming .
  *
  * Should only be used along with
- * @ref avs_coap_server_streaming_setup_response , or when the return value of
- * @ref avs_coap_server_streaming_request_handler_t is one of AVS_COAP_CODE_*
+ * @ref avs_coap_streaming_setup_response , or when the return value of
+ * @ref avs_coap_streaming_request_handler_t is one of <c>AVS_COAP_CODE_*</c>
  * constants representing a success.
  *
  * Not fulfilling that condition results in immediate cancellation of
- * established observation after
- * @ref avs_coap_server_streaming_request_handler_t returns.
+ * established observation after @ref avs_coap_streaming_request_handler_t
+ * returns.
  *
  * If an observation with the same @p id already exists, it is canceled and
  * replaced with a new observation.
@@ -206,7 +204,7 @@ avs_error_t avs_coap_streaming_handle_incoming_packet(
  *                       request.
  *
  * @param id             Observation ID, as passed to
- *                       @ref avs_coap_server_streaming_request_handler_t .
+ *                       @ref avs_coap_streaming_request_handler_t .
  *
  * @param cancel_handler Optional user-defined handler to be called whenever
  *                       the observation is canceled for any reason.
@@ -217,7 +215,7 @@ avs_error_t avs_coap_streaming_handle_incoming_packet(
  *
  * @param handler_arg    Opaque argument to pass to @p cancel_handler.
  *
- * @returns @ref AVS_OK for success, or an error condition for which the
+ * @returns <c>AVS_OK</c> for success, or an error condition for which the
  *          operation failed. On failure, any previously established observation
  *          with the same @p id is NOT canceled.
  */

@@ -52,10 +52,10 @@ int _anjay_senml_like_encode_objlnk(anjay_senml_like_encoder_t *ctx,
  * @param ctx      Pointer to SenML-like encoder.
  * @param basename Zero-terminated string with basename; if NULL, basename is
  *                 not encoded.
- * @param time     Time value in seconds to be encoded. NAN if it has to be
- *                 ommited.
  * @param name     Zero-terminated string with name; if NULL, name is not
  *                 encoded.
+ * @param time_s   Time value in seconds to be encoded. NAN if it has to be
+ *                 ommited.
  * @returns 0 in case of success, negative value otherwise.
  */
 int _anjay_senml_like_element_begin(anjay_senml_like_encoder_t *ctx,

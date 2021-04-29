@@ -125,12 +125,13 @@ class BootstrapDiscover:
             self.assertLinkListValid(discover_result.content.decode()[
                                      len(self.expected_enabler_version_string()):])
             expected_parameters = 1
-            self.assertIn(b'</%d>;ver="1.1"' % (OID.CellularConnectivity),
+            self.assertIn(b'</%d>;ver=%s' % (OID.CellularConnectivity, self.objectVersionEncoder('1.1')),
                           discover_result.content[len(self.expected_enabler_version_string()):])
             # No more parameters
             self.assertEqual(
                 expected_parameters + 1, len(discover_result.content[len(EXPECTED_PREFIX):].split(b';')))
-            self.assertTrue(discover_result.content.startswith(EXPECTED_PREFIX))
+            self.assertTrue(
+                discover_result.content.startswith(EXPECTED_PREFIX))
 
 
 class BootstrapDiscover10FullNoServers(BootstrapDiscover.FullNoServersTest):
@@ -143,6 +144,9 @@ class BootstrapDiscover10FullNoServers(BootstrapDiscover.FullNoServersTest):
 class BootstrapDiscover10FullMultipleServers(BootstrapDiscover.FullMultipleServersTest):
     def setUp(self):
         super().setUp(version='1.0')
+
+    def objectVersionEncoder(self, version):
+        return str.encode('"' + version + '"')
 
 
 

@@ -13,138 +13,331 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-A few notes on general usage
-============================
-
-.. _single-request-single-function-call:
-
-Single request - single function call
--------------------------------------
-
-To start, we first need to establish that Anjay LwM2M Client API assumes a
-single-threaded mode of operation. It relies on the user calling
-``anjay_serve()`` whenever some packet is received and ``anjay_sched_run()``
-regularly, as described in the :doc:`another chapter <BC3>`. Both of the
-methods block until the incoming message or (respectively) a job is processed.
-
-An incoming message may either be fully contained in a single packet, or split
-between multiple packets, however ``anjay_serve()`` is called just for the
-first one. Other parts (if any) are fetched internally by the library. In other
-words: ``anjay_serve()`` blocks until the message gets handled completely.
-
-.. figure:: _images/anjay-server-request.svg
-   :width: 100%
-
-   Handling a single LwM2M request. The application gets notified a packet
-   was received on a socket using ``poll()``/``select()`` and calls
-   ``anjay_serve()`` on that socket, allowing the library to interpret the
-   request and create a response.
-
-
-When considering a request from the LwM2M Server, the block-wise transfer may
-be initiated either by server (e.g. a big Write request) or by the client
-(e.g. a large response to a Read request).
-
-.. figure:: _images/anjay-server-block-request.svg
-   :width: 100%
-
-   Handling a block-wise request from the LwM2M Server. The server realizes
-   its request is too big to fit in a single packet and explicitly initiates
-   block-wise transfer by adding CoAP BLOCK option to the request. A single
-   call to ``anjay_serve()`` blocks the client until the request is completely
-   handled.
-
-.. figure:: _images/anjay-block-response-to-server-request.svg
-   :width: 100%
-
-   A block-wise response to a non-block request from the LwM2M Server. In
-   this case, the server performs a simple Read request. The client realizes
-   that returned data is too big, and adds a BLOCK option to the response.
-   The server then requests further blocks of a response. The call to
-   ``anjay_serve()`` only returns after the last block of a response is sent.
-
-
-Similar situation arises when the client attempts to send a Register or Update
-LwM2M request to the server with a large list of available Object Instances,
-or a big Notify message. The difference is that the client sends its own
-requests from within ``anjay_sched_run()`` call instead of ``anjay_serve()``.
-
-.. figure:: _images/anjay-client-request.svg
-   :width: 100%
-
-   A simple request from the LwM2M Client.
-
-.. figure:: _images/anjay-block-client-request.svg
-   :width: 100%
-
-   A block-wise request from the LwM2M Client. ``anjay_sched_run()`` call
-   blocks until the full transfer is complete.
-
-
-Because ``anjay_serve()`` blocks after a packet arrives, the library can
-handle at most one LwM2M Server at time, which makes its usage convenient,
-as one does not have to worry about data model being accessed or modified
-by multiple LwM2M Servers at the same time. Unfortunately it may happen to
-be a problem, as during blockwise transfers the library is unable to respond
-to other LwM2M Servers with anything else than 5.03 Service Unavailable.
-
-Before getting worried about it too much, one shall realize that the above
-behavior happens only when a blockwise transfer is issued on some part of
-the data model - i.e. for that to become a problem one would have to store
-and transfer big amounts of data regularly through LwM2M which, in context of
-resource constrained environments targeted by the LwM2M protocol might not
-be the best fit.
+Send method
+===========
 
 .. note::
+   A version that includes support for Send method as well as version 1.1 of the specification,
+   including Composite operations, SenML JSON and CBOR data formats, TCP, SMS and NIDD
+   bindings, is :doc:`available commercially <../Commercial_support>`.
 
-   The blocking behavior does not apply to firmware downloaded using the PULL
-   method. See :ref:`firmware-transfer` for details.
+The "Send" operation is used by the LwM2M Client to send data to the LwM2M Server without
+explicit request by that LwM2M Server.
+Messages are created using ``anjay_send_batch_builder`` which allows to build a payload with
+the data to be sent to the LwM2M Server. Payload can consist of multiple values from different
+resources.
+Calling ``anjay_send()`` does not send batch immediately, but schedules a task to be run
+on next ``anjay_sched_run()`` call.
+
+Example
+-------
+
+As an example we'll add send method support for the Time Object implemented previously in
+:doc:`BC6` section. It contains Application Type and Current Time resources, which we will
+send to the server for demonstration purposes. We create ``send_finished_handler()`` and
+``time_object_send()`` functions in the ``time_object.c`` file.
+
+.. highlight:: c
+.. snippet-source:: examples/tutorial/BC7/src/time_object.c
+    :caption: time_object.c
+    :commercial:
+
+    static void send_finished_handler(anjay_t *anjay,
+                                    anjay_ssid_t ssid,
+                                    const anjay_send_batch_t *batch,
+                                    int result,
+                                    void *data) {
+        (void) anjay;
+        (void) ssid;
+        (void) batch;
+        (void) data;
+
+        if (result != ANJAY_SEND_SUCCESS) {
+            avs_log(time_object, ERROR, "Send failed, result: %d", result);
+        } else {
+            avs_log(time_object, TRACE, "Send successful");
+        }
+    }
+
+    void time_object_send(anjay_t *anjay, const anjay_dm_object_def_t **def) {
+        if (!anjay || !def) {
+            return;
+        }
+        time_object_t *obj = get_obj(def);
+        const anjay_ssid_t server_ssid = 1;
+
+        // Allocate new batch builder.
+        anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+
+        if (!builder) {
+            avs_log(time_object, ERROR, "Failed to allocate batch builder");
+            return;
+        }
+
+        int res = 0;
+
+        AVS_LIST(time_instance_t) it;
+        AVS_LIST_FOREACH(it, obj->instances) {
+            // Add current values of resources from Time Object.
+            if (anjay_send_batch_data_add_current(builder, anjay, obj->def->oid,
+                                                it->iid, RID_CURRENT_TIME)
+                    || anjay_send_batch_data_add_current(builder, anjay,
+                                                        obj->def->oid, it->iid,
+                                                        RID_APPLICATION_TYPE)) {
+                anjay_send_batch_builder_cleanup(&builder);
+                avs_log(time_object, ERROR, "Failed to add batch data, result: %d",
+                        res);
+                return;
+            }
+        }
+        // After adding all values, compile our batch for sending.
+        anjay_send_batch_t *batch = anjay_send_batch_builder_compile(&builder);
+
+        if (!batch) {
+            anjay_send_batch_builder_cleanup(&builder);
+            avs_log(time_object, ERROR, "Batch compile failed");
+            return;
+        }
+
+        // Schedule our send to be run on next `anjay_sched_run()` call.
+        res = anjay_send(anjay, server_ssid, batch, send_finished_handler, NULL);
+
+        if (res) {
+            avs_log(time_object, ERROR, "Failed to send, result: %d", res);
+        }
+
+        // After scheduling, we can release our batch.
+        anjay_send_batch_release(&batch);
+    }
 
 
-Transactions and ``anjay_serve()``
-----------------------------------
+And include ``anjay/lwm2m_send.h`` and ``<avsystem/commons/avs_log.h>`` in ``time_object.c``.
 
-Our data model supports transactional operations. They are here to ensure that
-whenever something goes wrong during a transaction, all changes applied since
-its beginning can be reverted - keeping the LwM2M Client in a consistent state.
+.. highlight:: c
+.. snippet-source:: examples/tutorial/BC7/src/time_object.c
+    :caption: time_object.c
+    :emphasize-lines: 5, 9
+    :commercial:
 
-As we already know, calling ``anjay_serve()`` corresponds to processing a
-single LwM2M request. This, along with properly implemented transaction
-handlers guarantees that if the LwM2M Client was in a consistent state
-before request had been received, then it will remain in a consistent state
-after the request is processed. Moreover, because of single-threaded mode of
-operation no other LwM2M Server can see the LwM2M Client being in partially
-consistent state.
+    #include <assert.h>
+    #include <stdbool.h>
 
-Things work a bit different during the Bootstrap Sequence though. When the
-Client/Server initiated Bootstrap begins, the library fires transaction
-handlers for all data model entities. At the same time, it enters the state
-where requests originated from Bootstrap Server only are handled - there may be
-more than one such request, and so ``anjay_serve()`` could get called multiple
-times. This again does not hurt consistency in any way, because according to
-the LwM2M Specification, the LwM2M Client may ignore other servers during that
-special time, and the library is doing just that - meaning
-that they won't be able to observe intermediate initialization state.
+    #include <anjay/anjay.h>
+    #include <anjay/lwm2m_send.h>
+    #include <avsystem/commons/avs_defs.h>
+    #include <avsystem/commons/avs_list.h>
+    #include <avsystem/commons/avs_log.h>
+    #include <avsystem/commons/avs_memory.h>
 
-After the Bootstrap Sequence finishes the library checks that the data model is
-valid, and if it isn't the previous correct state will be restored, which
-proves the point.
+At last, we need to declare the function in the object's header file.
+
+.. highlight:: c
+.. snippet-source:: examples/tutorial/BC7/src/time_object.h
+    :caption: time_object.h
+    :emphasize-lines: 9
+    :commercial:
+
+    #ifndef TIME_OBJECT_H
+    #define TIME_OBJECT_H
+
+    #include <anjay/dm.h>
+
+    const anjay_dm_object_def_t **time_object_create(void);
+    void time_object_release(const anjay_dm_object_def_t **def);
+    void time_object_notify(anjay_t *anjay, const anjay_dm_object_def_t **def);
+    void time_object_send(anjay_t *anjay, const anjay_dm_object_def_t **def);
+
+    #endif // TIME_OBJECT_H
+
+Now we can call this function in our ``main_loop()`` function. In the example
+we setup periodical sends with period of 10 seconds for testing purposes.
+
+.. highlight:: c
+.. snippet-source:: examples/tutorial/BC7/src/main.c
+    :caption: main.c
+    :emphasize-lines: 13-16, 55-59
+    :commercial:
+
+    #include <anjay/anjay.h>
+    #include <anjay/attr_storage.h>
+    #include <anjay/security.h>
+    #include <anjay/server.h>
+    #include <avsystem/commons/avs_log.h>
+
+    #include <poll.h>
+
+    #include "time_object.h"
+
+    int main_loop(anjay_t *anjay, const anjay_dm_object_def_t **time_object) {
+
+        // Setup periodical sends
+        const avs_time_duration_t send_period =
+                avs_time_duration_from_scalar(10, AVS_TIME_S);
+        avs_time_real_t next_send = avs_time_real_now();
+
+        while (true) {
+            // Obtain all network data sources
+            AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
+
+            // Prepare to poll() on them
+            size_t numsocks = AVS_LIST_SIZE(sockets);
+            struct pollfd pollfds[numsocks];
+            size_t i = 0;
+            AVS_LIST(avs_net_socket_t *const) sock;
+            AVS_LIST_FOREACH(sock, sockets) {
+                pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
+                pollfds[i].events = POLLIN;
+                pollfds[i].revents = 0;
+                ++i;
+            }
+
+            const int max_wait_time_ms = 1000;
+            // Determine the expected time to the next job in milliseconds.
+            // If there is no job we will wait till something arrives for
+            // at most 1 second (i.e. max_wait_time_ms).
+            int wait_ms =
+                    anjay_sched_calculate_wait_time_ms(anjay, max_wait_time_ms);
+
+            // Wait for the events if necessary, and handle them.
+            if (poll(pollfds, numsocks, wait_ms) > 0) {
+                int socket_id = 0;
+                AVS_LIST(avs_net_socket_t *const) socket = NULL;
+                AVS_LIST_FOREACH(socket, sockets) {
+                    if (pollfds[socket_id].revents) {
+                        if (anjay_serve(anjay, *socket)) {
+                            avs_log(tutorial, ERROR, "anjay_serve failed");
+                        }
+                    }
+                    ++socket_id;
+                }
+            }
+
+            if (avs_time_real_before(next_send, avs_time_real_now())) {
+                // Send object application type and current time
+                time_object_send(anjay, time_object);
+                next_send = avs_time_real_add(next_send, send_period);
+            }
+
+            // Notify the library about a Resource value change
+            time_object_notify(anjay, time_object);
+
+            // Finally run the scheduler
+            anjay_sched_run(anjay);
+        }
+        return 0;
+    }
+
+    // Installs Security Object and adds and instance of it.
+    // An instance of Security Object provides information needed to connect to
+    // LwM2M server.
+    static int setup_security_object(anjay_t *anjay) {
+        if (anjay_security_object_install(anjay)) {
+            return -1;
+        }
+
+        static const char PSK_IDENTITY[] = "identity";
+        static const char PSK_KEY[] = "P4s$w0rd";
+
+        anjay_security_instance_t security_instance = {
+            .ssid = 1,
+            .server_uri = "coaps://try-anjay.avsystem.com:5684",
+            .security_mode = ANJAY_SECURITY_PSK,
+            .public_cert_or_psk_identity = (const uint8_t *) PSK_IDENTITY,
+            .public_cert_or_psk_identity_size = strlen(PSK_IDENTITY),
+            .private_cert_or_psk_key = (const uint8_t *) PSK_KEY,
+            .private_cert_or_psk_key_size = strlen(PSK_KEY)
+        };
+
+        // Anjay will assign Instance ID automatically
+        anjay_iid_t security_instance_id = ANJAY_ID_INVALID;
+        if (anjay_security_object_add_instance(anjay, &security_instance,
+                                            &security_instance_id)) {
+            return -1;
+        }
+
+        return 0;
+    }
+
+    // Installs Server Object and adds and instance of it.
+    // An instance of Server Object provides the data related to a LwM2M Server.
+    static int setup_server_object(anjay_t *anjay) {
+        if (anjay_server_object_install(anjay)) {
+            return -1;
+        }
+
+        const anjay_server_instance_t server_instance = {
+            // Server Short ID
+            .ssid = 1,
+            // Client will send Update message often than every 60 seconds
+            .lifetime = 60,
+            // Disable Default Minimum Period resource
+            .default_min_period = -1,
+            // Disable Default Maximum Period resource
+            .default_max_period = -1,
+            // Disable Disable Timeout resource
+            .disable_timeout = -1,
+            // Sets preferred transport to UDP
+            .binding = "U"
+        };
+
+        // Anjay will assign Instance ID automatically
+        anjay_iid_t server_instance_id = ANJAY_ID_INVALID;
+        if (anjay_server_object_add_instance(anjay, &server_instance,
+                                            &server_instance_id)) {
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int main(int argc, char *argv[]) {
+        if (argc != 2) {
+            avs_log(tutorial, ERROR, "usage: %s ENDPOINT_NAME", argv[0]);
+            return -1;
+        }
+
+        const anjay_configuration_t CONFIG = {
+            .endpoint_name = argv[1],
+            .in_buffer_size = 4000,
+            .out_buffer_size = 4000,
+            .msg_cache_size = 4000
+        };
+
+        anjay_t *anjay = anjay_new(&CONFIG);
+        if (!anjay) {
+            avs_log(tutorial, ERROR, "Could not create Anjay object");
+            return -1;
+        }
+
+        int result = 0;
+        // Install Attribute storage and setup necessary objects
+        if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
+                || setup_server_object(anjay)) {
+            result = -1;
+        }
+
+        const anjay_dm_object_def_t **time_object = NULL;
+        if (!result) {
+            time_object = time_object_create();
+            if (time_object) {
+                result = anjay_register_object(anjay, time_object);
+            } else {
+                result = -1;
+            }
+        }
+
+        if (!result) {
+            result = main_loop(anjay, time_object);
+        }
+
+        anjay_delete(anjay);
+        time_object_release(time_object);
+        return result;
+    }
 
 
-Notifications
--------------
-
-Anjay uses its scheduler to track pending notifications. Whenever
-a notification has to be sent, it is done from within ``anjay_sched_run()``
-function.
+That's all you need to make your client support LwM2M Send operation!
 
 .. note::
-
-   Calling ``anjay_notify_changed()`` or ``anjay_notify_instances_changed()``
-   does not send notifications immediately - they use the scheduler instead.
-
-
-.. figure:: _images/anjay-notification.svg
-   :width: 100%
-
-   Sending a LwM2M Notify message.
+    Complete code of this example can be found in `examples/tutorial/BC7`
+    subdirectory of the commercial Anjay release.

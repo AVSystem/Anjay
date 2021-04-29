@@ -99,7 +99,7 @@ class RegisterWithCertificatesAndServerPublicKey(CertificatesTest.Test):
 
 class BlockRegister:
     class Test(unittest.TestCase):
-        def __call__(self, server, timeout_s=None, verify=True):
+        def __call__(self, server, timeout_s=None, verify=True, version='1.0'):
             register_content = b''
             while True:
                 if timeout_s is None:
@@ -115,7 +115,7 @@ class BlockRegister:
                 server.send(Lwm2mContinue.matching(pkt)(options=block1))
 
             if verify:
-                self.assertEquals(expected_content(), register_content)
+                self.assertEquals(expected_content(version), register_content)
 
             server.send(Lwm2mCreated.matching(pkt)(location='/rd/demo', options=block1))
 
@@ -132,7 +132,7 @@ class RegisterUdp:
         pass
 
 
-def expected_content():
+def expected_content(version='1.0'):
     result = []
     for obj in ResPath.objects():
         if obj.oid == OID.Security:
@@ -145,7 +145,10 @@ def expected_content():
         elif obj.is_multi_instance or obj.version is not None:
             entry = '</%d>' % (obj.oid,)
             if obj.version is not None:
-                entry += ';ver="%s"' % (obj.version,)
+                if version == '1.0':
+                    entry += ';ver="%s"' % (obj.version,)
+                else:
+                    entry += ';ver=%s' % (obj.version,)
             result.append(entry)
         if not obj.is_multi_instance:
             result.append('</%d/0>' % (obj.oid,))
