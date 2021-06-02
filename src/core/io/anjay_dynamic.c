@@ -114,7 +114,11 @@ uint16_t _anjay_default_simple_format(anjay_t *anjay,
         return _anjay_default_hierarchical_format(version);
     }
 
+#ifdef ANJAY_WITHOUT_PLAINTEXT
+    return _anjay_default_hierarchical_format(version);
+#else  // ANJAY_WITHOUT_PLAINTEXT
     return AVS_COAP_FORMAT_PLAINTEXT;
+#endif // ANJAY_WITHOUT_PLAINTEXT
 }
 
 int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,

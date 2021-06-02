@@ -122,7 +122,7 @@ anjay_batch_t *_anjay_batch_acquire(const anjay_batch_t *batch);
  */
 void _anjay_batch_release(anjay_batch_t **batch);
 
-void _anjay_batch_entry_list_cleanup(AVS_LIST(anjay_batch_entry_t) list);
+void _anjay_batch_entry_list_cleanup(AVS_LIST(anjay_batch_entry_t) *list);
 
 int _anjay_dm_read_into_batch(anjay_batch_builder_t *builder,
                               anjay_t *anjay,

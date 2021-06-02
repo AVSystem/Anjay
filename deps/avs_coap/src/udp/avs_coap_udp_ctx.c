@@ -1589,6 +1589,12 @@ static avs_error_t coap_udp_setsock(avs_coap_ctx_t *ctx,
     return _avs_coap_ctx_set_socket_base(ctx, socket);
 }
 
+static uint32_t coap_udp_next_observe_option_value(avs_coap_ctx_t *ctx,
+                                                   uint32_t last_value) {
+    (void) ctx;
+    return last_value + 1;
+}
+
 static const avs_coap_ctx_vtable_t COAP_UDP_VTABLE = {
     .cleanup = coap_udp_cleanup,
     .get_base = coap_udp_get_base,
@@ -1601,7 +1607,8 @@ static const avs_coap_ctx_vtable_t COAP_UDP_VTABLE = {
     .receive_message = coap_udp_receive_message,
     .accept_observation = coap_udp_accept_observation,
     .on_timeout = coap_udp_on_timeout,
-    .get_stats = coap_udp_get_stats
+    .get_stats = coap_udp_get_stats,
+    .next_observe_option_value = coap_udp_next_observe_option_value
 };
 
 static bool are_tx_params_sane(const avs_coap_udp_tx_params_t *tx_params) {

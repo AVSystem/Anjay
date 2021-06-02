@@ -4,7 +4,6 @@
 *.so
 *.so.*
 avs_*_test
-
 /tools/dtls_echo_server
 /certs
 /ensure-no-warnings-from-headers-if-cpp.cpp

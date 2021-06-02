@@ -79,5 +79,5 @@ library in turn may additionally depend either on
 or `tinydtls <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
 support.
 
-To build Anjay from source, `CMake <http://www.cmake.org/>`_ version 3.6.0 or
+To build Anjay from source, `CMake <https://www.cmake.org/>`_ version 3.6.0 or
 newer is necessary.

@@ -69,6 +69,18 @@ if(WITH_TEST)
     list(APPEND AVS_COMMONS_REQUIRED_COMPONENTS avs_unit)
 endif()
 
+# TODO: is there a better way of detecting if avs_commons is already included?
+if(NOT TARGET avs_commons_global_headers)
+    # enable only necessary components - this prevents compiling "old" avs_coap
+    foreach(MOD IN LISTS AVS_COMMONS_REQUIRED_COMPONENTS)
+        string(TOUPPER "${MOD}" MOD_UPPER)
+        set(WITH_${MOD_UPPER} ON CACHE STRING "")
+    endforeach()
+    add_subdirectory(deps/avs_commons)
+    set(AVS_COMMONS_INCLUDE_DIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/include_public")
+endif()
+
 ### feature support
 
 set(WITH_AVS_COAP_POISONING "${WITH_POISONING}")

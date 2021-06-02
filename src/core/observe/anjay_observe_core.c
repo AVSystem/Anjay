@@ -350,6 +350,7 @@ static AVS_LIST(anjay_observation_value_t)
 create_observation_value(const anjay_msg_details_t *details,
                          avs_coap_notify_reliability_hint_t reliability_hint,
                          anjay_observation_t *ref,
+                         const avs_time_real_t *timestamp,
                          const anjay_batch_t *const *values) {
     const size_t values_count =
             _anjay_observe_is_error_details(details) ? 0 : ref->paths_count;
@@ -364,7 +365,7 @@ create_observation_value(const anjay_msg_details_t *details,
     result->details = *details;
     result->reliability_hint = reliability_hint;
     memcpy((void *) (intptr_t) (const void *) &result->ref, &ref, sizeof(ref));
-    result->timestamp = avs_time_real_now();
+    result->timestamp = *timestamp;
     for (size_t i = 0; i < values_count; ++i) {
         assert(values);
         assert(values[i]);
@@ -445,6 +446,7 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
                             anjay_observation_t *observation,
                             avs_coap_notify_reliability_hint_t reliability_hint,
                             const anjay_msg_details_t *details,
+                            const avs_time_real_t *timestamp,
                             const anjay_batch_t *const *values) {
     anjay_observe_state_t *observe =
             &_anjay_from_server(conn_state->conn_ref.server)->observe;
@@ -463,7 +465,7 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
 
     AVS_LIST(anjay_observation_value_t) res_value =
             create_observation_value(details, reliability_hint, observation,
-                                     values);
+                                     timestamp, values);
     if (!res_value) {
         return -1;
     }
@@ -488,8 +490,10 @@ static int insert_error(anjay_observe_connection_entry_t *conn_state,
     if (details.msg_code != -outer_result) {
         anjay_log(DEBUG, _("invalid error code: ") "%d", outer_result);
     }
+    const avs_time_real_t timestamp = avs_time_real_now();
     return insert_new_value(conn_state, observation,
-                            AVS_COAP_NOTIFY_PREFER_CONFIRMABLE, &details, NULL);
+                            AVS_COAP_NOTIFY_PREFER_CONFIRMABLE, &details,
+                            &timestamp, NULL);
 }
 
 static int get_effective_attrs(anjay_t *anjay,
@@ -589,6 +593,7 @@ int _anjay_observe_schedule_pmax_trigger(
 static int insert_initial_value(anjay_observe_connection_entry_t *conn_state,
                                 anjay_observation_t *observation,
                                 const anjay_msg_details_t *details,
+                                const avs_time_real_t *timestamp,
                                 const anjay_batch_t *const *values) {
     assert(!observation->last_sent);
     assert(!observation->last_unsent);
@@ -600,7 +605,7 @@ static int insert_initial_value(anjay_observe_connection_entry_t *conn_state,
     // even though we haven't actually sent it ourselves
     if ((observation->last_sent = create_observation_value(
                  details, AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE, observation,
-                 values))
+                 timestamp, values))
             && !(result = _anjay_observe_schedule_pmax_trigger(conn_state,
                                                                observation))) {
         observation->last_confirmable = now;
@@ -784,6 +789,7 @@ static int read_as_batch(anjay_t *anjay,
                          const anjay_dm_path_info_t *path_info,
                          anjay_request_action_t action,
                          anjay_ssid_t connection_ssid,
+                         const avs_time_real_t *timestamp,
                          anjay_batch_t **out_batch) {
     assert(out_batch && !*out_batch);
     anjay_batch_builder_t *builder = _anjay_batch_builder_new();
@@ -793,7 +799,7 @@ static int read_as_batch(anjay_t *anjay,
     }
 
     int result = _anjay_dm_read_into_batch(builder, anjay, obj_ptr, path_info,
-                                           connection_ssid, NULL);
+                                           connection_ssid, timestamp);
     (void) action;
     if (!result && !(*out_batch = _anjay_batch_builder_compile(&builder))) {
         anjay_log(ERROR, _("out of memory"));
@@ -808,10 +814,9 @@ cast_to_const_batch_array(anjay_batch_t **batch_array) {
     return (const anjay_batch_t *const *) batch_array;
 }
 
-static inline anjay_uri_path_t
-get_observation_path(const anjay_observation_t *observation) {
-    return (observation->action == ANJAY_ACTION_READ ? observation->paths[0]
-                                                     : MAKE_ROOT_PATH());
+static anjay_uri_path_t get_response_path(anjay_observation_value_t *value) {
+    anjay_observation_t *observation = value->ref;
+    return observation->paths[0];
 }
 
 static int write_notify_payload(size_t payload_offset,
@@ -848,8 +853,8 @@ static int write_notify_payload(size_t payload_offset,
             break;
         }
         // NOTE: Access Control permissions have been checked during the
-        // _anjay_dm_read_as_batch() stage, so we're "spoofing"
-        // ANJAY_SSID_BOOTSTRAP as the permissions are checked now
+        // read_as_batch() stage, so we're "spoofing" ANJAY_SSID_BOOTSTRAP
+        // as the permissions are checked now
         int result = _anjay_batch_data_output_entry(
                 anjay, value->values[conn->serialization_state.curr_value_idx],
                 ANJAY_SSID_BOOTSTRAP,
@@ -901,14 +906,17 @@ static int send_initial_response(anjay_t *anjay,
     if (!notify_stream) {
         return -1;
     }
+
+    anjay_uri_path_t root_path = request->uri;
+
     anjay_output_ctx_t *out_ctx = NULL;
-    int result = _anjay_output_dynamic_construct(&out_ctx, notify_stream,
-                                                 &request->uri, details->format,
-                                                 request->action);
+    int result =
+            _anjay_output_dynamic_construct(&out_ctx, notify_stream, &root_path,
+                                            details->format, request->action);
     for (size_t i = 0; !result && i < values_count; ++i) {
         // NOTE: Access Control permissions have been checked during the
-        // _anjay_dm_read_as_batch() stage, so we're "spoofing"
-        // ANJAY_SSID_BOOTSTRAP as the permissions are checked now
+        // read_as_batch() stage, so we're "spoofing" ANJAY_SSID_BOOTSTRAP
+        // as the permissions are checked now
         result = _anjay_batch_data_output(anjay, values[i],
                                           ANJAY_SSID_BOOTSTRAP, out_ctx);
     }
@@ -937,6 +945,7 @@ static int read_observation_path(anjay_t *anjay,
                                  const anjay_uri_path_t *path,
                                  anjay_request_action_t action,
                                  anjay_ssid_t connection_ssid,
+                                 const avs_time_real_t *timestamp,
                                  anjay_batch_t **out_batch) {
     const anjay_dm_object_def_t *const *obj = NULL;
     if (_anjay_uri_path_has(path, ANJAY_ID_OID)) {
@@ -946,7 +955,7 @@ static int read_observation_path(anjay_t *anjay,
     anjay_dm_path_info_t path_info;
     (void) ((result = _anjay_dm_path_info(anjay, obj, path, &path_info))
             || (result = read_as_batch(anjay, obj, &path_info, action,
-                                       connection_ssid, out_batch)));
+                                       connection_ssid, timestamp, out_batch)));
     return result;
 }
 
@@ -954,6 +963,7 @@ static int read_observation_values(anjay_t *anjay,
                                    const paths_arg_t *paths,
                                    anjay_request_action_t action,
                                    anjay_ssid_t connection_ssid,
+                                   const avs_time_real_t *timestamp,
                                    anjay_batch_t ***out_batches) {
     assert(out_batches && !*out_batches);
     assert(paths->type != PATHS_POINTER_LIST
@@ -973,7 +983,7 @@ static int read_observation_values(anjay_t *anjay,
         AVS_LIST(const anjay_uri_path_t) path;
         AVS_LIST_FOREACH(path, paths->paths) {
             if ((result = read_observation_path(anjay, path, action,
-                                                connection_ssid,
+                                                connection_ssid, timestamp,
                                                 &(*out_batches)[index]))) {
                 break;
             }
@@ -983,9 +993,9 @@ static int read_observation_values(anjay_t *anjay,
     }
     case PATHS_POINTER_ARRAY:
         for (size_t index = 0; index < paths->count; ++index) {
-            if ((result = read_observation_path(anjay, &paths->paths[index],
-                                                action, connection_ssid,
-                                                &(*out_batches)[index]))) {
+            if ((result = read_observation_path(
+                         anjay, &paths->paths[index], action, connection_ssid,
+                         timestamp, &(*out_batches)[index]))) {
                 break;
             }
         }
@@ -1010,13 +1020,15 @@ static int observe_handle(anjay_t *anjay,
         return -1;
     }
 
+    const avs_time_real_t timestamp = avs_time_real_now();
+
     AVS_RBTREE_ELEM(anjay_observation_t) observation = NULL;
     anjay_msg_details_t response_details;
     anjay_batch_t **batches = NULL;
     int send_result = -1;
-    int result =
-            read_observation_values(anjay, paths, request->action,
-                                    _anjay_dm_current_ssid(anjay), &batches);
+    int result = read_observation_values(anjay, paths, request->action,
+                                         _anjay_dm_current_ssid(anjay),
+                                         &timestamp, &batches);
     if (result) {
         delete_connection_if_empty(conn_ptr);
         return result;
@@ -1028,6 +1040,7 @@ static int observe_handle(anjay_t *anjay,
     if (!(observation =
                   put_entry_into_connection_state(request, *conn_ptr, paths))
             || insert_initial_value(*conn_ptr, observation, &response_details,
+                                    &timestamp,
                                     cast_to_const_batch_array(batches))
             || start_coap_observe(anjay->current_connection, request)) {
         result = -1;
@@ -1318,26 +1331,13 @@ initialize_serialization_state(anjay_observe_connection_entry_t *conn) {
     memset(&conn->serialization_state, 0, sizeof(conn->serialization_state));
 
     anjay_observation_value_t *value = conn->unsent;
-    anjay_observation_t *observation = value->ref;
-
-    // DO NOT ATTEMPT TO INLINE get_observation_path() HERE.
-    //
-    // Doing so makes some old GCC versions place this variable in read-only
-    // memory (!?), causing a crash at initialization below, unless the const is
-    // removed.
-    //
-    // After some manual checks on x86_64, crashes happen when compiling this
-    // with GCC <5.5 and 6.0-6.3.
-    //
-    // I was not able to find a relevant bug report nor a patch that fixed it to
-    // link here. -- marian
-    const anjay_uri_path_t root_path = get_observation_path(observation);
+    const anjay_uri_path_t root_path = get_response_path(value);
 
     if (!(conn->serialization_state.membuf_stream = avs_stream_membuf_create())
             || _anjay_output_dynamic_construct(
                        &conn->serialization_state.out_ctx,
                        conn->serialization_state.membuf_stream, &root_path,
-                       value->details.format, observation->action)) {
+                       value->details.format, value->ref->action)) {
         return -1;
     }
     conn->serialization_state.serialization_time = avs_time_real_now();
@@ -1498,6 +1498,8 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
         return -1;
     }
 
+    const avs_time_real_t timestamp = avs_time_real_now();
+
     int result = 0;
     for (size_t i = 0; i < observation->paths_count; ++i) {
         anjay_dm_internal_r_attrs_t attrs;
@@ -1512,7 +1514,7 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
                               &attrs.standard.common)) {
             if ((result = read_observation_path(anjay, &observation->paths[i],
                                                 observation->action, ssid,
-                                                &batches[i]))) {
+                                                &timestamp, &batches[i]))) {
                 anjay_log(ERROR,
                           _("Could not read path ") "%s" _(" for notifying"),
                           ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
@@ -1554,6 +1556,7 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
                           : AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE;
         result = insert_new_value(conn_state, observation, reliability_hint,
                                   &newest_value(observation)->details,
+                                  &timestamp,
                                   cast_to_const_batch_array(batches));
     }
 

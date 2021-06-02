@@ -25,6 +25,7 @@
 #    include "../anjay_io_core.h"
 #    include "../coap/anjay_content_format.h"
 #    include "anjay_base64_out.h"
+#    include "anjay_common.h"
 #    include "anjay_senml_like_encoder_vtable.h"
 
 #    include <inttypes.h>
@@ -39,21 +40,9 @@ VISIBILITY_SOURCE_BEGIN
 
 #    define JSON_MAX_CONTEXT_LEVEL 2
 
-typedef enum {
-    SENML_LIKE_DATA_BASENAME,
-    SENML_LIKE_DATA_NAME,
-    SENML_LIKE_DATA_VALUE,
-    SENML_LIKE_DATA_STRING,
-    SENML_LIKE_DATA_BOOL,
-    SENML_LIKE_DATA_OPAQUE,
-    SENML_LIKE_DATA_BASETIME,
-    SENML_LIKE_DATA_TIME,
-    SENML_LIKE_DATA_OBJLNK
-} senml_like_data_type_t;
-
 typedef struct json_encoder_struct json_encoder_t;
 
-typedef int (*key_encoder_t)(json_encoder_t *, senml_like_data_type_t);
+typedef int (*key_encoder_t)(json_encoder_t *, senml_label_t);
 
 struct json_encoder_struct {
     const anjay_senml_like_encoder_vtable_t *vtable;
@@ -65,7 +54,7 @@ struct json_encoder_struct {
     bool needs_separator;
 };
 
-static int begin_pair(json_encoder_t *ctx, senml_like_data_type_t type);
+static int begin_pair(json_encoder_t *ctx, senml_label_t type);
 
 static int write_quoted_string(avs_stream_t *stream, const char *value) {
     if (avs_is_err(avs_stream_write(stream, "\"", 1))) {
@@ -130,7 +119,7 @@ static inline void nested_context_pop(json_encoder_t *ctx) {
 static inline int maybe_write_name(json_encoder_t *ctx, const char *name) {
     int retval = 0;
     if (name) {
-        (void) ((retval = begin_pair(ctx, SENML_LIKE_DATA_NAME))
+        (void) ((retval = begin_pair(ctx, SENML_LABEL_NAME))
                 || (retval = write_quoted_string(ctx->stream, name)));
     }
     return retval;
@@ -149,7 +138,7 @@ static int maybe_write_separator(json_encoder_t *ctx) {
 #    ifdef ANJAY_WITH_LWM2M_JSON
 static inline int maybe_write_time(json_encoder_t *ctx, double time_s) {
     if (!isnan(time_s)) {
-        if (begin_pair(ctx, SENML_LIKE_DATA_TIME)
+        if (begin_pair(ctx, SENML_LABEL_TIME)
                 || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
                                                  AVS_DOUBLE_AS_STRING(time_s,
                                                                       17)))) {
@@ -159,29 +148,29 @@ static inline int maybe_write_time(json_encoder_t *ctx, double time_s) {
     return 0;
 }
 
-static int encode_key(json_encoder_t *ctx, senml_like_data_type_t type) {
+static int encode_key(json_encoder_t *ctx, senml_label_t type) {
     const char *key = NULL;
     switch (type) {
-    case SENML_LIKE_DATA_BASENAME:
+    case SENML_LABEL_BASE_NAME:
         key = "\"bn\":";
         break;
-    case SENML_LIKE_DATA_NAME:
+    case SENML_LABEL_NAME:
         key = "\"n\":";
         break;
-    case SENML_LIKE_DATA_VALUE:
+    case SENML_LABEL_VALUE:
         key = "\"v\":";
         break;
-    case SENML_LIKE_DATA_STRING:
-    case SENML_LIKE_DATA_OPAQUE:
+    case SENML_LABEL_VALUE_STRING:
+    case SENML_LABEL_VALUE_OPAQUE:
         key = "\"sv\":";
         break;
-    case SENML_LIKE_DATA_BOOL:
+    case SENML_LABEL_VALUE_BOOL:
         key = "\"bv\":";
         break;
-    case SENML_LIKE_DATA_TIME:
+    case SENML_LABEL_TIME:
         key = "\"t\":";
         break;
-    case SENML_LIKE_DATA_OBJLNK:
+    case SENML_EXT_LABEL_OBJLNK:
         key = "\"ov\":";
         break;
     default:
@@ -223,7 +212,7 @@ static int encoder_cleanup(anjay_senml_like_encoder_t **ctx_) {
 }
 #    endif // ANJAY_WITH_LWM2M_JSON
 
-static int begin_pair(json_encoder_t *ctx, senml_like_data_type_t type) {
+static int begin_pair(json_encoder_t *ctx, senml_label_t type) {
     int retval = -1;
     if (ctx->level == JSON_CONTEXT_LEVEL_MAP) {
         (void) ((retval = maybe_write_separator(ctx))
@@ -238,7 +227,7 @@ static int begin_pair(json_encoder_t *ctx, senml_like_data_type_t type) {
 
 static int encode_uint(anjay_senml_like_encoder_t *ctx_, uint64_t value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
-    if (begin_pair(ctx, SENML_LIKE_DATA_VALUE)
+    if (begin_pair(ctx, SENML_LABEL_VALUE)
             || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
                                              AVS_UINT64_AS_STRING(value)))) {
         return -1;
@@ -248,7 +237,7 @@ static int encode_uint(anjay_senml_like_encoder_t *ctx_, uint64_t value) {
 
 static int encode_int(anjay_senml_like_encoder_t *ctx_, int64_t value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
-    if (begin_pair(ctx, SENML_LIKE_DATA_VALUE)
+    if (begin_pair(ctx, SENML_LABEL_VALUE)
             || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
                                              AVS_INT64_AS_STRING(value)))) {
         return -1;
@@ -261,7 +250,7 @@ static int encode_int(anjay_senml_like_encoder_t *ctx_, int64_t value) {
 
 static int encode_double(anjay_senml_like_encoder_t *ctx_, double value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
-    if (begin_pair(ctx, SENML_LIKE_DATA_VALUE)
+    if (begin_pair(ctx, SENML_LABEL_VALUE)
             || avs_is_err(avs_stream_write_f(
                        ctx->stream, "%s", AVS_DOUBLE_AS_STRING(value, 17)))) {
         return -1;
@@ -271,7 +260,7 @@ static int encode_double(anjay_senml_like_encoder_t *ctx_, double value) {
 
 static int encode_bool(anjay_senml_like_encoder_t *ctx_, bool value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
-    if (begin_pair(ctx, SENML_LIKE_DATA_BOOL)
+    if (begin_pair(ctx, SENML_LABEL_VALUE_BOOL)
             || avs_is_err(avs_stream_write_f(ctx->stream, "%s",
                                              value ? "true" : "false"))) {
         return -1;
@@ -282,7 +271,7 @@ static int encode_bool(anjay_senml_like_encoder_t *ctx_, bool value) {
 static int encode_string(anjay_senml_like_encoder_t *ctx_, const char *value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
     int retval;
-    (void) ((retval = begin_pair(ctx, SENML_LIKE_DATA_STRING))
+    (void) ((retval = begin_pair(ctx, SENML_LABEL_VALUE_STRING))
             || (retval = write_quoted_string(ctx->stream, value)));
     return retval;
 }
@@ -290,7 +279,7 @@ static int encode_string(anjay_senml_like_encoder_t *ctx_, const char *value) {
 static int encode_objlnk(anjay_senml_like_encoder_t *ctx_, const char *value) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
     int retval;
-    (void) ((retval = begin_pair(ctx, SENML_LIKE_DATA_OBJLNK))
+    (void) ((retval = begin_pair(ctx, SENML_EXT_LABEL_OBJLNK))
             || (retval = write_quoted_string(ctx->stream, value)));
     return retval;
 }
@@ -310,7 +299,7 @@ static int bytes_begin(anjay_senml_like_encoder_t *ctx_, size_t size) {
     if (!(ctx->bytes = _anjay_base64_ret_bytes_ctx_new(
                   ctx->stream, ctx->base64_config, size))
             || maybe_write_separator(ctx)
-            || ctx->key_encoder(ctx, SENML_LIKE_DATA_OPAQUE)
+            || ctx->key_encoder(ctx, SENML_LABEL_VALUE_OPAQUE)
             || avs_is_err(avs_stream_write(ctx->stream, "\"", 1))) {
         _anjay_base64_ret_bytes_ctx_delete(&ctx->bytes);
         return -1;

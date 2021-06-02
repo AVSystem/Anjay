@@ -309,6 +309,13 @@ typedef avs_coap_stats_t avs_coap_get_stats_t(avs_coap_ctx_t *ctx);
 typedef avs_error_t avs_coap_setsock_t(avs_coap_ctx_t *ctx,
                                        avs_net_socket_t *socket);
 
+/**
+ * Used to get the next Observe option value basing on value from the last
+ * notification.
+ */
+typedef uint32_t avs_coap_next_observe_option_value_t(avs_coap_ctx_t *ctx,
+                                                      uint32_t last_value);
+
 /** @} */
 
 typedef struct avs_coap_ctx_vtable {
@@ -324,6 +331,7 @@ typedef struct avs_coap_ctx_vtable {
     avs_coap_accept_observation_t *accept_observation;
     avs_coap_on_timeout_t *on_timeout;
     avs_coap_get_stats_t *get_stats;
+    avs_coap_next_observe_option_value_t *next_observe_option_value;
 } avs_coap_ctx_vtable_t;
 
 VISIBILITY_PRIVATE_HEADER_END

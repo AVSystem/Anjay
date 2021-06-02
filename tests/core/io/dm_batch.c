@@ -451,9 +451,13 @@ AVS_UNIT_TEST(dm_batch, multiple_instance_resource) {
 AVS_UNIT_TEST(dm_batch, illegal_op) {
     TEST_SETUP(MOCK_CLOCK_START_RELATIVE);
 
+    AVS_LIST(anjay_batch_entry_t) *initial_append_ptr = builder->append_ptr;
+
     AVS_UNIT_ASSERT_FAILED(add_current(builder, anjay, ILLEGAL_IMPL_RID));
 
     AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(builder->list), 0);
+    AVS_UNIT_ASSERT_TRUE(builder->append_ptr == initial_append_ptr);
+    AVS_UNIT_ASSERT_NULL(*builder->append_ptr);
 
     TEST_TEARDOWN();
 }

@@ -227,15 +227,15 @@ static void batch_entry_cleanup(void *entry_) {
     batch_data_cleanup(&entry->data);
 }
 
-void _anjay_batch_entry_list_cleanup(AVS_LIST(anjay_batch_entry_t) list) {
-    AVS_LIST_CLEAR(&list) {
-        batch_entry_cleanup(list);
+void _anjay_batch_entry_list_cleanup(AVS_LIST(anjay_batch_entry_t) *list) {
+    AVS_LIST_CLEAR(list) {
+        batch_entry_cleanup(*list);
     }
 }
 
 void _anjay_batch_builder_cleanup(anjay_batch_builder_t **builder) {
     if (builder && *builder) {
-        _anjay_batch_entry_list_cleanup((*builder)->list);
+        _anjay_batch_entry_list_cleanup(&(*builder)->list);
         avs_free(*builder);
         *builder = NULL;
     }
@@ -268,7 +268,7 @@ void _anjay_batch_release(anjay_batch_t **batch) {
     assert((*batch)->ref_count);
 
     if (--((*batch)->ref_count) == 0) {
-        _anjay_batch_entry_list_cleanup((*batch)->list);
+        _anjay_batch_entry_list_cleanup(&(*batch)->list);
         avs_free(*batch);
     }
     *batch = NULL;
@@ -518,8 +518,8 @@ int _anjay_dm_read_into_batch(anjay_batch_builder_t *builder,
 
     // Despite of failure, the new element may be added. Remove it.
     if (result) {
-        _anjay_batch_entry_list_cleanup(*initial_append_ptr);
-        *initial_append_ptr = NULL;
+        builder->append_ptr = initial_append_ptr;
+        _anjay_batch_entry_list_cleanup(builder->append_ptr);
     }
     return result;
 }

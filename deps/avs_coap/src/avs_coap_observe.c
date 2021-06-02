@@ -132,8 +132,10 @@ _avs_coap_observe_setup_notify(avs_coap_ctx_t *ctx,
     *out_notify = (avs_coap_observe_notify_t) {
         .request_code = observe->request_code,
         .request_key = observe->request_key,
-        .observe_option_value = ++observe->last_observe_option_value
+        .observe_option_value = ctx->vtable->next_observe_option_value(
+                ctx, observe->last_observe_option_value)
     };
+    observe->last_observe_option_value = out_notify->observe_option_value;
     return AVS_OK;
 }
 
