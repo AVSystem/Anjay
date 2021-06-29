@@ -59,7 +59,8 @@ class FirmwareUpdate:
         def set_check_marker(self, check_marker):
             self.check_marker = check_marker
 
-        def set_expect_send_after_state_machine_reset(self, expect_send_after_state_machine_reset):
+        def set_expect_send_after_state_machine_reset(
+                self, expect_send_after_state_machine_reset):
             self.expect_send_after_state_machine_reset = expect_send_after_state_machine_reset
 
         def setUp(self, garbage=0, *args, **kwargs):
@@ -151,7 +152,8 @@ class FirmwareUpdate:
         ETAGS = False
 
         def get_firmware_uri(self):
-            return 'http://127.0.0.1:%d%s' % (self.http_server.server_address[1], FIRMWARE_PATH)
+            return 'http://127.0.0.1:%d%s' % (
+                self.http_server.server_address[1], FIRMWARE_PATH)
 
         def provide_response(self, use_real_app=False):
             with self._response_cv:
@@ -188,7 +190,8 @@ class FirmwareUpdate:
                         test_case._response_content = None
 
                     def chunks(data):
-                        for i in range(0, len(response_content), test_case.CHUNK_SIZE):
+                        for i in range(0, len(response_content),
+                                       test_case.CHUNK_SIZE):
                             yield response_content[i:i + test_case.CHUNK_SIZE]
 
                     for chunk in chunks(response_content):
@@ -246,7 +249,8 @@ class FirmwareUpdate:
             from cryptography.hazmat.primitives import hashes
 
             name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
-            issuer_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn)])
+            issuer_name = x509.Name(
+                [x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn)])
             now = datetime.datetime.utcnow()
             cert_builder = (x509.CertificateBuilder().
                             subject_name(name).
@@ -262,20 +266,24 @@ class FirmwareUpdate:
             if ca:
                 cert_builder = cert_builder.add_extension(
                     x509.BasicConstraints(ca=True, path_length=None), critical=False)
-            return cert_builder.sign(private_key, hashes.SHA256(), default_backend())
+            return cert_builder.sign(
+                private_key, hashes.SHA256(), default_backend())
 
         @staticmethod
-        def _generate_cert_and_key(cn='127.0.0.1', alt_ip='127.0.0.1', ca=False):
+        def _generate_cert_and_key(
+                cn='127.0.0.1', alt_ip='127.0.0.1', ca=False):
             key = FirmwareUpdate.TestWithTlsServer._generate_key()
             cert = FirmwareUpdate.TestWithTlsServer._generate_cert(key, key.public_key(), cn, cn,
                                                                    alt_ip, ca)
             return cert, key
 
         @staticmethod
-        def _generate_pem_cert_and_key(cn='127.0.0.1', alt_ip='127.0.0.1', ca=False):
+        def _generate_pem_cert_and_key(
+                cn='127.0.0.1', alt_ip='127.0.0.1', ca=False):
             from cryptography.hazmat.primitives import serialization
 
-            cert, key = FirmwareUpdate.TestWithTlsServer._generate_cert_and_key(cn, alt_ip, ca)
+            cert, key = FirmwareUpdate.TestWithTlsServer._generate_cert_and_key(
+                cn, alt_ip, ca)
             cert_pem = cert.public_bytes(encoding=serialization.Encoding.PEM)
             key_pem = key.private_bytes(encoding=serialization.Encoding.PEM,
                                         format=serialization.PrivateFormat.TraditionalOpenSSL,
@@ -313,7 +321,7 @@ class FirmwareUpdate:
             def unlink_without_err(fname):
                 try:
                     os.unlink(fname)
-                except:
+                except BaseException:
                     print('unlink(%r) failed' % (fname,))
                     sys.excepthook(*sys.exc_info())
 
@@ -355,7 +363,8 @@ class FirmwareUpdate:
 
     class DemoArgsExtractorMixin:
         def _get_valgrind_args(self):
-            # these tests call demo_process.kill(), so Valgrind is not really useful
+            # these tests call demo_process.kill(), so Valgrind is not really
+            # useful
             return []
 
         def _start_demo(self, cmdline_args, timeout_s=30):
@@ -389,7 +398,8 @@ class FirmwareUpdate:
             self.communicate('set-fw-package-path %s' %
                              (os.path.abspath(self.fw_file_name)))
 
-    class TestWithPartialDownloadAndRestart(TestWithPartialDownload, DemoArgsExtractorMixin):
+    class TestWithPartialDownloadAndRestart(
+            TestWithPartialDownload, DemoArgsExtractorMixin):
         def tearDown(self):
             with open(self.fw_file_name, "rb") as f:
                 self.assertEqual(f.read(), self.FIRMWARE_SCRIPT_CONTENT)
@@ -942,7 +952,8 @@ class FirmwareUpdateUnconfiguredHttpsTest(FirmwareUpdate.TestWithHttpsServer):
         self.assertEqual(0, self.read_state())
 
 
-class FirmwareUpdateUnconfiguredHttpsWithFallbackAttemptTest(FirmwareUpdate.TestWithHttpsServer):
+class FirmwareUpdateUnconfiguredHttpsWithFallbackAttemptTest(
+        FirmwareUpdate.TestWithHttpsServer):
     def setUp(self):
         super().setUp(pass_cert_to_demo=False,
                       psk_identity=b'test-identity', psk_key=b'test-key')
@@ -970,7 +981,8 @@ class FirmwareUpdateUnconfiguredHttpsWithFallbackAttemptTest(FirmwareUpdate.Test
 
         # even before reaching the server, we should get an error
         notify_msg = self.serv.recv()
-        # no security information => client will attempt PSK from data model and fail handshake => "Connection lost"
+        # no security information => client will attempt PSK from data model
+        # and fail handshake => "Connection lost"
         self.assertMsgEqual(Lwm2mNotify(observe_req.token,
                                         str(UPDATE_RESULT_CONNECTION_LOST).encode()),
                             notify_msg)
@@ -1079,7 +1091,8 @@ class FirmwareUpdateRestartWithDownloaded(FirmwareUpdate.Test):
                             self.serv.recv())
 
 
-class FirmwareUpdateRestartWithDownloading(FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
+class FirmwareUpdateRestartWithDownloading(
+        FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
     def runTest(self):
         # Write /5/0/1 (Firmware URI)
         req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, self.fw_uri)
@@ -1112,7 +1125,7 @@ class FirmwareUpdateRestartWithDownloading(FirmwareUpdate.TestWithPartialCoapDow
 
 
 class FirmwareUpdateRestartWithDownloadingETagChange(
-    FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
+        FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
     def runTest(self):
         # Write /5/0/1 (Firmware URI)
         req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, self.fw_uri)
@@ -1160,7 +1173,7 @@ class FirmwareUpdateRestartWithDownloadingETagChange(
 
 
 class FirmwareUpdateRestartWithDownloadingOverHttp(
-    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def get_etag(self, response_content):
         return None
 
@@ -1212,7 +1225,8 @@ class FirmwareUpdateRestartWithDownloadingOverHttp(
         self.assertEqual(len(self.requests), 2)
 
 
-class FirmwareUpdateResumeDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+class FirmwareUpdateResumeDownloadingOverHttp(
+        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def send_headers(self, handler, response_content, response_etag):
         if 'Range' in handler.headers:
             self.assertEqual(handler.headers['If-Match'], response_etag)
@@ -1262,7 +1276,7 @@ class FirmwareUpdateResumeDownloadingOverHttp(FirmwareUpdate.TestWithPartialHttp
 
 
 class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
-    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def _get_valgrind_args(self):
         # we don't kill the process here, so we want Valgrind
         return FirmwareUpdate.TestWithHttpServer._get_valgrind_args(self)
@@ -1313,7 +1327,7 @@ class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
 
 
 class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(
-    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def runTest(self):
         self.provide_response()
         # Write /5/0/1 (Firmware URI)
@@ -1353,7 +1367,7 @@ class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(
 
 
 class FirmwareUpdateRestartAfter412WithDownloadingOverHttp(
-    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def check_success(self, handler, response_content, response_etag):
         if 'If-Match' in handler.headers:
             self.assertEqual(handler.headers['If-Match'], response_etag)
@@ -1403,52 +1417,41 @@ class FirmwareUpdateRestartAfter412WithDownloadingOverHttp(
         self.assertEqual(len(self.requests), 3)
 
 
-class FirmwareUpdateWithDelayedSuccessTest(Block.Test):
-    def runTest(self):
-        with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
-            firmware = f.read()
+class FirmwareUpdateWithDelayedResultTest:
+    class TestMixin:
+        def runTest(self, forced_error, result):
+            with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
+                firmware = f.read()
 
-        # Write /5/0/0 (Firmware)
-        self.block_send(firmware,
-                        equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.DelayedSuccess)
+            # Write /5/0/0 (Firmware)
+            self.block_send(firmware,
+                            equal_chunk_splitter(chunk_size=1024),
+                            force_error=forced_error)
 
-        # Execute /5/0/2 (Update)
-        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
-        self.serv.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv())
+            # Execute /5/0/2 (Update)
+            req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+            self.serv.send(req)
+            self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                                self.serv.recv())
 
-        self.serv.reset()
-        self.assertDemoRegisters()
-        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content,
-                         str(UPDATE_RESULT_SUCCESS).encode())
-        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content,
+            self.serv.reset()
+            self.assertDemoRegisters()
+            self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content,
+                                str(result).encode())
+            self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content,
                          str(UPDATE_STATE_IDLE).encode())
 
 
-class FirmwareUpdateWithDelayedFailureTest(Block.Test):
+class FirmwareUpdateWithDelayedSuccessTest(
+        FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
     def runTest(self):
-        with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
-            firmware = f.read()
+        super().runTest(FirmwareUpdateForcedError.DelayedSuccess, UPDATE_RESULT_SUCCESS)
 
-        # Write /5/0/0 (Firmware)
-        self.block_send(firmware,
-                        equal_chunk_splitter(chunk_size=1024),
-                        force_error=FirmwareUpdateForcedError.DelayedSuccess)
 
-        # Execute /5/0/2 (Update)
-        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
-        self.serv.send(req)
-        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
-                            self.serv.recv())
-
-        self.serv.reset()
-        self.assertDemoRegisters()
-        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content,
-                         str(UPDATE_RESULT_SUCCESS).encode())
-        self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content,
-                         str(UPDATE_STATE_IDLE).encode())
+class FirmwareUpdateWithDelayedFailureTest(
+        FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
+    def runTest(self):
+        super().runTest(FirmwareUpdateForcedError.DelayedFailedUpdate, UPDATE_RESULT_FAILED)
 
 
 class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
@@ -1472,7 +1475,8 @@ class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
         # Updating. Wait for a while for State to actually change.
         observed_states = []
         deadline = time.time() + 5  # arbitrary limit
-        while not observed_states or observed_states[-1] == str(UPDATE_STATE_UPDATING):
+        while not observed_states or observed_states[-1] == str(
+                UPDATE_STATE_UPDATING):
             if time.time() > deadline:
                 self.fail('Firmware Update did not finish on time, last state = %s' % (
                     observed_states[-1] if observed_states else 'NONE'))
@@ -1507,7 +1511,8 @@ class FirmwareUpdateWithSetFailureInPerformUpgrade(Block.Test):
         # Updating. Wait for a while for State to actually change.
         observed_states = []
         deadline = time.time() + 5  # arbitrary limit
-        while not observed_states or observed_states[-1] == str(UPDATE_STATE_UPDATING):
+        while not observed_states or observed_states[-1] == str(
+                UPDATE_STATE_UPDATING):
             if time.time() > deadline:
                 self.fail('Firmware Update did not finish on time, last state = %s' % (
                     observed_states[-1] if observed_states else 'NONE'))

@@ -96,17 +96,16 @@ class BlockResponseFirstRequestIsNotBlock(BlockResponseTest):
         # Currently we have to read this till the end
         self.read_blocks(iid=0, base_seq=1)
 
-@unittest.skip("TODO: broken due to T2338")
 class BlockResponseFirstRequestIsBlock(BlockResponseTest):
     def runTest(self):
         response = self.read_bytes(iid=0, seq_num=1, block_size=1024)
         # Started from seq_num=1, clearly incorrect request
-        self.assertEqual(response.code, coap.Code.RES_REQUEST_ENTITY_INCOMPLETE)
+        self.assertEqual(response.code, coap.Code.RES_SERVICE_UNAVAILABLE)
 
         # Normal request
         response = self.read_bytes(iid=0, seq_num=0, block_size=1024)
         self.assertBlockResponse(response, seq_num=0, has_more=1, block_size=1024)
-        self.read_blocks(iid=0)
+        self.read_blocks(iid=0, base_seq=1)
 
 
 class BlockResponseSizeNegotiation(BlockResponseTest):

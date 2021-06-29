@@ -523,7 +523,7 @@ static int fw_perform_upgrade(void *fw_) {
         delete_persistence_file(fw);
         return -1;
     case FORCE_DELAYED_SUCCESS:
-        if (argv_append("--delayed-upgrade-result") || argv_append("0")) {
+        if (argv_append("--delayed-upgrade-result") || argv_append("1")) {
             demo_log(ERROR, "could not append delayed result to argv");
             return -1;
         }
@@ -742,7 +742,7 @@ int firmware_update_install(anjay_t *anjay,
                  "UPDATING state",
                  (int) delayed_result);
         state.result = ANJAY_FW_UPDATE_INITIAL_UPDATING;
-    } else {
+
         // Simulate FOTA process that finishes after the LwM2M client starts by
         // changing the Update Result later at runtime
         set_delayed_fw_update_result_args_t *args =

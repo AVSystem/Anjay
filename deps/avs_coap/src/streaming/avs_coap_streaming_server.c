@@ -300,12 +300,27 @@ static int request_handler(avs_coap_request_ctx_t *request_ctx,
         // This will be continued in ensure_data_is_available_to_read()
         return 0;
 
-    case AVS_COAP_SERVER_REQUEST_RECEIVED:
+    case AVS_COAP_SERVER_REQUEST_RECEIVED: {
+        avs_coap_option_block_t req_block2;
+        switch (avs_coap_options_get_block(&request->header.options,
+                                           AVS_COAP_BLOCK2, &req_block2)) {
+        case 0:
+            if (req_block2.seq_num != 0) {
+                LOG(WARNING, _("Server requested a response from the middle"));
+                return AVS_COAP_CODE_SERVICE_UNAVAILABLE;
+            }
+            break;
+        case AVS_COAP_OPTION_MISSING:
+            break;
+        default:
+            AVS_UNREACHABLE("malformed options got through packet validation");
+            return AVS_COAP_CODE_INTERNAL_SERVER_ERROR;
+        }
         streaming_req_ctx->server_ctx.state =
                 AVS_COAP_STREAMING_SERVER_RECEIVED_LAST_REQUEST_CHUNK;
         // This will be continued in ensure_data_is_available_to_read()
         return 0;
-
+    }
     case AVS_COAP_SERVER_REQUEST_CLEANUP:;
     }
 

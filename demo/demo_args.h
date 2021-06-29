@@ -91,6 +91,7 @@ typedef struct cmdline_args {
     uint32_t *default_ciphersuites;
     size_t default_ciphersuites_count;
 
+    bool alternative_logger;
 } cmdline_args_t;
 
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char **argv);

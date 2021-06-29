@@ -50,7 +50,7 @@ f971df7872a8f052bb72ae64610a8031  examples/tutorial/firmware-update/basic-implem
 70c72f9fe0ee62c1f3673b1a88824c5b  examples/tutorial/firmware-update/download-resumption/src/firmware_update.c
 94e8b954ca40d5141a2b5f08de54838b  examples/tutorial/firmware-update/secure-downloads/src/firmware_update.c
 86eac042f24d747027d695fb9ea91c1a  include_public/anjay/attr_storage.h
-b7045fe4b89413eb7191c81b52f51d00  include_public/anjay/core.h
+3ef4d65b7b9247a9e040acbc0d7318c2  include_public/anjay/core.h
 f3a180c8f227e33650d9677af165eaa5  include_public/anjay/dm.h
 96c1afad62fa3666b4732f35da167da4  include_public/anjay/download.h
 e7c943b79920d35adc94233db6171f4a  include_public/anjay/fw_update.h

@@ -52,7 +52,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.11.1"
+#    define ANJAY_VERSION "2.12.0"
 #endif // ANJAY_VERSION
 
 static int init(anjay_t *anjay, const anjay_configuration_t *config) {
@@ -68,9 +68,13 @@ static int init(anjay_t *anjay, const anjay_configuration_t *config) {
         anjay->dtls_version = AVS_NET_SSL_VERSION_TLSv1_2;
     }
 
-    anjay->endpoint_name = config->endpoint_name;
-    if (!anjay->endpoint_name) {
+    if (!config->endpoint_name) {
         anjay_log(ERROR, _("endpoint name must not be null"));
+        return -1;
+    }
+    anjay->endpoint_name = avs_strdup(config->endpoint_name);
+    if (!anjay->endpoint_name) {
+        anjay_log(ERROR, _("endpoint name could not be copied"));
         return -1;
     }
 
@@ -221,6 +225,7 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
 
     avs_free(anjay->default_tls_ciphersuites.ids);
+    avs_free(anjay->endpoint_name);
 
 #ifdef WITH_AVS_COAP_UDP
     avs_coap_udp_response_cache_release(&anjay->udp_response_cache);
@@ -770,7 +775,7 @@ static int serve_connection(anjay_t *anjay, anjay_connection_ref_t connection) {
     avs_coap_error_recovery_action_t recovery_action =
             avs_coap_error_recovery_action(err);
     if (recovery_action == AVS_COAP_ERR_RECOVERY_RECREATE_CONTEXT) {
-        _anjay_server_on_fatal_coap_error(connection);
+        _anjay_server_on_fatal_coap_error(connection, err);
     } else if (err.category == AVS_ERRNO_CATEGORY && err.code == AVS_ENODEV) {
         anjay_log(WARNING,
                   _("ENODEV returned from the networking layer, ignoring"));

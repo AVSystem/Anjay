@@ -685,6 +685,25 @@ static void serve(anjay_demo_t *demo) {
     }
 }
 
+static void log_extended_handler(avs_log_level_t level,
+                                 const char *module,
+                                 const char *file,
+                                 unsigned line,
+                                 const char *message) {
+    static const char *log_levels[] = { "TRC", "DBG", "INF", "WRN", "ERR", "" };
+    char *name = strrchr(file, '/');
+
+    if (name) {
+        char file_name[30];
+        snprintf(file_name, sizeof(file_name), "%s:%d", name + 1, line);
+        fprintf(stderr, "%s: |%-15s| %-30s| %s\n", log_levels[level], module,
+                file_name, message);
+    } else {
+        fprintf(stderr, "%s: |%-15s| %s:%d| %s\n", log_levels[level], module,
+                file, line, message);
+    }
+}
+
 static void
 log_handler(avs_log_level_t level, const char *module, const char *message) {
     (void) level;
@@ -766,6 +785,10 @@ int main(int argc, char *argv[]) {
     cmdline_args_t cmdline_args;
     if (demo_parse_argv(&cmdline_args, argc, argv)) {
         return -1;
+    }
+
+    if (cmdline_args.alternative_logger) {
+        avs_log_set_extended_handler(log_extended_handler);
     }
 
 #ifdef SIGXFSZ

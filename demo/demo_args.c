@@ -322,6 +322,9 @@ static void print_help(const struct option *options) {
           "startup, and store it at shutdown" },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { 305, NULL, NULL,
+          "Enable alternative logger as a showcase of extended logger "
+          "feature." },
     };
 
     const size_t screen_width = get_screen_width();
@@ -607,6 +610,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "dm-persistence-file",           required_argument, 0, 289 },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+        { "alternative-logger",            no_argument,       0, 305 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1118,6 +1122,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
+        case 305:
+            parsed_args->alternative_logger = true;
+            break;
         case 0:
             goto process;
         }

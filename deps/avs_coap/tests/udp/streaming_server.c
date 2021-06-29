@@ -233,6 +233,238 @@ AVS_UNIT_TEST(udp_streaming_server, large_payload) {
 #        undef RESPONSE_PAYLOAD
 }
 
+AVS_UNIT_TEST(udp_streaming_server, invalid_block1_req) {
+#        define REQUEST_PAYLOAD DATA_1KB "?"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *request = COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)),
+                                         BLOCK1_REQ(1, 1024, REQUEST_PAYLOAD));
+    const test_msg_t *response =
+            COAP_MSG(ACK, REQUEST_ENTITY_INCOMPLETE, ID(0), TOKEN(nth_token(0)),
+                     BLOCK1_RES(1, 1024, false));
+
+    streaming_handle_request_args_t args = {
+        // NOTE: user handler is given the first BLOCK1 request header
+        .expected_request_header = request->request_header,
+        .expected_request_data = REQUEST_PAYLOAD,
+        .expected_request_data_size = sizeof(REQUEST_PAYLOAD) - 1,
+        .response_header = {
+            .code = response->response_header.code
+        }
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, request);
+    expect_send(&env, response);
+    ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+#        undef REQUEST_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_server, missing_block1_req) {
+#        define REQUEST_PAYLOAD DATA_1KB DATA_1KB "?"
+#        define RESPONSE_PAYLOAD DATA_1KB DATA_1KB "!"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, PUT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_REQ(2, 1024, REQUEST_PAYLOAD)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTINUE, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_RES(0, 1024, true)),
+        COAP_MSG(ACK, SERVICE_UNAVAILABLE, ID(1), TOKEN(nth_token(1)),
+                 NO_PAYLOAD),
+    };
+
+    streaming_handle_request_args_t args = {
+        // NOTE: user handler is given the first BLOCK1 request header
+        .expected_request_header = requests[0]->request_header,
+        .expected_request_data = REQUEST_PAYLOAD,
+        .expected_request_data_size = sizeof(REQUEST_PAYLOAD) - 1,
+        .expect_failure = true,
+        .response_header = {
+            .code = responses[1]->response_header.code
+        },
+        .response_data = RESPONSE_PAYLOAD,
+        .response_data_size = sizeof(RESPONSE_PAYLOAD) - 1
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(requests) == AVS_ARRAY_SIZE(responses),
+                      mismatched_request_response_count);
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(requests); ++i) {
+        expect_recv(&env, requests[i]);
+        expect_send(&env, responses[i]);
+    }
+    avs_unit_mocksock_input_fail(env.mocksock, avs_errno(AVS_ETIMEDOUT),
+                                 .and_then = advance_mockclock,
+                                 .and_then_arg = &(avs_time_duration_t) {
+                                     .seconds = 300
+                                 });
+
+    ASSERT_FAIL(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+#        undef REQUEST_PAYLOAD
+#        undef RESPONSE_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_server, invalid_block2_req) {
+#        define RESPONSE_PAYLOAD DATA_1KB "!"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *request =
+            COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)), BLOCK2_REQ(1, 1024));
+    const test_msg_t *response =
+            COAP_MSG(ACK, SERVICE_UNAVAILABLE, ID(0), TOKEN(nth_token(0)),
+                     BLOCK2_REQ(1, 1024));
+
+    streaming_handle_request_args_t args = {
+        .expected_request_header = request->request_header,
+        .response_header = {
+            .code = response->response_header.code
+        },
+        .response_data = RESPONSE_PAYLOAD,
+        .response_data_size = sizeof(RESPONSE_PAYLOAD) - 1
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, request);
+    expect_send(&env, response);
+    ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+#        undef RESPONSE_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_server, invalid_block2_req_after_block1) {
+#        define REQUEST_PAYLOAD DATA_1KB "?"
+#        define RESPONSE_PAYLOAD DATA_1KB "!"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, PUT, ID(1), TOKEN(nth_token(1)),
+                 .block1 = {
+                     .type = AVS_COAP_BLOCK1,
+                     .seq_num = 1,
+                     .size = 1024,
+                     .has_more = false
+                 },
+                 .block2 = {
+                     .type = AVS_COAP_BLOCK2,
+                     .seq_num = 1,
+                     .size = 1024,
+                     .has_more = false
+                 },
+                 .payload = REQUEST_PAYLOAD + 1024,
+                 .payload_size = sizeof(REQUEST_PAYLOAD) - 1 - 1024),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTINUE, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_RES(0, 1024, true)),
+        COAP_MSG(ACK, SERVICE_UNAVAILABLE, ID(1), TOKEN(nth_token(1)),
+                 .block1 = {
+                     .type = AVS_COAP_BLOCK1,
+                     .seq_num = 1,
+                     .size = 1024,
+                     .has_more = false
+                 },
+                 .block2 = {
+                     .type = AVS_COAP_BLOCK2,
+                     .seq_num = 1,
+                     .size = 1024,
+                     .has_more = false
+                 }),
+    };
+
+    streaming_handle_request_args_t args = {
+        // NOTE: user handler is given the first BLOCK1 request header
+        .expected_request_header = requests[0]->request_header,
+        .expected_request_data = REQUEST_PAYLOAD,
+        .expected_request_data_size = sizeof(REQUEST_PAYLOAD) - 1,
+        .expect_failure = true,
+        .response_header = {
+            .code = responses[1]->response_header.code
+        },
+        .response_data = RESPONSE_PAYLOAD,
+        .response_data_size = sizeof(RESPONSE_PAYLOAD) - 1
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(requests) == AVS_ARRAY_SIZE(responses),
+                      mismatched_request_response_count);
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(requests); ++i) {
+        expect_recv(&env, requests[i]);
+        expect_send(&env, responses[i]);
+    }
+
+    ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+#        undef REQUEST_PAYLOAD
+#        undef RESPONSE_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_server, missing_block2_req) {
+#        define RESPONSE_PAYLOAD DATA_1KB DATA_1KB "!"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, PUT, ID(0), TOKEN(nth_token(0)), NO_PAYLOAD),
+        COAP_MSG(CON, PUT, ID(1), TOKEN(nth_token(1)), BLOCK2_REQ(2, 1024)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK2_RES(0, 1024, RESPONSE_PAYLOAD)),
+        COAP_MSG(ACK, SERVICE_UNAVAILABLE, ID(1), TOKEN(nth_token(1)),
+                 NO_PAYLOAD),
+    };
+
+    streaming_handle_request_args_t args = {
+        // NOTE: user handler is given the first BLOCK1 request header
+        .expected_request_header = requests[0]->request_header,
+        .response_header = {
+            .code = responses[0]->response_header.code
+        },
+        .response_data = RESPONSE_PAYLOAD,
+        .response_data_size = sizeof(RESPONSE_PAYLOAD) - 1
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    AVS_STATIC_ASSERT(AVS_ARRAY_SIZE(requests) == AVS_ARRAY_SIZE(responses),
+                      mismatched_request_response_count);
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(requests); ++i) {
+        expect_recv(&env, requests[i]);
+        expect_send(&env, responses[i]);
+    }
+    avs_unit_mocksock_input_fail(env.mocksock, avs_errno(AVS_ETIMEDOUT),
+                                 .and_then = advance_mockclock,
+                                 .and_then_arg = &(avs_time_duration_t) {
+                                     .seconds = 300
+                                 });
+
+    ASSERT_FAIL(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+#        undef RESPONSE_PAYLOAD
+}
+
 AVS_UNIT_TEST(udp_streaming_server, weird_block_sizes) {
 #        define REQUEST_PAYLOAD DATA_1KB "?"
 #        define RESPONSE_PAYLOAD DATA_1KB "!"
@@ -567,11 +799,6 @@ AVS_UNIT_TEST(udp_streaming_server, incorrect_block2_in_block1_request) {
             env.coap_ctx, streaming_handle_request, &args));
 
 #        undef REQUEST_PAYLOAD
-}
-
-static void advance_mockclock(avs_net_socket_t *socket, void *timeout) {
-    (void) socket;
-    _avs_mock_clock_advance(*(const avs_time_duration_t *) timeout);
 }
 
 AVS_UNIT_TEST(udp_streaming_server, block1_receive_timed_out) {

@@ -446,7 +446,8 @@ void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
  */
 void _anjay_server_on_server_communication_timeout(anjay_server_info_t *server);
 
-void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref);
+void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref,
+                                       avs_error_t err);
 
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON SERVER CONNECTIONS ///////////////////////////////////////////////

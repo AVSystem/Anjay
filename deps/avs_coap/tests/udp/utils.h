@@ -868,6 +868,11 @@ static inline int test_streaming_writer(avs_stream_t *stream, void *payload_) {
     return 0;
 }
 
+static inline void advance_mockclock(avs_net_socket_t *socket, void *timeout) {
+    (void) socket;
+    _avs_mock_clock_advance(*(const avs_time_duration_t *) timeout);
+}
+
 #endif // WITH_AVS_COAP_UDP
 
 #endif // AVS_COAP_SRC_UDP_TEST_UTILS_H

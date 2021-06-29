@@ -141,6 +141,91 @@ AVS_UNIT_TEST(udp_streaming_client, streaming_request_block_response) {
 #        undef PAYLOAD_CONTENT
 }
 
+AVS_UNIT_TEST(udp_streaming_client,
+              streaming_request_mismatched_first_block_response) {
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+#        define PAYLOAD_CONTENT DATA_1KB "?"
+
+    const test_msg_t *request =
+            COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)), NO_PAYLOAD);
+    const test_msg_t *response =
+            COAP_MSG(ACK, CONTENT, ID(0), TOKEN(nth_token(0)),
+                     BLOCK2_RES(1, 1024, PAYLOAD_CONTENT));
+
+    expect_send(&env, request);
+    expect_recv(&env, response);
+    expect_timeout(&env);
+
+    avs_stream_t *stream = NULL;
+    avs_coap_response_header_t response_header;
+
+    avs_error_t err =
+            avs_coap_streaming_send_request(env.coap_ctx,
+                                            &request->request_header, NULL,
+                                            NULL, &response_header, &stream);
+
+    ASSERT_EQ(err.category, AVS_COAP_ERR_CATEGORY);
+    ASSERT_EQ(err.code, AVS_COAP_ERR_MALFORMED_OPTIONS);
+
+#        undef PAYLOAD_CONTENT
+}
+
+AVS_UNIT_TEST(udp_streaming_client,
+              streaming_request_mismatched_block_response) {
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+#        define PAYLOAD_CONTENT DATA_1KB DATA_1KB "?"
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)), NO_PAYLOAD),
+        COAP_MSG(CON, GET, ID(1), TOKEN(nth_token(1)), BLOCK2_REQ(1, 1024)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(0), TOKEN(nth_token(0)),
+                 BLOCK2_RES(0, 1024, PAYLOAD_CONTENT)),
+        COAP_MSG(ACK, CONTENT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK2_RES(2, 1024, PAYLOAD_CONTENT))
+    };
+
+    expect_send(&env, requests[0]);
+    expect_recv(&env, responses[0]);
+    expect_send(&env, requests[1]);
+    expect_recv(&env, responses[1]);
+    expect_timeout(&env);
+
+    avs_stream_t *stream = NULL;
+    avs_coap_response_header_t response;
+
+    ASSERT_OK(avs_coap_streaming_send_request(env.coap_ctx,
+                                              &requests[0]->request_header,
+                                              NULL, NULL, &response, &stream));
+    avs_coap_options_cleanup(&response.options);
+
+    char buf[sizeof(PAYLOAD_CONTENT)];
+    size_t bytes_read_total = 0;
+    size_t bytes_read;
+    avs_error_t err;
+    while (avs_is_ok((err = avs_stream_read(stream, &bytes_read, NULL,
+                                            buf + bytes_read_total,
+                                            sizeof(buf) - bytes_read_total)))) {
+        bytes_read_total += bytes_read;
+    }
+
+    ASSERT_EQ(err.category, AVS_COAP_ERR_CATEGORY);
+    ASSERT_EQ(err.code, AVS_COAP_ERR_MALFORMED_OPTIONS);
+
+#        undef PAYLOAD_CONTENT
+}
+
 AVS_UNIT_TEST(udp_streaming_client, streaming_request_peek) {
     test_env_t env __attribute__((cleanup(test_teardown))) =
             test_setup_default();

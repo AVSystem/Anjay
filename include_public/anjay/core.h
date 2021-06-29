@@ -81,6 +81,9 @@ typedef struct anjay_configuration {
     /**
      * Endpoint name as presented to the LwM2M server. Must be non-NULL, or
      * otherwise @ref anjay_new() will fail.
+     *
+     * NOTE: Endpoint name is copied during @ref anjay_new() and cannot be
+     * modified later on.
      */
     const char *endpoint_name;
 

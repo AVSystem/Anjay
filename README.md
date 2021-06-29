@@ -292,9 +292,9 @@ See [LICENSE](LICENSE) file.
 
 Anjay LwM2M library comes with the option of [full commercial support, provided by AVSystem](https://www.avsystem.com/products/anjay/).
 
-The commercial version supports the latest LwM2M 1.1 release, including Composite operations, Send method, SenML JSON and CBOR data formats, TCP, SMS and NIDD bindings.
+The commercial version supports the LwM2M 1.1 release, including Composite operations, Send method, SenML JSON and CBOR data formats, TCP, SMS and NIDD bindings.
 
-If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem, which also focuses on LwM2M along with its latest 1.1 specification.
+If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem. It also includes the [interoperability test module](https://www.avsystem.com/lwm2m-interoperability-test/) that you can use to test your LwM2M client implementation. Our automated tests and testing scenarios enable you to quickly check how interoperable your device is with LwM2M.
 
 ## Contributing
 

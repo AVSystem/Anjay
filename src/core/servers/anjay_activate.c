@@ -102,12 +102,21 @@ void _anjay_server_on_server_communication_timeout(
     }
 }
 
-void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref) {
+void _anjay_server_on_fatal_coap_error(anjay_connection_ref_t conn_ref,
+                                       avs_error_t err) {
+    assert(avs_coap_error_recovery_action(err)
+           == AVS_COAP_ERR_RECOVERY_RECREATE_CONTEXT);
     anjay_server_connection_t *conn =
             _anjay_connection_get(&conn_ref.server->connections,
                                   conn_ref.conn_type);
-    _anjay_connection_internal_clean_socket(conn_ref.server->anjay, conn);
-    _anjay_active_server_refresh(conn_ref.server);
+    if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY
+            && conn->state != ANJAY_SERVER_CONNECTION_STABLE
+            && _anjay_server_registration_expired(conn_ref.server)) {
+        _anjay_server_on_server_communication_error(conn_ref.server, err);
+    } else {
+        _anjay_connection_internal_clean_socket(conn_ref.server->anjay, conn);
+        _anjay_active_server_refresh(conn_ref.server);
+    }
 }
 
 void _anjay_server_on_refreshed(anjay_server_info_t *server,

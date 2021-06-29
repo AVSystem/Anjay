@@ -379,6 +379,77 @@ AVS_UNIT_TEST(udp_streaming_observe, notify_block) {
 #        undef NOTIFY_PAYLOAD
 }
 
+AVS_UNIT_TEST(udp_streaming_observe, notify_block_missing) {
+#        define NOTIFY_PAYLOAD DATA_1KB DATA_1KB "Notifaj"
+    test_env_t env __attribute__((cleanup(test_teardown_late_expects_check))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+
+        // request for third block of Notify
+        COAP_MSG(CON, GET, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_REQ(2, 1024)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+
+        // BLOCK Notify
+        COAP_MSG(NON, CONTENT, ID(0), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(1),
+                 BLOCK2_RES(0, 1024, NOTIFY_PAYLOAD)),
+        COAP_MSG(ACK, SERVICE_UNAVAILABLE, ID(101),
+                 TOKEN(MAKE_TOKEN("Notifaj")), NO_PAYLOAD),
+    };
+
+    streaming_handle_request_args_t args = {
+        .env = &env,
+        .expected_request_header = requests[0]->request_header,
+        .response_header = {
+            .code = responses[0]->response_header.code
+        }
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, requests[0]);
+    expect_send(&env, responses[0]);
+
+    ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+
+    avs_coap_observe_id_t observe_id = {
+        .token = requests[0]->msg.token
+    };
+    test_streaming_payload_t test_payload = {
+        .data = NOTIFY_PAYLOAD,
+        .size = sizeof(NOTIFY_PAYLOAD) - 1
+    };
+
+    expect_send(&env, responses[1]);
+    expect_recv(&env, requests[1]);
+    expect_send(&env, responses[2]);
+    avs_unit_mocksock_input_fail(env.mocksock, avs_errno(AVS_ETIMEDOUT),
+                                 .and_then = advance_mockclock,
+                                 .and_then_arg = &(avs_time_duration_t) {
+                                     .seconds = 300
+                                 });
+
+    ASSERT_FAIL(avs_coap_notify_streaming(
+            env.coap_ctx, observe_id,
+            &(avs_coap_response_header_t) {
+                .code = responses[1]->response_header.code
+            },
+            AVS_COAP_NOTIFY_PREFER_NON_CONFIRMABLE, test_streaming_writer,
+            &test_payload));
+
+    // should be canceled by cleanup
+    expect_observe_cancel(&env, requests[0]->msg.token);
+#        undef NOTIFY_PAYLOAD
+}
+
 AVS_UNIT_TEST(udp_streaming_observe, notify_block_send_fail) {
 #        define NOTIFY_PAYLOAD DATA_1KB DATA_1KB DATA_1KB "Notifaj"
     avs_coap_udp_tx_params_t tx_params = AVS_COAP_DEFAULT_UDP_TX_PARAMS;
@@ -618,6 +689,81 @@ AVS_UNIT_TEST(udp_streaming_observe, notify_block_confirmable) {
     expect_timeout(&env);
 
     ASSERT_OK(avs_coap_notify_streaming(
+            env.coap_ctx, observe_id,
+            &(avs_coap_response_header_t) {
+                .code = responses[1]->response_header.code
+            },
+            AVS_COAP_NOTIFY_PREFER_CONFIRMABLE, test_streaming_writer,
+            &test_payload));
+
+    // should be canceled by cleanup
+    expect_observe_cancel(&env, requests[0]->msg.token);
+#        undef NOTIFY_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_streaming_observe, notify_block_missing_confirmable) {
+#        define NOTIFY_PAYLOAD DATA_1KB DATA_1KB "Notifaj"
+    test_env_t env __attribute__((cleanup(test_teardown_late_expects_check))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+        COAP_MSG(ACK, EMPTY, ID(0), NO_PAYLOAD),
+
+        // request for third block of Notify
+        COAP_MSG(CON, GET, ID(101), TOKEN(MAKE_TOKEN("Notifaj")),
+                 BLOCK2_REQ(2, 1024)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTENT, ID(100), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(0),
+                 NO_PAYLOAD),
+
+        // BLOCK Notify
+        COAP_MSG(CON, CONTENT, ID(0), TOKEN(MAKE_TOKEN("Obserw")), OBSERVE(1),
+                 BLOCK2_RES(0, 1024, NOTIFY_PAYLOAD)),
+        // Note: Service Unavailable response is non-confirmable because it
+        // cannot be matched to the actual notification exchange
+        COAP_MSG(ACK, SERVICE_UNAVAILABLE, ID(101),
+                 TOKEN(MAKE_TOKEN("Notifaj")), NO_PAYLOAD),
+    };
+
+    streaming_handle_request_args_t args = {
+        .env = &env,
+        .expected_request_header = requests[0]->request_header,
+        .response_header = {
+            .code = responses[0]->response_header.code
+        }
+    };
+
+    avs_unit_mocksock_enable_recv_timeout_getsetopt(
+            env.mocksock, avs_time_duration_from_scalar(1, AVS_TIME_S));
+
+    expect_recv(&env, requests[0]);
+    expect_send(&env, responses[0]);
+
+    ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
+            env.coap_ctx, streaming_handle_request, &args));
+
+    avs_coap_observe_id_t observe_id = {
+        .token = requests[0]->msg.token
+    };
+    test_streaming_payload_t test_payload = {
+        .data = NOTIFY_PAYLOAD,
+        .size = sizeof(NOTIFY_PAYLOAD) - 1
+    };
+
+    expect_send(&env, responses[1]);
+    expect_recv(&env, requests[1]);
+    expect_recv(&env, requests[2]);
+    expect_send(&env, responses[2]);
+    avs_unit_mocksock_input_fail(env.mocksock, avs_errno(AVS_ETIMEDOUT),
+                                 .and_then = advance_mockclock,
+                                 .and_then_arg = &(avs_time_duration_t) {
+                                     .seconds = 300
+                                 });
+
+    ASSERT_FAIL(avs_coap_notify_streaming(
             env.coap_ctx, observe_id,
             &(avs_coap_response_header_t) {
                 .code = responses[1]->response_header.code

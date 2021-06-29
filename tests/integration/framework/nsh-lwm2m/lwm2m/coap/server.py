@@ -215,6 +215,7 @@ class Server(object):
         self.socket = socket.socket(self.family, socket.SOCK_STREAM if self.transport == Transport.TCP else socket.SOCK_DGRAM)
         self.socket.setsockopt(
             socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(('', listen_port))
         self.accepted_connection = False
 

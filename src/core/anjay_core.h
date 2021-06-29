@@ -78,7 +78,7 @@ struct anjay_struct {
     anjay_connection_ref_t current_connection;
     anjay_scheduled_notify_t scheduled_notify;
 
-    const char *endpoint_name;
+    char *endpoint_name;
     anjay_transaction_state_t transaction_state;
 
     avs_shared_buffer_t *in_shared_buffer;
