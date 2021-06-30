@@ -17,8 +17,7 @@ FROM ubuntu:20.04
 
 WORKDIR /Anjay
 
-RUN apt-get update
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -yq git build-essential cmake libmbedtls-dev zlib1g-dev
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -yq git build-essential cmake libmbedtls-dev zlib1g-dev
 
 COPY . .
 
