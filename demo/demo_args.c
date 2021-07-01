@@ -325,6 +325,8 @@ static void print_help(const struct option *options) {
         { 305, NULL, NULL,
           "Enable alternative logger as a showcase of extended logger "
           "feature." },
+        { 306, NULL, NULL,
+          "Provide identity from ASCII string" },
     };
 
     const size_t screen_width = get_screen_width();
@@ -611,6 +613,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "dm-persistence-file",           required_argument, 0, 289 },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "alternative-logger",            no_argument,       0, 305 },
+        { "identitystring",                optional_argument, 0, 306 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1125,6 +1128,19 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 305:
             parsed_args->alternative_logger = true;
             break;
+        case 306: {
+            if(!optarg) {
+                demo_log(ERROR, "Missing identity string");
+                goto finish;
+            }
+            const size_t identity_lenght = strlen(optarg);
+            if(parsed_args->connection_args.public_cert_or_psk_identity != NULL || identity_lenght == 0) {
+                demo_log(ERROR, "Invalid identity either identity was set twice or empty parameter was passed");
+                goto finish;
+            }
+            clone_buffer(&parsed_args->connection_args.public_cert_or_psk_identity, &parsed_args->connection_args.public_cert_or_psk_identity_size, optarg, identity_lenght);
+            break;
+        }
         case 0:
             goto process;
         }
