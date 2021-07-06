@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "demo.h"
 #include "demo_args.h"
+#include "demo.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -1135,7 +1135,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 306: {
             const size_t identity_length = strlen(optarg);
             if (parsed_args->connection_args.public_cert_or_psk_identity != NULL
-                || identity_length == 0) {
+                    || identity_length == 0) {
                 demo_log(ERROR, "Invalid identity, either identity was set "
                                 "twice or empty parameter was passed");
                 goto finish;
@@ -1146,7 +1146,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                                       .public_cert_or_psk_identity_size,
                              optarg, identity_length)) {
                 retval = -ENOMEM;
-                demo_log(ERROR, "Error coping identity string, out of memory?");
+                demo_log(ERROR,
+                         "Error copying identity string, out of memory?");
                 goto finish;
             }
             break;
@@ -1154,7 +1155,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 307: {
             const size_t key_length = strlen(optarg);
             if (parsed_args->connection_args.private_cert_or_psk_key != NULL
-                || key_length == 0) {
+                    || key_length == 0) {
                 demo_log(ERROR, "Invalid key, either key was set "
                                 "twice or empty parameter was passed");
                 goto finish;
@@ -1165,7 +1166,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                                  .private_cert_or_psk_key_size,
                         optarg, key_length)) {
                 retval = -ENOMEM;
-                demo_log(ERROR, "Error coping key string, out of memory?");
+                demo_log(ERROR, "Error copying key string, out of memory?");
                 goto finish;
             }
             break;
@@ -1210,7 +1211,7 @@ process:
             !!parsed_args->connection_args.public_cert_or_psk_identity_size;
     key_set = !!parsed_args->connection_args.private_cert_or_psk_key_size;
     if ((identity_set && (cert_path != default_cert_path))
-        || (key_set && (key_path != default_key_path))) {
+            || (key_set && (key_path != default_key_path))) {
         demo_log(ERROR, "Certificate information cannot be loaded both from "
                         "file and immediate hex data at the same time");
         parsed_args->connection_args.security_mode = ANJAY_SECURITY_NOSEC;
@@ -1218,19 +1219,20 @@ process:
     }
     if (parsed_args->connection_args.security_mode == ANJAY_SECURITY_PSK) {
         if (!identity_set
-            && clone_buffer(
-                    &parsed_args->connection_args.public_cert_or_psk_identity,
-                    &parsed_args->connection_args
-                             .public_cert_or_psk_identity_size,
-                    DEFAULT_PSK_IDENTITY,
-                    sizeof(DEFAULT_PSK_IDENTITY) - 1)) {
+                && clone_buffer(&parsed_args->connection_args
+                                         .public_cert_or_psk_identity,
+                                &parsed_args->connection_args
+                                         .public_cert_or_psk_identity_size,
+                                DEFAULT_PSK_IDENTITY,
+                                sizeof(DEFAULT_PSK_IDENTITY) - 1)) {
             retval = -1;
         }
         if (!key_set
-            && clone_buffer(
-                    &parsed_args->connection_args.private_cert_or_psk_key,
-                    &parsed_args->connection_args.private_cert_or_psk_key_size,
-                    DEFAULT_PSK_KEY, sizeof(DEFAULT_PSK_KEY) - 1)) {
+                && clone_buffer(&parsed_args->connection_args
+                                         .private_cert_or_psk_key,
+                                &parsed_args->connection_args
+                                         .private_cert_or_psk_key_size,
+                                DEFAULT_PSK_KEY, sizeof(DEFAULT_PSK_KEY) - 1)) {
             retval = -1;
         }
     } else if (parsed_args->connection_args.security_mode
@@ -1266,10 +1268,10 @@ process:
             }
         }
         if (server_public_key_path
-            && load_buffer_from_file(
-                    &parsed_args->connection_args.server_public_key,
-                    &parsed_args->connection_args.server_public_key_size,
-                    server_public_key_path)) {
+                && load_buffer_from_file(
+                           &parsed_args->connection_args.server_public_key,
+                           &parsed_args->connection_args.server_public_key_size,
+                           server_public_key_path)) {
             demo_log(ERROR, "Could not load server public key from %s",
                      server_public_key_path);
             retval = -1;
@@ -1277,8 +1279,8 @@ process:
     }
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
-        && (!parsed_args->fw_security_info.data.psk.identity
-            || !parsed_args->fw_security_info.data.psk.psk)) {
+            && (!parsed_args->fw_security_info.data.psk.identity
+                || !parsed_args->fw_security_info.data.psk.psk)) {
         demo_log(ERROR, "Both identity and key must be provided when using PSK "
                         "for firmware upgrade security");
         retval = -1;
