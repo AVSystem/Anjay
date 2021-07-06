@@ -325,6 +325,11 @@ static void print_help(const struct option *options) {
         { 305, NULL, NULL,
           "Enable alternative logger as a showcase of extended logger "
           "feature." },
+        { 306, NULL, NULL,
+          "Provide identity from ASCII string (see -i parameter for more "
+          "details)" },
+        { 307, NULL, NULL,
+          "Provide key from ASCII string (see -k parameter for more details)" },
     };
 
     const size_t screen_width = get_screen_width();
@@ -611,6 +616,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "dm-persistence-file",           required_argument, 0, 289 },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "alternative-logger",            no_argument,       0, 305 },
+        { "identity-as-string",            required_argument, 0, 306 },
+        { "key-as-string",                 required_argument, 0, 307 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1125,6 +1132,45 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 305:
             parsed_args->alternative_logger = true;
             break;
+        case 306: {
+            const size_t identity_length = strlen(optarg);
+            if (parsed_args->connection_args.public_cert_or_psk_identity != NULL
+                    || identity_length == 0) {
+                demo_log(ERROR, "Invalid identity, either identity was set "
+                                "twice or empty parameter was passed");
+                goto finish;
+            }
+            if (clone_buffer(&parsed_args->connection_args
+                                      .public_cert_or_psk_identity,
+                             &parsed_args->connection_args
+                                      .public_cert_or_psk_identity_size,
+                             optarg, identity_length)) {
+                retval = -ENOMEM;
+                demo_log(ERROR,
+                         "Error copying identity string, out of memory?");
+                goto finish;
+            }
+            break;
+        }
+        case 307: {
+            const size_t key_length = strlen(optarg);
+            if (parsed_args->connection_args.private_cert_or_psk_key != NULL
+                    || key_length == 0) {
+                demo_log(ERROR, "Invalid key, either key was set "
+                                "twice or empty parameter was passed");
+                goto finish;
+            }
+            if (clone_buffer(
+                        &parsed_args->connection_args.private_cert_or_psk_key,
+                        &parsed_args->connection_args
+                                 .private_cert_or_psk_key_size,
+                        optarg, key_length)) {
+                retval = -ENOMEM;
+                demo_log(ERROR, "Error copying key string, out of memory?");
+                goto finish;
+            }
+            break;
+        }
         case 0:
             goto process;
         }
