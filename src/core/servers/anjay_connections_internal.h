@@ -38,21 +38,21 @@ _anjay_connection_info_cleanup(anjay_connection_info_t *info) {
 }
 
 typedef const avs_net_dtls_handshake_timeouts_t *
-anjay_connection_get_dtls_handshake_timeouts_t(anjay_t *anjay);
+anjay_connection_get_dtls_handshake_timeouts_t(anjay_unlocked_t *anjay);
 
 typedef avs_error_t anjay_connection_prepare_t(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         anjay_server_connection_t *out_connection,
         const avs_net_ssl_configuration_t *socket_config,
         const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record,
         const anjay_connection_info_t *info);
 
 typedef avs_error_t
-anjay_connection_connect_socket_t(anjay_t *anjay,
+anjay_connection_connect_socket_t(anjay_unlocked_t *anjay,
                                   anjay_server_connection_t *connection);
 
 typedef int
-anjay_connection_ensure_coap_context_t(anjay_t *anjay,
+anjay_connection_ensure_coap_context_t(anjay_unlocked_t *anjay,
                                        anjay_server_connection_t *connection);
 
 typedef struct {
@@ -68,7 +68,7 @@ extern const anjay_connection_type_definition_t ANJAY_CONNECTION_DEF_UDP;
 #endif // WITH_AVS_COAP_UDP
 
 avs_error_t
-_anjay_connection_init_psk_security(anjay_t *anjay,
+_anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
                                     anjay_iid_t security_iid,
                                     anjay_rid_t identity_rid,
                                     anjay_rid_t secret_key_rid,

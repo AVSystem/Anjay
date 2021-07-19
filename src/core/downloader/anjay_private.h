@@ -56,8 +56,9 @@ typedef struct {
 
 } anjay_download_ctx_common_t;
 
-static inline anjay_t *_anjay_downloader_get_anjay(anjay_downloader_t *dl) {
-    return AVS_CONTAINER_OF(dl, anjay_t, downloader);
+static inline anjay_unlocked_t *
+_anjay_downloader_get_anjay(anjay_downloader_t *dl) {
+    return AVS_CONTAINER_OF(dl, anjay_unlocked_t, downloader);
 }
 
 AVS_LIST(anjay_download_ctx_t) *
@@ -66,6 +67,13 @@ _anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl, uintptr_t id);
 void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
                                       AVS_LIST(anjay_download_ctx_t) *ctx,
                                       anjay_download_status_t status);
+
+avs_error_t
+_anjay_downloader_call_on_next_block(anjay_downloader_t *dl,
+                                     anjay_download_ctx_common_t *ctx,
+                                     const uint8_t *data,
+                                     size_t data_size,
+                                     const anjay_etag_t *etag);
 
 static inline anjay_download_status_t _anjay_download_status_success(void) {
     return (anjay_download_status_t) {

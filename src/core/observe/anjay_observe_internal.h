@@ -21,6 +21,8 @@
 
 #include <avsystem/coap/code.h>
 
+#include <anjay_modules/anjay_io_utils.h>
+
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 struct anjay_observation_struct {
@@ -57,7 +59,7 @@ typedef struct {
 
 typedef struct {
     avs_stream_t *membuf_stream;
-    anjay_output_ctx_t *out_ctx;
+    anjay_unlocked_output_ctx_t *out_ctx;
     size_t expected_offset;
     avs_time_real_t serialization_time;
     size_t curr_value_idx;

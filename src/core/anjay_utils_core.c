@@ -434,7 +434,7 @@ typedef union {
 } security_or_socket_info_t;
 
 typedef int
-try_security_instance_callback_t(anjay_t *anjay,
+try_security_instance_callback_t(anjay_unlocked_t *anjay,
                                  security_or_socket_info_t *out_info,
                                  anjay_ssid_t ssid,
                                  anjay_iid_t security_iid,
@@ -460,7 +460,7 @@ static bool has_valid_keys(const avs_net_security_info_t *info) {
 }
 
 static int
-try_security_instance_read_security(anjay_t *anjay,
+try_security_instance_read_security(anjay_unlocked_t *anjay,
                                     security_or_socket_info_t *out_info,
                                     anjay_ssid_t ssid,
                                     anjay_iid_t security_iid,
@@ -508,8 +508,8 @@ static bool optional_strings_equal(const char *left, const char *right) {
     }
 }
 
-static int try_security_instance(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj,
+static int try_security_instance(anjay_unlocked_t *anjay,
+                                 const anjay_dm_installed_object_t *obj,
                                  anjay_iid_t security_iid,
                                  void *args_) {
     (void) obj;
@@ -548,13 +548,13 @@ static int try_security_instance(anjay_t *anjay,
     return retval;
 }
 
-static void try_get_info_from_dm(anjay_t *anjay,
+static void try_get_info_from_dm(anjay_unlocked_t *anjay,
                                  const char *raw_url,
                                  security_or_socket_info_t *out_info,
                                  try_security_instance_callback_t *clb) {
     assert(anjay);
 
-    const anjay_dm_object_def_t *const *security_obj =
+    const anjay_dm_installed_object_t *security_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!security_obj) {
         anjay_log(ERROR, _("Security object not installed"));
@@ -576,9 +576,9 @@ static void try_get_info_from_dm(anjay_t *anjay,
     avs_url_free(url);
 }
 
-int anjay_security_config_from_dm(anjay_t *anjay,
-                                  anjay_security_config_t *out_config,
-                                  const char *raw_url) {
+int _anjay_security_config_from_dm_unlocked(anjay_unlocked_t *anjay,
+                                            anjay_security_config_t *out_config,
+                                            const char *raw_url) {
     security_or_socket_info_t info = {
         .security = {
             .out = out_config,
@@ -595,6 +595,17 @@ int anjay_security_config_from_dm(anjay_t *anjay,
         return -1;
     }
     return 0;
+}
+
+int anjay_security_config_from_dm(anjay_t *anjay_locked,
+                                  anjay_security_config_t *out_config,
+                                  const char *raw_url) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result =
+            _anjay_security_config_from_dm_unlocked(anjay, out_config, raw_url);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 static int map_str_conversion_result(const char *input, const char *endptr) {

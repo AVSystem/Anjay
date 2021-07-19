@@ -55,7 +55,7 @@ static void send_update_sched_job(avs_sched_t *sched, const void *ssid_ptr) {
     anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
     assert(ssid != ANJAY_SSID_ANY);
 
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     AVS_LIST(anjay_server_info_t) server =
             _anjay_servers_find_active(anjay, ssid);
     if (server) {
@@ -155,7 +155,7 @@ static int reschedule_update_for_server(anjay_server_info_t *server) {
     return 0;
 }
 
-static int reschedule_update_for_all_servers(anjay_t *anjay) {
+static int reschedule_update_for_all_servers(anjay_unlocked_t *anjay) {
     int result = 0;
 
     AVS_LIST(anjay_server_info_t) it;
@@ -171,24 +171,8 @@ static int reschedule_update_for_all_servers(anjay_t *anjay) {
     return result;
 }
 
-/**
- * Reschedules Update for a specified server or all servers. In the very end, it
- * calls schedule_update(), which basically speeds up the scheduled Update
- * operation (it is normally scheduled for "just before the lifetime expires",
- * this function reschedules it to now. The scheduled job is
- * send_update_sched_job() and it is also used for regular Updates.
- *
- * Aside from being a public API, this is also called in:
- *
- * - anjay_register_object() and anjay_unregister_object(), to force an Update
- *   when the set of available Objects changed
- * - serv_execute(), as a default implementation of Registration Update Trigger
- * - server_modified_notify(), to force an Update whenever Lifetime or Binding
- *   change
- * - _anjay_schedule_reregister(), although that's probably rather superfluous -
- *   see the docs of that function for details
- */
-int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid) {
+int _anjay_schedule_registration_update_unlocked(anjay_unlocked_t *anjay,
+                                                 anjay_ssid_t ssid) {
     int result = 0;
 
     if (ssid == ANJAY_SSID_ANY) {
@@ -203,6 +187,15 @@ int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid) {
         }
     }
 
+    return result;
+}
+
+int anjay_schedule_registration_update(anjay_t *anjay_locked,
+                                       anjay_ssid_t ssid) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_schedule_registration_update_unlocked(anjay, ssid);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
 
@@ -223,8 +216,9 @@ static int dm_payload_writer(size_t payload_offset,
     return 0;
 }
 
-static int
-get_server_lifetime(anjay_t *anjay, anjay_ssid_t ssid, int64_t *out_lifetime) {
+static int get_server_lifetime(anjay_unlocked_t *anjay,
+                               anjay_ssid_t ssid,
+                               int64_t *out_lifetime) {
     anjay_iid_t server_iid;
     if (_anjay_find_server_iid(anjay, ssid, &server_iid)) {
         return -1;
@@ -257,23 +251,25 @@ typedef struct {
     anjay_lwm2m_version_t version;
 } query_dm_args_t;
 
-static int query_dm_instance(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj,
+static int query_dm_instance(anjay_unlocked_t *anjay,
+                             const anjay_dm_installed_object_t *obj,
                              anjay_iid_t iid,
                              void *args_) {
     (void) anjay;
     query_dm_args_t *args = (query_dm_args_t *) args_;
     avs_error_t err =
             avs_stream_write_f(args->stream, "%s</%u/%u>",
-                               args->first ? "" : ",", (*obj)->oid, iid);
+                               args->first ? "" : ",",
+                               _anjay_dm_installed_object_oid(obj), iid);
     args->first = false;
     return avs_is_ok(err) ? 0 : -1;
 }
 
-static int query_dm_object(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj,
+static int query_dm_object(anjay_unlocked_t *anjay,
+                           const anjay_dm_installed_object_t *obj,
                            void *args_) {
-    if ((*obj)->oid == ANJAY_DM_OID_SECURITY) {
+    anjay_oid_t oid = _anjay_dm_installed_object_oid(obj);
+    if (oid == ANJAY_DM_OID_SECURITY) {
         /* LwM2M TS 1.1, 6.2.1. Register says that "The Security Object ID:0,
          * and OSCORE Object ID:21, if present, MUST NOT be part of the
          * Registration Objects and Object Instances list." */
@@ -287,12 +283,12 @@ static int query_dm_object(anjay_t *anjay,
         return -1;
     }
     bool obj_written = false;
-    if ((*obj)->version) {
-
+    const char *version = _anjay_dm_installed_object_version(obj);
+    if (version) {
         const char *format = "</%u>;ver=\"%s\"";
 
-        if (avs_is_err(avs_stream_write_f(args->stream, format, (*obj)->oid,
-                                          (*obj)->version))) {
+        if (avs_is_err(
+                    avs_stream_write_f(args->stream, format, oid, version))) {
             return -1;
         }
         obj_written = true;
@@ -311,14 +307,14 @@ static int query_dm_object(anjay_t *anjay,
         obj_written = true;
     }
     if (!obj_written
-            && avs_is_err(avs_stream_write_f(args->stream, "</%u>",
-                                             (*obj)->oid))) {
+            && avs_is_err(avs_stream_write_f(args->stream, "</%u>", oid))) {
         return -1;
     }
     return 0;
 }
 
-static int query_dm(anjay_t *anjay, anjay_lwm2m_version_t version, char **out) {
+static int
+query_dm(anjay_unlocked_t *anjay, anjay_lwm2m_version_t version, char **out) {
     assert(out);
     assert(!*out);
     avs_stream_t *stream = avs_stream_membuf_create();
@@ -729,7 +725,7 @@ static inline bool dm_caches_equal(const char *left, const char *right) {
 }
 
 static avs_error_t
-setup_update_request_options(anjay_t *anjay,
+setup_update_request_options(anjay_unlocked_t *anjay,
                              avs_coap_options_t *opts,
                              AVS_LIST(const anjay_string_t) endpoint_path,
                              const anjay_update_parameters_t *old_params,
@@ -1147,8 +1143,8 @@ void _anjay_server_update_registration_info(
 }
 
 static int
-server_object_instances_count_clb(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj,
+server_object_instances_count_clb(anjay_unlocked_t *anjay,
+                                  const anjay_dm_installed_object_t *obj,
                                   anjay_iid_t iid,
                                   void *count_ptr) {
     (void) anjay;
@@ -1158,10 +1154,10 @@ server_object_instances_count_clb(anjay_t *anjay,
     return 0;
 }
 
-static size_t server_object_instances_count(anjay_t *anjay) {
-    const anjay_dm_object_def_t *const *server_obj =
+static size_t server_object_instances_count(anjay_unlocked_t *anjay) {
+    const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
-    if (!server_obj || !*server_obj) {
+    if (!server_obj) {
         return 0;
     }
     size_t count = 0;
@@ -1183,7 +1179,7 @@ static bool registered_or_gave_up(anjay_server_info_t *server) {
     return anjay_registered || server->refresh_failed;
 }
 
-bool anjay_ongoing_registration_exists(anjay_t *anjay) {
+bool _anjay_ongoing_registration_exists_unlocked(anjay_unlocked_t *anjay) {
     size_t dm_servers_count = server_object_instances_count(anjay);
     if (dm_servers_count == 0) {
         return false;
@@ -1208,4 +1204,12 @@ bool anjay_ongoing_registration_exists(anjay_t *anjay) {
     }
 
     return false;
+}
+
+bool anjay_ongoing_registration_exists(anjay_t *anjay_locked) {
+    bool result = false;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_ongoing_registration_exists_unlocked(anjay);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }

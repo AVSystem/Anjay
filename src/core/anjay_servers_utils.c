@@ -33,7 +33,7 @@ typedef struct {
     anjay_server_info_t *out;
 } find_by_primary_socket_args_t;
 
-static int find_by_primary_socket_clb(anjay_t *anjay,
+static int find_by_primary_socket_clb(anjay_unlocked_t *anjay,
                                       anjay_server_info_t *server,
                                       void *args_) {
     (void) anjay;
@@ -51,7 +51,7 @@ static int find_by_primary_socket_clb(anjay_t *anjay,
 }
 
 anjay_server_info_t *
-_anjay_servers_find_by_primary_socket(anjay_t *anjay,
+_anjay_servers_find_by_primary_socket(anjay_unlocked_t *anjay,
                                       avs_net_socket_t *socket) {
     assert(socket);
     find_by_primary_socket_args_t arg = {
@@ -70,8 +70,9 @@ typedef struct {
     anjay_server_info_t *out;
 } find_active_args_t;
 
-static int
-find_active_clb(anjay_t *anjay, anjay_server_info_t *server, void *args_) {
+static int find_active_clb(anjay_unlocked_t *anjay,
+                           anjay_server_info_t *server,
+                           void *args_) {
     (void) anjay;
     find_active_args_t *args = (find_active_args_t *) args_;
     if (_anjay_server_ssid(server) == args->ssid) {
@@ -81,7 +82,7 @@ find_active_clb(anjay_t *anjay, anjay_server_info_t *server, void *args_) {
     return ANJAY_FOREACH_CONTINUE;
 }
 
-anjay_server_info_t *_anjay_servers_find_active(anjay_t *anjay,
+anjay_server_info_t *_anjay_servers_find_active(anjay_unlocked_t *anjay,
                                                 anjay_ssid_t ssid) {
     find_active_args_t arg = {
         .ssid = ssid,
@@ -98,7 +99,7 @@ typedef struct {
     anjay_server_info_t *out;
 } find_active_by_security_iid_args_t;
 
-static int find_active_by_security_iid_clb(anjay_t *anjay,
+static int find_active_by_security_iid_clb(anjay_unlocked_t *anjay,
                                            anjay_server_info_t *server,
                                            void *args_) {
     (void) anjay;
@@ -112,7 +113,7 @@ static int find_active_by_security_iid_clb(anjay_t *anjay,
 }
 
 anjay_server_info_t *
-_anjay_servers_find_active_by_security_iid(anjay_t *anjay,
+_anjay_servers_find_active_by_security_iid(anjay_unlocked_t *anjay,
                                            anjay_iid_t security_iid) {
     find_active_by_security_iid_args_t arg = {
         .security_iid = security_iid,
@@ -126,7 +127,7 @@ _anjay_servers_find_active_by_security_iid(anjay_t *anjay,
 }
 
 anjay_connection_ref_t
-_anjay_servers_find_active_primary_connection(anjay_t *anjay,
+_anjay_servers_find_active_primary_connection(anjay_unlocked_t *anjay,
                                               anjay_ssid_t ssid) {
     anjay_connection_ref_t ref = {
         .server = _anjay_servers_find_active(anjay, ssid),
@@ -166,7 +167,8 @@ bool _anjay_server_registration_expired(anjay_server_info_t *server) {
     return !avs_time_real_valid(_anjay_registration_expire_time(server));
 }
 
-int _anjay_schedule_socket_update(anjay_t *anjay, anjay_iid_t security_iid) {
+int _anjay_schedule_socket_update(anjay_unlocked_t *anjay,
+                                  anjay_iid_t security_iid) {
     anjay_server_info_t *server;
     if ((server = _anjay_servers_find_active_by_security_iid(anjay,
                                                              security_iid))) {
@@ -176,7 +178,7 @@ int _anjay_schedule_socket_update(anjay_t *anjay, anjay_iid_t security_iid) {
                                                &(anjay_update_parameters_t) {
                                                    .lifetime_s = -1
                                                });
-        return anjay_disable_server_with_timeout(
+        return _anjay_disable_server_with_timeout_unlocked(
                 anjay, _anjay_server_ssid(server), AVS_TIME_DURATION_ZERO);
     }
     return 0;

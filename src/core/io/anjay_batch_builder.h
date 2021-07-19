@@ -125,8 +125,8 @@ void _anjay_batch_release(anjay_batch_t **batch);
 void _anjay_batch_entry_list_cleanup(AVS_LIST(anjay_batch_entry_t) *list);
 
 int _anjay_dm_read_into_batch(anjay_batch_builder_t *builder,
-                              anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
+                              anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t *obj,
                               const anjay_dm_path_info_t *path_info,
                               anjay_ssid_t requesting_ssid,
                               const avs_time_real_t *forced_timestamp);
@@ -146,10 +146,10 @@ int _anjay_dm_read_into_batch(anjay_batch_builder_t *builder,
  *
  * @returns 0 for success, or a negative value in case of error.
  */
-int _anjay_batch_data_output(anjay_t *anjay,
+int _anjay_batch_data_output(anjay_unlocked_t *anjay,
                              const anjay_batch_t *batch,
                              anjay_ssid_t target_ssid,
-                             anjay_output_ctx_t *out_ctx);
+                             anjay_unlocked_output_ctx_t *out_ctx);
 
 /**
  * Serializes part of the batch associated with a single Resource or Resource
@@ -213,12 +213,12 @@ int _anjay_batch_data_output(anjay_t *anjay,
  * undefined.
  */
 int _anjay_batch_data_output_entry(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         const anjay_batch_t *batch,
         anjay_ssid_t target_ssid,
         avs_time_real_t serialization_time,
         const anjay_batch_data_output_state_t **state,
-        anjay_output_ctx_t *out_ctx);
+        anjay_unlocked_output_ctx_t *out_ctx);
 
 /**
  * Returns whether two batches have exactly the same data.

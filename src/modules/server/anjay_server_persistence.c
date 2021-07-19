@@ -23,6 +23,8 @@
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
 #    include <avsystem/commons/avs_utils.h>
 
+#    include <anjay/server.h>
+
 #    include <anjay_modules/anjay_dm_utils.h>
 #    include <anjay_modules/anjay_utils_core.h>
 
@@ -363,36 +365,39 @@ static avs_error_t server_instance_persistence_handler(
     return err;
 }
 
-avs_error_t anjay_server_object_persist(anjay_t *anjay,
+avs_error_t anjay_server_object_persist(anjay_t *anjay_locked,
                                         avs_stream_t *out_stream) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *server_obj =
+    assert(anjay_locked);
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
-    server_repr_t *repr = _anjay_serv_get(server_obj);
+    server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
     if (!repr) {
-        return avs_errno(AVS_EBADF);
+        err = avs_errno(AVS_EBADF);
+    } else {
+        avs_persistence_context_t persist_ctx =
+                avs_persistence_store_context_create(out_stream);
+        if (avs_is_ok((err = avs_persistence_bytes(&persist_ctx,
+                                                   (void *) (intptr_t) MAGIC_V3,
+                                                   sizeof(MAGIC_V3))))) {
+            server_persistence_version_t persistence_version =
+                    PERSISTENCE_VERSION_3;
+            err = avs_persistence_list(
+                    &persist_ctx,
+                    (AVS_LIST(void) *) (repr->in_transaction
+                                                ? &repr->saved_instances
+                                                : &repr->instances),
+                    sizeof(server_instance_t),
+                    server_instance_persistence_handler, &persistence_version,
+                    NULL);
+            if (avs_is_ok(err)) {
+                _anjay_serv_clear_modified(repr);
+                persistence_log(INFO, _("Server Object state persisted"));
+            }
+        }
     }
-    avs_persistence_context_t persist_ctx =
-            avs_persistence_store_context_create(out_stream);
-
-    avs_error_t err =
-            avs_persistence_bytes(&persist_ctx, (void *) (intptr_t) MAGIC_V3,
-                                  sizeof(MAGIC_V3));
-    if (avs_is_err(err)) {
-        return err;
-    }
-    server_persistence_version_t persistence_version = PERSISTENCE_VERSION_3;
-    err = avs_persistence_list(
-            &persist_ctx,
-            (AVS_LIST(void) *) (repr->in_transaction ? &repr->saved_instances
-                                                     : &repr->instances),
-            sizeof(server_instance_t), server_instance_persistence_handler,
-            &persistence_version, NULL);
-    if (avs_is_ok(err)) {
-        _anjay_serv_clear_modified(repr);
-        persistence_log(INFO, _("Server Object state persisted"));
-    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 
@@ -417,50 +422,52 @@ static int check_magic_header(magic_t magic_header,
     return -1;
 }
 
-avs_error_t anjay_server_object_restore(anjay_t *anjay,
+avs_error_t anjay_server_object_restore(anjay_t *anjay_locked,
                                         avs_stream_t *in_stream) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *server_obj =
+    assert(anjay_locked);
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
-    server_repr_t *repr = _anjay_serv_get(server_obj);
+    server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
     if (!repr || repr->in_transaction) {
-        return avs_errno(AVS_EBADF);
-    }
-    server_repr_t backup = *repr;
-    avs_persistence_context_t restore_ctx =
-            avs_persistence_restore_context_create(in_stream);
-
-    magic_t magic_header;
-    avs_error_t err = avs_persistence_bytes(&restore_ctx, magic_header,
-                                            sizeof(magic_header));
-    if (avs_is_err(err)) {
-        persistence_log(WARNING, _("Could not read Server Object header"));
-        return err;
-    }
-    server_persistence_version_t persistence_version;
-    if (check_magic_header(magic_header, &persistence_version)) {
-        persistence_log(WARNING, _("Header magic constant mismatch"));
-        return avs_errno(AVS_EBADMSG);
-    }
-
-    repr->instances = NULL;
-    err = avs_persistence_list(&restore_ctx,
-                               (AVS_LIST(void) *) &repr->instances,
-                               sizeof(server_instance_t),
-                               server_instance_persistence_handler,
-                               &persistence_version, NULL);
-    if (avs_is_ok(err) && _anjay_serv_object_validate(repr)) {
-        err = avs_errno(AVS_EBADMSG);
-    }
-    if (avs_is_err(err)) {
-        _anjay_serv_destroy_instances(&repr->instances);
-        repr->instances = backup.instances;
+        err = avs_errno(AVS_EBADF);
     } else {
-        _anjay_serv_destroy_instances(&backup.instances);
-        _anjay_serv_clear_modified(repr);
-        persistence_log(INFO, _("Server Object state restored"));
+        server_repr_t backup = *repr;
+        avs_persistence_context_t restore_ctx =
+                avs_persistence_restore_context_create(in_stream);
+
+        magic_t magic_header;
+        if (avs_is_err((err = avs_persistence_bytes(&restore_ctx, magic_header,
+                                                    sizeof(magic_header))))) {
+            persistence_log(WARNING, _("Could not read Server Object header"));
+        } else {
+            server_persistence_version_t persistence_version;
+            if (check_magic_header(magic_header, &persistence_version)) {
+                persistence_log(WARNING, _("Header magic constant mismatch"));
+                err = avs_errno(AVS_EBADMSG);
+            } else {
+                repr->instances = NULL;
+                err = avs_persistence_list(&restore_ctx,
+                                           (AVS_LIST(void) *) &repr->instances,
+                                           sizeof(server_instance_t),
+                                           server_instance_persistence_handler,
+                                           &persistence_version, NULL);
+                if (avs_is_ok(err) && _anjay_serv_object_validate(repr)) {
+                    err = avs_errno(AVS_EBADMSG);
+                }
+                if (avs_is_err(err)) {
+                    _anjay_serv_destroy_instances(&repr->instances);
+                    repr->instances = backup.instances;
+                } else {
+                    _anjay_serv_destroy_instances(&backup.instances);
+                    _anjay_serv_clear_modified(repr);
+                    persistence_log(INFO, _("Server Object state restored"));
+                }
+            }
+        }
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 

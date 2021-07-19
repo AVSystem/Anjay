@@ -122,9 +122,14 @@ AVS_UNIT_TEST(access_control_persistence, empty_aco) {
     ctx.in.buffer_size = avs_stream_outbuf_offset(&ctx.out);
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_access_control_restore(anjay2, (avs_stream_t *) &ctx.in));
-    AVS_UNIT_ASSERT_TRUE(aco_equal(_anjay_access_control_get(anjay1),
-                                   _anjay_access_control_get(anjay2)));
-    AVS_UNIT_ASSERT_NULL(_anjay_access_control_get(anjay1)->current.instances);
+    ANJAY_MUTEX_LOCK(anjay1_unlocked, anjay1);
+    ANJAY_MUTEX_LOCK(anjay2_unlocked, anjay2);
+    AVS_UNIT_ASSERT_TRUE(aco_equal(_anjay_access_control_get(anjay1_unlocked),
+                                   _anjay_access_control_get(anjay2_unlocked)));
+    ANJAY_MUTEX_UNLOCK(anjay2);
+    AVS_UNIT_ASSERT_NULL(
+            _anjay_access_control_get(anjay1_unlocked)->current.instances);
+    ANJAY_MUTEX_UNLOCK(anjay1);
 
     anjay_delete(anjay1);
     anjay_delete(anjay2);
@@ -141,8 +146,16 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
 
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay1));
     AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay2));
-    access_control_t *ac1 = _anjay_access_control_get(anjay1);
-    access_control_t *ac2 = _anjay_access_control_get(anjay2);
+
+    access_control_t *ac1;
+    ANJAY_MUTEX_LOCK(anjay1_unlocked, anjay1);
+    ac1 = _anjay_access_control_get(anjay1_unlocked);
+    ANJAY_MUTEX_UNLOCK(anjay1);
+
+    access_control_t *ac2;
+    ANJAY_MUTEX_LOCK(anjay2_unlocked, anjay2);
+    ac2 = _anjay_access_control_get(anjay2_unlocked);
+    ANJAY_MUTEX_UNLOCK(anjay2);
 
     const anjay_dm_object_def_t *mock_obj1 = make_mock_object(32);
     AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay1, &mock_obj1));

@@ -55,7 +55,8 @@ typedef struct {
 } access_control_state_t;
 
 typedef struct {
-    const anjay_dm_object_def_t *obj_def;
+    anjay_dm_installed_object_t obj_def_ptr;
+    const anjay_unlocked_dm_object_def_t *obj_def;
     access_control_state_t current;
     access_control_state_t saved_state;
     bool in_transaction;
@@ -73,19 +74,20 @@ _anjay_access_control_clear_modified(access_control_t *repr) {
     repr->current.modified_since_persist = false;
 }
 
-typedef const anjay_dm_object_def_t *const *obj_ptr_t;
+typedef const anjay_dm_installed_object_t obj_ptr_t;
 
 access_control_t *
-_anjay_access_control_from_obj_ptr(const anjay_dm_object_def_t *const *obj_ptr);
+_anjay_access_control_from_obj_ptr(const anjay_dm_installed_object_t obj_ptr);
 
-access_control_t *_anjay_access_control_get(anjay_t *anjay);
+access_control_t *_anjay_access_control_get(anjay_unlocked_t *anjay);
 
 void _anjay_access_control_clear_state(access_control_state_t *state);
 
 int _anjay_access_control_clone_state(access_control_state_t *dest,
                                       const access_control_state_t *src);
 
-int _anjay_access_control_validate_ssid(anjay_t *anjay, anjay_ssid_t ssid);
+int _anjay_access_control_validate_ssid(anjay_unlocked_t *anjay,
+                                        anjay_ssid_t ssid);
 
 int _anjay_access_control_add_instance(
         access_control_t *access_control,

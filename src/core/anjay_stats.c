@@ -92,7 +92,7 @@ static uint64_t get_current_stats_of_connection(anjay_connection_ref_t conn_ref,
     return 0;
 }
 
-static uint64_t get_stats_of_closed_connections(anjay_t *anjay,
+static uint64_t get_stats_of_closed_connections(anjay_unlocked_t *anjay,
                                                 net_stats_type_t type) {
     switch (type) {
     case NET_STATS_BYTES_SENT:
@@ -115,7 +115,7 @@ typedef struct {
     uint64_t result_for_active_servers;
 } get_current_stats_of_server_args_t;
 
-static int get_current_stats_of_server(anjay_t *anjay,
+static int get_current_stats_of_server(anjay_unlocked_t *anjay,
                                        anjay_server_info_t *server,
                                        void *args_) {
     (void) anjay;
@@ -133,7 +133,7 @@ static int get_current_stats_of_server(anjay_t *anjay,
     return 0;
 }
 
-static uint64_t get_stats_of_all_connections(anjay_t *anjay,
+static uint64_t get_stats_of_all_connections(anjay_unlocked_t *anjay,
                                              net_stats_type_t type) {
     get_current_stats_of_server_args_t args = {
         .net_stats_type = type,
@@ -144,25 +144,41 @@ static uint64_t get_stats_of_all_connections(anjay_t *anjay,
            + get_stats_of_closed_connections(anjay, type);
 }
 
-uint64_t anjay_get_tx_bytes(anjay_t *anjay) {
-    return get_stats_of_all_connections(anjay, NET_STATS_BYTES_SENT);
+uint64_t anjay_get_tx_bytes(anjay_t *anjay_locked) {
+    uint64_t result = 0;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = get_stats_of_all_connections(anjay, NET_STATS_BYTES_SENT);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
-uint64_t anjay_get_rx_bytes(anjay_t *anjay) {
-    return get_stats_of_all_connections(anjay, NET_STATS_BYTES_RECEIVED);
+uint64_t anjay_get_rx_bytes(anjay_t *anjay_locked) {
+    uint64_t result = 0;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = get_stats_of_all_connections(anjay, NET_STATS_BYTES_RECEIVED);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
-uint64_t anjay_get_num_incoming_retransmissions(anjay_t *anjay) {
-    return get_stats_of_all_connections(anjay,
-                                        NET_STATS_INCOMING_RETRANSMISSIONS);
+uint64_t anjay_get_num_incoming_retransmissions(anjay_t *anjay_locked) {
+    uint64_t result = 0;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = get_stats_of_all_connections(anjay,
+                                          NET_STATS_INCOMING_RETRANSMISSIONS);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
-uint64_t anjay_get_num_outgoing_retransmissions(anjay_t *anjay) {
-    return get_stats_of_all_connections(anjay,
-                                        NET_STATS_OUTGOING_RETRANSMISSIONS);
+uint64_t anjay_get_num_outgoing_retransmissions(anjay_t *anjay_locked) {
+    uint64_t result = 0;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = get_stats_of_all_connections(anjay,
+                                          NET_STATS_OUTGOING_RETRANSMISSIONS);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
-void _anjay_coap_ctx_cleanup(anjay_t *anjay, avs_coap_ctx_t **ctx) {
+void _anjay_coap_ctx_cleanup(anjay_unlocked_t *anjay, avs_coap_ctx_t **ctx) {
     if (ctx && *ctx) {
         avs_coap_stats_t stats = avs_coap_get_stats(*ctx);
         anjay->closed_connections_stats.coap_stats
@@ -209,14 +225,15 @@ uint64_t anjay_get_num_outgoing_retransmissions(anjay_t *anjay) {
     return 0;
 }
 
-void _anjay_coap_ctx_cleanup(anjay_t *anjay, avs_coap_ctx_t **ctx) {
+void _anjay_coap_ctx_cleanup(anjay_unlocked_t *anjay, avs_coap_ctx_t **ctx) {
     (void) anjay;
     avs_coap_ctx_cleanup(ctx);
 }
 
 #endif // ANJAY_WITH_NET_STATS
 
-avs_error_t _anjay_socket_cleanup(anjay_t *anjay, avs_net_socket_t **socket) {
+avs_error_t _anjay_socket_cleanup(anjay_unlocked_t *anjay,
+                                  avs_net_socket_t **socket) {
     assert(socket);
     if (*socket) {
         avs_net_socket_shutdown(*socket);

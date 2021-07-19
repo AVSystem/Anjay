@@ -26,6 +26,10 @@
 #    include <avsystem/commons/avs_list.h>
 #    include <avsystem/commons/avs_utils.h>
 
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+#        include <avsystem/commons/avs_init_once.h>
+#    endif // ANJAY_WITH_THREAD_SAFETY
+
 #    include <anjay_modules/anjay_dm_utils.h>
 
 #    include <string.h>
@@ -85,7 +89,7 @@ typedef struct {
 } builder_bytes_t;
 
 typedef struct builder_out_struct {
-    anjay_output_ctx_t base;
+    anjay_unlocked_output_ctx_t base;
     anjay_batch_builder_t *builder;
     builder_bytes_t bytes;
 
@@ -241,8 +245,34 @@ void _anjay_batch_builder_cleanup(anjay_batch_builder_t **builder) {
     }
 }
 
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+static avs_init_once_handle_t REF_COUNT_MUTEX_INIT_HANDLE;
+static avs_mutex_t *REF_COUNT_MUTEX;
+
+static int init_ref_count_mutex(void *dummy) {
+    (void) dummy;
+    assert(!REF_COUNT_MUTEX);
+    return avs_mutex_create(&REF_COUNT_MUTEX);
+}
+
+static int ensure_ref_count_mutex_initialized(void) {
+    int result = avs_init_once(&REF_COUNT_MUTEX_INIT_HANDLE,
+                               init_ref_count_mutex, NULL);
+    if (result) {
+        batch_log(ERROR, _("Could not initialize thread safety for batches"));
+    }
+    return result;
+}
+#    endif // ANJAY_WITH_THREAD_SAFETY
+
 anjay_batch_t *_anjay_batch_builder_compile(anjay_batch_builder_t **builder) {
     assert(builder && *builder);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    if (ensure_ref_count_mutex_initialized()) {
+        return NULL;
+    }
+    assert(REF_COUNT_MUTEX);
+#    endif // ANJAY_WITH_THREAD_SAFETY
     anjay_batch_t *batch =
             (anjay_batch_t *) avs_calloc(1, sizeof(anjay_batch_t));
     if (!batch) {
@@ -259,15 +289,36 @@ anjay_batch_t *_anjay_batch_builder_compile(anjay_batch_builder_t **builder) {
 anjay_batch_t *_anjay_batch_acquire(const anjay_batch_t *batch_) {
     assert(batch_);
     anjay_batch_t *batch = (anjay_batch_t *) (intptr_t) batch_;
-    batch->ref_count++;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    if (avs_mutex_lock(REF_COUNT_MUTEX)) {
+        batch_log(ERROR, _("Could not lock mutex"));
+        return NULL;
+    }
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    ++batch->ref_count;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    avs_mutex_unlock(REF_COUNT_MUTEX);
+#    endif // ANJAY_WITH_THREAD_SAFETY
     return batch;
 }
 
 void _anjay_batch_release(anjay_batch_t **batch) {
     assert(batch && *batch);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    int mutex_lock_result = avs_mutex_lock(REF_COUNT_MUTEX);
+    if (mutex_lock_result) {
+        batch_log(ERROR, _("Could not lock mutex"));
+    }
+#    endif // ANJAY_WITH_THREAD_SAFETY
     assert((*batch)->ref_count);
+    size_t old_count = ((*batch)->ref_count)--;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    if (!mutex_lock_result) {
+        avs_mutex_unlock(REF_COUNT_MUTEX);
+    }
+#    endif // ANJAY_WITH_THREAD_SAFETY
 
-    if (--((*batch)->ref_count) == 0) {
+    if (old_count <= 1) {
         _anjay_batch_entry_list_cleanup(&(*batch)->list);
         avs_free(*batch);
     }
@@ -278,8 +329,9 @@ static void value_returned(builder_out_ctx_t *ctx) {
     ctx->path = MAKE_ROOT_PATH();
 }
 
-static int
-bytes_append(anjay_ret_bytes_ctx_t *ctx, const void *data, size_t length) {
+static int bytes_append(anjay_unlocked_ret_bytes_ctx_t *ctx,
+                        const void *data,
+                        size_t length) {
     builder_bytes_t *bytes = (builder_bytes_t *) ctx;
     if (length > bytes->remaining_bytes) {
         batch_log(DEBUG,
@@ -299,9 +351,9 @@ static const anjay_ret_bytes_ctx_vtable_t BYTES_VTABLE = {
     .append = bytes_append
 };
 
-static int bytes_begin(anjay_output_ctx_t *ctx_,
+static int bytes_begin(anjay_unlocked_output_ctx_t *ctx_,
                        size_t length,
-                       anjay_ret_bytes_ctx_t **out_bytes_ctx) {
+                       anjay_unlocked_ret_bytes_ctx_t **out_bytes_ctx) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     if (ctx->bytes.remaining_bytes) {
         batch_log(ERROR, _("bytes already being returned"));
@@ -338,11 +390,11 @@ static int bytes_begin(anjay_output_ctx_t *ctx_,
     // Doesn't change owner of buf
     ctx->bytes.data = buf;
     ctx->bytes.remaining_bytes = length;
-    *out_bytes_ctx = (anjay_ret_bytes_ctx_t *) &ctx->bytes;
+    *out_bytes_ctx = (anjay_unlocked_ret_bytes_ctx_t *) &ctx->bytes;
     return 0;
 }
 
-static int ret_string(anjay_output_ctx_t *ctx_, const char *str) {
+static int ret_string(anjay_unlocked_output_ctx_t *ctx_, const char *str) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
@@ -353,7 +405,7 @@ static int ret_string(anjay_output_ctx_t *ctx_, const char *str) {
     return result;
 }
 
-static int ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
+static int ret_integer(anjay_unlocked_output_ctx_t *ctx_, int64_t value) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
@@ -364,7 +416,7 @@ static int ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
     return result;
 }
 
-static int ret_double(anjay_output_ctx_t *ctx_, double value) {
+static int ret_double(anjay_unlocked_output_ctx_t *ctx_, double value) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
@@ -375,7 +427,7 @@ static int ret_double(anjay_output_ctx_t *ctx_, double value) {
     return result;
 }
 
-static int ret_bool(anjay_output_ctx_t *ctx_, bool value) {
+static int ret_bool(anjay_unlocked_output_ctx_t *ctx_, bool value) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     int result = -1;
     if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
@@ -386,7 +438,7 @@ static int ret_bool(anjay_output_ctx_t *ctx_, bool value) {
     return result;
 }
 
-static int ret_objlnk(anjay_output_ctx_t *ctx_,
+static int ret_objlnk(anjay_unlocked_output_ctx_t *ctx_,
                       anjay_oid_t objlnk_oid,
                       anjay_iid_t objlnk_iid) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
@@ -402,7 +454,7 @@ static int ret_objlnk(anjay_output_ctx_t *ctx_,
     return result;
 }
 
-static int ret_start_aggregate(anjay_output_ctx_t *ctx_) {
+static int ret_start_aggregate(anjay_unlocked_output_ctx_t *ctx_) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     int result = -1;
     if (_anjay_uri_path_leaf_is(&ctx->path, ANJAY_ID_IID)
@@ -418,7 +470,8 @@ static int ret_start_aggregate(anjay_output_ctx_t *ctx_) {
     return result;
 }
 
-static int set_path(anjay_output_ctx_t *ctx_, const anjay_uri_path_t *path) {
+static int set_path(anjay_unlocked_output_ctx_t *ctx_,
+                    const anjay_uri_path_t *path) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     AVS_ASSERT(!_anjay_uri_path_outside_base(path, &ctx->root_path),
                "Attempted to use batch builder context with resources outside "
@@ -431,7 +484,7 @@ static int set_path(anjay_output_ctx_t *ctx_, const anjay_uri_path_t *path) {
     return 0;
 }
 
-static int clear_path(anjay_output_ctx_t *ctx_) {
+static int clear_path(anjay_unlocked_output_ctx_t *ctx_) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     if (_anjay_uri_path_length(&ctx->path) == 0) {
         batch_log(ERROR, _("Path not set"));
@@ -441,7 +494,7 @@ static int clear_path(anjay_output_ctx_t *ctx_) {
     return 0;
 }
 
-static int output_close(anjay_output_ctx_t *ctx_) {
+static int output_close(anjay_unlocked_output_ctx_t *ctx_) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
     if (ctx->bytes.remaining_bytes) {
         batch_log(ERROR,
@@ -489,28 +542,30 @@ builder_out_ctx_new(anjay_batch_builder_t *builder,
 }
 
 static int read_into_batch(anjay_batch_builder_t *builder,
-                           anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj,
+                           anjay_unlocked_t *anjay,
+                           const anjay_dm_installed_object_t *obj,
                            const anjay_dm_path_info_t *path_info,
                            anjay_ssid_t requesting_ssid,
                            const avs_time_real_t *forced_timestamp) {
     builder_out_ctx_t ctx =
             builder_out_ctx_new(builder, &path_info->uri, forced_timestamp);
     int retval = _anjay_dm_read(anjay, obj, path_info, requesting_ssid,
-                                (anjay_output_ctx_t *) &ctx);
-    int close_retval = output_close((anjay_output_ctx_t *) &ctx);
+                                (anjay_unlocked_output_ctx_t *) &ctx);
+    int close_retval = output_close((anjay_unlocked_output_ctx_t *) &ctx);
     return close_retval ? close_retval : retval;
 }
 
 int _anjay_dm_read_into_batch(anjay_batch_builder_t *builder,
-                              anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
+                              anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t *obj,
                               const anjay_dm_path_info_t *path_info,
                               anjay_ssid_t requesting_ssid,
                               const avs_time_real_t *forced_timestamp) {
     assert(builder);
     assert(anjay);
-    assert(!obj || path_info->uri.ids[ANJAY_ID_OID] == (*obj)->oid);
+    assert(!obj
+           || path_info->uri.ids[ANJAY_ID_OID]
+                      == _anjay_dm_installed_object_oid(obj));
 
     AVS_LIST(anjay_batch_entry_t) *initial_append_ptr = builder->append_ptr;
     int result = read_into_batch(builder, anjay, obj, path_info,
@@ -562,7 +617,7 @@ static double convert_to_senml_time(avs_time_real_t timestamp,
 
 static int serialize_batch_entry(const anjay_batch_entry_t *entry,
                                  avs_time_real_t serialization_time,
-                                 anjay_output_ctx_t *output) {
+                                 anjay_unlocked_output_ctx_t *output) {
     int result = _anjay_output_set_path(output, &entry->path);
     if (result) {
         return result;
@@ -576,21 +631,22 @@ static int serialize_batch_entry(const anjay_batch_entry_t *entry,
     }
     switch (entry->data.type) {
     case ANJAY_BATCH_DATA_BYTES:
-        return anjay_ret_bytes(output,
-                               entry->data.value.bytes.data,
-                               entry->data.value.bytes.length);
+        return _anjay_ret_bytes_unlocked(output,
+                                         entry->data.value.bytes.data,
+                                         entry->data.value.bytes.length);
     case ANJAY_BATCH_DATA_STRING:
-        return anjay_ret_string(output, entry->data.value.string);
+        return _anjay_ret_string_unlocked(output, entry->data.value.string);
     case ANJAY_BATCH_DATA_INT:
-        return anjay_ret_i64(output, entry->data.value.int_value);
+        return _anjay_ret_i64_unlocked(output, entry->data.value.int_value);
     case ANJAY_BATCH_DATA_DOUBLE:
-        return anjay_ret_double(output, entry->data.value.double_value);
+        return _anjay_ret_double_unlocked(output,
+                                          entry->data.value.double_value);
     case ANJAY_BATCH_DATA_BOOL:
-        return anjay_ret_bool(output, entry->data.value.bool_value);
+        return _anjay_ret_bool_unlocked(output, entry->data.value.bool_value);
     case ANJAY_BATCH_DATA_OBJLNK:
-        return anjay_ret_objlnk(output,
-                                entry->data.value.objlnk.oid,
-                                entry->data.value.objlnk.iid);
+        return _anjay_ret_objlnk_unlocked(output,
+                                          entry->data.value.objlnk.oid,
+                                          entry->data.value.objlnk.iid);
     case ANJAY_BATCH_DATA_START_AGGREGATE:
         return _anjay_output_start_aggregate(output);
     default:
@@ -599,7 +655,7 @@ static int serialize_batch_entry(const anjay_batch_entry_t *entry,
     }
 }
 
-static bool is_server_allowed_to_read(anjay_t *anjay,
+static bool is_server_allowed_to_read(anjay_unlocked_t *anjay,
                                       anjay_oid_t oid,
                                       anjay_iid_t iid,
                                       anjay_ssid_t ssid) {
@@ -612,10 +668,10 @@ static bool is_server_allowed_to_read(anjay_t *anjay,
     return _anjay_instance_action_allowed(anjay, &action_info);
 }
 
-int _anjay_batch_data_output(anjay_t *anjay,
+int _anjay_batch_data_output(anjay_unlocked_t *anjay,
                              const anjay_batch_t *batch,
                              anjay_ssid_t target_ssid,
-                             anjay_output_ctx_t *out_ctx) {
+                             anjay_unlocked_output_ctx_t *out_ctx) {
     const avs_time_real_t serialization_time = avs_time_real_now();
     const anjay_batch_data_output_state_t *state = NULL;
     int result = 0;
@@ -627,12 +683,12 @@ int _anjay_batch_data_output(anjay_t *anjay,
 }
 
 int _anjay_batch_data_output_entry(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         const anjay_batch_t *batch,
         anjay_ssid_t target_ssid,
         avs_time_real_t serialization_time,
         const anjay_batch_data_output_state_t **state,
-        anjay_output_ctx_t *out_ctx) {
+        anjay_unlocked_output_ctx_t *out_ctx) {
     assert(state);
     const AVS_LIST(anjay_batch_entry_t) it;
     if (!*state) {

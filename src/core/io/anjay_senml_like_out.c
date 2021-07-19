@@ -43,7 +43,7 @@ typedef struct {
 } senml_bytes_t;
 
 typedef struct senml_out_struct {
-    anjay_output_ctx_t base;
+    anjay_unlocked_output_ctx_t base;
     anjay_senml_like_encoder_t *encoder;
     anjay_uri_path_t path;
     anjay_uri_path_t base_path;
@@ -133,7 +133,7 @@ static int element_begin(senml_out_t *ctx) {
     return result;
 }
 
-static int streamed_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
+static int streamed_bytes_append(anjay_unlocked_ret_bytes_ctx_t *ctx_,
                                  const void *data,
                                  size_t length) {
     senml_out_t *ctx = AVS_CONTAINER_OF(ctx_, senml_out_t, bytes);
@@ -144,21 +144,22 @@ static const anjay_ret_bytes_ctx_vtable_t STREAMED_BYTES_VTABLE = {
     .append = streamed_bytes_append
 };
 
-static int senml_ret_bytes(anjay_output_ctx_t *ctx_,
+static int senml_ret_bytes(anjay_unlocked_output_ctx_t *ctx_,
                            size_t length,
-                           anjay_ret_bytes_ctx_t **out_bytes_ctx) {
+                           anjay_unlocked_ret_bytes_ctx_t **out_bytes_ctx) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     int retval;
     if (!(retval = element_begin(ctx))
             && !(retval =
                          _anjay_senml_like_bytes_begin(ctx->encoder, length))) {
         ctx->returning_bytes = true;
-        *out_bytes_ctx = (anjay_ret_bytes_ctx_t *) &ctx->bytes;
+        *out_bytes_ctx = (anjay_unlocked_ret_bytes_ctx_t *) &ctx->bytes;
     }
     return retval;
 }
 
-static int senml_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
+static int senml_ret_string(anjay_unlocked_output_ctx_t *ctx_,
+                            const char *value) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     int retval;
     (void) ((retval = element_begin(ctx))
@@ -167,7 +168,7 @@ static int senml_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
     return retval;
 }
 
-static int senml_ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
+static int senml_ret_integer(anjay_unlocked_output_ctx_t *ctx_, int64_t value) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     int retval;
     (void) ((retval = element_begin(ctx))
@@ -176,7 +177,7 @@ static int senml_ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
     return retval;
 }
 
-static int senml_ret_double(anjay_output_ctx_t *ctx_, double value) {
+static int senml_ret_double(anjay_unlocked_output_ctx_t *ctx_, double value) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     int retval;
     (void) ((retval = element_begin(ctx))
@@ -185,7 +186,7 @@ static int senml_ret_double(anjay_output_ctx_t *ctx_, double value) {
     return retval;
 }
 
-static int senml_ret_bool(anjay_output_ctx_t *ctx_, bool value) {
+static int senml_ret_bool(anjay_unlocked_output_ctx_t *ctx_, bool value) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     int retval;
     (void) ((retval = element_begin(ctx))
@@ -194,8 +195,9 @@ static int senml_ret_bool(anjay_output_ctx_t *ctx_, bool value) {
     return retval;
 }
 
-static int
-senml_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
+static int senml_ret_objlnk(anjay_unlocked_output_ctx_t *ctx_,
+                            anjay_oid_t oid,
+                            anjay_iid_t iid) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     char buf[MAX_OBJLNK_STRING_SIZE];
     int retval;
@@ -208,7 +210,7 @@ senml_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
     return retval;
 }
 
-static int senml_ret_start_aggregate(anjay_output_ctx_t *ctx_) {
+static int senml_ret_start_aggregate(anjay_unlocked_output_ctx_t *ctx_) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     if (_anjay_uri_path_leaf_is(&ctx->path, ANJAY_ID_IID)
             || _anjay_uri_path_leaf_is(&ctx->path, ANJAY_ID_RID)) {
@@ -219,7 +221,7 @@ static int senml_ret_start_aggregate(anjay_output_ctx_t *ctx_) {
     }
 }
 
-static int senml_set_path(anjay_output_ctx_t *ctx_,
+static int senml_set_path(anjay_unlocked_output_ctx_t *ctx_,
                           const anjay_uri_path_t *uri) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     AVS_ASSERT(!_anjay_uri_path_outside_base(uri, &ctx->base_path),
@@ -233,7 +235,7 @@ static int senml_set_path(anjay_output_ctx_t *ctx_,
     return 0;
 }
 
-static int senml_clear_path(anjay_output_ctx_t *ctx_) {
+static int senml_clear_path(anjay_unlocked_output_ctx_t *ctx_) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     if (_anjay_uri_path_length(&ctx->path) == 0) {
         senml_log(ERROR, _("Path not set"));
@@ -243,13 +245,13 @@ static int senml_clear_path(anjay_output_ctx_t *ctx_) {
     return 0;
 }
 
-static int senml_set_time(anjay_output_ctx_t *ctx_, double value) {
+static int senml_set_time(anjay_unlocked_output_ctx_t *ctx_, double value) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     ctx->timestamp = value;
     return 0;
 }
 
-static int senml_output_close(anjay_output_ctx_t *ctx_) {
+static int senml_output_close(anjay_unlocked_output_ctx_t *ctx_) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     int result = 0;
     if (ctx->returning_bytes) {
@@ -277,9 +279,8 @@ static const anjay_output_ctx_vtable_t SENML_OUT_VTABLE = {
     .close = senml_output_close
 };
 
-anjay_output_ctx_t *_anjay_output_senml_like_create(avs_stream_t *stream,
-                                                    const anjay_uri_path_t *uri,
-                                                    uint16_t format) {
+anjay_unlocked_output_ctx_t *_anjay_output_senml_like_create(
+        avs_stream_t *stream, const anjay_uri_path_t *uri, uint16_t format) {
     senml_out_t *ctx = (senml_out_t *) avs_calloc(1, sizeof(senml_out_t));
     if (!ctx) {
         return NULL;
@@ -311,7 +312,7 @@ anjay_output_ctx_t *_anjay_output_senml_like_create(avs_stream_t *stream,
     }
 
     senml_log(DEBUG, _("created SenML-like context"));
-    return (anjay_output_ctx_t *) ctx;
+    return (anjay_unlocked_output_ctx_t *) ctx;
 
 error:
     senml_log(DEBUG, _("failed to create SenML-like encoder"));

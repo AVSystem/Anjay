@@ -24,8 +24,8 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-int _anjay_dm_write_attributes(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_write_attributes(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t *obj,
                                const anjay_request_t *request);
 
 VISIBILITY_PRIVATE_HEADER_END

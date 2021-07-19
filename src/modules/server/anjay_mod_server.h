@@ -19,8 +19,8 @@
 #include <anjay_init.h>
 
 #include <anjay/core.h>
-#include <anjay/server.h>
 
+#include <anjay_modules/anjay_dm_utils.h>
 #include <anjay_modules/anjay_utils_core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
@@ -61,7 +61,8 @@ typedef struct {
 } server_instance_t;
 
 typedef struct {
-    const anjay_dm_object_def_t *def;
+    anjay_dm_installed_object_t def_ptr;
+    const anjay_unlocked_dm_object_def_t *def;
     AVS_LIST(server_instance_t) instances;
     AVS_LIST(server_instance_t) saved_instances;
     bool modified_since_persist;

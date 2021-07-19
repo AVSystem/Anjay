@@ -223,7 +223,7 @@ avs_net_socket_t *_anjay_connection_internal_get_socket(
         const anjay_server_connection_t *connection);
 
 void _anjay_connection_internal_clean_socket(
-        anjay_t *anjay, anjay_server_connection_t *connection);
+        anjay_unlocked_t *anjay, anjay_server_connection_t *connection);
 
 anjay_conn_session_token_t
 _anjay_connections_get_primary_session_token(anjay_connections_t *connections);
@@ -242,7 +242,8 @@ avs_error_t _anjay_server_connection_internal_bring_online(
         anjay_connection_type_t conn_type,
         const anjay_iid_t *security_iid);
 
-void _anjay_connections_close(anjay_t *anjay, anjay_connections_t *connections);
+void _anjay_connections_close(anjay_unlocked_t *anjay,
+                              anjay_connections_t *connections);
 
 typedef struct {
     char sni[256];
@@ -273,7 +274,7 @@ void _anjay_server_connections_refresh(
         avs_url_t **move_uri,
         const anjay_server_name_indication_t *sni);
 
-bool _anjay_socket_transport_supported(anjay_t *anjay,
+bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t type);
 
 VISIBILITY_PRIVATE_HEADER_END

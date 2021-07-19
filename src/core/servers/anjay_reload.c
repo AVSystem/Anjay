@@ -32,7 +32,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 static void refresh_server_job(avs_sched_t *sched, const void *server_ptr) {
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     anjay_server_info_t *server = *(anjay_server_info_t *const *) server_ptr;
 
     if (server->ssid != ANJAY_SSID_BOOTSTRAP
@@ -47,7 +47,7 @@ static void refresh_server_job(avs_sched_t *sched, const void *server_ptr) {
     _anjay_active_server_refresh(server);
 }
 
-static int reload_server_by_ssid(anjay_t *anjay,
+static int reload_server_by_ssid(anjay_unlocked_t *anjay,
                                  anjay_servers_t *old_servers,
                                  anjay_ssid_t ssid) {
     anjay_log(TRACE, _("reloading server SSID ") "%u", ssid);
@@ -96,8 +96,8 @@ typedef struct {
     int retval;
 } reload_servers_state_t;
 
-static int reload_server_by_server_iid(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj,
+static int reload_server_by_server_iid(anjay_unlocked_t *anjay,
+                                       const anjay_dm_installed_object_t *obj,
                                        anjay_iid_t iid,
                                        void *state_) {
     (void) obj;
@@ -121,7 +121,7 @@ static void reload_servers_sched_job(avs_sched_t *sched, const void *unused) {
     (void) unused;
     anjay_log(TRACE, _("reloading servers"));
 
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     anjay_servers_t old_servers = *anjay->servers;
     memset(anjay->servers, 0, sizeof(*anjay->servers));
     reload_servers_state_t reload_state = {
@@ -129,7 +129,7 @@ static void reload_servers_sched_job(avs_sched_t *sched, const void *unused) {
         .retval = 0
     };
 
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
     if (obj
             && _anjay_dm_foreach_instance(
@@ -186,7 +186,7 @@ static void reload_servers_sched_job(avs_sched_t *sched, const void *unused) {
               (unsigned long) AVS_LIST_SIZE(anjay->servers->servers));
 }
 
-static int schedule_reload_servers(anjay_t *anjay, bool delayed) {
+static int schedule_reload_servers(anjay_unlocked_t *anjay, bool delayed) {
     static const long RELOAD_DELAY_S = 5;
     if (!anjay->sched
             || AVS_SCHED_DELAYED(
@@ -200,11 +200,11 @@ static int schedule_reload_servers(anjay_t *anjay, bool delayed) {
     return 0;
 }
 
-int _anjay_schedule_reload_servers(anjay_t *anjay) {
+int _anjay_schedule_reload_servers(anjay_unlocked_t *anjay) {
     return schedule_reload_servers(anjay, false);
 }
 
-int _anjay_schedule_delayed_reload_servers(anjay_t *anjay) {
+int _anjay_schedule_delayed_reload_servers(anjay_unlocked_t *anjay) {
     return schedule_reload_servers(anjay, true);
 }
 
@@ -265,7 +265,7 @@ static bool transport_set_empty(anjay_transport_set_t set) {
 }
 
 anjay_transport_set_t
-_anjay_transport_set_remove_unavailable(anjay_t *anjay,
+_anjay_transport_set_remove_unavailable(anjay_unlocked_t *anjay,
                                         anjay_transport_set_t set) {
     (void) anjay;
     return (anjay_transport_set_t) {
@@ -288,34 +288,27 @@ bool _anjay_socket_transport_included(anjay_transport_set_t set,
     return false;
 }
 
-bool _anjay_socket_transport_is_online(anjay_t *anjay,
+bool _anjay_socket_transport_is_online(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t transport) {
     return _anjay_socket_transport_included(anjay->online_transports,
                                             transport);
 }
 
+static anjay_transport_set_t get_online_transports(anjay_t *anjay_locked) {
+    anjay_transport_set_t result = { 0 };
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = anjay->online_transports;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
 bool anjay_transport_is_offline(anjay_t *anjay,
                                 anjay_transport_set_t transport_set) {
     return transport_set_empty(transport_set_intersection(
-            anjay->online_transports, transport_set));
+            get_online_transports(anjay), transport_set));
 }
 
-int anjay_transport_enter_offline(anjay_t *anjay,
-                                  anjay_transport_set_t transport_set) {
-    return anjay_transport_set_online(
-            anjay,
-            transport_set_intersection(anjay->online_transports,
-                                       transport_set_not(transport_set)));
-}
-
-int anjay_transport_exit_offline(anjay_t *anjay,
-                                 anjay_transport_set_t transport_set) {
-    return anjay_transport_set_online(
-            anjay,
-            transport_set_union(anjay->online_transports, transport_set));
-}
-
-int anjay_transport_set_online(anjay_t *anjay,
+static int set_online_unlocked(anjay_unlocked_t *anjay,
                                anjay_transport_set_t transport_set) {
     anjay_transport_set_t orig_online_transports = anjay->online_transports;
     anjay->online_transports =
@@ -340,6 +333,43 @@ int anjay_transport_set_online(anjay_t *anjay,
     return result;
 }
 
+int anjay_transport_enter_offline(anjay_t *anjay_locked,
+                                  anjay_transport_set_t transport_set) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = set_online_unlocked(
+            anjay,
+            transport_set_intersection(anjay->online_transports,
+                                       transport_set_not(transport_set)));
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+static int exit_offline_unlocked(anjay_unlocked_t *anjay,
+                                 anjay_transport_set_t transport_set) {
+    return set_online_unlocked(anjay,
+                               transport_set_union(anjay->online_transports,
+                                                   transport_set));
+}
+
+int anjay_transport_exit_offline(anjay_t *anjay_locked,
+                                 anjay_transport_set_t transport_set) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = exit_offline_unlocked(anjay, transport_set);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+int anjay_transport_set_online(anjay_t *anjay_locked,
+                               anjay_transport_set_t transport_set) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = set_online_unlocked(anjay, transport_set);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
 /**
  * Schedules reconnection of all servers, and even downloader sockets. This is
  * basically:
@@ -352,36 +382,37 @@ int anjay_transport_set_online(anjay_t *anjay,
  * - Calls _anjay_downloader_sched_reconnect_all() to reconnect downloader
  *   sockets
  */
-int anjay_transport_schedule_reconnect(anjay_t *anjay,
+int anjay_transport_schedule_reconnect(anjay_t *anjay_locked,
                                        anjay_transport_set_t transport_set) {
-    int result = anjay_transport_exit_offline(anjay, transport_set);
-    if (result) {
-        return result;
-    }
-    AVS_LIST(anjay_server_info_t) server;
-    AVS_LIST_FOREACH(server, anjay->servers->servers) {
-        anjay_connection_type_t conn_type;
-        ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
-            const anjay_connection_ref_t ref = {
-                .server = server,
-                .conn_type = conn_type
-            };
-            anjay_server_connection_t *connection =
-                    _anjay_get_server_connection(ref);
-            if (_anjay_connection_internal_get_socket(connection)
-                    && _anjay_socket_transport_included(
-                               transport_set, connection->transport)) {
-                _anjay_connection_suspend(ref);
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    if (!(result = exit_offline_unlocked(anjay, transport_set))) {
+        AVS_LIST(anjay_server_info_t) server;
+        AVS_LIST_FOREACH(server, anjay->servers->servers) {
+            anjay_connection_type_t conn_type;
+            ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
+                const anjay_connection_ref_t ref = {
+                    .server = server,
+                    .conn_type = conn_type
+                };
+                anjay_server_connection_t *connection =
+                        _anjay_get_server_connection(ref);
+                if (_anjay_connection_internal_get_socket(connection)
+                        && _anjay_socket_transport_included(
+                                   transport_set, connection->transport)) {
+                    _anjay_connection_suspend(ref);
+                }
             }
         }
-    }
-    result = _anjay_servers_sched_reactivate_all_given_up(anjay);
+        result = _anjay_servers_sched_reactivate_all_given_up(anjay);
 #ifdef ANJAY_WITH_DOWNLOADER
-    if (!result) {
-        result = _anjay_downloader_sched_reconnect(&anjay->downloader,
-                                                   transport_set);
-    }
+        if (!result) {
+            result = _anjay_downloader_sched_reconnect(&anjay->downloader,
+                                                       transport_set);
+        }
 #endif // ANJAY_WITH_DOWNLOADER
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
 

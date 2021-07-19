@@ -28,13 +28,13 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-sec_repr_t *_anjay_sec_get(const anjay_dm_object_def_t *const *obj_ptr);
+sec_repr_t *_anjay_sec_get(const anjay_dm_installed_object_t obj_ptr);
 
 /**
  * Fetches UDP Security Mode from @p ctx, performs validation and in case of
  * success sets @p *out to one of @p anjay_security_mode_t enum value.
  */
-int _anjay_sec_fetch_security_mode(anjay_input_ctx_t *ctx,
+int _anjay_sec_fetch_security_mode(anjay_unlocked_input_ctx_t *ctx,
                                    anjay_security_mode_t *out);
 
 int _anjay_sec_validate_security_mode(int32_t security_mode);
@@ -43,7 +43,7 @@ int _anjay_sec_validate_security_mode(int32_t security_mode);
  * Fetches SMS Security Mode from @p ctx, performs validation and in case of
  * success sets @p *out to one of @p anjay_sms_security_mode_t enum value.
  */
-int _anjay_sec_fetch_sms_security_mode(anjay_input_ctx_t *ctx,
+int _anjay_sec_fetch_sms_security_mode(anjay_unlocked_input_ctx_t *ctx,
                                        anjay_sms_security_mode_t *out);
 
 int _anjay_sec_validate_sms_security_mode(int32_t security_mode);
@@ -52,7 +52,8 @@ int _anjay_sec_validate_sms_security_mode(int32_t security_mode);
  * Fetches SSID from @p ctx, performs validation and in case of success sets
  * @p *out .
  */
-int _anjay_sec_fetch_short_server_id(anjay_input_ctx_t *ctx, anjay_ssid_t *out);
+int _anjay_sec_fetch_short_server_id(anjay_unlocked_input_ctx_t *ctx,
+                                     anjay_ssid_t *out);
 
 void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value);
 

@@ -20,28 +20,31 @@
 
 #include <anjay_modules/anjay_io_utils.h>
 
+#include "anjay_io_core.h"
+
 VISIBILITY_SOURCE_BEGIN
 
-typedef int chunk_getter_t(anjay_input_ctx_t *ctx,
+typedef int chunk_getter_t(anjay_unlocked_input_ctx_t *ctx,
                            char *out,
                            size_t out_size,
                            bool *out_finished,
                            size_t *out_bytes_read);
 
-static int bytes_getter(anjay_input_ctx_t *ctx,
+static int bytes_getter(anjay_unlocked_input_ctx_t *ctx,
                         char *out,
                         size_t size,
                         bool *out_finished,
                         size_t *out_bytes_read) {
-    return anjay_get_bytes(ctx, out_bytes_read, out_finished, out, size);
+    return _anjay_get_bytes_unlocked(ctx, out_bytes_read, out_finished, out,
+                                     size);
 }
 
-static int string_getter(anjay_input_ctx_t *ctx,
+static int string_getter(anjay_unlocked_input_ctx_t *ctx,
                          char *out,
                          size_t size,
                          bool *out_finished,
                          size_t *out_bytes_read) {
-    int result = anjay_get_string(ctx, out, size);
+    int result = _anjay_get_string_unlocked(ctx, out, size);
     if (result < 0) {
         return result;
     }
@@ -59,7 +62,7 @@ static int string_getter(anjay_input_ctx_t *ctx,
     return 0;
 }
 
-static int generic_getter(anjay_input_ctx_t *ctx,
+static int generic_getter(anjay_unlocked_input_ctx_t *ctx,
                           char **out,
                           size_t *out_bytes_read,
                           chunk_getter_t *getter) {
@@ -95,7 +98,8 @@ error:
     return result;
 }
 
-int _anjay_io_fetch_bytes(anjay_input_ctx_t *ctx, anjay_raw_buffer_t *buffer) {
+int _anjay_io_fetch_bytes(anjay_unlocked_input_ctx_t *ctx,
+                          anjay_raw_buffer_t *buffer) {
     _anjay_raw_buffer_clear(buffer);
     int retval = generic_getter(ctx, (char **) &buffer->data, &buffer->size,
                                 bytes_getter);
@@ -103,7 +107,7 @@ int _anjay_io_fetch_bytes(anjay_input_ctx_t *ctx, anjay_raw_buffer_t *buffer) {
     return retval;
 }
 
-int _anjay_io_fetch_string(anjay_input_ctx_t *ctx, char **out) {
+int _anjay_io_fetch_string(anjay_unlocked_input_ctx_t *ctx, char **out) {
     avs_free(*out);
     *out = NULL;
     size_t bytes_read = 0;

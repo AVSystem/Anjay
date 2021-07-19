@@ -32,7 +32,7 @@ typedef struct {
     size_t bytes_left;
 } opaque_bytes_t;
 
-static int opaque_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
+static int opaque_ret_bytes_append(anjay_unlocked_ret_bytes_ctx_t *ctx_,
                                    const void *data,
                                    size_t length) {
     opaque_bytes_t *ctx = (opaque_bytes_t *) ctx_;
@@ -58,25 +58,25 @@ typedef enum {
 } opaque_out_state_t;
 
 typedef struct {
-    anjay_output_ctx_t base;
+    anjay_unlocked_output_ctx_t base;
     opaque_out_state_t state;
     opaque_bytes_t bytes;
 } opaque_out_t;
 
-static int opaque_ret_bytes(anjay_output_ctx_t *ctx_,
+static int opaque_ret_bytes(anjay_unlocked_output_ctx_t *ctx_,
                             size_t length,
-                            anjay_ret_bytes_ctx_t **out_bytes_ctx) {
+                            anjay_unlocked_ret_bytes_ctx_t **out_bytes_ctx) {
     opaque_out_t *ctx = (opaque_out_t *) ctx_;
     if (ctx->state == STATE_PATH_SET) {
         ctx->state = STATE_RETURNING;
         ctx->bytes.bytes_left = length;
-        *out_bytes_ctx = (anjay_ret_bytes_ctx_t *) &ctx->bytes;
+        *out_bytes_ctx = (anjay_unlocked_ret_bytes_ctx_t *) &ctx->bytes;
         return 0;
     }
     return -1;
 }
 
-static int opaque_set_path(anjay_output_ctx_t *ctx_,
+static int opaque_set_path(anjay_unlocked_output_ctx_t *ctx_,
                            const anjay_uri_path_t *path) {
     opaque_out_t *ctx = (opaque_out_t *) ctx_;
     if (ctx->state == STATE_PATH_SET) {
@@ -89,7 +89,7 @@ static int opaque_set_path(anjay_output_ctx_t *ctx_,
     return 0;
 }
 
-static int opaque_clear_path(anjay_output_ctx_t *ctx_) {
+static int opaque_clear_path(anjay_unlocked_output_ctx_t *ctx_) {
     opaque_out_t *ctx = (opaque_out_t *) ctx_;
     if (ctx->state != STATE_PATH_SET) {
         return -1;
@@ -98,7 +98,7 @@ static int opaque_clear_path(anjay_output_ctx_t *ctx_) {
     return 0;
 }
 
-static int opaque_ret_close(anjay_output_ctx_t *ctx_) {
+static int opaque_ret_close(anjay_unlocked_output_ctx_t *ctx_) {
     opaque_out_t *ctx = (opaque_out_t *) ctx_;
     return ctx->state == STATE_RETURNING ? 0
                                          : ANJAY_OUTCTXERR_ANJAY_RET_NOT_CALLED;
@@ -111,14 +111,14 @@ static const anjay_output_ctx_vtable_t OPAQUE_OUT_VTABLE = {
     .close = opaque_ret_close
 };
 
-anjay_output_ctx_t *_anjay_output_opaque_create(avs_stream_t *stream) {
+anjay_unlocked_output_ctx_t *_anjay_output_opaque_create(avs_stream_t *stream) {
     opaque_out_t *ctx = (opaque_out_t *) avs_calloc(1, sizeof(opaque_out_t));
     if (ctx) {
         ctx->base.vtable = &OPAQUE_OUT_VTABLE;
         ctx->bytes.vtable = &OPAQUE_BYTES_VTABLE;
         ctx->bytes.stream = stream;
     }
-    return (anjay_output_ctx_t *) ctx;
+    return (anjay_unlocked_output_ctx_t *) ctx;
 }
 
 typedef struct {
@@ -129,7 +129,7 @@ typedef struct {
     anjay_uri_path_t request_uri;
 } opaque_in_t;
 
-static int opaque_get_some_bytes(anjay_input_ctx_t *ctx,
+static int opaque_get_some_bytes(anjay_unlocked_input_ctx_t *ctx,
                                  size_t *out_bytes_read,
                                  bool *out_message_finished,
                                  void *out_buf,
@@ -141,12 +141,12 @@ static int opaque_get_some_bytes(anjay_input_ctx_t *ctx,
     return avs_is_ok(err) ? 0 : -1;
 }
 
-static int opaque_in_close(anjay_input_ctx_t *ctx_) {
+static int opaque_in_close(anjay_unlocked_input_ctx_t *ctx_) {
     (void) ctx_;
     return 0;
 }
 
-static int opaque_in_get_path(anjay_input_ctx_t *ctx_,
+static int opaque_in_get_path(anjay_unlocked_input_ctx_t *ctx_,
                               anjay_uri_path_t *out_path,
                               bool *out_is_array) {
     opaque_in_t *ctx = (opaque_in_t *) ctx_;
@@ -161,7 +161,7 @@ static int opaque_in_get_path(anjay_input_ctx_t *ctx_,
     return 0;
 }
 
-static int opaque_in_next_entry(anjay_input_ctx_t *ctx) {
+static int opaque_in_next_entry(anjay_unlocked_input_ctx_t *ctx) {
     (void) ctx;
     return 0;
 }
@@ -183,11 +183,11 @@ static const anjay_input_ctx_vtable_t OPAQUE_IN_VTABLE = {
     .next_entry = opaque_in_next_entry
 };
 
-int _anjay_input_opaque_create(anjay_input_ctx_t **out,
+int _anjay_input_opaque_create(anjay_unlocked_input_ctx_t **out,
                                avs_stream_t **stream_ptr,
                                const anjay_uri_path_t *request_uri) {
     opaque_in_t *ctx = (opaque_in_t *) avs_calloc(1, sizeof(opaque_in_t));
-    *out = (anjay_input_ctx_t *) ctx;
+    *out = (anjay_unlocked_input_ctx_t *) ctx;
     if (!ctx) {
         return -1;
     }

@@ -25,26 +25,26 @@
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 anjay_msg_details_t
-_anjay_dm_response_details_for_read(anjay_t *anjay,
+_anjay_dm_response_details_for_read(anjay_unlocked_t *anjay,
                                     const anjay_request_t *request,
                                     bool requires_hierarchical_format,
                                     anjay_lwm2m_version_t lwm2m_version);
 
-int _anjay_dm_read_or_observe(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_read_or_observe(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t *obj,
                               const anjay_request_t *request);
 
-int _anjay_dm_read(anjay_t *anjay,
-                   const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_read(anjay_unlocked_t *anjay,
+                   const anjay_dm_installed_object_t *obj,
                    const anjay_dm_path_info_t *path_info,
                    anjay_ssid_t requesting_ssid,
-                   anjay_output_ctx_t *out_ctx);
+                   anjay_unlocked_output_ctx_t *out_ctx);
 
-int _anjay_dm_read_and_destroy_ctx(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_read_and_destroy_ctx(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t *obj,
                                    const anjay_dm_path_info_t *path_info,
                                    anjay_ssid_t requesting_ssid,
-                                   anjay_output_ctx_t **out_ctx_ptr);
+                                   anjay_unlocked_output_ctx_t **out_ctx_ptr);
 
 VISIBILITY_PRIVATE_HEADER_END
 

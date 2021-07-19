@@ -29,7 +29,7 @@ typedef enum {
     STATE_ERROR
 } anjay_execute_state_t;
 
-struct anjay_execute_ctx_struct {
+struct anjay_unlocked_execute_ctx_struct {
     avs_stream_t *payload_stream;
     anjay_execute_state_t state;
     int arg;

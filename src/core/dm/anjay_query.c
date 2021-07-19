@@ -30,8 +30,8 @@ typedef struct {
     anjay_iid_t out_iid;
 } find_iid_args_t;
 
-static int find_server_iid_handler(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj,
+static int find_server_iid_handler(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t *obj,
                                    anjay_iid_t iid,
                                    void *args_) {
     (void) obj;
@@ -51,7 +51,7 @@ static int find_server_iid_handler(anjay_t *anjay,
     return 0;
 }
 
-int _anjay_find_server_iid(anjay_t *anjay,
+int _anjay_find_server_iid(anjay_unlocked_t *anjay,
                            anjay_ssid_t ssid,
                            anjay_iid_t *out_iid) {
     find_iid_args_t args = {
@@ -59,7 +59,7 @@ int _anjay_find_server_iid(anjay_t *anjay,
         .out_iid = ANJAY_ID_INVALID
     };
 
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
     if (ssid == ANJAY_SSID_ANY || ssid == ANJAY_SSID_BOOTSTRAP
             || _anjay_dm_foreach_instance(anjay, obj, find_server_iid_handler,
@@ -71,13 +71,13 @@ int _anjay_find_server_iid(anjay_t *anjay,
     return 0;
 }
 
-bool _anjay_dm_ssid_exists(anjay_t *anjay, anjay_ssid_t ssid) {
+bool _anjay_dm_ssid_exists(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     assert(ssid != ANJAY_SSID_BOOTSTRAP);
     anjay_iid_t dummy_iid;
     return !_anjay_find_server_iid(anjay, ssid, &dummy_iid);
 }
 
-int _anjay_ssid_from_server_iid(anjay_t *anjay,
+int _anjay_ssid_from_server_iid(anjay_unlocked_t *anjay,
                                 anjay_iid_t server_iid,
                                 anjay_ssid_t *out_ssid) {
     int64_t ssid;
@@ -91,7 +91,7 @@ int _anjay_ssid_from_server_iid(anjay_t *anjay,
     return 0;
 }
 
-int _anjay_ssid_from_security_iid(anjay_t *anjay,
+int _anjay_ssid_from_security_iid(anjay_unlocked_t *anjay,
                                   anjay_iid_t security_iid,
                                   uint16_t *out_ssid) {
     assert(security_iid != ANJAY_ID_INVALID);
@@ -117,7 +117,7 @@ int _anjay_ssid_from_security_iid(anjay_t *anjay,
 }
 
 #ifdef ANJAY_WITH_BOOTSTRAP
-bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
+bool _anjay_is_bootstrap_security_instance(anjay_unlocked_t *anjay,
                                            anjay_iid_t security_iid) {
     bool is_bootstrap;
     const anjay_uri_path_t path =
@@ -133,8 +133,8 @@ bool _anjay_is_bootstrap_security_instance(anjay_t *anjay,
 }
 
 static int
-bootstrap_security_iid_find_helper(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj,
+bootstrap_security_iid_find_helper(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t *obj,
                                    anjay_iid_t iid,
                                    void *result_ptr) {
     (void) obj;
@@ -145,9 +145,9 @@ bootstrap_security_iid_find_helper(anjay_t *anjay,
     return ANJAY_FOREACH_CONTINUE;
 }
 
-anjay_iid_t _anjay_find_bootstrap_security_iid(anjay_t *anjay) {
+anjay_iid_t _anjay_find_bootstrap_security_iid(anjay_unlocked_t *anjay) {
     anjay_iid_t result = ANJAY_ID_INVALID;
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (_anjay_dm_foreach_instance(
                 anjay, obj, bootstrap_security_iid_find_helper, &result)) {
@@ -158,7 +158,8 @@ anjay_iid_t _anjay_find_bootstrap_security_iid(anjay_t *anjay) {
 #endif
 
 avs_time_duration_t
-_anjay_disable_timeout_from_server_iid(anjay_t *anjay, anjay_iid_t server_iid) {
+_anjay_disable_timeout_from_server_iid(anjay_unlocked_t *anjay,
+                                       anjay_iid_t server_iid) {
     static const int32_t DEFAULT_DISABLE_TIMEOUT_S = NUM_SECONDS_IN_A_DAY;
 
     int64_t timeout_s;

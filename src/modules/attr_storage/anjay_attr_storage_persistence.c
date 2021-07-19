@@ -336,10 +336,10 @@ static bool is_attr_storage_sane(anjay_attr_storage_t *as) {
     return true;
 }
 
-static int clear_nonexistent_rids(anjay_t *anjay,
+static int clear_nonexistent_rids(anjay_unlocked_t *anjay,
                                   anjay_attr_storage_t *as,
                                   AVS_LIST(as_object_entry_t) *object_ptr,
-                                  const anjay_dm_object_def_t *const *def_ptr) {
+                                  const anjay_dm_installed_object_t *def_ptr) {
     AVS_LIST(as_instance_entry_t) *instance_ptr;
     AVS_LIST(as_instance_entry_t) instance_helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(instance_ptr, instance_helper,
@@ -352,12 +352,12 @@ static int clear_nonexistent_rids(anjay_t *anjay,
     return 0;
 }
 
-static avs_error_t clear_nonexistent_entries(anjay_t *anjay,
+static avs_error_t clear_nonexistent_entries(anjay_unlocked_t *anjay,
                                              anjay_attr_storage_t *as) {
     AVS_LIST(as_object_entry_t) *object_ptr;
     AVS_LIST(as_object_entry_t) object_helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(object_ptr, object_helper, &as->objects) {
-        const anjay_dm_object_def_t *const *def_ptr =
+        const anjay_dm_installed_object_t *def_ptr =
                 _anjay_dm_find_object_by_oid(anjay, (*object_ptr)->oid);
         if (!def_ptr) {
             remove_object_entry(as, object_ptr);
@@ -400,8 +400,10 @@ _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
     return err;
 }
 
-avs_error_t _anjay_attr_storage_restore_inner(
-        anjay_t *anjay, anjay_attr_storage_t *attr_storage, avs_stream_t *in) {
+avs_error_t
+_anjay_attr_storage_restore_inner(anjay_unlocked_t *anjay,
+                                  anjay_attr_storage_t *attr_storage,
+                                  avs_stream_t *in) {
     _anjay_attr_storage_clear(attr_storage);
 
     if (avs_is_eof(avs_stream_peek(in, 0, &(char) { 0 }))) {
@@ -430,33 +432,40 @@ avs_error_t _anjay_attr_storage_restore_inner(
     return err;
 }
 
-avs_error_t anjay_attr_storage_persist(anjay_t *anjay, avs_stream_t *out) {
+avs_error_t anjay_attr_storage_persist(anjay_t *anjay_locked,
+                                       avs_stream_t *out) {
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_attr_storage_t *as = _anjay_attr_storage_get(anjay);
     if (!as) {
         as_log(ERROR,
                _("Attribute Storage is not installed on this Anjay object"));
-        return avs_errno(AVS_EINVAL);
-    }
-    avs_error_t err = _anjay_attr_storage_persist_inner(as, out);
-    if (avs_is_ok(err)) {
+        err = avs_errno(AVS_EINVAL);
+    } else if (avs_is_ok((err = _anjay_attr_storage_persist_inner(as, out)))) {
         as->modified_since_persist = false;
         as_log(INFO, _("Attribute Storage state persisted"));
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 
-avs_error_t anjay_attr_storage_restore(anjay_t *anjay, avs_stream_t *in) {
+avs_error_t anjay_attr_storage_restore(anjay_t *anjay_locked,
+                                       avs_stream_t *in) {
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_attr_storage_t *as = _anjay_attr_storage_get(anjay);
     if (!as) {
         as_log(ERROR,
                _("Attribute Storage is not installed on this Anjay object"));
-        return avs_errno(AVS_EINVAL);
+        err = avs_errno(AVS_EINVAL);
+    } else {
+        if (avs_is_ok(
+                    (err = _anjay_attr_storage_restore_inner(anjay, as, in)))) {
+            as_log(INFO, _("Attribute Storage state restored"));
+        }
+        as->modified_since_persist = avs_is_err(err);
     }
-    avs_error_t err = _anjay_attr_storage_restore_inner(anjay, as, in);
-    if (avs_is_ok(err)) {
-        as_log(INFO, _("Attribute Storage state restored"));
-    }
-    as->modified_since_persist = avs_is_err(err);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 

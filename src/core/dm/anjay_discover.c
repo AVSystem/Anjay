@@ -108,17 +108,19 @@ static int print_r_attrs(avs_stream_t *stream,
 }
 
 static int print_discovered_object(avs_stream_t *stream,
-                                   const anjay_dm_object_def_t *const *obj,
+                                   const anjay_dm_installed_object_t *obj,
                                    const anjay_dm_internal_oi_attrs_t *attrs,
                                    anjay_lwm2m_version_t version) {
-    if (avs_is_err(avs_stream_write_f(stream, "</%" PRIu16 ">", (*obj)->oid))) {
+    if (avs_is_err(avs_stream_write_f(stream, "</%" PRIu16 ">",
+                                      _anjay_dm_installed_object_oid(obj)))) {
         return -1;
     }
     (void) version;
     const char *format = ";ver=\"%s\"";
-    if ((*obj)->version
-            && avs_is_err(
-                       avs_stream_write_f(stream, format, (*obj)->version))) {
+    if (_anjay_dm_installed_object_version(obj)
+            && avs_is_err(avs_stream_write_f(stream, format,
+                                             _anjay_dm_installed_object_version(
+                                                     obj)))) {
         return -1;
     }
     return print_oi_attrs(stream, attrs);
@@ -126,25 +128,26 @@ static int print_discovered_object(avs_stream_t *stream,
 
 static int
 print_discovered_instance(avs_stream_t *stream,
-                          const anjay_dm_object_def_t *const *obj,
+                          const anjay_dm_installed_object_t *obj,
                           anjay_iid_t iid,
                           const anjay_dm_internal_oi_attrs_t *attrs) {
     if (avs_is_err(avs_stream_write_f(stream, "</%" PRIu16 "/%" PRIu16 ">",
-                                      (*obj)->oid, iid))) {
+                                      _anjay_dm_installed_object_oid(obj),
+                                      iid))) {
         return -1;
     }
     return print_oi_attrs(stream, attrs);
 }
 
 static int print_discovered_resource(avs_stream_t *stream,
-                                     const anjay_dm_object_def_t *const *obj,
+                                     const anjay_dm_installed_object_t *obj,
                                      anjay_iid_t iid,
                                      anjay_rid_t rid,
                                      int32_t resource_dim,
                                      const anjay_dm_internal_r_attrs_t *attrs) {
-    if (avs_is_err(avs_stream_write_f(stream,
-                                      "</%" PRIu16 "/%" PRIu16 "/%" PRIu16 ">",
-                                      (*obj)->oid, iid, rid))
+    if (avs_is_err(avs_stream_write_f(
+                stream, "</%" PRIu16 "/%" PRIu16 "/%" PRIu16 ">",
+                _anjay_dm_installed_object_oid(obj), iid, rid))
             || print_resource_dim(stream, resource_dim)
             || print_r_attrs(stream, attrs)) {
         return -1;
@@ -156,8 +159,8 @@ static int print_separator(avs_stream_t *stream) {
     return avs_is_ok(avs_stream_write(stream, ",", 1)) ? 0 : -1;
 }
 
-static int read_resource_dim_clb(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj,
+static int read_resource_dim_clb(anjay_unlocked_t *anjay,
+                                 const anjay_dm_installed_object_t *obj,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
                                  anjay_riid_t riid,
@@ -171,8 +174,8 @@ static int read_resource_dim_clb(anjay_t *anjay,
     return 0;
 }
 
-static int read_resource_dim(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj,
+static int read_resource_dim(anjay_unlocked_t *anjay,
+                             const anjay_dm_installed_object_t *obj,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
                              int32_t *out_dim) {
@@ -188,15 +191,15 @@ static int read_resource_dim(anjay_t *anjay,
     return result;
 }
 
-static anjay_lwm2m_version_t current_lwm2m_version(anjay_t *anjay) {
+static anjay_lwm2m_version_t current_lwm2m_version(anjay_unlocked_t *anjay) {
     assert(anjay->current_connection.server);
     return _anjay_server_registration_info(anjay->current_connection.server)
             ->lwm2m_version;
 }
 
-static int discover_resource(anjay_t *anjay,
+static int discover_resource(anjay_unlocked_t *anjay,
                              avs_stream_t *stream,
-                             const anjay_dm_object_def_t *const *obj,
+                             const anjay_dm_installed_object_t *obj,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
                              anjay_dm_resource_kind_t kind,
@@ -258,8 +261,8 @@ typedef struct {
 } discover_instance_resource_args_t;
 
 static int
-discover_instance_resource_clb(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj,
+discover_instance_resource_clb(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t *obj,
                                anjay_iid_t iid,
                                anjay_rid_t rid,
                                anjay_dm_resource_kind_t kind,
@@ -276,9 +279,9 @@ discover_instance_resource_clb(anjay_t *anjay,
     return result;
 }
 
-static int discover_instance_resources(anjay_t *anjay,
+static int discover_instance_resources(anjay_unlocked_t *anjay,
                                        avs_stream_t *stream,
-                                       const anjay_dm_object_def_t *const *obj,
+                                       const anjay_dm_installed_object_t *obj,
                                        anjay_iid_t iid,
                                        anjay_id_type_t requested_path_type) {
     return _anjay_dm_foreach_resource(
@@ -289,8 +292,8 @@ static int discover_instance_resources(anjay_t *anjay,
             });
 }
 
-static int discover_object_instance(anjay_t *anjay,
-                                    const anjay_dm_object_def_t *const *obj,
+static int discover_object_instance(anjay_unlocked_t *anjay,
+                                    const anjay_dm_installed_object_t *obj,
                                     anjay_iid_t iid,
                                     void *stream_) {
     avs_stream_t *stream = (avs_stream_t *) stream_;
@@ -303,9 +306,9 @@ static int discover_object_instance(anjay_t *anjay,
     return result;
 }
 
-static int discover_object(anjay_t *anjay,
+static int discover_object(anjay_unlocked_t *anjay,
                            avs_stream_t *stream,
-                           const anjay_dm_object_def_t *const *obj) {
+                           const anjay_dm_installed_object_t *obj) {
     anjay_lwm2m_version_t version = current_lwm2m_version(anjay);
     anjay_dm_internal_oi_attrs_t object_attributes =
             ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
@@ -322,9 +325,9 @@ static int discover_object(anjay_t *anjay,
                                       stream);
 }
 
-static int discover_instance(anjay_t *anjay,
+static int discover_instance(anjay_unlocked_t *anjay,
                              avs_stream_t *stream,
-                             const anjay_dm_object_def_t *const *obj,
+                             const anjay_dm_installed_object_t *obj,
                              anjay_iid_t iid) {
     anjay_dm_internal_oi_attrs_t instance_attributes =
             ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
@@ -340,12 +343,12 @@ static int discover_instance(anjay_t *anjay,
     return discover_instance_resources(anjay, stream, obj, iid, ANJAY_ID_IID);
 }
 
-int _anjay_discover(anjay_t *anjay,
+int _anjay_discover(anjay_unlocked_t *anjay,
                     avs_stream_t *stream,
-                    const anjay_dm_object_def_t *const *obj,
+                    const anjay_dm_installed_object_t *obj,
                     anjay_iid_t iid,
                     anjay_rid_t rid) {
-    assert(obj && *obj);
+    assert(obj);
 
     if (iid == ANJAY_ID_INVALID) {
         return discover_object(anjay, stream, obj);
@@ -357,7 +360,7 @@ int _anjay_discover(anjay_t *anjay,
     }
 
     const anjay_action_info_t info = {
-        .oid = (*obj)->oid,
+        .oid = _anjay_dm_installed_object_oid(obj),
         .iid = iid,
         .ssid = _anjay_dm_current_ssid(anjay),
         .action = ANJAY_ACTION_DISCOVER
@@ -402,8 +405,8 @@ typedef struct {
 } bootstrap_discover_object_instance_args_t;
 
 static int
-bootstrap_discover_object_instance(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj,
+bootstrap_discover_object_instance(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t *obj,
                                    anjay_iid_t iid,
                                    void *args_) {
     bootstrap_discover_object_instance_args_t *args =
@@ -416,13 +419,13 @@ bootstrap_discover_object_instance(anjay_t *anjay,
     if (result) {
         return result;
     }
-    if ((*obj)->oid == ANJAY_DM_OID_SECURITY) {
+    if (_anjay_dm_installed_object_oid(obj) == ANJAY_DM_OID_SECURITY) {
         anjay_ssid_t ssid;
         int query_result = _anjay_ssid_from_security_iid(anjay, iid, &ssid);
         if (!query_result && ssid != ANJAY_SSID_BOOTSTRAP) {
             result = print_ssid_attr(args->stream, ssid);
         }
-    } else if ((*obj)->oid == ANJAY_DM_OID_SERVER) {
+    } else if (_anjay_dm_installed_object_oid(obj) == ANJAY_DM_OID_SERVER) {
         anjay_ssid_t ssid;
         int query_result = _anjay_ssid_from_server_iid(anjay, iid, &ssid);
         if (!query_result) {
@@ -432,8 +435,8 @@ bootstrap_discover_object_instance(anjay_t *anjay,
     return result;
 }
 
-static int bootstrap_discover_object(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj,
+static int bootstrap_discover_object(anjay_unlocked_t *anjay,
+                                     const anjay_dm_installed_object_t *obj,
                                      void *stream_) {
     anjay_lwm2m_version_t version = current_lwm2m_version(anjay);
     bootstrap_discover_object_instance_args_t args = {
@@ -450,10 +453,10 @@ static int bootstrap_discover_object(anjay_t *anjay,
     return result;
 }
 
-int _anjay_bootstrap_discover(anjay_t *anjay,
+int _anjay_bootstrap_discover(anjay_unlocked_t *anjay,
                               avs_stream_t *stream,
                               anjay_oid_t oid) {
-    const anjay_dm_object_def_t *const *obj = NULL;
+    const anjay_dm_installed_object_t *obj = NULL;
     if (oid != ANJAY_ID_INVALID) {
         obj = _anjay_dm_find_object_by_oid(anjay, oid);
         if (!obj) {

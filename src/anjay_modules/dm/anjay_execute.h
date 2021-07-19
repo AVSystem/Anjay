@@ -19,10 +19,13 @@
 
 #include <anjay/io.h>
 
+#include <anjay_modules/dm/anjay_modules.h>
+
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-anjay_execute_ctx_t *_anjay_execute_ctx_create(avs_stream_t *payload_stream);
-void _anjay_execute_ctx_destroy(anjay_execute_ctx_t **ctx);
+anjay_unlocked_execute_ctx_t *
+_anjay_execute_ctx_create(avs_stream_t *payload_stream);
+void _anjay_execute_ctx_destroy(anjay_unlocked_execute_ctx_t **ctx);
 
 VISIBILITY_PRIVATE_HEADER_END
 

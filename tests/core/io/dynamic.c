@@ -38,7 +38,7 @@
     char buf[Size];                                                           \
     avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;        \
     avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf));                  \
-    anjay_output_ctx_t *out = NULL;                                           \
+    anjay_unlocked_output_ctx_t *out = NULL;                                  \
     ASSERT_OK(_anjay_output_dynamic_construct(&out, (avs_stream_t *) &outbuf, \
                                               (Uri), (Format),                \
                                               ANJAY_ACTION_READ));
@@ -56,8 +56,8 @@ AVS_UNIT_TEST(dynamic_out, bytes) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_bytes(out, "1234567890", 10));
-    ASSERT_FAIL(anjay_ret_bytes(out, "0987654321", 10));
+    ASSERT_OK(_anjay_ret_bytes_unlocked(out, "1234567890", 10));
+    ASSERT_FAIL(_anjay_ret_bytes_unlocked(out, "0987654321", 10));
     ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("MTIzNDU2Nzg5MA==");
@@ -67,52 +67,30 @@ AVS_UNIT_TEST(dynamic_out, string) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_string(out, "0987654321"));
-    ASSERT_FAIL(anjay_ret_string(out, "1234567890"));
+    ASSERT_OK(_anjay_ret_string_unlocked(out, "0987654321"));
+    ASSERT_FAIL(_anjay_ret_string_unlocked(out, "1234567890"));
     ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("0987654321");
-}
-
-AVS_UNIT_TEST(dynamic_out, i32) {
-    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
-
-    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_i32(out, 514));
-    ASSERT_FAIL(anjay_ret_i32(out, 69));
-    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
-
-    VERIFY_BYTES("514");
 }
 
 AVS_UNIT_TEST(dynamic_out, i64) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_i64(out, 424242424242LL));
-    ASSERT_FAIL(anjay_ret_i64(out, 69));
+    ASSERT_OK(_anjay_ret_i64_unlocked(out, 424242424242LL));
+    ASSERT_FAIL(_anjay_ret_i64_unlocked(out, 69));
     ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("424242424242");
-}
-
-AVS_UNIT_TEST(dynamic_out, f32) {
-    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
-
-    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_float(out, 2.15625));
-    ASSERT_FAIL(anjay_ret_float(out, 3.14f));
-    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
-
-    VERIFY_BYTES("2.15625");
 }
 
 AVS_UNIT_TEST(dynamic_out, f64) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_double(out, 4053.125267029));
-    ASSERT_FAIL(anjay_ret_double(out, 3.14));
+    ASSERT_OK(_anjay_ret_double_unlocked(out, 4053.125267029));
+    ASSERT_FAIL(_anjay_ret_double_unlocked(out, 3.14));
     ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("4053.125267029");
@@ -122,8 +100,8 @@ AVS_UNIT_TEST(dynamic_out, boolean) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_bool(out, false));
-    ASSERT_FAIL(anjay_ret_bool(out, true));
+    ASSERT_OK(_anjay_ret_bool_unlocked(out, false));
+    ASSERT_FAIL(_anjay_ret_bool_unlocked(out, true));
     ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("0");
@@ -133,8 +111,8 @@ AVS_UNIT_TEST(dynamic_out, objlnk) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_objlnk(out, 514, 69));
-    ASSERT_FAIL(anjay_ret_objlnk(out, 66, 77));
+    ASSERT_OK(_anjay_ret_objlnk_unlocked(out, 514, 69));
+    ASSERT_FAIL(_anjay_ret_objlnk_unlocked(out, 66, 77));
     ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("514:69");
@@ -145,10 +123,10 @@ AVS_UNIT_TEST(dynamic_out, array_from_instance) {
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
                                                                        5)));
-    ASSERT_OK(anjay_ret_i32(out, 42));
+    ASSERT_OK(_anjay_ret_i64_unlocked(out, 42));
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
                                                                        69)));
-    ASSERT_OK(anjay_ret_string(out, "Hello, world!"));
+    ASSERT_OK(_anjay_ret_string_unlocked(out, "Hello, world!"));
     ASSERT_OK(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("\x88\x2A\x13" // array
@@ -163,10 +141,10 @@ AVS_UNIT_TEST(dynamic_out, array_from_resource) {
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
                                                                        5)));
-    ASSERT_OK(anjay_ret_i32(out, 42));
+    ASSERT_OK(_anjay_ret_i64_unlocked(out, 42));
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 42,
                                                                        69)));
-    ASSERT_OK(anjay_ret_string(out, "Hello, world!"));
+    ASSERT_OK(_anjay_ret_string_unlocked(out, "Hello, world!"));
     ASSERT_OK(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("\x88\x2A\x13" // array
@@ -180,7 +158,7 @@ AVS_UNIT_TEST(dynamic_out, object) {
     TEST_ENV(512, AVS_COAP_FORMAT_OMA_LWM2M_TLV, &MAKE_OBJECT_PATH(0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 42, 69)));
-    ASSERT_OK(anjay_ret_i32(out, 514));
+    ASSERT_OK(_anjay_ret_i64_unlocked(out, 514));
     ASSERT_OK(_anjay_output_ctx_destroy(&out));
 
     VERIFY_BYTES("\x04\x2A"         // object
@@ -192,8 +170,8 @@ AVS_UNIT_TEST(dynamic_out, method_not_implemented) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 42));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_OK(anjay_ret_i32(out, 514));
-    ASSERT_EQ(anjay_ret_i32(out, 69), -1);
+    ASSERT_OK(_anjay_ret_i64_unlocked(out, 514));
+    ASSERT_EQ(_anjay_ret_i64_unlocked(out, 69), -1);
     ASSERT_EQ(_anjay_output_start_aggregate(out),
               ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED);
     ASSERT_EQ(_anjay_output_ctx_destroy(&out), -1);
@@ -205,7 +183,7 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
     TEST_ENV(512, AVS_COAP_FORMAT_OCTET_STREAM, &MAKE_RESOURCE_PATH(0, 0, 0));
 
     ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    ASSERT_FAIL(anjay_ret_string(out, "data"));
+    ASSERT_FAIL(_anjay_ret_string_unlocked(out, "data"));
     ASSERT_EQ(_anjay_output_ctx_destroy(&out),
               ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED);
 }
@@ -217,7 +195,7 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
 
 typedef struct {
     anjay_request_t request;
-    anjay_input_ctx_t *input;
+    anjay_unlocked_input_ctx_t *input;
 } dynamic_test_env_t;
 
 typedef struct {
@@ -287,13 +265,13 @@ AVS_UNIT_TEST(dynamic_in, plain) {
     size_t bytes_read;
     bool message_finished;
     char buf[16];
-    int32_t value;
+    int64_t value;
     memset(buf, 0, sizeof(buf));
     ASSERT_OK(_anjay_input_get_path(env.input, NULL, NULL));
-    ASSERT_OK(anjay_get_bytes(env.input, &bytes_read, &message_finished, buf,
-                              sizeof(buf)));
+    ASSERT_OK(_anjay_get_bytes_unlocked(env.input, &bytes_read,
+                                        &message_finished, buf, sizeof(buf)));
     // It fails, because text context is in byte mode.
-    ASSERT_FAIL(anjay_get_i32(env.input, &value));
+    ASSERT_FAIL(_anjay_get_i64_unlocked(env.input, &value));
     ASSERT_EQ_STR(buf, "42");
 }
 
@@ -318,11 +296,11 @@ AVS_UNIT_TEST(dynamic_in, tlv) {
                 .expected_error = 0
             });
 
-    int32_t value;
+    int64_t value;
     anjay_uri_path_t path;
     ASSERT_OK(_anjay_input_get_path(env.input, &path, NULL));
     ASSERT_TRUE(_anjay_uri_path_equal(&path, &MAKE_RESOURCE_PATH(1, 2, 42)));
-    ASSERT_OK(anjay_get_i32(env.input, &value));
+    ASSERT_OK(_anjay_get_i64_unlocked(env.input, &value));
     ASSERT_EQ(value, 69);
 }
 
@@ -339,9 +317,9 @@ AVS_UNIT_TEST(dynamic_in, opaque) {
     bool message_finished;
     char buf[32];
     ASSERT_OK(_anjay_input_get_path(env.input, NULL, NULL));
-    ASSERT_FAIL(anjay_get_string(env.input, buf, sizeof(buf)));
-    ASSERT_OK(anjay_get_bytes(env.input, &bytes_read, &message_finished, buf,
-                              sizeof(buf)));
+    ASSERT_FAIL(_anjay_get_string_unlocked(env.input, buf, sizeof(buf)));
+    ASSERT_OK(_anjay_get_bytes_unlocked(env.input, &bytes_read,
+                                        &message_finished, buf, sizeof(buf)));
     ASSERT_TRUE(message_finished);
     ASSERT_EQ(bytes_read, sizeof(HELLO_WORLD) - 1);
     ASSERT_EQ_BYTES(buf, HELLO_WORLD);
@@ -401,20 +379,20 @@ static void test_partial_bytes(uint16_t content_format,
     size_t bytes_read;
     bool message_finished;
     char buf[LOREM_IPSUM_PART1_SIZE];
-    ASSERT_OK(anjay_get_bytes(env.input, &bytes_read, &message_finished, buf,
-                              sizeof(buf)));
+    ASSERT_OK(_anjay_get_bytes_unlocked(env.input, &bytes_read,
+                                        &message_finished, buf, sizeof(buf)));
     ASSERT_EQ(bytes_read, LOREM_IPSUM_PART1_SIZE);
     ASSERT_FALSE(message_finished);
     ASSERT_EQ_BYTES(buf, LOREM_IPSUM_PART1);
 
-    ASSERT_OK(anjay_get_bytes(env.input, &bytes_read, &message_finished, buf,
-                              sizeof(buf)));
+    ASSERT_OK(_anjay_get_bytes_unlocked(env.input, &bytes_read,
+                                        &message_finished, buf, sizeof(buf)));
     ASSERT_EQ(bytes_read, LOREM_IPSUM_PART2_SIZE);
     ASSERT_FALSE(message_finished);
     ASSERT_EQ_BYTES(buf, LOREM_IPSUM_PART2);
 
-    ASSERT_OK(anjay_get_bytes(env.input, &bytes_read, &message_finished, buf,
-                              sizeof(buf)));
+    ASSERT_OK(_anjay_get_bytes_unlocked(env.input, &bytes_read,
+                                        &message_finished, buf, sizeof(buf)));
     ASSERT_EQ(bytes_read, LOREM_IPSUM_PART3_SIZE);
     ASSERT_TRUE(message_finished);
     ASSERT_EQ_BYTES(buf, LOREM_IPSUM_PART3);
@@ -435,15 +413,15 @@ static void test_partial_string(uint16_t content_format,
     ASSERT_TRUE(_anjay_uri_path_equal(&path, &env.request.uri));
 
     char buf[LOREM_IPSUM_PART1_SIZE + 1];
-    ASSERT_EQ(anjay_get_string(env.input, buf, sizeof(buf)),
+    ASSERT_EQ(_anjay_get_string_unlocked(env.input, buf, sizeof(buf)),
               ANJAY_BUFFER_TOO_SHORT);
     ASSERT_EQ_STR(buf, LOREM_IPSUM_PART1);
 
-    ASSERT_EQ(anjay_get_string(env.input, buf, sizeof(buf)),
+    ASSERT_EQ(_anjay_get_string_unlocked(env.input, buf, sizeof(buf)),
               ANJAY_BUFFER_TOO_SHORT);
     ASSERT_EQ_STR(buf, LOREM_IPSUM_PART2);
 
-    ASSERT_OK(anjay_get_string(env.input, buf, sizeof(buf)));
+    ASSERT_OK(_anjay_get_string_unlocked(env.input, buf, sizeof(buf)));
     ASSERT_EQ_STR(buf, LOREM_IPSUM_PART3);
 }
 

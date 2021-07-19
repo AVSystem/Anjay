@@ -29,7 +29,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifdef ANJAY_WITH_OBSERVE
-static int observe_notify(anjay_t *anjay, anjay_notify_queue_t queue) {
+static int observe_notify(anjay_unlocked_t *anjay, anjay_notify_queue_t queue) {
     int ret = 0;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, queue) {
@@ -57,7 +57,7 @@ static int observe_notify(anjay_t *anjay, anjay_notify_queue_t queue) {
 #endif // ANJAY_WITH_OBSERVE
 
 static int
-security_modified_notify(anjay_t *anjay,
+security_modified_notify(anjay_unlocked_t *anjay,
                          anjay_notify_queue_object_entry_t *security) {
     int ret = 0;
     int32_t last_iid = -1;
@@ -75,7 +75,7 @@ security_modified_notify(anjay_t *anjay,
     return ret;
 }
 
-static int server_modified_notify(anjay_t *anjay,
+static int server_modified_notify(anjay_unlocked_t *anjay,
                                   anjay_notify_queue_object_entry_t *server) {
     int ret = 0;
     if (server->instance_set_changes.instance_set_changed) {
@@ -96,7 +96,7 @@ static int server_modified_notify(anjay_t *anjay,
                 _anjay_update_ret(&ret, -1);
             } else if (_anjay_servers_find_active(anjay, (anjay_ssid_t) ssid)) {
                 _anjay_update_ret(&ret,
-                                  anjay_schedule_registration_update(
+                                  _anjay_schedule_registration_update_unlocked(
                                           anjay, (anjay_ssid_t) ssid));
             }
         }
@@ -104,7 +104,7 @@ static int server_modified_notify(anjay_t *anjay,
     return ret;
 }
 
-static int anjay_notify_perform_impl(anjay_t *anjay,
+static int anjay_notify_perform_impl(anjay_unlocked_t *anjay,
                                      anjay_notify_queue_t *queue_ptr,
                                      bool server_notify) {
     if (!queue_ptr || !*queue_ptr) {
@@ -134,16 +134,18 @@ static int anjay_notify_perform_impl(anjay_t *anjay,
     return ret;
 }
 
-int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t *queue_ptr) {
+int _anjay_notify_perform(anjay_unlocked_t *anjay,
+                          anjay_notify_queue_t *queue_ptr) {
     return anjay_notify_perform_impl(anjay, queue_ptr, true);
 }
 
-int _anjay_notify_perform_without_servers(anjay_t *anjay,
+int _anjay_notify_perform_without_servers(anjay_unlocked_t *anjay,
                                           anjay_notify_queue_t *queue_ptr) {
     return anjay_notify_perform_impl(anjay, queue_ptr, false);
 }
 
-int _anjay_notify_flush(anjay_t *anjay, anjay_notify_queue_t *queue_ptr) {
+int _anjay_notify_flush(anjay_unlocked_t *anjay,
+                        anjay_notify_queue_t *queue_ptr) {
     int result = _anjay_notify_perform(anjay, queue_ptr);
     _anjay_notify_clear_queue(queue_ptr);
     return result;
@@ -311,11 +313,11 @@ void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue) {
 
 static void notify_clb(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
 }
 
-static int reschedule_notify(anjay_t *anjay) {
+static int reschedule_notify(anjay_unlocked_t *anjay) {
     if (anjay->scheduled_notify.handle) {
         return 0;
     }
@@ -323,7 +325,7 @@ static int reschedule_notify(anjay_t *anjay) {
                          notify_clb, NULL, 0);
 }
 
-int _anjay_notify_instance_created(anjay_t *anjay,
+int _anjay_notify_instance_created(anjay_unlocked_t *anjay,
                                    anjay_oid_t oid,
                                    anjay_iid_t iid) {
     int retval;
@@ -333,10 +335,10 @@ int _anjay_notify_instance_created(anjay_t *anjay,
     return retval;
 }
 
-int anjay_notify_changed(anjay_t *anjay,
-                         anjay_oid_t oid,
-                         anjay_iid_t iid,
-                         anjay_rid_t rid) {
+int _anjay_notify_changed_unlocked(anjay_unlocked_t *anjay,
+                                   anjay_oid_t oid,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid) {
     int retval;
     (void) ((retval = _anjay_notify_queue_resource_change(
                      &anjay->scheduled_notify.queue, oid, iid, rid))
@@ -344,7 +346,19 @@ int anjay_notify_changed(anjay_t *anjay,
     return retval;
 }
 
-int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid) {
+int anjay_notify_changed(anjay_t *anjay_locked,
+                         anjay_oid_t oid,
+                         anjay_iid_t iid,
+                         anjay_rid_t rid) {
+    int retval = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    retval = _anjay_notify_changed_unlocked(anjay, oid, iid, rid);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return retval;
+}
+
+int _anjay_notify_instances_changed_unlocked(anjay_unlocked_t *anjay,
+                                             anjay_oid_t oid) {
     int retval;
     (void) ((retval = _anjay_notify_queue_instance_set_unknown_change(
                      &anjay->scheduled_notify.queue, oid))
@@ -352,48 +366,50 @@ int anjay_notify_instances_changed(anjay_t *anjay, anjay_oid_t oid) {
     return retval;
 }
 
+int anjay_notify_instances_changed(anjay_t *anjay_locked, anjay_oid_t oid) {
+    int retval = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    retval = _anjay_notify_instances_changed_unlocked(anjay, oid);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return retval;
+}
+
 #ifdef ANJAY_WITH_OBSERVATION_STATUS
-anjay_resource_observation_status_t anjay_resource_observation_status(
-        anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid, anjay_rid_t rid) {
-    if (oid == ANJAY_ID_INVALID || iid == ANJAY_ID_INVALID
-            || rid == ANJAY_ID_INVALID) {
-        return (anjay_resource_observation_status_t) {
-            .is_observed = false,
-            .min_period = 0,
-            .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-        };
+anjay_resource_observation_status_t
+anjay_resource_observation_status(anjay_t *anjay_locked,
+                                  anjay_oid_t oid,
+                                  anjay_iid_t iid,
+                                  anjay_rid_t rid) {
+    anjay_resource_observation_status_t retval = {
+        .is_observed = false,
+        .min_period = 0,
+        .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
+    };
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    if (oid != ANJAY_ID_INVALID && iid != ANJAY_ID_INVALID
+            && rid != ANJAY_ID_INVALID) {
+        if (oid == ANJAY_DM_OID_SECURITY
+                && _anjay_servers_find_active_by_security_iid(anjay, iid)) {
+            // All resources in active Security instances are always considered
+            // observed, as server connections need to be refreshed if they
+            // changed; compare with _anjay_notify_perform()
+            retval.is_observed = true;
+        } else if (oid == ANJAY_DM_OID_SERVER
+                   && (rid == ANJAY_DM_RID_SERVER_LIFETIME
+                       || rid == ANJAY_DM_RID_SERVER_BINDING)) {
+            // Lifetime and Binding in Server Object are always considered
+            // observed, as server connections need to be refreshed if they
+            // changed; compare with _anjay_notify_perform()
+            retval.is_observed = true;
+        } else {
+            // Note: some modules may also depend on resource notifications,
+            // particularly Firmware Update depends on notifications on /5/0/3,
+            // but it also implements that object and generates relevant
+            // notifications internally, so there's no need to check that here.
+            retval = _anjay_observe_status(anjay, oid, iid, rid);
+        }
     }
-
-    if (oid == ANJAY_DM_OID_SECURITY
-            && _anjay_servers_find_active_by_security_iid(anjay, iid)) {
-        // All resources in active Security instances are always considered
-        // observed, as server connections need to be refreshed if they changed;
-        // compare with _anjay_notify_perform()
-        return (anjay_resource_observation_status_t) {
-            .is_observed = true,
-            .min_period = 0,
-            .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-        };
-    }
-
-    if (oid == ANJAY_DM_OID_SERVER
-            && (rid == ANJAY_DM_RID_SERVER_LIFETIME
-                || rid == ANJAY_DM_RID_SERVER_BINDING)) {
-        // Lifetime and Binding in Server Object are always considered observed,
-        // as server connections need to be refreshed if they changed; compare
-        // with _anjay_notify_perform()
-        return (anjay_resource_observation_status_t) {
-            .is_observed = true,
-            .min_period = 0,
-            .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-        };
-    }
-
-    // Note: some modules may also depend on resource notifications,
-    // particularly Firmware Update depends on notifications on /5/0/3, but it
-    // also implements that object and generates relevant notifications
-    // internally, so there's no need to check that here.
-
-    return _anjay_observe_status(anjay, oid, iid, rid);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return retval;
 }
 #endif // ANJAY_WITH_OBSERVATION_STATUS

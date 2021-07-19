@@ -76,8 +76,8 @@ TMPDIR="$(mktemp -d)"
 atexit "rm -rf '$TMPDIR'"
 
 analyze() {
-    "$SCAN_BUILD" --status-bugs -o "$OUTPUT_DIR" \
-        "$ROOT_DIR/devconfig -DSCAN_BUILD_BINARY="$SCAN_BUILD"" \
+    "$SCAN_BUILD" --status-bugs -no-failure-reports -o "$OUTPUT_DIR" \
+        "$ROOT_DIR/devconfig -DSCAN_BUILD_BINARY="$SCAN_BUILD" -DWITH_NESTED_FUNCTION_MUTEX_LOCKS=OFF" \
         && "$SCAN_BUILD" --status-bugs -o "$OUTPUT_DIR" make -j"$NUM_JOBS"
 }
 

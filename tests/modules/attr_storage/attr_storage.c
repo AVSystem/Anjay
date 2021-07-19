@@ -47,25 +47,50 @@ static const anjay_dm_object_def_t *const OBJ2 = &(
 
 #define DM_ATTR_STORAGE_TEST_INIT                                          \
     DM_TEST_INIT_WITH_OBJECTS(&OBJ, &OBJ2, &FAKE_SECURITY2, &FAKE_SERVER); \
-    _anjay_dm_transaction_begin(anjay);                                    \
-    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay))
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);                               \
+    _anjay_dm_transaction_begin(anjay_unlocked);                           \
+    ANJAY_MUTEX_UNLOCK(anjay);                                             \
+    AVS_UNIT_ASSERT_SUCCESS(anjay_attr_storage_install(anjay));            \
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay)
 
-#define DM_ATTR_STORAGE_TEST_FINISH                                      \
-    do {                                                                 \
-        (void) mocksocks;                                                \
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_transaction_finish(anjay, 0)); \
-        DM_TEST_FINISH;                                                  \
-    } while (0)
+#define DM_ATTR_STORAGE_TEST_FINISH                                           \
+    (void) mocksocks;                                                         \
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_transaction_finish(anjay_unlocked, 0)); \
+    ANJAY_MUTEX_UNLOCK(anjay);                                                \
+    DM_TEST_FINISH
+
+#ifdef ANJAY_WITH_THREAD_SAFETY
+#    define WRAP_OBJ_PTR(ObjPtr)                                    \
+        ({                                                          \
+            const anjay_dm_installed_object_t *installed_obj =      \
+                    _anjay_dm_find_object_by_oid(anjay_unlocked,    \
+                                                 (*(ObjPtr))->oid); \
+            AVS_UNIT_ASSERT_NOT_NULL(installed_obj);                \
+            AVS_UNIT_ASSERT_TRUE(installed_obj->type                \
+                                 == ANJAY_DM_OBJECT_USER_PROVIDED); \
+            AVS_UNIT_ASSERT_TRUE(installed_obj->impl.user_provided  \
+                                 == (ObjPtr));                      \
+            installed_obj;                                          \
+        })
+#else // ANJAY_WITH_THREAD_SAFETY
+#    define WRAP_OBJ_PTR(ObjPtr)               \
+        &(const anjay_dm_installed_object_t) { \
+            (ObjPtr)                           \
+        }
+#endif // ANJAY_WITH_THREAD_SAFETY
+
+#pragma GCC poison anjay_attr_storage_is_modified
 
 AVS_UNIT_TEST(attr_storage, instance_create) {
     DM_ATTR_STORAGE_TEST_INIT;
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 42, 0);
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_dm_call_instance_create(anjay, &OBJ, 42, NULL));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_create(
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 42, NULL));
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 0, -42);
-    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_instance_create(anjay, &OBJ, 0, NULL),
+    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_instance_create(
+                                  anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 0, NULL),
                           -42);
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -74,14 +99,15 @@ AVS_UNIT_TEST(attr_storage, resource_read) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 514, 42, ANJAY_ID_INVALID,
                                         0, ANJAY_MOCK_DM_NONE);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read(
-            anjay, &OBJ, 514, 42, ANJAY_ID_INVALID, NULL, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 514, 42, ANJAY_ID_INVALID, NULL,
+            NULL));
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 14, ANJAY_ID_INVALID,
                                         -7, ANJAY_MOCK_DM_NONE);
-    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_resource_read(anjay, &OBJ, 69, 14,
-                                                       ANJAY_ID_INVALID, NULL,
-                                                       NULL),
-                          -7);
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_EQUAL(
+            _anjay_dm_call_resource_read(anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 69,
+                                         14, ANJAY_ID_INVALID, NULL, NULL),
+            -7);
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -90,32 +116,34 @@ AVS_UNIT_TEST(attr_storage, resource_write) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 42, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_NONE, 0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write(
-            anjay, &OBJ, 514, 42, ANJAY_ID_INVALID, NULL, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 514, 42, ANJAY_ID_INVALID, NULL,
+            NULL));
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 14, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_NONE, -7);
-    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_resource_write(anjay, &OBJ, 69, 14,
-                                                        ANJAY_ID_INVALID, NULL,
-                                                        NULL),
-                          -7);
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_EQUAL(
+            _anjay_dm_call_resource_write(anjay_unlocked, WRAP_OBJ_PTR(&OBJ),
+                                          69, 14, ANJAY_ID_INVALID, NULL, NULL),
+            -7);
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
 AVS_UNIT_TEST(attr_storage, resource_execute) {
     DM_ATTR_STORAGE_TEST_INIT;
     avs_stream_inbuf_t null_stream = AVS_STREAM_INBUF_STATIC_INITIALIZER;
-    anjay_execute_ctx_t *ctx =
+    anjay_unlocked_execute_ctx_t *ctx =
             _anjay_execute_ctx_create((avs_stream_t *) &null_stream);
     AVS_UNIT_ASSERT_NOT_NULL(ctx);
     _anjay_mock_dm_expect_resource_execute(anjay, &OBJ, 514, 42, NULL, 0);
-    AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_dm_call_resource_execute(anjay, &OBJ, 514, 42, ctx, NULL));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_execute(
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 514, 42, ctx, NULL));
     _anjay_mock_dm_expect_resource_execute(anjay, &OBJ, 69, 14, NULL, -7);
-    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_resource_execute(anjay, &OBJ, 69, 14,
-                                                          ctx, NULL),
+    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_resource_execute(anjay_unlocked,
+                                                          WRAP_OBJ_PTR(&OBJ),
+                                                          69, 14, ctx, NULL),
                           -7);
     _anjay_execute_ctx_destroy(&ctx);
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -126,7 +154,7 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
 
     // prepare initial state
     AVS_LIST_APPEND(
-            &get_as(anjay)->objects,
+            &get_as(anjay_unlocked)->objects,
             test_object_entry(
                     42,
                     NULL,
@@ -191,7 +219,7 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                             NULL),
                     NULL));
     AVS_LIST_APPEND(
-            &get_as(anjay)->objects,
+            &get_as(anjay_unlocked)->objects,
             test_object_entry(
                     43,
                     NULL,
@@ -285,12 +313,13 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ, 0,
             (const anjay_iid_t[]) { 2, 3, 7, 13, 42, ANJAY_ID_INVALID });
-    AVS_UNIT_ASSERT_SUCCESS(as_notify_callback(anjay, queue, get_as(anjay)));
+    AVS_UNIT_ASSERT_SUCCESS(
+            as_notify_callback(anjay_unlocked, queue, get_as(anjay_unlocked)));
     _anjay_notify_clear_queue(&queue);
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     42,
                     NULL,
@@ -312,24 +341,26 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_1) {
                                     NULL),
                             NULL),
                     NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
 
-    get_as(anjay)->modified_since_persist = false;
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_notify_queue_instance_set_unknown_change(&queue, 2));
-    AVS_UNIT_ASSERT_SUCCESS(as_notify_callback(anjay, queue, get_as(anjay)));
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_SUCCESS(
+            as_notify_callback(anjay_unlocked, queue, get_as(anjay_unlocked)));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     _anjay_notify_clear_queue(&queue);
 
     // error
-    get_as(anjay)->modified_since_persist = false;
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_notify_queue_instance_set_unknown_change(&queue, 42));
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ, -11, (const anjay_iid_t[]) { 7, ANJAY_ID_INVALID });
-    AVS_UNIT_ASSERT_FAILED(as_notify_callback(anjay, queue, get_as(anjay)));
-    AVS_UNIT_ASSERT_NULL(get_as(anjay)->objects);
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FAILED(
+            as_notify_callback(anjay_unlocked, queue, get_as(anjay_unlocked)));
+    AVS_UNIT_ASSERT_NULL(get_as(anjay_unlocked)->objects);
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
     _anjay_notify_clear_queue(&queue);
 
     DM_ATTR_STORAGE_TEST_FINISH;
@@ -339,7 +370,7 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
     DM_ATTR_STORAGE_TEST_INIT;
 
     AVS_LIST_APPEND(
-            &get_as(anjay)->objects,
+            &get_as(anjay_unlocked)->objects,
             test_object_entry(
                     42,
                     test_default_attrlist(
@@ -466,7 +497,7 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
     // /1/9/0 == 514
     // /1/10/0 == 2
     // /1/11/0 == -5 (invalid)
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     _anjay_mock_dm_expect_list_instances(
             anjay, &FAKE_SERVER, 0,
             (const anjay_iid_t[]) { 9, 10, 11, ANJAY_ID_INVALID });
@@ -527,7 +558,7 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
     _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 11, 0,
                                         ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_INT(0, -5));
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ, 0,
             (const anjay_iid_t[]) { 2, 4, 7, 21, 42, ANJAY_ID_INVALID });
@@ -555,13 +586,14 @@ AVS_UNIT_TEST(attr_storage, as_notify_callback_2) {
                     ANJAY_MOCK_DM_RES_END });
     _anjay_mock_dm_expect_list_resources(anjay, &OBJ, 21, -11, NULL);
     _anjay_mock_dm_expect_list_resources(anjay, &OBJ, 42, -514, NULL);
-    AVS_UNIT_ASSERT_FAILED(as_notify_callback(anjay, queue, get_as(anjay)));
+    AVS_UNIT_ASSERT_FAILED(
+            as_notify_callback(anjay_unlocked, queue, get_as(anjay_unlocked)));
     _anjay_notify_clear_queue(&queue);
 
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     42,
                     test_default_attrlist(
@@ -647,13 +679,14 @@ AVS_UNIT_TEST(attr_storage, read_object_default_attrs_proxy) {
     _anjay_mock_dm_expect_object_read_default_attrs(
             anjay, &OBJ, 4, 0, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_read_default_attrs(
-            anjay, &OBJ, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 4, &attrs, NULL));
     assert_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
 
     _anjay_mock_dm_expect_object_read_default_attrs(
             anjay, &OBJ, 42, -413, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_object_read_default_attrs(
-                                  anjay, &OBJ, 42, &attrs, NULL),
+                                  anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 42,
+                                  &attrs, NULL),
                           -413);
 
     _anjay_mock_dm_expect_object_read_default_attrs(
@@ -667,7 +700,7 @@ AVS_UNIT_TEST(attr_storage, read_object_default_attrs_proxy) {
                 }
             });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_read_default_attrs(
-            anjay, &OBJ, 7, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 7, &attrs, NULL));
     assert_attrs_equal(&attrs,
                        &(const anjay_dm_internal_oi_attrs_t) {
                            .standard = {
@@ -695,7 +728,7 @@ AVS_UNIT_TEST(attr_storage, write_object_default_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ, 42,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 42,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 43,
@@ -718,7 +751,7 @@ AVS_UNIT_TEST(attr_storage, write_object_default_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ, 7,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 7,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = ANJAY_ATTRIB_PERIOD_NONE,
@@ -742,7 +775,7 @@ AVS_UNIT_TEST(attr_storage, write_object_default_attrs_proxy) {
             -8888);
     AVS_UNIT_ASSERT_EQUAL(
             _anjay_dm_call_object_write_default_attrs(
-                    anjay, &OBJ, 8,
+                    anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 8,
                     &(const anjay_dm_internal_oi_attrs_t) {
                         .standard = {
                             .min_period = 88,
@@ -766,7 +799,7 @@ AVS_UNIT_TEST(attr_storage, write_object_default_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ, 9,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 9,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 4,
@@ -780,25 +813,27 @@ AVS_UNIT_TEST(attr_storage, write_object_default_attrs_proxy) {
     _anjay_mock_dm_expect_object_write_default_attrs(
             anjay, &OBJ, 9, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ, 9, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 9,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
 
     _anjay_mock_dm_expect_object_write_default_attrs(
             anjay, &OBJ, 11, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ, 11, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 11,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
 
-    AVS_UNIT_ASSERT_NULL(get_as(anjay)->objects);
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_NULL(get_as(anjay_unlocked)->objects);
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
 
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
 AVS_UNIT_TEST(attr_storage, object_default_attrs) {
     DM_ATTR_STORAGE_TEST_INIT;
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ2, 42,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 42,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 43,
@@ -809,10 +844,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ2, 7,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 7,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = ANJAY_ATTRIB_PERIOD_NONE,
@@ -823,14 +858,15 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ2, 8, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 8,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
     // nothing actually changed
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ2, 9,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 9,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 4,
@@ -841,19 +877,21 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ2, 11, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 11,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
     // nothing actually changed
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
-            anjay, &OBJ2, 9, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 9,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
 
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69,
                     test_default_attrlist(
@@ -870,10 +908,10 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
 
     anjay_dm_internal_oi_attrs_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_read_default_attrs(
-            anjay, &OBJ2, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 4, &attrs, NULL));
     assert_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_read_default_attrs(
-            anjay, &OBJ2, 42, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 42, &attrs, NULL));
     assert_attrs_equal(&attrs,
                        &(const anjay_dm_internal_oi_attrs_t) {
                            .standard = {
@@ -885,7 +923,7 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                            _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                        });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_read_default_attrs(
-            anjay, &OBJ2, 7, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 7, &attrs, NULL));
     assert_attrs_equal(&attrs,
                        &(const anjay_dm_internal_oi_attrs_t) {
                            .standard = {
@@ -896,7 +934,7 @@ AVS_UNIT_TEST(attr_storage, object_default_attrs) {
                            },
                            _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                        });
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -907,13 +945,14 @@ AVS_UNIT_TEST(attr_storage, read_instance_default_attrs_proxy) {
     _anjay_mock_dm_expect_instance_read_default_attrs(
             anjay, &OBJ, 5, 4, 0, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
-            anjay, &OBJ, 5, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 5, 4, &attrs, NULL));
     assert_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
 
     _anjay_mock_dm_expect_instance_read_default_attrs(
             anjay, &OBJ, 5, 42, -413, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_instance_read_default_attrs(
-                                  anjay, &OBJ, 5, 42, &attrs, NULL),
+                                  anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 5, 42,
+                                  &attrs, NULL),
                           -413);
 
     _anjay_mock_dm_expect_instance_read_default_attrs(
@@ -927,7 +966,7 @@ AVS_UNIT_TEST(attr_storage, read_instance_default_attrs_proxy) {
                 }
             });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
-            anjay, &OBJ, 7, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 7, 4, &attrs, NULL));
     assert_attrs_equal(&attrs,
                        &(const anjay_dm_internal_oi_attrs_t) {
                            .standard = {
@@ -937,7 +976,7 @@ AVS_UNIT_TEST(attr_storage, read_instance_default_attrs_proxy) {
                                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
                            }
                        });
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -956,7 +995,7 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ, 4, 42,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 4, 42,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 43,
@@ -979,7 +1018,7 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ, 4, 7,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 4, 7,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = ANJAY_ATTRIB_PERIOD_NONE,
@@ -1002,7 +1041,7 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
             },
             -8888);
     AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_instance_write_default_attrs(
-                                  anjay, &OBJ, 8, 7,
+                                  anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 8, 7,
                                   &(const anjay_dm_internal_oi_attrs_t) {
                                       .standard = {
                                           .min_period = 88,
@@ -1026,7 +1065,7 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ, 9, 4,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 9, 4,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 4,
@@ -1040,30 +1079,33 @@ AVS_UNIT_TEST(attr_storage, write_instance_default_attrs_proxy) {
     _anjay_mock_dm_expect_instance_write_default_attrs(
             anjay, &OBJ, 9, 4, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ, 9, 4, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 9, 4,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
 
     _anjay_mock_dm_expect_instance_write_default_attrs(
             anjay, &OBJ, 11, 11, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ, 11, 11, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 11, 11,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
 
-    AVS_UNIT_ASSERT_NULL(get_as(anjay)->objects);
+    AVS_UNIT_ASSERT_NULL(get_as(anjay_unlocked)->objects);
 
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
 AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
     DM_ATTR_STORAGE_TEST_INIT;
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 42, 2, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 42, 2,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
     // nothing actually changed
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
-    AVS_UNIT_ASSERT_NULL(get_as(anjay)->objects);
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
+    AVS_UNIT_ASSERT_NULL(get_as(anjay_unlocked)->objects);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 3, 2,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 2,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 4,
@@ -1074,10 +1116,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 3, 5,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 5,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 7,
@@ -1088,10 +1130,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 9, 5,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 9, 5,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 1,
@@ -1102,10 +1144,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 14, 5,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 14, 5,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = ANJAY_ATTRIB_PERIOD_NONE,
@@ -1116,16 +1158,17 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 9, 5, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 9, 5,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69, NULL,
                     test_instance_entry(
@@ -1155,10 +1198,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
 
     anjay_dm_internal_oi_attrs_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
-            anjay, &OBJ2, 42, 2, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 42, 2, &attrs, NULL));
     assert_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
-            anjay, &OBJ2, 3, 2, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 2, &attrs, NULL));
     assert_attrs_equal(&attrs,
                        &(const anjay_dm_internal_oi_attrs_t) {
                            .standard = {
@@ -1170,7 +1213,7 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                            _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                        });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
-            anjay, &OBJ2, 3, 5, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 5, &attrs, NULL));
     assert_attrs_equal(&attrs,
                        &(const anjay_dm_internal_oi_attrs_t) {
                            .standard = {
@@ -1182,10 +1225,10 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                            _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                        });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
-            anjay, &OBJ2, 9, 5, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 9, 5, &attrs, NULL));
     assert_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_read_default_attrs(
-            anjay, &OBJ2, 14, 5, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 14, 5, &attrs, NULL));
     assert_attrs_equal(&attrs,
                        &(const anjay_dm_internal_oi_attrs_t) {
                            .standard = {
@@ -1197,7 +1240,7 @@ AVS_UNIT_TEST(attr_storage, instance_default_attrs) {
                            _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                        });
 
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -1208,13 +1251,14 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs_proxy) {
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 5, 6, 4, 0,
                                               &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
-            anjay, &OBJ, 5, 6, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 5, 6, 4, &attrs, NULL));
     assert_res_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY);
 
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 5, 7, 42, -413,
                                               &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY);
-    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_resource_read_attrs(anjay, &OBJ, 5, 7,
-                                                             42, &attrs, NULL),
+    AVS_UNIT_ASSERT_EQUAL(_anjay_dm_call_resource_read_attrs(
+                                  anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 5, 7, 42,
+                                  &attrs, NULL),
                           -413);
 
     _anjay_mock_dm_expect_resource_read_attrs(
@@ -1233,7 +1277,7 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs_proxy) {
                 }
             });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
-            anjay, &OBJ, 7, 17, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 7, 17, 4, &attrs, NULL));
     assert_res_attrs_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -1249,7 +1293,7 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs_proxy) {
                     .step = .5
                 }
             });
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -1273,7 +1317,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ, 4, 9, 42,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 4, 9, 42,
             &(const anjay_dm_internal_r_attrs_t) {
                 .standard = {
                     .common = {
@@ -1306,7 +1350,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ, 4, 111, 7,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 4, 111, 7,
             &(const anjay_dm_internal_r_attrs_t) {
                 .standard = {
                     .common = {
@@ -1340,7 +1384,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
             -8888);
     AVS_UNIT_ASSERT_EQUAL(
             _anjay_dm_call_resource_write_attrs(
-                    anjay, &OBJ, 8, 9, 7,
+                    anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 8, 9, 7,
                     &(const anjay_dm_internal_r_attrs_t) {
                         .standard = {
                             .common = {
@@ -1374,7 +1418,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
             },
             0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ, 9, 23, 4,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 9, 23, 4,
             &(const anjay_dm_internal_r_attrs_t) {
                 .standard = {
                     .common = {
@@ -1393,16 +1437,18 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs_proxy) {
     _anjay_mock_dm_expect_resource_write_attrs(
             anjay, &OBJ, 9, 23, 4, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ, 9, 23, 4, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 9, 23, 4,
+            &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
 
     _anjay_mock_dm_expect_resource_write_attrs(
             anjay, &OBJ, 11, 11, 11, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, 0);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ, 11, 11, 11, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ), 11, 11, 11,
+            &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
 
-    AVS_UNIT_ASSERT_NULL(get_as(anjay)->objects);
+    AVS_UNIT_ASSERT_NULL(get_as(anjay_unlocked)->objects);
 
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
@@ -1410,7 +1456,7 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs) {
     DM_ATTR_STORAGE_TEST_INIT;
 
     AVS_LIST_APPEND(
-            &get_as(anjay)->objects,
+            &get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69, NULL,
                     test_instance_entry(
@@ -1426,7 +1472,7 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs) {
 
     anjay_dm_internal_r_attrs_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
-            anjay, &OBJ2, 3, 1, 42, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 1, 42, &attrs, NULL));
     assert_res_attrs_equal(&attrs,
                            &(const anjay_dm_internal_r_attrs_t) {
                                .standard = {
@@ -1443,30 +1489,31 @@ AVS_UNIT_TEST(attr_storage, read_resource_attrs) {
                                _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                            });
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
-            anjay, &OBJ2, 3, 1, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 1, 4, &attrs, NULL));
     assert_res_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
-            anjay, &OBJ2, 3, 2, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 3, 2, 4, &attrs, NULL));
     assert_res_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_read_attrs(
-            anjay, &OBJ2, 2, 2, 4, &attrs, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 2, 4, &attrs, NULL));
     assert_res_attrs_equal(&attrs, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY);
 
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 
 AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
     DM_ATTR_STORAGE_TEST_INIT;
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 5, 3, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 5, 3,
+            &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
     // nothing actually changed
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
-    AVS_UNIT_ASSERT_NULL(get_as(anjay)->objects);
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
+    AVS_UNIT_ASSERT_NULL(get_as(anjay_unlocked)->objects);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 3, 1,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 3, 1,
             &(const anjay_dm_internal_r_attrs_t) {
                 .standard = {
                     .common = {
@@ -1482,12 +1529,12 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69, NULL,
                     test_instance_entry(
@@ -1507,7 +1554,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     NULL));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 5, 3,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 5, 3,
             &(const anjay_dm_internal_r_attrs_t) {
                 .standard = {
                     .common = {
@@ -1523,10 +1570,10 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 3, 5,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 3, 5,
             &(const anjay_dm_internal_r_attrs_t) {
                 .standard = {
                     .common = {
@@ -1542,12 +1589,12 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69, NULL,
                     test_instance_entry(
@@ -1578,7 +1625,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     NULL));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 2, 4,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 4,
             &(const anjay_dm_internal_oi_attrs_t) {
                 .standard = {
                     .min_period = 4,
@@ -1589,20 +1636,22 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 3, 5, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 3, 5,
+            &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 3, 1, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 3, 1,
+            &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69, NULL,
                     test_instance_entry(
@@ -1624,13 +1673,14 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     NULL));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 5, 3, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 5, 3,
+            &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69, NULL,
                     test_instance_entry(
@@ -1646,7 +1696,7 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     NULL));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 3, 5,
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 3, 5,
             &(const anjay_dm_internal_r_attrs_t) {
                 .standard = {
                     .common = {
@@ -1662,16 +1712,17 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             },
             NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
-            anjay, &OBJ2, 2, 4, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 4,
+            &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY, NULL));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
 
-    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay)->objects), 1);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(get_as(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            get_as(anjay)->objects,
+            get_as(anjay_unlocked)->objects,
             test_object_entry(
                     69, NULL,
                     test_instance_entry(
@@ -1687,12 +1738,13 @@ AVS_UNIT_TEST(attr_storage, write_resource_attrs) {
                     NULL));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
-            anjay, &OBJ2, 2, 3, 5, &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
-    AVS_UNIT_ASSERT_TRUE(anjay_attr_storage_is_modified(anjay));
-    get_as(anjay)->modified_since_persist = false;
-    AVS_UNIT_ASSERT_NULL(get_as(anjay)->objects);
+            anjay_unlocked, WRAP_OBJ_PTR(&OBJ2), 2, 3, 5,
+            &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY, NULL));
+    AVS_UNIT_ASSERT_TRUE(get_as(anjay_unlocked)->modified_since_persist);
+    get_as(anjay_unlocked)->modified_since_persist = false;
+    AVS_UNIT_ASSERT_NULL(get_as(anjay_unlocked)->objects);
 
-    AVS_UNIT_ASSERT_FALSE(anjay_attr_storage_is_modified(anjay));
+    AVS_UNIT_ASSERT_FALSE(get_as(anjay_unlocked)->modified_since_persist);
     DM_ATTR_STORAGE_TEST_FINISH;
 }
 

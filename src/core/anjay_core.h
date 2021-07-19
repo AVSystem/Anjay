@@ -43,7 +43,7 @@ typedef struct {
 
 typedef struct {
     unsigned depth;
-    AVS_LIST(const anjay_dm_object_def_t *const *) objs_in_transaction;
+    AVS_LIST(const anjay_dm_installed_object_t *) objs_in_transaction;
 } anjay_transaction_state_t;
 
 typedef struct {
@@ -51,7 +51,13 @@ typedef struct {
     avs_crypto_prng_ctx_t *ctx;
 } anjay_prng_ctx_t;
 
-struct anjay_struct {
+struct
+#ifdef ANJAY_WITH_THREAD_SAFETY
+        anjay_unlocked_struct
+#else  // ANJAY_WITH_THREAD_SAFETY
+        anjay_struct
+#endif // ANJAY_WITH_THREAD_SAFETY
+{
     anjay_transport_set_t online_transports;
 
     avs_net_ssl_version_t dtls_version;
@@ -102,16 +108,16 @@ struct anjay_struct {
 uint8_t _anjay_make_error_response_code(int handler_result);
 
 avs_time_duration_t
-_anjay_max_transmit_wait_for_transport(anjay_t *anjay,
+_anjay_max_transmit_wait_for_transport(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t transport);
 
 avs_time_duration_t
-_anjay_exchange_lifetime_for_transport(anjay_t *anjay,
+_anjay_exchange_lifetime_for_transport(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t transport);
 
-int _anjay_bind_connection(anjay_t *anjay, anjay_connection_ref_t ref);
+int _anjay_bind_connection(anjay_unlocked_t *anjay, anjay_connection_ref_t ref);
 
-void _anjay_release_connection(anjay_t *anjay);
+void _anjay_release_connection(anjay_unlocked_t *anjay);
 
 int _anjay_parse_request(const avs_coap_request_header_t *hdr,
                          anjay_request_t *out_request);

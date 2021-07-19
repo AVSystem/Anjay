@@ -80,7 +80,7 @@ combine_resource_attrs(anjay_dm_internal_r_attrs_t *out,
     combine_value(&out->standard.step, other->standard.step);
 }
 
-static int read_period(anjay_t *anjay,
+static int read_period(anjay_unlocked_t *anjay,
                        anjay_iid_t server_iid,
                        anjay_rid_t rid,
                        int32_t *out) {
@@ -103,7 +103,7 @@ static int read_period(anjay_t *anjay,
     }
 }
 
-static int read_combined_period(anjay_t *anjay,
+static int read_combined_period(anjay_unlocked_t *anjay,
                                 anjay_iid_t server_iid,
                                 anjay_rid_t rid,
                                 int32_t *out) {
@@ -114,7 +114,7 @@ static int read_combined_period(anjay_t *anjay,
     }
 }
 
-static int dm_read_combined_server_attrs(anjay_t *anjay,
+static int dm_read_combined_server_attrs(anjay_unlocked_t *anjay,
                                          anjay_ssid_t ssid,
                                          anjay_dm_internal_oi_attrs_t *out) {
     if (out->standard.min_period >= 0 && out->standard.max_period >= 0) {
@@ -144,8 +144,8 @@ static int dm_read_combined_server_attrs(anjay_t *anjay,
 }
 
 static int
-dm_read_combined_resource_attrs(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj,
+dm_read_combined_resource_attrs(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t *obj,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
                                 anjay_ssid_t ssid,
@@ -163,8 +163,8 @@ dm_read_combined_resource_attrs(anjay_t *anjay,
 }
 
 static int
-dm_read_combined_instance_attrs(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj,
+dm_read_combined_instance_attrs(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t *obj,
                                 anjay_iid_t iid,
                                 anjay_ssid_t ssid,
                                 anjay_dm_internal_oi_attrs_t *out) {
@@ -181,11 +181,10 @@ dm_read_combined_instance_attrs(anjay_t *anjay,
     return 0;
 }
 
-static int
-dm_read_combined_object_attrs(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
-                              anjay_ssid_t ssid,
-                              anjay_dm_internal_oi_attrs_t *out) {
+static int dm_read_combined_object_attrs(anjay_unlocked_t *anjay,
+                                         const anjay_dm_installed_object_t *obj,
+                                         anjay_ssid_t ssid,
+                                         anjay_dm_internal_oi_attrs_t *out) {
     if (!_anjay_dm_attributes_full(out)) {
         anjay_dm_internal_oi_attrs_t objattrs =
                 ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
@@ -246,15 +245,16 @@ bool _anjay_dm_resource_attributes_full(
            && !isnan(attrs->standard.less_than) && !isnan(attrs->standard.step);
 }
 
-int _anjay_dm_effective_attrs(anjay_t *anjay,
+int _anjay_dm_effective_attrs(anjay_unlocked_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
                               anjay_dm_internal_r_attrs_t *out) {
     int result = 0;
     *out = ANJAY_DM_INTERNAL_R_ATTRS_EMPTY;
 
-    if (query->obj && *query->obj) {
-        assert(_anjay_uri_path_normalized(&MAKE_URI_PATH(
-                (*query->obj)->oid, query->iid, query->rid, query->riid)));
+    if (query->obj) {
+        assert(_anjay_uri_path_normalized(
+                &MAKE_URI_PATH(_anjay_dm_installed_object_oid(query->obj),
+                               query->iid, query->rid, query->riid)));
 
         if (query->rid != ANJAY_ID_INVALID) {
             result = dm_read_combined_resource_attrs(anjay, query->obj,

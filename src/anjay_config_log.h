@@ -209,6 +209,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_SMS_MULTIPART
     _anjay_log(anjay, TRACE, "ANJAY_WITH_SMS_MULTIPART = OFF");
 #endif // ANJAY_WITH_SMS_MULTIPART
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_THREAD_SAFETY = ON");
+#else // ANJAY_WITH_THREAD_SAFETY
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_THREAD_SAFETY = OFF");
+#endif // ANJAY_WITH_THREAD_SAFETY
 #ifdef ANJAY_WITH_TRACE_LOGS
     _anjay_log(anjay, TRACE, "ANJAY_WITH_TRACE_LOGS = ON");
 #else // ANJAY_WITH_TRACE_LOGS

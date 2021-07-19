@@ -62,7 +62,7 @@ static void tlv_entry_pop(tlv_in_t *ctx) {
     AVS_LIST_DELETE(&ctx->entries);
 }
 
-static int tlv_get_some_bytes(anjay_input_ctx_t *ctx_,
+static int tlv_get_some_bytes(anjay_unlocked_input_ctx_t *ctx_,
                               size_t *out_bytes_read,
                               bool *out_message_finished,
                               void *out_buf,
@@ -100,7 +100,7 @@ static int tlv_get_some_bytes(anjay_input_ctx_t *ctx_,
     return 0;
 }
 
-static int tlv_read_to_end(anjay_input_ctx_t *ctx,
+static int tlv_read_to_end(anjay_unlocked_input_ctx_t *ctx,
                            size_t *out_bytes_read,
                            void *out_buf,
                            size_t buf_size) {
@@ -121,7 +121,7 @@ static int tlv_read_to_end(anjay_input_ctx_t *ctx,
     return message_finished ? 0 : ANJAY_BUFFER_TOO_SHORT;
 }
 
-static int tlv_read_whole_entry(anjay_input_ctx_t *ctx_,
+static int tlv_read_whole_entry(anjay_unlocked_input_ctx_t *ctx_,
                                 size_t *out_bytes_read,
                                 void *out_buf,
                                 size_t buf_size) {
@@ -141,8 +141,9 @@ static int tlv_read_whole_entry(anjay_input_ctx_t *ctx_,
     return tlv_read_to_end(ctx_, out_bytes_read, out_buf, buf_size);
 }
 
-static int
-tlv_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
+static int tlv_get_string(anjay_unlocked_input_ctx_t *ctx,
+                          char *out_buf,
+                          size_t buf_size) {
     assert(buf_size);
     size_t bytes_read = 0;
     int retval = tlv_read_to_end(ctx, &bytes_read, out_buf, buf_size - 1);
@@ -150,7 +151,7 @@ tlv_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
     return retval;
 }
 
-static int tlv_get_integer(anjay_input_ctx_t *ctx, int64_t *value) {
+static int tlv_get_integer(anjay_unlocked_input_ctx_t *ctx, int64_t *value) {
     uint8_t bytes[8];
     size_t bytes_read = 0;
     int retval;
@@ -166,7 +167,7 @@ static int tlv_get_integer(anjay_input_ctx_t *ctx, int64_t *value) {
     return 0;
 }
 
-static int tlv_get_double(anjay_input_ctx_t *ctx, double *value) {
+static int tlv_get_double(anjay_unlocked_input_ctx_t *ctx, double *value) {
     union {
         uint32_t f32;
         uint64_t f64;
@@ -188,7 +189,7 @@ static int tlv_get_double(anjay_input_ctx_t *ctx, double *value) {
     }
 }
 
-static int tlv_get_bool(anjay_input_ctx_t *ctx, bool *value) {
+static int tlv_get_bool(anjay_unlocked_input_ctx_t *ctx, bool *value) {
     char raw;
     size_t bytes_read = 0;
     int retval = tlv_read_whole_entry(ctx, &bytes_read, &raw, 1);
@@ -209,7 +210,7 @@ static int tlv_get_bool(anjay_input_ctx_t *ctx, bool *value) {
     }
 }
 
-static int tlv_get_objlnk(anjay_input_ctx_t *ctx,
+static int tlv_get_objlnk(anjay_unlocked_input_ctx_t *ctx,
                           anjay_oid_t *out_oid,
                           anjay_iid_t *out_iid) {
     AVS_STATIC_ASSERT(sizeof(uint16_t[2]) == 4, uint16_t_array_size);
@@ -306,7 +307,7 @@ static int get_id(tlv_in_t *ctx,
     return 0;
 }
 
-static int tlv_get_path(anjay_input_ctx_t *ctx,
+static int tlv_get_path(anjay_unlocked_input_ctx_t *ctx,
                         anjay_uri_path_t *out_path,
                         bool *out_is_array) {
     tlv_in_t *in = (tlv_in_t *) ctx;
@@ -361,7 +362,7 @@ static int tlv_get_path(anjay_input_ctx_t *ctx,
     return result;
 }
 
-static int tlv_next_entry(anjay_input_ctx_t *ctx) {
+static int tlv_next_entry(anjay_unlocked_input_ctx_t *ctx) {
     tlv_in_t *in = (tlv_in_t *) ctx;
     if (!in->has_path) {
         // Next entry is already available and should be processed.
@@ -390,7 +391,7 @@ static int tlv_next_entry(anjay_input_ctx_t *ctx) {
     return 0;
 }
 
-static int tlv_update_root_path(anjay_input_ctx_t *ctx_,
+static int tlv_update_root_path(anjay_unlocked_input_ctx_t *ctx_,
                                 const anjay_uri_path_t *root_path) {
     tlv_in_t *ctx = (tlv_in_t *) ctx_;
     anjay_uri_path_t new_path = (root_path ? *root_path : MAKE_ROOT_PATH());
@@ -412,7 +413,7 @@ static int tlv_update_root_path(anjay_input_ctx_t *ctx_,
     return 0;
 }
 
-static int tlv_in_close(anjay_input_ctx_t *ctx_) {
+static int tlv_in_close(anjay_unlocked_input_ctx_t *ctx_) {
     tlv_in_t *ctx = (tlv_in_t *) ctx_;
     if (ctx->entries && !ctx->finished) {
         LOG(DEBUG, _("input context is destroyed but not fully processed yet"));
@@ -434,11 +435,11 @@ static const anjay_input_ctx_vtable_t TLV_IN_VTABLE = {
     .close = tlv_in_close
 };
 
-int _anjay_input_tlv_create(anjay_input_ctx_t **out,
+int _anjay_input_tlv_create(anjay_unlocked_input_ctx_t **out,
                             avs_stream_t **stream_ptr,
                             const anjay_uri_path_t *request_uri) {
     tlv_in_t *ctx = (tlv_in_t *) avs_calloc(1, sizeof(tlv_in_t));
-    *out = (anjay_input_ctx_t *) ctx;
+    *out = (anjay_unlocked_input_ctx_t *) ctx;
     if (!ctx) {
         return -1;
     }

@@ -119,8 +119,8 @@ request_attrs_empty(const anjay_request_attributes_t *attrs) {
 }
 
 static int
-dm_write_resource_attrs(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj,
+dm_write_resource_attrs(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj,
                         anjay_iid_t iid,
                         anjay_rid_t rid,
                         const anjay_request_attributes_t *attributes) {
@@ -145,8 +145,8 @@ dm_write_resource_attrs(anjay_t *anjay,
 }
 
 static int
-dm_write_instance_attrs(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj,
+dm_write_instance_attrs(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj,
                         anjay_iid_t iid,
                         const anjay_request_attributes_t *attributes) {
     anjay_dm_internal_oi_attrs_t attrs = ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
@@ -165,8 +165,8 @@ dm_write_instance_attrs(anjay_t *anjay,
     return result;
 }
 
-static int dm_write_object_attrs(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj,
+static int dm_write_object_attrs(anjay_unlocked_t *anjay,
+                                 const anjay_dm_installed_object_t *obj,
                                  const anjay_request_attributes_t *attributes) {
     anjay_dm_internal_oi_attrs_t attrs = ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
     int result = _anjay_dm_call_object_read_default_attrs(
@@ -183,8 +183,8 @@ static int dm_write_object_attrs(anjay_t *anjay,
     return result;
 }
 
-int _anjay_dm_write_attributes(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_write_attributes(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t *obj,
                                const anjay_request_t *request) {
     dm_log(LAZY_DEBUG, _("Write Attributes ") "%s",
            ANJAY_DEBUG_MAKE_PATH(&request->uri));

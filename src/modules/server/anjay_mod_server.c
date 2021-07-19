@@ -23,6 +23,9 @@
 
 #    include <avsystem/commons/avs_utils.h>
 
+#    include <anjay/server.h>
+
+#    include <anjay_modules/anjay_bootstrap.h>
 #    include <anjay_modules/anjay_dm_utils.h>
 #    include <anjay_modules/anjay_servers.h>
 
@@ -159,21 +162,21 @@ static int del_instance(server_repr_t *repr, anjay_iid_t iid) {
     return ANJAY_ERR_NOT_FOUND;
 }
 
-static int serv_list_instances(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
-                               anjay_dm_list_ctx_t *ctx) {
+static int serv_list_instances(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t obj_ptr,
+                               anjay_unlocked_dm_list_ctx_t *ctx) {
     (void) anjay;
 
     server_repr_t *repr = _anjay_serv_get(obj_ptr);
     AVS_LIST(server_instance_t) it;
     AVS_LIST_FOREACH(it, repr->instances) {
-        anjay_dm_emit(ctx, it->iid);
+        _anjay_dm_emit_unlocked(ctx, it->iid);
     }
     return 0;
 }
 
-static int serv_instance_create(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
+static int serv_instance_create(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t obj_ptr,
                                 anjay_iid_t iid) {
     (void) anjay;
     server_repr_t *repr = _anjay_serv_get(obj_ptr);
@@ -193,15 +196,15 @@ static int serv_instance_create(anjay_t *anjay,
     return 0;
 }
 
-static int serv_instance_remove(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj_ptr,
+static int serv_instance_remove(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t obj_ptr,
                                 anjay_iid_t iid) {
     (void) anjay;
     return del_instance(_anjay_serv_get(obj_ptr), iid);
 }
 
-static int serv_instance_reset(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
+static int serv_instance_reset(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t obj_ptr,
                                anjay_iid_t iid) {
     (void) anjay;
     server_instance_t *inst = find_instance(_anjay_serv_get(obj_ptr), iid);
@@ -215,49 +218,55 @@ static int serv_instance_reset(anjay_t *anjay,
     return 0;
 }
 
-static int serv_list_resources(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
+static int serv_list_resources(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t obj_ptr,
                                anjay_iid_t iid,
-                               anjay_dm_resource_list_ctx_t *ctx) {
+                               anjay_unlocked_dm_resource_list_ctx_t *ctx) {
     (void) anjay;
     const server_instance_t *inst =
             find_instance(_anjay_serv_get(obj_ptr), iid);
     assert(inst);
 
-    anjay_dm_emit_res(ctx, SERV_RES_SSID, ANJAY_DM_RES_R, ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SERV_RES_LIFETIME, ANJAY_DM_RES_RW,
-                      inst->has_lifetime ? ANJAY_DM_RES_PRESENT
-                                         : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SERV_RES_DEFAULT_MIN_PERIOD, ANJAY_DM_RES_RW,
-                      inst->has_default_min_period ? ANJAY_DM_RES_PRESENT
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_SSID, ANJAY_DM_RES_R,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_LIFETIME, ANJAY_DM_RES_RW,
+                                inst->has_lifetime ? ANJAY_DM_RES_PRESENT
                                                    : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SERV_RES_DEFAULT_MAX_PERIOD, ANJAY_DM_RES_RW,
-                      inst->has_default_max_period ? ANJAY_DM_RES_PRESENT
-                                                   : ANJAY_DM_RES_ABSENT);
-#    ifndef ANJAY_WITHOUT_DEREGISTER
-    anjay_dm_emit_res(ctx, SERV_RES_DISABLE, ANJAY_DM_RES_E,
-                      ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SERV_RES_DISABLE_TIMEOUT, ANJAY_DM_RES_RW,
-                      inst->has_disable_timeout ? ANJAY_DM_RES_PRESENT
-                                                : ANJAY_DM_RES_ABSENT);
-#    endif // ANJAY_WITHOUT_DEREGISTER
-    anjay_dm_emit_res(ctx,
-                      SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE,
-                      ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SERV_RES_BINDING, ANJAY_DM_RES_RW,
-                      inst->has_binding ? ANJAY_DM_RES_PRESENT
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DEFAULT_MIN_PERIOD,
+                                ANJAY_DM_RES_RW,
+                                inst->has_default_min_period
+                                        ? ANJAY_DM_RES_PRESENT
                                         : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SERV_RES_REGISTRATION_UPDATE_TRIGGER, ANJAY_DM_RES_E,
-                      ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DEFAULT_MAX_PERIOD,
+                                ANJAY_DM_RES_RW,
+                                inst->has_default_max_period
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+#    ifndef ANJAY_WITHOUT_DEREGISTER
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DISABLE, ANJAY_DM_RES_E,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DISABLE_TIMEOUT, ANJAY_DM_RES_RW,
+                                inst->has_disable_timeout
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+#    endif // ANJAY_WITHOUT_DEREGISTER
+    _anjay_dm_emit_res_unlocked(
+            ctx, SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE,
+            ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_BINDING, ANJAY_DM_RES_RW,
+                                inst->has_binding ? ANJAY_DM_RES_PRESENT
+                                                  : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_REGISTRATION_UPDATE_TRIGGER,
+                                ANJAY_DM_RES_E, ANJAY_DM_RES_PRESENT);
     return 0;
 }
 
-static int serv_read(anjay_t *anjay,
-                     const anjay_dm_object_def_t *const *obj_ptr,
+static int serv_read(anjay_unlocked_t *anjay,
+                     const anjay_dm_installed_object_t obj_ptr,
                      anjay_iid_t iid,
                      anjay_rid_t rid,
                      anjay_riid_t riid,
-                     anjay_output_ctx_t *ctx) {
+                     anjay_unlocked_output_ctx_t *ctx) {
     (void) anjay;
     (void) riid;
     assert(riid == ANJAY_ID_INVALID);
@@ -268,21 +277,21 @@ static int serv_read(anjay_t *anjay,
 
     switch ((server_rid_t) rid) {
     case SERV_RES_SSID:
-        return anjay_ret_i32(ctx, inst->ssid);
+        return _anjay_ret_i64_unlocked(ctx, inst->ssid);
     case SERV_RES_LIFETIME:
-        return anjay_ret_i32(ctx, inst->lifetime);
+        return _anjay_ret_i64_unlocked(ctx, inst->lifetime);
     case SERV_RES_DEFAULT_MIN_PERIOD:
-        return anjay_ret_i32(ctx, inst->default_min_period);
+        return _anjay_ret_i64_unlocked(ctx, inst->default_min_period);
     case SERV_RES_DEFAULT_MAX_PERIOD:
-        return anjay_ret_i32(ctx, inst->default_max_period);
+        return _anjay_ret_i64_unlocked(ctx, inst->default_max_period);
 #    ifndef ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_DISABLE_TIMEOUT:
-        return anjay_ret_i32(ctx, inst->disable_timeout);
+        return _anjay_ret_i64_unlocked(ctx, inst->disable_timeout);
 #    endif // ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE:
-        return anjay_ret_bool(ctx, inst->notification_storing);
+        return _anjay_ret_bool_unlocked(ctx, inst->notification_storing);
     case SERV_RES_BINDING:
-        return anjay_ret_string(ctx, inst->binding.data);
+        return _anjay_ret_string_unlocked(ctx, inst->binding.data);
     default:
         AVS_UNREACHABLE(
                 "Read called on unknown or non-readable Server resource");
@@ -290,12 +299,12 @@ static int serv_read(anjay_t *anjay,
     }
 }
 
-static int serv_write(anjay_t *anjay,
-                      const anjay_dm_object_def_t *const *obj_ptr,
+static int serv_write(anjay_unlocked_t *anjay,
+                      const anjay_dm_installed_object_t obj_ptr,
                       anjay_iid_t iid,
                       anjay_rid_t rid,
                       anjay_riid_t riid,
-                      anjay_input_ctx_t *ctx) {
+                      anjay_unlocked_input_ctx_t *ctx) {
     (void) anjay;
     (void) riid;
     assert(riid == ANJAY_ID_INVALID);
@@ -314,7 +323,7 @@ static int serv_write(anjay_t *anjay,
         }
         return retval;
     case SERV_RES_LIFETIME:
-        if (!(retval = anjay_get_i32(ctx, &inst->lifetime))) {
+        if (!(retval = _anjay_get_i32_unlocked(ctx, &inst->lifetime))) {
             inst->has_lifetime = true;
         }
         return retval;
@@ -344,7 +353,8 @@ static int serv_write(anjay_t *anjay,
         }
         return retval;
     case SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE:
-        if (!(retval = anjay_get_bool(ctx, &inst->notification_storing))) {
+        if (!(retval = _anjay_get_bool_unlocked(ctx,
+                                                &inst->notification_storing))) {
             inst->has_notification_storing = true;
         }
         return retval;
@@ -355,11 +365,11 @@ static int serv_write(anjay_t *anjay,
     }
 }
 
-static int serv_execute(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj_ptr,
+static int serv_execute(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t obj_ptr,
                         anjay_iid_t iid,
                         anjay_rid_t rid,
-                        anjay_execute_ctx_t *ctx) {
+                        anjay_unlocked_execute_ctx_t *ctx) {
     (void) anjay;
     (void) obj_ptr;
     (void) ctx;
@@ -372,12 +382,12 @@ static int serv_execute(anjay_t *anjay,
         avs_time_duration_t disable_timeout = avs_time_duration_from_scalar(
                 inst->has_disable_timeout ? inst->disable_timeout : 86400,
                 AVS_TIME_S);
-        return anjay_disable_server_with_timeout(anjay, inst->ssid,
-                                                 disable_timeout);
+        return _anjay_disable_server_with_timeout_unlocked(anjay, inst->ssid,
+                                                           disable_timeout);
     }
 #    endif // ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_REGISTRATION_UPDATE_TRIGGER:
-        return anjay_schedule_registration_update(anjay, inst->ssid)
+        return _anjay_schedule_registration_update_unlocked(anjay, inst->ssid)
                        ? ANJAY_ERR_BAD_REQUEST
                        : 0;
     default:
@@ -389,34 +399,33 @@ static int serv_execute(anjay_t *anjay,
     return ANJAY_ERR_NOT_IMPLEMENTED;
 }
 
-static int serv_transaction_begin(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr) {
+static int serv_transaction_begin(anjay_unlocked_t *anjay,
+                                  const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_serv_transaction_begin_impl(_anjay_serv_get(obj_ptr));
 }
 
-static int
-serv_transaction_commit(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj_ptr) {
+static int serv_transaction_commit(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_serv_transaction_commit_impl(_anjay_serv_get(obj_ptr));
 }
 
 static int
-serv_transaction_validate(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj_ptr) {
+serv_transaction_validate(anjay_unlocked_t *anjay,
+                          const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_serv_transaction_validate_impl(_anjay_serv_get(obj_ptr));
 }
 
 static int
-serv_transaction_rollback(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj_ptr) {
+serv_transaction_rollback(anjay_unlocked_t *anjay,
+                          const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_serv_transaction_rollback_impl(_anjay_serv_get(obj_ptr));
 }
 
-static const anjay_dm_object_def_t SERVER = {
+static const anjay_unlocked_dm_object_def_t SERVER = {
     .oid = ANJAY_DM_OID_SERVER,
     .handlers = {
         .list_instances = serv_list_instances,
@@ -434,41 +443,43 @@ static const anjay_dm_object_def_t SERVER = {
     }
 };
 
-server_repr_t *_anjay_serv_get(const anjay_dm_object_def_t *const *obj_ptr) {
-    assert(obj_ptr && *obj_ptr == &SERVER);
-    return AVS_CONTAINER_OF(obj_ptr, server_repr_t, def);
+server_repr_t *_anjay_serv_get(const anjay_dm_installed_object_t obj_ptr) {
+    const anjay_unlocked_dm_object_def_t *const *unlocked_def =
+            _anjay_dm_installed_object_get_unlocked(&obj_ptr);
+    assert(*unlocked_def == &SERVER);
+    return AVS_CONTAINER_OF(unlocked_def, server_repr_t, def);
 }
 
-int anjay_server_object_add_instance(anjay_t *anjay,
+int anjay_server_object_add_instance(anjay_t *anjay_locked,
                                      const anjay_server_instance_t *instance,
                                      anjay_iid_t *inout_iid) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *obj_ptr =
+    assert(anjay_locked);
+    int retval = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj_ptr =
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(obj_ptr);
-
+    server_repr_t *repr = obj_ptr ? _anjay_serv_get(*obj_ptr) : NULL;
     if (!repr) {
         server_log(ERROR, _("Server object is not registered"));
-        return -1;
-    }
+        retval = -1;
+    } else {
+        const bool modified_since_persist = repr->modified_since_persist;
+        if (!(retval = add_instance(repr, instance, inout_iid))
+                && (retval = _anjay_serv_object_validate(repr))) {
+            (void) del_instance(repr, *inout_iid);
+            if (!modified_since_persist) {
+                /* validation failed and so in the end no instace is added */
+                _anjay_serv_clear_modified(repr);
+            }
+        }
 
-    const bool modified_since_persist = repr->modified_since_persist;
-    int retval = add_instance(repr, instance, inout_iid);
-    if (!retval && (retval = _anjay_serv_object_validate(repr))) {
-        (void) del_instance(repr, *inout_iid);
-        if (!modified_since_persist) {
-            /* validation failed and so in the end no instace is added */
-            _anjay_serv_clear_modified(repr);
+        if (!retval) {
+            if (_anjay_notify_instances_changed_unlocked(anjay, SERVER.oid)) {
+                server_log(WARNING, _("Could not schedule socket reload"));
+            }
         }
     }
-
-    if (!retval) {
-        if (anjay_notify_instances_changed(anjay, SERVER.oid)) {
-            server_log(WARNING, _("Could not schedule socket reload"));
-        }
-    }
-
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return retval;
 }
 
@@ -482,39 +493,40 @@ static void server_purge(server_repr_t *repr) {
 
 static void server_delete(void *repr) {
     server_purge((server_repr_t *) repr);
-    avs_free(repr);
+    // NOTE: repr itself will be freed when cleaning the objects list
 }
 
-void anjay_server_object_purge(anjay_t *anjay) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *server_obj =
+void anjay_server_object_purge(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *server_obj =
             _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(server_obj);
+    server_repr_t *repr = server_obj ? _anjay_serv_get(*server_obj) : NULL;
 
     if (!repr) {
         server_log(ERROR, _("Server object is not registered"));
-        return;
+    } else {
+        server_purge(repr);
+        if (_anjay_notify_instances_changed_unlocked(anjay, SERVER.oid)) {
+            server_log(WARNING, _("Could not schedule socket reload"));
+        }
     }
-
-    server_purge(repr);
-
-    if (anjay_notify_instances_changed(anjay, SERVER.oid)) {
-        server_log(WARNING, _("Could not schedule socket reload"));
-    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
-AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay) {
-    assert(anjay);
-    const anjay_dm_object_def_t *const *server_obj =
-            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
-    server_repr_t *repr = _anjay_serv_get(server_obj);
+AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay_locked) {
+    assert(anjay_locked);
     AVS_LIST(server_instance_t) source = NULL;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+    server_repr_t *repr = _anjay_serv_get(*server_obj);
     if (_anjay_dm_transaction_object_included(anjay, server_obj)) {
         source = repr->saved_instances;
     } else {
         source = repr->instances;
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     // We rely on the fact that the "ssid" field is first in server_instance_t,
     // which means that both "source" and "&source->ssid" point to exactly the
     // same memory location. The "next" pointer location in AVS_LIST is
@@ -524,49 +536,58 @@ AVS_LIST(const anjay_ssid_t) anjay_server_get_ssids(anjay_t *anjay) {
     return &source->ssid;
 }
 
-bool anjay_server_object_is_modified(anjay_t *anjay) {
-    assert(anjay);
-
-    server_repr_t *repr =
-            _anjay_serv_get(_anjay_dm_find_object_by_oid(anjay, SERVER.oid));
-    if (!repr) {
+bool anjay_server_object_is_modified(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    bool result = false;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+    if (!server_obj) {
         server_log(ERROR, _("Server object is not registered"));
-        return false;
+    } else {
+        server_repr_t *repr = _anjay_serv_get(*server_obj);
+        if (repr->in_transaction) {
+            result = repr->saved_modified_since_persist;
+        } else {
+            result = repr->modified_since_persist;
+        }
     }
-    return repr->in_transaction ? repr->saved_modified_since_persist
-                                : repr->modified_since_persist;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 static const anjay_dm_module_t SERVER_MODULE = {
     .deleter = server_delete
 };
 
-int anjay_server_object_install(anjay_t *anjay) {
-    assert(anjay);
-
-    server_repr_t *repr =
-            (server_repr_t *) avs_calloc(1, sizeof(server_repr_t));
+int anjay_server_object_install(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    AVS_LIST(server_repr_t) repr = AVS_LIST_NEW_ELEMENT(server_repr_t);
     if (!repr) {
         server_log(ERROR, _("out of memory"));
-        return -1;
+    } else {
+        repr->def = &SERVER;
+        _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);
+        if (!_anjay_dm_module_install(anjay, &SERVER_MODULE, repr)) {
+            AVS_STATIC_ASSERT(offsetof(server_repr_t, def_ptr) == 0,
+                              def_ptr_is_first_field);
+            AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
+            if (_anjay_register_object_unlocked(anjay, &entry)) {
+                result = _anjay_dm_module_uninstall(anjay, &SERVER_MODULE);
+                assert(!result);
+                result = -1;
+            } else {
+                result = 0;
+            }
+        }
+        if (result) {
+            AVS_LIST_CLEAR(&repr);
+        }
     }
-
-    repr->def = &SERVER;
-
-    if (_anjay_dm_module_install(anjay, &SERVER_MODULE, repr)) {
-        avs_free(repr);
-        return -1;
-    }
-
-    if (anjay_register_object(anjay, &repr->def)) {
-        // this will free repr
-        int result = _anjay_dm_module_uninstall(anjay, &SERVER_MODULE);
-        assert(!result);
-        (void) result;
-        return -1;
-    }
-
-    return 0;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 #    ifdef ANJAY_TEST

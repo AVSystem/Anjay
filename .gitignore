@@ -34,6 +34,7 @@ posix-config.h
 anjay-*.cmake
 Doxyfile
 /doc/sphinx/source/conf.py
+tests/integration/run_tests.sh
 tests/integration/framework/nsh-lwm2m/pymbedtls/build/
 
 # other

@@ -24,6 +24,7 @@
 
 #include <anjay/security.h>
 
+#include <anjay_modules/anjay_dm_utils.h>
 #include <anjay_modules/anjay_raw_buffer.h>
 #include <anjay_modules/anjay_utils_core.h>
 
@@ -82,7 +83,8 @@ typedef struct {
 } sec_instance_t;
 
 typedef struct {
-    const anjay_dm_object_def_t *def;
+    anjay_dm_installed_object_t def_ptr;
+    const anjay_unlocked_dm_object_def_t *def;
     AVS_LIST(sec_instance_t) instances;
     AVS_LIST(sec_instance_t) saved_instances;
     bool modified_since_persist;

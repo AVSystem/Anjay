@@ -42,9 +42,10 @@ typedef struct {
 
 #endif // ANJAY_WITH_NET_STATS
 
-void _anjay_coap_ctx_cleanup(anjay_t *anjay, avs_coap_ctx_t **ctx);
+void _anjay_coap_ctx_cleanup(anjay_unlocked_t *anjay, avs_coap_ctx_t **ctx);
 
-avs_error_t _anjay_socket_cleanup(anjay_t *anjay, avs_net_socket_t **socket);
+avs_error_t _anjay_socket_cleanup(anjay_unlocked_t *anjay,
+                                  avs_net_socket_t **socket);
 
 VISIBILITY_PRIVATE_HEADER_END
 

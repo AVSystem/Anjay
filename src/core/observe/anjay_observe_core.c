@@ -369,7 +369,10 @@ create_observation_value(const anjay_msg_details_t *details,
     for (size_t i = 0; i < values_count; ++i) {
         assert(values);
         assert(values[i]);
-        result->values[i] = _anjay_batch_acquire(values[i]);
+        if (!(result->values[i] = _anjay_batch_acquire(values[i]))) {
+            AVS_LIST_CLEAR(&result);
+            break;
+        }
     }
     return result;
 }
@@ -496,7 +499,7 @@ static int insert_error(anjay_observe_connection_entry_t *conn_state,
                             &timestamp, NULL);
 }
 
-static int get_effective_attrs(anjay_t *anjay,
+static int get_effective_attrs(anjay_unlocked_t *anjay,
                                anjay_dm_internal_r_attrs_t *out_attrs,
                                const anjay_uri_path_t *path,
                                anjay_ssid_t ssid) {
@@ -512,7 +515,7 @@ static int get_effective_attrs(anjay_t *anjay,
         .with_server_level_attrs = true
     };
 
-    if (details.obj && *details.obj && _anjay_uri_path_has(path, ANJAY_ID_IID)
+    if (details.obj && _anjay_uri_path_has(path, ANJAY_ID_IID)
             && !_anjay_dm_verify_instance_present(anjay, details.obj,
                                                   path->ids[ANJAY_ID_IID])) {
         details.iid = path->ids[ANJAY_ID_IID];
@@ -784,8 +787,8 @@ put_entry_into_connection_state(const anjay_request_t *request,
     return observation;
 }
 
-static int read_as_batch(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj_ptr,
+static int read_as_batch(anjay_unlocked_t *anjay,
+                         const anjay_dm_installed_object_t *obj_ptr,
                          const anjay_dm_path_info_t *path_info,
                          anjay_request_action_t action,
                          anjay_ssid_t connection_ssid,
@@ -835,7 +838,7 @@ static int write_notify_payload(size_t payload_offset,
         return -1;
     }
 
-    anjay_t *anjay = _anjay_from_server(conn->conn_ref.server);
+    anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
     anjay_observation_value_t *value = conn->unsent;
     anjay_observation_t *observation = value->ref;
 
@@ -879,7 +882,7 @@ static int write_notify_payload(size_t payload_offset,
 }
 
 static anjay_msg_details_t
-initial_response_details(anjay_t *anjay,
+initial_response_details(anjay_unlocked_t *anjay,
                          const anjay_request_t *request,
                          const anjay_batch_t *const *values) {
     bool requires_hierarchical_format;
@@ -895,7 +898,7 @@ initial_response_details(anjay_t *anjay,
                     ->lwm2m_version);
 }
 
-static int send_initial_response(anjay_t *anjay,
+static int send_initial_response(anjay_unlocked_t *anjay,
                                  const anjay_msg_details_t *details,
                                  const anjay_request_t *request,
                                  size_t values_count,
@@ -909,7 +912,7 @@ static int send_initial_response(anjay_t *anjay,
 
     anjay_uri_path_t root_path = request->uri;
 
-    anjay_output_ctx_t *out_ctx = NULL;
+    anjay_unlocked_output_ctx_t *out_ctx = NULL;
     int result =
             _anjay_output_dynamic_construct(&out_ctx, notify_stream, &root_path,
                                             details->format, request->action);
@@ -941,13 +944,13 @@ static void delete_batch_array(anjay_batch_t ***batches_ptr,
     *batches_ptr = NULL;
 }
 
-static int read_observation_path(anjay_t *anjay,
+static int read_observation_path(anjay_unlocked_t *anjay,
                                  const anjay_uri_path_t *path,
                                  anjay_request_action_t action,
                                  anjay_ssid_t connection_ssid,
                                  const avs_time_real_t *timestamp,
                                  anjay_batch_t **out_batch) {
-    const anjay_dm_object_def_t *const *obj = NULL;
+    const anjay_dm_installed_object_t *obj = NULL;
     if (_anjay_uri_path_has(path, ANJAY_ID_OID)) {
         obj = _anjay_dm_find_object_by_oid(anjay, path->ids[ANJAY_ID_OID]);
     }
@@ -959,7 +962,7 @@ static int read_observation_path(anjay_t *anjay,
     return result;
 }
 
-static int read_observation_values(anjay_t *anjay,
+static int read_observation_values(anjay_unlocked_t *anjay,
                                    const paths_arg_t *paths,
                                    anjay_request_action_t action,
                                    anjay_ssid_t connection_ssid,
@@ -1011,7 +1014,7 @@ static int read_observation_values(anjay_t *anjay,
     return result;
 }
 
-static int observe_handle(anjay_t *anjay,
+static int observe_handle(anjay_unlocked_t *anjay,
                           const paths_arg_t *paths,
                           const anjay_request_t *request) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
@@ -1068,7 +1071,8 @@ static int observe_handle(anjay_t *anjay,
     return result;
 }
 
-int _anjay_observe_handle(anjay_t *anjay, const anjay_request_t *request) {
+int _anjay_observe_handle(anjay_unlocked_t *anjay,
+                          const anjay_request_t *request) {
     assert(request->action == ANJAY_ACTION_READ);
     return observe_handle(anjay,
                           &(const paths_arg_t) {
@@ -1079,7 +1083,7 @@ int _anjay_observe_handle(anjay_t *anjay, const anjay_request_t *request) {
                           request);
 }
 
-static int observe_gc_ssid_iterate(anjay_t *anjay,
+static int observe_gc_ssid_iterate(anjay_unlocked_t *anjay,
                                    anjay_ssid_t ssid,
                                    void *conn_ptr_ptr_) {
     (void) anjay;
@@ -1096,7 +1100,7 @@ static int observe_gc_ssid_iterate(anjay_t *anjay,
     return 0;
 }
 
-void _anjay_observe_gc(anjay_t *anjay) {
+void _anjay_observe_gc(anjay_unlocked_t *anjay) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             &anjay->observe.connection_entries;
     _anjay_servers_foreach_ssid(anjay, observe_gc_ssid_iterate, &conn_ptr);
@@ -1164,7 +1168,7 @@ static bool should_update(const anjay_uri_path_t *path,
 }
 
 static bool confirmable_required(const anjay_observe_connection_entry_t *conn) {
-    anjay_t *anjay = _anjay_from_server(conn->conn_ref.server);
+    anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
     anjay_socket_transport_t transport =
             _anjay_connection_transport(conn->conn_ref);
     anjay_observation_t *observation = conn->unsent->ref;
@@ -1187,7 +1191,7 @@ static void value_sent(anjay_observe_connection_entry_t *conn_state) {
 }
 
 static bool notification_storing_enabled(anjay_connection_ref_t conn_ref) {
-    anjay_t *anjay = _anjay_from_server(conn_ref.server);
+    anjay_unlocked_t *anjay = _anjay_from_server(conn_ref.server);
     anjay_iid_t server_iid;
     if (!_anjay_find_server_iid(anjay, _anjay_server_ssid(conn_ref.server),
                                 &server_iid)) {
@@ -1223,7 +1227,7 @@ static int schedule_all_triggers(anjay_observe_connection_entry_t *conn) {
     return result;
 }
 
-static bool connection_exists(anjay_t *anjay,
+static bool connection_exists(anjay_unlocked_t *anjay,
                               anjay_observe_connection_entry_t *conn) {
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             (AVS_LIST(anjay_observe_connection_entry_t) *) AVS_LIST_FIND_PTR(
@@ -1484,7 +1488,7 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
         return 0;
     }
 
-    anjay_t *anjay = _anjay_from_server(conn_state->conn_ref.server);
+    anjay_unlocked_t *anjay = _anjay_from_server(conn_state->conn_ref.server);
     anjay_ssid_t ssid = _anjay_server_ssid(conn_state->conn_ref.server);
     anjay_batch_t **batches = NULL;
     bool should_update_batch = false;
@@ -1527,8 +1531,11 @@ update_notification_value(anjay_observe_connection_entry_t *conn_state,
                       attrs.standard.common.min_eval_period,
                       ANJAY_DEBUG_MAKE_PATH(&observation->paths[i]));
             // Do not even call read_handler, just copy previous value
-            batches[i] =
-                    _anjay_batch_acquire(newest_value(observation)->values[i]);
+            if (!(batches[i] = _anjay_batch_acquire(
+                          newest_value(observation)->values[i]))) {
+                result = -1;
+                goto finish;
+            }
         }
 
         if (!should_update_batch
@@ -1748,7 +1755,7 @@ finish:
     return retval == ANJAY_FOREACH_BREAK ? 0 : retval;
 }
 
-static int observe_notify_impl(anjay_t *anjay,
+static int observe_notify_impl(anjay_unlocked_t *anjay,
                                const anjay_uri_path_t *path,
                                anjay_ssid_t ssid,
                                bool invert_server_match,
@@ -1768,7 +1775,7 @@ static int observe_notify_impl(anjay_t *anjay,
     return result;
 }
 
-int _anjay_observe_notify(anjay_t *anjay,
+int _anjay_observe_notify(anjay_unlocked_t *anjay,
                           const anjay_uri_path_t *path,
                           anjay_ssid_t ssid,
                           bool invert_ssid_match) {
@@ -1800,10 +1807,11 @@ static int get_observe_status(anjay_observe_connection_entry_t *connection,
     return 0;
 }
 
-anjay_resource_observation_status_t _anjay_observe_status(anjay_t *anjay,
-                                                          anjay_oid_t oid,
-                                                          anjay_iid_t iid,
-                                                          anjay_rid_t rid) {
+anjay_resource_observation_status_t
+_anjay_observe_status(anjay_unlocked_t *anjay,
+                      anjay_oid_t oid,
+                      anjay_iid_t iid,
+                      anjay_rid_t rid) {
     assert(oid != ANJAY_ID_INVALID);
     assert(iid != ANJAY_ID_INVALID);
     assert(rid != ANJAY_ID_INVALID);

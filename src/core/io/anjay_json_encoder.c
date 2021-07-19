@@ -49,7 +49,7 @@ struct json_encoder_struct {
     key_encoder_t key_encoder;
     avs_base64_config_t base64_config;
     avs_stream_t *stream;
-    anjay_ret_bytes_ctx_t *bytes;
+    anjay_unlocked_ret_bytes_ctx_t *bytes;
     uint8_t level;
     bool needs_separator;
 };
@@ -310,7 +310,7 @@ static int bytes_begin(anjay_senml_like_encoder_t *ctx_, size_t size) {
 static int
 bytes_append(anjay_senml_like_encoder_t *ctx_, const void *data, size_t size) {
     json_encoder_t *ctx = (json_encoder_t *) ctx_;
-    return anjay_ret_bytes_append(ctx->bytes, data, size);
+    return _anjay_ret_bytes_append_unlocked(ctx->bytes, data, size);
 }
 
 static int bytes_end(anjay_senml_like_encoder_t *ctx_) {

@@ -46,15 +46,15 @@ VISIBILITY_SOURCE_BEGIN
 
 #ifdef ANJAY_WITH_BOOTSTRAP
 
-static void cancel_client_initiated_bootstrap(anjay_t *anjay) {
+static void cancel_client_initiated_bootstrap(anjay_unlocked_t *anjay) {
     avs_sched_del(&anjay->bootstrap.client_initiated_bootstrap_handle);
 }
 
-static void cancel_est_sren(anjay_t *anjay) {
+static void cancel_est_sren(anjay_unlocked_t *anjay) {
     (void) anjay;
 }
 
-static int suspend_nonbootstrap_server(anjay_t *anjay,
+static int suspend_nonbootstrap_server(anjay_unlocked_t *anjay,
                                        anjay_server_info_t *server,
                                        void *data) {
     (void) anjay;
@@ -72,7 +72,7 @@ static int suspend_nonbootstrap_server(anjay_t *anjay,
 }
 
 static void start_bootstrap_if_not_already_started(
-        anjay_t *anjay, anjay_connection_ref_t bootstrap_connection) {
+        anjay_unlocked_t *anjay, anjay_connection_ref_t bootstrap_connection) {
     if (bootstrap_connection.server) {
         anjay->bootstrap.bootstrap_session_token =
                 _anjay_server_primary_session_token(
@@ -98,7 +98,7 @@ static void start_bootstrap_if_not_already_started(
     anjay->bootstrap.in_progress = true;
 }
 
-static void abort_bootstrap(anjay_t *anjay) {
+static void abort_bootstrap(anjay_unlocked_t *anjay) {
     if (anjay->bootstrap.in_progress) {
         _anjay_dm_transaction_rollback(anjay);
         anjay->bootstrap.in_progress = false;
@@ -151,25 +151,24 @@ static uint8_t make_success_response_code(anjay_request_action_t action) {
     return (uint8_t) (-ANJAY_ERR_INTERNAL);
 }
 
-typedef int
-with_instance_on_demand_cb_t(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj,
-                             anjay_iid_t iid,
-                             anjay_input_ctx_t *in_ctx);
+typedef int with_instance_on_demand_cb_t(anjay_unlocked_t *anjay,
+                                         const anjay_dm_installed_object_t *obj,
+                                         anjay_iid_t iid,
+                                         anjay_unlocked_input_ctx_t *in_ctx);
 
-static int write_resource(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj,
+static int write_resource(anjay_unlocked_t *anjay,
+                          const anjay_dm_installed_object_t *obj,
                           anjay_iid_t iid,
-                          anjay_input_ctx_t *in_ctx) {
+                          anjay_unlocked_input_ctx_t *in_ctx) {
     (void) iid;
     return _anjay_dm_write_resource(anjay, obj, in_ctx,
                                     &anjay->bootstrap.notification_queue);
 }
 
-static int write_instance_inner(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj,
+static int write_instance_inner(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t *obj,
                                 anjay_iid_t iid,
-                                anjay_input_ctx_t *in_ctx) {
+                                anjay_unlocked_input_ctx_t *in_ctx) {
     int retval;
     anjay_uri_path_t path;
     while (!(retval = _anjay_input_get_path(in_ctx, &path, NULL))) {
@@ -200,10 +199,10 @@ static int write_instance_inner(anjay_t *anjay,
     return (retval == ANJAY_GET_PATH_END) ? 0 : retval;
 }
 
-static int with_instance_on_demand(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj,
+static int with_instance_on_demand(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t *obj,
                                    anjay_iid_t iid,
-                                   anjay_input_ctx_t *in_ctx,
+                                   anjay_unlocked_input_ctx_t *in_ctx,
                                    with_instance_on_demand_cb_t callback) {
     int result = 0;
     int ipresent = _anjay_dm_instance_present(anjay, obj, iid);
@@ -215,7 +214,7 @@ static int with_instance_on_demand(anjay_t *anjay,
         anjay_log(DEBUG,
                   _("Instance Create handler for object ") "%" PRIu16 _(
                           " failed"),
-                  (*obj)->oid);
+                  _anjay_dm_installed_object_oid(obj));
         return result;
     }
 
@@ -224,22 +223,23 @@ static int with_instance_on_demand(anjay_t *anjay,
     }
     if (ipresent == 0 && !result) {
         result = _anjay_notify_queue_instance_created(
-                &anjay->bootstrap.notification_queue, (*obj)->oid, iid);
+                &anjay->bootstrap.notification_queue,
+                _anjay_dm_installed_object_oid(obj), iid);
     }
     return result;
 }
 
-static int write_instance(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *obj,
+static int write_instance(anjay_unlocked_t *anjay,
+                          const anjay_dm_installed_object_t *obj,
                           anjay_iid_t iid,
-                          anjay_input_ctx_t *in_ctx) {
+                          anjay_unlocked_input_ctx_t *in_ctx) {
     return with_instance_on_demand(anjay, obj, iid, in_ctx,
                                    write_instance_inner);
 }
 
-static int write_object(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj,
-                        anjay_input_ctx_t *in_ctx) {
+static int write_object(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj,
+                        anjay_unlocked_input_ctx_t *in_ctx) {
     // should it remove existing instances?
     int retval;
     do {
@@ -259,11 +259,10 @@ static int write_object(anjay_t *anjay,
     return retval;
 }
 
-static int
-security_object_valid_handler(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
-                              anjay_iid_t iid,
-                              void *bootstrap_instances) {
+static int security_object_valid_handler(anjay_unlocked_t *anjay,
+                                         const anjay_dm_installed_object_t *obj,
+                                         anjay_iid_t iid,
+                                         void *bootstrap_instances) {
     (void) obj;
     if (!_anjay_is_bootstrap_security_instance(anjay, iid)) {
         return 0;
@@ -274,9 +273,9 @@ security_object_valid_handler(anjay_t *anjay,
     return 0;
 }
 
-static bool has_multiple_bootstrap_security_instances(anjay_t *anjay) {
+static bool has_multiple_bootstrap_security_instances(anjay_unlocked_t *anjay) {
     uintptr_t bootstrap_instances = 0;
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (_anjay_dm_foreach_instance(anjay, obj, security_object_valid_handler,
                                    &bootstrap_instances)
@@ -286,9 +285,9 @@ static bool has_multiple_bootstrap_security_instances(anjay_t *anjay) {
     return false;
 }
 
-static int bootstrap_write_impl(anjay_t *anjay,
+static int bootstrap_write_impl(anjay_unlocked_t *anjay,
                                 const anjay_uri_path_t *uri,
-                                anjay_input_ctx_t *in_ctx) {
+                                anjay_unlocked_input_ctx_t *in_ctx) {
     anjay_log(LAZY_DEBUG, _("Bootstrap Write ") "%s",
               ANJAY_DEBUG_MAKE_PATH(uri));
     if (!_anjay_uri_path_has(uri, ANJAY_ID_OID)
@@ -298,9 +297,9 @@ static int bootstrap_write_impl(anjay_t *anjay,
     cancel_client_initiated_bootstrap(anjay);
     cancel_est_sren(anjay);
     start_bootstrap_if_not_already_started(anjay, anjay->current_connection);
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, uri->ids[ANJAY_ID_OID]);
-    if (!obj || !*obj) {
+    if (!obj) {
         anjay_log(DEBUG, _("Object not found: ") "%u", uri->ids[ANJAY_ID_OID]);
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -325,18 +324,20 @@ static int bootstrap_write_impl(anjay_t *anjay,
     return retval;
 }
 
-static int delete_instance(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj,
+static int delete_instance(anjay_unlocked_t *anjay,
+                           const anjay_dm_installed_object_t *obj,
                            anjay_iid_t iid) {
     int retval = _anjay_dm_call_instance_remove(anjay, obj, iid, NULL);
     if (retval) {
         anjay_log(WARNING,
                   _("delete_instance: cannot delete ") "/%d/%d" _(": ") "%d",
-                  (*obj)->oid, iid, retval);
+                  _anjay_dm_installed_object_oid(obj), iid, retval);
     } else {
-        bootstrap_remove_notify_changed(&anjay->bootstrap, (*obj)->oid, iid);
+        bootstrap_remove_notify_changed(
+                &anjay->bootstrap, _anjay_dm_installed_object_oid(obj), iid);
         retval = _anjay_notify_queue_instance_removed(
-                &anjay->bootstrap.notification_queue, (*obj)->oid, iid);
+                &anjay->bootstrap.notification_queue,
+                _anjay_dm_installed_object_oid(obj), iid);
     }
     return retval;
 }
@@ -346,8 +347,8 @@ typedef struct {
     int retval;
 } delete_object_arg_t;
 
-static int delete_object(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj,
+static int delete_object(anjay_unlocked_t *anjay,
+                         const anjay_dm_installed_object_t *obj,
                          void *arg_) {
     // the contract forbids deleting instances from within
     // _anjay_dm_list_instances(), so we use a temporary list
@@ -357,7 +358,9 @@ static int delete_object(anjay_t *anjay,
     if (!retval) {
         AVS_LIST(anjay_iid_t) iid;
         AVS_LIST_FOREACH(iid, iids) {
-            if (arg->skip_bootstrap && (*obj)->oid == ANJAY_DM_OID_SECURITY
+            if (arg->skip_bootstrap
+                    && _anjay_dm_installed_object_oid(obj)
+                                   == ANJAY_DM_OID_SECURITY
                     && _anjay_is_bootstrap_security_instance(anjay, *iid)) {
                 continue; // don't remove self
             }
@@ -381,7 +384,8 @@ static int delete_object(anjay_t *anjay,
     return 0;
 }
 
-static int bootstrap_delete(anjay_t *anjay, const anjay_request_t *request) {
+static int bootstrap_delete(anjay_unlocked_t *anjay,
+                            const anjay_request_t *request) {
     anjay_log(LAZY_DEBUG, _("Bootstrap Delete ") "%s",
               ANJAY_DEBUG_MAKE_PATH(&request->uri));
     cancel_client_initiated_bootstrap(anjay);
@@ -399,10 +403,10 @@ static int bootstrap_delete(anjay_t *anjay, const anjay_request_t *request) {
     };
     int retval = 0;
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_OID)) {
-        const anjay_dm_object_def_t *const *obj =
+        const anjay_dm_installed_object_t *obj =
                 _anjay_dm_find_object_by_oid(anjay,
                                              request->uri.ids[ANJAY_ID_OID]);
-        if (!obj || !*obj) {
+        if (!obj) {
             anjay_log(WARNING, _("Object not found: ") "%u",
                       request->uri.ids[ANJAY_ID_OID]);
             return 0;
@@ -432,7 +436,8 @@ static int bootstrap_delete(anjay_t *anjay, const anjay_request_t *request) {
 }
 
 #    ifdef ANJAY_WITH_DISCOVER
-static int bootstrap_discover(anjay_t *anjay, const anjay_request_t *request) {
+static int bootstrap_discover(anjay_unlocked_t *anjay,
+                              const anjay_request_t *request) {
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_IID)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -459,9 +464,9 @@ static int bootstrap_discover(anjay_t *anjay, const anjay_request_t *request) {
 
 static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     anjay_iid_t iid;
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!obj
             || (iid = _anjay_find_bootstrap_security_iid(anjay))
@@ -471,12 +476,13 @@ static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
         return;
     }
     int retval = -1;
-    if (obj && *obj) {
+    if (obj) {
         _anjay_dm_transaction_begin(anjay);
         anjay_notify_queue_t notification = NULL;
         (void) ((retval = _anjay_dm_call_instance_remove(anjay, obj, iid, NULL))
                 || (retval = _anjay_notify_queue_instance_removed(
-                            &notification, (*obj)->oid, iid))
+                            &notification, _anjay_dm_installed_object_oid(obj),
+                            iid))
                 || (retval = _anjay_notify_flush(anjay, &notification)));
         retval = _anjay_dm_transaction_finish(anjay, retval);
     }
@@ -487,9 +493,9 @@ static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
     }
 }
 
-static int schedule_bootstrap_timeout(anjay_t *anjay) {
+static int schedule_bootstrap_timeout(anjay_unlocked_t *anjay) {
     anjay_iid_t iid;
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!obj
             || (iid = _anjay_find_bootstrap_security_iid(anjay))
@@ -522,7 +528,7 @@ static int schedule_bootstrap_timeout(anjay_t *anjay) {
     return 0;
 }
 
-static int validate_bootstrap_configuration(anjay_t *anjay) {
+static int validate_bootstrap_configuration(anjay_unlocked_t *anjay) {
     cancel_client_initiated_bootstrap(anjay);
     start_bootstrap_if_not_already_started(anjay, anjay->current_connection);
     if (_anjay_dm_transaction_validate(anjay)) {
@@ -535,7 +541,7 @@ static int validate_bootstrap_configuration(anjay_t *anjay) {
 #    define BOOTSTRAP_FINISH_PERFORM_TIMEOUT (1 << 0)
 #    define BOOTSTRAP_FINISH_DISABLE_SERVER (1 << 1)
 
-static int bootstrap_finish_impl(anjay_t *anjay, int flags) {
+static int bootstrap_finish_impl(anjay_unlocked_t *anjay, int flags) {
     anjay_log(TRACE, _("Bootstrap Sequence finished"));
     anjay->bootstrap.in_progress = false;
     _anjay_conn_session_token_reset(&anjay->bootstrap.bootstrap_session_token);
@@ -558,7 +564,7 @@ static int bootstrap_finish_impl(anjay_t *anjay, int flags) {
     }
     if ((flags & BOOTSTRAP_FINISH_DISABLE_SERVER) && !retval) {
         if (!anjay->bootstrap.allow_legacy_server_initiated_bootstrap) {
-            retval = anjay_disable_server_with_timeout(
+            retval = _anjay_disable_server_with_timeout_unlocked(
                     anjay, ANJAY_SSID_BOOTSTRAP, AVS_TIME_DURATION_INVALID);
         }
     }
@@ -573,7 +579,7 @@ static int bootstrap_finish_impl(anjay_t *anjay, int flags) {
     return retval;
 }
 
-static int bootstrap_finish(anjay_t *anjay) {
+static int bootstrap_finish(anjay_unlocked_t *anjay) {
     int result = validate_bootstrap_configuration(anjay);
     if (result) {
         return result;
@@ -590,7 +596,8 @@ reset_client_initiated_bootstrap_backoff(anjay_bootstrap_t *bootstrap) {
     bootstrap->client_initiated_bootstrap_holdoff = AVS_TIME_DURATION_INVALID;
 }
 
-int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay) {
+int _anjay_bootstrap_notify_regular_connection_available(
+        anjay_unlocked_t *anjay) {
     if (avs_coap_exchange_id_valid(
                 anjay->bootstrap.outgoing_request_exchange_id)) {
         // Let the bootstrap request finish. When a response comes, bootstrap
@@ -613,16 +620,17 @@ int _anjay_bootstrap_notify_regular_connection_available(anjay_t *anjay) {
     return result;
 }
 
-bool _anjay_bootstrap_legacy_server_initiated_allowed(anjay_t *anjay) {
+bool _anjay_bootstrap_legacy_server_initiated_allowed(anjay_unlocked_t *anjay) {
     return anjay->bootstrap.allow_legacy_server_initiated_bootstrap;
 }
 
-bool _anjay_bootstrap_in_progress(anjay_t *anjay) {
+bool _anjay_bootstrap_in_progress(anjay_unlocked_t *anjay) {
     return anjay->bootstrap.in_progress;
 }
 
-static int bootstrap_write(anjay_t *anjay, const anjay_request_t *request) {
-    anjay_input_ctx_t *in_ctx;
+static int bootstrap_write(anjay_unlocked_t *anjay,
+                           const anjay_request_t *request) {
+    anjay_unlocked_input_ctx_t *in_ctx;
     int result;
     if ((result = _anjay_input_dynamic_construct(
                  &in_ctx, request->payload_stream, request))) {
@@ -641,7 +649,7 @@ static int bootstrap_write(anjay_t *anjay, const anjay_request_t *request) {
 
 static void timeout_bootstrap_finish(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     anjay_log(WARNING, _("Bootstrap Finish not received in time - aborting"));
     // Abort client-initiated-bootstrap entirely. After that,
     // anjay_all_connections_failed() starts returning true (if the
@@ -654,7 +662,7 @@ static void timeout_bootstrap_finish(avs_sched_t *sched, const void *dummy) {
     }
 }
 
-static int schedule_finish_timeout(anjay_t *anjay,
+static int schedule_finish_timeout(anjay_unlocked_t *anjay,
                                    anjay_connection_ref_t connection) {
     if (AVS_SCHED_DELAYED(anjay->sched, &anjay->bootstrap.finish_timeout_handle,
                           _anjay_exchange_lifetime_for_transport(
@@ -667,7 +675,8 @@ static int schedule_finish_timeout(anjay_t *anjay,
     return 0;
 }
 
-static int invoke_action(anjay_t *anjay, const anjay_request_t *request) {
+static int invoke_action(anjay_unlocked_t *anjay,
+                         const anjay_request_t *request) {
     // Cancel the job explicitly, because it may happen that Bootstrap Finish
     // succeeds, but schedule_finish_timeout() fails, leaving the job on the
     // scheduler.
@@ -699,7 +708,7 @@ static int invoke_action(anjay_t *anjay, const anjay_request_t *request) {
     return result;
 }
 
-int _anjay_bootstrap_perform_action(anjay_t *anjay,
+int _anjay_bootstrap_perform_action(anjay_unlocked_t *anjay,
                                     const anjay_request_t *request) {
     anjay_msg_details_t msg_details = {
         .msg_code = make_success_response_code(request->action),
@@ -713,7 +722,7 @@ int _anjay_bootstrap_perform_action(anjay_t *anjay,
     return invoke_action(anjay, request);
 }
 
-static void send_request_bootstrap(anjay_t *anjay,
+static void send_request_bootstrap(anjay_unlocked_t *anjay,
                                    anjay_connection_ref_t connection);
 
 static void bootstrap_request_response_handler(
@@ -723,7 +732,7 @@ static void bootstrap_request_response_handler(
         const avs_coap_client_async_response_t *response,
         avs_error_t err,
         void *anjay_) {
-    anjay_t *anjay = (anjay_t *) anjay_;
+    anjay_unlocked_t *anjay = (anjay_unlocked_t *) anjay_;
     if (result != AVS_COAP_CLIENT_REQUEST_PARTIAL_CONTENT) {
         anjay->bootstrap.outgoing_request_exchange_id =
                 AVS_COAP_EXCHANGE_ID_INVALID;
@@ -786,7 +795,7 @@ static void bootstrap_request_response_handler(
     }
 }
 
-static void send_request_bootstrap(anjay_t *anjay,
+static void send_request_bootstrap(anjay_unlocked_t *anjay,
                                    anjay_connection_ref_t connection) {
     const anjay_url_t *const connection_uri = _anjay_connection_uri(connection);
     avs_coap_request_header_t request = {
@@ -834,7 +843,7 @@ static void send_request_bootstrap(anjay_t *anjay,
 
 static void request_bootstrap_job(avs_sched_t *sched, const void *dummy);
 
-static int schedule_request_bootstrap(anjay_t *anjay) {
+static int schedule_request_bootstrap(anjay_unlocked_t *anjay) {
     avs_time_monotonic_t now = avs_time_monotonic_now();
     if (!avs_time_monotonic_valid(
                 anjay->bootstrap.client_initiated_bootstrap_last_attempt)) {
@@ -881,7 +890,7 @@ static int schedule_request_bootstrap(anjay_t *anjay) {
 }
 
 static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     anjay_log(TRACE, _("sending Client Initiated Bootstrap"));
 
     (void) dummy;
@@ -922,7 +931,7 @@ error:
                                                 avs_errno(AVS_EPROTO));
 }
 
-static int64_t client_hold_off_time_s(anjay_t *anjay) {
+static int64_t client_hold_off_time_s(anjay_unlocked_t *anjay) {
     anjay_iid_t security_iid = _anjay_find_bootstrap_security_iid(anjay);
     if (security_iid == ANJAY_ID_INVALID) {
         anjay_log(WARNING,
@@ -943,11 +952,11 @@ static int64_t client_hold_off_time_s(anjay_t *anjay) {
 }
 
 int _anjay_perform_bootstrap_action_if_appropriate(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         anjay_server_info_t *bootstrap_server,
         anjay_bootstrap_action_t action) {
     if (!bootstrap_server && action != ANJAY_BOOTSTRAP_ACTION_NONE) {
-        return anjay_enable_server(anjay, ANJAY_SSID_BOOTSTRAP);
+        return _anjay_enable_server_unlocked(anjay, ANJAY_SSID_BOOTSTRAP);
     }
 
     switch (action) {
@@ -989,7 +998,7 @@ void _anjay_bootstrap_init(anjay_bootstrap_t *bootstrap,
     reset_client_initiated_bootstrap_backoff(bootstrap);
 }
 
-void _anjay_bootstrap_cleanup(anjay_t *anjay) {
+void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay) {
     assert(!avs_coap_exchange_id_valid(
             anjay->bootstrap.outgoing_request_exchange_id));
     cancel_client_initiated_bootstrap(anjay);

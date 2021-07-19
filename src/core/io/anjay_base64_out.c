@@ -88,7 +88,7 @@ static int base64_ret_bytes_flush(base64_ret_bytes_ctx_t *ctx,
     return 0;
 }
 
-static int base64_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
+static int base64_ret_bytes_append(anjay_unlocked_ret_bytes_ctx_t *ctx_,
                                    const void *data,
                                    size_t size) {
     base64_ret_bytes_ctx_t *ctx = (base64_ret_bytes_ctx_t *) ctx_;
@@ -119,7 +119,7 @@ static const anjay_ret_bytes_ctx_vtable_t BASE64_OUT_BYTES_VTABLE = {
     .append = base64_ret_bytes_append
 };
 
-anjay_ret_bytes_ctx_t *_anjay_base64_ret_bytes_ctx_new(
+anjay_unlocked_ret_bytes_ctx_t *_anjay_base64_ret_bytes_ctx_new(
         avs_stream_t *stream, avs_base64_config_t config, size_t length) {
     base64_ret_bytes_ctx_t *ctx = (base64_ret_bytes_ctx_t *) avs_calloc(
             1, sizeof(base64_ret_bytes_ctx_t));
@@ -129,10 +129,10 @@ anjay_ret_bytes_ctx_t *_anjay_base64_ret_bytes_ctx_new(
         ctx->config = config;
         ctx->num_bytes_left = length;
     }
-    return (anjay_ret_bytes_ctx_t *) ctx;
+    return (anjay_unlocked_ret_bytes_ctx_t *) ctx;
 }
 
-int _anjay_base64_ret_bytes_ctx_close(anjay_ret_bytes_ctx_t *ctx_) {
+int _anjay_base64_ret_bytes_ctx_close(anjay_unlocked_ret_bytes_ctx_t *ctx_) {
     base64_ret_bytes_ctx_t *ctx = (base64_ret_bytes_ctx_t *) ctx_;
     if (ctx->num_bytes_left != 0) {
         /* Some bytes were not written as we have expected */
@@ -142,7 +142,7 @@ int _anjay_base64_ret_bytes_ctx_close(anjay_ret_bytes_ctx_t *ctx_) {
                                        ctx->num_bytes_cached);
 }
 
-void _anjay_base64_ret_bytes_ctx_delete(anjay_ret_bytes_ctx_t **ctx_) {
+void _anjay_base64_ret_bytes_ctx_delete(anjay_unlocked_ret_bytes_ctx_t **ctx_) {
     if (!ctx_ || !*ctx_) {
         return;
     }

@@ -2255,7 +2255,13 @@ AVS_UNIT_TEST(dm_operations, unimplemented) {
 
 static const anjay_dm_attrs_query_details_t
         DM_EFFECTIVE_ATTRS_STANDARD_QUERY = {
-            .obj = &OBJ,
+            .obj = &(const anjay_dm_installed_object_t) {
+#ifdef ANJAY_WITH_THREAD_SAFETY
+                .type = ANJAY_DM_OBJECT_USER_PROVIDED,
+                .impl.user_provided =
+#endif // ANJAY_WITH_THREAD_SAFETY
+                        &OBJ
+            },
             .iid = 69,
             .rid = 4,
             .riid = ANJAY_ID_INVALID,
@@ -2282,10 +2288,12 @@ AVS_UNIT_TEST(dm_effective_attrs, resource_full) {
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 1, 0,
                                               &RES_ATTRS);
 
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     anjay_dm_internal_r_attrs_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
-            anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
+            anjay_unlocked, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(&attrs, &RES_ATTRS);
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2317,9 +2325,10 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_instance) {
                     .max_eval_period = 190
                 }
             });
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     anjay_dm_internal_r_attrs_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
-            anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
+            anjay_unlocked, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2335,6 +2344,7 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_instance) {
                     .step = ANJAY_ATTRIB_VALUE_NONE
                 }
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2371,9 +2381,10 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_object) {
                     .max_eval_period = 800
                 }
             });
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     anjay_dm_internal_r_attrs_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
-            anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
+            anjay_unlocked, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2389,6 +2400,7 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_object) {
                     .step = 6.9
                 }
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2452,9 +2464,10 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_server) {
                                         ANJAY_DM_RID_SERVER_DEFAULT_PMAX,
                                         ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_INT(0, 42));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     anjay_dm_internal_r_attrs_t attrs;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(
-            anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
+            anjay_unlocked, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2470,6 +2483,7 @@ AVS_UNIT_TEST(dm_effective_attrs, fallback_to_server) {
                     .step = ANJAY_ATTRIB_VALUE_NONE
                 }
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2477,9 +2491,11 @@ AVS_UNIT_TEST(dm_effective_attrs, resource_fail) {
     DM_TEST_INIT;
     (void) mocksocks;
     _anjay_mock_dm_expect_resource_read_attrs(anjay, &OBJ, 69, 4, 1, -1, NULL);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     anjay_dm_internal_r_attrs_t attrs = ANJAY_DM_INTERNAL_R_ATTRS_EMPTY;
     AVS_UNIT_ASSERT_FAILED(_anjay_dm_effective_attrs(
-            anjay, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
+            anjay_unlocked, &DM_EFFECTIVE_ATTRS_STANDARD_QUERY, &attrs));
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2499,7 +2515,9 @@ AVS_UNIT_TEST(dm_effective_attrs, for_instance) {
     anjay_dm_internal_r_attrs_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2515,6 +2533,7 @@ AVS_UNIT_TEST(dm_effective_attrs, for_instance) {
                     .step = ANJAY_ATTRIB_VALUE_NONE
                 }
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2526,7 +2545,10 @@ AVS_UNIT_TEST(dm_effective_attrs, instance_fail) {
     anjay_dm_internal_r_attrs_t attrs;
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_FAILED(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_FAILED(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2547,7 +2569,9 @@ AVS_UNIT_TEST(dm_effective_attrs, for_object) {
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
     details.iid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2563,6 +2587,7 @@ AVS_UNIT_TEST(dm_effective_attrs, for_object) {
                     .step = ANJAY_ATTRIB_VALUE_NONE
                 }
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2574,7 +2599,10 @@ AVS_UNIT_TEST(dm_effective_attrs, object_fail) {
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
     details.iid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_FAILED(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_FAILED(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2650,7 +2678,9 @@ AVS_UNIT_TEST(dm_effective_attrs, server_default) {
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
     details.iid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2667,6 +2697,7 @@ AVS_UNIT_TEST(dm_effective_attrs, server_default) {
                 },
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2681,7 +2712,9 @@ AVS_UNIT_TEST(dm_effective_attrs, no_server) {
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
     details.iid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2698,6 +2731,7 @@ AVS_UNIT_TEST(dm_effective_attrs, no_server) {
                 },
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2767,7 +2801,9 @@ AVS_UNIT_TEST(dm_effective_attrs, no_resources) {
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
     details.iid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
     _anjay_mock_dm_assert_attributes_equal(
             &attrs,
             &(const anjay_dm_internal_r_attrs_t) {
@@ -2784,6 +2820,7 @@ AVS_UNIT_TEST(dm_effective_attrs, no_resources) {
                 },
                 _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
             });
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2859,7 +2896,10 @@ AVS_UNIT_TEST(dm_effective_attrs, read_error) {
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
     details.iid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_FAILED(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_FAILED(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -2935,7 +2975,10 @@ AVS_UNIT_TEST(dm_effective_attrs, read_invalid) {
     anjay_dm_attrs_query_details_t details = DM_EFFECTIVE_ATTRS_STANDARD_QUERY;
     details.rid = ANJAY_ID_INVALID;
     details.iid = ANJAY_ID_INVALID;
-    AVS_UNIT_ASSERT_FAILED(_anjay_dm_effective_attrs(anjay, &details, &attrs));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_FAILED(
+            _anjay_dm_effective_attrs(anjay_unlocked, &details, &attrs));
+    ANJAY_MUTEX_UNLOCK(anjay);
     DM_TEST_FINISH;
 }
 
@@ -3104,8 +3147,11 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
                     ANJAY_MOCK_DM_RES_END });
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 42, 3, ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_STRING(0, ""));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_read_resource_into_buffer(
-            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 42, 3), NULL, 0, NULL));
+            anjay_unlocked, &MAKE_RESOURCE_PATH(OBJ->oid, 42, 3), NULL, 0,
+            NULL));
+    ANJAY_MUTEX_UNLOCK(anjay);
 
     _anjay_mock_dm_expect_list_resources(
             anjay, &OBJ, 514, 0,
@@ -3120,8 +3166,11 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
                     ANJAY_MOCK_DM_RES_END });
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 514, 4, ANJAY_ID_INVALID,
                                         -1, ANJAY_MOCK_DM_STRING(-1, "Hello"));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_FAILED(_anjay_dm_read_resource_into_buffer(
-            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 514, 4), NULL, 0, NULL));
+            anjay_unlocked, &MAKE_RESOURCE_PATH(OBJ->oid, 514, 4), NULL, 0,
+            NULL));
+    ANJAY_MUTEX_UNLOCK(anjay);
 
     char fake_string = 42;
     _anjay_mock_dm_expect_list_resources(
@@ -3137,8 +3186,11 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
                     ANJAY_MOCK_DM_RES_END });
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 69, 5, ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_STRING(0, ""));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_read_resource_string(
-            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 69, 5), &fake_string, 1));
+            anjay_unlocked, &MAKE_RESOURCE_PATH(OBJ->oid, 69, 5), &fake_string,
+            1));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_EQUAL(fake_string, 0);
 
     fake_string = 69;
@@ -3156,8 +3208,11 @@ AVS_UNIT_TEST(dm_res_read, no_space) {
     _anjay_mock_dm_expect_resource_read(anjay, &OBJ, 32, 6, ANJAY_ID_INVALID,
                                         -1,
                                         ANJAY_MOCK_DM_STRING(-1, "Goodbye"));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_FAILED(_anjay_dm_read_resource_string(
-            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 32, 6), &fake_string, 1));
+            anjay_unlocked, &MAKE_RESOURCE_PATH(OBJ->oid, 32, 6), &fake_string,
+            1));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_EQUAL(fake_string, 69);
 
     DM_TEST_FINISH;
@@ -3177,8 +3232,10 @@ AVS_UNIT_TEST(dm_res_read, objlnk) {
 
     anjay_oid_t oid = 0;
     anjay_iid_t iid = 0;
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     ASSERT_OK(_anjay_dm_read_resource_objlnk(
-            anjay, &MAKE_RESOURCE_PATH(OBJ->oid, 42, 1), &oid, &iid));
+            anjay_unlocked, &MAKE_RESOURCE_PATH(OBJ->oid, 42, 1), &oid, &iid));
+    ANJAY_MUTEX_UNLOCK(anjay);
     ASSERT_EQ(oid, 123);
     ASSERT_EQ(iid, 456);
 

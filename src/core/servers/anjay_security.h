@@ -35,13 +35,13 @@ typedef struct {
 } anjay_connection_info_t;
 
 int _anjay_connection_security_generic_get_uri(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         anjay_iid_t security_iid,
         avs_url_t **out_uri,
         const anjay_transport_info_t **out_transport_info);
 
 avs_error_t _anjay_connection_security_generic_get_config(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         anjay_security_config_t *out_config,
         anjay_security_config_cache_t *cache,
         anjay_connection_info_t *inout_info);

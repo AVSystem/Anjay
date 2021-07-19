@@ -20,6 +20,10 @@
 #include <avsystem/commons/avs_list.h>
 #include <avsystem/commons/avs_url.h>
 
+#ifdef ANJAY_WITH_THREAD_SAFETY
+#    include <avsystem/commons/avs_mutex.h>
+#endif // ANJAY_WITH_THREAD_SAFETY
+
 #ifdef ANJAY_WITH_LOGS
 #    ifndef AVS_COMMONS_WITH_AVS_LOG
 #        error "ANJAY_WITH_LOGS requires avs_log to be enabled"
@@ -50,7 +54,163 @@
 #include <anjay/core.h>
 #include <anjay/dm.h>
 
+#ifdef ANJAY_WITH_DOWNLOADER
+#    include <anjay/download.h>
+#endif // ANJAY_WITH_DOWNLOADER
+
 VISIBILITY_PRIVATE_HEADER_BEGIN
+
+#ifdef ANJAY_WITH_THREAD_SAFETY
+
+typedef struct anjay_unlocked_struct anjay_unlocked_t;
+
+struct anjay_struct {
+    avs_mutex_t *mutex;
+    avs_max_align_t anjay_unlocked_placeholder;
+};
+
+#    ifdef ANJAY_WITH_NESTED_FUNCTION_MUTEX_LOCKS
+
+// We are compiling on a reasonably recent version of GCC in Debug mode.
+// We are using GCC's nested function extension to make sure that there are
+// no "return" statements between the lock and unlock statements.
+// If the programmer attempts to use "return" there, they'll get at least
+// a warning saying that the return type is wrong, as the nested functions
+// return anjay_gcc_nested_function_retval_placeholder_t.
+
+#        pragma GCC diagnostic push
+#        pragma GCC diagnostic ignored "-Wc++-compat"
+#        pragma GCC diagnostic ignored "-Wpedantic"
+typedef struct {
+} anjay_gcc_nested_function_retval_placeholder_t;
+#        pragma GCC diagnostic pop
+
+#        define ANJAY_MUTEX_LOCK(AnjayUnlockedVar, AnjayLockedVar)    \
+            {                                                         \
+                AVS_PRAGMA(GCC diagnostic push)                       \
+                AVS_PRAGMA(GCC diagnostic ignored "-Wpedantic")       \
+                AVS_PRAGMA(GCC diagnostic ignored "-Wshadow")         \
+                inline anjay_gcc_nested_function_retval_placeholder_t \
+                mutex_lock_nested_function(                           \
+                        anjay_unlocked_t *AnjayUnlockedVar) {         \
+                    AVS_PRAGMA(GCC diagnostic pop)                    \
+                    (void) AnjayUnlockedVar
+
+#        define ANJAY_MUTEX_UNLOCK(AnjayLockedVar)                      \
+            AVS_PRAGMA(GCC diagnostic push)                             \
+            AVS_PRAGMA(GCC diagnostic ignored "-Wpedantic")             \
+            return (anjay_gcc_nested_function_retval_placeholder_t) {}; \
+            AVS_PRAGMA(GCC diagnostic pop)                              \
+            }                                                           \
+            if (!(AnjayLockedVar)                                       \
+                    || avs_mutex_lock((AnjayLockedVar)->mutex)) {       \
+                _anjay_log(anjay, ERROR, _("Could not lock mutex"));    \
+            } else {                                                    \
+                mutex_lock_nested_function(                             \
+                        (anjay_unlocked_t *) &(AnjayLockedVar)          \
+                                ->anjay_unlocked_placeholder);          \
+                avs_mutex_unlock((AnjayLockedVar)->mutex);              \
+            }                                                           \
+            }                                                           \
+            (void) 0
+
+#        define ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(AnjayLockedVar,            \
+                                                AnjayUnlockedVar)          \
+            {                                                              \
+                AVS_PRAGMA(GCC diagnostic push)                            \
+                AVS_PRAGMA(GCC diagnostic ignored "-Wpedantic")            \
+                auto inline anjay_gcc_nested_function_retval_placeholder_t \
+                mutex_unlock_for_callback_nested_function(anjay_t *);      \
+                mutex_unlock_for_callback_nested_function(                 \
+                        AVS_CONTAINER_OF(AnjayUnlockedVar,                 \
+                                         anjay_t,                          \
+                                         anjay_unlocked_placeholder));     \
+                                                                           \
+                inline anjay_gcc_nested_function_retval_placeholder_t      \
+                mutex_unlock_for_callback_nested_function(                 \
+                        anjay_t *AnjayLockedVar) {                         \
+                    AVS_PRAGMA(GCC diagnostic pop)                         \
+                    avs_mutex_unlock((AnjayLockedVar)->mutex)
+
+#        define ANJAY_MUTEX_LOCK_AFTER_CALLBACK(AnjayLockedVar)         \
+            if (avs_mutex_lock(AnjayLockedVar->mutex)) {                \
+                _anjay_log(anjay, ERROR, _("Could not lock mutex"));    \
+            }                                                           \
+            AVS_PRAGMA(GCC diagnostic push)                             \
+            AVS_PRAGMA(GCC diagnostic ignored "-Wpedantic")             \
+            return (anjay_gcc_nested_function_retval_placeholder_t) {}; \
+            AVS_PRAGMA(GCC diagnostic pop)                              \
+            }                                                           \
+            }                                                           \
+            (void) 0
+
+#    else // ANJAY_WITH_NESTED_FUNCTION_MUTEX_LOCKS
+
+// We are either not compiling on GCC, or we are compiling in Release mode.
+// Use more conventional code - the lock and unlock clauses are still contain
+// stray { and } to make sure that they're paired properly.
+
+#        define ANJAY_MUTEX_LOCK(AnjayUnlockedVar, AnjayLockedVar)   \
+            if (!(AnjayLockedVar)                                    \
+                    || avs_mutex_lock((AnjayLockedVar)->mutex)) {    \
+                _anjay_log(anjay, ERROR, _("Could not lock mutex")); \
+            } else {                                                 \
+                anjay_unlocked_t *AnjayUnlockedVar =                 \
+                        (anjay_unlocked_t *) &(AnjayLockedVar)       \
+                                ->anjay_unlocked_placeholder;        \
+                (void) AnjayUnlockedVar
+
+#        define ANJAY_MUTEX_UNLOCK(AnjayLockedVar)     \
+            avs_mutex_unlock((AnjayLockedVar)->mutex); \
+            }                                          \
+            (void) 0
+
+#        define ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(AnjayLockedVar,       \
+                                                AnjayUnlockedVar)     \
+            {                                                         \
+                anjay_t *AnjayLockedVar =                             \
+                        AVS_CONTAINER_OF(AnjayUnlockedVar,            \
+                                         anjay_t,                     \
+                                         anjay_unlocked_placeholder); \
+                avs_mutex_unlock(AnjayLockedVar->mutex)
+
+#        define ANJAY_MUTEX_LOCK_AFTER_CALLBACK(AnjayLockedVar)      \
+            if (avs_mutex_lock(AnjayLockedVar->mutex)) {             \
+                _anjay_log(anjay, ERROR, _("Could not lock mutex")); \
+            }                                                        \
+            }                                                        \
+            (void) 0
+
+#    endif // ANJAY_WITH_NESTED_FUNCTION_MUTEX_LOCKS
+
+#else // ANJAY_WITH_THREAD_SAFETY
+
+// Thread safety is disabled - use basically no-op blocks, although still
+// containing stray { and } to make sure they're paired properly.
+
+typedef anjay_t anjay_unlocked_t;
+
+#    define ANJAY_MUTEX_LOCK(AnjayUnlockedVar, AnjayLockedVar)     \
+        if (!(AnjayLockedVar)) {                                   \
+            _anjay_log(anjay, ERROR, _("Anjay pointer is NULL"));  \
+        } else {                                                   \
+            anjay_unlocked_t *AnjayUnlockedVar = (AnjayLockedVar); \
+            (void) AnjayUnlockedVar
+
+#    define ANJAY_MUTEX_UNLOCK(AnjayLockedVar) \
+        }                                      \
+        (void) 0
+
+#    define ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(AnjayLockedVar, AnjayUnlockedVar) \
+        {                                                                     \
+            anjay_t *AnjayLockedVar = (AnjayUnlockedVar);                     \
+            (void) AnjayLockedVar
+
+#    define ANJAY_MUTEX_LOCK_AFTER_CALLBACK(AnjayLockedVar) \
+        }                                                   \
+        (void) 0
+
+#endif // ANJAY_WITH_THREAD_SAFETY
 
 typedef enum {
     /**
@@ -162,6 +322,10 @@ typedef struct anjay_binding_info {
     anjay_socket_transport_t transport;
 } anjay_binding_info_t;
 
+int _anjay_security_config_from_dm_unlocked(anjay_unlocked_t *anjay,
+                                            anjay_security_config_t *out_config,
+                                            const char *raw_url);
+
 const anjay_binding_info_t *
 _anjay_binding_info_by_transport(anjay_socket_transport_t transport);
 
@@ -171,7 +335,7 @@ _anjay_transport_info_by_uri_scheme(const char *uri_or_scheme);
 const char *_anjay_default_port_by_url(const anjay_url_t *url);
 
 void _anjay_find_matching_coap_context_and_socket(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         const char *raw_url,
         avs_coap_ctx_t **out_coap,
         avs_net_socket_t **out_socket);
@@ -187,6 +351,19 @@ typedef struct {
 } anjay_security_config_cache_t;
 
 void _anjay_security_config_cache_cleanup(anjay_security_config_cache_t *cache);
+
+#ifdef ANJAY_WITH_DOWNLOADER
+avs_error_t _anjay_download_unlocked(anjay_unlocked_t *anjay,
+                                     const anjay_download_config_t *config,
+                                     anjay_download_handle_t *out_handle);
+
+void _anjay_download_abort_unlocked(anjay_unlocked_t *anjay,
+                                    anjay_download_handle_t handle);
+#endif // ANJAY_WITH_DOWNLOADER
+
+bool _anjay_ongoing_registration_exists_unlocked(anjay_unlocked_t *anjay);
+
+avs_sched_t *_anjay_get_scheduler_unlocked(anjay_unlocked_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

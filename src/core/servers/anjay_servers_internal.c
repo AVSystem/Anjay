@@ -78,14 +78,14 @@ void _anjay_servers_internal_cleanup(anjay_servers_t *servers) {
 }
 
 #ifndef ANJAY_WITHOUT_DEREGISTER
-void _anjay_servers_deregister(anjay_t *anjay) {
+void _anjay_servers_deregister(anjay_unlocked_t *anjay) {
     if (anjay->servers) {
         _anjay_servers_internal_deregister(anjay->servers);
     }
 }
 #endif // ANJAY_WITHOUT_DEREGISTER
 
-void _anjay_servers_cleanup(anjay_t *anjay) {
+void _anjay_servers_cleanup(anjay_unlocked_t *anjay) {
     if (anjay->servers) {
         _anjay_servers_internal_cleanup(anjay->servers);
         avs_free(anjay->servers);
@@ -93,7 +93,7 @@ void _anjay_servers_cleanup(anjay_t *anjay) {
     }
 }
 
-void _anjay_servers_cleanup_inactive(anjay_t *anjay) {
+void _anjay_servers_cleanup_inactive(anjay_unlocked_t *anjay) {
     AVS_LIST(anjay_server_info_t) *server_ptr;
     AVS_LIST(anjay_server_info_t) helper;
     AVS_LIST_DELETABLE_FOREACH_PTR(server_ptr, helper,
@@ -125,7 +125,7 @@ bool _anjay_connection_ready_for_outgoing_message(anjay_connection_ref_t ref) {
     // _anjay_connection_internal_bring_online() backoff. We don't want to send
     // notifications if we don't have a valid registration, so we treat such
     // server as inactive for notification purposes.
-    anjay_t *anjay = _anjay_from_server(ref.server);
+    anjay_unlocked_t *anjay = _anjay_from_server(ref.server);
     return !_anjay_bootstrap_in_progress(anjay)
            && _anjay_server_active(ref.server)
            && !_anjay_server_registration_expired(ref.server);
@@ -149,12 +149,8 @@ static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
     return 0;
 }
 
-/**
- * Repopulates the public_sockets list, adding to it all online non-SMS LwM2M
- * sockets, the single SMS router socket (if applicable) and all active
- * download sockets (if applicable).
- */
-AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay) {
+AVS_LIST(const anjay_socket_entry_t)
+_anjay_get_socket_entries_unlocked(anjay_unlocked_t *anjay) {
     AVS_LIST_CLEAR(&anjay->servers->public_sockets);
     AVS_LIST(anjay_socket_entry_t) *tail_ptr = &anjay->servers->public_sockets;
 
@@ -189,6 +185,15 @@ AVS_LIST(const anjay_socket_entry_t) anjay_get_socket_entries(anjay_t *anjay) {
     _anjay_downloader_get_sockets(&anjay->downloader, tail_ptr);
 #endif // ANJAY_WITH_DOWNLOADER
     return anjay->servers->public_sockets;
+}
+
+AVS_LIST(const anjay_socket_entry_t)
+anjay_get_socket_entries(anjay_t *anjay_locked) {
+    AVS_LIST(const anjay_socket_entry_t) result = NULL;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_get_socket_entries_unlocked(anjay);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 AVS_LIST(anjay_server_info_t) *
@@ -229,7 +234,7 @@ bool _anjay_server_active(anjay_server_info_t *server) {
     return false;
 }
 
-anjay_t *_anjay_from_server(anjay_server_info_t *server) {
+anjay_unlocked_t *_anjay_from_server(anjay_server_info_t *server) {
     return server->anjay;
 }
 
@@ -246,7 +251,7 @@ _anjay_server_binding_mode(anjay_server_info_t *server) {
     return (const anjay_binding_mode_t *) &server->binding_mode;
 }
 
-int _anjay_servers_foreach_ssid(anjay_t *anjay,
+int _anjay_servers_foreach_ssid(anjay_unlocked_t *anjay,
                                 anjay_servers_foreach_ssid_handler_t *handler,
                                 void *data) {
     AVS_LIST(anjay_server_info_t) it;
@@ -268,7 +273,7 @@ int _anjay_servers_foreach_ssid(anjay_t *anjay,
     return 0;
 }
 
-int _anjay_servers_foreach_active(anjay_t *anjay,
+int _anjay_servers_foreach_active(anjay_unlocked_t *anjay,
                                   anjay_servers_foreach_handler_t *handler,
                                   void *data) {
     AVS_LIST(anjay_server_info_t) it;

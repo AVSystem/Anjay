@@ -65,9 +65,10 @@ void _anjay_observe_init(anjay_observe_state_t *observe,
 
 void _anjay_observe_cleanup(anjay_observe_state_t *observe);
 
-void _anjay_observe_gc(anjay_t *anjay);
+void _anjay_observe_gc(anjay_unlocked_t *anjay);
 
-int _anjay_observe_handle(anjay_t *anjay, const anjay_request_t *request);
+int _anjay_observe_handle(anjay_unlocked_t *anjay,
+                          const anjay_request_t *request);
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref);
 
@@ -75,16 +76,17 @@ bool _anjay_observe_needs_flushing(anjay_connection_ref_t ref);
 
 int _anjay_observe_sched_flush(anjay_connection_ref_t ref);
 
-int _anjay_observe_notify(anjay_t *anjay,
+int _anjay_observe_notify(anjay_unlocked_t *anjay,
                           const anjay_uri_path_t *path,
                           anjay_ssid_t ssid,
                           bool invert_ssid_match);
 
 #    ifdef ANJAY_WITH_OBSERVATION_STATUS
-anjay_resource_observation_status_t _anjay_observe_status(anjay_t *anjay,
-                                                          anjay_oid_t oid,
-                                                          anjay_iid_t iid,
-                                                          anjay_rid_t rid);
+anjay_resource_observation_status_t
+_anjay_observe_status(anjay_unlocked_t *anjay,
+                      anjay_oid_t oid,
+                      anjay_iid_t iid,
+                      anjay_rid_t rid);
 #    endif // ANJAY_WITH_OBSERVATION_STATUS
 
 #else // ANJAY_WITH_OBSERVE

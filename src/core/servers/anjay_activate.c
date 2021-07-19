@@ -93,8 +93,8 @@ void _anjay_server_on_server_communication_timeout(
     anjay_server_connection_t *connection = _anjay_get_server_connection(ref);
     if (connection->state == ANJAY_SERVER_CONNECTION_STABLE
             && connection->stateful
-            && !anjay_disable_server_with_timeout(server->anjay, server->ssid,
-                                                  AVS_TIME_DURATION_ZERO)) {
+            && !_anjay_disable_server_with_timeout_unlocked(
+                       server->anjay, server->ssid, AVS_TIME_DURATION_ZERO)) {
         server->refresh_failed = true;
     } else {
         _anjay_server_on_server_communication_error(server,
@@ -205,7 +205,7 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
 }
 
 #ifdef ANJAY_WITH_BOOTSTRAP
-static bool should_retry_bootstrap(anjay_t *anjay) {
+static bool should_retry_bootstrap(anjay_unlocked_t *anjay) {
     if (anjay->bootstrap.bootstrap_trigger) {
         return true;
     }
@@ -232,7 +232,8 @@ static bool should_retry_bootstrap(anjay_t *anjay) {
 }
 #endif // ANJAY_WITH_BOOTSTRAP
 
-anjay_bootstrap_action_t _anjay_requested_bootstrap_action(anjay_t *anjay) {
+anjay_bootstrap_action_t
+_anjay_requested_bootstrap_action(anjay_unlocked_t *anjay) {
 #ifdef ANJAY_WITH_BOOTSTRAP
     // if Bootstrap attempt is already ongoing, there's no need to do anything
     if (!avs_coap_exchange_id_valid(
@@ -251,17 +252,21 @@ anjay_bootstrap_action_t _anjay_requested_bootstrap_action(anjay_t *anjay) {
  * failures (see the activation flow described in
  * _anjay_schedule_reload_servers() docs for details).
  */
-bool anjay_all_connections_failed(anjay_t *anjay) {
-    if (!anjay->servers->servers) {
-        return false;
-    }
-    AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
-        if (_anjay_server_active(it) || !it->refresh_failed) {
-            return false;
+bool anjay_all_connections_failed(anjay_t *anjay_locked) {
+    bool result = false;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    if (anjay->servers->servers) {
+        result = true;
+        AVS_LIST(anjay_server_info_t) it;
+        AVS_LIST_FOREACH(it, anjay->servers->servers) {
+            if (_anjay_server_active(it) || !it->refresh_failed) {
+                result = false;
+                break;
+            }
         }
     }
-    return true;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 int _anjay_server_sched_activate(anjay_server_info_t *server,
@@ -274,7 +279,7 @@ int _anjay_server_sched_activate(anjay_server_info_t *server,
     return _anjay_schedule_refresh_server(server, reactivate_delay);
 }
 
-int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay) {
+int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay) {
     int result = 0;
 
     AVS_LIST(anjay_server_info_t) it;
@@ -308,7 +313,7 @@ void _anjay_servers_add(anjay_servers_t *servers,
     AVS_LIST_INSERT(insert_ptr, server);
 }
 
-int _anjay_server_deactivate(anjay_t *anjay,
+int _anjay_server_deactivate(anjay_unlocked_t *anjay,
                              anjay_ssid_t ssid,
                              avs_time_duration_t reactivate_delay) {
     AVS_LIST(anjay_server_info_t) *server_ptr =
@@ -347,7 +352,7 @@ int _anjay_server_deactivate(anjay_t *anjay,
 }
 
 AVS_LIST(anjay_server_info_t)
-_anjay_servers_create_inactive(anjay_t *anjay, anjay_ssid_t ssid) {
+_anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     AVS_LIST(anjay_server_info_t) new_server =
             AVS_LIST_NEW_ELEMENT(anjay_server_info_t);
     if (!new_server) {
@@ -366,7 +371,7 @@ _anjay_servers_create_inactive(anjay_t *anjay, anjay_ssid_t ssid) {
 }
 
 static void disable_server_job(avs_sched_t *sched, const void *ssid_ptr) {
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
 
     anjay_iid_t server_iid;
@@ -388,20 +393,21 @@ static void disable_server_job(avs_sched_t *sched, const void *ssid_ptr) {
  * See the documentation of _anjay_schedule_reload_servers() for details on how
  * does the deactivation procedure work.
  */
-int anjay_disable_server(anjay_t *anjay, anjay_ssid_t ssid) {
+int anjay_disable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
-    if (!server) {
-        return -1;
+    if (server) {
+        avs_sched_del(&server->next_action_handle);
+        if (AVS_SCHED_NOW(anjay->sched, &server->next_action_handle,
+                          disable_server_job, &ssid, sizeof(ssid))) {
+            anjay_log(ERROR, _("could not schedule disable_server_job"));
+        } else {
+            result = 0;
+        }
     }
-
-    avs_sched_del(&server->next_action_handle);
-    if (AVS_SCHED_NOW(anjay->sched, &server->next_action_handle,
-                      disable_server_job, &ssid, sizeof(ssid))) {
-        anjay_log(ERROR, _("could not schedule disable_server_job"));
-        return -1;
-    }
-
-    return 0;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 typedef struct {
@@ -427,20 +433,9 @@ static void disable_server_with_timeout_job(avs_sched_t *sched,
     }
 }
 
-/**
- * Basically the same as anjay_disable_server(), but with explicit timeout value
- * instead of reading it from the data model.
- *
- * Aside from being a public API, it is called from:
- *
- * - bootstrap_finish_impl(), to deactivate the Bootstrap Server connection if
- *   legacy Server-Initiated Bootstrap is disabled
- * - serv_execute(), as a reference implementation of the Disable resource
- * - _anjay_schedule_socket_update(), to force reconnection of all sockets
- */
-int anjay_disable_server_with_timeout(anjay_t *anjay,
-                                      anjay_ssid_t ssid,
-                                      avs_time_duration_t timeout) {
+int _anjay_disable_server_with_timeout_unlocked(anjay_unlocked_t *anjay,
+                                                anjay_ssid_t ssid,
+                                                avs_time_duration_t timeout) {
     if (ssid == ANJAY_SSID_ANY) {
         anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
         return -1;
@@ -467,14 +462,17 @@ int anjay_disable_server_with_timeout(anjay_t *anjay,
     return 0;
 }
 
-/**
- * Schedules server activation immediately, after some sanity checks.
- *
- * The activation request is rejected if someone tries to enable the Bootstrap
- * Server, Client-Initiated Bootstrap is not supposed to be performed, and
- * legacy Server-Initiated Bootstrap is administratively disabled.
- */
-int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid) {
+int anjay_disable_server_with_timeout(anjay_t *anjay_locked,
+                                      anjay_ssid_t ssid,
+                                      avs_time_duration_t timeout) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_disable_server_with_timeout_unlocked(anjay, ssid, timeout);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     if (ssid == ANJAY_SSID_ANY) {
         anjay_log(WARNING, _("invalid SSID: ") "%u", ssid);
         return -1;
@@ -500,4 +498,12 @@ int anjay_enable_server(anjay_t *anjay, anjay_ssid_t ssid) {
     }
 
     return _anjay_server_sched_activate(*server_ptr, AVS_TIME_DURATION_ZERO);
+}
+
+int anjay_enable_server(anjay_t *anjay_locked, anjay_ssid_t ssid) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_enable_server_unlocked(anjay, ssid);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }

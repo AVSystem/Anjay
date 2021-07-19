@@ -42,17 +42,20 @@ anjay_t *_anjay_test_dm_init(const anjay_configuration_t *config) {
     return anjay;
 }
 
-void _anjay_test_dm_unsched_reload_sockets(anjay_t *anjay) {
+void _anjay_test_dm_unsched_reload_sockets(anjay_t *anjay_locked) {
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     avs_sched_del(&anjay->reload_servers_sched_job_handle);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
-avs_net_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
+avs_net_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay_locked,
                                                 anjay_ssid_t ssid) {
+    avs_net_socket_t *socket = NULL;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_UNIT_ASSERT_NOT_NULL(
             AVS_LIST_INSERT_NEW(anjay_server_info_t, &anjay->servers->servers));
     anjay->servers->servers->anjay = anjay;
     anjay->servers->servers->ssid = ssid;
-    avs_net_socket_t *socket = NULL;
     _anjay_mocksock_create(&socket, 1252, 1252);
     avs_unit_mocksock_expect_connect(socket, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
@@ -71,11 +74,12 @@ avs_net_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay,
             anjay->udp_response_cache, anjay->prng_ctx.ctx);
     AVS_UNIT_ASSERT_SUCCESS(
             avs_coap_ctx_set_socket(connection->coap_ctx, socket));
-
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return socket;
 }
 
-void _anjay_test_dm_finish(anjay_t *anjay) {
+void _anjay_test_dm_finish(anjay_t *anjay_locked) {
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_server_info_t *server;
     AVS_LIST_FOREACH(server, anjay->servers->servers) {
         anjay_server_connection_t *connection =
@@ -93,23 +97,29 @@ void _anjay_test_dm_finish(anjay_t *anjay) {
     AVS_LIST_CLEAR(&anjay->servers->servers) {
         _anjay_server_cleanup(anjay->servers->servers);
     }
-    anjay_delete(anjay);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    anjay_delete(anjay_locked);
     _anjay_mock_clock_finish();
 }
 
 int _anjay_test_dm_fake_security_list_instances(
-        anjay_t *anjay,
+        anjay_t *anjay_locked,
         const anjay_dm_object_def_t *const *obj_ptr,
         anjay_dm_list_ctx_t *ctx) {
     (void) obj_ptr;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_LIST(anjay_server_info_t) it;
     AVS_LIST_FOREACH(it, anjay->servers->servers) {
-        if (it->ssid == ANJAY_ID_INVALID) {
+        anjay_ssid_t ssid = it->ssid;
+        ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked_again, anjay);
+        if (ssid == ANJAY_ID_INVALID) {
             anjay_dm_emit(ctx, 0);
         } else {
-            anjay_dm_emit(ctx, it->ssid);
+            anjay_dm_emit(ctx, ssid);
         }
+        ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked_again);
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return 0;
 }
 

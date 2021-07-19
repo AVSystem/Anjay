@@ -21,15 +21,17 @@
 #include <stdlib.h>
 
 #include "../anjay_dm_core.h"
+#include "../anjay_io_core.h"
 #include "anjay_dm_execute.h"
 
 VISIBILITY_SOURCE_BEGIN
 
-static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx, int ch);
-static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t *ctx,
-                                                 int ch);
+static anjay_execute_state_t state_read_value(anjay_unlocked_execute_ctx_t *ctx,
+                                              int ch);
+static anjay_execute_state_t
+state_read_argument(anjay_unlocked_execute_ctx_t *ctx, int ch);
 
-static int get_next_char(anjay_execute_ctx_t *ctx) {
+static int get_next_char(anjay_unlocked_execute_ctx_t *ctx) {
     char read_char;
     avs_error_t err = avs_stream_read_reliably(
             ctx->payload_stream, &read_char, sizeof(read_char));
@@ -41,7 +43,7 @@ static int get_next_char(anjay_execute_ctx_t *ctx) {
     return EOF;
 }
 
-static int peek_next_char(anjay_execute_ctx_t *ctx) {
+static int peek_next_char(anjay_unlocked_execute_ctx_t *ctx) {
     char peeked_char;
     avs_error_t err = avs_stream_peek(ctx->payload_stream, 0, &peeked_char);
 
@@ -74,7 +76,7 @@ static bool is_value_assignment(int byte) {
     return byte == '=';
 }
 
-static int try_reading_next_arg(anjay_execute_ctx_t *ctx) {
+static int try_reading_next_arg(anjay_unlocked_execute_ctx_t *ctx) {
     if (ctx->state == STATE_ERROR) {
         return -1;
     }
@@ -104,47 +106,10 @@ static int try_reading_next_arg(anjay_execute_ctx_t *ctx) {
     return 0;
 }
 
-static int skip_value(anjay_execute_ctx_t *ctx) {
-    /*
-     * If we are in the middle of reading the value assigned to the argument,
-     * we'll skip the rest of it.
-     */
-    int ret = 0;
-    if (ctx->state == STATE_READ_VALUE) {
-        char buf[64];
-        do {
-            ret = anjay_execute_get_arg_value(ctx, NULL, buf, sizeof(buf));
-        } while (ret == ANJAY_BUFFER_TOO_SHORT);
-    }
-    return (int) ret;
-}
-
-int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
-                               int *out_arg,
-                               bool *out_has_value) {
-    if (skip_value(ctx)) {
-        return ANJAY_ERR_BAD_REQUEST;
-    }
-
-    if (ctx->state == STATE_EOF) {
-        *out_arg = -1;
-        *out_has_value = false;
-        return ANJAY_EXECUTE_GET_ARG_END;
-    }
-
-    int result = try_reading_next_arg(ctx);
-    if (result < 0) {
-        return ANJAY_ERR_BAD_REQUEST;
-    }
-    *out_arg = ctx->arg;
-    *out_has_value = ctx->arg_has_value;
-    return result;
-}
-
-int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
-                                size_t *out_bytes_read,
-                                char *out_buf,
-                                size_t buf_size) {
+static int execute_get_arg_value_unlocked(anjay_unlocked_execute_ctx_t *ctx,
+                                          size_t *out_bytes_read,
+                                          char *out_buf,
+                                          size_t buf_size) {
     size_t read_bytes = 0;
     bool value_finished = true;
     if (ctx->state == STATE_READ_VALUE) {
@@ -184,9 +149,81 @@ int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
     }
 }
 
-anjay_execute_ctx_t *_anjay_execute_ctx_create(avs_stream_t *payload_stream) {
-    anjay_execute_ctx_t *ret =
-            (anjay_execute_ctx_t *) avs_calloc(1, sizeof(anjay_execute_ctx_t));
+static int skip_value(anjay_unlocked_execute_ctx_t *ctx) {
+    /*
+     * If we are in the middle of reading the value assigned to the argument,
+     * we'll skip the rest of it.
+     */
+    int ret = 0;
+    if (ctx->state == STATE_READ_VALUE) {
+        char buf[64];
+        do {
+            ret = execute_get_arg_value_unlocked(ctx, NULL, buf, sizeof(buf));
+        } while (ret == ANJAY_BUFFER_TOO_SHORT);
+    }
+    return ret;
+}
+
+static int execute_get_next_arg_unlocked(anjay_unlocked_execute_ctx_t *ctx,
+                                         int *out_arg,
+                                         bool *out_has_value) {
+    if (skip_value(ctx)) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+
+    if (ctx->state == STATE_EOF) {
+        *out_arg = -1;
+        *out_has_value = false;
+        return ANJAY_EXECUTE_GET_ARG_END;
+    }
+
+    int result = try_reading_next_arg(ctx);
+    if (result < 0) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    *out_arg = ctx->arg;
+    *out_has_value = ctx->arg_has_value;
+    return result;
+}
+
+int anjay_execute_get_next_arg(anjay_execute_ctx_t *ctx,
+                               int *out_arg,
+                               bool *out_has_value) {
+    int result = -1;
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#endif // ANJAY_WITH_THREAD_SAFETY
+    result = execute_get_next_arg_unlocked(
+            _anjay_execute_get_unlocked(ctx), out_arg, out_has_value);
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+
+int anjay_execute_get_arg_value(anjay_execute_ctx_t *ctx,
+                                size_t *out_bytes_read,
+                                char *out_buf,
+                                size_t buf_size) {
+    int result = -1;
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#endif // ANJAY_WITH_THREAD_SAFETY
+    result = execute_get_arg_value_unlocked(_anjay_execute_get_unlocked(ctx),
+                                            out_bytes_read,
+                                            out_buf,
+                                            buf_size);
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+
+anjay_unlocked_execute_ctx_t *
+_anjay_execute_ctx_create(avs_stream_t *payload_stream) {
+    anjay_unlocked_execute_ctx_t *ret =
+            (anjay_unlocked_execute_ctx_t *) avs_calloc(
+                    1, sizeof(anjay_unlocked_execute_ctx_t));
     if (ret) {
         ret->payload_stream = payload_stream;
         ret->arg = -1;
@@ -195,15 +232,15 @@ anjay_execute_ctx_t *_anjay_execute_ctx_create(avs_stream_t *payload_stream) {
     return ret;
 }
 
-void _anjay_execute_ctx_destroy(anjay_execute_ctx_t **ctx) {
+void _anjay_execute_ctx_destroy(anjay_unlocked_execute_ctx_t **ctx) {
     if (ctx) {
         avs_free(*ctx);
         *ctx = NULL;
     }
 }
 
-static anjay_execute_state_t expect_separator_or_eof(anjay_execute_ctx_t *ctx,
-                                                     int ch) {
+static anjay_execute_state_t
+expect_separator_or_eof(anjay_unlocked_execute_ctx_t *ctx, int ch) {
     (void) ctx;
     if (is_arg_separator(ch)) {
         return STATE_FINISHED_READING_ARGUMENT;
@@ -213,7 +250,7 @@ static anjay_execute_state_t expect_separator_or_eof(anjay_execute_ctx_t *ctx,
     return STATE_ERROR;
 }
 
-static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx,
+static anjay_execute_state_t state_read_value(anjay_unlocked_execute_ctx_t *ctx,
                                               int ch) {
     if (is_value(ch)) {
         return STATE_READ_VALUE;
@@ -223,7 +260,8 @@ static anjay_execute_state_t state_read_value(anjay_execute_ctx_t *ctx,
     return STATE_ERROR;
 }
 
-static anjay_execute_state_t expect_value(anjay_execute_ctx_t *ctx, int ch) {
+static anjay_execute_state_t expect_value(anjay_unlocked_execute_ctx_t *ctx,
+                                          int ch) {
     (void) ctx;
     if (is_value_delimiter(ch)) {
         return STATE_READ_VALUE;
@@ -233,7 +271,8 @@ static anjay_execute_state_t expect_value(anjay_execute_ctx_t *ctx, int ch) {
 }
 
 static anjay_execute_state_t
-expect_separator_or_assignment_or_eof(anjay_execute_ctx_t *ctx, int ch) {
+expect_separator_or_assignment_or_eof(anjay_unlocked_execute_ctx_t *ctx,
+                                      int ch) {
     /*
      * This state is being entered only after some argument has been read
      * successfully, and it determines whether we should expect new argument, or
@@ -251,8 +290,8 @@ expect_separator_or_assignment_or_eof(anjay_execute_ctx_t *ctx, int ch) {
     return STATE_ERROR;
 }
 
-static anjay_execute_state_t state_read_argument(anjay_execute_ctx_t *ctx,
-                                                 int ch) {
+static anjay_execute_state_t
+state_read_argument(anjay_unlocked_execute_ctx_t *ctx, int ch) {
     assert(ch == EOF || (0 <= ch && ch <= UINT8_MAX));
 
     if (isdigit(ch)) {

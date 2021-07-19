@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.12.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.13.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -58,6 +58,11 @@ if(NOT CMAKE_VERSION VERSION_LESS 3.1)
     set(CMAKE_C_EXTENSIONS OFF)
 elseif(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+endif()
+
+if(POLICY CMP0067)
+    # Make try_compile() respect CMAKE_C_STANDARD and CMAKE_C_EXTENSIONS
+    cmake_policy(SET CMP0067 NEW)
 endif()
 
 option(WITH_EXTRA_WARNINGS "Enable extra compilation warnings" OFF)
@@ -246,6 +251,30 @@ cmake_dependent_option(WITH_INTERNAL_TRACE "Enable TRACE-level logs inside AVSys
 
 option(WITH_NET_STATS "Enable measuring amount of LwM2M traffic" ON)
 
+option(WITH_THREAD_SAFETY "Enable guarding of all accesses to anjay_t with a mutex" OFF)
+
+# ANJAY_MUTEX_LOCK() variant based on nested functions
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/nested_funcs.c"
+     "int main() { int nested(void) { return 0; } return nested(); }")
+try_compile(HAVE_NESTED_FUNCTIONS
+            "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp"
+            "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/nested_funcs.c")
+
+set(WITH_NESTED_FUNCTION_MUTEX_LOCKS_DEFAULT OFF)
+if(WITH_EXTRA_WARNINGS AND NOT CMAKE_BUILD_TYPE MATCHES "Rel")
+    set(WITH_NESTED_FUNCTION_MUTEX_LOCKS_DEFAULT ON)
+endif()
+
+cmake_dependent_option(WITH_NESTED_FUNCTION_MUTEX_LOCKS
+                       "Enable mutex locking variant based on nested functions (provides more compiler warnings)"
+                       "${WITH_NESTED_FUNCTION_MUTEX_LOCKS_DEFAULT}" "WITH_THREAD_SAFETY;HAVE_NESTED_FUNCTIONS;AVS_COMMONS_HAVE_PRAGMA_DIAGNOSTIC" OFF)
+
+# This option is not exposed in anjay_config.h,
+# as it is basically useless outside of development of the Anjay library itself
+if(WITH_NESTED_FUNCTION_MUTEX_LOCKS)
+    add_definitions(-DANJAY_WITH_NESTED_FUNCTION_MUTEX_LOCKS)
+endif()
+
 ################# MODULES ######################################################
 
 
@@ -424,6 +453,7 @@ set(ANJAY_WITH_MODULE_SERVER "${WITH_MODULE_server}")
 set(ANJAY_WITH_NET_STATS "${WITH_NET_STATS}")
 set(ANJAY_WITH_OBSERVATION_STATUS "${WITH_OBSERVATION_STATUS}")
 set(ANJAY_WITH_OBSERVE "${WITH_OBSERVE}")
+set(ANJAY_WITH_THREAD_SAFETY "${WITH_THREAD_SAFETY}")
 set(ANJAY_WITH_TRACE_LOGS "${WITH_ANJAY_TRACE_LOGS}")
 
 
@@ -629,6 +659,8 @@ if(WITH_TEST)
     add_subdirectory(tests/codegen)
 
     if(WITH_INTEGRATION_TESTS)
+        set(TEST_RERUNS 3 CACHE STRING "Maximal number of times we try to rerun each testsuite")
+        set(TEST_SENSITIVE_RERUNS 3 CACHE STRING "Maximal number of times we try to rerun each sensitive testsuite")
         add_subdirectory(tests/integration)
     endif()
 else(WITH_TEST)

@@ -55,7 +55,7 @@ def _read_url(url: str) -> bytes:
 
 
 class Lwm2mObjectRegistry:
-    def __init__(self, repo_url='https://raw.githubusercontent.com/OpenMobileAlliance/lwm2m-registry/test'):
+    def __init__(self, repo_url='https://raw.githubusercontent.com/OpenMobileAlliance/lwm2m-registry/prod'):
         self.repo_url = repo_url
         ddf_url = repo_url + '/DDF.xml'
         root = ElementTree.fromstring(_read_url(ddf_url))

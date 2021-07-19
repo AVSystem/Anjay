@@ -67,36 +67,36 @@ AVS_UNIT_TEST(attr_storage_persistence, persist_empty) {
             };                                                 \
     AVS_UNIT_ASSERT_SUCCESS(anjay_register_object(anjay, &OBJ##Oid))
 
-static void write_obj_attrs(anjay_t *anjay,
+static void write_obj_attrs(anjay_unlocked_t *anjay,
                             anjay_oid_t oid,
                             anjay_ssid_t ssid,
                             const anjay_dm_internal_oi_attrs_t *attrs) {
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_object_write_default_attrs(
             anjay, obj, ssid, attrs, NULL));
 }
 
-static void write_inst_attrs(anjay_t *anjay,
+static void write_inst_attrs(anjay_unlocked_t *anjay,
                              anjay_oid_t oid,
                              anjay_iid_t iid,
                              anjay_ssid_t ssid,
                              const anjay_dm_internal_oi_attrs_t *attrs) {
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_instance_write_default_attrs(
             anjay, obj, iid, ssid, attrs, NULL));
 }
 
-static void write_res_attrs(anjay_t *anjay,
+static void write_res_attrs(anjay_unlocked_t *anjay,
                             anjay_oid_t oid,
                             anjay_iid_t iid,
                             anjay_rid_t rid,
                             anjay_ssid_t ssid,
                             const anjay_dm_internal_r_attrs_t *attrs) {
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, oid);
     AVS_UNIT_ASSERT_NOT_NULL(obj);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_dm_call_resource_write_attrs(
@@ -174,7 +174,8 @@ static const char PERSIST_TEST_DATA[] =
         ;
 
 #ifdef WITH_CUSTOM_ATTRIBUTES
-static void persist_test_fill(anjay_t *anjay) {
+static void persist_test_fill(anjay_t *anjay_locked) {
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     write_obj_attrs(anjay, 4, 33,
                     &(const anjay_dm_internal_oi_attrs_t) {
                         .custom = {
@@ -258,6 +259,7 @@ static void persist_test_fill(anjay_t *anjay) {
                         },
                         _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                     });
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 AVS_UNIT_TEST(attr_storage_persistence, persist_full) {
@@ -301,7 +303,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_no_objects) {
     RESTORE_TEST_INIT(PERSIST_TEST_DATA);
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay_unlocked)->objects);
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -322,10 +326,11 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_one_object) {
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_EQUAL(
-            AVS_LIST_SIZE(_anjay_attr_storage_get(anjay)->objects), 1);
+            AVS_LIST_SIZE(_anjay_attr_storage_get(anjay_unlocked)->objects), 1);
     assert_object_equal(
-            _anjay_attr_storage_get(anjay)->objects,
+            _anjay_attr_storage_get(anjay_unlocked)->objects,
             test_object_entry(
                     42, NULL,
                     test_instance_entry(
@@ -361,6 +366,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_one_object) {
                                     NULL),
                             NULL),
                     NULL));
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -373,7 +379,8 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
     INSTALL_FAKE_OBJECT(517);
 
     // this will be cleared
-    write_inst_attrs(anjay, 69, 68, 67,
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    write_inst_attrs(anjay_unlocked, 69, 68, 67,
                      &(const anjay_dm_internal_oi_attrs_t) {
                          .standard = {
                              .min_period = 66,
@@ -381,6 +388,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
                          },
                          _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                      });
+    ANJAY_MUTEX_UNLOCK(anjay);
 
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ4, 0, (const anjay_iid_t[]) { ANJAY_ID_INVALID });
@@ -409,12 +417,13 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_EQUAL(
-            AVS_LIST_SIZE(_anjay_attr_storage_get(anjay)->objects), 3);
+            AVS_LIST_SIZE(_anjay_attr_storage_get(anjay_unlocked)->objects), 3);
 
     // object 4
     assert_object_equal(
-            _anjay_attr_storage_get(anjay)->objects,
+            _anjay_attr_storage_get(anjay_unlocked)->objects,
             test_object_entry(
                     4,
                     test_default_attrlist(
@@ -430,7 +439,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
 
     // object 42
     assert_object_equal(
-            AVS_LIST_NEXT(_anjay_attr_storage_get(anjay)->objects),
+            AVS_LIST_NEXT(_anjay_attr_storage_get(anjay_unlocked)->objects),
             test_object_entry(
                     42, NULL,
                     test_instance_entry(
@@ -469,7 +478,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
 
     // object 517
     assert_object_equal(
-            AVS_LIST_NTH(_anjay_attr_storage_get(anjay)->objects, 2),
+            AVS_LIST_NTH(_anjay_attr_storage_get(anjay_unlocked)->objects, 2),
             test_object_entry(
                     517, NULL,
                     test_instance_entry(
@@ -490,6 +499,7 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_all_objects) {
                                     NULL),
                             NULL),
                     NULL));
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -541,7 +551,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_no_instances) {
             anjay, &OBJ517, 0, (const anjay_iid_t[]) { ANJAY_ID_INVALID });
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay_unlocked)->objects);
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -566,7 +578,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_no_present_resources) {
                                                   ANJAY_MOCK_DM_RES_END });
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay_unlocked)->objects);
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -615,7 +629,8 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_broken_stream) {
     INSTALL_FAKE_OBJECT(517);
 
     // this will be cleared
-    write_inst_attrs(anjay, 517, 518, 519,
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    write_inst_attrs(anjay_unlocked, 517, 518, 519,
                      &(const anjay_dm_internal_oi_attrs_t) {
                          .standard = {
                              .min_period = 520,
@@ -623,11 +638,14 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_broken_stream) {
                          },
                          _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                      });
+    ANJAY_MUTEX_UNLOCK(anjay);
 
     AVS_UNIT_ASSERT_FAILED(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay_unlocked)->objects);
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -689,7 +707,8 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_insane_data) {
     INSTALL_FAKE_OBJECT(517);
 
     // this will be cleared
-    write_inst_attrs(anjay, 517, 518, 519,
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    write_inst_attrs(anjay_unlocked, 517, 518, 519,
                      &(const anjay_dm_internal_oi_attrs_t) {
                          .standard = {
                              .min_period = 520,
@@ -697,11 +716,14 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_insane_data) {
                          },
                          _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                      });
+    ANJAY_MUTEX_UNLOCK(anjay);
 
     AVS_UNIT_ASSERT_FAILED(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay_unlocked)->objects);
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -771,7 +793,10 @@ static const char TEST_DATA_WITH_EMPTY_RID_ATTRS[] =
         AVS_UNIT_ASSERT_FAILED(                                              \
                 anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf)); \
                                                                              \
-        AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);       \
+        ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);                             \
+        AVS_UNIT_ASSERT_NULL(                                                \
+                _anjay_attr_storage_get(anjay_unlocked)->objects);           \
+        ANJAY_MUTEX_UNLOCK(anjay);                                           \
         PERSISTENCE_TEST_FINISH;                                             \
     }
 
@@ -790,7 +815,9 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_data_with_bad_magic) {
     AVS_UNIT_ASSERT_FAILED(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay_unlocked)->objects);
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 
@@ -814,7 +841,8 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_duplicate_oid) {
     INSTALL_FAKE_OBJECT(4);
 
     // this will be cleared
-    write_inst_attrs(anjay, 4, 5, 6,
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    write_inst_attrs(anjay_unlocked, 4, 5, 6,
                      &(const anjay_dm_internal_oi_attrs_t) {
                          .standard = {
                              .min_period = 7,
@@ -822,11 +850,14 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_duplicate_oid) {
                          },
                          _ANJAY_DM_CUSTOM_ATTRS_INITIALIZER
                      });
+    ANJAY_MUTEX_UNLOCK(anjay);
 
     AVS_UNIT_ASSERT_FAILED(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
-    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay)->objects);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_NULL(_anjay_attr_storage_get(anjay_unlocked)->objects);
+    ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
 

@@ -74,7 +74,7 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
 int _anjay_server_sched_activate(anjay_server_info_t *server,
                                  avs_time_duration_t reactivate_delay);
 
-int _anjay_servers_sched_reactivate_all_given_up(anjay_t *anjay);
+int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay);
 
 /**
  * Inserts an active server entry into @p servers .
@@ -95,7 +95,7 @@ void _anjay_servers_add(anjay_servers_t *servers,
  * reactivate job after @p reactivate_delay. The job is a retryable one, so
  * the caller does not need to worry about reactivating the server manually.
  */
-int _anjay_server_deactivate(anjay_t *anjay,
+int _anjay_server_deactivate(anjay_unlocked_t *anjay,
                              anjay_ssid_t ssid,
                              avs_time_duration_t reactivate_delay);
 
@@ -104,8 +104,8 @@ int _anjay_server_deactivate(anjay_t *anjay,
  *
  * Does not schedule the reactivate job for created entry.
  */
-AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_t *anjay,
-                                                             anjay_ssid_t ssid);
+AVS_LIST(anjay_server_info_t)
+_anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid);
 
 /**
  * Checks whether now is a right moment to initiate Client Initiated Bootstrap
@@ -114,7 +114,8 @@ AVS_LIST(anjay_server_info_t) _anjay_servers_create_inactive(anjay_t *anjay,
  * @returns true if all requirements for Client Initiated Bootstrap are met,
  *          false otherwise.
  */
-anjay_bootstrap_action_t _anjay_requested_bootstrap_action(anjay_t *anjay);
+anjay_bootstrap_action_t
+_anjay_requested_bootstrap_action(anjay_unlocked_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

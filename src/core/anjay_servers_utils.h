@@ -27,15 +27,15 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  * NOTE: the bootstrap server is identified by the ANJAY_SSID_BOOTSTRAP
  * constant instead of its actual SSID.
  */
-anjay_server_info_t *_anjay_servers_find_active(anjay_t *anjay,
+anjay_server_info_t *_anjay_servers_find_active(anjay_unlocked_t *anjay,
                                                 anjay_ssid_t ssid);
 
 anjay_server_info_t *
-_anjay_servers_find_active_by_security_iid(anjay_t *anjay,
+_anjay_servers_find_active_by_security_iid(anjay_unlocked_t *anjay,
                                            anjay_iid_t security_iid);
 
 anjay_connection_ref_t
-_anjay_servers_find_active_primary_connection(anjay_t *anjay,
+_anjay_servers_find_active_primary_connection(anjay_unlocked_t *anjay,
                                               anjay_ssid_t ssid);
 
 /**
@@ -45,7 +45,8 @@ avs_time_real_t _anjay_registration_expire_time(anjay_server_info_t *server);
 
 bool _anjay_server_registration_expired(anjay_server_info_t *server);
 
-int _anjay_schedule_socket_update(anjay_t *anjay, anjay_iid_t security_iid);
+int _anjay_schedule_socket_update(anjay_unlocked_t *anjay,
+                                  anjay_iid_t security_iid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

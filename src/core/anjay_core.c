@@ -52,10 +52,11 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.12.0"
+#    define ANJAY_VERSION "2.13.0"
 #endif // ANJAY_VERSION
 
-static int init(anjay_t *anjay, const anjay_configuration_t *config) {
+static int init_anjay(anjay_unlocked_t *anjay,
+                      const anjay_configuration_t *config) {
 
 #ifdef ANJAY_WITH_BOOTSTRAP
     bool legacy_server_initiated_bootstrap =
@@ -177,29 +178,41 @@ const char *anjay_get_version(void) {
     return ANJAY_VERSION;
 }
 
-anjay_t *anjay_new(const anjay_configuration_t *config) {
+static anjay_t *alloc_anjay(void) {
     anjay_log(INFO, _("Initializing Anjay ") ANJAY_VERSION);
     _anjay_log_feature_list();
-    anjay_t *out = (anjay_t *) avs_calloc(1, sizeof(*out));
+    size_t alloc_size = sizeof(anjay_unlocked_t);
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    alloc_size += offsetof(anjay_t, anjay_unlocked_placeholder);
+#endif // ANJAY_WITH_THREAD_SAFETY
+    anjay_t *out = (anjay_t *) avs_calloc(1, alloc_size);
     if (!out) {
         anjay_log(ERROR, _("out of memory"));
         return NULL;
     }
-    out->sched = avs_sched_new("Anjay", out);
-    if (!out->sched) {
-        anjay_log(ERROR, _("out of memory"));
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    if (avs_mutex_create(&out->mutex)) {
+        anjay_log(ERROR, _("Could not create mutex"));
         avs_free(out);
         return NULL;
     }
-
-    if (init(out, config)) {
-        anjay_delete(out);
+    anjay_unlocked_t *anjay =
+            (anjay_unlocked_t *) &out->anjay_unlocked_placeholder;
+#else  // ANJAY_WITH_THREAD_SAFETY
+    anjay_unlocked_t *anjay = out;
+#endif // ANJAY_WITH_THREAD_SAFETY
+    if (!(anjay->sched = avs_sched_new("Anjay", anjay))) {
+        anjay_log(ERROR, _("out of memory"));
+#ifdef ANJAY_WITH_THREAD_SAFETY
+        avs_mutex_cleanup(&out->mutex);
+#endif // ANJAY_WITH_THREAD_SAFETY
+        avs_free(out);
         return NULL;
     }
     return out;
 }
 
-static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
+static void anjay_cleanup_impl(anjay_unlocked_t *anjay, bool deregister) {
     anjay_log(TRACE, _("deleting anjay object"));
 
 #ifdef ANJAY_WITH_DOWNLOADER
@@ -242,12 +255,54 @@ static void anjay_delete_impl(anjay_t *anjay, bool deregister) {
     avs_free(anjay->in_shared_buffer);
     avs_free(anjay->out_shared_buffer);
     _anjay_security_config_cache_cleanup(&anjay->security_config_from_dm_cache);
+}
 
-    avs_free(anjay);
+anjay_t *anjay_new(const anjay_configuration_t *config) {
+    anjay_t *out = alloc_anjay();
+    if (!out) {
+        return NULL;
+    }
+
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, out);
+    result = init_anjay(anjay, config);
+    if (result) {
+        anjay_cleanup_impl(anjay, true);
+    }
+    ANJAY_MUTEX_UNLOCK(out);
+
+    if (result) {
+#ifdef ANJAY_WITH_THREAD_SAFETY
+        avs_mutex_cleanup(&out->mutex);
+        anjay_unlocked_t *anjay_unlocked =
+                (anjay_unlocked_t *) &out->anjay_unlocked_placeholder;
+        avs_sched_t **sched_ptr = &anjay_unlocked->sched;
+        if (*sched_ptr) {
+            avs_sched_cleanup(sched_ptr);
+        }
+#endif // ANJAY_WITH_THREAD_SAFETY
+        avs_free(out);
+        out = NULL;
+    }
+    return out;
 }
 
 void anjay_delete(anjay_t *anjay) {
-    anjay_delete_impl(anjay, true);
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    int lock_result = avs_mutex_lock(anjay->mutex);
+    if (lock_result) {
+        anjay_log(WARNING, _("Could not lock mutex"));
+    }
+    anjay_cleanup_impl((anjay_unlocked_t *) &anjay->anjay_unlocked_placeholder,
+                       true);
+    if (!lock_result) {
+        avs_mutex_unlock(anjay->mutex);
+    }
+    avs_mutex_cleanup(&anjay->mutex);
+#else  // ANJAY_WITH_THREAD_SAFETY
+    anjay_cleanup_impl(anjay, true);
+#endif // ANJAY_WITH_THREAD_SAFETY
+    avs_free(anjay);
 }
 
 static void
@@ -640,7 +695,8 @@ static bool critical_option_validator(uint8_t msg_code, uint32_t optnum) {
     }
 }
 
-static int handle_request(anjay_t *anjay, const anjay_request_t *request) {
+static int handle_request(anjay_unlocked_t *anjay,
+                          const anjay_request_t *request) {
     int result = -1;
 
     if (_anjay_dm_current_ssid(anjay) == ANJAY_SSID_BOOTSTRAP) {
@@ -656,7 +712,7 @@ static int handle_request(anjay_t *anjay, const anjay_request_t *request) {
 }
 
 typedef struct {
-    anjay_t *anjay;
+    anjay_unlocked_t *anjay;
     int serve_result;
 } handle_incoming_message_args_t;
 
@@ -709,7 +765,7 @@ handle_incoming_message(avs_coap_streaming_request_ctx_t *ctx,
 }
 
 avs_time_duration_t
-_anjay_max_transmit_wait_for_transport(anjay_t *anjay,
+_anjay_max_transmit_wait_for_transport(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t transport) {
     switch (transport) {
     case ANJAY_SOCKET_TRANSPORT_INVALID:
@@ -725,7 +781,7 @@ _anjay_max_transmit_wait_for_transport(anjay_t *anjay,
 }
 
 avs_time_duration_t
-_anjay_exchange_lifetime_for_transport(anjay_t *anjay,
+_anjay_exchange_lifetime_for_transport(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t transport) {
     switch (transport) {
 #ifdef WITH_AVS_COAP_UDP
@@ -739,7 +795,8 @@ _anjay_exchange_lifetime_for_transport(anjay_t *anjay,
     }
 }
 
-int _anjay_bind_connection(anjay_t *anjay, anjay_connection_ref_t ref) {
+int _anjay_bind_connection(anjay_unlocked_t *anjay,
+                           anjay_connection_ref_t ref) {
     avs_net_socket_t *socket = _anjay_connection_get_online_socket(ref);
     if (!socket) {
         anjay_log(ERROR, _("server connection is not online"));
@@ -750,13 +807,14 @@ int _anjay_bind_connection(anjay_t *anjay, anjay_connection_ref_t ref) {
     return 0;
 }
 
-void _anjay_release_connection(anjay_t *anjay) {
+void _anjay_release_connection(anjay_unlocked_t *anjay) {
     _anjay_connection_schedule_queue_mode_close(anjay->current_connection);
     anjay->current_connection.server = NULL;
     anjay->current_connection.conn_type = ANJAY_CONNECTION_UNSET;
 }
 
-static int serve_connection(anjay_t *anjay, anjay_connection_ref_t connection) {
+static int serve_connection(anjay_unlocked_t *anjay,
+                            anjay_connection_ref_t connection) {
     if (_anjay_bind_connection(anjay, connection)) {
         return -1;
     }
@@ -788,7 +846,8 @@ static int serve_connection(anjay_t *anjay, anjay_connection_ref_t connection) {
     return avs_is_ok(err) ? args.serve_result : -1;
 }
 
-int anjay_serve(anjay_t *anjay, avs_net_socket_t *ready_socket) {
+static int serve_unlocked(anjay_unlocked_t *anjay,
+                          avs_net_socket_t *ready_socket) {
     _anjay_security_config_cache_cleanup(&anjay->security_config_from_dm_cache);
 
 #ifdef ANJAY_WITH_DOWNLOADER
@@ -807,12 +866,34 @@ int anjay_serve(anjay_t *anjay, avs_net_socket_t *ready_socket) {
     return serve_connection(anjay, connection);
 }
 
-avs_sched_t *anjay_get_scheduler(anjay_t *anjay) {
+int anjay_serve(anjay_t *anjay_locked, avs_net_socket_t *ready_socket) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = serve_unlocked(anjay, ready_socket);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+avs_sched_t *_anjay_get_scheduler_unlocked(anjay_unlocked_t *anjay) {
     return anjay->sched;
 }
 
-int anjay_sched_time_to_next(anjay_t *anjay, avs_time_duration_t *out_delay) {
+avs_sched_t *anjay_get_scheduler(anjay_t *anjay) {
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    anjay_unlocked_t *anjay_unlocked =
+            (anjay_unlocked_t *) &anjay->anjay_unlocked_placeholder;
+    return anjay_unlocked->sched;
+#else  // ANJAY_WITH_THREAD_SAFETY
+    return anjay->sched;
+#endif // ANJAY_WITH_THREAD_SAFETY
+}
+
+int anjay_sched_time_to_next(anjay_t *anjay_locked,
+                             avs_time_duration_t *out_delay) {
+    *out_delay = AVS_TIME_DURATION_INVALID;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     *out_delay = avs_sched_time_to_next(anjay->sched);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return avs_time_duration_valid(*out_delay) ? 0 : -1;
 }
 
@@ -839,8 +920,10 @@ int anjay_sched_calculate_wait_time_ms(anjay_t *anjay, int limit_ms) {
     return limit_ms;
 }
 
-void anjay_sched_run(anjay_t *anjay) {
+void anjay_sched_run(anjay_t *anjay_locked) {
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     avs_sched_run(anjay->sched);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 anjay_etag_t *anjay_etag_new(uint8_t etag_size) {
@@ -868,13 +951,25 @@ anjay_etag_t *anjay_etag_clone(const anjay_etag_t *old_etag) {
     return result;
 }
 
-avs_error_t anjay_download(anjay_t *anjay,
+#ifdef ANJAY_WITH_DOWNLOADER
+avs_error_t _anjay_download_unlocked(anjay_unlocked_t *anjay,
+                                     const anjay_download_config_t *config,
+                                     anjay_download_handle_t *out_handle) {
+    return _anjay_downloader_download(&anjay->downloader, out_handle, config);
+}
+#endif // ANJAY_WITH_DOWNLOADER
+
+avs_error_t anjay_download(anjay_t *anjay_locked,
                            const anjay_download_config_t *config,
                            anjay_download_handle_t *out_handle) {
 #ifdef ANJAY_WITH_DOWNLOADER
-    return _anjay_downloader_download(&anjay->downloader, out_handle, config);
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    err = _anjay_download_unlocked(anjay, config, out_handle);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return err;
 #else  // ANJAY_WITH_DOWNLOADER
-    (void) anjay;
+    (void) anjay_locked;
     (void) config;
     (void) out_handle;
     anjay_log(ERROR, _("CoAP download support disabled"));
@@ -883,14 +978,18 @@ avs_error_t anjay_download(anjay_t *anjay,
 }
 
 avs_error_t
-anjay_download_set_next_block_offset(anjay_t *anjay,
+anjay_download_set_next_block_offset(anjay_t *anjay_locked,
                                      anjay_download_handle_t dl_handle,
                                      size_t next_block_offset) {
 #ifdef ANJAY_WITH_DOWNLOADER
-    return _anjay_downloader_set_next_block_offset(
-            &anjay->downloader, dl_handle, next_block_offset);
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    err = _anjay_downloader_set_next_block_offset(&anjay->downloader, dl_handle,
+                                                  next_block_offset);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return err;
 #else  // ANJAY_WITH_DOWNLOADER
-    (void) anjay;
+    (void) anjay_locked;
     (void) dl_handle;
     (void) next_block_offset;
     anjay_log(ERROR, _("CoAP download support disabled"));
@@ -898,11 +997,21 @@ anjay_download_set_next_block_offset(anjay_t *anjay,
 #endif // ANJAY_WITH_DOWNLOADER
 }
 
-void anjay_download_abort(anjay_t *anjay, anjay_download_handle_t handle) {
 #ifdef ANJAY_WITH_DOWNLOADER
+void _anjay_download_abort_unlocked(anjay_unlocked_t *anjay,
+                                    anjay_download_handle_t handle) {
     _anjay_downloader_abort(&anjay->downloader, handle);
+}
+#endif // ANJAY_WITH_DOWNLOADER
+
+void anjay_download_abort(anjay_t *anjay_locked,
+                          anjay_download_handle_t handle) {
+#ifdef ANJAY_WITH_DOWNLOADER
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    _anjay_downloader_abort(&anjay->downloader, handle);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 #else  // ANJAY_WITH_DOWNLOADER
-    (void) anjay;
+    (void) anjay_locked;
     (void) handle;
     anjay_log(ERROR, _("CoAP download support disabled"));
 #endif // ANJAY_WITH_DOWNLOADER

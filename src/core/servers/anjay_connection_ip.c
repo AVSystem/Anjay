@@ -32,12 +32,12 @@
 VISIBILITY_SOURCE_BEGIN
 
 static const avs_net_dtls_handshake_timeouts_t *
-get_tls_handshake_timeouts(anjay_t *anjay) {
+get_tls_handshake_timeouts(anjay_unlocked_t *anjay) {
     return &anjay->udp_dtls_hs_tx_params;
 }
 
 static avs_error_t
-prepare_connection(anjay_t *anjay,
+prepare_connection(anjay_unlocked_t *anjay,
                    anjay_server_connection_t *out_conn,
                    const avs_net_ssl_configuration_t *socket_config,
                    const avs_net_socket_dane_tlsa_record_t *dane_tlsa_record,
@@ -110,7 +110,7 @@ prepare_connection(anjay_t *anjay,
     return AVS_OK;
 }
 
-static avs_error_t connect_socket(anjay_t *anjay,
+static avs_error_t connect_socket(anjay_unlocked_t *anjay,
                                   anjay_server_connection_t *connection) {
     (void) anjay;
 
@@ -145,7 +145,7 @@ static avs_error_t connect_socket(anjay_t *anjay,
 }
 
 #ifdef WITH_AVS_COAP_UDP
-static int ensure_udp_coap_context(anjay_t *anjay,
+static int ensure_udp_coap_context(anjay_unlocked_t *anjay,
                                    anjay_server_connection_t *connection) {
     if (!connection->coap_ctx) {
         connection->coap_ctx = avs_coap_udp_ctx_create(
@@ -161,7 +161,7 @@ static int ensure_udp_coap_context(anjay_t *anjay,
 }
 
 static avs_error_t
-try_bind_to_static_preferred_port(anjay_t *anjay,
+try_bind_to_static_preferred_port(anjay_unlocked_t *anjay,
                                   anjay_server_connection_t *connection) {
     if (anjay->udp_listen_port) {
         char static_preferred_port[ANJAY_MAX_URL_PORT_SIZE] = "";
@@ -246,7 +246,7 @@ get_preferred_local_addr(const anjay_server_connection_t *connection) {
     return NULL;
 }
 
-static avs_error_t connect_udp_socket(anjay_t *anjay,
+static avs_error_t connect_udp_socket(anjay_unlocked_t *anjay,
                                       anjay_server_connection_t *connection) {
     const char *local_addr = get_preferred_local_addr(connection);
     avs_error_t err;

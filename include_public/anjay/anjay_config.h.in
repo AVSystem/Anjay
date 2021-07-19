@@ -149,6 +149,11 @@
 #cmakedefine ANJAY_WITH_OBSERVATION_STATUS
 
 /**
+ * Enable guarding of all accesses to <c>anjay_t</c> with a mutex.
+ */
+#cmakedefine ANJAY_WITH_THREAD_SAFETY
+
+/**
  * Enable support for features new to LwM2M protocol version 1.1.
  *
  * IMPORTANT: Only available in the commercial version. Ignored in the open
@@ -416,8 +421,6 @@
 
 /**
  * Enable fw_update module (implementation of the Firmware Update object).
- *
- * Requires <c>ANJAY_WITH_DOWNLOADER</c> to be enabled.
  */
 #cmakedefine ANJAY_WITH_MODULE_FW_UPDATE
 

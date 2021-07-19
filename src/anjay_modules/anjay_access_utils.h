@@ -17,7 +17,7 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_ACCESS_UTILS_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_ACCESS_UTILS_H
 
-#include <anjay/anjay.h>
+#include <anjay_modules/anjay_utils_core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -48,7 +48,7 @@ void _anjay_acl_ref_validation_ctx_cleanup(anjay_acl_ref_validation_ctx_t *ctx);
  * - Validation of the same (target_oid, target_iid) pair is attempted more than
  *   once for the same ctx
  */
-int _anjay_acl_ref_validate_inst_ref(anjay_t *anjay,
+int _anjay_acl_ref_validate_inst_ref(anjay_unlocked_t *anjay,
                                      anjay_acl_ref_validation_ctx_t *ctx,
                                      anjay_oid_t target_oid,
                                      anjay_iid_t target_iid);

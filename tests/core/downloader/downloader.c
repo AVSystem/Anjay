@@ -30,7 +30,7 @@
     AVS_UNIT_ASSERT_TRUE(fabs((a) - (b)) < 0.01 /* epsilon */)
 
 typedef struct {
-    anjay_t anjay;
+    anjay_unlocked_t *anjay;
     avs_net_socket_t *mocksock[4];
     size_t num_mocksocks;
 } dl_test_env_t;
@@ -68,19 +68,35 @@ static void setup(void) {
         avs_unit_mocksock_enable_state_getopt(ENV.mocksock[i]);
     }
 
-    ENV.anjay = (anjay_t) {
-        .online_transports = ANJAY_TRANSPORT_SET_ALL,
-        .sched = avs_sched_new("Anjay-test", &ENV.anjay),
-        .udp_tx_params = DETERMINISTIC_TX_PARAMS,
-        .prng_ctx = (anjay_prng_ctx_t) {
-            .ctx = avs_crypto_prng_new(NULL, NULL),
-            .allocated_by_user = true
-        }
+    anjay_t *anjay_locked =
+            avs_calloc(1,
+#ifdef ANJAY_WITH_THREAD_SAFETY
+                       offsetof(anjay_t, anjay_unlocked_placeholder) +
+#endif // ANJAY_WITH_THREAD_SAFETY
+                               sizeof(anjay_unlocked_t));
+    AVS_UNIT_ASSERT_NOT_NULL(anjay_locked);
+    ENV.anjay =
+#ifdef ANJAY_WITH_THREAD_SAFETY
+            (anjay_unlocked_t *) &anjay_locked->anjay_unlocked_placeholder
+#else  // ANJAY_WITH_THREAD_SAFETY
+            anjay_locked
+#endif // ANJAY_WITH_THREAD_SAFETY
+            ;
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    AVS_UNIT_ASSERT_SUCCESS(avs_mutex_create(&anjay_locked->mutex));
+    AVS_UNIT_ASSERT_SUCCESS(avs_mutex_lock(anjay_locked->mutex));
+#endif // ANJAY_WITH_THREAD_SAFETY
+    ENV.anjay->online_transports = ANJAY_TRANSPORT_SET_ALL;
+    ENV.anjay->sched = avs_sched_new("Anjay-test", ENV.anjay);
+    ENV.anjay->udp_tx_params = DETERMINISTIC_TX_PARAMS;
+    ENV.anjay->prng_ctx = (anjay_prng_ctx_t) {
+        .ctx = avs_crypto_prng_new(NULL, NULL),
+        .allocated_by_user = true
     };
 
-    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay.prng_ctx.ctx);
+    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay->prng_ctx.ctx);
 
-    _anjay_downloader_init(&ENV.anjay.downloader, &ENV.anjay);
+    _anjay_downloader_init(&ENV.anjay->downloader, ENV.anjay);
 
     // NOTE: Special initialization value is used to ensure CoAP Message ID
     // starts with 0.
@@ -89,25 +105,35 @@ static void setup(void) {
 
     enum { ARBITRARY_SIZE = 4096 };
     // used by the downloader internally
-    ENV.anjay.out_shared_buffer = avs_shared_buffer_new(ARBITRARY_SIZE);
-    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay.out_shared_buffer);
+    ENV.anjay->out_shared_buffer = avs_shared_buffer_new(ARBITRARY_SIZE);
+    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay->out_shared_buffer);
 
-    ENV.anjay.in_shared_buffer = avs_shared_buffer_new(ARBITRARY_SIZE);
-    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay.in_shared_buffer);
+    ENV.anjay->in_shared_buffer = avs_shared_buffer_new(ARBITRARY_SIZE);
+    AVS_UNIT_ASSERT_NOT_NULL(ENV.anjay->in_shared_buffer);
 }
 
 static void teardown() {
-    _anjay_downloader_cleanup(&ENV.anjay.downloader);
-    avs_sched_cleanup(&ENV.anjay.sched);
+    _anjay_downloader_cleanup(&ENV.anjay->downloader);
+    avs_sched_cleanup(&ENV.anjay->sched);
 
     for (size_t i = 0; i < AVS_ARRAY_SIZE(ENV.mocksock); ++i) {
         _anjay_mocksock_expect_stats_zero(ENV.mocksock[i]);
-        _anjay_socket_cleanup(&ENV.anjay, &ENV.mocksock[i]);
+        _anjay_socket_cleanup(ENV.anjay, &ENV.mocksock[i]);
     }
 
-    avs_free(ENV.anjay.out_shared_buffer);
-    avs_free(ENV.anjay.in_shared_buffer);
-    avs_crypto_prng_free(&ENV.anjay.prng_ctx.ctx);
+    avs_free(ENV.anjay->out_shared_buffer);
+    avs_free(ENV.anjay->in_shared_buffer);
+    avs_crypto_prng_free(&ENV.anjay->prng_ctx.ctx);
+
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    anjay_t *anjay_locked =
+            AVS_CONTAINER_OF(ENV.anjay, anjay_t, anjay_unlocked_placeholder);
+    avs_mutex_unlock(anjay_locked->mutex);
+    avs_mutex_cleanup(&anjay_locked->mutex);
+    avs_free(anjay_locked);
+#else  // ANJAY_WITH_THREAD_SAFETY
+    avs_free(ENV.anjay);
+#endif // ANJAY_WITH_THREAD_SAFETY
 
     memset(&ENV, 0, sizeof(ENV));
 
@@ -122,7 +148,7 @@ typedef struct {
 } on_next_block_args_t;
 
 typedef struct {
-    anjay_t *anjay;
+    anjay_unlocked_t *anjay;
     AVS_LIST(on_next_block_args_t) on_next_block_calls;
     bool finish_call_expected;
     anjay_download_status_t expected_download_status;
@@ -153,7 +179,9 @@ static avs_error_t on_next_block(anjay_t *anjay,
     handler_data_t *hd = (handler_data_t *) user_data;
     AVS_UNIT_ASSERT_NOT_NULL(hd->on_next_block_calls);
 
-    AVS_UNIT_ASSERT_TRUE(anjay == hd->anjay);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_unlocked == hd->anjay);
+    ANJAY_MUTEX_UNLOCK(anjay);
 
     on_next_block_args_t *args = AVS_LIST_DETACH(&hd->on_next_block_calls);
     if (etag && etag->size > 0) {
@@ -176,7 +204,9 @@ static void on_download_finished(anjay_t *anjay,
                                  void *user_data) {
     handler_data_t *hd = (handler_data_t *) user_data;
 
-    AVS_UNIT_ASSERT_TRUE(anjay == hd->anjay);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_TRUE(anjay_unlocked == hd->anjay);
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_TRUE(hd->finish_call_expected);
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(&status, &hd->expected_download_status,
                                       sizeof(status));
@@ -198,7 +228,7 @@ static void setup_simple_with_etag(const char *url, const anjay_etag_t *etag) {
     setup();
     SIMPLE_ENV.base = &ENV;
     SIMPLE_ENV.data = (handler_data_t) {
-        .anjay = &SIMPLE_ENV.base->anjay
+        .anjay = SIMPLE_ENV.base->anjay
     };
     SIMPLE_ENV.cfg = (anjay_download_config_t) {
         .url = url,
@@ -221,7 +251,7 @@ static void teardown_simple() {
 
 static int handle_packet(void) {
     AVS_LIST(anjay_socket_entry_t) sock = NULL;
-    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay.downloader, &sock);
+    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay->downloader, &sock);
     if (!sock) {
         return -1;
     }
@@ -230,7 +260,7 @@ static int handle_packet(void) {
     AVS_UNIT_ASSERT_TRUE(SIMPLE_ENV.mocksock == sock->socket);
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_handle_packet(
-            &SIMPLE_ENV.base->anjay.downloader, sock->socket));
+            &SIMPLE_ENV.base->anjay->downloader, sock->socket));
 
     AVS_LIST_CLEAR(&sock);
     return 0;
@@ -239,14 +269,14 @@ static int handle_packet(void) {
 static void perform_simple_download(void) {
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     do {
-        while (anjay_sched_calculate_wait_time_ms(&SIMPLE_ENV.base->anjay,
-                                                  INT_MAX)
-               == 0) {
-            anjay_sched_run(&SIMPLE_ENV.base->anjay);
+        while (avs_time_duration_equal(avs_sched_time_to_next(
+                                               SIMPLE_ENV.base->anjay->sched),
+                                       AVS_TIME_DURATION_ZERO)) {
+            avs_sched_run(SIMPLE_ENV.base->anjay->sched);
         }
     } while (!handle_packet());
 
@@ -258,7 +288,7 @@ AVS_UNIT_TEST(downloader, empty_has_no_sockets) {
 
     AVS_LIST(anjay_socket_entry_t) socks = NULL;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_downloader_get_sockets(&ENV.anjay.downloader, &socks));
+            _anjay_downloader_get_sockets(&ENV.anjay->downloader, &socks));
     AVS_UNIT_ASSERT_NULL(socks);
 
     teardown();
@@ -291,17 +321,17 @@ AVS_UNIT_TEST(downloader, cannot_download_without_handlers) {
 
     SIMPLE_ENV.cfg.on_next_block = NULL;
     SIMPLE_ENV.cfg.on_download_finished = NULL;
-    assert_download_not_possible(&SIMPLE_ENV.base->anjay.downloader,
+    assert_download_not_possible(&SIMPLE_ENV.base->anjay->downloader,
                                  &SIMPLE_ENV.cfg);
 
     SIMPLE_ENV.cfg.on_next_block = NULL;
     SIMPLE_ENV.cfg.on_download_finished = on_download_finished;
-    assert_download_not_possible(&SIMPLE_ENV.base->anjay.downloader,
+    assert_download_not_possible(&SIMPLE_ENV.base->anjay->downloader,
                                  &SIMPLE_ENV.cfg);
 
     SIMPLE_ENV.cfg.on_next_block = on_next_block;
     SIMPLE_ENV.cfg.on_download_finished = NULL;
-    assert_download_not_possible(&SIMPLE_ENV.base->anjay.downloader,
+    assert_download_not_possible(&SIMPLE_ENV.base->anjay->downloader,
                                  &SIMPLE_ENV.cfg);
 
     teardown_simple();
@@ -396,14 +426,14 @@ AVS_UNIT_TEST(downloader, download_abort_on_cleanup) {
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg
 
             ));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     expect_download_finished(&SIMPLE_ENV.data,
                              _anjay_download_status_aborted());
-    _anjay_downloader_cleanup(&SIMPLE_ENV.base->anjay.downloader);
+    _anjay_downloader_cleanup(&SIMPLE_ENV.base->anjay->downloader);
 
     teardown_simple();
 }
@@ -439,7 +469,7 @@ AVS_UNIT_TEST(downloader, unsupported_protocol) {
 
     anjay_download_handle_t handle = NULL;
     avs_error_t err =
-            _anjay_downloader_download(&SIMPLE_ENV.base->anjay.downloader,
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
                                        &handle, &SIMPLE_ENV.cfg);
     AVS_UNIT_ASSERT_EQUAL(err.category, AVS_ERRNO_CATEGORY);
     AVS_UNIT_ASSERT_EQUAL(err.code, AVS_EPROTONOSUPPORT);
@@ -452,7 +482,7 @@ AVS_UNIT_TEST(downloader, unrelated_socket) {
     setup();
 
     AVS_UNIT_ASSERT_FAILED(_anjay_downloader_handle_packet(
-            &ENV.anjay.downloader, ENV.mocksock[0]));
+            &ENV.anjay->downloader, ENV.mocksock[0]));
 
     teardown();
 }
@@ -608,14 +638,14 @@ AVS_UNIT_TEST(downloader, buffer_too_small_to_download) {
     setup_simple("coap://127.0.0.1:5683");
 
     size_t new_capacity = 3;
-    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay.out_shared_buffer
+    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay->out_shared_buffer
                    ->capacity,
            &new_capacity, sizeof(new_capacity));
     avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     expect_download_finished(&SIMPLE_ENV.data,
@@ -623,9 +653,10 @@ AVS_UNIT_TEST(downloader, buffer_too_small_to_download) {
                                  .category = AVS_COAP_ERR_CATEGORY,
                                  .code = AVS_COAP_ERR_MESSAGE_TOO_BIG
                              }));
-    while (anjay_sched_calculate_wait_time_ms(&SIMPLE_ENV.base->anjay, INT_MAX)
-           == 0) {
-        anjay_sched_run(&SIMPLE_ENV.base->anjay);
+    while (avs_time_duration_equal(avs_sched_time_to_next(
+                                           SIMPLE_ENV.base->anjay->sched),
+                                   AVS_TIME_DURATION_ZERO)) {
+        avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
 
     teardown_simple();
@@ -644,15 +675,16 @@ AVS_UNIT_TEST(downloader, retry) {
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
-    while (anjay_sched_calculate_wait_time_ms(&SIMPLE_ENV.base->anjay, INT_MAX)
-           == 0) {
-        anjay_sched_run(&SIMPLE_ENV.base->anjay);
+    while (avs_time_duration_equal(avs_sched_time_to_next(
+                                           SIMPLE_ENV.base->anjay->sched),
+                                   AVS_TIME_DURATION_ZERO)) {
+        avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
 
     // request retransmissions
@@ -660,13 +692,13 @@ AVS_UNIT_TEST(downloader, retry) {
     for (size_t i = 0; i < 4; ++i) {
         // make sure there's a retransmission job scheduled
         avs_time_duration_t time_to_next =
-                avs_sched_time_to_next(SIMPLE_ENV.base->anjay.sched);
+                avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched);
         AVS_UNIT_ASSERT_TRUE(avs_time_duration_valid(time_to_next));
         _anjay_mock_clock_advance(time_to_next);
 
         avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                         req->length);
-        avs_sched_run(SIMPLE_ENV.base->anjay.sched);
+        avs_sched_run(SIMPLE_ENV.base->anjay->sched);
 
         // ...and it's roughly exponential backoff
         if (avs_time_duration_valid(last_time_to_next)) {
@@ -702,11 +734,11 @@ AVS_UNIT_TEST(downloader, retry) {
     // TODO: remove after T2217.
     // CoAP context cleanup. It's a side effect of a hack in
     // coap.c:cleanup_coap_transfer().
-    avs_sched_run(SIMPLE_ENV.base->anjay.sched);
+    avs_sched_run(SIMPLE_ENV.base->anjay->sched);
 
     // retransmission job should be canceled
     AVS_UNIT_ASSERT_FALSE(avs_time_duration_valid(
-            avs_sched_time_to_next(SIMPLE_ENV.base->anjay.sched)));
+            avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched)));
 
     avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
 
@@ -724,20 +756,21 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
-    while (anjay_sched_calculate_wait_time_ms(&SIMPLE_ENV.base->anjay, INT_MAX)
-           == 0) {
-        anjay_sched_run(&SIMPLE_ENV.base->anjay);
+    while (avs_time_duration_equal(avs_sched_time_to_next(
+                                           SIMPLE_ENV.base->anjay->sched),
+                                   AVS_TIME_DURATION_ZERO)) {
+        avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
 
     // retransmission job should be scheduled
     avs_time_duration_t time_to_next =
-            avs_sched_time_to_next(SIMPLE_ENV.base->anjay.sched);
+            avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched);
     AVS_UNIT_ASSERT_TRUE(avs_time_duration_to_fscalar(time_to_next, AVS_TIME_S)
                          < 5.0);
 
@@ -747,7 +780,7 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
     expect_timeout(SIMPLE_ENV.mocksock);
     AVS_UNIT_ASSERT_SUCCESS(handle_packet());
 
-    time_to_next = avs_sched_time_to_next(SIMPLE_ENV.base->anjay.sched);
+    time_to_next = avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched);
     AVS_UNIT_ASSERT_TRUE(avs_time_duration_valid(time_to_next));
 
     // no separate response should abort the transfer after
@@ -761,7 +794,7 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
     // abort job should be scheduled to run after EXCHANGE_LIFETIME
     _anjay_mock_clock_advance(
             avs_coap_udp_exchange_lifetime(&DETERMINISTIC_TX_PARAMS));
-    avs_sched_run(SIMPLE_ENV.base->anjay.sched);
+    avs_sched_run(SIMPLE_ENV.base->anjay->sched);
 
     avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
 
@@ -770,7 +803,7 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
 
 static size_t num_downloads_in_progress(void) {
     AVS_LIST(anjay_socket_entry_t) sock = NULL;
-    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay.downloader, &sock);
+    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay->downloader, &sock);
     size_t result = AVS_LIST_SIZE(sock);
     AVS_LIST_CLEAR(&sock);
     return result;
@@ -783,26 +816,26 @@ AVS_UNIT_TEST(downloader, abort) {
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // start_download_job is scheduled
     AVS_UNIT_ASSERT_TRUE(avs_time_duration_valid(
-            avs_sched_time_to_next(SIMPLE_ENV.base->anjay.sched)));
+            avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched)));
     AVS_UNIT_ASSERT_EQUAL(1, num_downloads_in_progress());
 
     expect_download_finished(&SIMPLE_ENV.data,
                              _anjay_download_status_aborted());
-    _anjay_downloader_abort(&SIMPLE_ENV.base->anjay.downloader, handle);
+    _anjay_downloader_abort(&SIMPLE_ENV.base->anjay->downloader, handle);
 
     // TODO: remove after T2217.
     // CoAP context cleanup. It's a side effect of a hack in
     // coap.c:cleanup_coap_transfer().
-    avs_sched_run(SIMPLE_ENV.base->anjay.sched);
+    avs_sched_run(SIMPLE_ENV.base->anjay->sched);
 
     // start_download_job is canceled
     AVS_UNIT_ASSERT_FALSE(avs_time_duration_valid(
-            avs_sched_time_to_next(SIMPLE_ENV.base->anjay.sched)));
+            avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched)));
     AVS_UNIT_ASSERT_EQUAL(0, num_downloads_in_progress());
 
     teardown_simple();
@@ -847,7 +880,7 @@ AVS_UNIT_TEST(downloader, in_buffer_size_enforces_smaller_initial_block_size) {
     // the downloader should realize it cannot hold blocks bigger than 128
     // bytes and request that size
     size_t new_capacity = 256;
-    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay.in_shared_buffer
+    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay->in_shared_buffer
                    ->capacity,
            &new_capacity, sizeof(new_capacity));
 
@@ -924,7 +957,7 @@ AVS_UNIT_TEST(downloader, renegotiation_after_first_packet) {
     // We request as much as we can (i.e. 64 bytes due to limit of
     // in_buffer_size)
     size_t new_capacity = 128;
-    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay.in_shared_buffer
+    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay->in_shared_buffer
                    ->capacity,
            &new_capacity, sizeof(new_capacity));
 
@@ -995,7 +1028,7 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
         memset(&args, 0, sizeof(args));
 
         size_t new_capacity = 64;
-        memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay.in_shared_buffer
+        memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay->in_shared_buffer
                        ->capacity,
                &new_capacity, sizeof(new_capacity));
 
@@ -1047,16 +1080,16 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
         SIMPLE_ENV.cfg.start_offset = offset;
         anjay_download_handle_t handle = NULL;
         AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-                &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+                &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
         AVS_UNIT_ASSERT_NOT_NULL(handle);
 
         expect_timeout(SIMPLE_ENV.mocksock);
 
         do {
-            while (anjay_sched_calculate_wait_time_ms(&SIMPLE_ENV.base->anjay,
-                                                      INT_MAX)
-                   == 0) {
-                anjay_sched_run(&SIMPLE_ENV.base->anjay);
+            while (avs_time_duration_equal(
+                    avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched),
+                    AVS_TIME_DURATION_ZERO)) {
+                avs_sched_run(SIMPLE_ENV.base->anjay->sched);
             }
         } while (!handle_packet());
 
@@ -1078,7 +1111,7 @@ AVS_UNIT_TEST(downloader, resumption_without_etag_and_block_estimation) {
                           12 + // CoAP header
                           6 +  // max size of BLOCK2 option
                           9;   // ETag option
-    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay.in_shared_buffer
+    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay->in_shared_buffer
                    ->capacity,
            &new_capacity, sizeof(new_capacity));
 
@@ -1092,18 +1125,19 @@ AVS_UNIT_TEST(downloader, resumption_without_etag_and_block_estimation) {
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // We only care about verifying initial BLOCK2 size.
-    while (anjay_sched_calculate_wait_time_ms(&SIMPLE_ENV.base->anjay, INT_MAX)
-           == 0) {
-        anjay_sched_run(&SIMPLE_ENV.base->anjay);
+    while (avs_time_duration_equal(avs_sched_time_to_next(
+                                           SIMPLE_ENV.base->anjay->sched),
+                                   AVS_TIME_DURATION_ZERO)) {
+        avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
 
     expect_download_finished(&SIMPLE_ENV.data,
                              _anjay_download_status_aborted());
-    _anjay_downloader_abort(&SIMPLE_ENV.base->anjay.downloader, handle);
+    _anjay_downloader_abort(&SIMPLE_ENV.base->anjay->downloader, handle);
     teardown_simple();
 }
 
@@ -1123,7 +1157,7 @@ AVS_UNIT_TEST(downloader, resumption_with_etag_and_block_estimation) {
                           12 + // CoAP header
                           6;   // max size of BLOCK2 option
     // Intentionally not including ETag in calculations
-    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay.in_shared_buffer
+    memcpy((void *) (intptr_t) &SIMPLE_ENV.base->anjay->in_shared_buffer
                    ->capacity,
            &new_capacity, sizeof(new_capacity));
 
@@ -1138,11 +1172,12 @@ AVS_UNIT_TEST(downloader, resumption_with_etag_and_block_estimation) {
 
     anjay_download_handle_t handle = NULL;
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay.downloader, &handle, &SIMPLE_ENV.cfg));
+            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
-    while (anjay_sched_calculate_wait_time_ms(&SIMPLE_ENV.base->anjay, INT_MAX)
-           == 0) {
-        anjay_sched_run(&SIMPLE_ENV.base->anjay);
+    while (avs_time_duration_equal(avs_sched_time_to_next(
+                                           SIMPLE_ENV.base->anjay->sched),
+                                   AVS_TIME_DURATION_ZERO)) {
+        avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
 
     const coap_test_msg_t *res =
@@ -1162,7 +1197,7 @@ AVS_UNIT_TEST(downloader, resumption_with_etag_and_block_estimation) {
     // We only care about verifying initial BLOCK2 size.
     expect_download_finished(&SIMPLE_ENV.data,
                              _anjay_download_status_aborted());
-    _anjay_downloader_abort(&SIMPLE_ENV.base->anjay.downloader, handle);
+    _anjay_downloader_abort(&SIMPLE_ENV.base->anjay->downloader, handle);
     teardown_simple();
 
     avs_free(etag);

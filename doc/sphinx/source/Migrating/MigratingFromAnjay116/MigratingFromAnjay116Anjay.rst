@@ -281,9 +281,7 @@ Example of old code, taken from the Access Control Object implementation::
         }
     };
 
-Equivalent new code:
-
-.. snippet-source:: src/modules/access_control/anjay_access_control_handlers.c
+Equivalent new code::
 
     static int ac_list_resources(anjay_t *anjay,
                                  obj_ptr_t obj_ptr,

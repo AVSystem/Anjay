@@ -28,7 +28,7 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-typedef int anjay_input_ctx_constructor_t(anjay_input_ctx_t **out,
+typedef int anjay_input_ctx_constructor_t(anjay_unlocked_input_ctx_t **out,
                                           avs_stream_t **stream_ptr,
                                           const anjay_uri_path_t *request_uri);
 
@@ -42,21 +42,22 @@ anjay_input_ctx_constructor_t _anjay_input_text_create;
 anjay_input_ctx_constructor_t _anjay_input_tlv_create;
 #endif // ANJAY_WITHOUT_TLV
 
-int _anjay_input_ctx_destroy(anjay_input_ctx_t **ctx_ptr);
+int _anjay_input_ctx_destroy(anjay_unlocked_input_ctx_t **ctx_ptr);
 
 /**
  * Fetches bytes from @p ctx. On success it frees underlying @p buffer storage
  * via @p _anjay_sec_raw_buffer_clear and reinitializes @p buffer properly with
  * obtained data.
  */
-int _anjay_io_fetch_bytes(anjay_input_ctx_t *ctx, anjay_raw_buffer_t *buffer);
+int _anjay_io_fetch_bytes(anjay_unlocked_input_ctx_t *ctx,
+                          anjay_raw_buffer_t *buffer);
 
 /**
  * Fetches string from @p ctx. It calls avs_free() on @p *out and, on success,
  * reinitializes @p *out properly with a pointer to (heap allocated) obtained
  * data.
  */
-int _anjay_io_fetch_string(anjay_input_ctx_t *ctx, char **out);
+int _anjay_io_fetch_string(anjay_unlocked_input_ctx_t *ctx, char **out);
 
 VISIBILITY_PRIVATE_HEADER_END
 

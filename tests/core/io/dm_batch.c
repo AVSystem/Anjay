@@ -472,12 +472,15 @@ AVS_UNIT_TEST(dm_batch, serialize_empty) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     const char expected[] = "[]";
     AVS_UNIT_ASSERT_EQUAL(avs_stream_outbuf_offset(&stream),
@@ -512,12 +515,15 @@ AVS_UNIT_TEST(dm_batch, serialize_bytes) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -547,12 +553,15 @@ AVS_UNIT_TEST(dm_batch, serialize_one_resource) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -584,12 +593,15 @@ AVS_UNIT_TEST(dm_batch, serialize_one_resource_with_absolute_timestamp) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -624,12 +636,15 @@ AVS_UNIT_TEST(dm_batch, serialize_two_resources) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -670,12 +685,15 @@ AVS_UNIT_TEST(dm_batch, serialize_two_resources_with_relative_timestamp) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size = avs_simple_snprintf(
@@ -709,12 +727,15 @@ AVS_UNIT_TEST(dm_batch, serialize_resource_instance) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -747,12 +768,15 @@ AVS_UNIT_TEST(dm_batch, absolute_timestamp_higher_than_serialization_time) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -786,12 +810,15 @@ AVS_UNIT_TEST(dm_batch, relative_timestamp_higher_than_serialization_time) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -824,12 +851,15 @@ AVS_UNIT_TEST(dm_batch, relative_timestamp_absolute_serialization_time) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =
@@ -869,12 +899,15 @@ AVS_UNIT_TEST(dm_batch, negative_timestamp) {
     char buffer[200] = { 0 };
     avs_stream_outbuf_t stream = AVS_STREAM_OUTBUF_STATIC_INITIALIZER;
     avs_stream_outbuf_set_buffer(&stream, buffer, sizeof(buffer));
-    anjay_output_ctx_t *out_ctx =
+    anjay_unlocked_output_ctx_t *out_ctx =
             _anjay_output_senml_like_create((avs_stream_t *) &stream,
                                             &MAKE_ROOT_PATH(),
                                             AVS_COAP_FORMAT_SENML_JSON);
     AVS_UNIT_ASSERT_NOT_NULL(out_ctx);
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_batch_data_output(anjay, batch, 1, out_ctx));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_batch_data_output(anjay_unlocked, batch, 1, out_ctx));
+    ANJAY_MUTEX_UNLOCK(anjay);
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out_ctx));
     char expected[200];
     int expected_size =

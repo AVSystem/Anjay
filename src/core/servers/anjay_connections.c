@@ -48,14 +48,14 @@ avs_net_socket_t *_anjay_connection_internal_get_socket(
 }
 
 void _anjay_connection_internal_clean_socket(
-        anjay_t *anjay, anjay_server_connection_t *connection) {
+        anjay_unlocked_t *anjay, anjay_server_connection_t *connection) {
     _anjay_coap_ctx_cleanup(anjay, &connection->coap_ctx);
     _anjay_socket_cleanup(anjay, &connection->conn_socket_);
     avs_sched_del(&connection->queue_mode_close_socket_clb);
 }
 
 avs_error_t
-_anjay_connection_init_psk_security(anjay_t *anjay,
+_anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
                                     anjay_iid_t security_iid,
                                     anjay_rid_t identity_rid,
                                     anjay_rid_t secret_key_rid,
@@ -163,13 +163,13 @@ avs_error_t _anjay_server_connection_internal_bring_online(
     return AVS_OK;
 }
 
-static void connection_cleanup(anjay_t *anjay,
+static void connection_cleanup(anjay_unlocked_t *anjay,
                                anjay_server_connection_t *connection) {
     _anjay_connection_internal_clean_socket(anjay, connection);
     _anjay_url_cleanup(&connection->uri);
 }
 
-void _anjay_connections_close(anjay_t *anjay,
+void _anjay_connections_close(anjay_unlocked_t *anjay,
                               anjay_connections_t *connections) {
     anjay_connection_type_t conn_type;
     ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
@@ -191,7 +191,7 @@ void _anjay_connection_internal_invalidate_session(
 }
 
 static avs_error_t
-recreate_socket(anjay_t *anjay,
+recreate_socket(anjay_unlocked_t *anjay,
                 const anjay_connection_type_definition_t *def,
                 anjay_server_connection_t *connection,
                 anjay_connection_info_t *inout_info) {
@@ -409,7 +409,7 @@ void _anjay_server_connections_refresh(
     _anjay_connection_info_cleanup(&server_info);
 }
 
-avs_error_t _anjay_get_security_config(anjay_t *anjay,
+avs_error_t _anjay_get_security_config(anjay_unlocked_t *anjay,
                                        anjay_security_config_t *out_config,
                                        anjay_security_config_cache_t *cache,
                                        anjay_ssid_t ssid,
@@ -425,7 +425,7 @@ avs_error_t _anjay_get_security_config(anjay_t *anjay,
     return err;
 }
 
-bool _anjay_socket_transport_supported(anjay_t *anjay,
+bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t type) {
     if (get_connection_type_def(type) == NULL) {
         return false;

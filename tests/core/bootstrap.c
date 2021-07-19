@@ -678,7 +678,7 @@ AVS_UNIT_TEST(bootstrap_delete, bs) {
     DM_TEST_FINISH;
 }
 
-static int fail_notify_perform(anjay_t *anjay,
+static int fail_notify_perform(anjay_unlocked_t *anjay,
                                anjay_notify_queue_t *queue_ptr) {
     (void) anjay;
     (void) queue_ptr;

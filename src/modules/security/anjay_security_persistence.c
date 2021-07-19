@@ -140,83 +140,88 @@ static avs_error_t handle_instance(avs_persistence_context_t *ctx,
     return err;
 }
 
-avs_error_t anjay_security_object_persist(anjay_t *anjay,
+avs_error_t anjay_security_object_persist(anjay_t *anjay_locked,
                                           avs_stream_t *out_stream) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *sec_obj =
+    assert(anjay_locked);
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *sec_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
-    sec_repr_t *repr = _anjay_sec_get(sec_obj);
+    sec_repr_t *repr = sec_obj ? _anjay_sec_get(*sec_obj) : NULL;
     if (!repr) {
-        return avs_errno(AVS_EBADF);
+        err = avs_errno(AVS_EBADF);
+    } else if (avs_is_ok((err = avs_stream_write(out_stream, MAGIC_V0,
+                                                 sizeof(MAGIC_V0))))) {
+        avs_persistence_context_t ctx =
+                avs_persistence_store_context_create(out_stream);
+        err = avs_persistence_list(
+                &ctx,
+                (AVS_LIST(void) *) (repr->in_transaction
+                                            ? &repr->saved_instances
+                                            : &repr->instances),
+                sizeof(sec_instance_t), handle_instance, (void *) (intptr_t) 0,
+                NULL);
+        if (avs_is_ok(err)) {
+            _anjay_sec_clear_modified(repr);
+            persistence_log(INFO, _("Security Object state persisted"));
+        }
     }
-    avs_error_t err = avs_stream_write(out_stream, MAGIC_V0, sizeof(MAGIC_V0));
-    if (avs_is_err(err)) {
-        return err;
-    }
-    avs_persistence_context_t ctx =
-            avs_persistence_store_context_create(out_stream);
-    err = avs_persistence_list(
-            &ctx,
-            (AVS_LIST(void) *) (repr->in_transaction ? &repr->saved_instances
-                                                     : &repr->instances),
-            sizeof(sec_instance_t), handle_instance, (void *) (intptr_t) 0,
-            NULL);
-    if (avs_is_ok(err)) {
-        _anjay_sec_clear_modified(repr);
-        persistence_log(INFO, _("Security Object state persisted"));
-    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 
-avs_error_t anjay_security_object_restore(anjay_t *anjay,
+avs_error_t anjay_security_object_restore(anjay_t *anjay_locked,
                                           avs_stream_t *in_stream) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *sec_obj =
+    assert(anjay_locked);
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *sec_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
-    sec_repr_t *repr = _anjay_sec_get(sec_obj);
+    sec_repr_t *repr = sec_obj ? _anjay_sec_get(*sec_obj) : NULL;
     if (!repr || repr->in_transaction) {
-        return avs_errno(AVS_EBADF);
-    }
-    sec_repr_t backup = *repr;
-
-    AVS_STATIC_ASSERT(sizeof(MAGIC_V0) == sizeof(MAGIC_V1), magic_size_v0_v1);
-    char magic_header[sizeof(MAGIC_V0)];
-    avs_error_t err = avs_stream_read_reliably(in_stream, magic_header,
-                                               sizeof(magic_header));
-    if (avs_is_err(err)) {
-        persistence_log(WARNING, _("Could not read Security Object header"));
-        return err;
-    }
-
-    int version;
-    if (!memcmp(magic_header, MAGIC_V0, sizeof(MAGIC_V0))) {
-        version = 0;
-    } else if (!memcmp(magic_header, MAGIC_V1, sizeof(MAGIC_V1))) {
-        version = 1;
+        err = avs_errno(AVS_EBADF);
     } else {
-        persistence_log(WARNING, _("Header magic constant mismatch"));
-        return avs_errno(AVS_EBADMSG);
+        sec_repr_t backup = *repr;
+
+        AVS_STATIC_ASSERT(sizeof(MAGIC_V0) == sizeof(MAGIC_V1),
+                          magic_size_v0_v1);
+        char magic_header[sizeof(MAGIC_V0)];
+        int version = -1;
+        if (avs_is_err(
+                    (err = avs_stream_read_reliably(in_stream, magic_header,
+                                                    sizeof(magic_header))))) {
+            persistence_log(WARNING,
+                            _("Could not read Security Object header"));
+        } else if (!memcmp(magic_header, MAGIC_V0, sizeof(MAGIC_V0))) {
+            version = 0;
+        } else if (!memcmp(magic_header, MAGIC_V1, sizeof(MAGIC_V1))) {
+            version = 1;
+        } else {
+            persistence_log(WARNING, _("Header magic constant mismatch"));
+            err = avs_errno(AVS_EBADMSG);
+        }
+        if (avs_is_ok(err)) {
+            avs_persistence_context_t restore_ctx =
+                    avs_persistence_restore_context_create(in_stream);
+            repr->instances = NULL;
+            err = avs_persistence_list(&restore_ctx,
+                                       (AVS_LIST(void) *) &repr->instances,
+                                       sizeof(sec_instance_t), handle_instance,
+                                       (void *) (intptr_t) version, NULL);
+            if (avs_is_ok(err) && _anjay_sec_object_validate(anjay, repr)) {
+                err = avs_errno(AVS_EPROTO);
+            }
+            if (avs_is_err(err)) {
+                _anjay_sec_destroy_instances(&repr->instances);
+                repr->instances = backup.instances;
+            } else {
+                _anjay_sec_destroy_instances(&backup.instances);
+                _anjay_sec_clear_modified(repr);
+                persistence_log(INFO, _("Security Object state restored"));
+            }
+        }
     }
-    avs_persistence_context_t restore_ctx =
-            avs_persistence_restore_context_create(in_stream);
-    repr->instances = NULL;
-    err = avs_persistence_list(&restore_ctx,
-                               (AVS_LIST(void) *) &repr->instances,
-                               sizeof(sec_instance_t), handle_instance,
-                               (void *) (intptr_t) version, NULL);
-    if (avs_is_ok(err) && _anjay_sec_object_validate(anjay, repr)) {
-        err = avs_errno(AVS_EPROTO);
-    }
-    if (avs_is_err(err)) {
-        _anjay_sec_destroy_instances(&repr->instances);
-        repr->instances = backup.instances;
-    } else {
-        _anjay_sec_destroy_instances(&backup.instances);
-        _anjay_sec_clear_modified(repr);
-        persistence_log(INFO, _("Security Object state restored"));
-    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 

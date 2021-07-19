@@ -21,7 +21,8 @@
 VISIBILITY_SOURCE_BEGIN
 
 AVS_LIST(anjay_dm_installed_module_t) *
-_anjay_dm_module_find_ptr(anjay_t *anjay, const anjay_dm_module_t *module) {
+_anjay_dm_module_find_ptr(anjay_unlocked_t *anjay,
+                          const anjay_dm_module_t *module) {
     if (!anjay) {
         return NULL;
     }
@@ -34,7 +35,7 @@ _anjay_dm_module_find_ptr(anjay_t *anjay, const anjay_dm_module_t *module) {
     return NULL;
 }
 
-int _anjay_dm_module_install(anjay_t *anjay,
+int _anjay_dm_module_install(anjay_unlocked_t *anjay,
                              const anjay_dm_module_t *module,
                              void *arg) {
     if (_anjay_dm_module_find_ptr(anjay, module)) {
@@ -54,7 +55,7 @@ int _anjay_dm_module_install(anjay_t *anjay,
     return 0;
 }
 
-int _anjay_dm_module_uninstall(anjay_t *anjay,
+int _anjay_dm_module_uninstall(anjay_unlocked_t *anjay,
                                const anjay_dm_module_t *module) {
     AVS_LIST(anjay_dm_installed_module_t) *module_ptr =
             _anjay_dm_module_find_ptr(anjay, module);
@@ -69,7 +70,7 @@ int _anjay_dm_module_uninstall(anjay_t *anjay,
     return 0;
 }
 
-void *_anjay_dm_module_get_arg(anjay_t *anjay,
+void *_anjay_dm_module_get_arg(anjay_unlocked_t *anjay,
                                const anjay_dm_module_t *module) {
     AVS_LIST(anjay_dm_installed_module_t) *entry_ptr =
             _anjay_dm_module_find_ptr(anjay, module);

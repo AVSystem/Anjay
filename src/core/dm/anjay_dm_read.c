@@ -29,28 +29,30 @@
 VISIBILITY_SOURCE_BEGIN
 
 static int
-read_resource_instance_internal(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj,
+read_resource_instance_internal(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t *obj,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
                                 anjay_riid_t riid,
-                                anjay_output_ctx_t *out_ctx) {
+                                anjay_unlocked_output_ctx_t *out_ctx) {
     int result;
     (void) ((result = _anjay_output_set_path(
-                     out_ctx,
-                     &MAKE_RESOURCE_INSTANCE_PATH((*obj)->oid, iid, rid, riid)))
+                     out_ctx, &MAKE_RESOURCE_INSTANCE_PATH(
+                                      _anjay_dm_installed_object_oid(obj), iid,
+                                      rid, riid)))
             || (result = _anjay_dm_call_resource_read(anjay, obj, iid, rid,
                                                       riid, out_ctx, NULL)));
     return result;
 }
 
-static int read_resource_instance_clb(anjay_t *anjay,
-                                      const anjay_dm_object_def_t *const *obj,
+static int read_resource_instance_clb(anjay_unlocked_t *anjay,
+                                      const anjay_dm_installed_object_t *obj,
                                       anjay_iid_t iid,
                                       anjay_rid_t rid,
                                       anjay_riid_t riid,
                                       void *out_ctx_) {
-    anjay_output_ctx_t *out_ctx = (anjay_output_ctx_t *) out_ctx_;
+    anjay_unlocked_output_ctx_t *out_ctx =
+            (anjay_unlocked_output_ctx_t *) out_ctx_;
     int result = read_resource_instance_internal(anjay, obj, iid, rid, riid,
                                                  out_ctx);
     if ((result == ANJAY_ERR_METHOD_NOT_ALLOWED
@@ -59,20 +61,22 @@ static int read_resource_instance_clb(anjay_t *anjay,
         dm_log(DEBUG,
                "%s" _(" when attempted to read ") "/%u/%u/%u/%u" _(
                        ", skipping"),
-               AVS_COAP_CODE_STRING((uint8_t) -result), (*obj)->oid, iid, rid,
-               riid);
+               AVS_COAP_CODE_STRING((uint8_t) -result),
+               _anjay_dm_installed_object_oid(obj), iid, rid, riid);
     }
     return result;
 }
 
-static int read_multiple_resource(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj,
+static int read_multiple_resource(anjay_unlocked_t *anjay,
+                                  const anjay_dm_installed_object_t *obj,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
-                                  anjay_output_ctx_t *out_ctx) {
+                                  anjay_unlocked_output_ctx_t *out_ctx) {
     int result;
     (void) ((result = _anjay_output_set_path(
-                     out_ctx, &MAKE_RESOURCE_PATH((*obj)->oid, iid, rid)))
+                     out_ctx,
+                     &MAKE_RESOURCE_PATH(_anjay_dm_installed_object_oid(obj),
+                                         iid, rid)))
             || (result = _anjay_output_start_aggregate(out_ctx))
             || (result = _anjay_dm_foreach_resource_instance(
                         anjay, obj, iid, rid, read_resource_instance_clb,
@@ -80,18 +84,20 @@ static int read_multiple_resource(anjay_t *anjay,
     return result;
 }
 
-static int read_resource_internal(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj,
+static int read_resource_internal(anjay_unlocked_t *anjay,
+                                  const anjay_dm_installed_object_t *obj,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_dm_resource_kind_t kind,
-                                  anjay_output_ctx_t *out_ctx) {
+                                  anjay_unlocked_output_ctx_t *out_ctx) {
     if (_anjay_dm_res_kind_multiple(kind)) {
         return read_multiple_resource(anjay, obj, iid, rid, out_ctx);
     } else {
         int result;
         (void) ((result = _anjay_output_set_path(
-                         out_ctx, &MAKE_RESOURCE_PATH((*obj)->oid, iid, rid)))
+                         out_ctx, &MAKE_RESOURCE_PATH(
+                                          _anjay_dm_installed_object_oid(obj),
+                                          iid, rid)))
                 || (result = _anjay_dm_call_resource_read(anjay, obj, iid, rid,
                                                           ANJAY_ID_INVALID,
                                                           out_ctx, NULL)));
@@ -99,26 +105,27 @@ static int read_resource_internal(anjay_t *anjay,
     }
 }
 
-static int read_resource(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj,
+static int read_resource(anjay_unlocked_t *anjay,
+                         const anjay_dm_installed_object_t *obj,
                          anjay_iid_t iid,
                          anjay_rid_t rid,
                          anjay_dm_resource_kind_t kind,
-                         anjay_output_ctx_t *out_ctx) {
+                         anjay_unlocked_output_ctx_t *out_ctx) {
     if (!_anjay_dm_res_kind_readable(kind)) {
-        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable"), (*obj)->oid, iid, rid);
+        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable"),
+               _anjay_dm_installed_object_oid(obj), iid, rid);
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
     return read_resource_internal(anjay, obj, iid, rid, kind, out_ctx);
 }
 
 typedef struct {
-    anjay_output_ctx_t *out_ctx;
+    anjay_unlocked_output_ctx_t *out_ctx;
     anjay_ssid_t requesting_ssid;
 } read_instance_resource_clb_args_t;
 
-static int read_instance_resource_clb(anjay_t *anjay,
-                                      const anjay_dm_object_def_t *const *obj,
+static int read_instance_resource_clb(anjay_unlocked_t *anjay,
+                                      const anjay_dm_installed_object_t *obj,
                                       anjay_iid_t iid,
                                       anjay_rid_t rid,
                                       anjay_dm_resource_kind_t kind,
@@ -127,8 +134,8 @@ static int read_instance_resource_clb(anjay_t *anjay,
     read_instance_resource_clb_args_t *args =
             (read_instance_resource_clb_args_t *) args_;
     if (presence == ANJAY_DM_RES_ABSENT) {
-        dm_log(DEBUG, "/%u/%u/%u" _(" is not present, skipping"), (*obj)->oid,
-               iid, rid);
+        dm_log(DEBUG, "/%u/%u/%u" _(" is not present, skipping"),
+               _anjay_dm_installed_object_oid(obj), iid, rid);
         return 0;
     }
     bool read_allowed = _anjay_dm_res_kind_readable(kind);
@@ -137,8 +144,8 @@ static int read_instance_resource_clb(anjay_t *anjay,
                        || _anjay_dm_res_kind_writable(kind);
     }
     if (!read_allowed) {
-        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable, skipping"), (*obj)->oid,
-               iid, rid);
+        dm_log(DEBUG, "/%u/%u/%u" _(" is not readable, skipping"),
+               _anjay_dm_installed_object_oid(obj), iid, rid);
         return 0;
     }
 
@@ -149,19 +156,22 @@ static int read_instance_resource_clb(anjay_t *anjay,
             && !(result = _anjay_output_clear_path(args->out_ctx))) {
         dm_log(DEBUG,
                "%s" _(" when attempted to read ") "/%u/%u/%u" _(", skipping"),
-               AVS_COAP_CODE_STRING((uint8_t) -result), (*obj)->oid, iid, rid);
+               AVS_COAP_CODE_STRING((uint8_t) -result),
+               _anjay_dm_installed_object_oid(obj), iid, rid);
     }
     return result;
 }
 
-static int read_instance(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj,
+static int read_instance(anjay_unlocked_t *anjay,
+                         const anjay_dm_installed_object_t *obj,
                          anjay_iid_t iid,
                          anjay_ssid_t requesting_ssid,
-                         anjay_output_ctx_t *out_ctx) {
+                         anjay_unlocked_output_ctx_t *out_ctx) {
     int result;
     (void) ((result = _anjay_output_set_path(
-                     out_ctx, &MAKE_INSTANCE_PATH((*obj)->oid, iid)))
+                     out_ctx,
+                     &MAKE_INSTANCE_PATH(_anjay_dm_installed_object_oid(obj),
+                                         iid)))
             || (result = _anjay_output_start_aggregate(out_ctx))
             || (result = _anjay_dm_foreach_resource(
                         anjay, obj, iid, read_instance_resource_clb,
@@ -175,11 +185,11 @@ static int read_instance(anjay_t *anjay,
 typedef struct {
     anjay_uri_path_t uri;
     anjay_ssid_t requesting_ssid;
-    anjay_output_ctx_t *out_ctx;
+    anjay_unlocked_output_ctx_t *out_ctx;
 } read_instance_clb_args_t;
 
-static int read_instance_clb(anjay_t *anjay,
-                             const anjay_dm_object_def_t *const *obj,
+static int read_instance_clb(anjay_unlocked_t *anjay,
+                             const anjay_dm_installed_object_t *obj,
                              anjay_iid_t iid,
                              void *args_) {
     read_instance_clb_args_t *args = (read_instance_clb_args_t *) args_;
@@ -195,11 +205,11 @@ static int read_instance_clb(anjay_t *anjay,
     return read_instance(anjay, obj, iid, args->requesting_ssid, args->out_ctx);
 }
 
-static int read_object(anjay_t *anjay,
-                       const anjay_dm_object_def_t *const *obj,
+static int read_object(anjay_unlocked_t *anjay,
+                       const anjay_dm_installed_object_t *obj,
                        const anjay_uri_path_t *uri,
                        anjay_ssid_t requesting_ssid,
-                       anjay_output_ctx_t *out_ctx) {
+                       anjay_unlocked_output_ctx_t *out_ctx) {
     assert(_anjay_uri_path_has(uri, ANJAY_ID_OID));
     return _anjay_dm_foreach_instance(anjay, obj, read_instance_clb,
                                       &(read_instance_clb_args_t) {
@@ -211,23 +221,24 @@ static int read_object(anjay_t *anjay,
 
 typedef struct {
     anjay_ssid_t requesting_ssid;
-    anjay_output_ctx_t *out_ctx;
+    anjay_unlocked_output_ctx_t *out_ctx;
 } read_object_clb_args_t;
 
-static int read_object_clb(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj,
+static int read_object_clb(anjay_unlocked_t *anjay,
+                           const anjay_dm_installed_object_t *obj,
                            void *args_) {
-    if ((*obj)->oid == ANJAY_DM_OID_SECURITY) {
+    if (_anjay_dm_installed_object_oid(obj) == ANJAY_DM_OID_SECURITY) {
         return ANJAY_FOREACH_CONTINUE;
     }
     read_object_clb_args_t *args = (read_object_clb_args_t *) args_;
-    return read_object(anjay, obj, &MAKE_OBJECT_PATH((*obj)->oid),
+    return read_object(anjay, obj,
+                       &MAKE_OBJECT_PATH(_anjay_dm_installed_object_oid(obj)),
                        args->requesting_ssid, args->out_ctx);
 }
 
-static int read_root(anjay_t *anjay,
+static int read_root(anjay_unlocked_t *anjay,
                      anjay_ssid_t requesting_ssid,
-                     anjay_output_ctx_t *out_ctx) {
+                     anjay_unlocked_output_ctx_t *out_ctx) {
     return _anjay_dm_foreach_object(anjay, read_object_clb,
                                     &(read_object_clb_args_t) {
                                         .requesting_ssid = requesting_ssid,
@@ -235,11 +246,11 @@ static int read_root(anjay_t *anjay,
                                     });
 }
 
-int _anjay_dm_read(anjay_t *anjay,
-                   const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_read(anjay_unlocked_t *anjay,
+                   const anjay_dm_installed_object_t *obj,
                    const anjay_dm_path_info_t *path_info,
                    anjay_ssid_t requesting_ssid,
-                   anjay_output_ctx_t *out_ctx) {
+                   anjay_unlocked_output_ctx_t *out_ctx) {
     if (!path_info->is_present) {
         return ANJAY_ERR_NOT_FOUND;
     }
@@ -258,8 +269,9 @@ int _anjay_dm_read(anjay_t *anjay,
         assert(!obj);
         return read_root(anjay, requesting_ssid, out_ctx);
     }
-    assert(obj && *obj);
-    assert(path_info->uri.ids[ANJAY_ID_OID] == (*obj)->oid);
+    assert(obj);
+    assert(path_info->uri.ids[ANJAY_ID_OID]
+           == _anjay_dm_installed_object_oid(obj));
     if (_anjay_uri_path_leaf_is(&path_info->uri, ANJAY_ID_OID)) {
         return read_object(anjay, obj, &path_info->uri, requesting_ssid,
                            out_ctx);
@@ -278,11 +290,11 @@ int _anjay_dm_read(anjay_t *anjay,
     }
 }
 
-int _anjay_dm_read_and_destroy_ctx(anjay_t *anjay,
-                                   const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_read_and_destroy_ctx(anjay_unlocked_t *anjay,
+                                   const anjay_dm_installed_object_t *obj,
                                    const anjay_dm_path_info_t *path_info,
                                    anjay_ssid_t requesting_ssid,
-                                   anjay_output_ctx_t **out_ctx_ptr) {
+                                   anjay_unlocked_output_ctx_t **out_ctx_ptr) {
     dm_log(LAZY_DEBUG, _("Read ") "%s", ANJAY_DEBUG_MAKE_PATH(&path_info->uri));
     return _anjay_output_ctx_destroy_and_process_result(
             out_ctx_ptr, _anjay_dm_read(anjay, obj, path_info, requesting_ssid,
@@ -290,7 +302,7 @@ int _anjay_dm_read_and_destroy_ctx(anjay_t *anjay,
 }
 
 anjay_msg_details_t
-_anjay_dm_response_details_for_read(anjay_t *anjay,
+_anjay_dm_response_details_for_read(anjay_unlocked_t *anjay,
                                     const anjay_request_t *request,
                                     bool requires_hierarchical_format,
                                     anjay_lwm2m_version_t lwm2m_version) {
@@ -309,8 +321,8 @@ _anjay_dm_response_details_for_read(anjay_t *anjay,
     };
 }
 
-int _anjay_dm_read_or_observe(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_read_or_observe(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t *obj,
                               const anjay_request_t *request) {
     assert(_anjay_uri_path_has(&request->uri, ANJAY_ID_OID));
     if (request->observe) {
@@ -340,7 +352,7 @@ int _anjay_dm_read_or_observe(anjay_t *anjay,
         return ANJAY_ERR_INTERNAL;
     }
 
-    anjay_output_ctx_t *out_ctx = NULL;
+    anjay_unlocked_output_ctx_t *out_ctx = NULL;
     if ((result = _anjay_output_dynamic_construct(&out_ctx, response_stream,
                                                   &request->uri, details.format,
                                                   ANJAY_ACTION_READ))) {
@@ -350,11 +362,11 @@ int _anjay_dm_read_or_observe(anjay_t *anjay,
             anjay, obj, &path_info, _anjay_dm_current_ssid(anjay), &out_ctx);
 }
 
-int _anjay_dm_read_resource_into_ctx(anjay_t *anjay,
+int _anjay_dm_read_resource_into_ctx(anjay_unlocked_t *anjay,
                                      const anjay_uri_path_t *path,
-                                     anjay_output_ctx_t *ctx) {
+                                     anjay_unlocked_output_ctx_t *ctx) {
     assert(_anjay_uri_path_leaf_is(path, ANJAY_ID_RID));
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, path->ids[ANJAY_ID_OID]);
     if (!obj) {
         dm_log(ERROR, _("unregistered Object ID: ") "%u",
@@ -373,15 +385,15 @@ int _anjay_dm_read_resource_into_ctx(anjay_t *anjay,
     return result;
 }
 
-int _anjay_dm_read_resource_into_stream(anjay_t *anjay,
+int _anjay_dm_read_resource_into_stream(anjay_unlocked_t *anjay,
                                         const anjay_uri_path_t *path,
                                         avs_stream_t *stream) {
     anjay_output_buf_ctx_t ctx = _anjay_output_buf_ctx_init(stream);
-    return _anjay_dm_read_resource_into_ctx(anjay, path,
-                                            (anjay_output_ctx_t *) &ctx);
+    return _anjay_dm_read_resource_into_ctx(
+            anjay, path, (anjay_unlocked_output_ctx_t *) &ctx);
 }
 
-int _anjay_dm_read_resource_into_buffer(anjay_t *anjay,
+int _anjay_dm_read_resource_into_buffer(anjay_unlocked_t *anjay,
                                         const anjay_uri_path_t *path,
                                         char *buffer,
                                         size_t buffer_size,

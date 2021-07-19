@@ -74,7 +74,7 @@ extern const anjay_dm_module_t _anjay_attr_storage_MODULE;
 
 void _anjay_attr_storage_clear(anjay_attr_storage_t *as);
 
-anjay_attr_storage_t *_anjay_attr_storage_get(anjay_t *anjay);
+anjay_attr_storage_t *_anjay_attr_storage_get(anjay_unlocked_t *anjay);
 
 /**
  * @param instance_ptr_ptr_
@@ -83,8 +83,8 @@ anjay_attr_storage_t *_anjay_attr_storage_get(anjay_t *anjay);
  * iretarion, it shall point always points to the list's head.
  */
 int _anjay_attr_storage_remove_absent_instances_clb(
-        anjay_t *anjay,
-        const anjay_dm_object_def_t *const *def_ptr,
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *def_ptr,
         anjay_iid_t iid,
         void *instance_ptr_ptr_);
 
@@ -95,10 +95,10 @@ typedef struct {
 } resource_entry_t;
 
 int _anjay_attr_storage_remove_absent_resources(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         anjay_attr_storage_t *as,
         AVS_LIST(as_instance_entry_t) *instance_ptr,
-        const anjay_dm_object_def_t *const *def_ptr);
+        const anjay_dm_installed_object_t *def_ptr);
 
 static inline void _anjay_attr_storage_mark_modified(anjay_attr_storage_t *as) {
     as->modified_since_persist = true;
@@ -166,8 +166,10 @@ avs_error_t
 _anjay_attr_storage_persist_inner(anjay_attr_storage_t *attr_storage,
                                   avs_stream_t *out);
 
-avs_error_t _anjay_attr_storage_restore_inner(
-        anjay_t *anjay, anjay_attr_storage_t *attr_storage, avs_stream_t *in);
+avs_error_t
+_anjay_attr_storage_restore_inner(anjay_unlocked_t *anjay,
+                                  anjay_attr_storage_t *attr_storage,
+                                  avs_stream_t *in);
 
 VISIBILITY_PRIVATE_HEADER_END
 

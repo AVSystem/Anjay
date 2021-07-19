@@ -504,6 +504,10 @@ typedef uint16_t anjay_riid_t;
  * **Must not** use @c avs_sched_cleanup on the returned scheduler. Anjay will
  * cleanup it itself.
  *
+ * <strong>NOTE:</strong> If Anjay is compiled with thread safety enabled, this
+ * scheduler object is normally used with the Anjay mutex locked. You will need
+ * to ensure thread safety yourself if using this function.
+ *
  * @param anjay Anjay object to operate on.
  *
  * @returns non-null scheduler object used by Anjay.

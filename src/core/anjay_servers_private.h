@@ -149,7 +149,7 @@ anjay_servers_t *_anjay_servers_create(void);
  * We could have _anjay_servers_cleanup() with a flag, but we decided that
  * having a separate function for de-registration is more elegant.
  */
-void _anjay_servers_deregister(anjay_t *anjay);
+void _anjay_servers_deregister(anjay_unlocked_t *anjay);
 #else // ANJAY_WITHOUT_DEREGISTER
 #    define _anjay_servers_deregister(Anjay) ((void) (Anjay))
 #endif // ANJAY_WITHOUT_DEREGISTER
@@ -163,7 +163,7 @@ void _anjay_servers_deregister(anjay_t *anjay);
  *
  * Only ever called from anjay_delete_impl().
  */
-void _anjay_servers_cleanup(anjay_t *anjay);
+void _anjay_servers_cleanup(anjay_unlocked_t *anjay);
 
 /**
  * Removes all references to inactive servers (see docs for anjay_server_info_t
@@ -182,9 +182,9 @@ void _anjay_servers_cleanup(anjay_t *anjay);
  * bootstrap procedure, which we were implementing as fallback. Probably there
  * are other ways to achieve the same thing.
  */
-void _anjay_servers_cleanup_inactive(anjay_t *anjay);
+void _anjay_servers_cleanup_inactive(anjay_unlocked_t *anjay);
 
-typedef int anjay_servers_foreach_ssid_handler_t(anjay_t *anjay,
+typedef int anjay_servers_foreach_ssid_handler_t(anjay_unlocked_t *anjay,
                                                  anjay_ssid_t ssid,
                                                  void *data);
 
@@ -199,11 +199,11 @@ typedef int anjay_servers_foreach_ssid_handler_t(anjay_t *anjay,
  * - _anjay_observe_gc() - to determine for which SSIDs to keep observe request
  *   information
  */
-int _anjay_servers_foreach_ssid(anjay_t *anjay,
+int _anjay_servers_foreach_ssid(anjay_unlocked_t *anjay,
                                 anjay_servers_foreach_ssid_handler_t *handler,
                                 void *data);
 
-typedef int anjay_servers_foreach_handler_t(anjay_t *anjay,
+typedef int anjay_servers_foreach_handler_t(anjay_unlocked_t *anjay,
                                             anjay_server_info_t *server,
                                             void *data);
 
@@ -215,7 +215,7 @@ typedef int anjay_servers_foreach_handler_t(anjay_t *anjay,
  * The sockets are returned as pointers to anjay_server_info_t, which allows
  * calling more methods on them.
  */
-int _anjay_servers_foreach_active(anjay_t *anjay,
+int _anjay_servers_foreach_active(anjay_unlocked_t *anjay,
                                   anjay_servers_foreach_handler_t *handler,
                                   void *data);
 
@@ -356,7 +356,7 @@ int _anjay_servers_foreach_active(anjay_t *anjay,
  *    - Last bound local port
  * 3. Schedule reactivation after the specified amount of time.
  */
-int _anjay_schedule_reload_servers(anjay_t *anjay);
+int _anjay_schedule_reload_servers(anjay_unlocked_t *anjay);
 
 /**
  * Interrupts any ongoing communication with connections that are
@@ -365,7 +365,7 @@ int _anjay_schedule_reload_servers(anjay_t *anjay);
  * Intended to be calling when entering offline mode, to prevent data being sent
  * between scheduler ticks.
  */
-void _anjay_servers_interrupt_offline(anjay_t *anjay);
+void _anjay_servers_interrupt_offline(anjay_unlocked_t *anjay);
 
 ////////////////////////////////////////////////////////////////////////////////
 // METHODS ON ACTIVE SERVERS ///////////////////////////////////////////////////
@@ -378,7 +378,7 @@ anjay_ssid_t _anjay_server_ssid(anjay_server_info_t *server);
 
 anjay_iid_t _anjay_server_last_used_security_iid(anjay_server_info_t *server);
 
-anjay_t *_anjay_from_server(anjay_server_info_t *server);
+anjay_unlocked_t *_anjay_from_server(anjay_server_info_t *server);
 
 /**
  * Gets the administratively configured binding mode of the server in question.
@@ -511,6 +511,14 @@ void _anjay_connection_suspend(anjay_connection_ref_t conn_ref);
 
 anjay_socket_transport_t
 _anjay_connection_transport(anjay_connection_ref_t conn_ref);
+
+/**
+ * Repopulates the public_sockets list, adding to it all online non-SMS LwM2M
+ * sockets, the single SMS router socket (if applicable) and all active
+ * download sockets (if applicable).
+ */
+AVS_LIST(const anjay_socket_entry_t)
+_anjay_get_socket_entries_unlocked(anjay_unlocked_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

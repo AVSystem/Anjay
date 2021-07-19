@@ -26,7 +26,7 @@
 #define TEST_ENV_COMMON(Uri)                                           \
     avs_stream_outbuf_t outbuf = AVS_STREAM_OUTBUF_STATIC_INITIALIZER; \
     avs_stream_outbuf_set_buffer(&outbuf, buf, sizeof(buf));           \
-    anjay_output_ctx_t *out =                                          \
+    anjay_unlocked_output_ctx_t *out =                                 \
             _anjay_output_tlv_create((avs_stream_t *) &outbuf, (Uri)); \
     AVS_UNIT_ASSERT_NOT_NULL(out)
 
@@ -52,7 +52,7 @@ AVS_UNIT_TEST(tlv_out, bytes_3blen_8bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 0)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xC7\x00"
                  "1234567");
@@ -65,7 +65,7 @@ AVS_UNIT_TEST(tlv_out, bytes_3blen_16bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42000)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xE7\xA4\x10"
                  "1234567");
@@ -77,7 +77,7 @@ AVS_UNIT_TEST(tlv_out, bytes_8blen_8bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 255)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xC8\xFF\x08"
                  "12345678");
@@ -89,7 +89,7 @@ AVS_UNIT_TEST(tlv_out, bytes_8blen_16bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 65534)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xE8\xFF\xFE\x08"
                  "12345678");
@@ -100,7 +100,7 @@ AVS_UNIT_TEST(tlv_out, bytes_16blen_8bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA1kB));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA1kB));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xD0\x2A\x03\xE8" DATA1kB);
 }
@@ -110,7 +110,7 @@ AVS_UNIT_TEST(tlv_out, bytes_16blen_16bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42420)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA1kB));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA1kB));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xF0\xA5\xB4\x03\xE8" DATA1kB);
 }
@@ -120,7 +120,7 @@ AVS_UNIT_TEST(tlv_out, bytes_24blen_8bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 69)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA100kB));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA100kB));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xD8\x45\x01\x86\xA0" DATA100kB);
 }
@@ -130,7 +130,7 @@ AVS_UNIT_TEST(tlv_out, bytes_24blen_16bid) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 258)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA100kB));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA100kB));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\xF8\x01\x02\x01\x86\xA0" DATA100kB);
 }
@@ -140,7 +140,7 @@ AVS_UNIT_TEST(tlv_out, bytes_overlength) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 1)));
-    AVS_UNIT_ASSERT_FAILED(anjay_ret_string(out, DATA20MB));
+    AVS_UNIT_ASSERT_FAILED(_anjay_ret_string_unlocked(out, DATA20MB));
     AVS_UNIT_ASSERT_FAILED(_anjay_output_ctx_destroy(&out));
     avs_free(buf);
 }
@@ -150,70 +150,60 @@ AVS_UNIT_TEST(tlv_out, zero_id) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 0)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, "test"));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, "test"));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
 }
 
-#define TEST_INT_IMPL(Name, Bits, Num, Data)                                \
+#define TEST_INT64_IMPL(Name, Num, Data)                                    \
     AVS_UNIT_TEST(tlv_out, Name) {                                          \
         TEST_ENV(32, &MAKE_INSTANCE_PATH(0, 0));                            \
                                                                             \
         AVS_UNIT_ASSERT_SUCCESS(                                            \
                 _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 1))); \
-        AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i##Bits(out, Num));               \
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_i64_unlocked(out, Num));         \
         AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));           \
         VERIFY_BYTES(Data);                                                 \
     }
 
-#define TEST_INT(Bits, Num, Data) \
-    TEST_INT_IMPL(AVS_CONCAT(i##Bits##_, __LINE__), Bits, Num, Data)
+#define TEST_INT64(Num, Data) \
+    TEST_INT64_IMPL(AVS_CONCAT(i64_, __LINE__), Num##LL, Data)
 
-#define TEST_INT32(...) TEST_INT(32, __VA_ARGS__)
-#define TEST_INT64(Num, Data) TEST_INT(64, Num##LL, Data)
-#define TEST_INT3264(...)   \
-    TEST_INT32(__VA_ARGS__) \
-    TEST_INT64(__VA_ARGS__)
-
-TEST_INT3264(42,
-             "\xC1\x01"
-             "\x2A")
-TEST_INT3264(4242,
-             "\xC2\x01"
-             "\x10\x92")
-TEST_INT3264(424242,
-             "\xC4\x01"
-             "\x00\x06\x79\x32")
-TEST_INT3264(42424242,
-             "\xC4\x01"
-             "\x02\x87\x57\xB2")
-TEST_INT3264((int32_t) 4242424242,
-             "\xC4\x01"
-             "\xFC\xDE\x41\xB2")
+TEST_INT64(42,
+           "\xC1\x01"
+           "\x2A")
+TEST_INT64(4242,
+           "\xC2\x01"
+           "\x10\x92")
+TEST_INT64(424242,
+           "\xC4\x01"
+           "\x00\x06\x79\x32")
+TEST_INT64(42424242,
+           "\xC4\x01"
+           "\x02\x87\x57\xB2")
+TEST_INT64((int32_t) 4242424242,
+           "\xC4\x01"
+           "\xFC\xDE\x41\xB2")
 TEST_INT64(4242424242, "\xC8\x01\x08\x00\x00\x00\x00\xFC\xDE\x41\xB2")
 TEST_INT64(424242424242, "\xC8\x01\x08\x00\x00\x00\x62\xC6\xD1\xA9\xB2")
 TEST_INT64(42424242424242, "\xC8\x01\x08\x00\x00\x26\x95\xA9\xE6\x49\xB2")
 TEST_INT64(4242424242424242, "\xC8\x01\x08\x00\x0F\x12\x76\x5D\xF4\xC9\xB2")
 TEST_INT64(424242424242424242, "\xC8\x01\x08\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
 
-#define TEST_FLOAT_IMPL(Name, Type, Num, Data)                              \
+#define TEST_DOUBLE_IMPL(Name, Num, Data)                                   \
     AVS_UNIT_TEST(tlv_out, Name) {                                          \
         TEST_ENV(32, &MAKE_INSTANCE_PATH(0, 0));                            \
                                                                             \
         AVS_UNIT_ASSERT_SUCCESS(                                            \
                 _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 1))); \
-        AVS_UNIT_ASSERT_SUCCESS(anjay_ret_##Type(out, Num));                \
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_double_unlocked(out, Num));      \
         AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));           \
         VERIFY_BYTES(Data);                                                 \
     }
 
-#define TEST_FLOAT(Num, Data) \
-    TEST_FLOAT_IMPL(AVS_CONCAT(float, __LINE__), float, Num, Data)
-
-TEST_FLOAT(1.0, "\xC4\x01\x3F\x80\x00\x00")
-TEST_FLOAT(-42.0e3, "\xC4\x01\xC7\x24\x10\x00")
-
 #define TEST_DOUBLE(Num, Data) \
-    TEST_FLOAT_IMPL(AVS_CONCAT(double, __LINE__), double, Num, Data)
+    TEST_DOUBLE_IMPL(AVS_CONCAT(double, __LINE__), Num, Data)
+
+TEST_DOUBLE(-42.0e3, "\xC4\x01\xC7\x24\x10\x00")
 
 // rounds exactly to float
 TEST_DOUBLE(1.0, "\xC4\x01\x3F\x80\x00\x00")
@@ -227,7 +217,7 @@ TEST_DOUBLE(1.1, "\xC8\x01\x08\x3F\xF1\x99\x99\x99\x99\x99\x9A")
                                                                             \
         AVS_UNIT_ASSERT_SUCCESS(                                            \
                 _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 1))); \
-        AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bool(out, Val));                  \
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_bool_unlocked(out, Val));        \
         AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));           \
         VERIFY_BYTES("\xC1\x01" Data);                                      \
     }
@@ -244,7 +234,7 @@ TEST_BOOL(42, "\1")
                                                                             \
         AVS_UNIT_ASSERT_SUCCESS(                                            \
                 _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 1))); \
-        AVS_UNIT_ASSERT_SUCCESS(anjay_ret_objlnk(out, Oid, Iid));           \
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_objlnk_unlocked(out, Oid, Iid)); \
         AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));           \
         VERIFY_BYTES("\xC4\x01" Data);                                      \
     }
@@ -263,14 +253,14 @@ AVS_UNIT_TEST(tlv_out_array, simple) {
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_path(
             out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 1, 42)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(out, 69));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_i64_unlocked(out, 69));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_path(
             out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 1, 514)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(out, 696969));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_i64_unlocked(out, 696969));
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 2)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(out, 4));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_i64_unlocked(out, 4));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
 
@@ -288,7 +278,7 @@ AVS_UNIT_TEST(tlv_out_array, too_long) {
         // 1 MB each entry, 20 MB altogether
         AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_path(
                 out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 1, 1)));
-        AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA1MB));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA1MB));
     }
     AVS_UNIT_ASSERT_FAILED(_anjay_output_ctx_destroy(&out));
     avs_free(buf);
@@ -299,7 +289,7 @@ AVS_UNIT_TEST(tlv_out_array, array_index) {
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_path(
             out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 1, 65534)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_i32(out, 69));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_i64_unlocked(out, 69));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
 }
@@ -309,10 +299,10 @@ AVS_UNIT_TEST(tlv_out, object_with_empty_bytes) {
 
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 1, 0)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bytes(out, "", 0));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_bytes_unlocked(out, "", 0));
     AVS_UNIT_ASSERT_SUCCESS(
             _anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 1, 1)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bytes(out, "", 1));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_bytes_unlocked(out, "", 1));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
 }
@@ -324,7 +314,7 @@ AVS_UNIT_TEST(tlv_out, riid_as_root) {
     TEST_ENV(512, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 0, 0));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_path(
             out, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 0, 0)));
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_string(out, DATA));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_string_unlocked(out, DATA));
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\x47\x00"
                  "1234567");
@@ -347,7 +337,7 @@ AVS_UNIT_TEST(tlv_out, set_path) {
             ((tlv_out_t *) out)->levels[TLV_OUT_LEVEL_RID].next_id, 0);
     AVS_UNIT_ASSERT_EQUAL(
             ((tlv_out_t *) out)->levels[TLV_OUT_LEVEL_RIID].next_id, 0);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bytes(out, NULL, 0));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_bytes_unlocked(out, NULL, 0));
 
     // set path upwards
     AVS_UNIT_ASSERT_SUCCESS(
@@ -367,7 +357,7 @@ AVS_UNIT_TEST(tlv_out, set_path) {
             ((tlv_out_t *) out)->levels[TLV_OUT_LEVEL_RID].next_id, 2);
     AVS_UNIT_ASSERT_EQUAL(
             ((tlv_out_t *) out)->levels[TLV_OUT_LEVEL_RIID].next_id, 3);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bytes(out, NULL, 0));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_bytes_unlocked(out, NULL, 0));
 
     // set unrelated path
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_path(
@@ -379,7 +369,7 @@ AVS_UNIT_TEST(tlv_out, set_path) {
             ((tlv_out_t *) out)->levels[TLV_OUT_LEVEL_RID].next_id, 5);
     AVS_UNIT_ASSERT_EQUAL(
             ((tlv_out_t *) out)->levels[TLV_OUT_LEVEL_RIID].next_id, 6);
-    AVS_UNIT_ASSERT_SUCCESS(anjay_ret_bytes(out, NULL, 0));
+    AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_bytes_unlocked(out, NULL, 0));
 
     AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));
     VERIFY_BYTES("\x04\x00" // instance /0/0

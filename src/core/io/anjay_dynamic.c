@@ -33,30 +33,30 @@ VISIBILITY_SOURCE_BEGIN
 
 /////////////////////////////////////////////////////////////////////// ENCODING
 
-static anjay_output_ctx_t *spawn_opaque(avs_stream_t *stream,
-                                        const anjay_uri_path_t *uri) {
+static anjay_unlocked_output_ctx_t *spawn_opaque(avs_stream_t *stream,
+                                                 const anjay_uri_path_t *uri) {
     (void) uri;
     return _anjay_output_opaque_create(stream);
 }
 
 #ifndef ANJAY_WITHOUT_PLAINTEXT
-static anjay_output_ctx_t *spawn_text(avs_stream_t *stream,
-                                      const anjay_uri_path_t *uri) {
+static anjay_unlocked_output_ctx_t *spawn_text(avs_stream_t *stream,
+                                               const anjay_uri_path_t *uri) {
     (void) uri;
     return _anjay_output_text_create(stream);
 }
 #endif // ANJAY_WITHOUT_PLAINTEXT
 
 #ifndef ANJAY_WITHOUT_TLV
-static anjay_output_ctx_t *spawn_tlv(avs_stream_t *stream,
-                                     const anjay_uri_path_t *uri) {
+static anjay_unlocked_output_ctx_t *spawn_tlv(avs_stream_t *stream,
+                                              const anjay_uri_path_t *uri) {
     return _anjay_output_tlv_create(stream, uri);
 }
 #endif // ANJAY_WITHOUT_TLV
 
 #ifdef ANJAY_WITH_LWM2M_JSON
-static anjay_output_ctx_t *spawn_json(avs_stream_t *stream,
-                                      const anjay_uri_path_t *uri) {
+static anjay_unlocked_output_ctx_t *spawn_json(avs_stream_t *stream,
+                                               const anjay_uri_path_t *uri) {
     return _anjay_output_senml_like_create(stream, uri,
                                            AVS_COAP_FORMAT_OMA_LWM2M_JSON);
 }
@@ -65,8 +65,8 @@ static anjay_output_ctx_t *spawn_json(avs_stream_t *stream,
 typedef struct {
     uint16_t format;
     anjay_input_ctx_constructor_t *input_ctx_constructor;
-    anjay_output_ctx_t *(*output_ctx_spawn_func)(avs_stream_t *stream,
-                                                 const anjay_uri_path_t *uri);
+    anjay_unlocked_output_ctx_t *(*output_ctx_spawn_func)(
+            avs_stream_t *stream, const anjay_uri_path_t *uri);
 } dynamic_format_def_t;
 
 static const dynamic_format_def_t SUPPORTED_SIMPLE_FORMATS[] = {
@@ -108,7 +108,7 @@ uint16_t _anjay_default_hierarchical_format(anjay_lwm2m_version_t version) {
     return AVS_COAP_FORMAT_OMA_LWM2M_TLV;
 }
 
-uint16_t _anjay_default_simple_format(anjay_t *anjay,
+uint16_t _anjay_default_simple_format(anjay_unlocked_t *anjay,
                                       anjay_lwm2m_version_t version) {
     if (anjay->prefer_hierarchical_formats) {
         return _anjay_default_hierarchical_format(version);
@@ -121,7 +121,7 @@ uint16_t _anjay_default_simple_format(anjay_t *anjay,
 #endif // ANJAY_WITHOUT_PLAINTEXT
 }
 
-int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,
+int _anjay_output_dynamic_construct(anjay_unlocked_output_ctx_t **out_ctx,
                                     avs_stream_t *stream,
                                     const anjay_uri_path_t *uri,
                                     uint16_t format,
@@ -156,7 +156,7 @@ int _anjay_output_dynamic_construct(anjay_output_ctx_t **out_ctx,
 
 /////////////////////////////////////////////////////////////////////// DECODING
 
-int _anjay_input_dynamic_construct(anjay_input_ctx_t **out,
+int _anjay_input_dynamic_construct(anjay_unlocked_input_ctx_t **out,
                                    avs_stream_t *stream,
                                    const anjay_request_t *request) {
     uint16_t format = request->content_format;

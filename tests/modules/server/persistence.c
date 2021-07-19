@@ -27,8 +27,8 @@ static const anjay_configuration_t CONFIG = {
 typedef struct {
     anjay_t *anjay_stored;
     anjay_t *anjay_restored;
-    const anjay_dm_object_def_t *const *stored;
-    const anjay_dm_object_def_t *const *restored;
+    anjay_dm_installed_object_t stored;
+    anjay_dm_installed_object_t restored;
     server_repr_t *stored_repr;
     server_repr_t *restored_repr;
     avs_stream_t *stream;
@@ -51,10 +51,14 @@ static server_persistence_test_env_t *server_persistence_test_env_create(void) {
     AVS_UNIT_ASSERT_SUCCESS(anjay_server_object_install(env->anjay_restored));
     env->stream = avs_stream_membuf_create();
     AVS_UNIT_ASSERT_NOT_NULL(env->stream);
-    env->stored = _anjay_dm_find_object_by_oid(env->anjay_stored,
-                                               ANJAY_DM_OID_SERVER);
-    env->restored = _anjay_dm_find_object_by_oid(env->anjay_restored,
-                                                 ANJAY_DM_OID_SERVER);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, env->anjay_stored);
+    env->stored =
+            *_anjay_dm_find_object_by_oid(anjay_unlocked, ANJAY_DM_OID_SERVER);
+    ANJAY_MUTEX_UNLOCK(env->anjay_stored);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, env->anjay_restored);
+    env->restored =
+            *_anjay_dm_find_object_by_oid(anjay_unlocked, ANJAY_DM_OID_SERVER);
+    ANJAY_MUTEX_UNLOCK(env->anjay_restored);
     env->stored_repr = _anjay_serv_get(env->stored);
     env->restored_repr = _anjay_serv_get(env->restored);
     return env;

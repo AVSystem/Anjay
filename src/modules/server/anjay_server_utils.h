@@ -28,14 +28,15 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-server_repr_t *_anjay_serv_get(const anjay_dm_object_def_t *const *obj_ptr);
+server_repr_t *_anjay_serv_get(const anjay_dm_installed_object_t obj_ptr);
 
-int _anjay_serv_fetch_ssid(anjay_input_ctx_t *ctx, anjay_ssid_t *out_ssid);
-int _anjay_serv_fetch_validated_i32(anjay_input_ctx_t *ctx,
+int _anjay_serv_fetch_ssid(anjay_unlocked_input_ctx_t *ctx,
+                           anjay_ssid_t *out_ssid);
+int _anjay_serv_fetch_validated_i32(anjay_unlocked_input_ctx_t *ctx,
                                     int32_t min_value,
                                     int32_t max_value,
                                     int32_t *out_value);
-int _anjay_serv_fetch_binding(anjay_input_ctx_t *ctx,
+int _anjay_serv_fetch_binding(anjay_unlocked_input_ctx_t *ctx,
                               anjay_binding_mode_t *out_binding);
 
 AVS_LIST(server_instance_t)

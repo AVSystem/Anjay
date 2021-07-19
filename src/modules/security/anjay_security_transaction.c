@@ -150,7 +150,7 @@ static int validate_instance(sec_instance_t *it) {
     return 0;
 }
 
-int _anjay_sec_object_validate(anjay_t *anjay, sec_repr_t *repr) {
+int _anjay_sec_object_validate(anjay_unlocked_t *anjay, sec_repr_t *repr) {
     AVS_LIST(ssid_transport_pair_t) seen_ssid_transport_pairs = NULL;
     AVS_LIST(sec_instance_t) it;
     int result = 0;
@@ -226,7 +226,8 @@ int _anjay_sec_transaction_commit_impl(sec_repr_t *repr) {
     return 0;
 }
 
-int _anjay_sec_transaction_validate_impl(anjay_t *anjay, sec_repr_t *repr) {
+int _anjay_sec_transaction_validate_impl(anjay_unlocked_t *anjay,
+                                         sec_repr_t *repr) {
     assert(repr->in_transaction);
     return _anjay_sec_object_validate(anjay, repr);
 }

@@ -33,7 +33,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 int _anjay_connection_security_generic_get_uri(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         anjay_iid_t security_iid,
         avs_url_t **out_uri,
         const anjay_transport_info_t **out_transport_info) {
@@ -70,7 +70,7 @@ int _anjay_connection_security_generic_get_uri(
     return 0;
 }
 
-static int get_security_mode(anjay_t *anjay,
+static int get_security_mode(anjay_unlocked_t *anjay,
                              anjay_iid_t security_iid,
                              anjay_security_mode_t *out_mode) {
     int64_t mode;
@@ -104,7 +104,7 @@ static int get_security_mode(anjay_t *anjay,
 }
 
 typedef struct {
-    anjay_output_ctx_t base;
+    anjay_unlocked_output_ctx_t base;
     const anjay_ret_bytes_ctx_vtable_t *ret_bytes_vtable;
     avs_crypto_security_info_tag_t tag;
     avs_crypto_security_info_union_t *out_array;
@@ -112,10 +112,10 @@ typedef struct {
     size_t bytes_remaining;
 } read_security_info_ctx_t;
 
-static int
-read_security_info_ret_bytes_begin(anjay_output_ctx_t *ctx_,
-                                   size_t length,
-                                   anjay_ret_bytes_ctx_t **out_bytes_ctx) {
+static int read_security_info_ret_bytes_begin(
+        anjay_unlocked_output_ctx_t *ctx_,
+        size_t length,
+        anjay_unlocked_ret_bytes_ctx_t **out_bytes_ctx) {
     read_security_info_ctx_t *ctx = (read_security_info_ctx_t *) ctx_;
     if (ctx->out_array) {
         anjay_log(ERROR, _("value already returned"));
@@ -136,13 +136,12 @@ read_security_info_ret_bytes_begin(anjay_output_ctx_t *ctx_,
     };
     ctx->out_element_count = 1;
     ctx->bytes_remaining = length;
-    *out_bytes_ctx = (anjay_ret_bytes_ctx_t *) &ctx->ret_bytes_vtable;
+    *out_bytes_ctx = (anjay_unlocked_ret_bytes_ctx_t *) &ctx->ret_bytes_vtable;
     return 0;
 }
 
-static int read_security_info_ret_bytes_append(anjay_ret_bytes_ctx_t *ctx_,
-                                               const void *data,
-                                               size_t size) {
+static int read_security_info_ret_bytes_append(
+        anjay_unlocked_ret_bytes_ctx_t *ctx_, const void *data, size_t size) {
     read_security_info_ctx_t *ctx =
             (read_security_info_ctx_t *) AVS_CONTAINER_OF(
                     ctx_, read_security_info_ctx_t, ret_bytes_vtable);
@@ -168,7 +167,7 @@ static const anjay_ret_bytes_ctx_vtable_t READ_SECURITY_INFO_BYTES_VTABLE = {
 };
 
 static avs_error_t
-read_security_info(anjay_t *anjay,
+read_security_info(anjay_unlocked_t *anjay,
                    anjay_iid_t security_iid,
                    anjay_rid_t security_rid,
                    avs_crypto_security_info_tag_t tag,
@@ -189,7 +188,7 @@ read_security_info(anjay_t *anjay,
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
                                security_rid);
     if (_anjay_dm_read_resource_into_ctx(anjay, &path,
-                                         (anjay_output_ctx_t *) &ctx)
+                                         (anjay_unlocked_output_ctx_t *) &ctx)
             || ctx.bytes_remaining) {
         anjay_log(WARNING, _("read ") "%s" _(" failed"),
                   ANJAY_DEBUG_MAKE_PATH(&path));
@@ -201,7 +200,7 @@ read_security_info(anjay_t *anjay,
     return AVS_OK;
 }
 
-static avs_error_t init_cert_security(anjay_t *anjay,
+static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
                                       anjay_ssid_t ssid,
                                       anjay_iid_t security_iid,
                                       anjay_security_config_t *security,
@@ -267,7 +266,7 @@ static avs_error_t init_cert_security(anjay_t *anjay,
                                    ANJAY_DM_RID_SECURITY_SERVER_PK_OR_IDENTITY);
         if (_anjay_dm_read_resource_into_ctx(
                     anjay, &server_pk_path,
-                    (anjay_output_ctx_t *) &server_pk_ctx)) {
+                    (anjay_unlocked_output_ctx_t *) &server_pk_ctx)) {
             anjay_log(WARNING, _("read ") "%s" _(" failed"),
                       ANJAY_DEBUG_MAKE_PATH(&server_pk_path));
             err = avs_errno(AVS_EPROTO);
@@ -318,7 +317,7 @@ static avs_error_t init_cert_security(anjay_t *anjay,
     return AVS_OK;
 }
 
-static avs_error_t init_security(anjay_t *anjay,
+static avs_error_t init_security(anjay_unlocked_t *anjay,
                                  anjay_ssid_t ssid,
                                  anjay_iid_t security_iid,
                                  anjay_security_config_t *security,
@@ -345,7 +344,7 @@ static avs_error_t init_security(anjay_t *anjay,
 }
 
 avs_error_t _anjay_connection_security_generic_get_config(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         anjay_security_config_t *out_config,
         anjay_security_config_cache_t *cache,
         anjay_connection_info_t *inout_info) {

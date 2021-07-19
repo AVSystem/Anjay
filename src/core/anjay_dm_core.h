@@ -37,11 +37,11 @@ typedef struct {
 } anjay_dm_installed_module_t;
 
 struct anjay_dm {
-    AVS_LIST(const anjay_dm_object_def_t *const *) objects;
+    AVS_LIST(anjay_dm_installed_object_t) objects;
     AVS_LIST(anjay_dm_installed_module_t) modules;
 };
 
-void _anjay_dm_cleanup(anjay_t *anjay);
+void _anjay_dm_cleanup(anjay_unlocked_t *anjay);
 
 typedef struct {
     bool has_min_period;
@@ -83,15 +83,17 @@ typedef struct {
         .action = (Request)->action              \
     }
 
-int _anjay_dm_transaction_validate(anjay_t *anjay);
-int _anjay_dm_transaction_finish_without_validation(anjay_t *anjay, int result);
+int _anjay_dm_transaction_validate(anjay_unlocked_t *anjay);
+int _anjay_dm_transaction_finish_without_validation(anjay_unlocked_t *anjay,
+                                                    int result);
 
-static inline int _anjay_dm_transaction_rollback(anjay_t *anjay) {
+static inline int _anjay_dm_transaction_rollback(anjay_unlocked_t *anjay) {
     int result = _anjay_dm_transaction_finish(anjay, INT_MIN);
     return (result == INT_MIN) ? 0 : result;
 }
 
-int _anjay_dm_perform_action(anjay_t *anjay, const anjay_request_t *request);
+int _anjay_dm_perform_action(anjay_unlocked_t *anjay,
+                             const anjay_request_t *request);
 
 static inline int _anjay_dm_map_present_result(int result) {
     if (!result) {
@@ -104,10 +106,11 @@ static inline int _anjay_dm_map_present_result(int result) {
 }
 
 AVS_LIST(anjay_dm_installed_module_t) *
-_anjay_dm_module_find_ptr(anjay_t *anjay, const anjay_dm_module_t *module);
+_anjay_dm_module_find_ptr(anjay_unlocked_t *anjay,
+                          const anjay_dm_module_t *module);
 
-int _anjay_dm_select_free_iid(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_select_free_iid(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t *obj,
                               anjay_iid_t *new_iid_ptr);
 
 typedef struct {
@@ -124,8 +127,8 @@ typedef struct {
     anjay_dm_resource_kind_t kind;
 } anjay_dm_path_info_t;
 
-int _anjay_dm_path_info(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_path_info(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj,
                         const anjay_uri_path_t *path,
                         anjay_dm_path_info_t *out_info);
 

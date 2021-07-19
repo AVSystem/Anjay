@@ -518,11 +518,13 @@ AVS_UNIT_TEST(parse_headers, parse_action) {
 
 AVS_UNIT_TEST(queue_mode, change) {
     DM_TEST_INIT_WITH_OBJECTS(&OBJ, &FAKE_SECURITY2, &FAKE_SERVER);
-    anjay_server_connection_t *connection =
-            _anjay_get_server_connection((const anjay_connection_ref_t) {
-                .server = anjay->servers->servers,
-                .conn_type = ANJAY_CONNECTION_PRIMARY
-            });
+    anjay_server_connection_t *connection = NULL;
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    connection = _anjay_get_server_connection((const anjay_connection_ref_t) {
+        .server = anjay_unlocked->servers->servers,
+        .conn_type = ANJAY_CONNECTION_PRIMARY
+    });
+    ANJAY_MUTEX_UNLOCK(anjay);
     ASSERT_NOT_NULL(connection);
     ////// WRITE NEW BINDING //////
     // Write to Binding - dummy data to assert it is actually queried via Read

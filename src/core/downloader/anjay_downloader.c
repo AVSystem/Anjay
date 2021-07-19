@@ -39,7 +39,7 @@ struct anjay_download_ctx {
     anjay_download_ctx_common_t common;
 };
 
-int _anjay_downloader_init(anjay_downloader_t *dl, anjay_t *anjay) {
+int _anjay_downloader_init(anjay_downloader_t *dl, anjay_unlocked_t *anjay) {
     assert(anjay);
     assert(_anjay_downloader_get_anjay(dl) == anjay);
     assert(_anjay_downloader_get_anjay(dl)->sched);
@@ -62,6 +62,39 @@ static void cleanup_transfer(AVS_LIST(anjay_download_ctx_t) *ctx) {
     assert((*ctx)->common.vtable);
 
     (*ctx)->common.vtable->cleanup(ctx);
+}
+
+avs_error_t
+_anjay_downloader_call_on_next_block(anjay_downloader_t *dl,
+                                     anjay_download_ctx_common_t *ctx,
+                                     const uint8_t *data,
+                                     size_t data_size,
+                                     const anjay_etag_t *etag) {
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
+    anjay_download_next_block_handler_t *handler = ctx->on_next_block;
+    void *user_data = ctx->user_data;
+    assert(handler);
+
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    (void) err;
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+    err = handler(anjay_locked, data, data_size, etag, user_data);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+    return err;
+}
+
+static void call_on_download_finished(anjay_downloader_t *dl,
+                                      anjay_download_ctx_t *ctx,
+                                      anjay_download_status_t status) {
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
+    anjay_download_finished_handler_t *handler =
+            ctx->common.on_download_finished;
+    void *user_data = ctx->common.user_data;
+    assert(handler);
+
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+    handler(anjay_locked, status, user_data);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 }
 
 void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
@@ -99,8 +132,7 @@ void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
         break;
     }
 
-    (*ctx)->common.on_download_finished(_anjay_downloader_get_anjay(dl), status,
-                                        (*ctx)->common.user_data);
+    call_on_download_finished(dl, *ctx, status);
 
     avs_sched_del(&(*ctx)->common.reconnect_job_handle);
     cleanup_transfer(ctx);
@@ -338,7 +370,7 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
 }
 
 static void reconnect_job(avs_sched_t *sched, const void *id_ptr) {
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     uintptr_t id = *(const uintptr_t *) id_ptr;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);

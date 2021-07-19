@@ -32,13 +32,15 @@ VISIBILITY_SOURCE_BEGIN
 
 #ifdef ANJAY_WITH_ACCESS_CONTROL
 
-static inline const anjay_dm_object_def_t *const *
-get_access_control(anjay_t *anjay) {
+static inline const anjay_dm_installed_object_t *
+get_access_control(anjay_unlocked_t *anjay) {
     return _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL);
 }
 
-static int
-read_u16(anjay_t *anjay, anjay_iid_t iid, anjay_rid_t rid, uint16_t *out) {
+static int read_u16(anjay_unlocked_t *anjay,
+                    anjay_iid_t iid,
+                    anjay_rid_t rid,
+                    uint16_t *out) {
     int64_t ret;
     const anjay_uri_path_t uri =
             MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, iid, rid);
@@ -61,13 +63,13 @@ typedef struct {
     uint16_t value;
 } u16_writer_ctx_t;
 
-static int u16_writer_integer(anjay_input_ctx_t *ctx, int64_t *out) {
+static int u16_writer_integer(anjay_unlocked_input_ctx_t *ctx, int64_t *out) {
     *out = ((u16_writer_ctx_t *) ctx)->value;
     return 0;
 }
 
-static int write_u16(anjay_t *anjay,
-                     const anjay_dm_object_def_t *const *ac_obj_ptr,
+static int write_u16(anjay_unlocked_t *anjay,
+                     const anjay_dm_installed_object_t *ac_obj_ptr,
                      anjay_iid_t iid,
                      anjay_rid_t rid,
                      anjay_riid_t riid,
@@ -80,10 +82,11 @@ static int write_u16(anjay_t *anjay,
         .value = value
     };
     return _anjay_dm_call_resource_write(anjay, ac_obj_ptr, iid, rid, riid,
-                                         (anjay_input_ctx_t *) &ctx, NULL);
+                                         (anjay_unlocked_input_ctx_t *) &ctx,
+                                         NULL);
 }
 
-static int read_ids_from_ac_instance(anjay_t *anjay,
+static int read_ids_from_ac_instance(anjay_unlocked_t *anjay,
                                      anjay_iid_t access_control_iid,
                                      anjay_oid_t *out_oid,
                                      anjay_iid_t *out_oiid,
@@ -104,8 +107,8 @@ static int read_ids_from_ac_instance(anjay_t *anjay,
     return ret;
 }
 
-static int read_mask(anjay_t *anjay,
-                     const anjay_dm_object_def_t *const *obj,
+static int read_mask(anjay_unlocked_t *anjay,
+                     const anjay_dm_installed_object_t *obj,
                      anjay_iid_t iid,
                      anjay_rid_t rid,
                      anjay_riid_t riid,
@@ -118,7 +121,8 @@ static int read_mask(anjay_t *anjay,
             _anjay_output_buf_ctx_init((avs_stream_t *) &stream);
     int result =
             _anjay_dm_call_resource_read(anjay, obj, iid, rid, riid,
-                                         (anjay_output_ctx_t *) &ctx, NULL);
+                                         (anjay_unlocked_output_ctx_t *) &ctx,
+                                         NULL);
     if (!result) {
         if (avs_stream_outbuf_offset(&stream) != sizeof(mask)) {
             return -1;
@@ -135,8 +139,8 @@ typedef struct {
     anjay_access_mask_t mask;
 } get_mask_instance_clb_args_t;
 
-static int get_mask_instance_clb(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj,
+static int get_mask_instance_clb(anjay_unlocked_t *anjay,
+                                 const anjay_dm_installed_object_t *obj,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
                                  anjay_riid_t riid,
@@ -162,8 +166,8 @@ static int get_mask_instance_clb(anjay_t *anjay,
     return 0;
 }
 
-static int foreach_acl(anjay_t *anjay,
-                       const anjay_dm_object_def_t *const *ac_obj,
+static int foreach_acl(anjay_unlocked_t *anjay,
+                       const anjay_dm_installed_object_t *ac_obj,
                        anjay_iid_t ac_iid,
                        anjay_dm_foreach_resource_instance_handler_t *handler,
                        void *data) {
@@ -195,8 +199,8 @@ typedef struct {
     anjay_iid_t target_iid;
 } find_ac_instance_args_t;
 
-static int find_ac_instance_clb(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *ac_obj,
+static int find_ac_instance_clb(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t *ac_obj,
                                 anjay_iid_t ac_iid,
                                 void *args_) {
     (void) ac_obj;
@@ -216,12 +220,11 @@ static int find_ac_instance_clb(anjay_t *anjay,
     return ANJAY_FOREACH_CONTINUE;
 }
 
-static int
-find_ac_instance_by_target(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *ac_obj,
-                           anjay_iid_t *out_ac_iid,
-                           anjay_oid_t target_oid,
-                           anjay_iid_t target_iid) {
+static int find_ac_instance_by_target(anjay_unlocked_t *anjay,
+                                      const anjay_dm_installed_object_t *ac_obj,
+                                      anjay_iid_t *out_ac_iid,
+                                      anjay_oid_t target_oid,
+                                      anjay_iid_t target_iid) {
     find_ac_instance_args_t args = {
         .ac_iid = ANJAY_ID_INVALID,
         .target_oid = target_oid,
@@ -240,8 +243,8 @@ find_ac_instance_by_target(anjay_t *anjay,
     return result;
 }
 
-static int get_mask(anjay_t *anjay,
-                    const anjay_dm_object_def_t *const *ac_obj,
+static int get_mask(anjay_unlocked_t *anjay,
+                    const anjay_dm_installed_object_t *ac_obj,
                     anjay_iid_t ac_iid,
                     anjay_ssid_t *inout_ssid,
                     anjay_access_mask_t *out_mask) {
@@ -265,11 +268,11 @@ static int get_mask(anjay_t *anjay,
     return 0;
 }
 
-static anjay_access_mask_t access_control_mask(anjay_t *anjay,
+static anjay_access_mask_t access_control_mask(anjay_unlocked_t *anjay,
                                                anjay_oid_t oid,
                                                anjay_iid_t iid,
                                                anjay_ssid_t ssid) {
-    const anjay_dm_object_def_t *const *ac_obj =
+    const anjay_dm_installed_object_t *ac_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_ACCESS_CONTROL);
     anjay_iid_t ac_iid;
     if (!ac_obj
@@ -301,7 +304,8 @@ static anjay_access_mask_t access_control_mask(anjay_t *anjay,
     return ANJAY_ACCESS_MASK_NONE;
 }
 
-static bool can_instantiate(anjay_t *anjay, const anjay_action_info_t *info) {
+static bool can_instantiate(anjay_unlocked_t *anjay,
+                            const anjay_action_info_t *info) {
     return access_control_mask(anjay, info->oid, ANJAY_ID_INVALID, info->ssid)
            & ANJAY_ACCESS_MASK_CREATE;
 }
@@ -312,8 +316,9 @@ typedef struct {
     anjay_ssid_t owner;
 } get_owner_data_t;
 
-static int
-count_non_bootstrap_clb(anjay_t *anjay, anjay_ssid_t ssid, void *counter_ptr) {
+static int count_non_bootstrap_clb(anjay_unlocked_t *anjay,
+                                   anjay_ssid_t ssid,
+                                   void *counter_ptr) {
     (void) anjay;
     if (ssid != ANJAY_SSID_BOOTSTRAP) {
         ++*((size_t *) counter_ptr);
@@ -321,7 +326,7 @@ count_non_bootstrap_clb(anjay_t *anjay, anjay_ssid_t ssid, void *counter_ptr) {
     return ANJAY_FOREACH_CONTINUE;
 }
 
-static bool is_single_ssid_environment(anjay_t *anjay) {
+static bool is_single_ssid_environment(anjay_unlocked_t *anjay) {
     size_t non_bootstrap_count = 0;
     if (_anjay_servers_foreach_ssid(anjay, count_non_bootstrap_clb,
                                     &non_bootstrap_count)) {
@@ -332,7 +337,7 @@ static bool is_single_ssid_environment(anjay_t *anjay) {
 
 #endif // ANJAY_WITH_ACCESS_CONTROL
 
-bool _anjay_instance_action_allowed(anjay_t *anjay,
+bool _anjay_instance_action_allowed(anjay_unlocked_t *anjay,
                                     const anjay_action_info_t *info) {
     if (info->oid == ANJAY_DM_OID_SECURITY) {
         return false;
@@ -442,8 +447,8 @@ static void what_changed(anjay_ssid_t origin_ssid,
 }
 
 static int
-enumerate_valid_ssids_clb(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *security_obj,
+enumerate_valid_ssids_clb(anjay_unlocked_t *anjay,
+                          const anjay_dm_installed_object_t *security_obj,
                           anjay_iid_t iid,
                           void *ssid_list_ptr_) {
     (void) security_obj;
@@ -472,8 +477,8 @@ typedef struct {
     anjay_access_mask_t mask;
 } acl_entry_t;
 
-static int read_acl_clb(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj,
+static int read_acl_clb(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj,
                         anjay_iid_t iid,
                         anjay_rid_t rid,
                         anjay_riid_t riid,
@@ -493,8 +498,8 @@ static int read_acl_clb(anjay_t *anjay,
     return result;
 }
 
-static int read_acl(anjay_t *anjay,
-                    const anjay_dm_object_def_t *const *ac_obj,
+static int read_acl(anjay_unlocked_t *anjay,
+                    const anjay_dm_installed_object_t *ac_obj,
                     anjay_iid_t ac_iid,
                     AVS_LIST(acl_entry_t) *out_acl) {
     assert(out_acl);
@@ -548,8 +553,8 @@ typedef struct {
 } process_orphaned_instances_args_t;
 
 static int
-process_orphaned_instances_clb(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj,
+process_orphaned_instances_clb(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t *obj,
                                anjay_iid_t iid,
                                void *args_) {
     process_orphaned_instances_args_t *args =
@@ -637,7 +642,7 @@ finish:
     return result;
 }
 
-static int remove_referred_instance(anjay_t *anjay,
+static int remove_referred_instance(anjay_unlocked_t *anjay,
                                     const orphaned_instance_info_t *it,
                                     anjay_notify_queue_t *out_dm_changes) {
     // We do not fail if either of the following is true:
@@ -645,7 +650,7 @@ static int remove_referred_instance(anjay_t *anjay,
     // - the target Instance is not set
     // - the target Instance does not exist
     int result = 0;
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, it->target_oid);
     if (obj
             && _anjay_dm_instance_present(anjay, obj,
@@ -677,13 +682,13 @@ static int remove_referred_instance(anjay_t *anjay,
  *   referred to by it (see LwM2M TS 1.0.2, E.1.3 Unbootstrapping).
  */
 static int
-remove_orphaned_instances(anjay_t *anjay,
-                          const anjay_dm_object_def_t *const *ac_obj,
+remove_orphaned_instances(anjay_unlocked_t *anjay,
+                          const anjay_dm_installed_object_t *ac_obj,
                           anjay_notify_queue_t *new_notifications_queue) {
     int result = 0;
     AVS_LIST(anjay_ssid_t) ssid_list = NULL;
     AVS_LIST(orphaned_instance_info_t) instances_to_remove = NULL;
-    const anjay_dm_object_def_t *const *security_obj =
+    const anjay_dm_installed_object_t *security_obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (security_obj) {
         result = _anjay_dm_foreach_instance(
@@ -722,8 +727,8 @@ typedef struct anjay_acl_ref_validation_object_info_struct {
 } acl_ref_validation_object_info_t;
 
 static AVS_LIST(anjay_iid_t)
-create_allowed_iids_set(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *obj) {
+create_allowed_iids_set(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj) {
     AVS_LIST(anjay_iid_t) result = NULL;
     if (_anjay_dm_get_sorted_instance_list(anjay, obj, &result)) {
         return NULL;
@@ -740,21 +745,21 @@ create_allowed_iids_set(anjay_t *anjay,
 }
 
 static acl_ref_validation_object_info_t *
-get_or_create_validation_object_info(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj,
+get_or_create_validation_object_info(anjay_unlocked_t *anjay,
+                                     const anjay_dm_installed_object_t *obj,
                                      anjay_acl_ref_validation_ctx_t *ctx) {
     AVS_LIST(acl_ref_validation_object_info_t) *it;
     AVS_LIST_FOREACH_PTR(it, &ctx->object_infos) {
-        if ((*it)->oid == (*obj)->oid) {
+        if ((*it)->oid == _anjay_dm_installed_object_oid(obj)) {
             return *it;
-        } else if ((*it)->oid > (*obj)->oid) {
+        } else if ((*it)->oid > _anjay_dm_installed_object_oid(obj)) {
             break;
         }
     }
     if (!AVS_LIST_INSERT_NEW(acl_ref_validation_object_info_t, it)) {
         return NULL;
     }
-    (*it)->oid = (*obj)->oid;
+    (*it)->oid = _anjay_dm_installed_object_oid(obj);
     if (!((*it)->allowed_iids = create_allowed_iids_set(anjay, obj))) {
         AVS_LIST_DELETE(it);
         return NULL;
@@ -769,11 +774,11 @@ void _anjay_acl_ref_validation_ctx_cleanup(
     }
 }
 
-int _anjay_acl_ref_validate_inst_ref(anjay_t *anjay,
+int _anjay_acl_ref_validate_inst_ref(anjay_unlocked_t *anjay,
                                      anjay_acl_ref_validation_ctx_t *ctx,
                                      anjay_oid_t target_oid,
                                      anjay_iid_t target_iid) {
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, target_oid);
     if (!obj) {
         return -1;
@@ -805,8 +810,8 @@ typedef struct {
  * instance onto the args->iids_to_remove list.
  */
 static int
-enumerate_instances_to_remove_clb(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj,
+enumerate_instances_to_remove_clb(anjay_unlocked_t *anjay,
+                                  const anjay_dm_installed_object_t *obj,
                                   anjay_iid_t iid,
                                   void *args_) {
     (void) obj;
@@ -832,8 +837,8 @@ enumerate_instances_to_remove_clb(anjay_t *anjay,
  * Removes Access Control instances that do not refer to any valid object
  * instance.
  */
-static int perform_removes(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *ac_obj,
+static int perform_removes(anjay_unlocked_t *anjay,
+                           const anjay_dm_installed_object_t *ac_obj,
                            anjay_notify_queue_t *new_notifications_queue) {
     enumerate_instances_to_remove_args_t args = {
         .validation_ctx = _anjay_acl_ref_validation_ctx_new(),
@@ -863,8 +868,8 @@ typedef struct {
 } validate_resources_to_write_clb_args_t;
 
 static int
-validate_resources_to_write_clb(anjay_t *anjay,
-                                const anjay_dm_object_def_t *const *obj,
+validate_resources_to_write_clb(anjay_unlocked_t *anjay,
+                                const anjay_dm_installed_object_t *obj,
                                 anjay_iid_t iid,
                                 anjay_rid_t rid,
                                 anjay_dm_resource_kind_t kind,
@@ -909,8 +914,8 @@ validate_resources_to_write_clb(anjay_t *anjay,
 }
 
 static int
-validate_resources_to_write(anjay_t *anjay,
-                            const anjay_dm_object_def_t *const *ac_obj,
+validate_resources_to_write(anjay_unlocked_t *anjay,
+                            const anjay_dm_installed_object_t *ac_obj,
                             anjay_iid_t ac_iid) {
     validate_resources_to_write_clb_args_t args = {
         .oid_found = false,
@@ -933,8 +938,8 @@ validate_resources_to_write(anjay_t *anjay,
  * Creates Access Control object instances for objects instances listed in
  * known_added_iids entries inside incoming_queue.
  */
-static int perform_adds(anjay_t *anjay,
-                        const anjay_dm_object_def_t *const *ac_obj,
+static int perform_adds(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *ac_obj,
                         anjay_notify_queue_t *notifications_queue) {
     const anjay_ssid_t origin_ssid = _anjay_dm_current_ssid(anjay);
 
@@ -1003,7 +1008,7 @@ get_ac_notif_entry(anjay_notify_queue_t queue) {
 }
 
 static int generate_apparent_instance_set_change_notifications(
-        anjay_t *anjay, anjay_notify_queue_t *notifications_queue) {
+        anjay_unlocked_t *anjay, anjay_notify_queue_t *notifications_queue) {
     const anjay_notify_queue_object_entry_t *ac_notif =
             get_ac_notif_entry(*notifications_queue);
     if (!ac_notif) {
@@ -1034,14 +1039,14 @@ static int generate_apparent_instance_set_change_notifications(
 
 #endif // ANJAY_WITH_ACCESS_CONTROL
 
-int _anjay_sync_access_control(anjay_t *anjay,
+int _anjay_sync_access_control(anjay_unlocked_t *anjay,
                                anjay_notify_queue_t *notifications_queue) {
 #ifndef ANJAY_WITH_ACCESS_CONTROL
     (void) anjay;
     (void) notifications_queue;
     return 0;
 #else  // ANJAY_WITH_ACCESS_CONTROL
-    const anjay_dm_object_def_t *const *ac_obj = get_access_control(anjay);
+    const anjay_dm_installed_object_t *ac_obj = get_access_control(anjay);
     if (!ac_obj) {
         return 0;
     }

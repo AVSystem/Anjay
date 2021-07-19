@@ -46,7 +46,7 @@ typedef struct {
  *
  * @returns 0 on success, negative value in case of an error.
  */
-int _anjay_downloader_init(anjay_downloader_t *dl, anjay_t *anjay);
+int _anjay_downloader_init(anjay_downloader_t *dl, anjay_unlocked_t *anjay);
 
 /**
  * Frees any resources associated with the downloader object. Aborts all

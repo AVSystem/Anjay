@@ -53,9 +53,9 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
  *               Object Instance.
  * @return 0 on success, negative value in case of an error.
  */
-int _anjay_discover(anjay_t *anjay,
+int _anjay_discover(anjay_unlocked_t *anjay,
                     avs_stream_t *stream,
-                    const anjay_dm_object_def_t *const *obj,
+                    const anjay_dm_installed_object_t *obj,
                     anjay_iid_t iid,
                     anjay_rid_t rid);
 
@@ -70,7 +70,7 @@ int _anjay_discover(anjay_t *anjay,
  *               Discover on the root path.
  * @return 0 on success, negative value in case of an error.
  */
-int _anjay_bootstrap_discover(anjay_t *anjay,
+int _anjay_bootstrap_discover(anjay_unlocked_t *anjay,
                               avs_stream_t *stream,
                               anjay_oid_t oid);
 #    endif // ANJAY_WITH_BOOTSTRAP

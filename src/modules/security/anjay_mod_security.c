@@ -215,56 +215,59 @@ static int del_instance(sec_repr_t *repr, anjay_iid_t iid) {
     return ANJAY_ERR_NOT_FOUND;
 }
 
-static int sec_list_resources(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
+static int sec_list_resources(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t obj_ptr,
                               anjay_iid_t iid,
-                              anjay_dm_resource_list_ctx_t *ctx) {
+                              anjay_unlocked_dm_resource_list_ctx_t *ctx) {
     (void) anjay;
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     assert(inst);
 
-    anjay_dm_emit_res(ctx, SEC_RES_LWM2M_SERVER_URI, ANJAY_DM_RES_R,
-                      ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SEC_RES_BOOTSTRAP_SERVER, ANJAY_DM_RES_R,
-                      ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SECURITY_MODE, ANJAY_DM_RES_R,
-                      ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SEC_RES_PK_OR_IDENTITY, ANJAY_DM_RES_R,
-                      ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SERVER_PK, ANJAY_DM_RES_R,
-                      ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SECRET_KEY, ANJAY_DM_RES_R,
-                      ANJAY_DM_RES_PRESENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SMS_SECURITY_MODE, ANJAY_DM_RES_R,
-                      inst->has_sms_security_mode ? ANJAY_DM_RES_PRESENT
-                                                  : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SMS_BINDING_KEY_PARAMS, ANJAY_DM_RES_R,
-                      inst->has_sms_key_params ? ANJAY_DM_RES_PRESENT
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_LWM2M_SERVER_URI, ANJAY_DM_RES_R,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_BOOTSTRAP_SERVER, ANJAY_DM_RES_R,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SECURITY_MODE, ANJAY_DM_RES_R,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_PK_OR_IDENTITY, ANJAY_DM_RES_R,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SERVER_PK, ANJAY_DM_RES_R,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SECRET_KEY, ANJAY_DM_RES_R,
+                                ANJAY_DM_RES_PRESENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SMS_SECURITY_MODE, ANJAY_DM_RES_R,
+                                inst->has_sms_security_mode
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SMS_BINDING_KEY_PARAMS,
+                                ANJAY_DM_RES_R,
+                                inst->has_sms_key_params ? ANJAY_DM_RES_PRESENT
+                                                         : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SMS_BINDING_SECRET_KEYS,
+                                ANJAY_DM_RES_R,
+                                inst->has_sms_secret_key ? ANJAY_DM_RES_PRESENT
+                                                         : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SERVER_SMS_NUMBER, ANJAY_DM_RES_R,
+                                inst->sms_number ? ANJAY_DM_RES_PRESENT
+                                                 : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SHORT_SERVER_ID, ANJAY_DM_RES_R,
+                                inst->has_ssid ? ANJAY_DM_RES_PRESENT
                                                : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SMS_BINDING_SECRET_KEYS, ANJAY_DM_RES_R,
-                      inst->has_sms_secret_key ? ANJAY_DM_RES_PRESENT
-                                               : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SERVER_SMS_NUMBER, ANJAY_DM_RES_R,
-                      inst->sms_number ? ANJAY_DM_RES_PRESENT
-                                       : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SEC_RES_SHORT_SERVER_ID, ANJAY_DM_RES_R,
-                      inst->has_ssid ? ANJAY_DM_RES_PRESENT
-                                     : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SEC_RES_CLIENT_HOLD_OFF_TIME, ANJAY_DM_RES_R,
-                      inst->holdoff_s >= 0 ? ANJAY_DM_RES_PRESENT
-                                           : ANJAY_DM_RES_ABSENT);
-    anjay_dm_emit_res(ctx, SEC_RES_BOOTSTRAP_TIMEOUT, ANJAY_DM_RES_R,
-                      inst->bs_timeout_s >= 0 ? ANJAY_DM_RES_PRESENT
-                                              : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(
+            ctx, SEC_RES_CLIENT_HOLD_OFF_TIME, ANJAY_DM_RES_R,
+            inst->holdoff_s >= 0 ? ANJAY_DM_RES_PRESENT : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_BOOTSTRAP_TIMEOUT, ANJAY_DM_RES_R,
+                                inst->bs_timeout_s >= 0 ? ANJAY_DM_RES_PRESENT
+                                                        : ANJAY_DM_RES_ABSENT);
     return 0;
 }
 
-static int sec_read(anjay_t *anjay,
-                    const anjay_dm_object_def_t *const *obj_ptr,
+static int sec_read(anjay_unlocked_t *anjay,
+                    const anjay_dm_installed_object_t obj_ptr,
                     anjay_iid_t iid,
                     anjay_rid_t rid,
                     anjay_riid_t riid,
-                    anjay_output_ctx_t *ctx) {
+                    anjay_unlocked_output_ctx_t *ctx) {
     (void) anjay;
     (void) riid;
     assert(riid == ANJAY_ID_INVALID);
@@ -274,18 +277,18 @@ static int sec_read(anjay_t *anjay,
 
     switch ((security_resource_t) rid) {
     case SEC_RES_LWM2M_SERVER_URI:
-        return anjay_ret_string(ctx, inst->server_uri);
+        return _anjay_ret_string_unlocked(ctx, inst->server_uri);
     case SEC_RES_BOOTSTRAP_SERVER:
-        return anjay_ret_bool(ctx, inst->is_bootstrap);
+        return _anjay_ret_bool_unlocked(ctx, inst->is_bootstrap);
     case SEC_RES_SECURITY_MODE:
-        return anjay_ret_i32(ctx, (int32_t) inst->security_mode);
+        return _anjay_ret_i64_unlocked(ctx, (int32_t) inst->security_mode);
     case SEC_RES_SERVER_PK:
-        return anjay_ret_bytes(ctx, inst->server_public_key.data,
-                               inst->server_public_key.size);
+        return _anjay_ret_bytes_unlocked(ctx, inst->server_public_key.data,
+                                         inst->server_public_key.size);
     case SEC_RES_PK_OR_IDENTITY:
         switch (inst->public_cert_or_psk_identity.type) {
         case SEC_KEY_AS_DATA:
-            return anjay_ret_bytes(
+            return _anjay_ret_bytes_unlocked(
                     ctx, inst->public_cert_or_psk_identity.value.data.data,
                     inst->public_cert_or_psk_identity.value.data.size);
         default:
@@ -295,7 +298,7 @@ static int sec_read(anjay_t *anjay,
     case SEC_RES_SECRET_KEY:
         switch (inst->private_cert_or_psk_key.type) {
         case SEC_KEY_AS_DATA:
-            return anjay_ret_bytes(
+            return _anjay_ret_bytes_unlocked(
                     ctx, inst->private_cert_or_psk_key.value.data.data,
                     inst->private_cert_or_psk_key.value.data.size);
         default:
@@ -303,33 +306,33 @@ static int sec_read(anjay_t *anjay,
             return ANJAY_ERR_INTERNAL;
         }
     case SEC_RES_SHORT_SERVER_ID:
-        return anjay_ret_i32(ctx, (int32_t) inst->ssid);
+        return _anjay_ret_i64_unlocked(ctx, (int32_t) inst->ssid);
     case SEC_RES_CLIENT_HOLD_OFF_TIME:
-        return anjay_ret_i32(ctx, inst->holdoff_s);
+        return _anjay_ret_i64_unlocked(ctx, inst->holdoff_s);
     case SEC_RES_BOOTSTRAP_TIMEOUT:
-        return anjay_ret_i32(ctx, inst->bs_timeout_s);
+        return _anjay_ret_i64_unlocked(ctx, inst->bs_timeout_s);
     case SEC_RES_SMS_SECURITY_MODE:
-        return anjay_ret_i32(ctx, (int32_t) inst->sms_security_mode);
+        return _anjay_ret_i64_unlocked(ctx, (int32_t) inst->sms_security_mode);
     case SEC_RES_SMS_BINDING_KEY_PARAMS:
-        return anjay_ret_bytes(ctx, inst->sms_key_params.data,
-                               inst->sms_key_params.size);
+        return _anjay_ret_bytes_unlocked(ctx, inst->sms_key_params.data,
+                                         inst->sms_key_params.size);
     case SEC_RES_SMS_BINDING_SECRET_KEYS:
-        return anjay_ret_bytes(ctx, inst->sms_secret_key.data,
-                               inst->sms_secret_key.size);
+        return _anjay_ret_bytes_unlocked(ctx, inst->sms_secret_key.data,
+                                         inst->sms_secret_key.size);
     case SEC_RES_SERVER_SMS_NUMBER:
-        return anjay_ret_string(ctx, inst->sms_number);
+        return _anjay_ret_string_unlocked(ctx, inst->sms_number);
     default:
         AVS_UNREACHABLE("Read handler called on unknown Security resource");
         return ANJAY_ERR_NOT_IMPLEMENTED;
     }
 }
 
-static int sec_write(anjay_t *anjay,
-                     const anjay_dm_object_def_t *const *obj_ptr,
+static int sec_write(anjay_unlocked_t *anjay,
+                     const anjay_dm_installed_object_t obj_ptr,
                      anjay_iid_t iid,
                      anjay_rid_t rid,
                      anjay_riid_t riid,
-                     anjay_input_ctx_t *ctx) {
+                     anjay_unlocked_input_ctx_t *ctx) {
     (void) anjay;
     (void) riid;
     assert(riid == ANJAY_ID_INVALID);
@@ -344,7 +347,7 @@ static int sec_write(anjay_t *anjay,
     case SEC_RES_LWM2M_SERVER_URI:
         return _anjay_io_fetch_string(ctx, &inst->server_uri);
     case SEC_RES_BOOTSTRAP_SERVER:
-        if (!(retval = anjay_get_bool(ctx, &inst->is_bootstrap))) {
+        if (!(retval = _anjay_get_bool_unlocked(ctx, &inst->is_bootstrap))) {
             inst->has_is_bootstrap = true;
         }
         return retval;
@@ -372,9 +375,9 @@ static int sec_write(anjay_t *anjay,
         }
         return retval;
     case SEC_RES_CLIENT_HOLD_OFF_TIME:
-        return anjay_get_i32(ctx, &inst->holdoff_s);
+        return _anjay_get_i32_unlocked(ctx, &inst->holdoff_s);
     case SEC_RES_BOOTSTRAP_TIMEOUT:
-        return anjay_get_i32(ctx, &inst->bs_timeout_s);
+        return _anjay_get_i32_unlocked(ctx, &inst->bs_timeout_s);
     case SEC_RES_SMS_SECURITY_MODE:
         if (!(retval = _anjay_sec_fetch_sms_security_mode(
                       ctx, &inst->sms_security_mode))) {
@@ -399,21 +402,21 @@ static int sec_write(anjay_t *anjay,
     }
 }
 
-static int sec_list_instances(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
-                              anjay_dm_list_ctx_t *ctx) {
+static int sec_list_instances(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t obj_ptr,
+                              anjay_unlocked_dm_list_ctx_t *ctx) {
     (void) anjay;
 
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
     AVS_LIST(sec_instance_t) it;
     AVS_LIST_FOREACH(it, repr->instances) {
-        anjay_dm_emit(ctx, it->iid);
+        _anjay_dm_emit_unlocked(ctx, it->iid);
     }
     return 0;
 }
 
-static int sec_instance_create(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
+static int sec_instance_create(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t obj_ptr,
                                anjay_iid_t iid) {
     (void) anjay;
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
@@ -438,41 +441,39 @@ static int sec_instance_create(anjay_t *anjay,
     return 0;
 }
 
-static int sec_instance_remove(anjay_t *anjay,
-                               const anjay_dm_object_def_t *const *obj_ptr,
+static int sec_instance_remove(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t obj_ptr,
                                anjay_iid_t iid) {
     (void) anjay;
     return del_instance(_anjay_sec_get(obj_ptr), iid);
 }
 
-static int sec_transaction_begin(anjay_t *anjay,
-                                 const anjay_dm_object_def_t *const *obj_ptr) {
+static int sec_transaction_begin(anjay_unlocked_t *anjay,
+                                 const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_sec_transaction_begin_impl(_anjay_sec_get(obj_ptr));
 }
 
-static int sec_transaction_commit(anjay_t *anjay,
-                                  const anjay_dm_object_def_t *const *obj_ptr) {
+static int sec_transaction_commit(anjay_unlocked_t *anjay,
+                                  const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_sec_transaction_commit_impl(_anjay_sec_get(obj_ptr));
 }
 
-static int
-sec_transaction_validate(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj_ptr) {
+static int sec_transaction_validate(anjay_unlocked_t *anjay,
+                                    const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_sec_transaction_validate_impl(anjay, _anjay_sec_get(obj_ptr));
 }
 
-static int
-sec_transaction_rollback(anjay_t *anjay,
-                         const anjay_dm_object_def_t *const *obj_ptr) {
+static int sec_transaction_rollback(anjay_unlocked_t *anjay,
+                                    const anjay_dm_installed_object_t obj_ptr) {
     (void) anjay;
     return _anjay_sec_transaction_rollback_impl(_anjay_sec_get(obj_ptr));
 }
 
-static int sec_instance_reset(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj_ptr,
+static int sec_instance_reset(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t obj_ptr,
                               anjay_iid_t iid) {
     (void) anjay;
     sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
@@ -483,7 +484,7 @@ static int sec_instance_reset(anjay_t *anjay,
     return 0;
 }
 
-static const anjay_dm_object_def_t SECURITY = {
+static const anjay_unlocked_dm_object_def_t SECURITY = {
     .oid = ANJAY_DM_OID_SECURITY,
     .handlers = {
         .list_instances = sec_list_instances,
@@ -500,42 +501,44 @@ static const anjay_dm_object_def_t SECURITY = {
     }
 };
 
-sec_repr_t *_anjay_sec_get(const anjay_dm_object_def_t *const *obj_ptr) {
-    assert(obj_ptr && *obj_ptr == &SECURITY);
-    return AVS_CONTAINER_OF(obj_ptr, sec_repr_t, def);
+sec_repr_t *_anjay_sec_get(const anjay_dm_installed_object_t obj_ptr) {
+    const anjay_unlocked_dm_object_def_t *const *unlocked_def =
+            _anjay_dm_installed_object_get_unlocked(&obj_ptr);
+    assert(*unlocked_def == &SECURITY);
+    return AVS_CONTAINER_OF(unlocked_def, sec_repr_t, def);
 }
 
 int anjay_security_object_add_instance(
-        anjay_t *anjay,
+        anjay_t *anjay_locked,
         const anjay_security_instance_t *instance,
         anjay_iid_t *inout_iid) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *obj_ptr =
+    assert(anjay_locked);
+    int retval = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *obj_ptr =
             _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
-    sec_repr_t *repr = _anjay_sec_get(obj_ptr);
-
+    sec_repr_t *repr = obj_ptr ? _anjay_sec_get(*obj_ptr) : NULL;
     if (!repr) {
         security_log(ERROR, _("Security object is not registered"));
-        return -1;
-    }
+        retval = -1;
+    } else {
+        const bool modified_since_persist = repr->modified_since_persist;
+        if (!(retval = add_instance(repr, instance, inout_iid))
+                && (retval = _anjay_sec_object_validate(anjay, repr))) {
+            (void) del_instance(repr, *inout_iid);
+            if (!modified_since_persist) {
+                /* validation failed and so in the end no instace is added */
+                _anjay_sec_clear_modified(repr);
+            }
+        }
 
-    const bool modified_since_persist = repr->modified_since_persist;
-    int retval = add_instance(repr, instance, inout_iid);
-    if (!retval && (retval = _anjay_sec_object_validate(anjay, repr))) {
-        (void) del_instance(repr, *inout_iid);
-        if (!modified_since_persist) {
-            /* validation failed and so in the end no instace is added */
-            _anjay_sec_clear_modified(repr);
+        if (!retval) {
+            if (_anjay_notify_instances_changed_unlocked(anjay, SECURITY.oid)) {
+                security_log(WARNING, _("Could not schedule socket reload"));
+            }
         }
     }
-
-    if (!retval) {
-        if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
-            security_log(WARNING, _("Could not schedule socket reload"));
-        }
-    }
-
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return retval;
 }
 
@@ -549,72 +552,79 @@ static void security_purge(sec_repr_t *repr) {
 
 static void security_delete(void *repr) {
     security_purge((sec_repr_t *) repr);
-    avs_free(repr);
+    // NOTE: repr itself will be freed when cleaning the objects list
 }
 
-void anjay_security_object_purge(anjay_t *anjay) {
-    assert(anjay);
-
-    const anjay_dm_object_def_t *const *sec_obj =
+void anjay_security_object_purge(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *sec_obj =
             _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
-    sec_repr_t *repr = _anjay_sec_get(sec_obj);
+    sec_repr_t *repr = sec_obj ? _anjay_sec_get(*sec_obj) : NULL;
 
     if (!repr) {
         security_log(ERROR, _("Security object is not registered"));
-        return;
+    } else {
+        security_purge(repr);
+        if (_anjay_notify_instances_changed_unlocked(anjay, SECURITY.oid)) {
+            security_log(WARNING, _("Could not schedule socket reload"));
+        }
     }
-
-    security_purge(repr);
-
-    if (anjay_notify_instances_changed(anjay, SECURITY.oid)) {
-        security_log(WARNING, _("Could not schedule socket reload"));
-    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
-bool anjay_security_object_is_modified(anjay_t *anjay) {
-    assert(anjay);
-
-    sec_repr_t *repr =
-            _anjay_sec_get(_anjay_dm_find_object_by_oid(anjay, SECURITY.oid));
-
-    if (!repr) {
+bool anjay_security_object_is_modified(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    bool result = false;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *sec_obj =
+            _anjay_dm_find_object_by_oid(anjay, SECURITY.oid);
+    if (!sec_obj) {
         security_log(ERROR, _("Security object is not registered"));
-        return false;
+    } else {
+        sec_repr_t *repr = _anjay_sec_get(*sec_obj);
+        if (repr->in_transaction) {
+            result = repr->saved_modified_since_persist;
+        } else {
+            result = repr->modified_since_persist;
+        }
     }
-
-    return repr->in_transaction ? repr->saved_modified_since_persist
-                                : repr->modified_since_persist;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 static const anjay_dm_module_t SECURITY_MODULE = {
     .deleter = security_delete
 };
 
-int anjay_security_object_install(anjay_t *anjay) {
-    assert(anjay);
-
-    sec_repr_t *repr = (sec_repr_t *) avs_calloc(1, sizeof(sec_repr_t));
+int anjay_security_object_install(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    AVS_LIST(sec_repr_t) repr = AVS_LIST_NEW_ELEMENT(sec_repr_t);
     if (!repr) {
         security_log(ERROR, _("out of memory"));
-        return -1;
+    } else {
+        repr->def = &SECURITY;
+        _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);
+        if (!_anjay_dm_module_install(anjay, &SECURITY_MODULE, repr)) {
+            AVS_STATIC_ASSERT(offsetof(sec_repr_t, def_ptr) == 0,
+                              def_ptr_is_first_field);
+            AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
+            if (_anjay_register_object_unlocked(anjay, &entry)) {
+                result = _anjay_dm_module_uninstall(anjay, &SECURITY_MODULE);
+                assert(!result);
+                result = -1;
+            } else {
+                result = 0;
+            }
+        }
+        if (result) {
+            AVS_LIST_CLEAR(&repr);
+        }
     }
-
-    repr->def = &SECURITY;
-
-    if (_anjay_dm_module_install(anjay, &SECURITY_MODULE, repr)) {
-        avs_free(repr);
-        return -1;
-    }
-
-    if (anjay_register_object(anjay, &repr->def)) {
-        // this will free repr
-        int result = _anjay_dm_module_uninstall(anjay, &SECURITY_MODULE);
-        assert(!result);
-        (void) result;
-        return -1;
-    }
-
-    return 0;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 #    ifdef ANJAY_TEST

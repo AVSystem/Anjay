@@ -92,6 +92,10 @@ void anjay_server_object_purge(anjay_t *anjay);
  * If a transaction on the Server object is currently ongoing (e.g., during
  * Bootstrap), last known state from before the transaction will be returned.
  *
+ * <strong>NOTE:</strong> If Anjay is compiled with thread safety enabled, the
+ * list that is returned is normally accessed with the Anjay mutex locked. You
+ * will need to ensure thread safety yourself if using this function.
+ *
  * @param anjay Anjay instance with Server Object installed.
  *
  * @returns A list of known SSIDs on success, NULL when the object is empty.

@@ -19,7 +19,7 @@
 
 #include <stdbool.h>
 
-#include <anjay/core.h>
+#include <anjay_modules/anjay_utils_core.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
@@ -50,20 +50,22 @@ typedef AVS_LIST(anjay_notify_queue_object_entry_t) anjay_notify_queue_t;
  * Object require knowing which server (if any) performed the changes.
  * @ref _anjay_dm_current_ssid will be called to determine it.
  */
-int _anjay_notify_perform(anjay_t *anjay, anjay_notify_queue_t *queue_ptr);
+int _anjay_notify_perform(anjay_unlocked_t *anjay,
+                          anjay_notify_queue_t *queue_ptr);
 
 /**
  * Works like @ref _anjay_notify_perform but doesn't call
  * server_modified_notify().
  */
-int _anjay_notify_perform_without_servers(anjay_t *anjay,
+int _anjay_notify_perform_without_servers(anjay_unlocked_t *anjay,
                                           anjay_notify_queue_t *queue_ptr);
 
 /**
  * Calls @ref _anjay_notify_perform and @ref _anjay_notify_clear_queue
  * afterwards (regardless of success or failure).
  */
-int _anjay_notify_flush(anjay_t *anjay, anjay_notify_queue_t *queue_ptr);
+int _anjay_notify_flush(anjay_unlocked_t *anjay,
+                        anjay_notify_queue_t *queue_ptr);
 
 int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,
                                          anjay_oid_t oid,
@@ -87,12 +89,21 @@ int _anjay_notify_queue_resource_change(anjay_notify_queue_t *out_queue,
 
 void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue);
 
-int _anjay_notify_instance_created(anjay_t *anjay,
+int _anjay_notify_instance_created(anjay_unlocked_t *anjay,
                                    anjay_oid_t oid,
                                    anjay_iid_t iid);
 
-typedef int
-anjay_notify_callback_t(anjay_t *anjay, anjay_notify_queue_t queue, void *data);
+int _anjay_notify_changed_unlocked(anjay_unlocked_t *anjay,
+                                   anjay_oid_t oid,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid);
+
+int _anjay_notify_instances_changed_unlocked(anjay_unlocked_t *anjay,
+                                             anjay_oid_t oid);
+
+typedef int anjay_notify_callback_t(anjay_unlocked_t *anjay,
+                                    anjay_notify_queue_t queue,
+                                    void *data);
 
 VISIBILITY_PRIVATE_HEADER_END
 

@@ -114,7 +114,7 @@ static inline bool etag_matches(const anjay_etag_t *etag, const char *text) {
 }
 
 static void
-handle_http_packet_with_locked_buffer(anjay_t *anjay,
+handle_http_packet_with_locked_buffer(anjay_unlocked_t *anjay,
                                       AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
                                       uint8_t *buffer) {
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
@@ -140,11 +140,10 @@ handle_http_packet_with_locked_buffer(anjay_t *anjay,
                         ctx->bytes_downloaded - ctx->bytes_written;
                 assert(bytes_read >= bytes_to_write);
                 size_t original_offset = ctx->bytes_written;
-                if (avs_is_err((err = ctx->common.on_next_block(
-                                        anjay,
+                if (avs_is_err((err = _anjay_downloader_call_on_next_block(
+                                        &anjay->downloader, &ctx->common,
                                         &buffer[bytes_read - bytes_to_write],
-                                        bytes_to_write, ctx->etag,
-                                        ctx->common.user_data)))) {
+                                        bytes_to_write, ctx->etag)))) {
                     _anjay_downloader_abort_transfer(
                             &anjay->downloader, ctx_ptr,
                             _anjay_download_status_failed(err));
@@ -172,7 +171,7 @@ handle_http_packet_with_locked_buffer(anjay_t *anjay,
 
 static void handle_http_packet(anjay_downloader_t *dl,
                                AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
-    anjay_t *anjay = _anjay_downloader_get_anjay(dl);
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
     uint8_t *buffer = avs_shared_buffer_acquire(anjay->in_shared_buffer);
     assert(buffer);
     handle_http_packet_with_locked_buffer(anjay, ctx_ptr, buffer);
@@ -180,7 +179,7 @@ static void handle_http_packet(anjay_downloader_t *dl,
 }
 
 static void timeout_job(avs_sched_t *sched, const void *id_ptr) {
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     uintptr_t id = *(const uintptr_t *) id_ptr;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
@@ -195,7 +194,7 @@ static void timeout_job(avs_sched_t *sched, const void *id_ptr) {
 }
 
 static void send_request(avs_sched_t *sched, const void *id_ptr) {
-    anjay_t *anjay = _anjay_get_from_sched(sched);
+    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
     uintptr_t id = *(const uintptr_t *) id_ptr;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
@@ -377,7 +376,7 @@ reconnect_http_transfer(anjay_downloader_t *dl,
                         AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
     avs_stream_cleanup(&ctx->stream);
-    anjay_t *anjay = _anjay_downloader_get_anjay(dl);
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
     if (AVS_SCHED_NOW(anjay->sched, &ctx->next_action_job, send_request,
                       &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(ERROR, _("could not schedule download job"));
@@ -534,7 +533,7 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
         return avs_errno(AVS_EINVAL);
     }
 
-    anjay_t *anjay = _anjay_downloader_get_anjay(dl);
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
     AVS_LIST(anjay_http_download_ctx_t) ctx =
             AVS_LIST_NEW_ELEMENT(anjay_http_download_ctx_t);
     if (!ctx) {

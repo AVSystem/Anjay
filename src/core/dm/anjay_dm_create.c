@@ -63,8 +63,8 @@ setup_create_response(anjay_oid_t oid,
     return result;
 }
 
-static int dm_create_select_iid_clb(anjay_t *anjay,
-                                    const anjay_dm_object_def_t *const *obj,
+static int dm_create_select_iid_clb(anjay_unlocked_t *anjay,
+                                    const anjay_dm_installed_object_t *obj,
                                     anjay_iid_t iid,
                                     void *new_iid_ptr_) {
     (void) anjay;
@@ -78,8 +78,8 @@ static int dm_create_select_iid_clb(anjay_t *anjay,
     }
 }
 
-int _anjay_dm_select_free_iid(anjay_t *anjay,
-                              const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_select_free_iid(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t *obj,
                               anjay_iid_t *new_iid_ptr) {
     *new_iid_ptr = 0;
     int result =
@@ -92,31 +92,31 @@ int _anjay_dm_select_free_iid(anjay_t *anjay,
     return result;
 }
 
-static int dm_create_inner(anjay_t *anjay,
-                           const anjay_dm_object_def_t *const *obj,
+static int dm_create_inner(anjay_unlocked_t *anjay,
+                           const anjay_dm_installed_object_t *obj,
                            anjay_iid_t iid,
-                           anjay_input_ctx_t *in_ctx) {
+                           anjay_unlocked_input_ctx_t *in_ctx) {
     assert(iid != ANJAY_ID_INVALID);
     int result = _anjay_dm_call_instance_create(anjay, obj, iid, NULL);
     if (result) {
         dm_log(DEBUG,
                _("Instance Create handler for object ") "%" PRIu16 _(" failed"),
-               (*obj)->oid);
+               _anjay_dm_installed_object_oid(obj));
         return result ? result : ANJAY_ERR_INTERNAL;
     } else if ((result = _anjay_dm_write_created_instance(anjay, obj, iid,
                                                           in_ctx))) {
         dm_log(DEBUG,
                _("Writing Resources for newly created ") "/%" PRIu16 "/%" PRIu16
                        _(" failed; removing"),
-               (*obj)->oid, iid);
+               _anjay_dm_installed_object_oid(obj), iid);
     }
     return result;
 }
 
-static int dm_create_with_explicit_iid(anjay_t *anjay,
-                                       const anjay_dm_object_def_t *const *obj,
+static int dm_create_with_explicit_iid(anjay_unlocked_t *anjay,
+                                       const anjay_dm_installed_object_t *obj,
                                        anjay_iid_t iid,
-                                       anjay_input_ctx_t *in_ctx) {
+                                       anjay_unlocked_input_ctx_t *in_ctx) {
     if (iid == ANJAY_ID_INVALID) {
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -124,13 +124,13 @@ static int dm_create_with_explicit_iid(anjay_t *anjay,
     if (result > 0) {
         dm_log(DEBUG,
                _("Instance ") "/%" PRIu16 "/%" PRIu16 _(" already exists"),
-               (*obj)->oid, iid);
+               _anjay_dm_installed_object_oid(obj), iid);
         return ANJAY_ERR_BAD_REQUEST;
     } else if (result) {
         dm_log(DEBUG,
                _("Instance Present handler for ") "/%" PRIu16
                                                   "/%" PRIu16 _(" failed"),
-               (*obj)->oid, iid);
+               _anjay_dm_installed_object_oid(obj), iid);
         return result;
     }
     result = dm_create_inner(anjay, obj, iid, in_ctx);
@@ -148,10 +148,10 @@ static int dm_create_with_explicit_iid(anjay_t *anjay,
     return result;
 }
 
-int _anjay_dm_create(anjay_t *anjay,
-                     const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_create(anjay_unlocked_t *anjay,
+                     const anjay_dm_installed_object_t *obj,
                      const anjay_request_t *request,
-                     anjay_input_ctx_t *in_ctx) {
+                     anjay_unlocked_input_ctx_t *in_ctx) {
     dm_log(LAZY_DEBUG, _("Create ") "%s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     assert(_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_OID));
 
@@ -168,7 +168,7 @@ int _anjay_dm_create(anjay_t *anjay,
                     dm_create_with_explicit_iid(anjay, obj,
                                                 path.ids[ANJAY_ID_IID], in_ctx);
         } else {
-            path = MAKE_OBJECT_PATH((*obj)->oid);
+            path = MAKE_OBJECT_PATH(_anjay_dm_installed_object_oid(obj));
             (void) ((result = _anjay_dm_select_free_iid(
                              anjay, obj, &path.ids[ANJAY_ID_IID]))
                     || (result = _anjay_input_update_root_path(in_ctx, &path))
@@ -178,7 +178,8 @@ int _anjay_dm_create(anjay_t *anjay,
     }
     if (!result) {
         dm_log(LAZY_DEBUG, _("created: ") "%s", ANJAY_DEBUG_MAKE_PATH(&path));
-        if ((result = setup_create_response((*obj)->oid, path.ids[ANJAY_ID_IID],
+        if ((result = setup_create_response(_anjay_dm_installed_object_oid(obj),
+                                            path.ids[ANJAY_ID_IID],
                                             request->ctx))) {
             dm_log(DEBUG, _("Could not prepare response message."));
         }

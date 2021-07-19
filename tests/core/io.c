@@ -25,7 +25,7 @@
     avs_stream_t *stream = NULL;                                               \
     AVS_UNIT_ASSERT_SUCCESS(avs_unit_memstream_alloc(&stream, sizeof(Data)));  \
     AVS_UNIT_ASSERT_SUCCESS(avs_stream_write(stream, Data, sizeof(Data) - 1)); \
-    anjay_input_ctx_t *ctx;                                                    \
+    anjay_unlocked_input_ctx_t *ctx;                                           \
     AVS_UNIT_ASSERT_SUCCESS(_anjay_input_tlv_create(                           \
             &ctx, &stream, &MAKE_OBJECT_PATH(ANJAY_DM_OID_ACCESS_CONTROL)));
 
@@ -52,21 +52,21 @@ AVS_UNIT_TEST(input_array, example) {
     );
 
     anjay_uri_path_t path;
-    int32_t value;
+    int64_t value;
 
     // check paths for the first object
     {
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
         AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
                 &path, &MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, 0, 0)));
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 3);
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
         AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
                 &path, &MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, 0, 1)));
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 1);
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
@@ -75,7 +75,7 @@ AVS_UNIT_TEST(input_array, example) {
                 &path,
                 &MAKE_RESOURCE_INSTANCE_PATH(
                         ANJAY_DM_OID_ACCESS_CONTROL, 0, 2, 1)));
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, -32);
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
@@ -84,41 +84,41 @@ AVS_UNIT_TEST(input_array, example) {
                 &path,
                 &MAKE_RESOURCE_INSTANCE_PATH(
                         ANJAY_DM_OID_ACCESS_CONTROL, 0, 2, 2)));
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, -128);
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_get_path(ctx, &path, NULL));
         AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(
                 &path, &MAKE_RESOURCE_PATH(ANJAY_DM_OID_ACCESS_CONTROL, 0, 3)));
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 1);
     }
     _anjay_input_next_entry(ctx);
 
     // do a half-assed job decoding the second one
     {
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 4);
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
 
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 2);
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
 
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, -128);
 
         // value already consumed
-        AVS_UNIT_ASSERT_FAILED(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_FAILED(_anjay_get_i64_unlocked(ctx, &value));
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, -128);
 
         AVS_UNIT_ASSERT_SUCCESS(_anjay_input_next_entry(ctx));
 
-        AVS_UNIT_ASSERT_SUCCESS(anjay_get_i32(ctx, &value));
+        AVS_UNIT_ASSERT_SUCCESS(_anjay_get_i64_unlocked(ctx, &value));
         AVS_UNIT_ASSERT_EQUAL(value, 1);
     }
     _anjay_input_next_entry(ctx);

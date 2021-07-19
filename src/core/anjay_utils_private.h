@@ -110,13 +110,13 @@ int _anjay_copy_tls_ciphersuites(avs_net_socket_tls_ciphersuites_t *dest,
                                  const avs_net_socket_tls_ciphersuites_t *src);
 
 anjay_transport_set_t
-_anjay_transport_set_remove_unavailable(anjay_t *anjay,
+_anjay_transport_set_remove_unavailable(anjay_unlocked_t *anjay,
                                         anjay_transport_set_t set);
 
 bool _anjay_socket_transport_included(anjay_transport_set_t set,
                                       anjay_socket_transport_t transport);
 
-bool _anjay_socket_transport_is_online(anjay_t *anjay,
+bool _anjay_socket_transport_is_online(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t transport);
 
 #define ANJAY_SMS_URI_SCHEME "tel"

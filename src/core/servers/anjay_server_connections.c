@@ -35,7 +35,7 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static int read_binding_info(anjay_t *anjay,
+static int read_binding_info(anjay_unlocked_t *anjay,
                              anjay_ssid_t ssid,
                              anjay_binding_mode_t *out_binding_mode,
                              char *out_preferred_transport) {
@@ -98,7 +98,7 @@ typedef struct {
  * completely eliminate offline transports at this moment, because it is not
  * considered an error if a transport is offline.
  */
-static int rank_uri(anjay_t *anjay,
+static int rank_uri(anjay_unlocked_t *anjay,
                     anjay_binding_mode_t *binding_mode,
                     char preferred_transport,
                     const anjay_transport_info_t *transport_info,
@@ -137,7 +137,7 @@ static int rank_uri(anjay_t *anjay,
 }
 
 static void update_selected_security_instance_if_ranked_better(
-        anjay_t *anjay,
+        anjay_unlocked_t *anjay,
         select_security_instance_state_t *state,
         anjay_iid_t iid,
         avs_url_t **move_uri,
@@ -160,8 +160,8 @@ static void update_selected_security_instance_if_ranked_better(
     *move_uri = NULL;
 }
 
-static int select_security_instance_clb(anjay_t *anjay,
-                                        const anjay_dm_object_def_t *const *obj,
+static int select_security_instance_clb(anjay_unlocked_t *anjay,
+                                        const anjay_dm_installed_object_t *obj,
                                         anjay_iid_t iid,
                                         void *state_) {
     (void) obj;
@@ -185,13 +185,13 @@ static int select_security_instance_clb(anjay_t *anjay,
     return ANJAY_FOREACH_CONTINUE;
 }
 
-static int select_security_instance(anjay_t *anjay,
+static int select_security_instance(anjay_unlocked_t *anjay,
                                     anjay_ssid_t ssid,
                                     anjay_binding_mode_t *binding_mode,
                                     char preferred_transport,
                                     anjay_iid_t *out_security_iid,
                                     avs_url_t **out_uri) {
-    const anjay_dm_object_def_t *const *obj =
+    const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     select_security_instance_state_t state = {
         .ssid = ssid,
@@ -294,7 +294,7 @@ static void cancel_exchanges(anjay_connection_ref_t conn_ref) {
     _anjay_observe_interrupt(conn_ref);
 }
 
-void _anjay_servers_interrupt_offline(anjay_t *anjay) {
+void _anjay_servers_interrupt_offline(anjay_unlocked_t *anjay) {
     AVS_LIST(anjay_server_info_t) it;
     AVS_LIST_FOREACH(it, anjay->servers->servers) {
         anjay_connection_type_t conn_type;

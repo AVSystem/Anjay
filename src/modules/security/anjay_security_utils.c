@@ -42,10 +42,10 @@ int _anjay_sec_validate_security_mode(int32_t security_mode) {
     }
 }
 
-int _anjay_sec_fetch_security_mode(anjay_input_ctx_t *ctx,
+int _anjay_sec_fetch_security_mode(anjay_unlocked_input_ctx_t *ctx,
                                    anjay_security_mode_t *out) {
     int32_t value;
-    int retval = anjay_get_i32(ctx, &value);
+    int retval = _anjay_get_i32_unlocked(ctx, &value);
     if (!retval) {
         retval = _anjay_sec_validate_security_mode(value);
     }
@@ -69,10 +69,10 @@ int _anjay_sec_validate_sms_security_mode(int32_t security_mode) {
     }
 }
 
-int _anjay_sec_fetch_sms_security_mode(anjay_input_ctx_t *ctx,
+int _anjay_sec_fetch_sms_security_mode(anjay_unlocked_input_ctx_t *ctx,
                                        anjay_sms_security_mode_t *out) {
     int32_t value;
-    int retval = anjay_get_i32(ctx, &value);
+    int retval = _anjay_get_i32_unlocked(ctx, &value);
     if (!retval) {
         retval = _anjay_sec_validate_sms_security_mode(value);
     }
@@ -86,10 +86,10 @@ static int _anjay_sec_validate_short_server_id(int32_t ssid) {
     return ssid > 0 && ssid <= UINT16_MAX ? 0 : -1;
 }
 
-int _anjay_sec_fetch_short_server_id(anjay_input_ctx_t *ctx,
+int _anjay_sec_fetch_short_server_id(anjay_unlocked_input_ctx_t *ctx,
                                      anjay_ssid_t *out) {
     int32_t value;
-    int retval = anjay_get_i32(ctx, &value);
+    int retval = _anjay_get_i32_unlocked(ctx, &value);
     if (!retval) {
         retval = _anjay_sec_validate_short_server_id(value);
     }

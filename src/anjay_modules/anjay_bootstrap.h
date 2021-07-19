@@ -19,13 +19,13 @@
 
 #include <stdbool.h>
 
-#include <anjay/io.h>
+#include <anjay_modules/anjay_io_utils.h>
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
 #ifdef ANJAY_WITH_BOOTSTRAP
 
-bool _anjay_bootstrap_in_progress(anjay_t *anjay);
+bool _anjay_bootstrap_in_progress(anjay_unlocked_t *anjay);
 
 #else
 

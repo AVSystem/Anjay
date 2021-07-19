@@ -33,7 +33,7 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 
 typedef struct {
     /** Object whose Instance is being queried. */
-    const anjay_dm_object_def_t *const *obj;
+    const anjay_dm_installed_object_t *obj;
     /** Instance whose Resource is being queried. */
     anjay_iid_t iid;
     /**
@@ -86,7 +86,7 @@ typedef struct {
  * @param out       Result of query.
  * @return 0 on success, negative value in case of an error.
  */
-int _anjay_dm_effective_attrs(anjay_t *anjay,
+int _anjay_dm_effective_attrs(anjay_unlocked_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
                               anjay_dm_internal_r_attrs_t *out);
 

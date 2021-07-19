@@ -44,15 +44,16 @@ VISIBILITY_SOURCE_BEGIN
 typedef enum { STATE_INITIAL, STATE_PATH_SET, STATE_FINISHED } text_out_state_t;
 
 typedef struct {
-    anjay_output_ctx_t base;
-    anjay_ret_bytes_ctx_t *bytes;
+    anjay_unlocked_output_ctx_t base;
+    anjay_unlocked_ret_bytes_ctx_t *bytes;
     avs_stream_t *stream;
     text_out_state_t state;
 } text_out_t;
 
-static int text_ret_bytes_begin(anjay_output_ctx_t *ctx_,
-                                size_t length,
-                                anjay_ret_bytes_ctx_t **out_bytes_ctx) {
+static int
+text_ret_bytes_begin(anjay_unlocked_output_ctx_t *ctx_,
+                     size_t length,
+                     anjay_unlocked_ret_bytes_ctx_t **out_bytes_ctx) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes || ctx->state != STATE_PATH_SET) {
         return -1;
@@ -63,7 +64,8 @@ static int text_ret_bytes_begin(anjay_output_ctx_t *ctx_,
     return *out_bytes_ctx ? 0 : -1;
 }
 
-static int text_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
+static int text_ret_string(anjay_unlocked_output_ctx_t *ctx_,
+                           const char *value) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
         return -1;
@@ -77,7 +79,7 @@ static int text_ret_string(anjay_output_ctx_t *ctx_, const char *value) {
     return -1;
 }
 
-static int text_ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
+static int text_ret_integer(anjay_unlocked_output_ctx_t *ctx_, int64_t value) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
         return -1;
@@ -92,7 +94,7 @@ static int text_ret_integer(anjay_output_ctx_t *ctx_, int64_t value) {
     return -1;
 }
 
-static int text_ret_double(anjay_output_ctx_t *ctx_, double value) {
+static int text_ret_double(anjay_unlocked_output_ctx_t *ctx_, double value) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
         return -1;
@@ -110,12 +112,13 @@ static int text_ret_double(anjay_output_ctx_t *ctx_, double value) {
     return -1;
 }
 
-static int text_ret_bool(anjay_output_ctx_t *ctx, bool value) {
+static int text_ret_bool(anjay_unlocked_output_ctx_t *ctx, bool value) {
     return text_ret_integer(ctx, value);
 }
 
-static int
-text_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
+static int text_ret_objlnk(anjay_unlocked_output_ctx_t *ctx_,
+                           anjay_oid_t oid,
+                           anjay_iid_t iid) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
         return -1;
@@ -129,7 +132,7 @@ text_ret_objlnk(anjay_output_ctx_t *ctx_, anjay_oid_t oid, anjay_iid_t iid) {
     return -1;
 }
 
-static int text_set_path(anjay_output_ctx_t *ctx_,
+static int text_set_path(anjay_unlocked_output_ctx_t *ctx_,
                          const anjay_uri_path_t *path) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->state == STATE_PATH_SET) {
@@ -142,7 +145,7 @@ static int text_set_path(anjay_output_ctx_t *ctx_,
     return 0;
 }
 
-static int text_clear_path(anjay_output_ctx_t *ctx_) {
+static int text_clear_path(anjay_unlocked_output_ctx_t *ctx_) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->state != STATE_PATH_SET || ctx->bytes) {
         return -1;
@@ -151,7 +154,7 @@ static int text_clear_path(anjay_output_ctx_t *ctx_) {
     return 0;
 }
 
-static int text_ret_close(anjay_output_ctx_t *ctx_) {
+static int text_ret_close(anjay_unlocked_output_ctx_t *ctx_) {
     text_out_t *ctx = (text_out_t *) ctx_;
     int result = 0;
     if (ctx->bytes) {
@@ -175,13 +178,13 @@ static const anjay_output_ctx_vtable_t TEXT_OUT_VTABLE = {
     .close = text_ret_close
 };
 
-anjay_output_ctx_t *_anjay_output_text_create(avs_stream_t *stream) {
+anjay_unlocked_output_ctx_t *_anjay_output_text_create(avs_stream_t *stream) {
     text_out_t *ctx = (text_out_t *) avs_calloc(1, sizeof(text_out_t));
     if (ctx) {
         ctx->base.vtable = &TEXT_OUT_VTABLE;
         ctx->stream = stream;
     }
-    return (anjay_output_ctx_t *) ctx;
+    return (anjay_unlocked_output_ctx_t *) ctx;
 }
 
 /////////////////////////////////////////////////////////////////////// DECODING
@@ -219,7 +222,7 @@ static void text_get_some_bytes_cache_flush(text_in_t *ctx,
     *out_buf += bytes_to_copy;
 }
 
-static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
+static int text_get_some_bytes(anjay_unlocked_input_ctx_t *ctx_,
                                size_t *out_bytes_read,
                                bool *out_msg_finished,
                                void *out_buf,
@@ -269,8 +272,9 @@ static int text_get_some_bytes(anjay_input_ctx_t *ctx_,
     return 0;
 }
 
-static int
-text_get_string(anjay_input_ctx_t *ctx, char *out_buf, size_t buf_size) {
+static int text_get_string(anjay_unlocked_input_ctx_t *ctx,
+                           char *out_buf,
+                           size_t buf_size) {
     assert(buf_size);
     text_in_t *in = (text_in_t *) ctx;
     if (in->bytes_mode) {
@@ -302,9 +306,9 @@ static int map_get_string_error(int retval) {
     return retval;
 }
 
-static int text_get_integer(anjay_input_ctx_t *ctx, int64_t *value) {
+static int text_get_integer(anjay_unlocked_input_ctx_t *ctx, int64_t *value) {
     char buf[AVS_INT_STR_BUF_SIZE(long long)];
-    int retval = anjay_get_string(ctx, buf, sizeof(buf));
+    int retval = _anjay_get_string_unlocked(ctx, buf, sizeof(buf));
     if (retval) {
         return map_get_string_error(retval);
     }
@@ -320,7 +324,7 @@ static int text_get_integer(anjay_input_ctx_t *ctx, int64_t *value) {
     return 0;
 }
 
-static int text_get_bool(anjay_input_ctx_t *ctx, bool *value) {
+static int text_get_bool(anjay_unlocked_input_ctx_t *ctx, bool *value) {
     int64_t i64;
     int retval = text_get_integer(ctx, &i64);
     if (retval) {
@@ -336,9 +340,9 @@ static int text_get_bool(anjay_input_ctx_t *ctx, bool *value) {
     return 0;
 }
 
-static int text_get_double(anjay_input_ctx_t *ctx, double *value) {
+static int text_get_double(anjay_unlocked_input_ctx_t *ctx, double *value) {
     char buf[ANJAY_MAX_DOUBLE_STRING_SIZE];
-    int retval = anjay_get_string(ctx, buf, sizeof(buf));
+    int retval = _anjay_get_string_unlocked(ctx, buf, sizeof(buf));
     if (retval) {
         return map_get_string_error(retval);
     }
@@ -348,11 +352,11 @@ static int text_get_double(anjay_input_ctx_t *ctx, double *value) {
     return 0;
 }
 
-static int text_get_objlnk(anjay_input_ctx_t *ctx,
+static int text_get_objlnk(anjay_unlocked_input_ctx_t *ctx,
                            anjay_oid_t *out_oid,
                            anjay_iid_t *out_iid) {
     char buf[MAX_OBJLNK_STRING_SIZE];
-    int retval = anjay_get_string(ctx, buf, sizeof(buf));
+    int retval = _anjay_get_string_unlocked(ctx, buf, sizeof(buf));
     if (retval) {
         return map_get_string_error(retval);
     }
@@ -363,12 +367,12 @@ static int text_get_objlnk(anjay_input_ctx_t *ctx,
     return 0;
 }
 
-static int text_in_close(anjay_input_ctx_t *ctx_) {
+static int text_in_close(anjay_unlocked_input_ctx_t *ctx_) {
     (void) ctx_;
     return 0;
 }
 
-static int text_get_path(anjay_input_ctx_t *ctx,
+static int text_get_path(anjay_unlocked_input_ctx_t *ctx,
                          anjay_uri_path_t *out_path,
                          bool *out_is_array) {
     text_in_t *in = (text_in_t *) ctx;
@@ -383,7 +387,7 @@ static int text_get_path(anjay_input_ctx_t *ctx,
     return 0;
 }
 
-static int text_next_entry(anjay_input_ctx_t *ctx) {
+static int text_next_entry(anjay_unlocked_input_ctx_t *ctx) {
     (void) ctx;
     return 0;
 }
@@ -400,11 +404,11 @@ static const anjay_input_ctx_vtable_t TEXT_IN_VTABLE = {
     .close = text_in_close
 };
 
-int _anjay_input_text_create(anjay_input_ctx_t **out,
+int _anjay_input_text_create(anjay_unlocked_input_ctx_t **out,
                              avs_stream_t **stream_ptr,
                              const anjay_uri_path_t *request_uri) {
     text_in_t *ctx = (text_in_t *) avs_calloc(1, sizeof(text_in_t));
-    *out = (anjay_input_ctx_t *) ctx;
+    *out = (anjay_unlocked_input_ctx_t *) ctx;
     if (!ctx) {
         return -1;
     }

@@ -28,7 +28,7 @@
 #define TEST_ENV(Size, Path)                            \
     avs_stream_t *stream = NULL;                        \
     ASSERT_OK(avs_unit_memstream_alloc(&stream, Size)); \
-    anjay_input_ctx_t *in;                              \
+    anjay_unlocked_input_ctx_t *in;                     \
     ASSERT_OK(_anjay_input_tlv_create(&in, &stream, &(Path)));
 
 #define TEST_TEARDOWN                             \
@@ -37,17 +37,18 @@
         ASSERT_OK(avs_stream_cleanup(&stream));   \
     } while (0)
 
-#define TLV_BYTES_TEST_DATA(Header, Data)                                  \
-    do {                                                                   \
-        char *buf = (char *) avs_malloc(sizeof(Data) + sizeof(Header));    \
-        size_t bytes_read;                                                 \
-        bool message_finished;                                             \
-        ASSERT_OK(anjay_get_bytes(in, &bytes_read, &message_finished, buf, \
-                                  sizeof(Data) + sizeof(Header)));         \
-        ASSERT_EQ(bytes_read, sizeof(Data) - 1);                           \
-        ASSERT_TRUE(message_finished);                                     \
-        ASSERT_EQ_BYTES(buf, Data);                                        \
-        avs_free(buf);                                                     \
+#define TLV_BYTES_TEST_DATA(Header, Data)                                    \
+    do {                                                                     \
+        char *buf = (char *) avs_malloc(sizeof(Data) + sizeof(Header));      \
+        size_t bytes_read;                                                   \
+        bool message_finished;                                               \
+        ASSERT_OK(_anjay_get_bytes_unlocked(in, &bytes_read,                 \
+                                            &message_finished, buf,          \
+                                            sizeof(Data) + sizeof(Header))); \
+        ASSERT_EQ(bytes_read, sizeof(Data) - 1);                             \
+        ASSERT_TRUE(message_finished);                                       \
+        ASSERT_EQ_BYTES(buf, Data);                                          \
+        avs_free(buf);                                                       \
     } while (0)
 
 static const anjay_uri_path_t TEST_INSTANCE_PATH =
@@ -120,8 +121,8 @@ AVS_UNIT_TEST(tlv_in_bytes, id_too_short) {
     char buf[64];
     size_t bytes_read;
     bool message_finished;
-    ASSERT_FAIL(anjay_get_bytes(in, &bytes_read, &message_finished, buf,
-                                sizeof(buf)));
+    ASSERT_FAIL(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished,
+                                          buf, sizeof(buf)));
 
     TEST_TEARDOWN;
 }
@@ -134,8 +135,8 @@ AVS_UNIT_TEST(tlv_in_bytes, length_too_short) {
     char buf[64];
     size_t bytes_read;
     bool message_finished;
-    ASSERT_FAIL(anjay_get_bytes(in, &bytes_read, &message_finished, buf,
-                                sizeof(buf)));
+    ASSERT_FAIL(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished,
+                                          buf, sizeof(buf)));
 
     TEST_TEARDOWN;
 }
@@ -150,7 +151,8 @@ AVS_UNIT_TEST(tlv_in_bytes, partial_read) {
         char ch;
         size_t bytes_read;
         bool message_finished;
-        ASSERT_OK(anjay_get_bytes(in, &bytes_read, &message_finished, &ch, 1));
+        ASSERT_OK(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished,
+                                            &ch, 1));
         if (i == 6) {
             ASSERT_TRUE(message_finished);
         } else {
@@ -187,8 +189,8 @@ AVS_UNIT_TEST(tlv_in_bytes, short_read_get_id) {
     char buf[3];
     size_t bytes_read;
     bool message_finished;
-    ASSERT_OK(anjay_get_bytes(in, &bytes_read, &message_finished, buf,
-                              sizeof(buf)));
+    ASSERT_OK(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished, buf,
+                                        sizeof(buf)));
     ASSERT_EQ(bytes_read, 3);
     ASSERT_FALSE(message_finished);
     ASSERT_EQ_BYTES_SIZED(buf, "012", 3);
@@ -216,8 +218,8 @@ AVS_UNIT_TEST(tlv_in_bytes, premature_end) {
     char buf[16];
     size_t bytes_read;
     bool message_finished;
-    ASSERT_FAIL(anjay_get_bytes(in, &bytes_read, &message_finished, buf,
-                                sizeof(buf)));
+    ASSERT_FAIL(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished,
+                                          buf, sizeof(buf)));
 
     TEST_TEARDOWN;
 }
@@ -230,8 +232,8 @@ AVS_UNIT_TEST(tlv_in_bytes, no_data) {
     char buf[16] = { init };
     size_t bytes_read;
     bool message_finished;
-    ASSERT_OK(anjay_get_bytes(in, &bytes_read, &message_finished, buf,
-                              sizeof(buf)));
+    ASSERT_OK(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished, buf,
+                                        sizeof(buf)));
     /* buffer untouched, read 0 bytes */
     ASSERT_EQ(buf[0], init);
 
@@ -245,7 +247,7 @@ AVS_UNIT_TEST(tlv_in_bytes, no_data) {
     avs_stream_t *stream = NULL;                                         \
     ASSERT_OK(avs_unit_memstream_alloc(&stream, sizeof(Data)));          \
     ASSERT_OK(avs_stream_write(stream, Data, sizeof(Data) - 1));         \
-    anjay_input_ctx_t *in;                                               \
+    anjay_unlocked_input_ctx_t *in;                                      \
     ASSERT_OK(_anjay_input_tlv_create(&in, &stream, &MAKE_ROOT_PATH())); \
     tlv_in_t *ctx = (tlv_in_t *) in;                                     \
     ctx->has_path = true;                                                \
@@ -264,7 +266,7 @@ AVS_UNIT_TEST(tlv_in_types, string_ok) {
     TEST_ENV(TEST_STRING);
 
     char buf[16];
-    ASSERT_OK(anjay_get_string(in, buf, sizeof(buf)));
+    ASSERT_OK(_anjay_get_string_unlocked(in, buf, sizeof(buf)));
     ASSERT_EQ_STR(buf, TEST_STRING);
 
     TEST_TEARDOWN;
@@ -275,35 +277,39 @@ AVS_UNIT_TEST(tlv_in_types, string_overflow) {
     TEST_ENV(TEST_STRING);
 
     char buf[4];
-    ASSERT_EQ(anjay_get_string(in, buf, sizeof(buf)), ANJAY_BUFFER_TOO_SHORT);
+    ASSERT_EQ(_anjay_get_string_unlocked(in, buf, sizeof(buf)),
+              ANJAY_BUFFER_TOO_SHORT);
     ASSERT_EQ_STR(buf, "Hel");
-    ASSERT_EQ(anjay_get_string(in, buf, sizeof(buf)), ANJAY_BUFFER_TOO_SHORT);
+    ASSERT_EQ(_anjay_get_string_unlocked(in, buf, sizeof(buf)),
+              ANJAY_BUFFER_TOO_SHORT);
     ASSERT_EQ_STR(buf, "lo,");
-    ASSERT_EQ(anjay_get_string(in, buf, sizeof(buf)), ANJAY_BUFFER_TOO_SHORT);
+    ASSERT_EQ(_anjay_get_string_unlocked(in, buf, sizeof(buf)),
+              ANJAY_BUFFER_TOO_SHORT);
     ASSERT_EQ_STR(buf, " wo");
-    ASSERT_EQ(anjay_get_string(in, buf, sizeof(buf)), ANJAY_BUFFER_TOO_SHORT);
+    ASSERT_EQ(_anjay_get_string_unlocked(in, buf, sizeof(buf)),
+              ANJAY_BUFFER_TOO_SHORT);
     ASSERT_EQ_STR(buf, "rld");
-    ASSERT_OK(anjay_get_string(in, buf, sizeof(buf)));
+    ASSERT_OK(_anjay_get_string_unlocked(in, buf, sizeof(buf)));
     ASSERT_EQ_STR(buf, "!");
 
     TEST_TEARDOWN;
 }
 
-#define TEST_NUM_IMPL(Name, Type, Suffix, Num, Data) \
-    AVS_UNIT_TEST(tlv_in_types, Name) {              \
-        TEST_ENV(Data);                              \
-        Type value;                                  \
-        ASSERT_OK(anjay_get_##Suffix(in, &value));   \
-        ASSERT_EQ(value, (Type) Num);                \
-        TEST_TEARDOWN;                               \
+#define TEST_NUM_IMPL(Name, Type, Suffix, Num, Data)           \
+    AVS_UNIT_TEST(tlv_in_types, Name) {                        \
+        TEST_ENV(Data);                                        \
+        Type value;                                            \
+        ASSERT_OK(_anjay_get_##Suffix##_unlocked(in, &value)); \
+        ASSERT_EQ(value, (Type) Num);                          \
+        TEST_TEARDOWN;                                         \
     }
 
-#define TEST_NUM_FAIL_IMPL(Name, Type, Suffix, Data) \
-    AVS_UNIT_TEST(tlv_in_types, Name) {              \
-        TEST_ENV(Data);                              \
-        Type value;                                  \
-        ASSERT_FAIL(anjay_get_##Suffix(in, &value)); \
-        TEST_TEARDOWN;                               \
+#define TEST_NUM_FAIL_IMPL(Name, Type, Suffix, Data)             \
+    AVS_UNIT_TEST(tlv_in_types, Name) {                          \
+        TEST_ENV(Data);                                          \
+        Type value;                                              \
+        ASSERT_FAIL(_anjay_get_##Suffix##_unlocked(in, &value)); \
+        TEST_TEARDOWN;                                           \
     }
 
 #define TEST_NUM(Type, Suffix, Num, Data) \
@@ -311,80 +317,62 @@ AVS_UNIT_TEST(tlv_in_types, string_overflow) {
 #define TEST_NUM_FAIL(Type, Suffix, Data) \
     TEST_NUM_FAIL_IMPL(AVS_CONCAT(Suffix##fail_, __LINE__), Type, Suffix, Data)
 
-#define TEST_INT32(...) TEST_NUM(int32_t, i32, __VA_ARGS__)
 #define TEST_INT64(Num, Data) TEST_NUM(int64_t, i64, Num##LL, Data)
-#define TEST_INT3264(...)   \
-    TEST_INT32(__VA_ARGS__) \
-    TEST_INT64(__VA_ARGS__)
 
-#define TEST_INT3264_FAIL(...)               \
-    TEST_NUM_FAIL(int32_t, i32, __VA_ARGS__) \
-    TEST_NUM_FAIL(int64_t, i64, __VA_ARGS__)
+#define TEST_INT64_FAIL(...) TEST_NUM_FAIL(int64_t, i64, __VA_ARGS__)
 
-#define TEST_INT64ONLY(Num, Data)     \
-    TEST_NUM_FAIL(int32_t, i32, Data) \
-    TEST_INT64(Num, Data)
+TEST_INT64_FAIL("")
+TEST_INT64(42, "\x2A")
+TEST_INT64(4242, "\x10\x92")
+TEST_INT64_FAIL("\x06\x79\x32")
+TEST_INT64(424242, "\x00\x06\x79\x32")
+TEST_INT64(42424242, "\x02\x87\x57\xB2")
+TEST_INT64((int32_t) 4242424242, "\xFC\xDE\x41\xB2")
+TEST_INT64(4242424242, "\x00\x00\x00\x00\xFC\xDE\x41\xB2")
+TEST_INT64_FAIL("\x62\xC6\xD1\xA9\xB2")
+TEST_INT64(424242424242, "\x00\x00\x00\x62\xC6\xD1\xA9\xB2")
+TEST_INT64_FAIL("\x26\x95\xA9\xE6\x49\xB2")
+TEST_INT64(42424242424242, "\x00\x00\x26\x95\xA9\xE6\x49\xB2")
+TEST_INT64_FAIL("\x0F\x12\x76\x5D\xF4\xC9\xB2")
+TEST_INT64(4242424242424242, "\x00\x0F\x12\x76\x5D\xF4\xC9\xB2")
+TEST_INT64(424242424242424242, "\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
+TEST_INT64_FAIL("\x00\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
 
-TEST_INT3264_FAIL("")
-TEST_INT3264(42, "\x2A")
-TEST_INT3264(4242, "\x10\x92")
-TEST_INT3264_FAIL("\x06\x79\x32")
-TEST_INT3264(424242, "\x00\x06\x79\x32")
-TEST_INT3264(42424242, "\x02\x87\x57\xB2")
-TEST_INT3264((int32_t) 4242424242, "\xFC\xDE\x41\xB2")
-TEST_INT64ONLY(4242424242, "\x00\x00\x00\x00\xFC\xDE\x41\xB2")
-TEST_INT3264_FAIL("\x62\xC6\xD1\xA9\xB2")
-TEST_INT64ONLY(424242424242, "\x00\x00\x00\x62\xC6\xD1\xA9\xB2")
-TEST_INT3264_FAIL("\x26\x95\xA9\xE6\x49\xB2")
-TEST_INT64ONLY(42424242424242, "\x00\x00\x26\x95\xA9\xE6\x49\xB2")
-TEST_INT3264_FAIL("\x0F\x12\x76\x5D\xF4\xC9\xB2")
-TEST_INT64ONLY(4242424242424242, "\x00\x0F\x12\x76\x5D\xF4\xC9\xB2")
-TEST_INT64ONLY(424242424242424242, "\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
-TEST_INT3264_FAIL("\x00\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
-
-#define TEST_UINT32(...) TEST_NUM(uint32_t, u32, __VA_ARGS__)
 #define TEST_UINT64(Num, Data) TEST_NUM(uint64_t, u64, Num##ULL, Data)
-#define TEST_UINT3264(...)   \
-    TEST_UINT32(__VA_ARGS__) \
-    TEST_UINT64(__VA_ARGS__)
 
-#define TEST_FLOAT(Num, Data)         \
-    TEST_NUM(float, float, Num, Data) \
-    TEST_NUM(double, double, Num, Data)
+#define TEST_DOUBLE(Num, Data) TEST_NUM(double, double, Num, Data)
 
-#define TEST_FLOAT_FAIL(Data)         \
-    TEST_NUM_FAIL(float, float, Data) \
-    TEST_NUM_FAIL(double, double, Data)
+#define TEST_DOUBLE_FAIL(Data) TEST_NUM_FAIL(double, double, Data)
 
-TEST_FLOAT_FAIL("")
-TEST_FLOAT_FAIL("\x3F")
-TEST_FLOAT_FAIL("\x3F\x80")
-TEST_FLOAT_FAIL("\x3F\x80\x00")
-TEST_FLOAT(1.0, "\x3F\x80\x00\x00")
-TEST_FLOAT(-42.0e3, "\xC7\x24\x10\x00")
-TEST_FLOAT_FAIL("\x3F\xF0\x00\x00\x00")
-TEST_FLOAT_FAIL("\x3F\xF0\x00\x00\x00\x00")
-TEST_FLOAT_FAIL("\x3F\xF0\x00\x00\x00\x00\x00")
-TEST_FLOAT(1.0, "\x3F\xF0\x00\x00\x00\x00\x00\x00")
-TEST_FLOAT(1.1, "\x3F\xF1\x99\x99\x99\x99\x99\x9A")
-TEST_FLOAT(-42.0e3, "\xC0\xE4\x82\x00\x00\x00\x00\x00")
-TEST_FLOAT_FAIL("\xC0\xE4\x82\x00\x00\x00\x00\x00\x00")
+TEST_DOUBLE_FAIL("")
+TEST_DOUBLE_FAIL("\x3F")
+TEST_DOUBLE_FAIL("\x3F\x80")
+TEST_DOUBLE_FAIL("\x3F\x80\x00")
+TEST_DOUBLE(1.0, "\x3F\x80\x00\x00")
+TEST_DOUBLE(-42.0e3, "\xC7\x24\x10\x00")
+TEST_DOUBLE_FAIL("\x3F\xF0\x00\x00\x00")
+TEST_DOUBLE_FAIL("\x3F\xF0\x00\x00\x00\x00")
+TEST_DOUBLE_FAIL("\x3F\xF0\x00\x00\x00\x00\x00")
+TEST_DOUBLE(1.0, "\x3F\xF0\x00\x00\x00\x00\x00\x00")
+TEST_DOUBLE(1.1, "\x3F\xF1\x99\x99\x99\x99\x99\x9A")
+TEST_DOUBLE(-42.0e3, "\xC0\xE4\x82\x00\x00\x00\x00\x00")
+TEST_DOUBLE_FAIL("\xC0\xE4\x82\x00\x00\x00\x00\x00\x00")
 
-#define TEST_BOOL_IMPL(Name, Value, Data)      \
-    AVS_UNIT_TEST(tlv_in_types, Name) {        \
-        TEST_ENV(Data);                        \
-        bool value;                            \
-        ASSERT_OK(anjay_get_bool(in, &value)); \
-        ASSERT_EQ(!!(Value), value);           \
-        TEST_TEARDOWN;                         \
+#define TEST_BOOL_IMPL(Name, Value, Data)                \
+    AVS_UNIT_TEST(tlv_in_types, Name) {                  \
+        TEST_ENV(Data);                                  \
+        bool value;                                      \
+        ASSERT_OK(_anjay_get_bool_unlocked(in, &value)); \
+        ASSERT_EQ(!!(Value), value);                     \
+        TEST_TEARDOWN;                                   \
     }
 
-#define TEST_BOOL_FAIL_IMPL(Name, Data)          \
-    AVS_UNIT_TEST(tlv_in_types, Name) {          \
-        TEST_ENV(Data);                          \
-        bool value;                              \
-        ASSERT_FAIL(anjay_get_bool(in, &value)); \
-        TEST_TEARDOWN;                           \
+#define TEST_BOOL_FAIL_IMPL(Name, Data)                    \
+    AVS_UNIT_TEST(tlv_in_types, Name) {                    \
+        TEST_ENV(Data);                                    \
+        bool value;                                        \
+        ASSERT_FAIL(_anjay_get_bool_unlocked(in, &value)); \
+        TEST_TEARDOWN;                                     \
     }
 
 #define TEST_BOOL(Value, Data) \
@@ -398,24 +386,24 @@ TEST_BOOL(true, "\1")
 TEST_BOOL_FAIL("\2")
 TEST_BOOL_FAIL("\0\0")
 
-#define TEST_OBJLNK_IMPL(Name, Oid, Iid, Data)       \
-    AVS_UNIT_TEST(tlv_in_types, Name) {              \
-        TEST_ENV(Data);                              \
-        anjay_oid_t oid;                             \
-        anjay_iid_t iid;                             \
-        ASSERT_OK(anjay_get_objlnk(in, &oid, &iid)); \
-        ASSERT_EQ(oid, Oid);                         \
-        ASSERT_EQ(iid, Iid);                         \
-        TEST_TEARDOWN;                               \
+#define TEST_OBJLNK_IMPL(Name, Oid, Iid, Data)                 \
+    AVS_UNIT_TEST(tlv_in_types, Name) {                        \
+        TEST_ENV(Data);                                        \
+        anjay_oid_t oid;                                       \
+        anjay_iid_t iid;                                       \
+        ASSERT_OK(_anjay_get_objlnk_unlocked(in, &oid, &iid)); \
+        ASSERT_EQ(oid, Oid);                                   \
+        ASSERT_EQ(iid, Iid);                                   \
+        TEST_TEARDOWN;                                         \
     }
 
-#define TEST_OBJLNK_FAIL_IMPL(Name, Data)              \
-    AVS_UNIT_TEST(tlv_in_types, Name) {                \
-        TEST_ENV(Data);                                \
-        anjay_oid_t oid;                               \
-        anjay_iid_t iid;                               \
-        ASSERT_FAIL(anjay_get_objlnk(in, &oid, &iid)); \
-        TEST_TEARDOWN;                                 \
+#define TEST_OBJLNK_FAIL_IMPL(Name, Data)                        \
+    AVS_UNIT_TEST(tlv_in_types, Name) {                          \
+        TEST_ENV(Data);                                          \
+        anjay_oid_t oid;                                         \
+        anjay_iid_t iid;                                         \
+        ASSERT_FAIL(_anjay_get_objlnk_unlocked(in, &oid, &iid)); \
+        TEST_TEARDOWN;                                           \
     }
 
 #define TEST_OBJLNK(...) \
@@ -441,10 +429,11 @@ AVS_UNIT_TEST(tlv_in_types, invalid_read) {
     size_t bytes_read;
     bool message_finished;
     char ch;
-    ASSERT_OK(anjay_get_bytes(in, &bytes_read, &message_finished, &ch, 1));
+    ASSERT_OK(_anjay_get_bytes_unlocked(in, &bytes_read, &message_finished, &ch,
+                                        1));
 
-    int32_t value;
-    ASSERT_FAIL(anjay_get_i32(in, &value));
+    int64_t value;
+    ASSERT_FAIL(_anjay_get_i64_unlocked(in, &value));
 
     TEST_TEARDOWN;
 }
@@ -455,7 +444,7 @@ AVS_UNIT_TEST(tlv_in_types, invalid_read) {
     avs_stream_t *stream = NULL;                                 \
     ASSERT_OK(avs_unit_memstream_alloc(&stream, sizeof(Data)));  \
     ASSERT_OK(avs_stream_write(stream, Data, sizeof(Data) - 1)); \
-    anjay_input_ctx_t *in;                                       \
+    anjay_unlocked_input_ctx_t *in;                              \
     ASSERT_OK(_anjay_input_tlv_create(&in, &stream, &(Path)));
 
 AVS_UNIT_TEST(tlv_in_path, typical_payload_for_create_without_iid) {

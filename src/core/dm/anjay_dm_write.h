@@ -24,10 +24,10 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-int _anjay_dm_write(anjay_t *anjay,
-                    const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_write(anjay_unlocked_t *anjay,
+                    const anjay_dm_installed_object_t *obj,
                     const anjay_request_t *request,
-                    anjay_input_ctx_t *in_ctx);
+                    anjay_unlocked_input_ctx_t *in_ctx);
 
 /**
  * NOTE: This function is used in one situation, that is: after LwM2M Create to
@@ -37,10 +37,10 @@ int _anjay_dm_write(anjay_t *anjay,
  * Apart from that, the function has no more applications and @ref
  * _anjay_dm_write() shall be used instead.
  */
-int _anjay_dm_write_created_instance(anjay_t *anjay,
-                                     const anjay_dm_object_def_t *const *obj,
+int _anjay_dm_write_created_instance(anjay_unlocked_t *anjay,
+                                     const anjay_dm_installed_object_t *obj,
                                      anjay_iid_t iid,
-                                     anjay_input_ctx_t *in_ctx);
+                                     anjay_unlocked_input_ctx_t *in_ctx);
 
 VISIBILITY_PRIVATE_HEADER_END
 

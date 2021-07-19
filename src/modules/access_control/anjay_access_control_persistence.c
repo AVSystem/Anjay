@@ -77,7 +77,7 @@ static avs_error_t persist_instance(avs_persistence_context_t *ctx,
     return err;
 }
 
-static bool is_object_registered(anjay_t *anjay, anjay_oid_t oid) {
+static bool is_object_registered(anjay_unlocked_t *anjay, anjay_oid_t oid) {
     return oid != ANJAY_DM_OID_SECURITY
            && _anjay_dm_find_object_by_oid(anjay, oid) != NULL;
 }
@@ -98,7 +98,7 @@ static avs_error_t restore_instance(access_control_instance_t *out_instance,
 }
 
 static avs_error_t
-restore_instances(anjay_t *anjay,
+restore_instances(anjay_unlocked_t *anjay,
                   AVS_LIST(access_control_instance_t) *instances_ptr,
                   avs_persistence_context_t *restore_ctx) {
     uint32_t count;
@@ -138,7 +138,7 @@ restore_instances(anjay_t *anjay,
 }
 
 static avs_error_t
-restore(anjay_t *anjay, access_control_t *ac, avs_stream_t *in) {
+restore(anjay_unlocked_t *anjay, access_control_t *ac, avs_stream_t *in) {
     avs_persistence_context_t restore_ctx =
             avs_persistence_restore_context_create(in);
     access_control_state_t state = { NULL, false };
@@ -155,60 +155,55 @@ restore(anjay_t *anjay, access_control_t *ac, avs_stream_t *in) {
 
 static const char MAGIC[] = { 'A', 'C', 'O', '\1' };
 
-avs_error_t anjay_access_control_persist(anjay_t *anjay, avs_stream_t *out) {
+avs_error_t anjay_access_control_persist(anjay_t *anjay_locked,
+                                         avs_stream_t *out) {
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
         ac_log(ERROR, _("Access Control not installed in this Anjay object"));
-        return avs_errno(AVS_EBADF);
+        err = avs_errno(AVS_EBADF);
+    } else if (avs_is_ok((err = avs_stream_write(out, MAGIC, sizeof(MAGIC))))) {
+        avs_persistence_context_t ctx =
+                avs_persistence_store_context_create(out);
+        AVS_LIST(access_control_instance_t) *list_ptr =
+                ac->in_transaction ? &ac->saved_state.instances
+                                   : &ac->current.instances;
+        err = avs_persistence_list(&ctx, (AVS_LIST(void) *) list_ptr,
+                                   sizeof(**list_ptr), persist_instance, NULL,
+                                   NULL);
+        if (avs_is_ok(err)) {
+            ac_log(INFO, _("Access Control state persisted"));
+            _anjay_access_control_clear_modified(ac);
+        }
     }
-
-    avs_error_t err = avs_stream_write(out, MAGIC, sizeof(MAGIC));
-    if (avs_is_err(err)) {
-        return err;
-    }
-    avs_persistence_context_t ctx = avs_persistence_store_context_create(out);
-    AVS_LIST(access_control_instance_t) *list_ptr =
-            ac->in_transaction ? &ac->saved_state.instances
-                               : &ac->current.instances;
-    err = avs_persistence_list(&ctx, (AVS_LIST(void) *) list_ptr,
-                               sizeof(**list_ptr), persist_instance, NULL,
-                               NULL);
-    if (avs_is_ok(err)) {
-        ac_log(INFO, _("Access Control state persisted"));
-        _anjay_access_control_clear_modified(ac);
-    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 
-avs_error_t anjay_access_control_restore(anjay_t *anjay, avs_stream_t *in) {
+avs_error_t anjay_access_control_restore(anjay_t *anjay_locked,
+                                         avs_stream_t *in) {
+    avs_error_t err = avs_errno(AVS_EINVAL);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    err = avs_errno(AVS_EBADF);
+    char magic_header[sizeof(MAGIC)];
     access_control_t *ac = _anjay_access_control_get(anjay);
     if (!ac) {
         ac_log(ERROR, _("Access Control not installed in this Anjay object"));
-        return avs_errno(AVS_EBADF);
-    }
-
-    if (ac->in_transaction) {
+    } else if (ac->in_transaction) {
         ac_log(ERROR, _("Cannot restore Access Control state while the object "
                         "is in transaction"));
-        return avs_errno(AVS_EBADF);
-    }
-
-    char magic_header[sizeof(MAGIC)];
-    avs_error_t err =
-            avs_stream_read_reliably(in, magic_header, sizeof(magic_header));
-    if (avs_is_err(err)) {
+    } else if (avs_is_err((err = avs_stream_read_reliably(
+                                   in, magic_header, sizeof(magic_header))))) {
         ac_log(WARNING, _("magic constant not found"));
-        return err;
-    }
-
-    if (memcmp(magic_header, MAGIC, sizeof(MAGIC))) {
+    } else if (memcmp(magic_header, MAGIC, sizeof(MAGIC))) {
         ac_log(WARNING, _("header magic constant mismatch"));
-        return avs_errno(AVS_EBADMSG);
-    }
-    if (avs_is_ok((err = restore(anjay, ac, in)))) {
+        err = avs_errno(AVS_EBADMSG);
+    } else if (avs_is_ok((err = restore(anjay, ac, in)))) {
         _anjay_access_control_clear_modified(ac);
         ac_log(INFO, _("Access Control state restored"));
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }
 

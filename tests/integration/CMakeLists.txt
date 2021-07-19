@@ -83,12 +83,12 @@ unset(_MISSING_PYTHON_MSG)
 add_custom_target(pymbedtls COMMAND
                   python3 "${NSH_LWM2M_DIR}/pymbedtls/setup.py" install --install-lib ${PYMBEDTLS_MODULE_DIR})
 
+set(WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+configure_file("run_tests.sh.in" "run_tests.sh")
 add_custom_target(integration_check_st
-                  COMMAND ${CMAKE_CTEST_COMMAND} -R sensitive ||
-                          ${CMAKE_CTEST_COMMAND} -R sensitive --rerun-failed --output-on-failure
+                  COMMAND ./run_tests.sh -s
                   DEPENDS demo pymbedtls)
 add_custom_target(integration_check
-                  COMMAND ${CMAKE_CTEST_COMMAND} -E sensitive -j ${NPROC} ||
-                          ${CMAKE_CTEST_COMMAND} -E sensitive --rerun-failed --output-on-failure
+                  COMMAND ./run_tests.sh
                   DEPENDS integration_check_st)
 add_dependencies(check integration_check)

@@ -80,7 +80,7 @@ typedef struct {
  * activation and deactivation flow.
  */
 struct anjay_server_info_struct {
-    anjay_t *anjay;
+    anjay_unlocked_t *anjay;
 
     anjay_ssid_t ssid; // or ANJAY_SSID_BOOTSTRAP
 

@@ -26,10 +26,8 @@ VISIBILITY_SOURCE_BEGIN
 
 //// HELPERS ///////////////////////////////////////////////////////////////////
 access_control_t *_anjay_access_control_from_obj_ptr(obj_ptr_t obj_ptr) {
-    if (!obj_ptr) {
-        return NULL;
-    }
-    return AVS_CONTAINER_OF(obj_ptr, access_control_t, obj_def);
+    return AVS_CONTAINER_OF(_anjay_dm_installed_object_get_unlocked(&obj_ptr),
+                            access_control_t, obj_def);
 }
 
 void _anjay_access_control_clear_state(access_control_state_t *state) {
@@ -182,13 +180,14 @@ find_ac_instance(access_control_t *ac, anjay_oid_t oid, anjay_iid_t iid) {
     return NULL;
 }
 
-static bool
-target_instance_reachable(anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid) {
+static bool target_instance_reachable(anjay_unlocked_t *anjay,
+                                      anjay_oid_t oid,
+                                      anjay_iid_t iid) {
     if (!_anjay_access_control_target_oid_valid(oid)
             || !_anjay_access_control_target_iid_valid(iid)) {
         return false;
     }
-    obj_ptr_t target_obj = _anjay_dm_find_object_by_oid(anjay, oid);
+    obj_ptr_t *target_obj = _anjay_dm_find_object_by_oid(anjay, oid);
     if (!target_obj) {
         return false;
     }
@@ -196,7 +195,7 @@ target_instance_reachable(anjay_t *anjay, anjay_oid_t oid, anjay_iid_t iid) {
            || _anjay_dm_instance_present(anjay, target_obj, iid) > 0;
 }
 
-static int set_acl_in_instance(anjay_t *anjay,
+static int set_acl_in_instance(anjay_unlocked_t *anjay,
                                access_control_instance_t *ac_instance,
                                anjay_ssid_t ssid,
                                anjay_access_mask_t access_mask) {
@@ -231,7 +230,7 @@ static int set_acl_in_instance(anjay_t *anjay,
     return 0;
 }
 
-static int set_acl(anjay_t *anjay,
+static int set_acl(anjay_unlocked_t *anjay,
                    access_control_t *ac,
                    anjay_oid_t oid,
                    anjay_iid_t iid,
@@ -269,7 +268,7 @@ static int set_acl(anjay_t *anjay,
     }
 
     if (!result
-            && (result = anjay_notify_instances_changed(
+            && (result = _anjay_notify_instances_changed_unlocked(
                         anjay, ANJAY_DM_OID_ACCESS_CONTROL))) {
         ac_log(ERROR,
                _("error while calling anjay_notify_instances_changed()"));
@@ -296,41 +295,37 @@ static int set_acl(anjay_t *anjay,
     return result;
 }
 
-int anjay_access_control_set_acl(anjay_t *anjay,
+int anjay_access_control_set_acl(anjay_t *anjay_locked,
                                  anjay_oid_t oid,
                                  anjay_iid_t iid,
                                  anjay_ssid_t ssid,
                                  anjay_access_mask_t access_mask) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     access_control_t *access_control = _anjay_access_control_get(anjay);
     if (!access_control) {
         ac_log(ERROR, _("Access Control not installed in this Anjay object"));
-        return -1;
-    }
-
-    if (ssid == ANJAY_SSID_BOOTSTRAP) {
+    } else if (ssid == ANJAY_SSID_BOOTSTRAP) {
         ac_log(ERROR,
                _("cannot set ACL: SSID = ") "%u" _(" is a reserved value"),
                ssid);
-        return -1;
-    }
-    if ((access_mask & ANJAY_ACCESS_MASK_FULL) != access_mask) {
+    } else if ((access_mask & ANJAY_ACCESS_MASK_FULL) != access_mask) {
         ac_log(ERROR, _("cannot set ACL: invalid permission mask"));
-        return -1;
-    }
-    if (iid != ANJAY_ID_INVALID && (access_mask & ANJAY_ACCESS_MASK_CREATE)) {
-        ac_log(ERROR, _("cannot set ACL: Create permission makes no sense for "
-                        "Object Instances"));
-        return -1;
-    }
-    if (iid == ANJAY_ID_INVALID
-            && (access_mask & ANJAY_ACCESS_MASK_CREATE) != access_mask) {
+    } else if (iid != ANJAY_ID_INVALID
+               && (access_mask & ANJAY_ACCESS_MASK_CREATE)) {
+        ac_log(ERROR,
+               _("cannot set ACL: Create permission makes no sense for "
+                 "Object Instances"));
+    } else if (iid == ANJAY_ID_INVALID
+               && (access_mask & ANJAY_ACCESS_MASK_CREATE) != access_mask) {
         ac_log(ERROR,
                _("cannot set ACL: only Create permission makes sense for "
                  "creation instance"));
-        return -1;
+    } else {
+        result = set_acl(anjay, access_control, oid, iid, ssid, access_mask);
     }
-
-    return set_acl(anjay, access_control, oid, iid, ssid, access_mask);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
 }
 
 #    ifdef ANJAY_TEST
