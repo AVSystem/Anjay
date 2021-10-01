@@ -464,8 +464,10 @@ static int bootstrap_discover(anjay_unlocked_t *anjay,
 
 static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_iid_t iid;
+    int retval = -1;
     const anjay_dm_installed_object_t *obj =
             _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SECURITY);
     if (!obj
@@ -473,10 +475,8 @@ static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
                            == ANJAY_ID_INVALID) {
         anjay_log(WARNING,
                   _("Could not find Bootstrap Server Account to purge"));
-        return;
-    }
-    int retval = -1;
-    if (obj) {
+        retval = 0;
+    } else {
         _anjay_dm_transaction_begin(anjay);
         anjay_notify_queue_t notification = NULL;
         (void) ((retval = _anjay_dm_call_instance_remove(anjay, obj, iid, NULL))
@@ -491,6 +491,7 @@ static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
                   _("Could not purge Bootstrap Server Account ") "%" PRIu16,
                   iid);
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static int schedule_bootstrap_timeout(anjay_unlocked_t *anjay) {
@@ -624,6 +625,13 @@ bool _anjay_bootstrap_legacy_server_initiated_allowed(anjay_unlocked_t *anjay) {
     return anjay->bootstrap.allow_legacy_server_initiated_bootstrap;
 }
 
+bool _anjay_bootstrap_scheduled(anjay_unlocked_t *anjay) {
+    return anjay->bootstrap.bootstrap_trigger
+           || avs_coap_exchange_id_valid(
+                      anjay->bootstrap.outgoing_request_exchange_id)
+           || anjay->bootstrap.client_initiated_bootstrap_handle;
+}
+
 bool _anjay_bootstrap_in_progress(anjay_unlocked_t *anjay) {
     return anjay->bootstrap.in_progress;
 }
@@ -649,7 +657,8 @@ static int bootstrap_write(anjay_unlocked_t *anjay,
 
 static void timeout_bootstrap_finish(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_log(WARNING, _("Bootstrap Finish not received in time - aborting"));
     // Abort client-initiated-bootstrap entirely. After that,
     // anjay_all_connections_failed() starts returning true (if the
@@ -660,6 +669,7 @@ static void timeout_bootstrap_finish(avs_sched_t *sched, const void *dummy) {
     if (server) {
         _anjay_server_on_failure(server, "not reachable");
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static int schedule_finish_timeout(anjay_unlocked_t *anjay,
@@ -890,7 +900,8 @@ static int schedule_request_bootstrap(anjay_unlocked_t *anjay) {
 }
 
 static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_log(TRACE, _("sending Client Initiated Bootstrap"));
 
     (void) dummy;
@@ -902,7 +913,7 @@ static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
         anjay_log(DEBUG, _("Bootstrap server connection not available to send "
                            "Request Bootstrap through"));
         anjay->bootstrap.bootstrap_trigger = false;
-        return;
+        goto finish;
     }
     if (connection.conn_type == ANJAY_CONNECTION_UNSET) {
         goto error;
@@ -924,11 +935,13 @@ static void request_bootstrap_job(avs_sched_t *sched, const void *dummy) {
     _anjay_server_update_registration_info(
             connection.server, NULL, ANJAY_LWM2M_VERSION_1_0, false, NULL);
     send_request_bootstrap(anjay, connection);
-    return;
+    goto finish;
 error:
     anjay->bootstrap.bootstrap_trigger = false;
     _anjay_server_on_server_communication_error(connection.server,
                                                 avs_errno(AVS_EPROTO));
+finish:;
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static int64_t client_hold_off_time_s(anjay_unlocked_t *anjay) {

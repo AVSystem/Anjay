@@ -93,7 +93,6 @@
 typedef struct event_log_struct {
     const anjay_dm_object_def_t *def;
 
-    avs_sched_t *sched;
     avs_sched_handle_t stop_log_job_handle;
 
     bool log_running;
@@ -353,7 +352,8 @@ static int resource_execute(anjay_t *anjay,
         }
         avs_sched_del(&obj->stop_log_job_handle);
         if (disable_log_delay) {
-            if (AVS_SCHED_DELAYED(obj->sched, &obj->stop_log_job_handle,
+            if (AVS_SCHED_DELAYED(anjay_get_scheduler(anjay),
+                                  &obj->stop_log_job_handle,
                                   avs_time_duration_from_scalar(
                                           disable_log_delay, AVS_TIME_S),
                                   disable_log,
@@ -415,12 +415,6 @@ const anjay_dm_object_def_t **event_log_object_create(void) {
         return NULL;
     }
 
-    obj->sched = avs_sched_new("eventlog", NULL);
-    if (!obj->sched) {
-        avs_free(obj);
-        return NULL;
-    }
-
     obj->def = &OBJ_DEF;
     return &obj->def;
 }
@@ -428,18 +422,8 @@ const anjay_dm_object_def_t **event_log_object_create(void) {
 void event_log_object_release(const anjay_dm_object_def_t **def) {
     if (def) {
         event_log_t *obj = get_obj(def);
-
-        avs_sched_cleanup(&obj->sched);
         avs_free(obj);
     }
-}
-
-avs_sched_t *event_log_get_sched(const anjay_dm_object_def_t *const *obj_ptr) {
-    if (obj_ptr) {
-        event_log_t *obj = get_obj(obj_ptr);
-        return obj->sched;
-    }
-    return NULL;
 }
 
 int event_log_write_data(anjay_t *anjay,

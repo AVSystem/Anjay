@@ -313,8 +313,10 @@ void _anjay_notify_clear_queue(anjay_notify_queue_t *out_queue) {
 
 static void notify_clb(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static int reschedule_notify(anjay_unlocked_t *anjay) {

@@ -74,7 +74,6 @@ typedef enum {
 
 typedef struct {
     const anjay_dm_object_def_t *def;
-    iosched_t *iosched;
     dev_error_t last_error;
 
     char manufacturer[256];
@@ -317,7 +316,8 @@ static int dev_instance_reset(anjay_t *anjay,
     return 0;
 }
 
-static void perform_reboot(void *unused) {
+static void perform_reboot(avs_sched_t *sched, const void *unused) {
+    (void) sched;
     (void) unused;
     char exe_path[256];
 #ifdef __APPLE__
@@ -342,17 +342,15 @@ static int dev_execute(anjay_t *anjay,
                        anjay_iid_t iid,
                        anjay_rid_t rid,
                        anjay_execute_ctx_t *ctx) {
-    (void) anjay;
+    (void) obj_ptr;
     (void) iid;
     (void) ctx;
-
-    dev_repr_t *dev = get_dev(obj_ptr);
 
     switch (rid) {
     case DEV_RES_REBOOT:
     case DEV_RES_FACTORY_RESET:
-        if (!iosched_instant_entry_new(dev->iosched, perform_reboot, NULL,
-                                       NULL)) {
+        if (AVS_SCHED_NOW(anjay_get_scheduler(anjay), NULL, perform_reboot,
+                          NULL, 0)) {
             return ANJAY_ERR_INTERNAL;
         }
 
@@ -470,15 +468,13 @@ static void extract_device_info(const char *endpoint_name,
     (void) result;
 }
 
-const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
-                                                   const char *endpoint_name) {
+const anjay_dm_object_def_t **device_object_create(const char *endpoint_name) {
     dev_repr_t *repr = (dev_repr_t *) avs_calloc(1, sizeof(dev_repr_t));
     if (!repr) {
         return NULL;
     }
 
     repr->def = &DEVICE;
-    repr->iosched = iosched;
     repr->last_error = DEV_ERR_NO_ERROR;
 
     dev_instance_reset_impl(repr);

@@ -19,18 +19,25 @@ Threading API
 Overview
 --------
 
-The ``avs_net`` and ``avs_log`` modules require threading primitives
-to operate reliably in multi-threaded environments, specifically:
+If Anjay is compiled with thread safety enabled (``WITH_THREAD_SAFETY`` CMake
+option), it requires some basic threading primitives to be implemented for the
+thread safety features to work properly.
+
+The same threading primitives are additionally used by the ``avs_net`` and
+``avs_log`` modules regardless of whether thread safety is enabled or not.
+
+The specific requirements are:
 
 - ``avs_net`` requires ``avs_init_once()``,
-- ``avs_log`` requires ``avs_mutex_create()``, ``avs_mutex_cleanup()``,
-  ``avs_mutex_lock()``, ``avs_mutex_unlock()``, and
+- ``avs_log`` and Anjay thread safety require ``avs_mutex_create()``,
+  ``avs_mutex_cleanup()``, ``avs_mutex_lock()``, ``avs_mutex_unlock()``, and
   ``avs_init_once()``.
 
 In addition, ``avs_sched`` optionally depends on ``avs_condvar_create()``,
 ``avs_condvar_cleanup()``, ``avs_condvar_notify_all()`` as well as
 ``avs_mutex_*`` APIs. The dependency can be controlled with
-``WITH_SCHEDULER_THREAD_SAFE`` CMake option.
+``WITH_SCHEDULER_THREAD_SAFE`` CMake option. This option normally has the same
+setting as ``WITH_THREAD_SAFETY``.
 
 There are two independent implementations of the threading API for compatibility
 with most platforms:

@@ -819,13 +819,15 @@ static int fw_resource_instances(anjay_unlocked_t *anjay,
 static void perform_upgrade(avs_sched_t *sched, const void *fw_ptr) {
     fw_repr_t *fw = *(fw_repr_t *const *) fw_ptr;
 
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     int result = user_state_perform_upgrade(anjay, &fw->user_state);
     if (result) {
         fw_log(ERROR, _("user_state_perform_upgrade() failed: ") "%d", result);
         handle_err_result(anjay, fw, UPDATE_STATE_DOWNLOADED, result,
                           ANJAY_FW_UPDATE_RESULT_FAILED);
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static int fw_execute(anjay_unlocked_t *anjay,

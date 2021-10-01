@@ -1245,7 +1245,8 @@ static void on_network_error(anjay_connection_ref_t conn_ref, avs_error_t err) {
 }
 
 static void flush_send_queue_job(avs_sched_t *sched, const void *conn_ptr) {
-    (void) sched;
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_observe_connection_entry_t *conn =
             *(anjay_observe_connection_entry_t *const *) conn_ptr;
     if (conn && conn->unsent
@@ -1254,6 +1255,7 @@ static void flush_send_queue_job(avs_sched_t *sched, const void *conn_ptr) {
             && _anjay_connection_get_online_socket(conn->conn_ref)) {
         flush_next_unsent(conn);
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static int
@@ -1577,7 +1579,8 @@ finish:
 }
 
 static void trigger_observe(avs_sched_t *sched, const void *args_) {
-    (void) sched;
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const trigger_observe_args_t *args = (const trigger_observe_args_t *) args_;
     assert(args->conn_state);
     assert(args->observation);
@@ -1612,6 +1615,7 @@ static void trigger_observe(avs_sched_t *sched, const void *args_) {
             remove_all_unsent_values(args->conn_state);
         }
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static anjay_dm_oi_attributes_t

@@ -521,7 +521,7 @@ AVS_UNIT_TEST(queue_mode, change) {
     anjay_server_connection_t *connection = NULL;
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     connection = _anjay_get_server_connection((const anjay_connection_ref_t) {
-        .server = anjay_unlocked->servers->servers,
+        .server = anjay_unlocked->servers,
         .conn_type = ANJAY_CONNECTION_PRIMARY
     });
     ANJAY_MUTEX_UNLOCK(anjay);

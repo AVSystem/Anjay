@@ -8,5 +8,12 @@
     ],
     "anjay_core\\.c": [
         "anjay_config_log\\.h"
+    ],
+    "anjay_event_loop\\.c": [
+        "poll\\.h",
+        "sys/select\\.h"
+    ],
+    "anjay_utils_core\\.h": [
+        "stdatomic\\.h"
     ]
 }

@@ -322,13 +322,13 @@ static void print_help(const struct option *options) {
           "startup, and store it at shutdown" },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
-        { 305, NULL, NULL,
+        { 306, NULL, NULL,
           "Enable alternative logger as a showcase of extended logger "
           "feature." },
-        { 306, NULL, NULL,
+        { 307, NULL, NULL,
           "Provide identity from ASCII string (see -i parameter for more "
           "details)" },
-        { 307, NULL, NULL,
+        { 308, NULL, NULL,
           "Provide key from ASCII string (see -k parameter for more details)" },
     };
 
@@ -615,9 +615,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "dm-persistence-file",           required_argument, 0, 289 },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
-        { "alternative-logger",            no_argument,       0, 305 },
-        { "identity-as-string",            required_argument, 0, 306 },
-        { "key-as-string",                 required_argument, 0, 307 },
+        { "alternative-logger",            no_argument,       0, 306 },
+        { "identity-as-string",            required_argument, 0, 307 },
+        { "key-as-string",                 required_argument, 0, 308 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -1129,11 +1129,11 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
-        case 305:
+        case 306:
             parsed_args->alternative_logger = true;
             break;
-        case 306: {
-            const size_t identity_length = strlen(optarg);
+        case 307: {
+            const size_t identity_length = optarg ? strlen(optarg) : 0;
             if (parsed_args->connection_args.public_cert_or_psk_identity != NULL
                     || identity_length == 0) {
                 demo_log(ERROR, "Invalid identity, either identity was set "
@@ -1152,8 +1152,8 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         }
-        case 307: {
-            const size_t key_length = strlen(optarg);
+        case 308: {
+            const size_t key_length = optarg ? strlen(optarg) : 0;
             if (parsed_args->connection_args.private_cert_or_psk_key != NULL
                     || key_length == 0) {
                 demo_log(ERROR, "Invalid key, either key was set "

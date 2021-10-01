@@ -688,15 +688,15 @@ typedef struct {
     anjay_fw_update_result_t delayed_result;
 } set_delayed_fw_update_result_args_t;
 
-static void set_delayed_fw_update_result(void *arg) {
-    set_delayed_fw_update_result_args_t *args =
-            (set_delayed_fw_update_result_args_t *) arg;
+static void set_delayed_fw_update_result(avs_sched_t *sched, const void *arg) {
+    (void) sched;
+    const set_delayed_fw_update_result_args_t *args =
+            (const set_delayed_fw_update_result_args_t *) arg;
 
     anjay_fw_update_set_result(args->anjay, args->delayed_result);
 }
 
 int firmware_update_install(anjay_t *anjay,
-                            iosched_t *iosched,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
@@ -745,20 +745,12 @@ int firmware_update_install(anjay_t *anjay,
 
         // Simulate FOTA process that finishes after the LwM2M client starts by
         // changing the Update Result later at runtime
-        set_delayed_fw_update_result_args_t *args =
-                (set_delayed_fw_update_result_args_t *) avs_malloc(
-                        sizeof(*args));
-        if (!args) {
-            goto exit;
-        }
-        *args = (set_delayed_fw_update_result_args_t) {
+        set_delayed_fw_update_result_args_t args = {
             .anjay = anjay,
             .delayed_result = delayed_result
         };
-        if (iosched_instant_entry_new(iosched, set_delayed_fw_update_result,
-                                      args, avs_free)
-                == NULL) {
-            avs_free(args);
+        if (AVS_SCHED_NOW(anjay_get_scheduler(anjay), NULL,
+                          set_delayed_fw_update_result, &args, sizeof(args))) {
             goto exit;
         }
     }

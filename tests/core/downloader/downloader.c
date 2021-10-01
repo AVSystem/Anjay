@@ -85,9 +85,10 @@ static void setup(void) {
 #ifdef ANJAY_WITH_THREAD_SAFETY
     AVS_UNIT_ASSERT_SUCCESS(avs_mutex_create(&anjay_locked->mutex));
     AVS_UNIT_ASSERT_SUCCESS(avs_mutex_lock(anjay_locked->mutex));
+    ENV.anjay->coap_sched = avs_sched_new("Anjay-test-CoAP", NULL);
 #endif // ANJAY_WITH_THREAD_SAFETY
     ENV.anjay->online_transports = ANJAY_TRANSPORT_SET_ALL;
-    ENV.anjay->sched = avs_sched_new("Anjay-test", ENV.anjay);
+    ENV.anjay->sched = avs_sched_new("Anjay-test", anjay_locked);
     ENV.anjay->udp_tx_params = DETERMINISTIC_TX_PARAMS;
     ENV.anjay->prng_ctx = (anjay_prng_ctx_t) {
         .ctx = avs_crypto_prng_new(NULL, NULL),
@@ -114,6 +115,12 @@ static void setup(void) {
 
 static void teardown() {
     _anjay_downloader_cleanup(&ENV.anjay->downloader);
+    avs_sched_cleanup(&ENV.anjay->coap_sched);
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    anjay_t *anjay_locked =
+            AVS_CONTAINER_OF(ENV.anjay, anjay_t, anjay_unlocked_placeholder);
+    avs_mutex_unlock(anjay_locked->mutex);
+#endif // ANJAY_WITH_THREAD_SAFETY
     avs_sched_cleanup(&ENV.anjay->sched);
 
     for (size_t i = 0; i < AVS_ARRAY_SIZE(ENV.mocksock); ++i) {
@@ -126,9 +133,6 @@ static void teardown() {
     avs_crypto_prng_free(&ENV.anjay->prng_ctx.ctx);
 
 #ifdef ANJAY_WITH_THREAD_SAFETY
-    anjay_t *anjay_locked =
-            AVS_CONTAINER_OF(ENV.anjay, anjay_t, anjay_unlocked_placeholder);
-    avs_mutex_unlock(anjay_locked->mutex);
     avs_mutex_cleanup(&anjay_locked->mutex);
     avs_free(anjay_locked);
 #else  // ANJAY_WITH_THREAD_SAFETY
@@ -273,11 +277,13 @@ static void perform_simple_download(void) {
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     do {
+        ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
         while (avs_time_duration_equal(avs_sched_time_to_next(
                                                SIMPLE_ENV.base->anjay->sched),
                                        AVS_TIME_DURATION_ZERO)) {
             avs_sched_run(SIMPLE_ENV.base->anjay->sched);
         }
+        ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
     } while (!handle_packet());
 
     avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
@@ -653,11 +659,13 @@ AVS_UNIT_TEST(downloader, buffer_too_small_to_download) {
                                  .category = AVS_COAP_ERR_CATEGORY,
                                  .code = AVS_COAP_ERR_MESSAGE_TOO_BIG
                              }));
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     while (avs_time_duration_equal(avs_sched_time_to_next(
                                            SIMPLE_ENV.base->anjay->sched),
                                    AVS_TIME_DURATION_ZERO)) {
         avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     teardown_simple();
 }
@@ -679,6 +687,7 @@ AVS_UNIT_TEST(downloader, retry) {
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     while (avs_time_duration_equal(avs_sched_time_to_next(
@@ -710,6 +719,7 @@ AVS_UNIT_TEST(downloader, retry) {
         }
         last_time_to_next = time_to_next;
     }
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     // handle response
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
@@ -734,7 +744,9 @@ AVS_UNIT_TEST(downloader, retry) {
     // TODO: remove after T2217.
     // CoAP context cleanup. It's a side effect of a hack in
     // coap.c:cleanup_coap_transfer().
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     avs_sched_run(SIMPLE_ENV.base->anjay->sched);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     // retransmission job should be canceled
     AVS_UNIT_ASSERT_FALSE(avs_time_duration_valid(
@@ -762,11 +774,13 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
     // initial request
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     while (avs_time_duration_equal(avs_sched_time_to_next(
                                            SIMPLE_ENV.base->anjay->sched),
                                    AVS_TIME_DURATION_ZERO)) {
         avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     // retransmission job should be scheduled
     avs_time_duration_t time_to_next =
@@ -794,7 +808,9 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
     // abort job should be scheduled to run after EXCHANGE_LIFETIME
     _anjay_mock_clock_advance(
             avs_coap_udp_exchange_lifetime(&DETERMINISTIC_TX_PARAMS));
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     avs_sched_run(SIMPLE_ENV.base->anjay->sched);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
 
@@ -831,7 +847,9 @@ AVS_UNIT_TEST(downloader, abort) {
     // TODO: remove after T2217.
     // CoAP context cleanup. It's a side effect of a hack in
     // coap.c:cleanup_coap_transfer().
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     avs_sched_run(SIMPLE_ENV.base->anjay->sched);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     // start_download_job is canceled
     AVS_UNIT_ASSERT_FALSE(avs_time_duration_valid(
@@ -1086,11 +1104,14 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
         expect_timeout(SIMPLE_ENV.mocksock);
 
         do {
+            ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked,
+                                            SIMPLE_ENV.base->anjay);
             while (avs_time_duration_equal(
                     avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched),
                     AVS_TIME_DURATION_ZERO)) {
                 avs_sched_run(SIMPLE_ENV.base->anjay->sched);
             }
+            ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
         } while (!handle_packet());
 
         avs_unit_mocksock_assert_expects_met(SIMPLE_ENV.mocksock);
@@ -1129,11 +1150,13 @@ AVS_UNIT_TEST(downloader, resumption_without_etag_and_block_estimation) {
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // We only care about verifying initial BLOCK2 size.
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     while (avs_time_duration_equal(avs_sched_time_to_next(
                                            SIMPLE_ENV.base->anjay->sched),
                                    AVS_TIME_DURATION_ZERO)) {
         avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     expect_download_finished(&SIMPLE_ENV.data,
                              _anjay_download_status_aborted());
@@ -1174,11 +1197,13 @@ AVS_UNIT_TEST(downloader, resumption_with_etag_and_block_estimation) {
     AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
             &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     while (avs_time_duration_equal(avs_sched_time_to_next(
                                            SIMPLE_ENV.base->anjay->sched),
                                    AVS_TIME_DURATION_ZERO)) {
         avs_sched_run(SIMPLE_ENV.base->anjay->sched);
     }
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
 
     const coap_test_msg_t *res =
             COAP_MSG(ACK, CONTENT, ID_TOKEN_RAW(0, nth_token(0)),

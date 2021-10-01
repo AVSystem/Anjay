@@ -6,60 +6,15 @@
 #include <avsystem/commons/avs_stream_file.h>
 
 #include <errno.h>
-#include <poll.h>
 #include <signal.h>
 #include <unistd.h>
 
-static volatile bool g_running = true;
+static anjay_t *volatile g_anjay;
 
 void signal_handler(int signum) {
-    if (signum == SIGINT) {
-        g_running = false;
+    if (signum == SIGINT && g_anjay) {
+        anjay_event_loop_interrupt(g_anjay);
     }
-}
-
-int main_loop(anjay_t *anjay) {
-    while (g_running) {
-        // Obtain all network data sources
-        AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
-
-        // Prepare to poll() on them
-        size_t numsocks = AVS_LIST_SIZE(sockets);
-        struct pollfd pollfds[numsocks];
-        size_t i = 0;
-        AVS_LIST(avs_net_socket_t *const) sock;
-        AVS_LIST_FOREACH(sock, sockets) {
-            pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
-            pollfds[i].events = POLLIN;
-            pollfds[i].revents = 0;
-            ++i;
-        }
-
-        const int max_wait_time_ms = 1000;
-        // Determine the expected time to the next job in milliseconds.
-        // If there is no job we will wait till something arrives for
-        // at most 1 second (i.e. max_wait_time_ms).
-        int wait_ms =
-                anjay_sched_calculate_wait_time_ms(anjay, max_wait_time_ms);
-
-        // Wait for the events if necessary, and handle them.
-        if (poll(pollfds, numsocks, wait_ms) > 0) {
-            int socket_id = 0;
-            AVS_LIST(avs_net_socket_t *const) socket = NULL;
-            AVS_LIST_FOREACH(socket, sockets) {
-                if (pollfds[socket_id].revents) {
-                    if (anjay_serve(anjay, *socket)) {
-                        avs_log(tutorial, ERROR, "anjay_serve failed");
-                    }
-                }
-                ++socket_id;
-            }
-        }
-
-        // Finally run the scheduler
-        anjay_sched_run(anjay);
-    }
-    return 0;
 }
 
 #define PERSISTENCE_FILENAME "at2-persistence.dat"
@@ -186,8 +141,8 @@ int main(int argc, char *argv[]) {
         .out_buffer_size = 4000
     };
 
-    anjay_t *anjay = anjay_new(&CONFIG);
-    if (!anjay) {
+    g_anjay = anjay_new(&CONFIG);
+    if (!g_anjay) {
         avs_log(tutorial, ERROR, "Could not create Anjay object");
         return -1;
     }
@@ -195,29 +150,30 @@ int main(int argc, char *argv[]) {
     int result = 0;
 
     // Install Attribute storage and necessary objects
-    if (anjay_attr_storage_install(anjay)
-            || anjay_security_object_install(anjay)
-            || anjay_server_object_install(anjay)) {
+    if (anjay_attr_storage_install(g_anjay)
+            || anjay_security_object_install(g_anjay)
+            || anjay_server_object_install(g_anjay)) {
         result = -1;
         goto cleanup;
     }
 
-    int restore_retval = restore_objects_if_possible(anjay);
+    int restore_retval = restore_objects_if_possible(g_anjay);
     if (restore_retval < 0) {
         result = -1;
         goto cleanup;
     } else if (restore_retval > 0) {
-        initialize_objects_with_default_settings(anjay);
+        initialize_objects_with_default_settings(g_anjay);
     }
 
-    result = main_loop(anjay);
+    result = anjay_event_loop_run(g_anjay,
+                                  avs_time_duration_from_scalar(1, AVS_TIME_S));
 
-    int persist_result = persist_objects(anjay);
+    int persist_result = persist_objects(g_anjay);
     if (!result) {
         result = persist_result;
     }
 
 cleanup:
-    anjay_delete(anjay);
+    anjay_delete(g_anjay);
     return result;
 }

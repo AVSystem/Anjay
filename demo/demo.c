@@ -18,8 +18,10 @@
 #    define WIN32_LEAN_AND_MEAN
 #    define _WIN32_WINNT \
         0x600 // minimum requirement: Windows NT 6.0 a.k.a. Vista
-#    include <Ws2tcpip.h>
+#    include <ws2tcpip.h>
 #    undef ERROR
+#else // _WIN32
+#    include <netinet/in.h>
 #endif // _WIN32
 
 #include "demo.h"
@@ -29,7 +31,6 @@
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
 #    include "firmware_update.h"
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
-#include "iosched.h"
 
 #include "objects.h"
 #include <avsystem/commons/avs_url.h>
@@ -40,9 +41,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef _WIN32
-#    include <netinet/in.h>
-#endif // _WIN32
+#include <pthread.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -156,6 +155,8 @@ void demo_reload_servers(anjay_demo_t *demo) {
 }
 
 static void demo_delete(anjay_demo_t *demo) {
+    avs_sched_del(&demo->notify_time_dependent_job);
+
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
         && defined(AVS_COMMONS_STREAM_WITH_FILE)
 #    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
@@ -204,11 +205,11 @@ static void demo_delete(anjay_demo_t *demo) {
     AVS_LIST_CLEAR(&demo->objects) {
         demo->objects->release_func(demo->objects->obj_ptr);
     }
+    AVS_LIST_CLEAR(&demo->installed_objects_update_handlers);
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     firmware_update_destroy(&demo->fw_update);
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
-    iosched_release(demo->iosched);
     AVS_LIST_CLEAR(&demo->allocated_strings);
     avs_free(demo);
 }
@@ -335,6 +336,53 @@ install_object(anjay_demo_t *demo,
     return 0;
 }
 
+static int
+add_installed_object_update_handler(anjay_demo_t *demo,
+                                    anjay_update_handler_t *handler) {
+    assert(demo);
+
+    AVS_LIST(anjay_update_handler_t *) *handler_entry =
+            AVS_LIST_APPEND_PTR(&demo->installed_objects_update_handlers);
+    assert(handler_entry && !*handler_entry);
+    *handler_entry = AVS_LIST_NEW_ELEMENT(anjay_update_handler_t *);
+    **handler_entry = handler;
+
+    return 0;
+}
+
+static void reschedule_notify_time_dependent(anjay_demo_t *demo);
+
+static void notify_time_dependent_job(avs_sched_t *sched,
+                                      const void *demo_ptr) {
+    (void) sched;
+    anjay_demo_t *demo = *(anjay_demo_t *const *) demo_ptr;
+    anjay_demo_object_t *object;
+    AVS_LIST_FOREACH(object, demo->objects) {
+        if (object->time_dependent_notify_func) {
+            object->time_dependent_notify_func(demo->anjay, object->obj_ptr);
+        }
+    }
+    anjay_update_handler_t **update_handler;
+    AVS_LIST_FOREACH(update_handler, demo->installed_objects_update_handlers) {
+        (*update_handler)(demo->anjay);
+    }
+    reschedule_notify_time_dependent(demo);
+}
+
+static void reschedule_notify_time_dependent(anjay_demo_t *demo) {
+    avs_time_real_t now = avs_time_real_now();
+    avs_time_real_t next_full_second = {
+        .since_real_epoch = {
+            .seconds = now.since_real_epoch.seconds + 1,
+            .nanoseconds = 0
+        }
+    };
+    AVS_SCHED_DELAYED(anjay_get_scheduler(demo->anjay),
+                      &demo->notify_time_dependent_job,
+                      avs_time_real_diff(next_full_second, now),
+                      notify_time_dependent_job, &demo, sizeof(demo));
+}
+
 static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     for (size_t i = 0; i < MAX_SERVERS; ++i) {
         server_entry_t *entry = &cmdline_args->connection_args.servers[i];
@@ -391,8 +439,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
 #endif     // AVS_COMMONS_STREAM_WITH_FILE
     demo->anjay = anjay_new(&config);
-    demo->iosched = iosched_create();
-    if (!demo->anjay || !demo->iosched
+    if (!demo->anjay
 #ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
             || anjay_attr_storage_install(demo->anjay)
 #endif // ANJAY_WITH_MODULE_ATTR_STORAGE
@@ -403,21 +450,17 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         return -1;
     }
 
-#ifndef _WIN32
-    if (!cmdline_args->disable_stdin) {
-        if (!iosched_poll_entry_new(demo->iosched,
-                                    &(const int) { STDIN_FILENO },
-                                    DEMO_POLLIN | DEMO_POLLHUP,
-                                    demo_command_dispatch, demo, NULL)) {
-            return -1;
-        }
-    }
-#else // _WIN32
-#    warning "TODO: Support stdin somehow on Windows"
-#endif // _WIN32
-
     if (anjay_security_object_install(demo->anjay)
             || anjay_server_object_install(demo->anjay)
+#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
+            || install_accelerometer_object(demo->anjay)
+            || add_installed_object_update_handler(demo,
+                                                   accelerometer_update_handler)
+            || install_push_button_object(demo->anjay)
+            || install_temperature_object(demo->anjay)
+            || add_installed_object_update_handler(demo,
+                                                   temperature_update_handler)
+#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
             || install_object(demo, location_object_create(), NULL,
                               location_notify_time_dependent,
                               location_object_release)
@@ -436,8 +479,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
             || install_object(demo, download_diagnostics_object_create(), NULL,
                               NULL, download_diagnostics_object_release)
             || install_object(demo,
-                              device_object_create(demo->iosched,
-                                                   cmdline_args->endpoint_name),
+                              device_object_create(cmdline_args->endpoint_name),
                               NULL, device_notify_time_dependent,
                               device_object_release)
             || install_object(demo, ext_dev_info_object_create(), NULL,
@@ -448,8 +490,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                               geopoints_notify_time_dependent,
                               geopoints_object_release)
 #ifndef _WIN32
-            || install_object(demo, ip_ping_object_create(demo->iosched), NULL,
-                              NULL, ip_ping_object_release)
+            || install_object(demo, ip_ping_object_create(), NULL, NULL,
+                              ip_ping_object_release)
 #endif // _WIN32
             || install_object(demo, test_object_create(), test_get_instances,
                               test_notify_time_dependent, test_object_release)
@@ -499,7 +541,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     // Install Firmware Update Object at the end, because installed Device
     // Object and Server Object's instances may be needed.
-    if (firmware_update_install(demo->anjay, demo->iosched, &demo->fw_update,
+    if (firmware_update_install(demo->anjay, &demo->fw_update,
                                 cmdline_args->fw_updated_marker_path,
                                 fw_security_info_ptr,
                                 cmdline_args->fwu_tx_params_modified
@@ -537,6 +579,8 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 #endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
+    reschedule_notify_time_dependent(demo);
+
     return 0;
 }
 
@@ -551,138 +595,25 @@ static anjay_demo_t *demo_new(cmdline_args_t *cmdline_args) {
         return NULL;
     }
 
-    demo->running = true;
     return demo;
 }
 
-static void notify_time_dependent(anjay_demo_t *demo) {
-    anjay_demo_object_t *object;
-    AVS_LIST_FOREACH(object, demo->objects) {
-        if (object->time_dependent_notify_func) {
-            object->time_dependent_notify_func(demo->anjay, object->obj_ptr);
-        }
-    }
+static void *event_loop_func(void *demo) {
+    // NOTE: This log is expected by our test suite (see Lwm2mTest.start_demo())
+    // Please don't remove.
+    demo_log(INFO, "*** ANJAY DEMO STARTUP FINISHED ***");
+    int result = anjay_event_loop_run(
+            ((anjay_demo_t *) demo)->anjay,
+            avs_time_duration_from_scalar(100, AVS_TIME_MS));
+    // force the stdin reading loop to finish
+    close(STDIN_FILENO);
+    return (void *) (intptr_t) result;
 }
 
-typedef struct {
-    anjay_demo_t *demo;
-    avs_net_socket_t *socket;
-    const iosched_entry_t *iosched_entry;
-} socket_entry_t;
-
-static void socket_dispatch(short revents, void *arg_) {
-    (void) revents;
-    socket_entry_t *arg = (socket_entry_t *) arg_;
-    int result = anjay_serve(arg->demo->anjay, arg->socket);
-    demo_log(DEBUG, "anjay_serve returned %d", result);
-}
-
-static socket_entry_t *create_socket_entry(anjay_demo_t *demo,
-                                           avs_net_socket_t *socket) {
-    socket_entry_t *entry = AVS_LIST_NEW_ELEMENT(socket_entry_t);
-    if (!entry) {
-        demo_log(ERROR, "out of memory");
-        return NULL;
-    }
-
-    const void *sys_socket = avs_net_socket_get_system(socket);
-    if (!sys_socket) {
-        demo_log(ERROR, "could not obtain system socket");
-        AVS_LIST_DELETE(&entry);
-        return NULL;
-    }
-    entry->demo = demo;
-    entry->socket = socket;
-    entry->iosched_entry =
-            iosched_poll_entry_new(demo->iosched, sys_socket, DEMO_POLLIN,
-                                   socket_dispatch, entry, NULL);
-    if (!entry->iosched_entry) {
-        demo_log(ERROR, "cannot add iosched entry");
-        AVS_LIST_DELETE(&entry);
-    }
-    return entry;
-}
-
-static void refresh_socket_entries(anjay_demo_t *demo,
-                                   AVS_LIST(socket_entry_t) *entry_ptr) {
-    AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(demo->anjay);
-
-    AVS_LIST(avs_net_socket_t *const) socket;
-    AVS_LIST_FOREACH(socket, sockets) {
-        while (*entry_ptr && (*entry_ptr)->socket != *socket) {
-            assert((*entry_ptr)->iosched_entry);
-            iosched_entry_remove(demo->iosched, (*entry_ptr)->iosched_entry);
-            AVS_LIST_DELETE(entry_ptr);
-        }
-        if (*entry_ptr) {
-            assert((*entry_ptr)->iosched_entry);
-            entry_ptr = AVS_LIST_NEXT_PTR(entry_ptr);
-            continue;
-        }
-        socket_entry_t *new_entry = create_socket_entry(demo, *socket);
-
-        if (new_entry) {
-            AVS_LIST_INSERT(entry_ptr, new_entry);
-            entry_ptr = AVS_LIST_NEXT_PTR(entry_ptr);
-        }
-    }
-    while (*entry_ptr) {
-        assert((*entry_ptr)->iosched_entry);
-        iosched_entry_remove(demo->iosched, (*entry_ptr)->iosched_entry);
-        AVS_LIST_DELETE(entry_ptr);
-    }
-}
-
-static avs_sched_t *get_event_log_sched(anjay_demo_t *demo) {
-    const anjay_dm_object_def_t **obj_def =
-            demo_find_object(demo, DEMO_OID_EVENT_LOG);
-    return obj_def ? event_log_get_sched(obj_def) : NULL;
-}
-
-static void serve(anjay_demo_t *demo) {
-    AVS_LIST(socket_entry_t) socket_entries = NULL;
-
-    avs_time_real_t last_time = avs_time_real_now();
-
-    while (demo->running) {
-        refresh_socket_entries(demo, &socket_entries);
-        demo_log(TRACE, "number of sockets to poll: %u",
-                 (unsigned) AVS_LIST_SIZE(socket_entries));
-
-        avs_time_real_t current_time = avs_time_real_now();
-
-        if (current_time.since_real_epoch.seconds
-                != last_time.since_real_epoch.seconds) {
-            notify_time_dependent(demo);
-        }
-        last_time = current_time;
-
-        int waitms = anjay_sched_calculate_wait_time_ms(
-                demo->anjay,
-                (int) ((1000500000 - current_time.since_real_epoch.nanoseconds)
-                       / 1000000));
-
-        avs_time_duration_t event_log_wait_duration =
-                avs_sched_time_to_next(get_event_log_sched(demo));
-
-        if (avs_time_duration_valid(event_log_wait_duration)) {
-            int64_t event_log_waitms;
-            avs_time_duration_to_scalar(&event_log_waitms, AVS_TIME_MS,
-                                        event_log_wait_duration);
-            waitms = AVS_MIN((int) event_log_waitms, waitms);
-        }
-
-        // +1 to prevent annoying looping in case of
-        // sub-millisecond delays
-        iosched_run(demo->iosched, waitms + 1);
-
-        anjay_sched_run(demo->anjay);
-        avs_sched_run(get_event_log_sched(demo));
-    }
-
-    AVS_LIST_CLEAR(&socket_entries) {
-        iosched_entry_remove(demo->iosched, socket_entries->iosched_entry);
-    }
+static void interrupt_event_loop_job(avs_sched_t *sched, const void *demo_ptr) {
+    (void) sched;
+    anjay_demo_t *demo = *(anjay_demo_t *const *) demo_ptr;
+    anjay_event_loop_interrupt(demo->anjay);
 }
 
 static void log_extended_handler(avs_log_level_t level,
@@ -802,10 +733,47 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    // NOTE: This log is expected by our test suite (see Lwm2mTest.start_demo())
-    // Please don't remove.
-    demo_log(INFO, "*** ANJAY DEMO STARTUP FINISHED ***");
-    serve(demo);
+    pthread_t event_loop_thread;
+    if (!pthread_create(&event_loop_thread, NULL, event_loop_func, demo)) {
+        if (!cmdline_args.disable_stdin) {
+            union {
+                demo_command_invocation_t invocation;
+                char buf[offsetof(demo_command_invocation_t, cmd) + 500];
+            } invocation = {
+                .invocation.demo = demo
+            };
+            while (!feof(stdin) && !ferror(stdin)) {
+                if (fgets(invocation.invocation.cmd,
+                          sizeof(invocation)
+                                  - offsetof(demo_command_invocation_t, cmd),
+                          stdin)) {
+                    while (true) {
+                        size_t buf_len = strlen(invocation.invocation.cmd);
+                        if (!buf_len) {
+                            break;
+                        }
+                        char *last_char =
+                                &invocation.invocation.cmd[buf_len - 1];
+                        if (*last_char == '\r' || *last_char == '\n') {
+                            *last_char = '\0';
+                        } else {
+                            break;
+                        }
+                    }
+                    demo_command_dispatch(&invocation.invocation);
+                }
+            }
+            // NOTE: anjay_event_loop_interrupt() intentionally does not work if
+            // called before the event loop actually starts; it means that we
+            // can't call it directly hear, as it would lead to a race condition
+            // if stdin is closed immediately (e.g. is /dev/null).
+            AVS_SCHED_NOW(anjay_get_scheduler(demo->anjay), NULL,
+                          interrupt_event_loop_job, &demo, sizeof(demo));
+        }
+
+        pthread_join(event_loop_thread, NULL);
+    }
+
     demo_delete(demo);
     cmdline_args_cleanup(&cmdline_args);
     avs_log_reset();

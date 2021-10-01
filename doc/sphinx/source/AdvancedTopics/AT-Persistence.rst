@@ -72,9 +72,10 @@ used:
 Example
 -------
 
-As an example we'll modify the code from the :doc:`../BasicClient/BC3` tutorial.
-We would like to persist Object data when the LwM2M Client finishes its work and
-restore it on startup (if a valid persistence file exists).
+As an example we'll modify the code from the
+:doc:`../BasicClient/BC-ObjectImplementation` tutorial. We would like to persist
+Object data when the LwM2M Client finishes its work and restore it on startup
+(if a valid persistence file exists).
 
 .. snippet-source:: examples/tutorial/AT-Persistence/src/main.c
 

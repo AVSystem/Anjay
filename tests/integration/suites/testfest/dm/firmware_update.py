@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import http
 import os
+import resource
+import socket
 import threading
 import time
-import unittest
-import contextlib
-import resource
 
 from framework.lwm2m_test import *
 from .utils import DataModel, ValueValidator as VV
@@ -30,13 +30,23 @@ class FirmwareUpdate:
     class Test(DataModel.Test):
         def collect_values(self, path: Lwm2mPath, final_value, max_iterations=100, step_time=0.1):
             observed_values = []
-            for _ in range(max_iterations):
-                state = self.test_read(path)
-                observed_values.append(state)
-                if state == final_value:
-                    break
-                time.sleep(step_time)
-            return observed_values
+            orig_timeout = self.serv.get_timeout()
+            try:
+                deadline = time.time() + max_iterations * step_time
+                while True:
+                    timeout = max(deadline - time.time(), 0.0)
+                    self.serv.set_timeout(timeout)
+                    try:
+                        state = self.test_read(path)
+                    except socket.timeout:
+                        break
+                    observed_values.append(state)
+                    if state == final_value:
+                        break
+                    time.sleep(step_time)
+                return observed_values
+            finally:
+                self.serv.set_timeout(orig_timeout)
 
         def setUp(self, extra_cmdline_args=[]):
             self.ANJAY_MARKER_FILE = generate_temp_filename(dir='/tmp', prefix='anjay-fw-updated-')

@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include <anjay/attr_storage.h>
+#include <anjay/ipso_objects.h>
 #include <anjay/security.h>
 
 #include <avsystem/commons/avs_memory.h>
@@ -41,7 +42,7 @@ static int parse_ssid(const char *text, anjay_ssid_t *out_ssid) {
     return 0;
 }
 
-static void cmd_send_update(anjay_demo_t *demo, char *args_string) {
+static void cmd_send_update(anjay_demo_t *demo, const char *args_string) {
     anjay_ssid_t ssid = ANJAY_SSID_ANY;
     if (*args_string && parse_ssid(args_string, &ssid)) {
         demo_log(ERROR, "invalid Short Server ID: %s", args_string);
@@ -57,15 +58,21 @@ static void cmd_send_update(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static int parse_transports(char *text,
+static int parse_transports(const char *text,
                             anjay_transport_set_t *out_transport_set) {
+    char *text_copy = avs_strdup(text);
+    if (!text_copy) {
+        demo_log(ERROR, "Out of memory");
+        return -1;
+    }
     *out_transport_set = ANJAY_TRANSPORT_SET_ALL;
     bool found = false;
     bool error = false;
+    char *text_arg = text_copy;
     char *saveptr = NULL;
     const char *token = NULL;
-    while ((token = avs_strtok(text, AVS_SPACES, &saveptr))) {
-        text = NULL;
+    while ((token = avs_strtok(text_arg, AVS_SPACES, &saveptr))) {
+        text_arg = NULL;
         if (!found) {
             memset(out_transport_set, 0, sizeof(*out_transport_set));
             found = true;
@@ -82,10 +89,11 @@ static int parse_transports(char *text,
             error = true;
         }
     }
+    avs_free(text_copy);
     return error ? -1 : 0;
 }
 
-static void cmd_reconnect(anjay_demo_t *demo, char *args_string) {
+static void cmd_reconnect(anjay_demo_t *demo, const char *args_string) {
     anjay_transport_set_t transport_set;
     if (!parse_transports(args_string, &transport_set)) {
         if (anjay_transport_schedule_reconnect(demo->anjay, transport_set)) {
@@ -97,7 +105,8 @@ static void cmd_reconnect(anjay_demo_t *demo, char *args_string) {
 }
 
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
-static void cmd_set_fw_package_path(anjay_demo_t *demo, char *args_string) {
+static void cmd_set_fw_package_path(anjay_demo_t *demo,
+                                    const char *args_string) {
     const char *path = args_string;
     while (isspace(*path)) {
         ++path;
@@ -107,7 +116,7 @@ static void cmd_set_fw_package_path(anjay_demo_t *demo, char *args_string) {
 }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
-static void cmd_open_location_csv(anjay_demo_t *demo, char *args_string) {
+static void cmd_open_location_csv(anjay_demo_t *demo, const char *args_string) {
     const anjay_dm_object_def_t **location_obj =
             demo_find_object(demo, DEMO_OID_LOCATION);
     if (!location_obj) {
@@ -164,7 +173,7 @@ static int add_server(anjay_demo_t *demo, const char *uri) {
     return 0;
 }
 
-static void cmd_add_server(anjay_demo_t *demo, char *args_string) {
+static void cmd_add_server(anjay_demo_t *demo, const char *args_string) {
     const char *uri = args_string;
     while (isspace(*uri)) {
         ++uri;
@@ -176,7 +185,7 @@ static void cmd_add_server(anjay_demo_t *demo, char *args_string) {
     demo_reload_servers(demo);
 }
 
-static void cmd_trim_servers(anjay_demo_t *demo, char *args_string) {
+static void cmd_trim_servers(anjay_demo_t *demo, const char *args_string) {
     size_t num_servers = count_servers(demo->connection_args);
     unsigned number;
     if (sscanf(args_string, "%u", &number) != 1 || number >= num_servers) {
@@ -190,13 +199,13 @@ static void cmd_trim_servers(anjay_demo_t *demo, char *args_string) {
     demo_reload_servers(demo);
 }
 
-static void cmd_socket_count(anjay_demo_t *demo, char *args_string) {
+static void cmd_socket_count(anjay_demo_t *demo, const char *args_string) {
     (void) args_string;
     printf("SOCKET_COUNT==%lu\n",
            (unsigned long) AVS_LIST_SIZE(anjay_get_sockets(demo->anjay)));
 }
 
-static void cmd_get_port(anjay_demo_t *demo, char *args_string) {
+static void cmd_get_port(anjay_demo_t *demo, const char *args_string) {
     int index;
     if (sscanf(args_string, "%d", &index) != 1) {
         demo_log(ERROR, "Invalid index: %s", args_string);
@@ -221,7 +230,7 @@ static void cmd_get_port(anjay_demo_t *demo, char *args_string) {
     printf("PORT==%s\n", port);
 }
 
-static void cmd_get_transport(anjay_demo_t *demo, char *args_string) {
+static void cmd_get_transport(anjay_demo_t *demo, const char *args_string) {
     int index;
     if (sscanf(args_string, "%d", &index) != 1) {
         demo_log(ERROR, "Invalid index: %s", args_string);
@@ -253,7 +262,8 @@ static void cmd_get_transport(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static void cmd_non_lwm2m_socket_count(anjay_demo_t *demo, char *args_string) {
+static void cmd_non_lwm2m_socket_count(anjay_demo_t *demo,
+                                       const char *args_string) {
     (void) args_string;
     AVS_LIST(const anjay_socket_entry_t) entry =
             anjay_get_socket_entries(demo->anjay);
@@ -266,7 +276,7 @@ static void cmd_non_lwm2m_socket_count(anjay_demo_t *demo, char *args_string) {
     printf("NON_LWM2M_SOCKET_COUNT==%lu\n", non_lwm2m_sockets);
 }
 
-static void cmd_enter_offline(anjay_demo_t *demo, char *args_string) {
+static void cmd_enter_offline(anjay_demo_t *demo, const char *args_string) {
     anjay_transport_set_t transport_set;
     if (!parse_transports(args_string, &transport_set)) {
         int result = anjay_transport_enter_offline(demo->anjay, transport_set);
@@ -274,7 +284,7 @@ static void cmd_enter_offline(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static void cmd_exit_offline(anjay_demo_t *demo, char *args_string) {
+static void cmd_exit_offline(anjay_demo_t *demo, const char *args_string) {
     anjay_transport_set_t transport_set;
     if (!parse_transports(args_string, &transport_set)) {
         int result = anjay_transport_exit_offline(demo->anjay, transport_set);
@@ -282,7 +292,7 @@ static void cmd_exit_offline(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static void cmd_notify(anjay_demo_t *demo, char *args_string) {
+static void cmd_notify(anjay_demo_t *demo, const char *args_string) {
     anjay_oid_t oid;
     anjay_iid_t iid;
     anjay_rid_t rid;
@@ -300,7 +310,7 @@ static void cmd_notify(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static void cmd_unregister_object(anjay_demo_t *demo, char *args_string) {
+static void cmd_unregister_object(anjay_demo_t *demo, const char *args_string) {
     int oid;
     if (sscanf(args_string, "%d", &oid) != 1 || oid < 0 || oid > UINT16_MAX) {
         demo_log(ERROR, "Invalid OID: %s", args_string);
@@ -322,7 +332,7 @@ static void cmd_unregister_object(anjay_demo_t *demo, char *args_string) {
     demo_log(ERROR, "No such object to unregister: %d", oid);
 }
 
-static void cmd_reregister_object(anjay_demo_t *demo, char *args_string) {
+static void cmd_reregister_object(anjay_demo_t *demo, const char *args_string) {
     int oid;
     if (sscanf(args_string, "%d", &oid) != 1 || oid < 0 || oid > UINT16_MAX) {
         demo_log(ERROR, "Invalid OID: %s", args_string);
@@ -409,7 +419,7 @@ static void dl_finished_new(anjay_t *anjay,
     demo_log(INFO, "download finished, result == %d", (int) status.result);
 }
 
-static void cmd_download(anjay_demo_t *demo, char *args_string) {
+static void cmd_download(anjay_demo_t *demo, const char *args_string) {
     char url[256];
     char target_file[256];
     char psk_identity[256] = "";
@@ -453,7 +463,7 @@ static void cmd_download(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static void cmd_download_blocks(anjay_demo_t *demo, char *args_string) {
+static void cmd_download_blocks_impl(anjay_demo_t *demo, char *args_string) {
     char url[256];
     char target_file[256];
     int offsets_offset;
@@ -540,8 +550,17 @@ parse_error:
     demo_download_user_data_destroy(user_data);
 }
 
+static void cmd_download_blocks(anjay_demo_t *demo, const char *args_string) {
+    char *args_string_copy = avs_strdup(args_string);
+    if (!args_string_copy) {
+        demo_log(ERROR, "out of memory");
+    }
+    cmd_download_blocks_impl(demo, args_string_copy);
+    avs_free(args_string_copy);
+}
+
 #ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
-static void cmd_set_attrs(anjay_demo_t *demo, char *args_string) {
+static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     char *path = (char *) avs_malloc(strlen(args_string) + 1);
     if (!path) {
         demo_log(ERROR, "Out of memory");
@@ -625,7 +644,7 @@ finish:
 }
 #endif // ANJAY_WITH_MODULE_ATTR_STORAGE
 
-static void cmd_disable_server(anjay_demo_t *demo, char *args_string) {
+static void cmd_disable_server(anjay_demo_t *demo, const char *args_string) {
     unsigned ssid;
     int timeout_s;
     if (sscanf(args_string, "%u %d", &ssid, &timeout_s) < 2
@@ -646,7 +665,7 @@ static void cmd_disable_server(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static void cmd_enable_server(anjay_demo_t *demo, char *args_string) {
+static void cmd_enable_server(anjay_demo_t *demo, const char *args_string) {
     anjay_ssid_t ssid = ANJAY_SSID_ANY;
     if (*args_string && parse_ssid(args_string, &ssid)) {
         demo_log(ERROR, "invalid Short Server ID: %s", args_string);
@@ -659,19 +678,22 @@ static void cmd_enable_server(anjay_demo_t *demo, char *args_string) {
     }
 }
 
-static void cmd_all_connections_failed(anjay_demo_t *demo, char *unused_args) {
+static void cmd_all_connections_failed(anjay_demo_t *demo,
+                                       const char *unused_args) {
     (void) unused_args;
     printf("ALL_CONNECTIONS_FAILED==%d\n",
            (int) anjay_all_connections_failed(demo->anjay));
 }
 
-static void cmd_schedule_update_on_exit(anjay_demo_t *demo, char *unused_args) {
+static void cmd_schedule_update_on_exit(anjay_demo_t *demo,
+                                        const char *unused_args) {
     (void) unused_args;
     demo->schedule_update_on_exit = true;
 }
 
 #ifdef ANJAY_WITH_OBSERVATION_STATUS
-static void cmd_observation_status(anjay_demo_t *demo, char *args_string) {
+static void cmd_observation_status(anjay_demo_t *demo,
+                                   const char *args_string) {
     anjay_oid_t oid;
     anjay_iid_t iid;
     anjay_rid_t rid;
@@ -692,7 +714,7 @@ static void cmd_observation_status(anjay_demo_t *demo, char *args_string) {
 }
 #endif // ANJAY_WITH_OBSERVATION_STATUS
 
-static void cmd_badc_write(anjay_demo_t *demo, char *args_string) {
+static void cmd_badc_write(anjay_demo_t *demo, const char *args_string) {
     anjay_iid_t iid;
     anjay_riid_t riid;
     int length;
@@ -705,7 +727,8 @@ static void cmd_badc_write(anjay_demo_t *demo, char *args_string) {
                                     iid, riid, &args_string[length]);
 }
 
-static void cmd_set_event_log_data(anjay_demo_t *demo, char *args_string) {
+static void cmd_set_event_log_data(anjay_demo_t *demo,
+                                   const char *args_string) {
     const anjay_dm_object_def_t **obj_def =
             demo_find_object(demo, DEMO_OID_EVENT_LOG);
     if (!obj_def) {
@@ -725,7 +748,8 @@ static void cmd_set_event_log_data(anjay_demo_t *demo, char *args_string) {
 }
 
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
-static void cmd_set_fw_update_result(anjay_demo_t *demo, char *args_string) {
+static void cmd_set_fw_update_result(anjay_demo_t *demo,
+                                     const char *args_string) {
     int result;
     if (sscanf(args_string, " %d", &result) != 1) {
         demo_log(ERROR, "Firmware Update result not specified");
@@ -736,18 +760,109 @@ static void cmd_set_fw_update_result(anjay_demo_t *demo, char *args_string) {
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 static void cmd_ongoing_registration_exists(anjay_demo_t *demo,
-                                            char *args_string) {
+                                            const char *args_string) {
     (void) args_string;
     printf("ONGOING_REGISTRATION==%s\n",
            anjay_ongoing_registration_exists(demo->anjay) ? "true" : "false");
 }
 
-static void cmd_help(anjay_demo_t *demo, char *args_string);
+#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
+static void cmd_temperature_add_instance(anjay_demo_t *demo,
+                                         const char *args_string) {
+    anjay_iid_t iid;
+    if (sscanf(args_string, " %" SCNu16, &iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    temperature_add_instance(demo->anjay, iid);
+}
+
+static void cmd_temperature_remove_instance(anjay_demo_t *demo,
+                                            const char *args_string) {
+    anjay_iid_t iid;
+    if (sscanf(args_string, " %" SCNu16, &iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    temperature_remove_instance(demo->anjay, iid);
+}
+
+static void cmd_accelerometer_add_instance(anjay_demo_t *demo,
+                                           const char *args_string) {
+    anjay_iid_t iid;
+    if (sscanf(args_string, " %" SCNu16, &iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    accelerometer_add_instance(demo->anjay, iid);
+}
+
+static void cmd_accelerometer_remove_instance(anjay_demo_t *demo,
+                                              const char *args_string) {
+    anjay_iid_t iid;
+    if (sscanf(args_string, " %" SCNu16, &iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    accelerometer_remove_instance(demo->anjay, iid);
+}
+
+static void cmd_push_button_add_instance(anjay_demo_t *demo,
+                                         const char *args_string) {
+    anjay_iid_t iid;
+    char application_type[40];
+    if (sscanf(args_string, " %" SCNu16 " %39s", &iid, application_type) < 2) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    anjay_ipso_button_instance_add(demo->anjay, iid, application_type);
+}
+
+static void cmd_push_button_remove_instance(anjay_demo_t *demo,
+                                            const char *args_string) {
+    anjay_iid_t iid;
+    if (sscanf(args_string, " %" SCNu16, &iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    anjay_ipso_button_instance_remove(demo->anjay, iid);
+}
+
+static void cmd_push_button_press(anjay_demo_t *demo, const char *args_string) {
+    anjay_iid_t iid;
+    if (sscanf(args_string, " %" SCNu16, &iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    anjay_ipso_button_update(demo->anjay, iid, true);
+}
+
+static void cmd_push_button_release(anjay_demo_t *demo,
+                                    const char *args_string) {
+    anjay_iid_t iid;
+    if (sscanf(args_string, " %" SCNu16, &iid) < 1) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    anjay_ipso_button_update(demo->anjay, iid, false);
+}
+
+#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
+
+static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
 struct cmd_handler_def {
     const char *cmd_name;
     size_t cmd_name_length;
-    void (*handler)(anjay_demo_t *, char *);
+    void (*handler)(anjay_demo_t *, const char *);
     const char *help_args;
     const char *help_descr;
 };
@@ -831,6 +946,36 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("ongoing-registration-exists", "",
                 cmd_ongoing_registration_exists,
                 "Display information about ongoing registrations"),
+#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
+    CMD_HANDLER("temperature-add-instance", "IID",
+                cmd_temperature_add_instance,
+                "Adds a new instance of the fake Temperature object. Maximal "
+                "IID of such instance is 16."),
+    CMD_HANDLER("temperature-remove-instance", "IID",
+                cmd_temperature_remove_instance,
+                "Removes instance of the fake Temperature object"),
+    CMD_HANDLER("accelerometer-add-instance", "IID",
+                cmd_accelerometer_add_instance,
+                "Adds a new instance of the fake Accelerometer object. Maximal "
+                "IID of such instance is 16"),
+    CMD_HANDLER("accelerometer-remove-instance", "IID",
+                cmd_accelerometer_remove_instance,
+                "Removes instance of the fake Accelerometer object"),
+    CMD_HANDLER("push-button-add-instance", "IID application_type",
+                cmd_push_button_add_instance,
+                "Adds new instance of the fake Push Button object. Maximal "
+                "IID of such instance is 16. The initial value of the \"Application type\" "
+                "string will be set to application_type."),
+    CMD_HANDLER("push-button-remove-instance", "IID",
+                cmd_push_button_remove_instance,
+                "Removes the selected instance of the fake Push Button object"),
+    CMD_HANDLER("push-button-press", "IID",
+                cmd_push_button_press,
+                "Presses the selected instance of the fake Push Button object"),
+    CMD_HANDLER("push-button-release", "IID",
+                cmd_push_button_release,
+                "Releases the selected instance of the fake Push Button object."),
+#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };
@@ -877,7 +1022,7 @@ static void print_with_indent(const char *text) {
     }
 }
 
-static void cmd_help(anjay_demo_t *demo, char *args_string) {
+static void cmd_help(anjay_demo_t *demo, const char *args_string) {
     (void) demo;
     (void) args_string;
 
@@ -892,15 +1037,22 @@ static void cmd_help(anjay_demo_t *demo, char *args_string) {
     puts("---");
 }
 
-static void handle_command(anjay_demo_t *demo, char *buf) {
-    demo_log(INFO, "command: %s", buf);
+static void handle_command(avs_sched_t *sched, const void *invocation_) {
+    (void) sched;
+    const demo_command_invocation_t *invocation =
+            (const demo_command_invocation_t *) invocation_;
+    if (invocation->cmd[0]) {
+        demo_log(INFO, "command: %s", invocation->cmd);
 
-    for (size_t idx = 0; idx < AVS_ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
-        const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[idx];
+        for (size_t idx = 0; idx < AVS_ARRAY_SIZE(COMMAND_HANDLERS); ++idx) {
+            const struct cmd_handler_def *cmd = &COMMAND_HANDLERS[idx];
 
-        if (strncmp(buf, cmd->cmd_name, cmd->cmd_name_length) == 0) {
-            cmd->handler(demo, buf + cmd->cmd_name_length);
-            break;
+            if (strncmp(invocation->cmd, cmd->cmd_name, cmd->cmd_name_length)
+                    == 0) {
+                cmd->handler(invocation->demo,
+                             invocation->cmd + cmd->cmd_name_length);
+                break;
+            }
         }
     }
 
@@ -908,21 +1060,9 @@ static void handle_command(anjay_demo_t *demo, char *buf) {
     fflush(stdout);
 }
 
-void demo_command_dispatch(short revents, void *demo_) {
-    anjay_demo_t *demo = (anjay_demo_t *) demo_;
-    if (revents & DEMO_POLLHUP) {
-        demo->running = false;
-    }
-    if (revents & DEMO_POLLIN) {
-        static char buf[500] = "";
-
-        if (fgets(buf, sizeof(buf), stdin) && buf[0]) {
-            buf[strlen(buf) - 1] = 0;
-            handle_command(demo, buf);
-        }
-
-        if (feof(stdin)) {
-            demo->running = false;
-        }
-    }
+void demo_command_dispatch(const demo_command_invocation_t *invocation) {
+    AVS_SCHED_NOW(anjay_get_scheduler(invocation->demo->anjay), NULL,
+                  handle_command, invocation,
+                  offsetof(demo_command_invocation_t, cmd)
+                          + strlen(invocation->cmd) + 1);
 }

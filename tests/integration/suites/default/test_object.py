@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
+import time
 
 from framework.lwm2m.tlv import TLVType
 from framework.lwm2m_test import *
@@ -332,6 +333,10 @@ class UpdateResourceInstanceTest(TestObject.TestCase):
 
 class WriteNonexistent(TestObject.TestCase):
     def runTest(self):
+        # The Test object contains a Timestamp resource, so sleep to the beginning of a second to
+        # maximize the probability that we won't cross that between the two reads
+        time.sleep(1.0 - (time.time() % 1.0))
+
         # Read the state of the object
         req = Lwm2mRead('/%d' % (OID.Test,))
         self.serv.send(req)

@@ -217,6 +217,7 @@ class ResetResponseToFirstRequestBlock(ClientBlockRequest.Test()):
         req = self.block_recv_next(expected_seq_num=0)
         self.serv.send(Lwm2mReset.matching(req)())
         # client should abort
+        self.wait_until_socket_count(0, timeout_s=5)
 
 
 class ResetResponseToIntermediateRequestBlock(ClientBlockRequest.Test()):
@@ -229,6 +230,7 @@ class ResetResponseToIntermediateRequestBlock(ClientBlockRequest.Test()):
         req = self.block_recv_next(expected_seq_num=(self.expected_num_blocks // 2))
         self.serv.send(Lwm2mReset.matching(req)())
         # client should abort
+        self.wait_until_socket_count(0, timeout_s=5)
 
 
 class ResetResponseToLastRequestBlock(ClientBlockRequest.Test()):
@@ -241,6 +243,7 @@ class ResetResponseToLastRequestBlock(ClientBlockRequest.Test()):
         req = self.block_recv_next(expected_seq_num=(self.expected_num_blocks - 1))
         self.serv.send(Lwm2mReset.matching(req)())
         # client should abort
+        self.wait_until_socket_count(0, timeout_s=5)
 
 
 class CoapErrorResponseToFirstRequestBlock(ClientBlockRequest.Test()):

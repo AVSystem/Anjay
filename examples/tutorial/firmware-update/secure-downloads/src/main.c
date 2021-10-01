@@ -4,56 +4,23 @@
 #include <anjay/server.h>
 #include <avsystem/commons/avs_log.h>
 
-#include <poll.h>
-
 #include "firmware_update.h"
 #include "time_object.h"
 
-int main_loop(anjay_t *anjay, const anjay_dm_object_def_t **time_object) {
-    while (true) {
-        // Obtain all network data sources
-        AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
+typedef struct {
+    anjay_t *anjay;
+    const anjay_dm_object_def_t **time_object;
+} notify_job_args_t;
 
-        // Prepare to poll() on them
-        size_t numsocks = AVS_LIST_SIZE(sockets);
-        struct pollfd pollfds[numsocks];
-        size_t i = 0;
-        AVS_LIST(avs_net_socket_t *const) sock;
-        AVS_LIST_FOREACH(sock, sockets) {
-            pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
-            pollfds[i].events = POLLIN;
-            pollfds[i].revents = 0;
-            ++i;
-        }
+// Periodically notifies the library about Resource value changes
+static void notify_job(avs_sched_t *sched, const void *args_ptr) {
+    const notify_job_args_t *args = (const notify_job_args_t *) args_ptr;
 
-        const int max_wait_time_ms = 1000;
-        // Determine the expected time to the next job in milliseconds.
-        // If there is no job we will wait till something arrives for
-        // at most 1 second (i.e. max_wait_time_ms).
-        int wait_ms =
-                anjay_sched_calculate_wait_time_ms(anjay, max_wait_time_ms);
+    time_object_notify(args->anjay, args->time_object);
 
-        // Wait for the events if necessary, and handle them.
-        if (poll(pollfds, numsocks, wait_ms) > 0) {
-            int socket_id = 0;
-            AVS_LIST(avs_net_socket_t *const) socket = NULL;
-            AVS_LIST_FOREACH(socket, sockets) {
-                if (pollfds[socket_id].revents) {
-                    if (anjay_serve(anjay, *socket)) {
-                        avs_log(tutorial, ERROR, "anjay_serve failed");
-                    }
-                }
-                ++socket_id;
-            }
-        }
-
-        // Notify the library about a Resource value change
-        time_object_notify(anjay, time_object);
-
-        // Finally run the scheduler
-        anjay_sched_run(anjay);
-    }
-    return 0;
+    // Schedule run of the same function after 1 second
+    AVS_SCHED_DELAYED(sched, NULL, avs_time_duration_from_scalar(1, AVS_TIME_S),
+                      notify_job, args, sizeof(*args));
 }
 
 // Installs Security Object and adds and instance of it.
@@ -158,7 +125,15 @@ int main(int argc, char *argv[]) {
     }
 
     if (!result) {
-        result = main_loop(anjay, time_object);
+        // Run notify_job the first time;
+        // this will schedule periodic calls to itself via the scheduler
+        notify_job(anjay_get_scheduler(anjay), &(const notify_job_args_t) {
+                                                   .anjay = anjay,
+                                                   .time_object = time_object
+                                               });
+
+        result = anjay_event_loop_run(
+                anjay, avs_time_duration_from_scalar(1, AVS_TIME_S));
     }
 
     anjay_delete(anjay);

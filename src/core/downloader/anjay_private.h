@@ -29,24 +29,20 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 #define dl_log(...) _anjay_log(downloader, __VA_ARGS__)
 
 typedef struct {
-    avs_net_socket_t *(*get_socket)(anjay_downloader_t *dl,
-                                    anjay_download_ctx_t *ctx);
-    anjay_socket_transport_t (*get_socket_transport)(anjay_downloader_t *dl,
-                                                     anjay_download_ctx_t *ctx);
-    void (*handle_packet)(anjay_downloader_t *dl,
-                          AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    avs_net_socket_t *(*get_socket)(anjay_download_ctx_t *ctx);
+    anjay_socket_transport_t (*get_socket_transport)(anjay_download_ctx_t *ctx);
+    void (*handle_packet)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
     void (*cleanup)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
-    void (*suspend)(anjay_downloader_t *dl, anjay_download_ctx_t *ctx);
-    avs_error_t (*reconnect)(anjay_downloader_t *dl,
-                             AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
-    avs_error_t (*set_next_block_offset)(anjay_downloader_t *dl,
-                                         anjay_download_ctx_t *ctx,
+    void (*suspend)(anjay_download_ctx_t *ctx);
+    avs_error_t (*reconnect)(AVS_LIST(anjay_download_ctx_t) *ctx_ptr);
+    avs_error_t (*set_next_block_offset)(anjay_download_ctx_t *ctx,
                                          size_t next_block_offset);
 } anjay_download_ctx_vtable_t;
 
 typedef struct {
     const anjay_download_ctx_vtable_t *vtable;
 
+    anjay_downloader_t *dl;
     uintptr_t id;
     avs_sched_handle_t reconnect_job_handle;
 
@@ -64,13 +60,11 @@ _anjay_downloader_get_anjay(anjay_downloader_t *dl) {
 AVS_LIST(anjay_download_ctx_t) *
 _anjay_downloader_find_ctx_ptr_by_id(anjay_downloader_t *dl, uintptr_t id);
 
-void _anjay_downloader_abort_transfer(anjay_downloader_t *dl,
-                                      AVS_LIST(anjay_download_ctx_t) *ctx,
+void _anjay_downloader_abort_transfer(AVS_LIST(anjay_download_ctx_t) *ctx,
                                       anjay_download_status_t status);
 
 avs_error_t
-_anjay_downloader_call_on_next_block(anjay_downloader_t *dl,
-                                     anjay_download_ctx_common_t *ctx,
+_anjay_downloader_call_on_next_block(anjay_download_ctx_common_t *ctx,
                                      const uint8_t *data,
                                      size_t data_size,
                                      const anjay_etag_t *etag);

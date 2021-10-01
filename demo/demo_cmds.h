@@ -17,6 +17,11 @@
 #ifndef DEMO_CMDS_H
 #define DEMO_CMDS_H
 
-void demo_command_dispatch(short revents, void *demo);
+typedef struct {
+    struct anjay_demo_struct *demo;
+    char cmd[];
+} demo_command_invocation_t;
+
+void demo_command_dispatch(const demo_command_invocation_t *invocation);
 
 #endif

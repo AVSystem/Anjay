@@ -51,14 +51,11 @@ void _anjay_server_cleanup(anjay_server_info_t *server) {
     _anjay_registration_info_cleanup(&server->registration_info);
 }
 
-anjay_servers_t *_anjay_servers_create(void) {
-    return (anjay_servers_t *) avs_calloc(1, sizeof(anjay_servers_t));
-}
-
 #ifndef ANJAY_WITHOUT_DEREGISTER
-void _anjay_servers_internal_deregister(anjay_servers_t *servers) {
+void _anjay_servers_internal_deregister(
+        AVS_LIST(anjay_server_info_t) *servers) {
     AVS_LIST(anjay_server_info_t) server;
-    AVS_LIST_FOREACH(server, servers->servers) {
+    AVS_LIST_FOREACH(server, *servers) {
         if (_anjay_server_active(server) && server->ssid != ANJAY_SSID_BOOTSTRAP
                 && !_anjay_server_registration_expired(server)) {
             _anjay_server_deregister(server);
@@ -67,37 +64,30 @@ void _anjay_servers_internal_deregister(anjay_servers_t *servers) {
 }
 #endif // ANJAY_WITHOUT_DEREGISTER
 
-void _anjay_servers_internal_cleanup(anjay_servers_t *servers) {
+void _anjay_servers_internal_cleanup(AVS_LIST(anjay_server_info_t) *servers) {
     anjay_log(TRACE, _("cleaning up ") "%lu" _(" servers"),
-              (unsigned long) AVS_LIST_SIZE(servers->servers));
+              (unsigned long) AVS_LIST_SIZE(*servers));
 
-    AVS_LIST_CLEAR(&servers->servers) {
-        _anjay_server_cleanup(servers->servers);
+    AVS_LIST_CLEAR(servers) {
+        _anjay_server_cleanup(*servers);
     }
-    AVS_LIST_CLEAR(&servers->public_sockets);
 }
 
 #ifndef ANJAY_WITHOUT_DEREGISTER
 void _anjay_servers_deregister(anjay_unlocked_t *anjay) {
-    if (anjay->servers) {
-        _anjay_servers_internal_deregister(anjay->servers);
-    }
+    _anjay_servers_internal_deregister(&anjay->servers);
 }
 #endif // ANJAY_WITHOUT_DEREGISTER
 
 void _anjay_servers_cleanup(anjay_unlocked_t *anjay) {
-    if (anjay->servers) {
-        _anjay_servers_internal_cleanup(anjay->servers);
-        avs_free(anjay->servers);
-        anjay->servers = NULL;
-    }
+    _anjay_servers_internal_cleanup(&anjay->servers);
+    AVS_LIST_CLEAR(&anjay->cached_public_sockets);
 }
 
 void _anjay_servers_cleanup_inactive(anjay_unlocked_t *anjay) {
     AVS_LIST(anjay_server_info_t) *server_ptr;
     AVS_LIST(anjay_server_info_t) helper;
-    AVS_LIST_DELETABLE_FOREACH_PTR(server_ptr, helper,
-                                   &anjay->servers->servers) {
+    AVS_LIST_DELETABLE_FOREACH_PTR(server_ptr, helper, &anjay->servers) {
         if (!_anjay_server_active(*server_ptr)) {
             _anjay_server_cleanup(*server_ptr);
             AVS_LIST_DELETE(server_ptr);
@@ -150,15 +140,15 @@ static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
 }
 
 AVS_LIST(const anjay_socket_entry_t)
-_anjay_get_socket_entries_unlocked(anjay_unlocked_t *anjay) {
-    AVS_LIST_CLEAR(&anjay->servers->public_sockets);
-    AVS_LIST(anjay_socket_entry_t) *tail_ptr = &anjay->servers->public_sockets;
+_anjay_collect_socket_entries(anjay_unlocked_t *anjay) {
+    AVS_LIST(anjay_socket_entry_t) result = NULL;
+    AVS_LIST(anjay_socket_entry_t) *tail_ptr = &result;
 
     // Note that there is at most one SMS socket (as the modem connection is
     // common to all servers) so "sms_active" and "sms_queue_mode" are common
     // for all of them.
     anjay_connection_ref_t ref;
-    AVS_LIST_FOREACH(ref.server, anjay->servers->servers) {
+    AVS_LIST_FOREACH(ref.server, anjay->servers) {
         if (!_anjay_server_active(ref.server)) {
             continue;
         }
@@ -184,22 +174,25 @@ _anjay_get_socket_entries_unlocked(anjay_unlocked_t *anjay) {
 #ifdef ANJAY_WITH_DOWNLOADER
     _anjay_downloader_get_sockets(&anjay->downloader, tail_ptr);
 #endif // ANJAY_WITH_DOWNLOADER
-    return anjay->servers->public_sockets;
+    return result;
 }
 
 AVS_LIST(const anjay_socket_entry_t)
 anjay_get_socket_entries(anjay_t *anjay_locked) {
     AVS_LIST(const anjay_socket_entry_t) result = NULL;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    result = _anjay_get_socket_entries_unlocked(anjay);
+    AVS_LIST_CLEAR(&anjay->cached_public_sockets);
+    anjay->cached_public_sockets = _anjay_collect_socket_entries(anjay);
+    result = anjay->cached_public_sockets;
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
 
 AVS_LIST(anjay_server_info_t) *
-_anjay_servers_find_insert_ptr(anjay_servers_t *servers, anjay_ssid_t ssid) {
+_anjay_servers_find_insert_ptr(AVS_LIST(anjay_server_info_t) *servers,
+                               anjay_ssid_t ssid) {
     AVS_LIST(anjay_server_info_t) *it;
-    AVS_LIST_FOREACH_PTR(it, &servers->servers) {
+    AVS_LIST_FOREACH_PTR(it, servers) {
         if ((*it)->ssid >= ssid) {
             return it;
         }
@@ -207,8 +200,9 @@ _anjay_servers_find_insert_ptr(anjay_servers_t *servers, anjay_ssid_t ssid) {
     return it;
 }
 
-AVS_LIST(anjay_server_info_t) *_anjay_servers_find_ptr(anjay_servers_t *servers,
-                                                       anjay_ssid_t ssid) {
+AVS_LIST(anjay_server_info_t) *
+_anjay_servers_find_ptr(AVS_LIST(anjay_server_info_t) *servers,
+                        anjay_ssid_t ssid) {
     AVS_LIST(anjay_server_info_t) *ptr =
             _anjay_servers_find_insert_ptr(servers, ssid);
     if (*ptr && (*ptr)->ssid == ssid) {
@@ -255,7 +249,7 @@ int _anjay_servers_foreach_ssid(anjay_unlocked_t *anjay,
                                 anjay_servers_foreach_ssid_handler_t *handler,
                                 void *data) {
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+    AVS_LIST_FOREACH(it, anjay->servers) {
         int result = handler(anjay, it->ssid, data);
         if (result == ANJAY_FOREACH_BREAK) {
             anjay_log(DEBUG, _("servers_foreach_ssid: break on ") "%u",
@@ -277,7 +271,7 @@ int _anjay_servers_foreach_active(anjay_unlocked_t *anjay,
                                   anjay_servers_foreach_handler_t *handler,
                                   void *data) {
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+    AVS_LIST_FOREACH(it, anjay->servers) {
         if (!_anjay_server_active(it)) {
             continue;
         }

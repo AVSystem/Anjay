@@ -22,7 +22,7 @@
 
 #include "pybind11_interop.hpp"
 
-#include <mbedtls/config.h>
+#include <mbedtls/version.h>
 
 using namespace std;
 

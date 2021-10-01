@@ -20,12 +20,13 @@
 
 #include "../demo.h"
 #include "../demo_utils.h"
-#include "../iosched.h"
 #include "../objects.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <pthread.h>
 
 #include <avsystem/commons/avs_utils.h>
 
@@ -61,33 +62,22 @@ typedef struct {
 } ip_ping_conf_t;
 
 typedef struct {
-    ip_ping_state_t state;
-    unsigned int success_count;
-    unsigned int error_count;
-    unsigned int avg_response_time;
-    unsigned int min_response_time;
-    unsigned int max_response_time;
-    unsigned int response_time_stdev_us;
+    volatile atomic_int state_;
+    volatile atomic_uint success_count_;
+    volatile atomic_uint error_count_;
+    volatile atomic_uint avg_response_time_;
+    volatile atomic_uint min_response_time_;
+    volatile atomic_uint max_response_time_;
+    volatile atomic_uint response_time_stdev_us_;
 } ip_ping_stats_t;
-
-typedef enum {
-    IP_PING_HANDLER_HEADER,
-    IP_PING_HANDLER_SKIP1,
-    IP_PING_HANDLER_SKIP2,
-    IP_PING_HANDLER_COUNTS,
-    IP_PING_HANDLER_RTT
-} ip_ping_handler_state_t;
 
 typedef struct {
     FILE *ping_pipe;
-    const iosched_entry_t *iosched_entry;
-    ip_ping_handler_state_t state;
     anjay_t *anjay;
 } ip_ping_command_state_t;
 
 typedef struct {
     const anjay_dm_object_def_t *def;
-    iosched_t *iosched;
     ip_ping_conf_t configuration;
     ip_ping_conf_t saved_configuration;
     ip_ping_stats_t stats;
@@ -158,19 +148,20 @@ static int ip_ping_resource_read(anjay_t *anjay,
     case IP_PING_DSCP:
         return anjay_ret_i32(ctx, ping->configuration.dscp);
     case IP_PING_STATE:
-        return anjay_ret_i32(ctx, (int32_t) ping->stats.state);
+        return anjay_ret_i32(ctx, (int32_t) atomic_load(&ping->stats.state_));
     case IP_PING_SUCCESS_COUNT:
-        return anjay_ret_i64(ctx, ping->stats.success_count);
+        return anjay_ret_i64(ctx, atomic_load(&ping->stats.success_count_));
     case IP_PING_ERROR_COUNT:
-        return anjay_ret_i64(ctx, ping->stats.error_count);
+        return anjay_ret_i64(ctx, atomic_load(&ping->stats.error_count_));
     case IP_PING_AVG_TIME_MS:
-        return anjay_ret_i64(ctx, ping->stats.avg_response_time);
+        return anjay_ret_i64(ctx, atomic_load(&ping->stats.avg_response_time_));
     case IP_PING_MIN_TIME_MS:
-        return anjay_ret_i64(ctx, ping->stats.min_response_time);
+        return anjay_ret_i64(ctx, atomic_load(&ping->stats.min_response_time_));
     case IP_PING_MAX_TIME_MS:
-        return anjay_ret_i64(ctx, ping->stats.max_response_time);
+        return anjay_ret_i64(ctx, atomic_load(&ping->stats.max_response_time_));
     case IP_PING_TIME_STDEV_US:
-        return anjay_ret_i64(ctx, ping->stats.response_time_stdev_us);
+        return anjay_ret_i64(ctx,
+                             atomic_load(&ping->stats.response_time_stdev_us_));
     default:
         AVS_UNREACHABLE(
                 "Read handler called on unknown or non-readable resource");
@@ -179,12 +170,17 @@ static int ip_ping_resource_read(anjay_t *anjay,
 }
 
 static int ip_ping_reset_diagnostic_state(anjay_t *anjay, ip_ping_t *ipping) {
-    if (ipping->stats.state == IP_PING_STATE_IN_PROGRESS) {
+    int state = IP_PING_STATE_COMPLETE;
+    bool reset = false;
+    while (!(reset = atomic_compare_exchange_weak(&ipping->stats.state_, &state,
+                                                  IP_PING_STATE_NONE))
+           && state != IP_PING_STATE_NONE && state != IP_PING_STATE_IN_PROGRESS)
+        ;
+    if (reset) {
+        anjay_notify_changed(anjay, ipping->def->oid, 0, IP_PING_STATE);
+    } else if (state == IP_PING_STATE_IN_PROGRESS) {
         demo_log(ERROR, "Canceling a diagnostic in progress is not supported");
         return ANJAY_ERR_INTERNAL;
-    } else if (ipping->stats.state != IP_PING_STATE_NONE) {
-        ipping->stats.state = IP_PING_STATE_NONE;
-        anjay_notify_changed(anjay, ipping->def->oid, 0, IP_PING_STATE);
     }
     return 0;
 }
@@ -259,16 +255,16 @@ static void update_response_times(ip_ping_t *ping,
                                   unsigned max,
                                   unsigned avg,
                                   unsigned mdev_us) {
-    ping->stats.min_response_time = min;
+    atomic_store(&ping->stats.min_response_time_, min);
     anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
                          IP_PING_MIN_TIME_MS);
-    ping->stats.avg_response_time = max;
+    atomic_store(&ping->stats.avg_response_time_, max);
     anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
                          IP_PING_AVG_TIME_MS);
-    ping->stats.max_response_time = avg;
+    atomic_store(&ping->stats.max_response_time_, avg);
     anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
                          IP_PING_MAX_TIME_MS);
-    ping->stats.response_time_stdev_us = mdev_us;
+    atomic_store(&ping->stats.response_time_stdev_us_, mdev_us);
     anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
                          IP_PING_TIME_STDEV_US);
 }
@@ -278,82 +274,85 @@ static void ip_ping_command_state_cleanup(ip_ping_t *ping) {
         pclose(ping->command_state.ping_pipe);
         ping->command_state.ping_pipe = NULL;
     }
-    if (ping->command_state.iosched_entry) {
-        iosched_entry_remove(ping->iosched, ping->command_state.iosched_entry);
-        ping->command_state.iosched_entry = NULL;
-    }
 }
 
-static void ip_ping_handler(short revents, void *ping_) {
-    (void) revents;
+static void *ip_ping_thread(void *ping_) {
     ip_ping_t *ping = (ip_ping_t *) ping_;
     char line[512];
-    ip_ping_handler_state_t last_state;
 
-    if (!fgets(line, sizeof(line), ping->command_state.ping_pipe)) {
-        goto finish;
-    }
+    typedef enum {
+        IP_PING_HANDLER_HEADER,
+        IP_PING_HANDLER_SKIP1,
+        IP_PING_HANDLER_SKIP2,
+        IP_PING_HANDLER_COUNTS,
+        IP_PING_HANDLER_RTT
+    } ip_ping_handler_state_t;
 
-    last_state = ping->command_state.state;
-    ping->command_state.state =
-            (ip_ping_handler_state_t) (ping->command_state.state + 1);
-    switch (last_state) {
-    case IP_PING_HANDLER_HEADER:
-        if (strstr(line, "unknown")) {
-            demo_log(ERROR, "Unknown host: %s", ping->configuration.hostname);
-            ping->stats.state = IP_PING_STATE_ERROR_HOST_NAME;
-            goto finish;
+    ip_ping_handler_state_t state = IP_PING_HANDLER_HEADER;
+
+    while (fgets(line, sizeof(line), ping->command_state.ping_pipe)) {
+        switch (state) {
+        case IP_PING_HANDLER_HEADER:
+            if (strstr(line, "unknown")) {
+                demo_log(ERROR, "Unknown host: %s",
+                         ping->configuration.hostname);
+                atomic_store(&ping->stats.state_,
+                             IP_PING_STATE_ERROR_HOST_NAME);
+                goto finish;
+            }
+            break;
+        case IP_PING_HANDLER_SKIP1:
+        case IP_PING_HANDLER_SKIP2:
+        default:
+            break;
+        case IP_PING_HANDLER_COUNTS: {
+            unsigned total, success;
+            if (sscanf(line, "%u %*s %*s %u", &total, &success) != 2) {
+                goto finish;
+            }
+            atomic_store(&ping->stats.success_count_, success);
+            anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
+                                 IP_PING_SUCCESS_COUNT);
+            atomic_store(&ping->stats.error_count_, total - success);
+            anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
+                                 IP_PING_ERROR_COUNT);
+            if (success == 0) {
+                atomic_store(&ping->stats.state_, IP_PING_STATE_COMPLETE);
+                update_response_times(ping, 0, 0, 0, 0);
+                goto finish;
+            }
+            break;
         }
-        return;
-    case IP_PING_HANDLER_SKIP1:
-    case IP_PING_HANDLER_SKIP2:
-    default:
-        return;
-    case IP_PING_HANDLER_COUNTS: {
-        unsigned total, success;
-        if (sscanf(line, "%u %*s %*s %u", &total, &success) != 2) {
-            goto finish;
+        case IP_PING_HANDLER_RTT: {
+            const char *ptr = strstr(line, "=");
+            if (!ptr) {
+                demo_log(ERROR, "Invalid output format of ping.");
+                goto finish;
+            }
+            ptr += 2;
+            float min, avg, max, mdev;
+            if (sscanf(ptr, "%f/%f/%f/%f", &min, &avg, &max, &mdev) != 4) {
+                goto finish;
+            }
+            atomic_store(&ping->stats.state_, IP_PING_STATE_COMPLETE);
+            update_response_times(ping,
+                                  (unsigned) min,
+                                  (unsigned) avg,
+                                  (unsigned) max,
+                                  (unsigned) (mdev * 1000.0f));
         }
-        ping->stats.success_count = success;
-        anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
-                             IP_PING_SUCCESS_COUNT);
-        ping->stats.error_count = total - success;
-        anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
-                             IP_PING_ERROR_COUNT);
-        if (success == 0) {
-            ping->stats.state = IP_PING_STATE_COMPLETE;
-            update_response_times(ping, 0, 0, 0, 0);
-            goto finish;
         }
-        return;
-    }
-    case IP_PING_HANDLER_RTT: {
-        const char *ptr = strstr(line, "=");
-        if (!ptr) {
-            demo_log(ERROR, "Invalid output format of ping.");
-            goto finish;
-        }
-        ptr += 2;
-        float min, avg, max, mdev;
-        if (sscanf(ptr, "%f/%f/%f/%f", &min, &avg, &max, &mdev) != 4) {
-            goto finish;
-        }
-        ping->stats.state = IP_PING_STATE_COMPLETE;
-        update_response_times(ping,
-                              (unsigned) min,
-                              (unsigned) avg,
-                              (unsigned) max,
-                              (unsigned) (mdev * 1000.0f));
-    }
+        state = (ip_ping_handler_state_t) (state + 1);
     }
 
 finish:
     ip_ping_command_state_cleanup(ping);
-    if (ping->stats.state == IP_PING_STATE_IN_PROGRESS) {
-        ping->stats.state = IP_PING_STATE_ERROR_INTERNAL;
-    }
+    atomic_compare_exchange_strong(
+            &ping->stats.state_, &(unsigned int) { IP_PING_STATE_IN_PROGRESS },
+            IP_PING_STATE_ERROR_INTERNAL);
     anjay_notify_changed(ping->command_state.anjay, ping->def->oid, 0,
                          IP_PING_STATE);
+    return NULL;
 }
 
 static ip_ping_state_t start_ip_ping(anjay_t *anjay, ip_ping_t *ping) {
@@ -385,18 +384,15 @@ static ip_ping_state_t start_ip_ping(anjay_t *anjay, ip_ping_t *ping) {
         return IP_PING_STATE_ERROR_INTERNAL;
     }
 
-    ping->command_state.iosched_entry = iosched_poll_entry_new(
-            ping->iosched,
-            &(const int) { fileno(ping->command_state.ping_pipe) }, DEMO_POLLIN,
-            ip_ping_handler, ping, NULL);
-    if (!ping->command_state.iosched_entry) {
+    ping->command_state.anjay = anjay;
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, ip_ping_thread, NULL)) {
         pclose(ping->command_state.ping_pipe);
         ping->command_state.ping_pipe = NULL;
         return IP_PING_STATE_ERROR_INTERNAL;
     }
 
-    ping->command_state.state = IP_PING_HANDLER_HEADER;
-    ping->command_state.anjay = anjay;
+    pthread_detach(thread);
     return IP_PING_STATE_IN_PROGRESS;
 }
 
@@ -414,8 +410,11 @@ static int ip_ping_resource_execute(anjay_t *anjay,
     if ((result = ip_ping_reset_diagnostic_state(anjay, ping))) {
         return result;
     }
-    ping->stats.state = start_ip_ping(anjay, ping);
-    anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, IP_PING_STATE);
+    ip_ping_state_t state = start_ip_ping(anjay, ping);
+    if (atomic_compare_exchange_strong(&ping->stats.state_,
+                                       &(int) { IP_PING_STATE_NONE }, state)) {
+        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, IP_PING_STATE);
+    }
     return 0;
 }
 
@@ -452,14 +451,13 @@ static const anjay_dm_object_def_t IP_PING = {
     }
 };
 
-const anjay_dm_object_def_t **ip_ping_object_create(iosched_t *iosched) {
+const anjay_dm_object_def_t **ip_ping_object_create(void) {
     ip_ping_t *repr = (ip_ping_t *) avs_calloc(1, sizeof(ip_ping_t));
     if (!repr) {
         return NULL;
     }
 
     repr->def = &IP_PING;
-    repr->iosched = iosched;
 
     return &repr->def;
 }

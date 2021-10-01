@@ -40,7 +40,14 @@ implementation of the networking API:
    :glob:
    :titlesonly:
 
-   NetworkingAPI/NetworkingAPI*
+   NetworkingAPI/NetworkingAPI-Minimal
+   NetworkingAPI/NetworkingAPI-RemoteHostPort
+   NetworkingAPI/NetworkingAPI-Bind
+   NetworkingAPI/NetworkingAPI-ShutdownRemoteHostname
+   NetworkingAPI/NetworkingAPI-Stats
+   NetworkingAPI/NetworkingAPI-IpStickiness
+   NetworkingAPI/NetworkingAPI-EventLoopSupport
+   NetworkingAPI/NetworkingAPI-OtherFeatures
 
 
 List of functions to implement

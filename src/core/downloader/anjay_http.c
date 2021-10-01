@@ -114,10 +114,10 @@ static inline bool etag_matches(const anjay_etag_t *etag, const char *text) {
 }
 
 static void
-handle_http_packet_with_locked_buffer(anjay_unlocked_t *anjay,
-                                      AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
+handle_http_packet_with_locked_buffer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr,
                                       uint8_t *buffer) {
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
     bool nonblock_read_ready;
     do {
         size_t bytes_read;
@@ -127,9 +127,8 @@ handle_http_packet_with_locked_buffer(anjay_unlocked_t *anjay,
                 avs_stream_read(ctx->stream, &bytes_read, &message_finished,
                                 buffer, anjay->in_shared_buffer->capacity);
         if (avs_is_err(err)) {
-            _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
-                                             _anjay_download_status_failed(
-                                                     err));
+            _anjay_downloader_abort_transfer(
+                    ctx_ptr, _anjay_download_status_failed(err));
             return;
         }
         if (bytes_read) {
@@ -141,12 +140,11 @@ handle_http_packet_with_locked_buffer(anjay_unlocked_t *anjay,
                 assert(bytes_read >= bytes_to_write);
                 size_t original_offset = ctx->bytes_written;
                 if (avs_is_err((err = _anjay_downloader_call_on_next_block(
-                                        &anjay->downloader, &ctx->common,
+                                        &ctx->common,
                                         &buffer[bytes_read - bytes_to_write],
                                         bytes_to_write, ctx->etag)))) {
                     _anjay_downloader_abort_transfer(
-                            &anjay->downloader, ctx_ptr,
-                            _anjay_download_status_failed(err));
+                            ctx_ptr, _anjay_download_status_failed(err));
                     return;
                 }
                 if (ctx->bytes_written == original_offset) {
@@ -157,7 +155,7 @@ handle_http_packet_with_locked_buffer(anjay_unlocked_t *anjay,
         if (message_finished) {
             dl_log(INFO, _("HTTP transfer id = ") "%" PRIuPTR _(" finished"),
                    ctx->common.id);
-            _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
+            _anjay_downloader_abort_transfer(ctx_ptr,
                                              _anjay_download_status_success());
             return;
         }
@@ -169,33 +167,32 @@ handle_http_packet_with_locked_buffer(anjay_unlocked_t *anjay,
     (void) result;
 }
 
-static void handle_http_packet(anjay_downloader_t *dl,
-                               AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
-    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
+static void handle_http_packet(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
     uint8_t *buffer = avs_shared_buffer_acquire(anjay->in_shared_buffer);
     assert(buffer);
-    handle_http_packet_with_locked_buffer(anjay, ctx_ptr, buffer);
+    handle_http_packet_with_locked_buffer(ctx_ptr, buffer);
     avs_shared_buffer_release(anjay->in_shared_buffer);
 }
 
 static void timeout_job(avs_sched_t *sched, const void *id_ptr) {
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     uintptr_t id = *(const uintptr_t *) id_ptr;
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!ctx_ptr) {
         dl_log(DEBUG, _("download id = ") "%" PRIuPTR _("expired"), id);
-        return;
+    } else {
+        _anjay_downloader_abort_transfer(ctx_ptr,
+                                         _anjay_download_status_failed(
+                                                 avs_errno(AVS_ETIMEDOUT)));
     }
-
-    _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
-                                     _anjay_download_status_failed(
-                                             avs_errno(AVS_ETIMEDOUT)));
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
-static void send_request(avs_sched_t *sched, const void *id_ptr) {
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
-    uintptr_t id = *(const uintptr_t *) id_ptr;
+static void send_request_unlocked(anjay_unlocked_t *anjay, uintptr_t id) {
     AVS_LIST(anjay_download_ctx_t) *ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!ctx_ptr) {
@@ -210,7 +207,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                                  AVS_HTTP_CONTENT_IDENTITY, ctx->parsed_url,
                                  NULL, NULL);
     if (avs_is_err(err) || !ctx->stream) {
-        _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
+        _anjay_downloader_abort_transfer(ctx_ptr,
                                          _anjay_download_status_failed(err));
         return;
     }
@@ -224,7 +221,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                         < 0
                 || avs_http_add_header(ctx->stream, "If-Match", ifmatch)) {
             dl_log(ERROR, _("Could not send If-Match header"));
-            _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
+            _anjay_downloader_abort_transfer(ctx_ptr,
                                              _anjay_download_status_failed(
                                                      avs_errno(AVS_ENOMEM)));
             return;
@@ -240,7 +237,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                 || avs_http_add_header(ctx->stream, "Range", range)) {
             dl_log(ERROR, _("Could not resume HTTP download: could not send "
                             "Range header"));
-            _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
+            _anjay_downloader_abort_transfer(ctx_ptr,
                                              _anjay_download_status_failed(
                                                      avs_errno(AVS_ENOMEM)));
             return;
@@ -257,19 +254,17 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                    http_status);
             if (http_status == 412) { // Precondition Failed
                 _anjay_downloader_abort_transfer(
-                        &anjay->downloader, ctx_ptr,
-                        _anjay_download_status_expired());
+                        ctx_ptr, _anjay_download_status_expired());
             } else {
                 _anjay_downloader_abort_transfer(
-                        &anjay->downloader, ctx_ptr,
+                        ctx_ptr,
                         _anjay_download_status_invalid_response(http_status));
             }
         } else {
             dl_log(ERROR, _("Could not send HTTP request: ") "%s",
                    AVS_COAP_STRERROR(err));
-            _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
-                                             _anjay_download_status_failed(
-                                                     err));
+            _anjay_downloader_abort_transfer(
+                    ctx_ptr, _anjay_download_status_failed(err));
         }
         return;
     }
@@ -287,7 +282,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                          "Content-Range: ") "%s",
                        it->value);
                 _anjay_downloader_abort_transfer(
-                        &anjay->downloader, ctx_ptr,
+                        ctx_ptr,
                         _anjay_download_status_failed(avs_errno(AVS_EPROTO)));
                 return;
             }
@@ -297,8 +292,7 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                 if (!etag_matches(ctx->etag, it->value)) {
                     dl_log(ERROR, _("ETag does not match"));
                     _anjay_downloader_abort_transfer(
-                            &anjay->downloader, ctx_ptr,
-                            _anjay_download_status_expired());
+                            ctx_ptr, _anjay_download_status_expired());
                     return;
                 }
             } else if (!(ctx->etag = read_etag(it->value))) {
@@ -314,9 +308,8 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
                           AVS_NET_SOCKET_DEFAULT_RECV_TIMEOUT, timeout_job,
                           &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(ERROR, _("could not schedule timeout job"));
-        _anjay_downloader_abort_transfer(&anjay->downloader, ctx_ptr,
-                                         _anjay_download_status_failed(
-                                                 avs_errno(AVS_ENOMEM)));
+        _anjay_downloader_abort_transfer(
+                ctx_ptr, _anjay_download_status_failed(avs_errno(AVS_ENOMEM)));
         return;
     }
 
@@ -335,48 +328,79 @@ static void send_request(avs_sched_t *sched, const void *id_ptr) {
      * chunk of data is received from the server.
      */
     if (avs_stream_nonblock_read_ready(ctx->stream)) {
-        handle_http_packet(&anjay->downloader, ctx_ptr);
+        handle_http_packet(ctx_ptr);
     }
 }
 
-static avs_net_socket_t *get_http_socket(anjay_downloader_t *dl,
-                                         anjay_download_ctx_t *ctx) {
-    (void) dl;
+static void send_request(avs_sched_t *sched, const void *id_ptr) {
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    send_request_unlocked(anjay, *(const uintptr_t *) id_ptr);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
+static avs_net_socket_t *get_http_socket(anjay_download_ctx_t *ctx) {
     return avs_stream_net_getsock(((anjay_http_download_ctx_t *) ctx)->stream);
 }
 
 static anjay_socket_transport_t
-get_http_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
-    (void) dl;
+get_http_socket_transport(anjay_download_ctx_t *ctx) {
     (void) ctx;
     return ANJAY_SOCKET_TRANSPORT_TCP;
 }
 
-static void cleanup_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
-    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
-    avs_sched_del(&ctx->next_action_job);
+static void
+cleanup_http_stream_unlocked(AVS_LIST(anjay_download_ctx_t) detached_ctx) {
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) detached_ctx;
     avs_free(ctx->etag);
     avs_stream_cleanup(&ctx->stream);
     avs_url_free(ctx->parsed_url);
     avs_http_free(ctx->client);
     _anjay_security_config_cache_cleanup(&ctx->security_config_cache);
-    AVS_LIST_DELETE(ctx_ptr);
+    AVS_LIST_DELETE(&detached_ctx);
+    assert(!detached_ctx);
 }
 
-static void suspend_http_transfer(anjay_downloader_t *dl,
-                                  anjay_download_ctx_t *ctx_) {
-    (void) dl;
+static void cleanup_http_stream(avs_sched_t *sched,
+                                const void *detached_ctx_ptr) {
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    cleanup_http_stream_unlocked(
+            *(AVS_LIST(anjay_download_ctx_t) const *) detached_ctx_ptr);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
+static void cleanup_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
+    anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
+
+    avs_sched_del(&ctx->next_action_job);
+    AVS_LIST(anjay_download_ctx_t) detached_ctx = AVS_LIST_DETACH(ctx_ptr);
+    /**
+     * HACK: this is necessary, because the download might be aborted from
+     * anjay_serve() inside an event loop - freeing everything directly would
+     * cause the underlying socket to be destroyed, which could cause
+     * use-after-free in the event loop when attempting to query the destroyed
+     * socket's file descriptor.
+     */
+    if (!anjay->sched
+            || AVS_SCHED_NOW(anjay->sched, NULL, cleanup_http_stream,
+                             &detached_ctx, sizeof(detached_ctx))) {
+        cleanup_http_stream_unlocked(detached_ctx);
+    }
+}
+
+static void suspend_http_transfer(anjay_download_ctx_t *ctx_) {
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
     avs_sched_del(&ctx->next_action_job);
     avs_stream_cleanup(&ctx->stream);
 }
 
 static avs_error_t
-reconnect_http_transfer(anjay_downloader_t *dl,
-                        AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
+reconnect_http_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) *ctx_ptr;
     avs_stream_cleanup(&ctx->stream);
-    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
     if (AVS_SCHED_NOW(anjay->sched, &ctx->next_action_job, send_request,
                       &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(ERROR, _("could not schedule download job"));
@@ -385,10 +409,8 @@ reconnect_http_transfer(anjay_downloader_t *dl,
     return AVS_OK;
 }
 
-static avs_error_t set_next_http_block_offset(anjay_downloader_t *dl,
-                                              anjay_download_ctx_t *ctx_,
+static avs_error_t set_next_http_block_offset(anjay_download_ctx_t *ctx_,
                                               size_t next_block_offset) {
-    (void) dl;
     anjay_http_download_ctx_t *ctx = (anjay_http_download_ctx_t *) ctx_;
     if (next_block_offset <= ctx->bytes_written) {
         dl_log(DEBUG, _("attempted to move download offset backwards"));
@@ -600,6 +622,7 @@ _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
         goto error;
     }
 
+    ctx->common.dl = dl;
     ctx->common.id = id;
     ctx->common.on_next_block = cfg->on_next_block;
     ctx->common.on_download_finished = cfg->on_download_finished;

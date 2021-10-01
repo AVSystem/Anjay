@@ -157,7 +157,11 @@ avs_error_t _anjay_server_connection_internal_bring_online(
     if (!session_resumed) {
         _anjay_conn_session_token_reset(&connection->session_token);
     }
-    anjay_log(INFO, session_resumed ? "resumed connection" : "reconnected");
+    if (session_resumed) {
+        anjay_log(INFO, "resumed connection");
+    } else {
+        anjay_log(INFO, "reconnected");
+    }
     connection->state = ANJAY_SERVER_CONNECTION_FRESHLY_CONNECTED;
     connection->needs_observe_flush = true;
     return AVS_OK;

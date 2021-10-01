@@ -67,7 +67,7 @@ class ConfirmableTest(test_suite.Lwm2mSingleServerTest,
         # flush any remaining notifications & Cancel Observe responses
         try:
             while True:
-                pkt = self.serv.recv(timeout_s=0.1)
+                pkt = self.serv.recv(timeout_s=0.5)
                 self.assertIn(
                     pkt.token, {counter_pkt.token, timestamp_pkt.token})
         except socket.timeout:
@@ -125,7 +125,7 @@ class NonConfirmableTest(test_suite.Lwm2mSingleServerTest,
         # flush any remaining notifications & Cancel Observe responses
         try:
             while True:
-                pkt = self.serv.recv(timeout_s=0.1)
+                pkt = self.serv.recv(timeout_s=0.5)
                 self.assertIn(
                     pkt.token, {counter_pkt.token, timestamp_pkt.token})
         except socket.timeout:

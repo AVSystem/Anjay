@@ -49,7 +49,7 @@ class AccessViolationOn256ByteUri(test_suite.Lwm2mSingleServerTest):
         super().tearDown(auto_deregister=False)
 
     def runTest(self):
-        pass
+        self.communicate('')
 
 
 class CrashAfterRequestWithTokenFollowedByNoToken(test_suite.Lwm2mSingleServerTest):

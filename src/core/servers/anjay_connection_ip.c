@@ -149,9 +149,9 @@ static int ensure_udp_coap_context(anjay_unlocked_t *anjay,
                                    anjay_server_connection_t *connection) {
     if (!connection->coap_ctx) {
         connection->coap_ctx = avs_coap_udp_ctx_create(
-                anjay->sched, &anjay->udp_tx_params, anjay->in_shared_buffer,
-                anjay->out_shared_buffer, anjay->udp_response_cache,
-                anjay->prng_ctx.ctx);
+                _anjay_get_coap_sched(anjay), &anjay->udp_tx_params,
+                anjay->in_shared_buffer, anjay->out_shared_buffer,
+                anjay->udp_response_cache, anjay->prng_ctx.ctx);
         if (!connection->coap_ctx) {
             anjay_log(ERROR, _("could not create CoAP/UDP context"));
             return -1;

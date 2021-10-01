@@ -29,25 +29,6 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-/**
- * This structure holds information about server connections.
- */
-struct anjay_servers_struct {
-    /**
-     * List of known LwM2M servers we may want to be connected to. This is
-     * semantically a map, keyed (and ordered) by SSID.
-     */
-    AVS_LIST(anjay_server_info_t) servers;
-
-    /**
-     * Cache of anjay_socket_entry_t objects, returned by
-     * anjay_get_socket_entries(). These entries are never used for anything
-     * inside the library, it's just to allow returning a list from a function
-     * without requiring the user to clean it up.
-     */
-    AVS_LIST(anjay_socket_entry_t) public_sockets;
-};
-
 typedef struct {
     avs_coap_exchange_id_t exchange_id;
     anjay_lwm2m_version_t attempted_version;
@@ -176,12 +157,12 @@ struct anjay_server_info_struct {
 };
 
 #ifndef ANJAY_WITHOUT_DEREGISTER
-void _anjay_servers_internal_deregister(anjay_servers_t *servers);
+void _anjay_servers_internal_deregister(AVS_LIST(anjay_server_info_t) *servers);
 #else // ANJAY_WITHOUT_DEREGISTER
 #    define _anjay_servers_internal_deregister(Servers) ((void) (Servers))
 #endif // ANJAY_WITHOUT_DEREGISTER
 
-void _anjay_servers_internal_cleanup(anjay_servers_t *servers);
+void _anjay_servers_internal_cleanup(AVS_LIST(anjay_server_info_t) *servers);
 
 void _anjay_server_clean_active_data(anjay_server_info_t *server);
 
@@ -191,10 +172,12 @@ void _anjay_server_clean_active_data(anjay_server_info_t *server);
 void _anjay_server_cleanup(anjay_server_info_t *server);
 
 AVS_LIST(anjay_server_info_t) *
-_anjay_servers_find_insert_ptr(anjay_servers_t *servers, anjay_ssid_t ssid);
+_anjay_servers_find_insert_ptr(AVS_LIST(anjay_server_info_t) *servers,
+                               anjay_ssid_t ssid);
 
-AVS_LIST(anjay_server_info_t) *_anjay_servers_find_ptr(anjay_servers_t *servers,
-                                                       anjay_ssid_t ssid);
+AVS_LIST(anjay_server_info_t) *
+_anjay_servers_find_ptr(AVS_LIST(anjay_server_info_t) *servers,
+                        anjay_ssid_t ssid);
 
 VISIBILITY_PRIVATE_HEADER_END
 

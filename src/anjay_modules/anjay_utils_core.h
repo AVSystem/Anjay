@@ -17,6 +17,10 @@
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_UTILS_CORE_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_UTILS_CORE_H
 
+#ifdef ANJAY_WITH_EVENT_LOOP
+#    include <stdatomic.h>
+#endif // ANJAY_WITH_EVENT_LOOP
+
 #include <avsystem/commons/avs_list.h>
 #include <avsystem/commons/avs_url.h>
 
@@ -60,14 +64,40 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
+#ifdef ANJAY_WITH_EVENT_LOOP
+typedef enum {
+    ANJAY_EVENT_LOOP_IDLE,
+    ANJAY_EVENT_LOOP_RUNNING,
+    ANJAY_EVENT_LOOP_INTERRUPT
+} anjay_event_loop_status_t;
+#endif // ANJAY_WITH_EVENT_LOOP
+
+// Please update this condition if anjay_atomic_fields_t ever gets more fields
+#if defined(ANJAY_WITH_EVENT_LOOP)
+#    define ANJAY_ATOMIC_FIELDS_DEFINED
+#endif // defined(ANJAY_WITH_EVENT_LOOP)
+
+#ifdef ANJAY_ATOMIC_FIELDS_DEFINED
+typedef struct {
+#    ifdef ANJAY_WITH_EVENT_LOOP
+    volatile atomic_int event_loop_status;
+#    endif // ANJAY_WITH_EVENT_LOOP
+} anjay_atomic_fields_t;
+#endif // ANJAY_ATOMIC_FIELDS_DEFINED
+
 #ifdef ANJAY_WITH_THREAD_SAFETY
 
 typedef struct anjay_unlocked_struct anjay_unlocked_t;
 
 struct anjay_struct {
     avs_mutex_t *mutex;
+#    ifdef ANJAY_ATOMIC_FIELDS_DEFINED
+    anjay_atomic_fields_t atomic_fields;
+#    endif // ANJAY_ATOMIC_FIELDS_DEFINED
     avs_max_align_t anjay_unlocked_placeholder;
 };
+
+void _anjay_reschedule_coap_sched_job(anjay_unlocked_t *anjay);
 
 #    ifdef ANJAY_WITH_NESTED_FUNCTION_MUTEX_LOCKS
 
@@ -107,6 +137,9 @@ typedef struct {
                 _anjay_log(anjay, ERROR, _("Could not lock mutex"));    \
             } else {                                                    \
                 mutex_lock_nested_function(                             \
+                        (anjay_unlocked_t *) &(AnjayLockedVar)          \
+                                ->anjay_unlocked_placeholder);          \
+                _anjay_reschedule_coap_sched_job(                       \
                         (anjay_unlocked_t *) &(AnjayLockedVar)          \
                                 ->anjay_unlocked_placeholder);          \
                 avs_mutex_unlock((AnjayLockedVar)->mutex);              \
@@ -160,9 +193,12 @@ typedef struct {
                                 ->anjay_unlocked_placeholder;        \
                 (void) AnjayUnlockedVar
 
-#        define ANJAY_MUTEX_UNLOCK(AnjayLockedVar)     \
-            avs_mutex_unlock((AnjayLockedVar)->mutex); \
-            }                                          \
+#        define ANJAY_MUTEX_UNLOCK(AnjayLockedVar)         \
+            _anjay_reschedule_coap_sched_job(              \
+                    (anjay_unlocked_t *) &(AnjayLockedVar) \
+                            ->anjay_unlocked_placeholder); \
+            avs_mutex_unlock((AnjayLockedVar)->mutex);     \
+            }                                              \
             (void) 0
 
 #        define ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(AnjayLockedVar,       \

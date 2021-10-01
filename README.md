@@ -1,6 +1,6 @@
 # Anjay LwM2M library [<img align="right" height="50px" src="https://avsystem.github.io/Anjay-doc/_images/avsystem_logo.png">](http://www.avsystem.com/)
 
-[![Build Status](https://travis-ci.org/AVSystem/Anjay.svg?branch=master)](https://travis-ci.org/AVSystem/Anjay)
+[![Build Status](https://github.com/AVSystem/Anjay/actions/workflows/anjay-tests.yml/badge.svg?branch=master)](https://github.com/AVSystem/Anjay/actions)
 [![Coverity Status](https://scan.coverity.com/projects/13206/badge.svg)](https://scan.coverity.com/projects/avsystem-anjay)
 
 ## What is Anjay?

@@ -18,7 +18,7 @@
 
     This section describes in details the implementation of custom Objects in
     Anjay, either defined in `OMA LwM2M Object and Resource Registry
-    <https://www.openmobilealliance.org/wp/OMNA/LwM2M/LwM2MRegistry.html>`_
+    <https://technical.openmobilealliance.org/OMNA/LwM2M/LwM2MRegistry.html>`_
     or designed by user.
 
     Although most of the Object's code can be generated using

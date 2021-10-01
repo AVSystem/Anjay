@@ -53,23 +53,23 @@ avs_net_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay_locked,
     avs_net_socket_t *socket = NULL;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_LIST_INSERT_NEW(anjay_server_info_t, &anjay->servers->servers));
-    anjay->servers->servers->anjay = anjay;
-    anjay->servers->servers->ssid = ssid;
+            AVS_LIST_INSERT_NEW(anjay_server_info_t, &anjay->servers));
+    anjay->servers->anjay = anjay;
+    anjay->servers->ssid = ssid;
     _anjay_mocksock_create(&socket, 1252, 1252);
     avs_unit_mocksock_expect_connect(socket, "", "");
     AVS_UNIT_ASSERT_SUCCESS(avs_net_socket_connect(socket, "", ""));
-    anjay->servers->servers->registration_info.expire_time.since_real_epoch
-            .seconds = INT64_MAX;
+    anjay->servers->registration_info.expire_time.since_real_epoch.seconds =
+            INT64_MAX;
     anjay_server_connection_t *connection =
             _anjay_get_server_connection((const anjay_connection_ref_t) {
-                .server = anjay->servers->servers,
+                .server = anjay->servers,
                 .conn_type = ANJAY_CONNECTION_PRIMARY
             });
     AVS_UNIT_ASSERT_NOT_NULL(connection);
     connection->conn_socket_ = socket;
     connection->coap_ctx = avs_coap_udp_ctx_create(
-            anjay->sched, &AVS_COAP_DEFAULT_UDP_TX_PARAMS,
+            _anjay_get_coap_sched(anjay), &AVS_COAP_DEFAULT_UDP_TX_PARAMS,
             anjay->in_shared_buffer, anjay->out_shared_buffer,
             anjay->udp_response_cache, anjay->prng_ctx.ctx);
     AVS_UNIT_ASSERT_SUCCESS(
@@ -81,7 +81,7 @@ avs_net_socket_t *_anjay_test_dm_install_socket(anjay_t *anjay_locked,
 void _anjay_test_dm_finish(anjay_t *anjay_locked) {
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_server_info_t *server;
-    AVS_LIST_FOREACH(server, anjay->servers->servers) {
+    AVS_LIST_FOREACH(server, anjay->servers) {
         anjay_server_connection_t *connection =
                 _anjay_get_server_connection((const anjay_connection_ref_t) {
                     .server = server,
@@ -94,8 +94,8 @@ void _anjay_test_dm_finish(anjay_t *anjay_locked) {
         }
     }
     _anjay_mock_dm_expect_clean();
-    AVS_LIST_CLEAR(&anjay->servers->servers) {
-        _anjay_server_cleanup(anjay->servers->servers);
+    AVS_LIST_CLEAR(&anjay->servers) {
+        _anjay_server_cleanup(anjay->servers);
     }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     anjay_delete(anjay_locked);
@@ -109,7 +109,7 @@ int _anjay_test_dm_fake_security_list_instances(
     (void) obj_ptr;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+    AVS_LIST_FOREACH(it, anjay->servers) {
         anjay_ssid_t ssid = it->ssid;
         ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked_again, anjay);
         if (ssid == ANJAY_ID_INVALID) {

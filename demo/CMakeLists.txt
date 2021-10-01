@@ -20,7 +20,6 @@ set(SOURCES
     demo_args.c
     demo_cmds.c
     demo_utils.c
-    iosched.c
     objects/apn_conn_profile.c
     objects/binary_app_data_container.c
     objects/cell_connectivity.c
@@ -31,6 +30,7 @@ set(SOURCES
     objects/event_log.c
     objects/ext_dev_info.c
     objects/geopoints.c
+    objects/ipso_objects.c
     objects/location.c
     objects/portfolio.c
     objects/test.c)
@@ -48,7 +48,6 @@ set(HEADERS
     demo_args.h
     demo_cmds.h
     demo_utils.h
-    iosched.h
     objects.h)
 
 if (${ANJAY_WITH_MODULE_FW_UPDATE})
@@ -61,8 +60,10 @@ if(NOT TARGET anjay)
     find_package(anjay REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/..")
 endif()
 
+find_package(Threads REQUIRED)
+
 add_executable(demo ${ALL_SOURCES})
-target_link_libraries(demo PRIVATE anjay m)
+target_link_libraries(demo PRIVATE anjay m ${CMAKE_THREAD_LIBS_INIT})
 
 add_custom_target(demo_firmware
                   COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tests/integration/framework/firmware_package.py

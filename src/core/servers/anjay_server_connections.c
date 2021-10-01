@@ -296,7 +296,7 @@ static void cancel_exchanges(anjay_connection_ref_t conn_ref) {
 
 void _anjay_servers_interrupt_offline(anjay_unlocked_t *anjay) {
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+    AVS_LIST_FOREACH(it, anjay->servers) {
         anjay_connection_type_t conn_type;
         ANJAY_CONNECTION_TYPE_FOREACH(conn_type) {
             anjay_connection_ref_t ref = {
@@ -376,8 +376,10 @@ void _anjay_connection_bring_online(anjay_connection_ref_t ref) {
 }
 
 static void queue_mode_close_socket(avs_sched_t *sched, const void *ref_ptr) {
-    (void) sched;
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     _anjay_connection_suspend(*(const anjay_connection_ref_t *) ref_ptr);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 void _anjay_connection_schedule_queue_mode_close(anjay_connection_ref_t ref) {

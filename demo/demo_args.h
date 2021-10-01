@@ -45,9 +45,7 @@ typedef struct cmdline_args {
     int32_t outbuf_size;
     int32_t msg_cache_size;
     bool confirmable_notifications;
-#ifndef _WIN32
     bool disable_stdin;
-#endif // _WIN32
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     const char *fw_updated_marker_path;
     avs_net_security_info_t fw_security_info;

@@ -100,7 +100,7 @@ static void assert_observe(anjay_t *anjay_locked,
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr =
             _anjay_observe_find_connection_state((anjay_connection_ref_t) {
-                .server = *_anjay_servers_find_ptr(anjay->servers, ssid),
+                .server = *_anjay_servers_find_ptr(&anjay->servers, ssid),
                 .conn_type = ANJAY_CONNECTION_PRIMARY
             });
     AVS_UNIT_ASSERT_NOT_NULL(conn_ptr);
@@ -606,7 +606,7 @@ AVS_UNIT_TEST(observe, gc) {
     SUCCESS_TEST(14, 69, 514, 666, 777);
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    remove_server(&anjay_unlocked->servers->servers);
+    remove_server(&anjay_unlocked->servers);
     _anjay_observe_gc(anjay_unlocked);
     ANJAY_MUTEX_UNLOCK(anjay);
 
@@ -618,7 +618,7 @@ AVS_UNIT_TEST(observe, gc) {
     ASSERT_SUCCESS_TEST_RESULT(777);
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    remove_server(AVS_LIST_NTH_PTR(&anjay_unlocked->servers->servers, 3));
+    remove_server(AVS_LIST_NTH_PTR(&anjay_unlocked->servers, 3));
     _anjay_observe_gc(anjay_unlocked);
     ANJAY_MUTEX_UNLOCK(anjay);
 
@@ -629,7 +629,7 @@ AVS_UNIT_TEST(observe, gc) {
     ASSERT_SUCCESS_TEST_RESULT(666);
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    remove_server(AVS_LIST_NTH_PTR(&anjay_unlocked->servers->servers, 1));
+    remove_server(AVS_LIST_NTH_PTR(&anjay_unlocked->servers, 1));
     _anjay_observe_gc(anjay_unlocked);
     ANJAY_MUTEX_UNLOCK(anjay);
 
@@ -1787,7 +1787,7 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     connection = _anjay_get_server_connection((const anjay_connection_ref_t) {
-        .server = anjay_unlocked->servers->servers,
+        .server = anjay_unlocked->servers,
         .conn_type = ANJAY_CONNECTION_PRIMARY
     });
     AVS_UNIT_ASSERT_NOT_NULL(connection);
@@ -1910,8 +1910,7 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 2);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    anjay_unlocked->current_connection.server =
-            anjay_unlocked->servers->servers;
+    anjay_unlocked->current_connection.server = anjay_unlocked->servers;
     anjay_unlocked->current_connection.conn_type = ANJAY_CONNECTION_PRIMARY;
     _anjay_observe_sched_flush(anjay_unlocked->current_connection);
     memset(&anjay_unlocked->current_connection, 0,
@@ -1943,7 +1942,7 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     connection = _anjay_get_server_connection((const anjay_connection_ref_t) {
-        .server = anjay_unlocked->servers->servers,
+        .server = anjay_unlocked->servers,
         .conn_type = ANJAY_CONNECTION_PRIMARY
     });
     AVS_UNIT_ASSERT_NOT_NULL(connection);
@@ -2031,8 +2030,7 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 2);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    anjay_unlocked->current_connection.server =
-            anjay_unlocked->servers->servers;
+    anjay_unlocked->current_connection.server = anjay_unlocked->servers;
     anjay_unlocked->current_connection.conn_type = ANJAY_CONNECTION_PRIMARY;
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     _anjay_observe_sched_flush(anjay_unlocked->current_connection);

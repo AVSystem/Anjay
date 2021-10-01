@@ -109,9 +109,9 @@ levels are:
 
   Each Object is assigned a unique numerical identifier in the range 0-65535,
   inclusive. OMA manages a `registry of known Object IDs
-  <https://www.openmobilealliance.org/wp/OMNA/LwM2M/LwM2MRegistry.html>`_. Each
-  Object defines a set of Resources whose meanings are common for each Object
-  Instance.
+  <https://technical.openmobilealliance.org/OMNA/LwM2M/LwM2MRegistry.html>`_.
+  Each Object defines a set of Resources whose meanings are common for each
+  Object Instance.
 
 - **Object Instance** - some Objects are described as "single-instance" - such
   Objects always have exactly one Instance with identifier 0. Examples of such

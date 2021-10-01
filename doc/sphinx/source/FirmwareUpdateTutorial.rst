@@ -20,4 +20,9 @@ Firmware Update Tutorial
    :glob:
    :titlesonly:
 
-   FirmwareUpdateTutorial/FU*
+   FirmwareUpdateTutorial/FU-Introduction
+   FirmwareUpdateTutorial/FU-BasicImplementation
+   FirmwareUpdateTutorial/FU-ModesAndProtocols
+   FirmwareUpdateTutorial/FU-SecureDownloads
+   FirmwareUpdateTutorial/FU-PoorConnectivity
+   FirmwareUpdateTutorial/FU-DownloadResumption

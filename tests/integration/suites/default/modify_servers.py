@@ -24,6 +24,8 @@ class ModifyServersTest(test_suite.Lwm2mTest):
         self.setup_demo_with_servers(servers=2, auto_register=False)
 
     def tearDown(self):
+        self.coap_ping(self.servers[0])
+        self.coap_ping(self.servers[1])
         self.request_demo_shutdown()
         self.assertDemoDeregisters(self.servers[0], path='/rd/demo')
         self.assertDemoDeregisters(self.servers[1], path='/rd/server3')

@@ -28,6 +28,10 @@
 #include "security.hpp"
 #include "socket.hpp"
 
+#ifndef MBEDTLS_PRIVATE
+#    define MBEDTLS_PRIVATE(Name) Name
+#endif // MBEDTLS_PRIVATE
+
 using namespace std;
 using namespace chrono;
 
@@ -420,8 +424,9 @@ void Socket::settimeout(py::object timeout_s_or_none) {
 py::bytes Socket::peer_cert() {
     const mbedtls_x509_crt *cert = mbedtls_ssl_get_peer_cert(&mbedtls_context_);
     if (cert) {
-        return py::bytes(reinterpret_cast<const char *>(cert->raw.p),
-                         cert->raw.len);
+        return py::bytes(reinterpret_cast<const char *>(
+                                 cert->MBEDTLS_PRIVATE(raw).MBEDTLS_PRIVATE(p)),
+                         cert->MBEDTLS_PRIVATE(raw).MBEDTLS_PRIVATE(len));
     }
     return py::bytes();
 }

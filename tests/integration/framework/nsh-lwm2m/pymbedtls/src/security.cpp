@@ -74,11 +74,22 @@ CertSecurity::CertSecurity(const char *ca_path,
                                     + ca_file,
                             result);
     }
-    if (key_file
-            && (result = mbedtls_pk_parse_keyfile(
-                        &pk_ctx_, key_file, nullptr))) {
-        throw mbedtls_error(
-                string("Could not parse private-key file ") + key_file, result);
+    if (key_file) {
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+        mbedtls_ctr_drbg_context rng;
+        mbedtls_ctr_drbg_init(&rng);
+#endif // MBEDTLS_VERSION_NUMBER >= 0x03000000
+        result = mbedtls_pk_parse_keyfile(&pk_ctx_, key_file, nullptr
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000
+                                          ,
+                                          mbedtls_ctr_drbg_random, &rng
+#endif // MBEDTLS_VERSION_NUMBER >= 0x03000000
+        );
+        if (result) {
+            throw mbedtls_error(string("Could not parse private-key file ")
+                                        + key_file,
+                                result);
+        }
     }
     if (crt_file && (result = mbedtls_x509_crt_parse_file(&crt_, crt_file))) {
         throw mbedtls_error(string("Could not load certificate from file ")

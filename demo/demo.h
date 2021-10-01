@@ -17,6 +17,8 @@
 #ifndef DEMO_H
 #define DEMO_H
 
+#include <stdatomic.h>
+
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>
 #include <anjay/anjay_config.h>
@@ -48,9 +50,10 @@ typedef struct {
     anjay_demo_object_deleter_t *release_func;
 } anjay_demo_object_t;
 
+typedef void anjay_update_handler_t(anjay_t *anjay);
+
 struct anjay_demo_struct {
     anjay_t *anjay;
-    bool running;
 
     AVS_LIST(anjay_demo_string_t) allocated_strings;
     server_connection_args_t *connection_args;
@@ -63,12 +66,14 @@ struct anjay_demo_struct {
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
 #endif     // AVS_COMMONS_STREAM_WITH_FILE
 
-    iosched_t *iosched;
+    avs_sched_handle_t notify_time_dependent_job;
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     fw_update_logic_t fw_update;
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
     AVS_LIST(anjay_demo_object_t) objects;
+
+    AVS_LIST(anjay_update_handler_t *) installed_objects_update_handlers;
 
     // for testing purposes only: causes a Registration Update to be scheduled
     // immediately before calling anjay_delete

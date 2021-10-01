@@ -266,4 +266,10 @@ the most complex ones.
    :glob:
    :titlesonly:
 
-   AT-CustomObjects/AT_*
+   AT-CustomObjects/AT_CO_SingleInstanceReadOnly
+   AT-CustomObjects/AT_CO_SingleInstanceExecutableAndReadOnly
+   AT-CustomObjects/AT_CO_MultiInstanceReadOnlyFixed
+   AT-CustomObjects/AT_CO_FixedInstanceWritable
+   AT-CustomObjects/AT_CO_MultiInstanceDynamic
+   AT-CustomObjects/AT_CO_MultipleResourceInstances
+   AT-CustomObjects/AT_CO_BootstrapAwareness

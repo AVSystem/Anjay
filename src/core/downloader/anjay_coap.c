@@ -47,8 +47,6 @@ AVS_STATIC_ASSERT(AVS_ALIGNOF(anjay_etag_t) == AVS_ALIGNOF(avs_coap_etag_t),
 typedef struct {
     anjay_download_ctx_common_t common;
 
-    anjay_downloader_t *dl;
-
     anjay_socket_transport_t transport;
     anjay_url_t uri;
     size_t bytes_downloaded;
@@ -71,19 +69,24 @@ typedef struct {
 } anjay_coap_download_ctx_t;
 
 typedef struct {
-    anjay_unlocked_t *anjay;
     avs_coap_ctx_t *coap_ctx;
     avs_net_socket_t *socket;
 } cleanup_coap_context_args_t;
 
-static void cleanup_coap_context(avs_sched_t *sched, const void *args_) {
-    (void) sched;
-    cleanup_coap_context_args_t args =
-            *(const cleanup_coap_context_args_t *) args_;
-    _anjay_coap_ctx_cleanup(args.anjay, &args.coap_ctx);
+static void cleanup_coap_context_unlocked(anjay_unlocked_t *anjay,
+                                          cleanup_coap_context_args_t args) {
+    _anjay_coap_ctx_cleanup(anjay, &args.coap_ctx);
 #    ifndef ANJAY_TEST
-    _anjay_socket_cleanup(args.anjay, &args.socket);
+    _anjay_socket_cleanup(anjay, &args.socket);
 #    endif // ANJAY_TEST
+}
+
+static void cleanup_coap_context(avs_sched_t *sched, const void *args) {
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    cleanup_coap_context_unlocked(anjay,
+                                  *(const cleanup_coap_context_args_t *) args);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
@@ -91,10 +94,9 @@ static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     avs_sched_del(&ctx->job_start);
     _anjay_url_cleanup(&ctx->uri);
 
-    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->dl);
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
 
     const cleanup_coap_context_args_t args = {
-        .anjay = anjay,
         .coap_ctx = ctx->coap,
         .socket = ctx->socket
     };
@@ -117,7 +119,7 @@ static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
         if (!anjay->sched
                 || AVS_SCHED_NOW(anjay->sched, NULL, cleanup_coap_context,
                                  &args, sizeof(args))) {
-            cleanup_coap_context(NULL, &args);
+            cleanup_coap_context_unlocked(NULL, args);
         }
     }
     AVS_LIST_DELETE(ctx_ptr);
@@ -158,9 +160,10 @@ static void abort_download_transfer(anjay_coap_download_ctx_t *dl_ctx,
     assert(!avs_coap_exchange_id_valid(dl_ctx->exchange_id));
 
     AVS_LIST(anjay_download_ctx_t) *dl_ctx_ptr =
-            _anjay_downloader_find_ctx_ptr_by_id(dl_ctx->dl, dl_ctx->common.id);
+            _anjay_downloader_find_ctx_ptr_by_id(dl_ctx->common.dl,
+                                                 dl_ctx->common.id);
     if (dl_ctx_ptr) {
-        _anjay_downloader_abort_transfer(dl_ctx->dl, dl_ctx_ptr, status);
+        _anjay_downloader_abort_transfer(dl_ctx_ptr, status);
     }
 }
 
@@ -219,7 +222,7 @@ handle_coap_response(avs_coap_ctx_t *ctx,
         }
         assert(dl_ctx->bytes_downloaded == response->payload_offset);
         if (avs_is_err((err = _anjay_downloader_call_on_next_block(
-                                dl_ctx->dl, &dl_ctx->common,
+                                &dl_ctx->common,
                                 (const uint8_t *) response->payload,
                                 response->payload_size,
                                 (const anjay_etag_t *) &etag)))) {
@@ -260,25 +263,19 @@ handle_coap_response(avs_coap_ctx_t *ctx,
     }
 }
 
-static void handle_coap_message(anjay_downloader_t *dl,
-                                AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
-    (void) dl;
-
+static void handle_coap_message(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     // NOTE: The return value is ignored as there is not a lot we can do with
     // it.
     (void) avs_coap_async_handle_incoming_packet(
             ((anjay_coap_download_ctx_t *) *ctx_ptr)->coap, NULL, NULL);
 }
 
-static avs_net_socket_t *get_coap_socket(anjay_downloader_t *dl,
-                                         anjay_download_ctx_t *ctx) {
-    (void) dl;
+static avs_net_socket_t *get_coap_socket(anjay_download_ctx_t *ctx) {
     return ((anjay_coap_download_ctx_t *) ctx)->socket;
 }
 
 static anjay_socket_transport_t
-get_coap_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
-    (void) dl;
+get_coap_socket_transport(anjay_download_ctx_t *ctx) {
     return ((anjay_coap_download_ctx_t *) ctx)->transport;
 }
 
@@ -287,69 +284,72 @@ get_coap_socket_transport(anjay_downloader_t *dl, anjay_download_ctx_t *ctx) {
 #    endif // ANJAY_TEST
 
 static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     uintptr_t id = *(const uintptr_t *) id_ptr;
     AVS_LIST(anjay_download_ctx_t) *dl_ctx_ptr =
             _anjay_downloader_find_ctx_ptr_by_id(&anjay->downloader, id);
     if (!dl_ctx_ptr) {
         dl_log(DEBUG, _("download id = ") "%" PRIuPTR _(" expired"), id);
-        return;
-    }
-    anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *dl_ctx_ptr;
-    ctx->reconnecting = false;
+    } else {
+        anjay_coap_download_ctx_t *ctx =
+                (anjay_coap_download_ctx_t *) *dl_ctx_ptr;
+        ctx->reconnecting = false;
 
-    avs_error_t err;
-    avs_coap_options_t options;
-    const uint8_t code = AVS_COAP_CODE_GET;
-    if (avs_is_err((err = avs_coap_options_dynamic_init(&options)))) {
-        dl_log(ERROR,
-               _("download id = ") "%" PRIuPTR _(
-                       " cannot start: out of memory"),
-               id);
-        goto end;
-    }
-
-    AVS_LIST(const anjay_string_t) elem;
-    AVS_LIST_FOREACH(elem, ctx->uri.uri_path) {
-        if (avs_is_err((err = avs_coap_options_add_string(
-                                &options, AVS_COAP_OPTION_URI_PATH,
-                                elem->c_str)))) {
+        avs_error_t err;
+        avs_coap_options_t options;
+        const uint8_t code = AVS_COAP_CODE_GET;
+        if (avs_is_err((err = avs_coap_options_dynamic_init(&options)))) {
+            dl_log(ERROR,
+                   _("download id = ") "%" PRIuPTR _(
+                           " cannot start: out of memory"),
+                   id);
             goto end;
         }
-    }
-    AVS_LIST_FOREACH(elem, ctx->uri.uri_query) {
-        if (avs_is_err((err = avs_coap_options_add_string(
-                                &options, AVS_COAP_OPTION_URI_QUERY,
-                                elem->c_str)))) {
-            goto end;
+
+        AVS_LIST(const anjay_string_t) elem;
+        AVS_LIST_FOREACH(elem, ctx->uri.uri_path) {
+            if (avs_is_err((err = avs_coap_options_add_string(
+                                    &options, AVS_COAP_OPTION_URI_PATH,
+                                    elem->c_str)))) {
+                goto end;
+            }
+        }
+        AVS_LIST_FOREACH(elem, ctx->uri.uri_query) {
+            if (avs_is_err((err = avs_coap_options_add_string(
+                                    &options, AVS_COAP_OPTION_URI_QUERY,
+                                    elem->c_str)))) {
+                goto end;
+            }
+        }
+
+        assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
+        (void) (avs_is_err((err = avs_coap_client_send_async_request(
+                                    ctx->coap, &ctx->exchange_id,
+                                    &(avs_coap_request_header_t) {
+                                        .code = code,
+                                        .options = options
+                                    },
+                                    NULL, NULL, handle_coap_response,
+                                    (void *) ctx)))
+                || avs_is_err((
+                           err = avs_coap_client_set_next_response_payload_offset(
+                                   ctx->coap, ctx->exchange_id,
+                                   ctx->bytes_downloaded))));
+
+    end:
+        avs_coap_options_cleanup(&options);
+
+        if (avs_is_err(err)) {
+            _anjay_downloader_abort_transfer(
+                    dl_ctx_ptr, _anjay_download_status_failed(err));
         }
     }
-
-    assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
-    (void) (avs_is_err(
-                    (err = avs_coap_client_send_async_request(
-                             ctx->coap, &ctx->exchange_id,
-                             &(avs_coap_request_header_t) {
-                                 .code = code,
-                                 .options = options
-                             },
-                             NULL, NULL, handle_coap_response, (void *) ctx)))
-            || avs_is_err(
-                       (err = avs_coap_client_set_next_response_payload_offset(
-                                ctx->coap, ctx->exchange_id,
-                                ctx->bytes_downloaded))));
-
-end:
-    avs_coap_options_cleanup(&options);
-
-    if (avs_is_err(err)) {
-        _anjay_downloader_abort_transfer(ctx->dl, dl_ctx_ptr,
-                                         _anjay_download_status_failed(err));
-    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
-    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->dl);
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
 
     _anjay_coap_ctx_cleanup(anjay, &ctx->coap);
     assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
@@ -361,7 +361,8 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
         // necessary. It's used to cache responses generated by us whenever we
         // handle an incoming request, and contexts used for downloads don't
         // expect receiving any requests that would need handling.
-        ctx->coap = avs_coap_udp_ctx_create(anjay->sched, &ctx->tx_params,
+        ctx->coap = avs_coap_udp_ctx_create(_anjay_get_coap_sched(anjay),
+                                            &ctx->tx_params,
                                             anjay->in_shared_buffer,
                                             anjay->out_shared_buffer, NULL,
                                             anjay->prng_ctx.ctx);
@@ -390,9 +391,7 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
     return err;
 }
 
-static void suspend_coap_transfer(anjay_downloader_t *dl,
-                                  anjay_download_ctx_t *ctx_) {
-    (void) dl;
+static void suspend_coap_transfer(anjay_download_ctx_t *ctx_) {
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) ctx_;
     dl_log(INFO, _("suspending download ") "%" PRIuPTR, ctx->common.id);
     ctx->reconnecting = true;
@@ -415,9 +414,8 @@ static void suspend_coap_transfer(anjay_downloader_t *dl,
     }
 }
 
-static avs_error_t sched_download_resumption(anjay_downloader_t *dl,
-                                             anjay_coap_download_ctx_t *ctx) {
-    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
+static avs_error_t sched_download_resumption(anjay_coap_download_ctx_t *ctx) {
+    anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
     if (AVS_SCHED_NOW(anjay->sched, &ctx->job_start, start_download_job,
                       &ctx->common.id, sizeof(ctx->common.id))) {
         dl_log(WARNING,
@@ -432,9 +430,7 @@ static avs_error_t sched_download_resumption(anjay_downloader_t *dl,
 }
 
 static avs_error_t
-reconnect_coap_transfer(anjay_downloader_t *dl,
-                        AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
-    (void) dl;
+reconnect_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     (void) ctx_ptr;
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
     ctx->reconnecting = true;
@@ -464,16 +460,14 @@ reconnect_coap_transfer(anjay_downloader_t *dl,
             return err;
         }
         if (!avs_coap_exchange_id_valid(ctx->exchange_id)) {
-            return sched_download_resumption(dl, ctx);
+            return sched_download_resumption(ctx);
         }
     }
     return AVS_OK;
 }
 
-static avs_error_t set_next_coap_block_offset(anjay_downloader_t *dl,
-                                              anjay_download_ctx_t *ctx_,
+static avs_error_t set_next_coap_block_offset(anjay_download_ctx_t *ctx_,
                                               size_t next_block_offset) {
-    (void) dl;
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) ctx_;
     avs_error_t err = AVS_OK;
     if (avs_coap_exchange_id_valid(ctx->exchange_id)) {
@@ -620,11 +614,11 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         }
     }
 
+    ctx->common.dl = dl;
     ctx->common.id = id;
     ctx->common.on_next_block = cfg->on_next_block;
     ctx->common.on_download_finished = cfg->on_download_finished;
     ctx->common.user_data = cfg->user_data;
-    ctx->dl = dl;
     ctx->bytes_downloaded = cfg->start_offset;
 
     if (cfg->etag) {

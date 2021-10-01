@@ -84,6 +84,9 @@ class OID:
     BinaryAppDataContainer = 19
     EventLog = 20
     Oscore = 21
+    Temperature = 3303
+    Accelerometer = 3313
+    PushButton = 3347
     Test = 33605
     ExtDevInfo = 33606
     IpPing = 33607
@@ -245,6 +248,28 @@ class RID:
         Description = 3
         Inside = 4
 
+    class Temperature:
+        MinMeasuredValue = 5601
+        MaxMeasuredValue = 5602
+        MinRangeValue = 5603
+        MaxRangeValue = 5604
+        ResetMinAndMaxMeasuredValues = 5605
+        SensorValue = 5700
+        SensorUnits = 5701
+
+    class Accelerometer:
+        MinRangeValue = 5603
+        MaxRangeValue = 5604
+        XValue = 5702
+        YValue = 5703
+        ZValue = 5704
+        SensorUnits = 5701
+
+    class PushButton:
+        DigitalInputState = 5500
+        DigitalInputCounter = 5501
+        ApplicationType = 5750
+
     class Test:
         Timestamp = 0
         Counter = 1
@@ -396,6 +421,12 @@ class ResPath:
     ApnConnectionProfile = _Lwm2mResourcePathHelper.from_rid_object(RID.ApnConnectionProfile,
                                                                     oid=OID.ApnConnectionProfile,
                                                                     multi_instance=True)
+    Temperature = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Temperature, oid=OID.Temperature)
+    Accelerometer = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.Accelerometer, oid=OID.Accelerometer)
+    PushButton = _Lwm2mResourcePathHelper.from_rid_object(
+        RID.PushButton, oid=OID.PushButton)
     Test = _Lwm2mResourcePathHelper.from_rid_object(
         RID.Test, oid=OID.Test, multi_instance=True)
     Portfolio = _Lwm2mResourcePathHelper.from_rid_object(

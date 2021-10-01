@@ -806,7 +806,7 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
         types = [
             (('boolean', 'bool'), 'anjay_ret_bool(%s, 0)'),
             (('integer', 'int'),  'anjay_ret_i32(%s, 0)'),
-            (('float',),          'anjay_ret_float(%s, 0)'),
+            (('float',),          'anjay_ret_double(%s, 0)'),
             (('corelnk', # TODO T2033
               'string', 'str'),   'anjay_ret_string(%s, "")'),
             (('opaque',),         'anjay_ret_bytes(%s, "", 0)'),
@@ -841,7 +841,7 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
         types = [
             (('boolean', 'bool'), 'bool value',      'anjay_get_bool(%s, &value)'),
             (('integer', 'int'),  'int32_t value',   'anjay_get_i32(%s, &value)'),
-            (('float',),          'float value',     'anjay_get_float(%s, &value)'),
+            (('float',),          'double value',    'anjay_get_double(%s, &value)'),
             (('corelnk', # TODO T2033
               'string', 'str'),   'char value[256]', 'anjay_get_string(%s, value, sizeof(value))'),
             (('opaque',),

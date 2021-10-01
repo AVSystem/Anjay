@@ -504,10 +504,6 @@ typedef uint16_t anjay_riid_t;
  * **Must not** use @c avs_sched_cleanup on the returned scheduler. Anjay will
  * cleanup it itself.
  *
- * <strong>NOTE:</strong> If Anjay is compiled with thread safety enabled, this
- * scheduler object is normally used with the Anjay mutex locked. You will need
- * to ensure thread safety yourself if using this function.
- *
  * @param anjay Anjay object to operate on.
  *
  * @returns non-null scheduler object used by Anjay.
@@ -566,6 +562,138 @@ int anjay_sched_calculate_wait_time_ms(anjay_t *anjay, int limit_ms);
  * @param anjay Anjay object to operate on.
  */
 void anjay_sched_run(anjay_t *anjay);
+
+#ifdef ANJAY_WITH_EVENT_LOOP
+/**
+ * Runs Anjay's main event loop that executes @ref anjay_serve and
+ * @ref anjay_sched_run as appropriate.
+ *
+ * This function will only return after either:
+ *
+ * - @ref anjay_event_loop_interrupt is called (from a different thread or from
+ *   a user callback), or
+ * - a fatal error (e.g. out-of-memory) occurs in the loop itself (errors from
+ *   @ref anjay_serve are <em>not</em> considered fatal)
+ *
+ * <strong>IMPORTANT:</strong> The preimplemented event loop is primarily
+ * intended to be run in a dedicated thread, while other threads may handle
+ * tasks not related to LwM2M. It is safe to control the same instance of Anjay
+ * concurrently from a different thread <strong>only if</strong> the thread
+ * safety features have been enabled at Anjay's compile time:
+ *
+ * - <c>AVS_COMMONS_SCHED_THREAD_SAFE</c> (<c>WITH_SCHEDULER_THREAD_SAFE</c> in
+ *   CMake) is required to safely use Anjay's internal scheduler (see
+ *   @ref anjay_get_scheduler)
+ *   - Please note that only managing scheduler tasks from another thread is
+ *     safe. Attempting to call @ref anjay_sched_run (or
+ *     <c>avs_sched_run(anjay_get_scheduler(anjay))</c> while the event loop is
+ *     running <strong>may lead to undefined behavior in the loop</strong>
+ * - <c>ANJAY_WITH_THREAD_SAFETY</c> (<c>WITH_THREAD_SAFETY</c> in CMake) is
+ *   required to call any other functions, aside from the cleanup functions
+ *   (which are only safe to call after the event loop has finished) and
+ *   @ref anjay_event_loop_interrupt (which is always safe to call)
+ *
+ * <strong>CAUTION:</strong> The preimplemented event loop will only work if all
+ * the sockets that may be created by Anjay will return file descriptors
+ * compatible with <c>poll()</c> or <c>select()</c> through
+ * <c>avs_net_socket_get_system()</c>.
+ *
+ * In particular, please be cautious when using SMS or NIDD transports
+ * (applicable to commercial version only) - your
+ * <c>anjay_smsdrv_system_socket_t</c> and
+ * <c>anjay_nidd_driver_system_descriptor_t</c> functions need to populate the
+ * output argument with a valid file descriptor (e.g.
+ * <c>int fd = ...; *out = &fd;</c>), and that file descriptor must be valid to
+ * use with the <c>poll()</c> or <c>select()</c> functions (which may not true
+ * if the socket API is separate from other IO APIs, as is the case e.g. on
+ * Windows). Otherwise attempting to use this event loop implementation will not
+ * handle NIDD and SMS transports properly, and may even lead to undefined
+ * behavior.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param max_wait_time Maximum time to spend in each single call to
+ *                      <c>poll()</c> or <c>select()</c>. Larger times will
+ *                      prevent the event loop thread from waking up too
+ *                      frequently. However, during this wait time, the call to
+ *                      @ref anjay_event_loop_interrupt may not be handled
+ *                      immediately, and scheduler jobs requested from other
+ *                      threads (see @ref anjay_get_scheduler) will not be
+ *                      executed, so shortening this time will make the
+ *                      scheduler more responsive.
+ *
+ * @returns 0 after having been successfully interrupted by
+ *          @ref anjay_event_loop_interrupt, or a negative value in case of a
+ *          fatal error.
+ */
+int anjay_event_loop_run(anjay_t *anjay, avs_time_duration_t max_wait_time);
+
+/**
+ * Interrupts an ongoing execution of @ref anjay_event_loop_run.
+ *
+ * This function may be called from another thread, or from a callback running
+ * within the event loop itself.
+ *
+ * After the call to this function, the event loop will finish as soon as
+ * possible while gracefully executing any outstanding tasks.
+ *
+ * Please note that the event loop may not be interrupted immediately and
+ * instead wait until either of the following:
+ *
+ * - any ongoing scheduler tasks finish
+ * - any incoming RPC involving a blockwise transfer finishes
+ * - the <c>poll</c> or <c>select()</c> operation finishes (see the
+ *   <c>max_wait_time</c> argument to @ref anjay_event_loop_run)
+ *
+ * Interrupting the two latter cases may be possible by performing a
+ * system-specific call that would interrupt ongoing socket operations (e.g.
+ * raising a signal with an appropriately crafted signal handler on Unix-like
+ * systems) <em>immediately after</em> having called
+ * <c>anjay_event_loop_interrupt()</c>.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns 0 if the interrupt has been successfully raised, or a negative value
+ *          if the event loop is either not running or already in the process of
+ *          finishing due to a previous interrupt.
+ *
+ * Please note that this function always returns immediately, without waiting
+ * for the event loop to actually finish. Please use an appropriate system API
+ * (e.g. <c>pthread_join()</c> on Unix-like systems) if you need to ensure that
+ * the event loop has finished.
+ */
+int anjay_event_loop_interrupt(anjay_t *anjay);
+
+/**
+ * Executes <c>select()</c> or <c>poll()</c> on all sockets currently in use and
+ * calls @ref anjay_serve if appropriate.
+ *
+ * This is intended as a building block for custom event loops. In particular,
+ * this code:
+ *
+ * <code>
+ * while (true) {
+ *     anjay_serve_any(anjay, max_wait_time);
+ *     anjay_sched_run(anjay);
+ * }
+ * </code>
+ *
+ * is equivalent to <c>anjay_event_loop_run(anjay, max_wait_time)</c>, as long
+ * as @ref anjay_event_loop_interrupt is never called.
+ *
+ * <strong>CAUTION:</strong> Most of the caveats described in the documentation
+ * for @ref anjay_event_loop_run also apply to this function. Please refer there
+ * for more information.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param max_wait_time Maximum time to spend in <c>poll()</c> or
+ *                      <c>select()</c>.
+ *
+ * @returns 0 for success, or a negative value in case of a fatal error. Please
+ *          note that errors from @ref anjay_serve are <em>not</em> considered
+ *          fatal.
+ */
+int anjay_serve_any(anjay_t *anjay, avs_time_duration_t max_wait_time);
+#endif // ANJAY_WITH_EVENT_LOOP
 
 /**
  * Schedules sending an Update message to the server identified by given
@@ -916,8 +1044,8 @@ int anjay_security_config_from_dm(anjay_t *anjay,
 
 /**
  * Returns @c false if registration to all LwM2M Servers either succeeded or
- * failed with no more retries pending and @c true if registration is in
- * progress.
+ * failed with no more retries pending and @c true if a registration or
+ * bootstrap is in progress.
  */
 bool anjay_ongoing_registration_exists(anjay_t *anjay);
 

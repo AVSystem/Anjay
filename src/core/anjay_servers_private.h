@@ -131,12 +131,6 @@ typedef struct {
 // METHODS ON THE WHOLE SERVERS SUBSYSTEM //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-/**
- * Creates and initializes the servers structure. Currently implemented simply
- * as a zero-filling allocation.
- */
-anjay_servers_t *_anjay_servers_create(void);
-
 #ifndef ANJAY_WITHOUT_DEREGISTER
 /**
  * Deregisters from every active server. It is currently only ever called from
@@ -513,12 +507,11 @@ anjay_socket_transport_t
 _anjay_connection_transport(anjay_connection_ref_t conn_ref);
 
 /**
- * Repopulates the public_sockets list, adding to it all online non-SMS LwM2M
- * sockets, the single SMS router socket (if applicable) and all active
- * download sockets (if applicable).
+ * Creates a list of all online non-SMS LwM2M sockets, the single SMS router
+ * socket (if applicable) and all active download sockets (if applicable).
  */
 AVS_LIST(const anjay_socket_entry_t)
-_anjay_get_socket_entries_unlocked(anjay_unlocked_t *anjay);
+_anjay_collect_socket_entries(anjay_unlocked_t *anjay);
 
 VISIBILITY_PRIVATE_HEADER_END
 

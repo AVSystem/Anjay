@@ -53,7 +53,7 @@ AVS_UNIT_TEST(access_control, set_acl) {
 
     // prevent sending Update, as that will fail in the test environment
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    avs_sched_del(&anjay_unlocked->servers->servers->next_action_handle);
+    avs_sched_del(&anjay_unlocked->servers->next_action_handle);
     ANJAY_MUTEX_UNLOCK(anjay);
 
     anjay_sched_run(anjay);
@@ -63,8 +63,7 @@ AVS_UNIT_TEST(access_control, set_acl) {
         anjay_notify_queue_t queue = NULL;
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_notify_queue_instance_created(&queue, TEST->oid, iid));
-        anjay_unlocked->current_connection.server =
-                anjay_unlocked->servers->servers;
+        anjay_unlocked->current_connection.server = anjay_unlocked->servers;
         anjay_unlocked->current_connection.conn_type = ANJAY_CONNECTION_PRIMARY;
 
         // transaction validation

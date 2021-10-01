@@ -7,7 +7,7 @@ Anjay is currently not supported or regularly tested (which means that builds ma
 - Any degree of testing was only performed on Windows 10; the code is theoretically compatible with Windows Vista and up
 - Building using MinGW from MSYS shell is currently the only supported toolchain
 - Building as a shared library (DLL) is not currently supported
-- Demo application has limited functionality - internal command line and IP Ping object are not available
+- IP Ping object is not available in the demo application
 - Testing frameworks are not supported
 - SMS binding is not supported (applicable to commercial version only)
 

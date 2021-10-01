@@ -18,7 +18,6 @@
 #define DEMO_OBJECTS_H
 
 #include "demo_utils.h"
-#include "iosched.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -48,8 +47,7 @@ typedef struct anjay_demo_struct anjay_demo_t;
 #define DEMO_OID_GEOPOINTS 33608
 #define DEMO_OID_DOWNLOAD_DIAG 33609
 
-const anjay_dm_object_def_t **device_object_create(iosched_t *iosched,
-                                                   const char *endpoint_name);
+const anjay_dm_object_def_t **device_object_create(const char *endpoint_name);
 void device_object_release(const anjay_dm_object_def_t **def);
 void device_notify_time_dependent(anjay_t *anjay,
                                   const anjay_dm_object_def_t **def);
@@ -113,7 +111,7 @@ void ext_dev_info_object_release(const anjay_dm_object_def_t **def);
 void ext_dev_info_notify_time_dependent(anjay_t *anjay,
                                         const anjay_dm_object_def_t **def);
 
-const anjay_dm_object_def_t **ip_ping_object_create(iosched_t *iosched);
+const anjay_dm_object_def_t **ip_ping_object_create(void);
 void ip_ping_object_release(const anjay_dm_object_def_t **def);
 
 const anjay_dm_object_def_t **apn_conn_profile_object_create(void);
@@ -164,10 +162,23 @@ int binary_app_data_container_write(anjay_t *anjay,
 
 const anjay_dm_object_def_t **event_log_object_create(void);
 void event_log_object_release(const anjay_dm_object_def_t **def);
-avs_sched_t *event_log_get_sched(const anjay_dm_object_def_t *const *obj_ptr);
 int event_log_write_data(anjay_t *anjay,
                          const anjay_dm_object_def_t *const *obj_ptr,
                          const void *data,
                          size_t data_size);
+
+#ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
+int install_temperature_object(anjay_t *anjay);
+void temperature_update_handler(anjay_t *anjay);
+void temperature_add_instance(anjay_t *anjay, anjay_iid_t iid);
+void temperature_remove_instance(anjay_t *anjay, anjay_iid_t iid);
+
+int install_accelerometer_object(anjay_t *anjay);
+void accelerometer_update_handler(anjay_t *anjay);
+void accelerometer_add_instance(anjay_t *anjay, anjay_iid_t iid);
+void accelerometer_remove_instance(anjay_t *anjay, anjay_iid_t iid);
+
+int install_push_button_object(anjay_t *anjay);
+#endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
 
 #endif // DEMO_OBJECTS_H

@@ -16,8 +16,8 @@
 DTLS connection using certificates
 ==================================
 
-In :doc:`/BasicClient/BC4` section you learned how to use PSK to enable secure
-connection in Anjay using DTLS. In this section, we will show how to use
+In :doc:`/BasicClient/BC-Security` section you learned how to use PSK to enable
+secure connection in Anjay using DTLS. In this section, we will show how to use
 certificates instead of PSK.
 
 Preparing a LwM2M Client written using Anjay to use X.509 certificates requires
@@ -31,12 +31,12 @@ that you would like to load the certificates from files.
 
 All actual parsing is performed by the TLS backend library, so it is enough to
 just load contents of certificate files in DER format into memory. The code from
-listing below is based on :doc:`/BasicClient/BC3` example and highlights the
-modified parts.
+listing below is based on :doc:`/BasicClient/BC-MandatoryObjects` example and
+highlights the modified parts.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/AT-Certificates/src/main.c
-    :emphasize-lines: 8,54-85,98,101-130
+    :emphasize-lines: 7-40,53,56-85
 
     #include <anjay/anjay.h>
     #include <anjay/attr_storage.h>
@@ -44,52 +44,7 @@ modified parts.
     #include <anjay/server.h>
     #include <avsystem/commons/avs_log.h>
 
-    #include <poll.h>
     #include <string.h>
-
-    static int main_loop(anjay_t *anjay) {
-        while (true) {
-            // Obtain all network data sources
-            AVS_LIST(avs_net_socket_t *const) sockets = anjay_get_sockets(anjay);
-
-            // Prepare to poll() on them
-            size_t numsocks = AVS_LIST_SIZE(sockets);
-            struct pollfd pollfds[numsocks];
-            size_t i = 0;
-            AVS_LIST(avs_net_socket_t *const) sock;
-            AVS_LIST_FOREACH(sock, sockets) {
-                pollfds[i].fd = *(const int *) avs_net_socket_get_system(*sock);
-                pollfds[i].events = POLLIN;
-                pollfds[i].revents = 0;
-                ++i;
-            }
-
-            const int max_wait_time_ms = 1000;
-            // Determine the expected time to the next job in milliseconds.
-            // If there is no job we will wait till something arrives for
-            // at most 1 second (i.e. max_wait_time_ms).
-            int wait_ms =
-                    anjay_sched_calculate_wait_time_ms(anjay, max_wait_time_ms);
-
-            // Wait for the events if necessary, and handle them.
-            if (poll(pollfds, numsocks, wait_ms) > 0) {
-                int socket_id = 0;
-                AVS_LIST(avs_net_socket_t *const) socket = NULL;
-                AVS_LIST_FOREACH(socket, sockets) {
-                    if (pollfds[socket_id].revents) {
-                        if (anjay_serve(anjay, *socket)) {
-                            avs_log(tutorial, ERROR, "anjay_serve failed");
-                        }
-                    }
-                    ++socket_id;
-                }
-            }
-
-            // Finally run the scheduler
-            anjay_sched_run(anjay);
-        }
-        return 0;
-    }
 
     static int
     load_buffer_from_file(uint8_t **out, size_t *out_size, const char *filename) {
@@ -230,7 +185,8 @@ modified parts.
         }
 
         if (!result) {
-            result = main_loop(anjay);
+            result = anjay_event_loop_run(
+                    anjay, avs_time_duration_from_scalar(1, AVS_TIME_S));
         }
 
         anjay_delete(anjay);

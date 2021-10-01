@@ -23,8 +23,6 @@
 #include <anjay/anjay_config.h>
 #include <anjay/fw_update.h>
 
-#include "iosched.h"
-
 typedef struct firmware_metadata {
     uint8_t magic[8]; // "ANJAY_FW"
     uint16_t version;
@@ -44,7 +42,6 @@ typedef struct {
 } fw_update_logic_t;
 
 int firmware_update_install(anjay_t *anjay,
-                            iosched_t *iosched,
                             fw_update_logic_t *fw,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,

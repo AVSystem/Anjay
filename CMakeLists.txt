@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.13.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.14.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -110,6 +110,13 @@ option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
 option(WITH_DOWNLOADER "Enable support for downloader API" ON)
 cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF "WITH_DOWNLOADER" OFF)
 
+set(THREAD_SAFETY_DEFAULT OFF)
+if(WIN32 OR UNIX)
+    set(THREAD_SAFETY_DEFAULT ON)
+endif()
+
+option(WITH_THREAD_SAFETY "Enable guarding of all accesses to anjay_t with a mutex" "${THREAD_SAFETY_DEFAULT}")
+
 ################# LIBRARIES ####################################################
 
 # avs_commons required components.
@@ -160,6 +167,10 @@ if(WITH_LOCAL_AVS_COMMONS)
     read_avs_commons_compile_time_option(AVS_COMMONS_HAVE_VISIBILITY)
     read_avs_commons_compile_time_option(AVS_COMMONS_STREAM_WITH_FILE)
     set(WITH_AVS_STREAM_FILE "${AVS_COMMONS_STREAM_WITH_FILE}")
+    read_avs_commons_compile_time_option(AVS_COMMONS_SCHED_THREAD_SAFE)
+    set(WITH_SCHEDULER_THREAD_SAFE "${AVS_COMMONS_SCHED_THREAD_SAFE}")
+    read_avs_commons_compile_time_option(AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET)
+    set(WITH_POSIX_AVS_SOCKET "${AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET}")
 else()
     set(_DTLS_BACKENDS "mbedtls" "openssl" "tinydtls")
     set(DTLS_BACKEND "mbedtls" CACHE STRING "DTLS backend to use; possible values: <empty> ${_DTLS_BACKENDS}")
@@ -189,7 +200,7 @@ option(WITH_AVS_LOG "Enable logging support" ON)
 option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
 
 if(NOT WITH_LOCAL_AVS_COMMONS)
-    set(WITH_SCHEDULER_THREAD_SAFE OFF CACHE INTERNAL "")
+    set(WITH_SCHEDULER_THREAD_SAFE "${WITH_THREAD_SAFETY}" CACHE INTERNAL "")
 
     add_subdirectory(deps/avs_commons)
 endif()
@@ -251,7 +262,7 @@ cmake_dependent_option(WITH_INTERNAL_TRACE "Enable TRACE-level logs inside AVSys
 
 option(WITH_NET_STATS "Enable measuring amount of LwM2M traffic" ON)
 
-option(WITH_THREAD_SAFETY "Enable guarding of all accesses to anjay_t with a mutex" OFF)
+option(WITH_EVENT_LOOP "Enable default implementation of the event loop" "${WITH_POSIX_AVS_SOCKET}")
 
 # ANJAY_MUTEX_LOCK() variant based on nested functions
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/nested_funcs.c"
@@ -280,6 +291,7 @@ endif()
 
 cmake_dependent_option(WITH_MODULE_attr_storage "Automatic attribute storage module" ON WITH_AVS_PERSISTENCE OFF)
 cmake_dependent_option(WITH_MODULE_access_control "Access control object implementation module" ON WITH_ACCESS_CONTROL OFF)
+option(WITH_MODULE_ipso_objects "Generic implementation of certain kinds of IPSO objects" ON)
 option(WITH_MODULE_security "Security object module" ON)
 option(WITH_MODULE_server "Server object module" ON)
 option(WITH_MODULE_fw_update "Firmware Update object module" ON)
@@ -291,6 +303,7 @@ add_library(anjay
             src/core/anjay_bootstrap_core.c
             src/core/anjay_core.c
             src/core/anjay_dm_core.c
+            src/core/anjay_event_loop.c
             src/core/anjay_io_core.c
             src/core/anjay_io_utils.c
             src/core/anjay_notify.c
@@ -338,6 +351,9 @@ add_library(anjay
             src/modules/attr_storage/anjay_attr_storage_persistence.c
             src/modules/attr_storage/anjay_mod_attr_storage.c
             src/modules/fw_update/anjay_fw_update.c
+            src/modules/ipso/anjay_ipso_3d_sensor.c
+            src/modules/ipso/anjay_ipso_basic_sensor.c
+            src/modules/ipso/anjay_ipso_button.c
             src/modules/security/anjay_mod_security.c
             src/modules/security/anjay_security_persistence.c
             src/modules/security/anjay_security_transaction.c
@@ -416,6 +432,7 @@ add_library(anjay
             include_public/anjay/download.h
             include_public/anjay/fw_update.h
             include_public/anjay/io.h
+            include_public/anjay/ipso_objects.h
             include_public/anjay/security.h
             include_public/anjay/server.h
             include_public/anjay/stats.h)
@@ -447,10 +464,12 @@ set(ANJAY_WITHOUT_DEREGISTER "${WITHOUT_DEREGISTER}")
 set(ANJAY_WITHOUT_IP_STICKINESS "${WITHOUT_IP_STICKINESS}")
 set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
 set(ANJAY_WITH_MODULE_ATTR_STORAGE "${WITH_MODULE_attr_storage}")
+set(ANJAY_WITH_MODULE_IPSO_OBJECTS "${WITH_MODULE_ipso_objects}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
 set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
 set(ANJAY_WITH_MODULE_SERVER "${WITH_MODULE_server}")
 set(ANJAY_WITH_NET_STATS "${WITH_NET_STATS}")
+set(ANJAY_WITH_EVENT_LOOP "${WITH_EVENT_LOOP}")
 set(ANJAY_WITH_OBSERVATION_STATUS "${WITH_OBSERVATION_STATUS}")
 set(ANJAY_WITH_OBSERVE "${WITH_OBSERVE}")
 set(ANJAY_WITH_THREAD_SAFETY "${WITH_THREAD_SAFETY}")
@@ -477,6 +496,8 @@ endif()
 
 set(DEMO_DEPENDENCIES
     WITH_AVS_LOG
+    WITH_EVENT_LOOP
+    # WITH_SCHEDULER_THREAD_SAFE
     WITH_MODULE_security
     WITH_MODULE_server)
 
@@ -739,6 +760,10 @@ if(WITH_MODULE_access_control)
 endif()
 if(WITH_MODULE_attr_storage)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/attr_storage.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_ipso_objects)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/ipso_objects.h"
             DESTINATION include/anjay)
 endif()
 if(WITH_MODULE_fw_update)

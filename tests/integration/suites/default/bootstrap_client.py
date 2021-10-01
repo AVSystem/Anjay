@@ -454,3 +454,30 @@ class NoBootstrapAfterCompleteFail(BootstrapTest.Test):
         with self.serv.fake_close():
             self.assertDtlsReconnect(self.bootstrap_server, timeout_s=10)
             self.assertDemoRequestsBootstrap()
+
+
+class BootstrapCheckOngoingRegistrationsWithLegacyServerInitiated(BootstrapTest.Test):
+    def runTest(self):
+        # Client-Initiated Bootstrap
+        self.assertDemoRequestsBootstrap()
+        self.assertTrue(self.ongoing_registration_exists())
+        self.add_server(server_iid=1,
+                        security_iid=2,
+                        server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port())
+        self.perform_bootstrap_finish()
+
+        # Registration
+        pkt = self.assertDemoRegisters(respond=False)
+        self.assertTrue(self.ongoing_registration_exists())
+        self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
+        self.assertFalse(self.ongoing_registration_exists())
+
+        # Server-Initiated Bootstrap
+        req = Lwm2mDelete('/')
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
+                            self.bootstrap_server.recv())
+        self.assertTrue(self.ongoing_registration_exists())
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)

@@ -38,9 +38,6 @@ typedef enum {
 struct anjay_server_info_struct;
 typedef struct anjay_server_info_struct anjay_server_info_t;
 
-struct anjay_servers_struct;
-typedef struct anjay_servers_struct anjay_servers_t;
-
 typedef struct {
     anjay_server_info_t *server;
     anjay_connection_type_t conn_type;

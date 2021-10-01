@@ -28,4 +28,10 @@ This client can be a good starting point for creating more complex applications.
    :glob:
    :titlesonly:
 
-   BasicClient/BC*
+   BasicClient/BC-Initialization
+   BasicClient/BC-MandatoryObjects
+   BasicClient/BC-Security
+   BasicClient/BC-ObjectImplementation
+   BasicClient/BC-Notifications
+   BasicClient/BC-Send
+   BasicClient/BC-ThreadSafety

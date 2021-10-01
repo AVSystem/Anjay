@@ -119,6 +119,11 @@ typedef int anjay_dm_object_write_default_attrs_t(
  * performed from this handler, so the implementation is free to use iteration
  * state that would be invalidated by such calls.
  *
+ * CAUTION: Aside from the note above, the library MAY call other data model
+ * handlers for the same Object from within the @ref anjay_dm_emit call. Please
+ * make sure that your code is able to handle this - e.g. avoid calling
+ * @ref anjay_dm_emit with a non-recursive object-scope mutex locked.
+ *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
  *                @ref anjay_register_object .
@@ -271,6 +276,11 @@ typedef int anjay_dm_instance_write_default_attrs_t(
  * A handler that enumerates SUPPORTED Resources for an Object Instance, called
  * only if the Object Instance is PRESENT (has recently been returned via
  * @ref anjay_dm_list_instances_t).
+ *
+ * CAUTION: The library MAY call other data model handlers for the same Object
+ * from within the @ref anjay_dm_emit_res call. Please make sure that your code
+ * is able to handle this - e.g. avoid calling @ref anjay_dm_emit_res with
+ * a non-recursive object-scope mutex locked.
  *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to
@@ -447,6 +457,11 @@ anjay_dm_resource_reset_t(anjay_t *anjay,
  * @ref anjay_dm_resource_reset_t handlers inside the @ref anjay_dm_emit calls
  * performed from this handler, so the implementation is free to use iteration
  * state that would be invalidated by such calls.
+ *
+ * CAUTION: Aside from the note above, the library MAY call other data model
+ * handlers for the same Object from within the @ref anjay_dm_emit call. Please
+ * make sure that your code is able to handle this - e.g. avoid calling
+ * @ref anjay_dm_emit with a non-recursive object-scope mutex locked.
  *
  * @param anjay   Anjay object to operate on.
  * @param obj_ptr Object definition pointer, as passed to

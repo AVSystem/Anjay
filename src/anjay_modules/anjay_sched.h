@@ -23,8 +23,8 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-static inline anjay_unlocked_t *_anjay_get_from_sched(avs_sched_t *sched) {
-    return (anjay_unlocked_t *) avs_sched_data(sched);
+static inline anjay_t *_anjay_get_from_sched(avs_sched_t *sched) {
+    return (anjay_t *) avs_sched_data(sched);
 }
 
 VISIBILITY_PRIVATE_HEADER_END

@@ -393,10 +393,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         return valgrind_list
 
-    def _start_demo(self, cmdline_args, timeout_s=30, prepend_args=None):
-        """
-        Starts the demo executable with given CMDLINE_ARGS.
-        """
+    def _get_demo_executable(self):
         demo_executable = os.path.join(
             self.config.demo_path, self.config.demo_cmd)
 
@@ -407,7 +404,13 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             print('ERROR: %s is NOT executable' % (demo_executable,), file=sys.stderr)
             sys.exit(-1)
 
-        args_prefix = []
+        return demo_executable
+
+    def _start_demo(self, cmdline_args, timeout_s=30, prepend_args=None):
+        """
+        Starts the demo executable with given CMDLINE_ARGS.
+        """
+        demo_executable = self._get_demo_executable()
         if (os.environ.get('RR')
                 or ('RRR' in os.environ
                     and test_or_suite_matches_query_regex(self, os.environ['RRR']))):
@@ -787,13 +790,24 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.dumpcap_stderr_reader_thread.join()
         logging.debug('dumpcap terminated')
 
-    def request_demo_shutdown(self, deregister_servers=[], *args, **kwargs):
+    def coap_ping(self, server=None, timeout_s=-1):
+        serv = server or self.serv
+        req = Lwm2mEmpty(type=coap.Type.CONFIRMABLE)
+        serv.send(req)
+        self.assertMsgEqual(Lwm2mReset.matching(req)(), serv.recv(timeout_s=timeout_s))
+
+    def request_demo_shutdown(self, deregister_servers=[], timeout_s=-1, *args, **kwargs):
         """
         Attempts to cleanly terminate demo by closing its STDIN.
 
         If DEREGISTER_SERVERS is a non-empty list, the function waits until
         demo deregisters from each server from the list.
         """
+        for serv in deregister_servers:
+            # send a CoAP ping to each of the connections
+            # to make sure that all data has been processed by the client
+            self.coap_ping(serv, timeout_s=timeout_s)
+
         logging.debug('requesting clean demo shutdown')
         if self.demo_process is None:
             logging.debug('demo not started, skipping')
@@ -802,7 +816,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         self.demo_process.stdin.close()
 
         for serv in deregister_servers:
-            self.assertDemoDeregisters(serv, reset=False, *args, **kwargs)
+            self.assertDemoDeregisters(serv, reset=False, timeout_s=timeout_s, *args, **kwargs)
 
         logging.debug('demo terminated')
 

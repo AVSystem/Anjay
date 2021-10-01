@@ -64,9 +64,11 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
 
 static void server_communication_error_job(avs_sched_t *sched,
                                            const void *server_ptr) {
-    (void) sched;
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     _anjay_server_on_failure(*(anjay_server_info_t *const *) server_ptr,
                              "not reachable");
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
@@ -213,7 +215,7 @@ static bool should_retry_bootstrap(anjay_unlocked_t *anjay) {
     bool possibly_active_server_exists = false;
     bool registration_failure_must_trigger_bootstrap = false;
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+    AVS_LIST_FOREACH(it, anjay->servers) {
         if (it->ssid == ANJAY_SSID_BOOTSTRAP) {
             if (anjay->bootstrap.in_progress) {
                 // Bootstrap already in progress, there may be no need to retry
@@ -255,10 +257,10 @@ _anjay_requested_bootstrap_action(anjay_unlocked_t *anjay) {
 bool anjay_all_connections_failed(anjay_t *anjay_locked) {
     bool result = false;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    if (anjay->servers->servers) {
+    if (anjay->servers) {
         result = true;
         AVS_LIST(anjay_server_info_t) it;
-        AVS_LIST_FOREACH(it, anjay->servers->servers) {
+        AVS_LIST_FOREACH(it, anjay->servers) {
             if (_anjay_server_active(it) || !it->refresh_failed) {
                 result = false;
                 break;
@@ -283,7 +285,7 @@ int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay) {
     int result = 0;
 
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+    AVS_LIST_FOREACH(it, anjay->servers) {
         if (_anjay_server_active(it) || !it->refresh_failed
                 || (it->ssid == ANJAY_SSID_BOOTSTRAP
                     && !_anjay_bootstrap_legacy_server_initiated_allowed(
@@ -299,7 +301,7 @@ int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay) {
     return result;
 }
 
-void _anjay_servers_add(anjay_servers_t *servers,
+void _anjay_servers_add(AVS_LIST(anjay_server_info_t) *servers,
                         AVS_LIST(anjay_server_info_t) server) {
     assert(AVS_LIST_SIZE(server) == 1);
     AVS_LIST(anjay_server_info_t) *insert_ptr =
@@ -317,7 +319,7 @@ int _anjay_server_deactivate(anjay_unlocked_t *anjay,
                              anjay_ssid_t ssid,
                              avs_time_duration_t reactivate_delay) {
     AVS_LIST(anjay_server_info_t) *server_ptr =
-            _anjay_servers_find_ptr(anjay->servers, ssid);
+            _anjay_servers_find_ptr(&anjay->servers, ssid);
     if (!server_ptr) {
         anjay_log(ERROR, _("SSID ") "%" PRIu16 _(" is not a known server"),
                   ssid);
@@ -371,7 +373,8 @@ _anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
 }
 
 static void disable_server_job(avs_sched_t *sched, const void *ssid_ptr) {
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
 
     anjay_iid_t server_iid;
@@ -385,6 +388,7 @@ static void disable_server_job(avs_sched_t *sched, const void *ssid_ptr) {
                 _anjay_disable_timeout_from_server_iid(anjay, server_iid);
         _anjay_server_deactivate(anjay, ssid, disable_timeout);
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 /**
@@ -417,10 +421,11 @@ typedef struct {
 
 static void disable_server_with_timeout_job(avs_sched_t *sched,
                                             const void *data_ptr_) {
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     const disable_server_data_t *data =
             (const disable_server_data_t *) data_ptr_;
-    if (_anjay_server_deactivate(_anjay_get_from_sched(sched), data->ssid,
-                                 data->timeout)) {
+    if (_anjay_server_deactivate(anjay, data->ssid, data->timeout)) {
         anjay_log(ERROR, _("unable to deactivate server: ") "%" PRIu16,
                   data->ssid);
     } else {
@@ -431,6 +436,7 @@ static void disable_server_with_timeout_job(avs_sched_t *sched,
             anjay_log(INFO, _("server ") "%" PRIu16 _(" disabled"), data->ssid);
         }
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 int _anjay_disable_server_with_timeout_unlocked(anjay_unlocked_t *anjay,
@@ -479,7 +485,7 @@ int _anjay_enable_server_unlocked(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     }
 
     AVS_LIST(anjay_server_info_t) *server_ptr =
-            _anjay_servers_find_ptr(anjay->servers, ssid);
+            _anjay_servers_find_ptr(&anjay->servers, ssid);
 
     if (!server_ptr || !*server_ptr || _anjay_server_active(*server_ptr)) {
         anjay_log(TRACE, _("not an inactive server: SSID = ") "%u", ssid);

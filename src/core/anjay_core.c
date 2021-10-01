@@ -52,11 +52,17 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.13.0"
+#    define ANJAY_VERSION "2.14.0"
 #endif // ANJAY_VERSION
 
 static int init_anjay(anjay_unlocked_t *anjay,
                       const anjay_configuration_t *config) {
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    if (!(anjay->coap_sched = avs_sched_new("Anjay CoAP", NULL))) {
+        anjay_log(ERROR, _("out of memory"));
+        return -1;
+    }
+#endif // ANJAY_WITH_THREAD_SAFETY
 
 #ifdef ANJAY_WITH_BOOTSTRAP
     bool legacy_server_initiated_bootstrap =
@@ -126,12 +132,6 @@ static int init_anjay(anjay_unlocked_t *anjay,
         return -1;
     }
 
-    anjay->servers = _anjay_servers_create();
-    if (!anjay->servers) {
-        anjay_log(ERROR, _("out of memory"));
-        return -1;
-    }
-
     anjay->in_shared_buffer = avs_shared_buffer_new(config->in_buffer_size);
     if (!anjay->in_shared_buffer) {
         anjay_log(ERROR, _("out of memory"));
@@ -174,6 +174,38 @@ static int init_anjay(anjay_unlocked_t *anjay,
     return 0;
 }
 
+#ifdef ANJAY_WITH_THREAD_SAFETY
+static void coap_sched_job(avs_sched_t *sched, const void *dummy) {
+    (void) dummy;
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    if (anjay->coap_sched) {
+        avs_sched_run(anjay->coap_sched);
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
+void _anjay_reschedule_coap_sched_job(anjay_unlocked_t *anjay) {
+    // NOTE: This function is implicitly called at every ANJAY_MUTEX_UNLOCK()
+    // This is necessary because the CoAP jobs need to be run with the Anjay
+    // mutex locked, and the main scheduler is run without that lock
+    if (anjay->coap_sched) {
+        avs_time_monotonic_t next_job_time =
+                avs_sched_time_of_next(anjay->coap_sched);
+        if (avs_time_monotonic_valid(next_job_time)) {
+            if (!anjay->coap_sched_job_handle
+                    || AVS_RESCHED_AT(&anjay->coap_sched_job_handle,
+                                      next_job_time)) {
+                AVS_SCHED_AT(anjay->sched, &anjay->coap_sched_job_handle,
+                             next_job_time, coap_sched_job, NULL, 0);
+            }
+        } else {
+            avs_sched_del(&anjay->coap_sched_job_handle);
+        }
+    }
+}
+#endif // ANJAY_WITH_THREAD_SAFETY
+
 const char *anjay_get_version(void) {
     return ANJAY_VERSION;
 }
@@ -201,7 +233,7 @@ static anjay_t *alloc_anjay(void) {
 #else  // ANJAY_WITH_THREAD_SAFETY
     anjay_unlocked_t *anjay = out;
 #endif // ANJAY_WITH_THREAD_SAFETY
-    if (!(anjay->sched = avs_sched_new("Anjay", anjay))) {
+    if (!(anjay->sched = avs_sched_new("Anjay", out))) {
         anjay_log(ERROR, _("out of memory"));
 #ifdef ANJAY_WITH_THREAD_SAFETY
         avs_mutex_cleanup(&out->mutex);
@@ -246,7 +278,13 @@ static void anjay_cleanup_impl(anjay_unlocked_t *anjay, bool deregister) {
 
     avs_sched_del(&anjay->reload_servers_sched_job_handle);
     avs_sched_del(&anjay->scheduled_notify.handle);
+
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
     avs_sched_cleanup(&anjay->sched);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    avs_sched_cleanup(&anjay->coap_sched);
+#endif // ANJAY_WITH_THREAD_SAFETY
 
     if (!anjay->prng_ctx.allocated_by_user) {
         avs_crypto_prng_free(&anjay->prng_ctx.ctx);
@@ -846,7 +884,7 @@ static int serve_connection(anjay_unlocked_t *anjay,
     return avs_is_ok(err) ? args.serve_result : -1;
 }
 
-static int serve_unlocked(anjay_unlocked_t *anjay,
+int _anjay_serve_unlocked(anjay_unlocked_t *anjay,
                           avs_net_socket_t *ready_socket) {
     _anjay_security_config_cache_cleanup(&anjay->security_config_from_dm_cache);
 
@@ -869,7 +907,7 @@ static int serve_unlocked(anjay_unlocked_t *anjay,
 int anjay_serve(anjay_t *anjay_locked, avs_net_socket_t *ready_socket) {
     int result = -1;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    result = serve_unlocked(anjay, ready_socket);
+    result = _anjay_serve_unlocked(anjay, ready_socket);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }
@@ -879,6 +917,9 @@ avs_sched_t *_anjay_get_scheduler_unlocked(anjay_unlocked_t *anjay) {
 }
 
 avs_sched_t *anjay_get_scheduler(anjay_t *anjay) {
+    if (!anjay) {
+        return NULL;
+    }
 #ifdef ANJAY_WITH_THREAD_SAFETY
     anjay_unlocked_t *anjay_unlocked =
             (anjay_unlocked_t *) &anjay->anjay_unlocked_placeholder;
@@ -888,12 +929,12 @@ avs_sched_t *anjay_get_scheduler(anjay_t *anjay) {
 #endif // ANJAY_WITH_THREAD_SAFETY
 }
 
-int anjay_sched_time_to_next(anjay_t *anjay_locked,
-                             avs_time_duration_t *out_delay) {
+int anjay_sched_time_to_next(anjay_t *anjay, avs_time_duration_t *out_delay) {
     *out_delay = AVS_TIME_DURATION_INVALID;
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    *out_delay = avs_sched_time_to_next(anjay->sched);
-    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    avs_sched_t *sched = anjay_get_scheduler(anjay);
+    if (sched) {
+        *out_delay = avs_sched_time_to_next(sched);
+    }
     return avs_time_duration_valid(*out_delay) ? 0 : -1;
 }
 
@@ -920,10 +961,11 @@ int anjay_sched_calculate_wait_time_ms(anjay_t *anjay, int limit_ms) {
     return limit_ms;
 }
 
-void anjay_sched_run(anjay_t *anjay_locked) {
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    avs_sched_run(anjay->sched);
-    ANJAY_MUTEX_UNLOCK(anjay_locked);
+void anjay_sched_run(anjay_t *anjay) {
+    avs_sched_t *sched = anjay_get_scheduler(anjay);
+    if (sched) {
+        avs_sched_run(sched);
+    }
 }
 
 anjay_etag_t *anjay_etag_new(uint8_t etag_size) {

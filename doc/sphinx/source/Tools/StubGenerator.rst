@@ -25,7 +25,7 @@ fill in actual object logic.
 
 You can use `./tools/lwm2m_object_registry.py` script to download the
 Object Definition XML from `OMA LwM2M Object and Resource Registry
-<https://www.openmobilealliance.org/wp/OMNA/LwM2M/LwM2MRegistry.html>`_.
+<https://technical.openmobilealliance.org/OMNA/LwM2M/LwM2MRegistry.html>`_.
 
 Usage examples
 ~~~~~~~~~~~~~~

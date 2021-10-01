@@ -85,7 +85,7 @@ int _anjay_servers_sched_reactivate_all_given_up(anjay_unlocked_t *anjay);
  *
  * Does not modify scheduled update job for @p server.
  */
-void _anjay_servers_add(anjay_servers_t *servers,
+void _anjay_servers_add(AVS_LIST(anjay_server_info_t) *servers,
                         AVS_LIST(anjay_server_info_t) server);
 /**
  * Deactivates the active server entry associated with @p ssid . Fails if there

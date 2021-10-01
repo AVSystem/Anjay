@@ -63,10 +63,28 @@ struct
     avs_net_ssl_version_t dtls_version;
     avs_net_socket_configuration_t socket_config;
     avs_sched_t *sched;
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    avs_sched_t *coap_sched;
+    avs_sched_handle_t coap_sched_job_handle;
+#endif // ANJAY_WITH_THREAD_SAFETY
     anjay_dm_t dm;
     anjay_security_config_cache_t security_config_from_dm_cache;
     uint16_t udp_listen_port;
-    anjay_servers_t *servers;
+
+    /**
+     * List of known LwM2M servers we may want to be connected to. This is
+     * semantically a map, keyed (and ordered) by SSID.
+     */
+    AVS_LIST(anjay_server_info_t) servers;
+
+    /**
+     * Cache of anjay_socket_entry_t objects, returned by
+     * anjay_get_socket_entries(). These entries are never used for anything
+     * inside the library, it's just to allow returning a list from a function
+     * without requiring the user to clean it up.
+     */
+    AVS_LIST(const anjay_socket_entry_t) cached_public_sockets;
+
     avs_sched_handle_t reload_servers_sched_job_handle;
 #ifdef ANJAY_WITH_OBSERVE
     anjay_observe_state_t observe;
@@ -101,6 +119,10 @@ struct
     avs_ssl_additional_configuration_clb_t *additional_tls_config_clb;
 
     anjay_prng_ctx_t prng_ctx;
+#if !defined(ANJAY_WITH_THREAD_SAFETY) && defined(ANJAY_ATOMIC_FIELDS_DEFINED)
+    anjay_atomic_fields_t atomic_fields;
+#endif // !defined(ANJAY_WITH_THREAD_SAFETY) &&
+       // defined(ANJAY_ATOMIC_FIELDS_DEFINED)
 };
 
 #define ANJAY_DM_DEFAULT_PMIN_VALUE 1
@@ -119,8 +141,19 @@ int _anjay_bind_connection(anjay_unlocked_t *anjay, anjay_connection_ref_t ref);
 
 void _anjay_release_connection(anjay_unlocked_t *anjay);
 
+int _anjay_serve_unlocked(anjay_unlocked_t *anjay,
+                          avs_net_socket_t *ready_socket);
+
 int _anjay_parse_request(const avs_coap_request_header_t *hdr,
                          anjay_request_t *out_request);
+
+static inline avs_sched_t *_anjay_get_coap_sched(anjay_unlocked_t *anjay) {
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    return anjay->coap_sched;
+#else  // ANJAY_WITH_THREAD_SAFETY
+    return anjay->sched;
+#endif // ANJAY_WITH_THREAD_SAFETY
+}
 
 VISIBILITY_PRIVATE_HEADER_END
 

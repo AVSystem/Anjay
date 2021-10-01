@@ -69,6 +69,12 @@ _anjay_dm_installed_object_get_unlocked(
     return obj_ptr->impl.unlocked;
 }
 
+static inline bool _anjay_dm_installed_object_is_valid_unlocked(
+        const anjay_dm_installed_object_t *obj_ptr) {
+    return obj_ptr && (obj_ptr->type == ANJAY_DM_OBJECT_UNLOCKED)
+           && obj_ptr->impl.unlocked && (*obj_ptr->impl.unlocked);
+}
+
 #else // ANJAY_WITH_THREAD_SAFETY
 
 typedef anjay_dm_object_def_t anjay_unlocked_dm_object_def_t;
@@ -89,6 +95,11 @@ _anjay_dm_installed_object_get_unlocked(
     assert(*obj_ptr);
     assert(**obj_ptr);
     return *obj_ptr;
+}
+
+static inline const bool _anjay_dm_installed_object_is_valid_unlocked(
+        const anjay_dm_installed_object_t *obj_ptr) {
+    return obj_ptr && (*obj_ptr) && (**obj_ptr);
 }
 
 typedef anjay_dm_list_ctx_t anjay_unlocked_dm_list_ctx_t;

@@ -55,6 +55,8 @@ int _anjay_bootstrap_notify_regular_connection_available(
 
 bool _anjay_bootstrap_legacy_server_initiated_allowed(anjay_unlocked_t *anjay);
 
+bool _anjay_bootstrap_scheduled(anjay_unlocked_t *anjay);
+
 int _anjay_bootstrap_perform_action(anjay_unlocked_t *anjay,
                                     const anjay_request_t *request);
 
@@ -74,6 +76,8 @@ void _anjay_bootstrap_cleanup(anjay_unlocked_t *anjay);
         ((void) 0)
 
 #    define _anjay_bootstrap_legacy_server_initiated_allowed(...) (false)
+
+#    define _anjay_bootstrap_scheduled(anjay) ((void) (anjay), false)
 
 #    define _anjay_bootstrap_perform_action(...) (-1)
 

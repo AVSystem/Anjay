@@ -154,6 +154,23 @@
 #define ANJAY_WITH_THREAD_SAFETY
 
 /**
+ * Enable standard implementation of an event loop.
+ *
+ * Requires C11 <c>stdatomic.h</c> header to be available, and either a platform
+ * that provides a BSD-compatible socket API, or a compatibility layer file (see
+ * <c>AVS_COMMONS_POSIX_COMPAT_HEADER</c> in <c>avs_commons_config.h</c>). This
+ * is designed to best work with the defalt implementation of avs_net sockets
+ * (see <c>AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET</c>), but alternative socket
+ * implementations can also be used.
+ *
+ * The event loop is most useful when thread safety features
+ * (@ref ANJAY_WITH_THREAD_SAFETY and <c>AVS_COMMONS_SCHED_THREAD_SAFE</c>) are
+ * enabled as well, but this is not a hard requirement. See the documentation
+ * for <c>anjay_event_loop_run()</c> for details.
+ */
+#define ANJAY_WITH_EVENT_LOOP
+
+/**
  * Enable support for features new to LwM2M protocol version 1.1.
  *
  * IMPORTANT: Only available in the commercial version. Ignored in the open
@@ -423,6 +440,12 @@
  * Enable fw_update module (implementation of the Firmware Update object).
  */
 #define ANJAY_WITH_MODULE_FW_UPDATE
+
+/**
+ * Enables ipso_objects module (generic implementation of the following kinds of
+ * the basic sensor and three axis sensor IPSO objects).
+ */
+#define ANJAY_WITH_MODULE_IPSO_OBJECTS
 
 /**
  * Enable at_sms module (implementation of an SMS driver for AT modem devices).

@@ -55,13 +55,15 @@ static void send_update_sched_job(avs_sched_t *sched, const void *ssid_ptr) {
     anjay_ssid_t ssid = *(const anjay_ssid_t *) ssid_ptr;
     assert(ssid != ANJAY_SSID_ANY);
 
-    anjay_unlocked_t *anjay = _anjay_get_from_sched(sched);
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_LIST(anjay_server_info_t) server =
             _anjay_servers_find_active(anjay, ssid);
     if (server) {
         server->registration_info.update_forced = true;
         _anjay_active_server_refresh(server);
     }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
 /**
@@ -159,7 +161,7 @@ static int reschedule_update_for_all_servers(anjay_unlocked_t *anjay) {
     int result = 0;
 
     AVS_LIST(anjay_server_info_t) it;
-    AVS_LIST_FOREACH(it, anjay->servers->servers) {
+    AVS_LIST_FOREACH(it, anjay->servers) {
         if (_anjay_server_active(it)) {
             int partial = reschedule_update_for_server(it);
             if (!result) {
@@ -1166,20 +1168,26 @@ static size_t server_object_instances_count(anjay_unlocked_t *anjay) {
     return count;
 }
 
-static bool registered_or_gave_up(anjay_server_info_t *server) {
-    if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+static bool server_state_stable(anjay_server_info_t *server) {
+    if (!_anjay_server_active(server)) {
         return false;
+    } else if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+        // Bootstrap server connection is considered stable if it's in the idle
+        // state waiting for 1.0-style Server-Initiated Bootstrap. That state
+        // does not expire.
+        return !_anjay_bootstrap_scheduled(server->anjay);
+    } else {
+        // Management servers connections are considered stable when they have
+        // a valid, non-expired registration.
+        return !_anjay_server_registration_expired(server);
     }
-
-    const bool anjay_registered =
-            !_anjay_bootstrap_in_progress(server->anjay)
-            && _anjay_server_active(server)
-            && !_anjay_server_registration_expired(server);
-
-    return anjay_registered || server->refresh_failed;
 }
 
 bool _anjay_ongoing_registration_exists_unlocked(anjay_unlocked_t *anjay) {
+    if (_anjay_bootstrap_in_progress(anjay)) {
+        return true;
+    }
+
     size_t dm_servers_count = server_object_instances_count(anjay);
     if (dm_servers_count == 0) {
         return false;
@@ -1187,7 +1195,7 @@ bool _anjay_ongoing_registration_exists_unlocked(anjay_unlocked_t *anjay) {
 
     size_t loaded_servers_count = 0;
     anjay_server_info_t *server;
-    AVS_LIST_FOREACH(server, anjay->servers->servers) {
+    AVS_LIST_FOREACH(server, anjay->servers) {
         if (server->ssid != ANJAY_SSID_BOOTSTRAP) {
             loaded_servers_count++;
         }
@@ -1197,8 +1205,8 @@ bool _anjay_ongoing_registration_exists_unlocked(anjay_unlocked_t *anjay) {
         return true;
     }
 
-    AVS_LIST_FOREACH(server, anjay->servers->servers) {
-        if (!registered_or_gave_up(server)) {
+    AVS_LIST_FOREACH(server, anjay->servers) {
+        if (!server->refresh_failed && !server_state_stable(server)) {
             return true;
         }
     }

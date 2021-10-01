@@ -20,4 +20,14 @@ Advanced topics
    :glob:
    :titlesonly:
 
-   AdvancedTopics/AT-*
+   AdvancedTopics/AT-AccessControl
+   AdvancedTopics/AT-AttributeStorage
+   AdvancedTopics/AT-Certificates
+   AdvancedTopics/AT-CustomObjects
+   AdvancedTopics/AT-NetworkErrorHandling
+   AdvancedTopics/AT-OtherFeatures
+   AdvancedTopics/AT-Persistence
+   AdvancedTopics/AT-RetransmissionsTimeoutsCaching
+   AdvancedTopics/AT-CustomEventLoop
+   AdvancedTopics/AT-EventLoopNotes
+   AdvancedTopics/AT-IpsoObjects
