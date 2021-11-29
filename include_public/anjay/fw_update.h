@@ -333,7 +333,7 @@ typedef const char *anjay_fw_update_get_name_t(void *user_ptr);
  *                 @ref anjay_fw_update_install
  *
  * @returns The callback shall return a pointer to a null-terminated string
- *          containing tha package version, or <c>NULL</c> if it is not
+ *          containing the package version, or <c>NULL</c> if it is not
  *          currently available.
  */
 typedef const char *anjay_fw_update_get_version_t(void *user_ptr);

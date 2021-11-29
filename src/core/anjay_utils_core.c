@@ -193,8 +193,8 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
     va_list list;
     va_start(list, string);
 
-    AVS_LIST(const anjay_string_t) strings_list = NULL;
-    AVS_LIST(const anjay_string_t) *strings_list_endptr = &strings_list;
+    AVS_LIST(anjay_string_t) strings_list = NULL;
+    AVS_LIST(anjay_string_t) *strings_list_endptr = &strings_list;
     const char *str = string;
 
     while (str) {
@@ -206,7 +206,7 @@ AVS_LIST(const anjay_string_t) _anjay_make_string_list(const char *string,
             break;
         }
 
-        memcpy((char *) (intptr_t) (*strings_list_endptr)->c_str, str, len);
+        memcpy((*strings_list_endptr)->c_str, str, len);
         AVS_LIST_ADVANCE_PTR(&strings_list_endptr);
         str = va_arg(list, const char *);
     }

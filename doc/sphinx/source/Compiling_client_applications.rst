@@ -180,7 +180,7 @@ Alternatively, you may use any other build system. You will need to:
     and `anjay_config.h.in <https://github.com/AVSystem/Anjay/blob/master/include_public/anjay/anjay_config.h.in>`_
     will guide you about the meaning of various settings.
   * You may use one of the directories from `example_configs
-    <https://github.com/AVSystem/Anjay/blob/master/example_configs>`_ as a starting point. See
+    <https://github.com/AVSystem/Anjay/tree/master/example_configs>`_ as a starting point. See
     `README.md inside that directory
     <https://github.com/AVSystem/Anjay/blob/master/example_configs/README.md>`_ for details. You may
     even set one of the subdirectories there are as an include path directly in your compiler if you

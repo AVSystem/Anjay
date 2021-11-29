@@ -223,9 +223,17 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
         if (avs_is_err(err)) {
             return err;
         }
-        certificate_info.client_cert =
-                avs_crypto_certificate_chain_info_from_array(
-                        cache->client_cert_array, element_count);
+        switch (element_count) {
+        case 0:
+            break;
+        case 1:
+            certificate_info.client_cert = cache->client_cert_array[0];
+            break;
+        default:
+            certificate_info.client_cert =
+                    avs_crypto_certificate_chain_info_from_array(
+                            cache->client_cert_array, element_count);
+        }
     }
 
     {

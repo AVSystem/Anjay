@@ -118,8 +118,8 @@ static int fw_get_security_config(void *user_ptr,
     const avs_net_certificate_info_t cert_info = {
         .server_cert_validation = true,
         .trusted_certs =
-                avs_crypto_certificate_chain_info_from_path("./certs/CA.crt"),
-        .client_cert = avs_crypto_certificate_chain_info_from_path(
+                avs_crypto_certificate_chain_info_from_file("./certs/CA.crt"),
+        .client_cert = avs_crypto_certificate_chain_info_from_file(
                 "./certs/client.crt"),
         .client_key = avs_crypto_private_key_info_from_file(
                 "./certs/client.key", NULL)

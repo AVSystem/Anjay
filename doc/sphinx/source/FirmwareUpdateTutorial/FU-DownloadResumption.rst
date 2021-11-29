@@ -99,7 +99,7 @@ previous chapters, but we've always made it zero-initialized before doing so.
 
 .. note::
 
-    **Quick remainder:** download resumption is supported for **PULL**
+    **Quick reminder:** download resumption is supported for **PULL**
     mode downloads only.
 
 Anyway, as you can see from the structure above, we're going to need three

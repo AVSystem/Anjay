@@ -28,35 +28,36 @@
 
 #define ANJAY_DEMO_TEMPERATURE_MAX_INSTANCE_NUM 16
 
-static int temperature_get_value(anjay_iid_t iid, void *ctx, double *value) {
-    (void) iid;
-    (void) ctx;
+typedef struct {
+    uint64_t value;
+} thermometer_t;
+static thermometer_t THERMOMETER;
 
-    static int counter = 1;
-    *value = (double) counter;
-    counter = (counter + ANJAY_DEMO_TEMPERATURE_CHANGE)
-              % (ANJAY_DEMO_TEMPERATURE_MAX_VALUE + 1);
+static double get_temperature(thermometer_t *thermometer) {
+    thermometer->value = (thermometer->value + ANJAY_DEMO_TEMPERATURE_CHANGE)
+                         % (ANJAY_DEMO_TEMPERATURE_MAX_VALUE + 1);
+    return (double) (thermometer->value);
+}
+
+static int
+temperature_get_value(anjay_iid_t iid, void *thermometer, double *value) {
+    (void) iid;
+
+    *value = get_temperature((thermometer_t *) thermometer);
+
     return 0;
 }
 
 int install_temperature_object(anjay_t *anjay) {
-    if (anjay_ipso_basic_sensor_install(anjay,
-                                        ANJAY_DEMO_TEMPERATURE_OID,
-                                        ANJAY_DEMO_TEMPERATURE_MAX_INSTANCE_NUM)
-            || anjay_ipso_basic_sensor_instance_add(
-                       anjay,
-                       ANJAY_DEMO_TEMPERATURE_OID,
-                       0,
-                       (anjay_ipso_basic_sensor_impl_t) {
-                           .unit = ANJAY_DEMO_TEMPERATURE_UNIT,
-                           .get_value = temperature_get_value,
-                           .min_range_value = 0,
-                           .max_range_value =
-                                   (double) ANJAY_DEMO_TEMPERATURE_MAX_VALUE
-                       })) {
+    if (anjay_ipso_basic_sensor_install(
+                anjay,
+                ANJAY_DEMO_TEMPERATURE_OID,
+                ANJAY_DEMO_TEMPERATURE_MAX_INSTANCE_NUM)) {
         avs_log(ipso, ERROR, "Could not install Temperature object");
         return -1;
     }
+
+    temperature_add_instance(anjay, 0);
 
     return 0;
 }
@@ -73,6 +74,7 @@ void temperature_add_instance(anjay_t *anjay, anjay_iid_t iid) {
             (anjay_ipso_basic_sensor_impl_t) {
                 .unit = ANJAY_DEMO_TEMPERATURE_UNIT,
                 .get_value = temperature_get_value,
+                .user_context = (void *) &THERMOMETER,
                 .min_range_value = 0,
                 .max_range_value = (double) ANJAY_DEMO_TEMPERATURE_MAX_VALUE
             });

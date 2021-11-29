@@ -100,7 +100,7 @@ If POSIX socket API is not available:
     - ``set_opt`` able to set the ``AVS_NET_SOCKET_OPT_RECV_TIMEOUT`` option
 
     Additional functions that are not strictly necessary to run Anjay, but are
-    used by some of the optional funcitonaly
+    used by some of the optional functionality
 
     - ``bind`` - allows binding to a specific statically configured port; also
       used to keep the bound port stable if possible

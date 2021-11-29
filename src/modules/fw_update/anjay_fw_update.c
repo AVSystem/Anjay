@@ -324,11 +324,13 @@ static int fw_list_resources(anjay_unlocked_t *anjay,
 }
 
 #    if defined(AVS_COMMONS_WITH_MBEDTLS) || defined(AVS_COMMONS_WITH_OPENSSL) \
-            || defined(AVS_COMMONS_WITH_TINYDTLS)
+            || defined(AVS_COMMONS_WITH_TINYDTLS)                              \
+            || defined(AVS_COMMONS_WITH_CUSTOM_TLS)
 #        define WITH_SSL
 #    endif // defined(AVS_COMMONS_WITH_MBEDTLS) ||
            // defined(AVS_COMMONS_WITH_OPENSSL) ||
-           // defined(AVS_COMMONS_WITH_TINYDTLS)
+           // defined(AVS_COMMONS_WITH_TINYDTLS) ||
+           // defined(AVS_COMMONS_WITH_CUSTOM_TLS)
 
 static const int32_t SUPPORTED_PROTOCOLS[] = {
 #    ifdef WITH_AVS_COAP_UDP

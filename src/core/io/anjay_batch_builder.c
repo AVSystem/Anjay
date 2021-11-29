@@ -690,7 +690,7 @@ int _anjay_batch_data_output_entry(
         const anjay_batch_data_output_state_t **state,
         anjay_unlocked_output_ctx_t *out_ctx) {
     assert(state);
-    const AVS_LIST(anjay_batch_entry_t) it;
+    AVS_LIST(const anjay_batch_entry_t) it;
     if (!*state) {
         it = batch->list;
     } else {
@@ -701,12 +701,12 @@ int _anjay_batch_data_output_entry(
            && !is_server_allowed_to_read(anjay, it->path.ids[ANJAY_ID_OID],
                                          it->path.ids[ANJAY_ID_IID],
                                          target_ssid)) {
-        AVS_LIST_ADVANCE(&it);
+        AVS_LIST_ADVANCE((AVS_LIST(anjay_batch_entry_t) *) (intptr_t) &it);
     }
     int result = 0;
     if (it) {
         result = serialize_batch_entry(it, serialization_time, out_ctx);
-        AVS_LIST_ADVANCE(&it);
+        AVS_LIST_ADVANCE((AVS_LIST(anjay_batch_entry_t) *) (intptr_t) &it);
     }
     *state = AVS_CONTAINER_OF(it, anjay_batch_data_output_state_t, entry);
     return result;

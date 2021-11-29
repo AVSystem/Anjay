@@ -306,10 +306,8 @@ static size_t effective_nstart(const avs_coap_udp_ctx_t *ctx) {
     return result;
 }
 
-static void _log_udp_msg_summary(const char *file,
-                                 const int line,
-                                 const char *info,
-                                 const avs_coap_udp_msg_t *msg) {
+static void log_udp_msg_summary(const char *info,
+                                const avs_coap_udp_msg_t *msg) {
     char observe_str[24] = "";
 #    ifdef WITH_AVS_COAP_OBSERVE
     uint32_t observe;
@@ -338,27 +336,20 @@ static void _log_udp_msg_summary(const char *file,
         _avs_coap_option_block_string(&block2_str_buf, &block2);
     }
 
-    avs_log_internal_l__(
-            AVS_LOG_DEBUG, AVS_QUOTE_MACRO(MODULE_NAME), file, (unsigned) line,
-            "%s: %s (ID: %" PRIu16 ", token: %s)%s%s%s%s%s, payload: %u B",
-            info, AVS_COAP_CODE_STRING(msg->header.code),
-            _avs_coap_udp_header_get_id(&msg->header),
-            AVS_COAP_TOKEN_HEX(&msg->token), has_block1 ? ", " : "",
-            block1_str_buf.str, has_block2 ? ", " : "", block2_str_buf.str,
-            observe_str, (unsigned) msg->payload_size);
+    LOG(DEBUG, "%s: %s (ID: %" PRIu16 ", token: %s)%s%s%s%s%s, payload: %u B",
+        info, AVS_COAP_CODE_STRING(msg->header.code),
+        _avs_coap_udp_header_get_id(&msg->header),
+        AVS_COAP_TOKEN_HEX(&msg->token), has_block1 ? ", " : "",
+        block1_str_buf.str, has_block2 ? ", " : "", block2_str_buf.str,
+        observe_str, (unsigned) msg->payload_size);
 #    else  // WITH_AVS_COAP_BLOCK
-    avs_log_internal_l__(AVS_LOG_DEBUG, AVS_QUOTE_MACRO(MODULE_NAME), file,
-                         (unsigned) line,
-                         "%s: %s (ID: %" PRIu16 ", token: %s)%s, payload: %u B",
-                         info, AVS_COAP_CODE_STRING(msg->header.code),
-                         _avs_coap_udp_header_get_id(&msg->header),
-                         AVS_COAP_TOKEN_HEX(&msg->token), observe_str,
-                         (unsigned) msg->payload_size);
+    LOG(DEBUG, "%s: %s (ID: %" PRIu16 ", token: %s)%s, payload: %u B", info,
+        AVS_COAP_CODE_STRING(msg->header.code),
+        _avs_coap_udp_header_get_id(&msg->header),
+        AVS_COAP_TOKEN_HEX(&msg->token), observe_str,
+        (unsigned) msg->payload_size);
 #    endif // WITH_AVS_COAP_BLOCK
 }
-
-#    define log_udp_msg_summary(Info, Msg) \
-        _log_udp_msg_summary(__FILE__, __LINE__, (Info), (Msg))
 
 static void try_cache_response(avs_coap_udp_ctx_t *ctx,
                                const avs_coap_udp_msg_t *res) {

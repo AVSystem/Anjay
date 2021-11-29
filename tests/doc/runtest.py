@@ -16,18 +16,38 @@
 # limitations under the License.
 
 import argparse
+import datetime
 import logging
 import os
 import re
-import requests
 import sys
+import urllib
+import urllib.parse
 from collections import defaultdict
 
-ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
+import requests
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 HTTP_STATUS_OK = 200
 FILE_EXTENSION = '.rst'
 REGEX = r'<(http.*?)>`_'
-DEFAULT_DOC_PATH = os.path.normpath(os.path.join(ROOT_DIR, '../../doc/sphinx/source'))
+PUBLIC_REPO_BLOB_PREFIX = 'https://github.com/AVSystem/Anjay/blob/master/'
+PUBLIC_REPO_TREE_PREFIX = 'https://github.com/AVSystem/Anjay/tree/master/'
+DEFAULT_DOC_PATH = os.path.join(PROJECT_ROOT, 'doc/sphinx/source')
+
+
+def _get_ignored_patterns():
+    whitelist = os.environ.get('ANJAY_DOC_CHECK_WHITELIST') or ''
+    date, patterns = (whitelist.split('=', 1) + [''])[:2]
+    patterns = patterns.split(',')
+    if date == str(datetime.datetime.now().date()):
+        return patterns
+    else:
+        return []
+
+
+IGNORED_PATTERNS = _get_ignored_patterns()
+
 
 def explore(path):
     for root, directories, file_names in os.walk(path):
@@ -38,15 +58,30 @@ def explore(path):
                     content = f.read()
                     yield (file_path, content)
 
+
 def find_urls(rst_content):
     lines = enumerate(rst_content.splitlines(), 1)
     return ((line_number, found_url)
             for line_number, line_content in lines
             for found_url in re.findall(REGEX, line_content))
 
+
 def is_url_valid(url, attempt=1, max_attempts=5):
+    if url.startswith(PUBLIC_REPO_BLOB_PREFIX):
+        return os.path.isfile(os.path.join(PROJECT_ROOT, url[len(PUBLIC_REPO_BLOB_PREFIX):]))
+    elif url.startswith(PUBLIC_REPO_TREE_PREFIX):
+        return os.path.isdir(os.path.join(PROJECT_ROOT, url[len(PUBLIC_REPO_TREE_PREFIX):]))
+    if any(pattern in url for pattern in IGNORED_PATTERNS):
+        logging.warning('URL %s not checked due to ANJAY_DOC_CHECK_WHITELIST' % (url,))
+        return True
+
     if attempt > max_attempts:
         logging.error('URL %s could not be reached %d times. Giving up.' % (url, max_attempts))
+        logging.error(('If you believe this is a problem on the remote site, you can set the '
+                       + 'ANJAY_DOC_CHECK_WHITELIST=%s=%s environment variable to ignore this '
+                       + 'error for today.')
+                      % (datetime.datetime.now().date(),
+                         ','.join(IGNORED_PATTERNS + [urllib.parse.urlparse(url).hostname])))
         return False
 
     status = None
@@ -66,6 +101,7 @@ def is_url_valid(url, attempt=1, max_attempts=5):
 
     return True
 
+
 def find_invalid_urls(urls):
     from multiprocessing import pool
 
@@ -78,6 +114,7 @@ def find_invalid_urls(urls):
             invalid_urls[url] = urls[url]
 
     return invalid_urls
+
 
 def report(path):
     urls = defaultdict(list)
@@ -95,6 +132,7 @@ def report(path):
         sys.exit(-1)
     else:
         logging.info('All urls are valid.')
+
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)

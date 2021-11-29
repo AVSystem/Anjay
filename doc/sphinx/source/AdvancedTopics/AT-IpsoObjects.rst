@@ -46,13 +46,19 @@ instances which will be used and, in case of sensor objects, OID of the
 installed objects (in the case of the Push Button Object it is always the same
 and equals 3347). 
 
-For example, if we want to create a Temperature Object (which has OID equal to
+For example, if we wanted to create a Temperature Object (which has OID equal to
 3303) that could have up to 2 instances, we would call
-``anjay_ipso_basic_sensor_install`` function like this:
+``anjay_ipso_basic_sensor_install`` function like we did in our demo:
 
-.. code-block:: c
+.. snippet-source:: demo/objects/ipso_objects.c
 
-    anjay_ipso_basic_sensor_install(anjay, 3303, 2);
+    if (anjay_ipso_basic_sensor_install(
+                anjay,
+                ANJAY_DEMO_TEMPERATURE_OID,
+                ANJAY_DEMO_TEMPERATURE_MAX_INSTANCE_NUM)) {
+        avs_log(ipso, ERROR, "Could not install Temperature object");
+        return -1;
+    }
 
 Instance addition
 -----------------
@@ -112,19 +118,18 @@ User might pass some additional context to the callback using the ``user_ctx``
 field.
 
 Let's assume that we want to add an instance of the installed Temperature
-Object and let ``get_the_temperature(thermometer_t *)`` be a given system
-function (which takes as an argument some thermometer instance of 
-type ``thermometer_t *``) for reading the temperature. The object has allocated
-space for two instances - so our IID should be 0 or 1, let it be 1.
-Because ``get_the_temperature`` function need the thermometer argument we will
-pass it using the ``user_ctx`` pointer:
+Object and let ``get_temperature`` be a given system
+function (which takes as an argument some thermometer instance of type
+``thermometer_t *``) for reading the temperature. We fake such situation for our
+demo client and in this scenario we can use the following simple function:
 
-.. code-block:: c
+.. snippet-source:: demo/objects/ipso_objects.c
 
-    int get_value(void *user_ctx, double *value) {
-        thermometer_t *thermometer = (thermometer_t *) user_ctx;
+    static int
+    temperature_get_value(anjay_iid_t iid, void *thermometer, double *value) {
+        (void) iid;
 
-        *value = get_the_temperature(thermometer);
+        *value = get_temperature((thermometer_t *) thermometer);
 
         return 0;
     }
@@ -134,19 +139,21 @@ The proper temperature unit are degrees Celsius (as defined in
 Let assume that our thermometer measures temperatures between 0 and 100 degrees
 Celsius. Knowing this we can prepare an instance of
 ``anjay_ipso_basic_sensor_impl_t`` and pass it to
-``anjay_ipso_basic_sensor_add_instance`` function:
+``anjay_ipso_basic_sensor_add_instance`` function, as we did in our demo:
 
-.. code-block:: c
+.. snippet-source:: demo/objects/ipso_objects.c
 
-    anjay_ipso_basic_sensor_instance_add(
-        anjay, 3303, 1,
-        (anjay_ipso_basic_sensor_impl_t) {
-            .unit = "Cel",
-            .user_ctx = (void *) thermometer,
-            .min_range_value = (double) 0,
-            .max_range_value = (double) 100,
-            .get_value = get_value,
-        }));
+    (void) anjay_ipso_basic_sensor_instance_add(
+            anjay,
+            ANJAY_DEMO_TEMPERATURE_OID,
+            iid,
+            (anjay_ipso_basic_sensor_impl_t) {
+                .unit = ANJAY_DEMO_TEMPERATURE_UNIT,
+                .get_value = temperature_get_value,
+                .user_context = (void *) &THERMOMETER,
+                .min_range_value = 0,
+                .max_range_value = (double) ANJAY_DEMO_TEMPERATURE_MAX_VALUE
+            });
 
 The implementation struct for the three axis objects is quite similar to this
 for basic objects - there are three major differences:
@@ -226,18 +233,18 @@ the sensor object current, it is usually a good practice to call it frequently.
 In the case of the Push Button Object the update function is a bit more
 significant - it is meant to be called every time the button is pressed or
 released and it is the only way to update the state of the Object Instance.
-In addition to IID it passes a new state of the button. Thus, when the button
-corresponding to the instance with IID 7 is pressed we should call:
+In addition to IID it passes a new state of the button. Thus, when an instance
+of the fake button in our demo is pressed, we call:
 
-.. code-block:: c
+.. snippet-source:: demo/demo_cmds.c
 
-    anjay_ipso_button_update(anjay, 7, true);
+    anjay_ipso_button_update(demo->anjay, iid, true);
 
 and when it is released:
 
-.. code-block:: c
+.. snippet-source:: demo/demo_cmds.c
 
-    anjay_ipso_button_update(anjay, 7, false);
+    anjay_ipso_button_update(demo->anjay, iid, false);
 
 .. note:
 
@@ -254,12 +261,13 @@ each of them corresponding to a specific class of objects:
  * `anjay_ipso_3d_sensor_instance_remove <../api/ipso__objects_8h.html#a2bd255f62cf4817ea567b65ddae6644c>`_,
  * `anjay_ipso_button_instance_remove <../api/ipso__objects_8h.html#af53a1881ef4ed8de52cb000700a0dbb9>`_.
 
-For example, to remove the created instance of the Temperature Object, the
-following call will be proper:
+For example, we can look how the fake temperature object instance is removed in
+our demo:
 
-.. code-block:: c
+.. snippet-source:: demo/objects/ipso_objects.c
 
-    anjay_ipso_basic_sensor_remove(anjay, 3303, 1);
+    (void) anjay_ipso_basic_sensor_instance_remove(
+            anjay, ANJAY_DEMO_TEMPERATURE_OID, iid);
 
 Further reading
 ---------------

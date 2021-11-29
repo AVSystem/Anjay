@@ -29,3 +29,4 @@ need to be implemented.
    PortingGuideForNonPOSIXPlatforms/TimeAPI
    PortingGuideForNonPOSIXPlatforms/ThreadingAPI
    PortingGuideForNonPOSIXPlatforms/NetworkingAPI
+   PortingGuideForNonPOSIXPlatforms/CustomTLS

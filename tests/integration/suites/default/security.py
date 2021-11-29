@@ -30,7 +30,6 @@ from framework.test_utils import DEMO_ENDPOINT_NAME, RID, OID
 from suites.default import bootstrap_client
 from suites.default import retransmissions
 
-
 class SecurityObjectDmOperationsBySingleServer(test_suite.Lwm2mSingleServerTest,
                                                test_suite.Lwm2mDmOperations):
     def runTest(self):

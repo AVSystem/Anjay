@@ -643,7 +643,8 @@ create_detached_observation(const avs_coap_token_t *token,
     memcpy((void *) (intptr_t) (const void *) &new_observation->paths_count,
            &paths->count, sizeof(paths->count));
     if (paths->type == PATHS_POINTER_LIST) {
-        AVS_LIST(const anjay_uri_path_t) it = paths->paths;
+        AVS_LIST(anjay_uri_path_t) it =
+                (AVS_LIST(anjay_uri_path_t)) (intptr_t) paths->paths;
         for (size_t i = 0; i < paths->count; ++i) {
             memcpy((void *) (intptr_t) (const void *) &new_observation
                            ->paths[i],

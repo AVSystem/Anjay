@@ -127,6 +127,8 @@ although typically this is done in the main function, before calling any of the
 Anjay APIs and the network layer implementation assumes that the interface has
 already been initialized.
 
+.. _non-posix-networking-api-create:
+
 Socket creation
 ---------------
 

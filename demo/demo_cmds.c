@@ -554,6 +554,7 @@ static void cmd_download_blocks(anjay_demo_t *demo, const char *args_string) {
     char *args_string_copy = avs_strdup(args_string);
     if (!args_string_copy) {
         demo_log(ERROR, "out of memory");
+        return;
     }
     cmd_download_blocks_impl(demo, args_string_copy);
     avs_free(args_string_copy);

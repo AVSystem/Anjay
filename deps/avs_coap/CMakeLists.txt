@@ -245,7 +245,7 @@ if(WITH_TEST)
 
     # Source validation
     if(DEFINED AVS_COMMONS_SOURCE_DIR)
-        set(ABSOLUTE_HEAEDERS)
+        set(ABSOLUTE_HEADERS)
         foreach(F ${SOURCES})
             add_test(NAME test_avs_coap_${F}_visibility
                      COMMAND "${AVS_COMMONS_SOURCE_DIR}/test_visibility.py" "${F}"

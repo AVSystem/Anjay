@@ -765,7 +765,7 @@ int main(int argc, char *argv[]) {
             }
             // NOTE: anjay_event_loop_interrupt() intentionally does not work if
             // called before the event loop actually starts; it means that we
-            // can't call it directly hear, as it would lead to a race condition
+            // can't call it directly here, as it would lead to a race condition
             // if stdin is closed immediately (e.g. is /dev/null).
             AVS_SCHED_NOW(anjay_get_scheduler(demo->anjay), NULL,
                           interrupt_event_loop_job, &demo, sizeof(demo));
