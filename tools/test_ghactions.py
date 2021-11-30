@@ -110,7 +110,7 @@ def _main():
     parser.add_argument('-r', '--root-dir', type=str, help='Root directory of Anjay repo',
                         required=True)
     parser.add_argument('--substitution', type=str, help='Replace certain commands in jobs',
-                        default='make check=make -j%d anjay_check avs_commons_check avs_coap_check' % multiprocessing.cpu_count())
+                        default='make check=make -j%d anjay_check avs_commons_check avs_coap_check examples' % multiprocessing.cpu_count())
     args = parser.parse_args()
 
     with open(os.path.join(args.root_dir, '.github', 'workflows', 'anjay-tests.yml'), 'r') as f:

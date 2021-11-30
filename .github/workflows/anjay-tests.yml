@@ -15,7 +15,7 @@
 name: Anjay tests
 on: [push]
 jobs:
-  ubuntu-compilers-test:
+  ubuntu1604-compilers-test:
     runs-on: ubuntu-latest
     container: avsystemembedded/anjay-travis:ubuntu-16.04
     env:
@@ -44,3 +44,27 @@ jobs:
             CXX: clang++-3.7
           - CC: clang-3.8
             CXX: clang++-3.8
+
+  ubuntu1804-compilers-test:
+    runs-on: ubuntu-latest
+    container: avsystemembedded/anjay-travis:ubuntu-18.04
+    env:
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+    steps:
+      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - run: apt-get update
+      - run: apt-get -y install $CC $CXX
+      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+    strategy:
+      matrix:
+        include:
+          - CC: gcc-7
+            CXX: g++
+          - CC: clang-6.0
+            CXX: clang++-6.0
