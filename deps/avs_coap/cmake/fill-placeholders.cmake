@@ -1,4 +1,4 @@
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ string(TIMESTAMP current_year "%Y")
 foreach(file IN LISTS CMAKE_INSTALL_MANIFEST_FILES)
     if(file MATCHES ".(h|hpp|c|cpp|cmake|py|sh)$")
         file(READ ${file} file_contents)
-        string(REPLACE "2017-2021" "${current_year}" file_contents_replaced "${file_contents}")
+        string(REPLACE "2017-2022" "${current_year}" file_contents_replaced "${file_contents}")
         file(WRITE ${file} "${file_contents_replaced}")
     endif()
 endforeach()

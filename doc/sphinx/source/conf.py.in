@@ -16,6 +16,7 @@ import packaging
 import packaging.version
 import sys
 import os
+import sphinx_rtd_theme
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -32,7 +33,8 @@ sys.path.insert(0, '@ANJAY_SOURCE_DIR@/doc/sphinx/extensions')
 # ones.
 extensions = ['snippet_source',
               'builders.snippet_source_linter',
-              'builders.snippet_source_list_references']
+              'builders.snippet_source_list_references',
+              'sphinx_rtd_theme']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -48,7 +50,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Anjay'
-copyright = u'2017-2021, AVSystem'
+copyright = u'2017-2022, AVSystem'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -100,8 +102,6 @@ pygments_style = 'sphinx'
 
 # -- Options for HTML output ----------------------------------------------
 
-import sphinx_rtd_theme
-
 if packaging.version.parse(sphinx_rtd_theme.__version__) < packaging.version.parse('0.4.3'):
     raise Exception('Anjay requires sphinx_rtd_theme >=0.4.3 for proper styling')
 
@@ -142,9 +142,9 @@ html_logo = '@ANJAY_SPHINX_DOC_ROOT_DIR@/avsystem_header.png'
 html_static_path = ['@ANJAY_SOURCE_DIR@/doc/sphinx/source/_static']
 
 # This is necessary to fix issues with tables in "Read the Docs" style.
-html_context = {
-    'css_files': [ '_static/theme_overrides.css' ]
-}
+html_css_files = [
+    'theme_overrides.css'
+    ]
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied

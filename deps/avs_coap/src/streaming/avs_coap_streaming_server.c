@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -524,10 +524,6 @@ handle_incoming_packet(avs_coap_streaming_request_ctx_t *streaming_req_ctx,
             streaming_req_ctx->server_ctx.acquired_in_buffer,
             streaming_req_ctx->server_ctx.acquired_in_buffer_size,
             handle_new_request, streaming_req_ctx, &exchange);
-    if (err.category == AVS_ERRNO_CATEGORY && err.code == AVS_ETIMEDOUT) {
-        // timeout is expected; ignore
-        err = AVS_OK;
-    }
     if (exchange) {
         // Note that we've just called _avs_coap_async_incoming_packet_handle(),
         // not _avs_coap_async_incoming_packet_simple_handle(). That function
@@ -622,8 +618,13 @@ static avs_error_t ensure_data_is_available_to_read(
                     avs_time_monotonic_diff(next_deadline,
                                             avs_time_monotonic_now());
             assert(avs_time_duration_valid(recv_timeout));
-            if (avs_is_err((streaming_req_ctx->err = handle_incoming_packet(
-                                    streaming_req_ctx, recv_timeout)))) {
+            streaming_req_ctx->err =
+                    handle_incoming_packet(streaming_req_ctx, recv_timeout);
+            if (streaming_req_ctx->err.category == AVS_ERRNO_CATEGORY
+                    && streaming_req_ctx->err.code == AVS_ETIMEDOUT) {
+                // timeout is expected; ignore
+                streaming_req_ctx->err = AVS_OK;
+            } else if (avs_is_err(streaming_req_ctx->err)) {
                 return streaming_req_ctx->err;
             }
         }
@@ -716,16 +717,17 @@ static avs_error_t handle_incoming_packet_with_acquired_in_buffer(
         // only case it handles that actually requires some interaction with the
         // user code is handling an incoming _request_. See inside for more
         // details.
-        if (avs_is_ok((streaming_req_ctx.err = handle_incoming_packet(
-                               &streaming_req_ctx, AVS_TIME_DURATION_ZERO)))) {
-            if (!streaming_req_ctx.server_ctx.chunk_buffer) {
-                // Timeout - as the contract of this function does not mandate
-                // that we must always receive anything, we just return success.
-                // Also, because we loop, wanting to flush internal socket
-                // buffers, this is actually the only success return point of
-                // this function.
-                return AVS_OK;
-            }
+        streaming_req_ctx.err = handle_incoming_packet(&streaming_req_ctx,
+                                                       AVS_TIME_DURATION_ZERO);
+        if (streaming_req_ctx.err.category == AVS_ERRNO_CATEGORY
+                && streaming_req_ctx.err.code == AVS_ETIMEDOUT) {
+            // Timeout - as the contract of this function does not mandate that
+            // we must always receive anything, we just return success. Also,
+            // because we loop, wanting to flush internal socket buffers, this
+            // is actually the only success return point of this function.
+            return AVS_OK;
+        } else if (avs_is_ok(streaming_req_ctx.err)
+                   && streaming_req_ctx.server_ctx.chunk_buffer) {
             if (has_received_request_chunk(&streaming_req_ctx.server_ctx)) {
                 // We have successfully received some data, so passing
                 // AVS_OK as error code makes sense here.

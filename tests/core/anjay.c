@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -575,6 +575,7 @@ AVS_UNIT_TEST(queue_mode, change) {
                                         ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_INT(0, 1));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     ASSERT_OK(anjay_serve(anjay, mocksocks[0]));
 
     {
@@ -758,6 +759,7 @@ AVS_UNIT_TEST(queue_mode, change) {
                      NO_PAYLOAD);
     avs_unit_mocksock_input(mocksocks[0], update_response->content,
                             update_response->length);
+    expect_timeout(mocksocks[0]);
     ASSERT_OK(anjay_serve(anjay, mocksocks[0]));
 
     ASSERT_NOT_NULL(connection->queue_mode_close_socket_clb);

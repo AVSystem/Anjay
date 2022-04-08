@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -101,37 +101,42 @@ configuration is:
 .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_socket.h
 
     /**
-     * A PSK/identity pair with borrowed pointers. avs_commons will never attempt
-     * to modify these values.
+     * A PSK/identity pair. avs_commons will never attempt to modify these values.
      */
     typedef struct {
-        const void *psk;
-        size_t psk_size;
-        const void *identity;
-        size_t identity_size;
-    } avs_net_psk_info_t;
+        avs_crypto_psk_key_info_t key;
+        avs_crypto_psk_identity_info_t identity;
+    } avs_net_generic_psk_info_t;
 
-After we correctly populated it, we may use:
+The ``avs_crypto_psk_key_info_t`` and ``avs_crypto_psk_identity_info_t`` are
+supposed to be populated using the ``avs_crypto_psk_key_info_from_*`` and
+``avs_crypto_psk_identity_info_from_*`` functions.
+
+``avs_crypto_psk_key_info_from_buffer()`` and
+``avs_crypto_psk_identity_info_from_buffer()``, although in the commercial
+version, other variants may be used to utilize PSK information stored on a
+hardware security module.
+
+After populating the ``avs_net_generic_psk_info_t`` structure, we may use:
 
 .. highlight:: c
 .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_socket.h
 
-    avs_net_security_info_t avs_net_security_info_from_psk(avs_net_psk_info_t psk);
+    avs_net_security_info_t
+    avs_net_security_info_from_generic_psk(avs_net_generic_psk_info_t psk);
 
-to convert ``avs_net_psk_info_t`` into ``avs_net_security_info_t``, as in
-the following example:
+to convert into into ``avs_net_security_info_t``, as in the following example:
 
 .. code-block:: c
 
-    const avs_net_psk_info_t psk_info = {
-        .psk = "shared-key",
-        .psk_size = strlen("shared-key"),
-        .identity = "our-identity",
-        .identity_size = strlen("our-identity")
+    avs_net_generic_psk_info_t psk_info = {
+        .key = avs_crypto_psk_key_info_from_buffer(
+                "shared-key", strlen("shared-key")),
+        .identity = avs_crypto_psk_identity_info_from_buffer(
+                "our-identity", strlen("our-identity"))
     };
     avs_net_security_info_t psk_security =
-        avs_net_security_info_from_psk(psk_info);
-
+            avs_net_security_info_from_generic_psk(psk_info);
 
 Configuration of Certificates
 """""""""""""""""""""""""""""

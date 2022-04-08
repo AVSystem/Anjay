@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@
 
 VISIBILITY_PRIVATE_HEADER_BEGIN
 
-int _anjay_sec_object_validate(anjay_unlocked_t *anjay, sec_repr_t *repr);
+int _anjay_sec_object_validate_and_process_keys(anjay_unlocked_t *anjay,
+                                                sec_repr_t *repr);
 
 int _anjay_sec_transaction_begin_impl(sec_repr_t *repr);
 int _anjay_sec_transaction_commit_impl(sec_repr_t *repr);

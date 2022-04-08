@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ A simple idea for generating an endpoint name is to use the local hostname:
 
 .. code-block:: sh
 
-    $ ./anjay-bc1 urn:dev:os:$(hostname)
+    $ ./anjay-bc-initialization urn:dev:os:$(hostname)
 
 .. important::
 

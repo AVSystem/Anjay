@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,6 +120,7 @@ class Server(object):
         self._prev_remote_endpoint = None
         self.socket_timeout = None
         self.socket = None
+        self.server_socket = None
         self.family = socket.AF_INET6 if use_ipv6 else socket.AF_INET
         self.transport = transport
         self.reuse_port = reuse_port
@@ -212,11 +213,14 @@ class Server(object):
             listen_port = self.get_listen_port() if self.socket else 0
 
         self.close()
-        self.socket = socket.socket(self.family, socket.SOCK_STREAM if self.transport == Transport.TCP else socket.SOCK_DGRAM)
-        self.socket.setsockopt(
-            socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind(('', listen_port))
+        if self.server_socket is not None:
+            self.socket = self.server_socket
+        else:
+            self.socket = socket.socket(self.family, socket.SOCK_STREAM if self.transport == Transport.TCP else socket.SOCK_DGRAM)
+            self.socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_REUSEPORT, 1 if self.reuse_port else 0)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.bind(('', listen_port))
         self.accepted_connection = False
 
     def send(self, coap_packet: Packet) -> None:
@@ -259,17 +263,17 @@ class Server(object):
 
         try:
             return self.socket.getpeername()
-        except socket.error:
+        except Exception:
             return None
 
     def security_mode(self):
         return 'nosec'
 
 
-class DtlsServer(Server):
+class TlsServer(Server):
     def __init__(self, psk_identity=None, psk_key=None, ca_path=None, ca_file=None,
                  crt_file=None, key_file=None, listen_port=0, debug=False, use_ipv6=False,
-                 reuse_port=False, connection_id='', ciphersuites=None):
+                 reuse_port=False, connection_id='', ciphersuites=None, transport=Transport.TCP):
         use_psk = (psk_identity and psk_key)
         use_certs = any((ca_path, ca_file, crt_file, key_file))
         if use_psk and use_certs:
@@ -298,7 +302,7 @@ class DtlsServer(Server):
         self._pymbedtls_context = Context(security, debug, connection_id)
         self._security_mode = security.name()
 
-        super().__init__(listen_port, use_ipv6, reuse_port=reuse_port)
+        super().__init__(listen_port, use_ipv6, reuse_port=reuse_port, transport=transport)
 
     def connect_to_client(self, remote_addr: Tuple[str, int]) -> None:
         raise NotImplementedError(
@@ -315,19 +319,29 @@ class DtlsServer(Server):
     def reset(self, listen_port=None) -> None:
         from pymbedtls import ServerSocket
         super().reset(listen_port)
-        self.socket = ServerSocket(self._pymbedtls_context, self.socket)
+        if not isinstance(self.socket, ServerSocket):
+            self.socket = ServerSocket(self._pymbedtls_context, self.socket)
 
     def listen(self, timeout_s: float = -1) -> None:
         from pymbedtls import ServerSocket
         assert isinstance(self.socket, ServerSocket)
+
         with _override_timeout(self.socket, timeout_s):
             client_socket = self.socket.accept()
             if self.socket_timeout is not None:
                 client_socket.settimeout(self.socket_timeout)
 
-        self.socket.close()
-        self.socket = client_socket
+        if self.transport == Transport.UDP:
+            self.socket.close()
+            self.socket = client_socket
+        else:
+            raise ValueError("Invalid transport: %r" % (self.transport,))
 
     def security_mode(self):
         # Either 'psk' or 'cert'.
         return self._security_mode
+
+
+class DtlsServer(TlsServer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, transport=Transport.UDP)

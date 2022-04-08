@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,13 +84,19 @@ public:
 
     ~Socket();
 
-    void connect(py::tuple host_port, py::object handshake_timeouts_s_);
+    void perform_handshake(py::tuple host_port,
+                           py::object handshake_timeouts_s_,
+                           bool py_connect);
     void send(const std::string &data);
     py::bytes recv(int);
     void settimeout(py::object timeout_s_or_none);
     py::bytes peer_cert();
     py::object __getattr__(py::object name);
     void __setattr__(py::object name, py::object value);
+
+    void connect(py::tuple host_port, py::object handshake_timeouts_s) {
+        perform_handshake(host_port, handshake_timeouts_s, true);
+    }
 };
 
 class ServerSocket {

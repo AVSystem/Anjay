@@ -1,4 +1,4 @@
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.14.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "2.15.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -734,6 +734,8 @@ if(WITH_FIND_UNUSED_CODE)
                       COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/find_unused_code.py"
                               # avs_commons global cleanup functions
                               --ignore-symbol "^_avs_.*_cleanup_global.*_state$$"
+                              # hardware crypto PSK support
+                              --ignore-symbol "^_avs_crypto_mbedtls_engine_load_psk_\\(identity\\|key\\)$$"
                               # gcc internals
                               --ignore-object ".*/crtbegin.o"
                               # external libraries

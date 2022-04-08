@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -626,6 +626,29 @@ void anjay_sched_run(anjay_t *anjay);
  *          fatal error.
  */
 int anjay_event_loop_run(anjay_t *anjay, avs_time_duration_t max_wait_time);
+
+/**
+ * Act same as @ref anjay_event_loop_run, but when none of the configured
+ * servers could be reached, try to reconnect using function @ref
+ * anjay_transport_schedule_reconnect.
+ *
+ * @param anjay         Anjay object to operate on.
+ * @param max_wait_time Maximum time to spend in each single call to
+ *                      <c>poll()</c> or <c>select()</c>. Larger times will
+ *                      prevent the event loop thread from waking up too
+ *                      frequently. However, during this wait time, the call to
+ *                      @ref anjay_event_loop_interrupt may not be handled
+ *                      immediately, and scheduler jobs requested from other
+ *                      threads (see @ref anjay_get_scheduler) will not be
+ *                      executed, so shortening this time will make the
+ *                      scheduler more responsive.
+ *
+ * @returns 0 after having been successfully interrupted by
+ *          @ref anjay_event_loop_interrupt, or a negative value in case of a
+ *          fatal error.
+ */
+int anjay_event_loop_run_with_error_handling(anjay_t *anjay_locked,
+                                             avs_time_duration_t max_wait_time);
 
 /**
  * Interrupts an ongoing execution of @ref anjay_event_loop_run.

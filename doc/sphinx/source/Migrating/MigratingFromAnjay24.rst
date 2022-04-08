@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -23,13 +23,11 @@ Migrating from Anjay 2.3.x or 2.4.x
 Introduction
 ------------
 
-While most changes since Anjay 2.4 are minor, things like EST support in
-commercial version of Anjay 2.5 and changes in certificate-based security
-support in Anjay 2.7 and 2.8 required significant redesign in ``avs_commons``
-cryptography support libraries. While backwards compatibility should be
-maintained in most practical usages, there are some changes which might prove to
-be breaking if public-key cryptography APIs of ``avs_net`` have been used
-directly.
+While most changes since Anjay 2.4 are minor, improvements in security support
+required significant redesign in ``avs_commons`` cryptography support libraries.
+While backwards compatibility should be maintained in most practical usages,
+there are some changes which might prove to be breaking if old APIs have been
+used directly.
 
 Additional slight updates might be necessary if you are using any alternative
 build system instead of CMake to compile your project, of if you maintain your
@@ -136,6 +134,8 @@ your preprocessor directives if you check these macros in your code:
 +-----------------------------------+------------------------------------------+
 | Old macro name                    | New macro name                           |
 +===================================+==========================================+
+| ``AVS_COMMONS_NET_WITH_PSK``      | ``AVS_COMMONS_WITH_AVS_CRYPTO_PSK``      |
++-----------------------------------+------------------------------------------+
 | ``AVS_COMMONS_NET_WITH_X509``     | ``AVS_COMMONS_WITH_AVS_CRYPTO_PKI``      |
 +-----------------------------------+------------------------------------------+
 | ``AVS_COMMONS_NET_WITH_VALGRIND`` | ``AVS_COMMONS_WITH_AVS_CRYPTO_VALGRIND`` |
@@ -152,12 +152,105 @@ been taken, specifically:
 * If ``WITH_X509`` CMake variable is manually defined (e.g. by the ``-D``
   command-line option), the ``WITH_PKI`` variable is automatically set
   accordingly. A warning message is displayed in that case.
-* If the ``AVS_COMMONS_NET_WITH_X509`` macro is defined (e.g. in a legacy
-  ``avs_commons_config.h`` file), it is interpreted as equivalent to
-  ``AVS_COMMONS_WITH_AVS_CRYPTO_PKI``, and additionally causes the
-  aforementioned ``avsystem/commons/avs_net_pki_compat.h`` header to be included
-  from ``avsystem/commons/avs_socket.h``. A warning message is displayed in that
-  case.
+* If the ``AVS_COMMONS_NET_WITH_PSK`` or ``AVS_COMMONS_NET_WITH_X509`` macros
+  are defined (e.g. in a legacy ``avs_commons_config.h`` file), they are
+  interpreted as equivalent to the new macros, as mentioned in the table above.
+  Warning messages are displayed in that case.
+* If the ``AVS_COMMONS_NET_WITH_X509`` macro is defined, it additionally causes
+  the aforementioned ``avsystem/commons/avs_net_pki_compat.h`` header to be
+  included from ``avsystem/commons/avs_socket.h``.
+
+Refactor of PSK credential handling
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``avs_net_security_info_t`` structure has been updated to use the new type,
+``avs_net_generic_psk_info_t``, to encapsulate the PSK credentials. The new
+type uses new types based on ``avs_crypto_security_info_union_t`` instead of
+raw buffers.
+
+* **Old API:**
+  ::
+
+      /**
+       * A PSK/identity pair with borrowed pointers. avs_commons will never attempt
+       * to modify these values.
+       */
+      typedef struct {
+          const void *psk;
+          size_t psk_size;
+          const void *identity;
+          size_t identity_size;
+      } avs_net_psk_info_t;
+
+      // ...
+
+      typedef struct {
+          avs_net_security_mode_t mode;
+          union {
+              avs_net_psk_info_t psk;
+              avs_net_certificate_info_t cert;
+          } data;
+      } avs_net_security_info_t;
+
+      avs_net_security_info_t avs_net_security_info_from_psk(avs_net_psk_info_t psk);
+
+* **New API:**
+
+  .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_crypto_psk.h
+
+      typedef struct {
+          avs_crypto_security_info_union_t desc;
+      } avs_crypto_psk_identity_info_t;
+
+      // ...
+
+      avs_crypto_psk_identity_info_t
+      avs_crypto_psk_identity_info_from_buffer(const void *buffer,
+                                               size_t buffer_size);
+
+      // ...
+
+      typedef struct {
+          avs_crypto_security_info_union_t desc;
+      } avs_crypto_psk_key_info_t;
+
+      // ...
+
+      avs_crypto_psk_key_info_t
+      avs_crypto_psk_key_info_from_buffer(const void *buffer, size_t buffer_size);
+
+  .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_socket.h
+
+      /**
+       * A PSK/identity pair. avs_commons will never attempt to modify these values.
+       */
+      typedef struct {
+          avs_crypto_psk_key_info_t key;
+          avs_crypto_psk_identity_info_t identity;
+      } avs_net_generic_psk_info_t;
+
+      // ...
+
+      typedef struct {
+          avs_net_security_mode_t mode;
+          union {
+              avs_net_generic_psk_info_t psk;
+              avs_net_certificate_info_t cert;
+          } data;
+      } avs_net_security_info_t;
+
+      avs_net_security_info_t
+      avs_net_security_info_from_generic_psk(avs_net_generic_psk_info_t psk);
+
+The old ``avs_net_psk_info_t`` type is still available for compatibility. The
+``avs_crypto_psk_key_info_from_buffer()`` function has also been reimplemented
+as a ``static inline`` function that wraps calls to
+``avs_crypto_psk_identity_info_from_buffer()``,
+``avs_crypto_psk_key_info_from_buffer()`` and
+``avs_net_security_info_from_generic_psk()``.
+
+However, code that accesses the ``data.psk`` field of
+``avs_net_security_info_t`` directly will need to be updated.
 
 Separation of avs_url module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

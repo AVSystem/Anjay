@@ -457,15 +457,26 @@ static unsigned int psk_client_cb(SSL *ssl,
 }
 
 static avs_error_t configure_psk(tls_socket_impl_t *sock,
-                                 const avs_net_psk_info_t *psk) {
-    if (!psk->psk_size || psk->psk_size > sizeof(sock->psk)
-            || psk->identity_size > sizeof(sock->identity)) {
+                                 const avs_net_generic_psk_info_t *psk) {
+    if (!psk->key.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER
+            || psk->identity.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER) {
         return avs_errno(AVS_EINVAL);
     }
-    memcpy(sock->psk, psk->psk, psk->psk_size);
-    sock->psk_size = psk->psk_size;
-    memcpy(sock->identity, psk->identity, psk->identity_size);
-    sock->identity_size = psk->identity_size;
+
+    const void *key_ptr = psk->key.desc.info.buffer.buffer;
+    size_t key_size = psk->key.desc.info.buffer.buffer_size;
+
+    const void *identity_ptr = psk->identity.desc.info.buffer.buffer;
+    size_t identity_size = psk->identity.desc.info.buffer.buffer_size;
+
+    if (key_size > sizeof(sock->psk)
+            || identity_size > sizeof(sock->identity)) {
+        return avs_errno(AVS_EINVAL);
+    }
+    memcpy(sock->psk, key_ptr, key_size);
+    sock->psk_size = key_size;
+    memcpy(sock->identity, identity_ptr, identity_size);
+    sock->identity_size = identity_size;
     SSL_CTX_set_cipher_list(sock->ctx, "PSK");
     SSL_CTX_set_psk_client_callback(sock->ctx, psk_client_cb);
     SSL_CTX_set_verify(sock->ctx, SSL_VERIFY_PEER, NULL);

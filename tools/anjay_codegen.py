@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -394,6 +394,9 @@ static int list_resource_instances(anjay_t *anjay,
 {% endif %}
 static const anjay_dm_object_def_t OBJ_DEF = {
     .oid = {{ obj.oid }},
+{% if obj.version not in ['', '1.0'] %}
+    .version = "{{ obj.version }}",
+{% endif %}
     .handlers = {
 {% for handler in handlers %}
 {% if handler is string %}
@@ -709,6 +712,9 @@ static int list_resource_instances(anjay_t *anjay,
 {% endif %}
 static const anjay_dm_object_def_t OBJ_DEF = {
     .oid = {{ obj.oid }},
+{% if obj.version not in ['', '1.0'] %}
+    .version = "{{ obj.version }}",
+{% endif %}
     .handlers = {
 {% for handler in handlers %}
 {% if handler is string %}
@@ -1082,6 +1088,9 @@ int list_resource_instances(anjay_t *,
 struct ObjDef : public anjay_dm_object_def_t {
     ObjDef() : anjay_dm_object_def_t() {
         oid = {{ obj.oid }};
+{% if obj.version not in ['', '1.0'] %}
+        version = "{{ obj.version }}";
+{% endif %}
 
 {% for handler in handlers %}
 {% if handler is string %}
@@ -1396,6 +1405,9 @@ int list_resource_instances(anjay_t *,
 struct ObjDef : public anjay_dm_object_def_t {
     ObjDef() : anjay_dm_object_def_t() {
         oid = {{ obj.oid }};
+{% if obj.version not in ['', '1.0'] %}
+        version = "{{ obj.version }}";
+{% endif %}
 
 {% for handler in handlers %}
 {% if handler is string %}
@@ -1433,12 +1445,30 @@ void {{ obj_name_snake }}_object_release(const anjay_dm_object_def_t **def) {
 """
 
 
+NONALPHANUM_REGEX = re.compile(r'[^a-zA-Z0-9]+')
+
+DIGIT_SPELLINGS = {
+    '0': 'zero',
+    '1': 'one',
+    '2': 'two',
+    '3': 'three',
+    '4': 'four',
+    '5': 'five',
+    '6': 'six',
+    '7': 'seven',
+    '8': 'eight',
+    '9': 'nine'
+}
+
+
 def _node_text(n: Element) -> str:
-    return (n.text if n.text is not None else '').strip()
+    return (n.text if (n is not None and n.text is not None) else '').strip()
 
 
-def _sanitize_macro_name(n: str) -> str:
-    return re.sub(r'[^a-zA-Z0-9]+', '_', n).strip('_')
+def _sanitize_identifier(n: str) -> str:
+    identifier = NONALPHANUM_REGEX.sub('_', n).strip('_')
+    # Identifiers are not allowed to have a leading digit
+    return DIGIT_SPELLINGS.get(identifier[0], identifier[0]) + identifier[1:]
 
 
 class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operations', 'multiple', 'mandatory', 'type',
@@ -1453,7 +1483,7 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
 
     @property
     def name_upper(self) -> str:
-        return _sanitize_macro_name('RID_' + self.name.upper())
+        return _sanitize_identifier('RID_' + self.name.upper())
 
     @property
     def kind_enum(self) -> str:
@@ -1569,14 +1599,14 @@ class ResourceDef(collections.namedtuple('ResourceDef', ['rid', 'name', 'operati
 
 
 class ObjectDef(collections.namedtuple('ObjectDef',
-                                       ['oid', 'name', 'description', 'urn', 'multiple', 'mandatory', 'resources'])):
+                                       ['oid', 'name', 'version', 'description', 'urn', 'multiple', 'mandatory', 'resources'])):
     @property
     def name_snake(self) -> str:
-        return self.name.lower().replace(' ', '_')
+        return _sanitize_identifier(self.name).lower()
 
     @property
     def name_pascal(self) -> str:
-        return ''.join(word.capitalize() for word in self.name.split())
+        return ''.join(word.capitalize() for word in _sanitize_identifier(self.name).split('_'))
 
     @property
     def mandatory_str(self) -> str:
@@ -1621,9 +1651,10 @@ class ObjectDef(collections.namedtuple('ObjectDef',
         if resources_subset is not None:
             resources = [ r for r in resources if r.rid in resources_subset ]
 
-        return cls(name=_node_text(obj.find('Name')),
+        return cls(oid=int(_node_text(obj.find('ObjectID'))),
+                   name=_node_text(obj.find('Name')),
+                   version=_node_text(obj.find('ObjectVersion')),
                    description=textwrap.fill(_node_text(obj.find('Description1'))).replace('\n', '\n * '),
-                   oid=int(_node_text(obj.find('ObjectID'))),
                    urn=_node_text(obj.find('ObjectURN')),
                    multiple={'Single': False, 'Multiple': True}[_node_text(obj.find('MultipleInstances'))],
                    mandatory={'Optional': False, 'Mandatory': True}[_node_text(obj.find('Mandatory'))],

@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -71,8 +71,8 @@ need to modify ``time_instance_t`` a little. This will allow to store the last
 timestamp when the ``anjay_notify_changed()`` was successfully called, to avoid
 calling it twice during one second. Although it will not result in sending two
 notifications with the same Resource value, because Anjay checks it internally,
-it will lead to perform some unnecessary actions (like calling read handler for
-example).
+it will lead to performing some unnecessary actions (like calling read handler
+for example).
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-Notifications/src/time_object.c

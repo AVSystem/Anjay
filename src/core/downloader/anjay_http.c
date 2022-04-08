@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -420,32 +420,19 @@ static avs_error_t set_next_http_block_offset(anjay_download_ctx_t *ctx_,
     return AVS_OK;
 }
 
-static avs_error_t copy_psk_info(avs_net_psk_info_t *dest,
-                                 const avs_net_psk_info_t *src,
+static avs_error_t copy_psk_info(avs_net_generic_psk_info_t *dest,
+                                 const avs_net_generic_psk_info_t *src,
                                  anjay_security_config_cache_t *cache) {
     *dest = *src;
-    size_t psk_buffer_size = 0;
-    if (src->identity) {
-        psk_buffer_size += src->identity_size;
+    avs_error_t err;
+    if (avs_is_err(
+                (err = avs_crypto_psk_key_info_copy(&cache->psk_key, src->key)))
+            || avs_is_err((err = avs_crypto_psk_identity_info_copy(
+                                   &cache->psk_identity, src->identity)))) {
+        return err;
     }
-    if (src->psk) {
-        psk_buffer_size += src->psk_size;
-    }
-    assert(!cache->psk_buffer);
-    if (!(cache->psk_buffer = avs_malloc(psk_buffer_size))) {
-        dl_log(ERROR, _("Out of memory"));
-        return avs_errno(AVS_ENOMEM);
-    }
-    char *psk_buffer_ptr = (char *) cache->psk_buffer;
-    if (src->identity) {
-        memcpy(psk_buffer_ptr, src->identity, src->identity_size);
-        dest->identity = psk_buffer_ptr;
-        psk_buffer_ptr += src->identity_size;
-    }
-    if (src->psk) {
-        memcpy(psk_buffer_ptr, src->psk, src->psk_size);
-        dest->psk = psk_buffer_ptr;
-    }
+    dest->key = *cache->psk_key;
+    dest->identity = *cache->psk_identity;
     return AVS_OK;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,30 +147,40 @@ static int add_instance(sec_repr_t *repr,
     }
 
     new_instance->sms_security_mode = instance->sms_security_mode;
-    if (_anjay_raw_buffer_clone(
-                &new_instance->sms_key_params,
-                &(const anjay_raw_buffer_t) {
-                    .data = (void *) (intptr_t) instance->sms_key_parameters,
-                    .size = instance->sms_key_parameters_size
-                })) {
-        goto error;
-    }
-    if (_anjay_raw_buffer_clone(
-                &new_instance->sms_secret_key,
-                &(const anjay_raw_buffer_t) {
-                    .data = (void *) (intptr_t) instance->sms_secret_key,
-                    .size = instance->sms_secret_key_size
-                })) {
-        goto error;
-    }
-    if (instance->server_sms_number) {
-        new_instance->sms_number = avs_strdup(instance->server_sms_number);
-    }
     new_instance->has_sms_security_mode =
             !_anjay_sec_validate_sms_security_mode(
                     (int32_t) instance->sms_security_mode);
-    new_instance->has_sms_key_params = !!instance->sms_key_parameters;
-    new_instance->has_sms_secret_key = !!instance->sms_secret_key;
+
+    {
+        new_instance->sms_key_params.type = SEC_KEY_AS_DATA;
+        if (_anjay_raw_buffer_clone(
+                    &new_instance->sms_key_params.value.data,
+                    &(const anjay_raw_buffer_t) {
+                        .data = (void *) (intptr_t)
+                                        instance->sms_key_parameters,
+                        .size = instance->sms_key_parameters_size
+                    })) {
+            goto error;
+        }
+        new_instance->has_sms_key_params = !!instance->sms_key_parameters;
+    }
+
+    {
+        new_instance->sms_secret_key.type = SEC_KEY_AS_DATA;
+        if (_anjay_raw_buffer_clone(
+                    &new_instance->sms_secret_key.value.data,
+                    &(const anjay_raw_buffer_t) {
+                        .data = (void *) (intptr_t) instance->sms_secret_key,
+                        .size = instance->sms_secret_key_size
+                    })) {
+            goto error;
+        }
+        new_instance->has_sms_secret_key = !!instance->sms_secret_key;
+    }
+
+    if (instance->server_sms_number) {
+        new_instance->sms_number = avs_strdup(instance->server_sms_number);
+    }
 
     AVS_LIST(sec_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -196,7 +206,7 @@ static int add_instance(sec_repr_t *repr,
     return 0;
 
 error:
-    _anjay_sec_destroy_instances(&new_instance);
+    _anjay_sec_destroy_instances(&new_instance, true);
     return -1;
 }
 
@@ -205,7 +215,7 @@ static int del_instance(sec_repr_t *repr, anjay_iid_t iid) {
     AVS_LIST_FOREACH_PTR(it, &repr->instances) {
         if ((*it)->iid == iid) {
             AVS_LIST(sec_instance_t) element = AVS_LIST_DETACH(it);
-            _anjay_sec_destroy_instances(&element);
+            _anjay_sec_destroy_instances(&element, true);
             _anjay_sec_mark_modified(repr);
             return 0;
         }
@@ -262,6 +272,18 @@ static int sec_list_resources(anjay_unlocked_t *anjay,
     return 0;
 }
 
+static int ret_sec_key_or_data(anjay_unlocked_output_ctx_t *ctx,
+                               const sec_key_or_data_t *res) {
+    switch (res->type) {
+    case SEC_KEY_AS_DATA:
+        return _anjay_ret_bytes_unlocked(ctx, res->value.data.data,
+                                         res->value.data.size);
+    default:
+        AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+        return ANJAY_ERR_INTERNAL;
+    }
+}
+
 static int sec_read(anjay_unlocked_t *anjay,
                     const anjay_dm_installed_object_t obj_ptr,
                     anjay_iid_t iid,
@@ -286,25 +308,9 @@ static int sec_read(anjay_unlocked_t *anjay,
         return _anjay_ret_bytes_unlocked(ctx, inst->server_public_key.data,
                                          inst->server_public_key.size);
     case SEC_RES_PK_OR_IDENTITY:
-        switch (inst->public_cert_or_psk_identity.type) {
-        case SEC_KEY_AS_DATA:
-            return _anjay_ret_bytes_unlocked(
-                    ctx, inst->public_cert_or_psk_identity.value.data.data,
-                    inst->public_cert_or_psk_identity.value.data.size);
-        default:
-            AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
-            return ANJAY_ERR_INTERNAL;
-        }
+        return ret_sec_key_or_data(ctx, &inst->public_cert_or_psk_identity);
     case SEC_RES_SECRET_KEY:
-        switch (inst->private_cert_or_psk_key.type) {
-        case SEC_KEY_AS_DATA:
-            return _anjay_ret_bytes_unlocked(
-                    ctx, inst->private_cert_or_psk_key.value.data.data,
-                    inst->private_cert_or_psk_key.value.data.size);
-        default:
-            AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
-            return ANJAY_ERR_INTERNAL;
-        }
+        return ret_sec_key_or_data(ctx, &inst->private_cert_or_psk_key);
     case SEC_RES_SHORT_SERVER_ID:
         return _anjay_ret_i64_unlocked(ctx, (int32_t) inst->ssid);
     case SEC_RES_CLIENT_HOLD_OFF_TIME:
@@ -314,17 +320,24 @@ static int sec_read(anjay_unlocked_t *anjay,
     case SEC_RES_SMS_SECURITY_MODE:
         return _anjay_ret_i64_unlocked(ctx, (int32_t) inst->sms_security_mode);
     case SEC_RES_SMS_BINDING_KEY_PARAMS:
-        return _anjay_ret_bytes_unlocked(ctx, inst->sms_key_params.data,
-                                         inst->sms_key_params.size);
+        return ret_sec_key_or_data(ctx, &inst->sms_key_params);
     case SEC_RES_SMS_BINDING_SECRET_KEYS:
-        return _anjay_ret_bytes_unlocked(ctx, inst->sms_secret_key.data,
-                                         inst->sms_secret_key.size);
+        return ret_sec_key_or_data(ctx, &inst->sms_secret_key);
     case SEC_RES_SERVER_SMS_NUMBER:
         return _anjay_ret_string_unlocked(ctx, inst->sms_number);
     default:
         AVS_UNREACHABLE("Read handler called on unknown Security resource");
         return ANJAY_ERR_NOT_IMPLEMENTED;
     }
+}
+
+static int fetch_sec_key_or_data(anjay_unlocked_input_ctx_t *ctx,
+                                 sec_key_or_data_t *res) {
+    _anjay_sec_key_or_data_cleanup(res, true);
+    assert(res->type == SEC_KEY_AS_DATA);
+    assert(!res->prev_ref);
+    assert(!res->next_ref);
+    return _anjay_io_fetch_bytes(ctx, &res->value.data);
 }
 
 static int sec_write(anjay_unlocked_t *anjay,
@@ -358,17 +371,11 @@ static int sec_write(anjay_unlocked_t *anjay,
         }
         return retval;
     case SEC_RES_PK_OR_IDENTITY:
-        _anjay_sec_key_or_data_cleanup(&inst->public_cert_or_psk_identity);
-        assert(inst->public_cert_or_psk_identity.type == SEC_KEY_AS_DATA);
-        return _anjay_io_fetch_bytes(
-                ctx, &inst->public_cert_or_psk_identity.value.data);
+        return fetch_sec_key_or_data(ctx, &inst->public_cert_or_psk_identity);
     case SEC_RES_SERVER_PK:
         return _anjay_io_fetch_bytes(ctx, &inst->server_public_key);
     case SEC_RES_SECRET_KEY:
-        _anjay_sec_key_or_data_cleanup(&inst->private_cert_or_psk_key);
-        assert(inst->private_cert_or_psk_key.type == SEC_KEY_AS_DATA);
-        return _anjay_io_fetch_bytes(ctx,
-                                     &inst->private_cert_or_psk_key.value.data);
+        return fetch_sec_key_or_data(ctx, &inst->private_cert_or_psk_key);
     case SEC_RES_SHORT_SERVER_ID:
         if (!(retval = _anjay_sec_fetch_short_server_id(ctx, &inst->ssid))) {
             inst->has_ssid = true;
@@ -385,14 +392,12 @@ static int sec_write(anjay_unlocked_t *anjay,
         }
         return retval;
     case SEC_RES_SMS_BINDING_KEY_PARAMS:
-        if (!(retval = _anjay_io_fetch_bytes(ctx, &inst->sms_key_params))) {
-            inst->has_sms_key_params = true;
-        }
+        inst->has_sms_key_params =
+                !(retval = fetch_sec_key_or_data(ctx, &inst->sms_key_params));
         return retval;
     case SEC_RES_SMS_BINDING_SECRET_KEYS:
-        if (!(retval = _anjay_io_fetch_bytes(ctx, &inst->sms_secret_key))) {
-            inst->has_sms_secret_key = true;
-        }
+        inst->has_sms_secret_key =
+                !(retval = fetch_sec_key_or_data(ctx, &inst->sms_secret_key));
         return retval;
     case SEC_RES_SERVER_SMS_NUMBER:
         return _anjay_io_fetch_string(ctx, &inst->sms_number);
@@ -479,7 +484,7 @@ static int sec_instance_reset(anjay_unlocked_t *anjay,
     sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     assert(inst);
 
-    _anjay_sec_destroy_instance_fields(inst);
+    _anjay_sec_destroy_instance_fields(inst, true);
     init_instance(inst, iid);
     return 0;
 }
@@ -524,7 +529,8 @@ int anjay_security_object_add_instance(
     } else {
         const bool modified_since_persist = repr->modified_since_persist;
         if (!(retval = add_instance(repr, instance, inout_iid))
-                && (retval = _anjay_sec_object_validate(anjay, repr))) {
+                && (retval = _anjay_sec_object_validate_and_process_keys(
+                            anjay, repr))) {
             (void) del_instance(repr, *inout_iid);
             if (!modified_since_persist) {
                 /* validation failed and so in the end no instace is added */
@@ -542,16 +548,15 @@ int anjay_security_object_add_instance(
     return retval;
 }
 
-static void security_purge(sec_repr_t *repr) {
-    if (repr->instances) {
-        _anjay_sec_mark_modified(repr);
+static void security_delete(void *repr_) {
+    sec_repr_t *repr = (sec_repr_t *) repr_;
+    if (repr->in_transaction) {
+        _anjay_sec_destroy_instances(&repr->instances, true);
+        _anjay_sec_destroy_instances(&repr->saved_instances, false);
+    } else {
+        assert(!repr->saved_instances);
+        _anjay_sec_destroy_instances(&repr->instances, false);
     }
-    _anjay_sec_destroy_instances(&repr->instances);
-    _anjay_sec_destroy_instances(&repr->saved_instances);
-}
-
-static void security_delete(void *repr) {
-    security_purge((sec_repr_t *) repr);
     // NOTE: repr itself will be freed when cleaning the objects list
 }
 
@@ -565,7 +570,11 @@ void anjay_security_object_purge(anjay_t *anjay_locked) {
     if (!repr) {
         security_log(ERROR, _("Security object is not registered"));
     } else {
-        security_purge(repr);
+        if (repr->instances) {
+            _anjay_sec_mark_modified(repr);
+        }
+        _anjay_sec_destroy_instances(&repr->saved_instances, true);
+        _anjay_sec_destroy_instances(&repr->instances, true);
         if (_anjay_notify_instances_changed_unlocked(anjay, SECURITY.oid)) {
             security_log(WARNING, _("Could not schedule socket reload"));
         }
@@ -597,34 +606,40 @@ static const anjay_dm_module_t SECURITY_MODULE = {
     .deleter = security_delete
 };
 
-int anjay_security_object_install(anjay_t *anjay_locked) {
-    assert(anjay_locked);
-    int result = -1;
-    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+static sec_repr_t *security_install_unlocked(anjay_unlocked_t *anjay) {
     AVS_LIST(sec_repr_t) repr = AVS_LIST_NEW_ELEMENT(sec_repr_t);
     if (!repr) {
         security_log(ERROR, _("out of memory"));
-    } else {
-        repr->def = &SECURITY;
-        _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);
-        if (!_anjay_dm_module_install(anjay, &SECURITY_MODULE, repr)) {
-            AVS_STATIC_ASSERT(offsetof(sec_repr_t, def_ptr) == 0,
-                              def_ptr_is_first_field);
-            AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
-            if (_anjay_register_object_unlocked(anjay, &entry)) {
-                result = _anjay_dm_module_uninstall(anjay, &SECURITY_MODULE);
-                assert(!result);
-                result = -1;
-            } else {
-                result = 0;
-            }
-        }
-        if (result) {
-            AVS_LIST_CLEAR(&repr);
+        return NULL;
+    }
+    int result = -1;
+    repr->def = &SECURITY;
+    _anjay_dm_installed_object_init_unlocked(&repr->def_ptr, &repr->def);
+    if (!_anjay_dm_module_install(anjay, &SECURITY_MODULE, repr)) {
+        AVS_STATIC_ASSERT(offsetof(sec_repr_t, def_ptr) == 0,
+                          def_ptr_is_first_field);
+        AVS_LIST(anjay_dm_installed_object_t) entry = &repr->def_ptr;
+        if (_anjay_register_object_unlocked(anjay, &entry)) {
+            result = _anjay_dm_module_uninstall(anjay, &SECURITY_MODULE);
+            assert(!result);
+            result = -1;
+        } else {
+            result = 0;
         }
     }
+    if (result) {
+        AVS_LIST_CLEAR(&repr);
+    }
+    return repr;
+}
+
+int anjay_security_object_install(anjay_t *anjay_locked) {
+    assert(anjay_locked);
+    sec_repr_t *repr = NULL;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    repr = security_install_unlocked(anjay);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
-    return result;
+    return repr ? 0 : -1;
 }
 
 #    ifdef ANJAY_TEST

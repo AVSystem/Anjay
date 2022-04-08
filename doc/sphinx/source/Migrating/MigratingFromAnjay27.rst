@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -25,14 +25,17 @@ Introduction
 
 While most changes since Anjay 2.7 are minor, the advancements in HSM
 integration in ``avs_commons`` required some breaking changes in they way
-compile-time configuration of that library is performed.
+compile-time configuration of that library is performed. ``avs_commons`` 4.10
+also includes refactoring of the APIs related to (D)TLS PSK credentials.
 
-**No manual changes** (aside from possibly upgrading CMake) **should be
-necessary if you are using CMake to compile your project and using the default
-POSIX socket integration.** If you are using any alternative build system, you
-might need to make adjustments to your configuration headers. If you maintain
-your own socket integration, you might need to make slight adjustments to your
-code.
+The API remains compatible for most common use cases. However, you may need to
+adjust your code if you maintain your own socket integration, or if it accesses
+the ``avs_net_security_info_t`` structure directly. The latter is especially
+likely if you maintain your own implementation of the TLS layer.
+
+If you are using an alternative build system, not utilizing the included CMake
+scripts, you might additionally need to make adjustments to your configuration
+headers.
 
 Change to minimum CMake version
 -------------------------------
@@ -62,6 +65,112 @@ depending on your build process, e.g.:
   ``avs_commons_config.h`` if you specify it manually
 * You may need to add ``-lavs_url`` to your link command if you're using
   ``avs_commons`` that has been manually compiled separately using CMake
+
+Renamed configuration macro in avs_commons_config.h
+---------------------------------------------------
+
+The ``AVS_COMMONS_NET_WITH_PSK`` configuration macro in ``avs_commons_config.h``
+has been renamed to ``AVS_COMMONS_WITH_AVS_CRYPTO_PSK``.
+
+You may need to update your configuration files if you are not using CMake, or
+your preprocessor directives if you check this macro in your code.
+
+To improve backwards compatibility, if the ``AVS_COMMONS_NET_WITH_PSK`` macro is
+defined (e.g. in a legacy ``avs_commons_config.h`` file), it is interpreted as
+equivalent to ``AVS_COMMONS_WITH_AVS_CRYPTO_PSK``. A warning message is
+displayed in that case.
+
+Refactor of PSK credential handling
+-----------------------------------
+
+The ``avs_net_security_info_t`` structure has been updated to use the new type,
+``avs_net_generic_psk_info_t``, to encapsulate the PSK credentials. The new
+type uses new types based on ``avs_crypto_security_info_union_t`` instead of
+raw buffers.
+
+* **Old API:**
+  ::
+
+      /**
+       * A PSK/identity pair with borrowed pointers. avs_commons will never attempt
+       * to modify these values.
+       */
+      typedef struct {
+          const void *psk;
+          size_t psk_size;
+          const void *identity;
+          size_t identity_size;
+      } avs_net_psk_info_t;
+
+      // ...
+
+      typedef struct {
+          avs_net_security_mode_t mode;
+          union {
+              avs_net_psk_info_t psk;
+              avs_net_certificate_info_t cert;
+          } data;
+      } avs_net_security_info_t;
+
+      avs_net_security_info_t avs_net_security_info_from_psk(avs_net_psk_info_t psk);
+
+* **New API:**
+
+  .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_crypto_psk.h
+
+      typedef struct {
+          avs_crypto_security_info_union_t desc;
+      } avs_crypto_psk_identity_info_t;
+
+      // ...
+
+      avs_crypto_psk_identity_info_t
+      avs_crypto_psk_identity_info_from_buffer(const void *buffer,
+                                               size_t buffer_size);
+
+      // ...
+
+      typedef struct {
+          avs_crypto_security_info_union_t desc;
+      } avs_crypto_psk_key_info_t;
+
+      // ...
+
+      avs_crypto_psk_key_info_t
+      avs_crypto_psk_key_info_from_buffer(const void *buffer, size_t buffer_size);
+
+  .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_socket.h
+
+      /**
+       * A PSK/identity pair. avs_commons will never attempt to modify these values.
+       */
+      typedef struct {
+          avs_crypto_psk_key_info_t key;
+          avs_crypto_psk_identity_info_t identity;
+      } avs_net_generic_psk_info_t;
+
+      // ...
+
+      typedef struct {
+          avs_net_security_mode_t mode;
+          union {
+              avs_net_generic_psk_info_t psk;
+              avs_net_certificate_info_t cert;
+          } data;
+      } avs_net_security_info_t;
+
+      avs_net_security_info_t
+      avs_net_security_info_from_generic_psk(avs_net_generic_psk_info_t psk);
+
+The old ``avs_net_psk_info_t`` type is still available for compatibility. The
+``avs_crypto_psk_key_info_from_buffer()`` function has also been reimplemented
+as a ``static inline`` function that wraps calls to
+``avs_crypto_psk_identity_info_from_buffer()``,
+``avs_crypto_psk_key_info_from_buffer()`` and
+``avs_net_security_info_from_generic_psk()``.
+
+However, code that accesses the ``data.psk`` field of
+``avs_net_security_info_t`` directly will need to be updated.
 
 Refactor of avs_net_validate_ip_address() and avs_net_local_address_for_target_host()
 -------------------------------------------------------------------------------------
@@ -95,9 +204,9 @@ Coupling of the Hardware Security Module support in ``avs_commons`` has been
 loosened, making it possible to replace the reference implementation based on
 ``libp11`` with a custom one.
 
-* New CMake configuration flag ``WITH_AVS_CRYPTO_ENGINE``, and its corresponding
-  configuration header macro ``AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE`` have been
-  added.
+* New CMake configuration flag ``WITH_AVS_CRYPTO_PKI_ENGINE``, and its
+  corresponding configuration header macro
+  ``AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE`` have been added.
 * Enabling the aforementioned flag is now a dependency for enabling
   ``WITH_OPENSSL_PKCS11_ENGINE`` (CMake) /
   ``AVS_COMMONS_WITH_OPENSSL_PKCS11_ENGINE`` (header)

@@ -18,7 +18,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'avs_coap'
-copyright = '2017-2021, AVSystem'
+copyright = '2017-2022, AVSystem'
 author = 'AVSystem'
 version = '@AVS_COAP_VERSION@'
 release = version

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,17 +18,21 @@ import datetime
 import os
 import socket
 import subprocess
+import threading
 import time
 
 import cryptography
 import cryptography.hazmat
+import cryptography.hazmat.backends
 import cryptography.x509
 
 from framework.lwm2m.coap.server import SecurityMode
+from framework.lwm2m.coap.transport import Transport
 from framework.lwm2m_test import *
 from framework.test_utils import DEMO_ENDPOINT_NAME, RID, OID
 from suites.default import bootstrap_client
 from suites.default import retransmissions
+
 
 class SecurityObjectDmOperationsBySingleServer(test_suite.Lwm2mSingleServerTest,
                                                test_suite.Lwm2mDmOperations):

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,18 +55,21 @@ int _anjay_sec_validate_sms_security_mode(int32_t security_mode);
 int _anjay_sec_fetch_short_server_id(anjay_unlocked_input_ctx_t *ctx,
                                      anjay_ssid_t *out);
 
-void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value);
+void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value,
+                                    bool remove_from_engine);
 
 /**
  * Frees all resources held in the @p instance.
  */
-void _anjay_sec_destroy_instance_fields(sec_instance_t *instance);
+void _anjay_sec_destroy_instance_fields(sec_instance_t *instance,
+                                        bool remove_from_engine);
 
 /**
  * Frees all resources held in instances from the @p instances_ptr list,
  * and the list itself.
  */
-void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr);
+void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr,
+                                  bool remove_from_engine);
 
 /**
  * Clones all instances of the given Security Object @p repr . Return NULL

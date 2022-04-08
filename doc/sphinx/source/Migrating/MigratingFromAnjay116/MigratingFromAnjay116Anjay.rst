@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -182,7 +182,7 @@ Equivalent new code:
     It is REQUIRED that the Object Instances are reported in strictly ascending
     order with regard to the Instance ID, i.e. that the Instance ID passed to
     each consecutive call to ``anjay_dm_emit()`` is higher than the one passed
-    to a previous call, if any (within any given call the the ``list_instances``
+    to a previous call, if any (within any given call to the ``list_instances``
     handler).
 
 .. note::
@@ -319,7 +319,7 @@ Equivalent new code::
     It is REQUIRED that the Resources are reported in strictly ascending order
     with regard to the Resource ID, i.e. that the Resource ID passed to each
     consecutive call to ``anjay_dm_emit_res()`` is higher than the one passed to
-    a previous call, if any (within any given call the the ``list_resources``
+    a previous call, if any (within any given call to the ``list_resources``
     handler).
 
 .. important::
@@ -658,7 +658,7 @@ Equivalent new code:
     ascending order with regard to the Resource Instance ID, i.e. that the
     Resource Instance ID passed to each consecutive call to ``anjay_dm_emit()``
     is higher than the one passed to a previous call, if any (within any given
-    call the the ``list_resource_instances`` handler).
+    call to the ``list_resource_instances`` handler).
 
 .. note::
 
@@ -703,7 +703,7 @@ There are two important differences:
   necessary.
 
   * If you are writing your own implementation of the Access Control object, you
-    may assume the the creation has been initiated by the Bootstrap Server
+    may assume that the creation has been initiated by the Bootstrap Server
     (``ssid == ANJAY_SSID_BOOTSTRAP``).
 
 Refactored execute argument value getter

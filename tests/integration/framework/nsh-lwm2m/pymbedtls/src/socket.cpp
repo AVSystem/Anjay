@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,10 +27,6 @@
 #include "context.hpp"
 #include "security.hpp"
 #include "socket.hpp"
-
-#ifndef MBEDTLS_PRIVATE
-#    define MBEDTLS_PRIVATE(Name) Name
-#endif // MBEDTLS_PRIVATE
 
 using namespace std;
 using namespace chrono;
@@ -113,6 +109,8 @@ int Socket::_recv(void *self,
         --timeout_ms;
     }
 
+    int socket_type = socket->py_socket_.attr("type").cast<int>();
+
     int bytes_received = 0;
     do {
         try {
@@ -121,10 +119,18 @@ int Socket::_recv(void *self,
                                   timeout_ms / 1000.0);
             }
 
+            py::tuple num_received_and_peer;
             const auto before_recv = steady_clock::now();
-            py::tuple num_received_and_peer =
-                    call_method<py::tuple>(socket->py_socket_, "recvfrom_into",
-                                           py_buf);
+            if (socket_type == SOCK_DGRAM) {
+                num_received_and_peer =
+                        call_method<py::tuple>(socket->py_socket_,
+                                               "recvfrom_into", py_buf);
+                bytes_received = py::cast<int>(num_received_and_peer[0]);
+            } else {
+                bytes_received = call_method<int>(socket->py_socket_,
+                                                  "recv_into", py_buf);
+            }
+
             if (timeout_ms != UINT32_MAX) {
                 auto elapsed_ms = duration_cast<milliseconds>(
                                           steady_clock::now() - before_recv)
@@ -136,33 +142,34 @@ int Socket::_recv(void *self,
                 }
             }
 
-            bytes_received = py::cast<int>(num_received_and_peer[0]);
+            if (socket_type == SOCK_DGRAM) {
+                // Unfortunately directly comparing two py::tuples yields false,
+                // if they're not the same objects.
+                auto peer_host_port_tuple =
+                        py::cast<py::tuple>(num_received_and_peer[1]);
+                auto recv_host_port =
+                        host_port_to_std_tuple(peer_host_port_tuple);
 
-            // Unfortunately directly comparing two py::tuples yields false,
-            // if they're not the same objects.
-            auto peer_host_port_tuple =
-                    py::cast<py::tuple>(num_received_and_peer[1]);
-            auto recv_host_port = host_port_to_std_tuple(peer_host_port_tuple);
-
-            if (socket->client_host_and_port_ != recv_host_port) {
-                if (!socket->in_handshake_
-                        && socket->context_->connection_id().size()) {
-                    // The message may still originate from an endpoint that we
-                    // know, but we cannot verify it at this stage, because no
-                    // TLS record parsing has been made. We need to delay it
-                    // till mbedtls_ssl_read() finishes.
-                    socket->last_recv_host_and_port_ = recv_host_port;
-                } else {
-                    // ignore this message.
-                    continue;
+                if (socket->client_host_and_port_ != recv_host_port) {
+                    if (!socket->in_handshake_
+                            && socket->context_->connection_id().size()) {
+                        // The message may still originate from an endpoint that
+                        // we know, but we cannot verify it at this stage,
+                        // because no TLS record parsing has been made. We need
+                        // to delay it till mbedtls_ssl_read() finishes.
+                        socket->last_recv_host_and_port_ = recv_host_port;
+                    } else {
+                        // ignore this message.
+                        continue;
+                    }
                 }
-            }
 
-            // Ensure that we're still connected to the known (host, port). We
-            // may not be, if someone "disconnected" the socket to test
-            // connection_id behavior.
-            call_method<void>(socket->py_socket_, "connect",
-                              socket->client_host_and_port_);
+                // Ensure that we're still connected to the known (host, port).
+                // We may not be, if someone "disconnected" the socket to test
+                // connection_id behavior.
+                call_method<void>(socket->py_socket_, "connect",
+                                  socket->client_host_and_port_);
+            }
             break;
         } catch (py::error_already_set &err) {
             bytes_received =
@@ -249,12 +256,14 @@ Socket::Socket(std::shared_ptr<Context> context,
         throw mbedtls_error("mbedtls_ctr_drbg_seed failed", result);
     }
 
-    result = mbedtls_ssl_config_defaults(&config_,
-                                         type == SocketType::Client
-                                                 ? MBEDTLS_SSL_IS_CLIENT
-                                                 : MBEDTLS_SSL_IS_SERVER,
-                                         MBEDTLS_SSL_TRANSPORT_DATAGRAM, // TODO
-                                         MBEDTLS_SSL_PRESET_DEFAULT);
+    int socket_type = py_socket_.attr("type").cast<int>();
+    result = mbedtls_ssl_config_defaults(
+            &config_,
+            type == SocketType::Client ? MBEDTLS_SSL_IS_CLIENT
+                                       : MBEDTLS_SSL_IS_SERVER,
+            socket_type == SOCK_DGRAM ? MBEDTLS_SSL_TRANSPORT_DATAGRAM
+                                      : MBEDTLS_SSL_TRANSPORT_STREAM,
+            MBEDTLS_SSL_PRESET_DEFAULT);
     if (result) {
         throw mbedtls_error("mbedtls_ssl_config_defaults failed", result);
     }
@@ -321,7 +330,9 @@ Socket::~Socket() {
     mbedtls_ssl_free(&mbedtls_context_);
 }
 
-void Socket::connect(py::tuple host_port, py::object handshake_timeouts_s_) {
+void Socket::perform_handshake(py::tuple host_port,
+                               py::object handshake_timeouts_s_,
+                               bool py_connect) {
     client_host_and_port_ = host_port_to_std_tuple(host_port);
     last_recv_host_and_port_ = host_port_to_std_tuple(host_port);
 
@@ -349,7 +360,9 @@ void Socket::connect(py::tuple host_port, py::object handshake_timeouts_s_) {
             throw mbedtls_error("mbedtls_ssl_set_client_transport_id failed",
                                 result);
         }
-        call_method<void>(py_socket_, "connect", client_host_and_port_);
+        if (py_connect) {
+            call_method<void>(py_socket_, "connect", client_host_and_port_);
+        }
         hs_result = do_handshake();
     } while (hs_result == HandshakeResult::HelloVerifyRequired);
 }
@@ -424,9 +437,16 @@ void Socket::settimeout(py::object timeout_s_or_none) {
 py::bytes Socket::peer_cert() {
     const mbedtls_x509_crt *cert = mbedtls_ssl_get_peer_cert(&mbedtls_context_);
     if (cert) {
+#if MBEDTLS_VERSION_NUMBER >= 0x03000000 && MBEDTLS_VERSION_NUMBER < 0x03010000
         return py::bytes(reinterpret_cast<const char *>(
                                  cert->MBEDTLS_PRIVATE(raw).MBEDTLS_PRIVATE(p)),
                          cert->MBEDTLS_PRIVATE(raw).MBEDTLS_PRIVATE(len));
+#else  // MBEDTLS_VERSION_NUMBER >= 0x03000000
+       // && MBEDTLS_VERSION_NUMBER < 0x03010000
+        return py::bytes(reinterpret_cast<const char *>(cert->raw.p),
+                         cert->raw.len);
+#endif // MBEDTLS_VERSION_NUMBER >= 0x03000000
+       // && MBEDTLS_VERSION_NUMBER < 0x03010000
     }
     return py::bytes();
 }
@@ -484,31 +504,47 @@ ServerSocket::ServerSocket(std::shared_ptr<Context> context,
 }
 
 unique_ptr<Socket> ServerSocket::accept(py::object handshake_timeouts_s) {
-    // use old socket to communicate with client
-    // create a new one for listening
-    py::object bound_addr = call_method<py::object>(py_socket_, "getsockname");
-    py::tuple data__remote_addr =
-            call_method<py::tuple>(py_socket_, "recvfrom", 1, (int) MSG_PEEK);
-    py::tuple remote_addr = py::cast<py::tuple>(data__remote_addr[1]);
+    int socket_type = py_socket_.attr("type").cast<int>();
+    py::object client_py_sock;
+    py::tuple remote_addr;
 
-    py::object client_py_sock = py::eval(
-            "socket.socket")(py_socket_.attr("family"), py_socket_.attr("type"),
-                             py_socket_.attr("proto"));
-    enable_reuse(client_py_sock);
+    if (socket_type == SOCK_DGRAM) {
+        // use old socket to communicate with client
+        // create a new one for listening
+        py::object bound_addr =
+                call_method<py::object>(py_socket_, "getsockname");
+        py::tuple data__remote_addr =
+                call_method<py::tuple>(py_socket_, "recvfrom", 1,
+                                       (int) MSG_PEEK);
+        remote_addr = py::cast<py::tuple>(data__remote_addr[1]);
 
-    call_method<void>(client_py_sock, "bind", bound_addr);
+        client_py_sock = py::eval("socket.socket")(py_socket_.attr("family"),
+                                                   socket_type,
+                                                   py_socket_.attr("proto"));
+        enable_reuse(client_py_sock);
 
-    // we have called recvfrom() on py_socket_ and we now want that data
-    // to show up on the client_socket - so let's swap them
-    swap(py_socket_, client_py_sock);
+        call_method<void>(client_py_sock, "bind", bound_addr);
 
-    call_method<void>(client_py_sock, "connect", remote_addr);
+        // we have called recvfrom() on py_socket_ and we now want that data
+        // to show up on the client_socket - so let's swap them
+        swap(py_socket_, client_py_sock);
+
+        call_method<void>(client_py_sock, "connect", remote_addr);
+    } else {
+        // TCP
+        py::tuple client_py_sock__remote_addr =
+                call_method<py::tuple>(py_socket_, "accept");
+        client_py_sock = client_py_sock__remote_addr[0];
+        remote_addr = py::cast<py::tuple>(client_py_sock__remote_addr[1]);
+
+        enable_reuse(client_py_sock);
+    }
 
     // Unfortunately C++11 is retarded and does not implement make_unique.
     unique_ptr<Socket> client_sock =
             unique_ptr<Socket>(new Socket(context_, std::move(client_py_sock),
                                           SocketType::Server));
-    client_sock->connect(remote_addr, handshake_timeouts_s);
+    client_sock->perform_handshake(remote_addr, handshake_timeouts_s, false);
     return client_sock;
 }
 

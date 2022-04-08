@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -460,10 +460,10 @@ int _anjay_dm_verify_resource_instance_present(
             dm_resource_instance_present(anjay, obj, iid, rid, riid));
 }
 
-#ifdef ANJAY_WITH_DISCOVER
 static int dm_discover(anjay_unlocked_t *anjay,
                        const anjay_dm_installed_object_t *obj,
                        const anjay_request_t *request) {
+#ifdef ANJAY_WITH_DISCOVER
     dm_log(LAZY_DEBUG, _("Discover ") "%s",
            ANJAY_DEBUG_MAKE_PATH(&request->uri));
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_RIID)) {
@@ -490,13 +490,15 @@ static int dm_discover(anjay_unlocked_t *anjay,
                ANJAY_DEBUG_MAKE_PATH(&request->uri));
     }
     return result;
-}
-#else // ANJAY_WITH_DISCOVER
-#    define dm_discover(anjay, obj, details)               \
-        (dm_log(ERROR, _("Not supported: Discover ") "%s", \
-                ANJAY_DEBUG_MAKE_PATH(&details->uri)),     \
-         ANJAY_ERR_NOT_IMPLEMENTED)
+#else  // ANJAY_WITH_DISCOVER
+    (void) anjay;
+    (void) obj;
+    (void) request;
+    dm_log(ERROR, _("Not supported: Discover ") "%s",
+           ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    return ANJAY_ERR_NOT_IMPLEMENTED;
 #endif // ANJAY_WITH_DISCOVER
+}
 
 static int dm_execute(anjay_unlocked_t *anjay,
                       const anjay_dm_installed_object_t *obj,

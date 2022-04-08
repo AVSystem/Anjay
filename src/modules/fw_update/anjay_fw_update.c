@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -323,27 +323,18 @@ static int fw_list_resources(anjay_unlocked_t *anjay,
     return 0;
 }
 
-#    if defined(AVS_COMMONS_WITH_MBEDTLS) || defined(AVS_COMMONS_WITH_OPENSSL) \
-            || defined(AVS_COMMONS_WITH_TINYDTLS)                              \
-            || defined(AVS_COMMONS_WITH_CUSTOM_TLS)
-#        define WITH_SSL
-#    endif // defined(AVS_COMMONS_WITH_MBEDTLS) ||
-           // defined(AVS_COMMONS_WITH_OPENSSL) ||
-           // defined(AVS_COMMONS_WITH_TINYDTLS) ||
-           // defined(AVS_COMMONS_WITH_CUSTOM_TLS)
-
 static const int32_t SUPPORTED_PROTOCOLS[] = {
 #    ifdef WITH_AVS_COAP_UDP
     0, /* CoAP */
-#        ifdef WITH_SSL
+#        ifndef AVS_COMMONS_WITHOUT_TLS
     1,         /* CoAPS */
-#        endif // WITH_SSL
+#        endif // AVS_COMMONS_WITHOUT_TLS
 #    endif     // WITH_AVS_COAP_UDP
 #    ifdef ANJAY_WITH_HTTP_DOWNLOAD
     2, /* HTTP 1.1 */
-#        ifdef WITH_SSL
+#        ifndef AVS_COMMONS_WITHOUT_TLS
     3,         /* HTTPS 1.1 */
-#        endif // WITH_SSL
+#        endif // AVS_COMMONS_WITHOUT_TLS
 #    endif     // ANJAY_WITH_HTTP_DOWNLOAD
 };
 

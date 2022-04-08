@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -653,6 +653,7 @@ class FirmwareUpdateInvalidUri(FirmwareUpdate.Test):
             if int(notify.content) != UPDATE_RESULT_INITIAL:
                 break
         self.assertEqual(UPDATE_RESULT_INVALID_URI, int(notify.content))
+        self.serv.send(Lwm2mReset(msg_id=notify.msg_id))
         self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
 
 

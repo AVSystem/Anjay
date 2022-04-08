@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,20 +82,19 @@ static avs_error_t handle_raw_buffer(avs_persistence_context_t *ctx,
     return err;
 }
 
-static avs_error_t handle_public_key(avs_persistence_context_t *ctx,
-                                     sec_key_or_data_t *value,
-                                     intptr_t stream_version) {
+static avs_error_t
+handle_sec_key_or_data(avs_persistence_context_t *ctx,
+                       sec_key_or_data_t *value,
+                       intptr_t stream_version,
+                       intptr_t min_version_for_key,
+                       avs_crypto_security_info_tag_t default_tag) {
     (void) stream_version;
     assert(value->type == SEC_KEY_AS_DATA);
-    return handle_raw_buffer(ctx, &value->value.data);
-}
-
-static avs_error_t handle_private_key(avs_persistence_context_t *ctx,
-                                      sec_key_or_data_t *value,
-                                      intptr_t stream_version) {
-    (void) stream_version;
-    assert(value->type == SEC_KEY_AS_DATA);
-    return handle_raw_buffer(ctx, &value->value.data);
+    avs_error_t err = handle_raw_buffer(ctx, &value->value.data);
+    assert(avs_is_err(err)
+           || avs_persistence_direction(ctx) != AVS_PERSISTENCE_RESTORE
+           || (!value->prev_ref && !value->next_ref));
+    return err;
 }
 
 static avs_error_t handle_instance(avs_persistence_context_t *ctx,
@@ -110,12 +109,16 @@ static avs_error_t handle_instance(avs_persistence_context_t *ctx,
             || avs_is_err((err = avs_persistence_u16(ctx, &security_mode)))
             || avs_is_err((
                        err = avs_persistence_string(ctx, &element->server_uri)))
-            || avs_is_err((err = handle_public_key(
+            || avs_is_err((err = handle_sec_key_or_data(
                                    ctx, &element->public_cert_or_psk_identity,
-                                   stream_version)))
-            || avs_is_err((err = handle_private_key(
+                                   stream_version,
+                                   /* min_version_for_key = */ 4,
+                                   AVS_CRYPTO_SECURITY_INFO_CERTIFICATE_CHAIN)))
+            || avs_is_err((err = handle_sec_key_or_data(
                                    ctx, &element->private_cert_or_psk_key,
-                                   stream_version)))
+                                   stream_version,
+                                   /* min_version_for_key = */ 4,
+                                   AVS_CRYPTO_SECURITY_INFO_PRIVATE_KEY)))
             || avs_is_err((err = handle_raw_buffer(
                                    ctx, &element->server_public_key)))) {
         return err;
@@ -126,10 +129,16 @@ static avs_error_t handle_instance(avs_persistence_context_t *ctx,
         if (avs_is_err((err = handle_sized_v1_fields(ctx, element)))
                 || avs_is_err(
                            (err = avs_persistence_u16(ctx, &sms_security_mode)))
-                || avs_is_err((err = handle_raw_buffer(
-                                       ctx, &element->sms_key_params)))
-                || avs_is_err((err = handle_raw_buffer(
-                                       ctx, &element->sms_secret_key)))
+                || avs_is_err((err = handle_sec_key_or_data(
+                                       ctx, &element->sms_key_params,
+                                       stream_version,
+                                       /* min_version_for_key = */ 5,
+                                       AVS_CRYPTO_SECURITY_INFO_PSK_IDENTITY)))
+                || avs_is_err((err = handle_sec_key_or_data(
+                                       ctx, &element->sms_secret_key,
+                                       stream_version,
+                                       /* min_version_for_key = */ 5,
+                                       AVS_CRYPTO_SECURITY_INFO_PSK_KEY)))
                 || avs_is_err((err = avs_persistence_string(
                                        ctx, &element->sms_number)))) {
             return err;
@@ -208,14 +217,16 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay_locked,
                                        (AVS_LIST(void) *) &repr->instances,
                                        sizeof(sec_instance_t), handle_instance,
                                        (void *) (intptr_t) version, NULL);
-            if (avs_is_ok(err) && _anjay_sec_object_validate(anjay, repr)) {
+            if (avs_is_ok(err)
+                    && _anjay_sec_object_validate_and_process_keys(anjay,
+                                                                   repr)) {
                 err = avs_errno(AVS_EPROTO);
             }
             if (avs_is_err(err)) {
-                _anjay_sec_destroy_instances(&repr->instances);
+                _anjay_sec_destroy_instances(&repr->instances, true);
                 repr->instances = backup.instances;
             } else {
-                _anjay_sec_destroy_instances(&backup.instances);
+                _anjay_sec_destroy_instances(&backup.instances, true);
                 _anjay_sec_clear_modified(repr);
                 persistence_log(INFO, _("Security Object state restored"));
             }

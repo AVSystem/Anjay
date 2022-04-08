@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,14 +46,46 @@ typedef enum {
     SEC_RES_BOOTSTRAP_TIMEOUT = 12,
 } security_resource_t;
 
-typedef enum { SEC_KEY_AS_DATA, SEC_KEY_AS_KEY } sec_key_or_data_type_t;
+typedef enum {
+    SEC_KEY_AS_DATA,
+    SEC_KEY_AS_KEY_EXTERNAL,
+    SEC_KEY_AS_KEY_OWNED
+} sec_key_or_data_type_t;
 
-typedef struct {
+typedef struct sec_key_or_data_struct sec_key_or_data_t;
+struct sec_key_or_data_struct {
     sec_key_or_data_type_t type;
     union {
         anjay_raw_buffer_t data;
     } value;
-} sec_key_or_data_t;
+
+    // HERE GOES MAGIC.
+    //
+    // sec_key_or_data_t is, in a way, semantically something like a
+    // shared_ptr<variant<anjay_raw_buffer_t, security_info_and_heap_buf>>.
+    // Note that the instances of sec_key_or_data_t itself are NOT individually
+    // allocated on the heap, as they are fields in sec_instance_t.
+    //
+    // These two fields organize multiple instances of sec_key_or_data_t that
+    // refer to the same heap buffer (either via value.data.data or
+    // value.key.heap_buf) in a doubly linked list. That way, when multiple
+    // instances referring to the same buffer exist, and one of them is to be
+    // cleaned up, that cleaned up instance can be removed from the list without
+    // needing any other pointers (which wouldn't work if that was a singly
+    // linked list).
+    //
+    // When the last (or only) instance referring to a given buffer is being
+    // cleaned up, both prev_ref and next_ref will be NULL, which is a signal
+    // to actually free the resources.
+    //
+    // These pointers are manipulated in _anjay_sec_key_or_data_cleanup() and
+    // sec_key_or_data_create_ref(), so see there for the actual implementation.
+    // Also note that in practice, it is not expected for more than two
+    // references (one in instances and one in saved_instances) to the same
+    // buffer to exist, but a generic solution isn't more complicated, so...
+    sec_key_or_data_t *prev_ref;
+    sec_key_or_data_t *next_ref;
+};
 
 typedef struct {
     anjay_iid_t iid;
@@ -69,8 +101,8 @@ typedef struct {
     int32_t bs_timeout_s;
 
     anjay_sms_security_mode_t sms_security_mode;
-    anjay_raw_buffer_t sms_key_params;
-    anjay_raw_buffer_t sms_secret_key;
+    sec_key_or_data_t sms_key_params;
+    sec_key_or_data_t sms_secret_key;
     char *sms_number;
 
     bool has_is_bootstrap;

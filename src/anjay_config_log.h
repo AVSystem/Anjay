@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -360,11 +360,6 @@ static inline void _anjay_log_feature_list(void) {
 #else // AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET
     _anjay_log(anjay, TRACE, "AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET = OFF");
 #endif // AVS_COMMONS_NET_WITH_POSIX_AVS_SOCKET
-#ifdef AVS_COMMONS_NET_WITH_PSK
-    _anjay_log(anjay, TRACE, "AVS_COMMONS_NET_WITH_PSK = ON");
-#else // AVS_COMMONS_NET_WITH_PSK
-    _anjay_log(anjay, TRACE, "AVS_COMMONS_NET_WITH_PSK = OFF");
-#endif // AVS_COMMONS_NET_WITH_PSK
 #ifdef AVS_COMMONS_NET_WITH_SOCKET_LOG
     _anjay_log(anjay, TRACE, "AVS_COMMONS_NET_WITH_SOCKET_LOG = ON");
 #else // AVS_COMMONS_NET_WITH_SOCKET_LOG
@@ -440,16 +435,26 @@ static inline void _anjay_log_feature_list(void) {
 #else // AVS_COMMONS_WITH_AVS_CRYPTO_ADVANCED_FEATURES
     _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_ADVANCED_FEATURES = OFF");
 #endif // AVS_COMMONS_WITH_AVS_CRYPTO_ADVANCED_FEATURES
-#ifdef AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE
-    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE = ON");
-#else // AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE
-    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE = OFF");
-#endif // AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE
 #ifdef AVS_COMMONS_WITH_AVS_CRYPTO_PKI
     _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PKI = ON");
 #else // AVS_COMMONS_WITH_AVS_CRYPTO_PKI
     _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PKI = OFF");
 #endif // AVS_COMMONS_WITH_AVS_CRYPTO_PKI
+#ifdef AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE = ON");
+#else // AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE = OFF");
+#endif // AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE
+#ifdef AVS_COMMONS_WITH_AVS_CRYPTO_PSK
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PSK = ON");
+#else // AVS_COMMONS_WITH_AVS_CRYPTO_PSK
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PSK = OFF");
+#endif // AVS_COMMONS_WITH_AVS_CRYPTO_PSK
+#ifdef AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE = ON");
+#else // AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE
+    _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE = OFF");
+#endif // AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE
 #ifdef AVS_COMMONS_WITH_AVS_CRYPTO_VALGRIND
     _anjay_log(anjay, TRACE, "AVS_COMMONS_WITH_AVS_CRYPTO_VALGRIND = ON");
 #else // AVS_COMMONS_WITH_AVS_CRYPTO_VALGRIND

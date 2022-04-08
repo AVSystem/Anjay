@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ instances.
 **Initializing, releasing and resetting the instance**
 
 Next we have to implement ``init_instance()`` and ``release_instance()``
-functions. These functions are using during creation and deletion of instances,
+functions. These functions are used during creation and deletion of instances,
 performed by LwM2M Server for example.
 
 In this case, all we have to do is to initialize Application Type with some

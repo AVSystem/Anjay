@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@
 
 #include "../dm/anjay_query.h"
 
+#include "../io/anjay_vtable.h"
+
 #include "anjay_activate.h"
 #include "anjay_connections_internal.h"
 #include "anjay_security.h"
@@ -54,53 +56,147 @@ void _anjay_connection_internal_clean_socket(
     avs_sched_del(&connection->queue_mode_close_socket_clb);
 }
 
+typedef struct {
+    anjay_unlocked_output_ctx_t base;
+    const anjay_ret_bytes_ctx_vtable_t *ret_bytes_vtable;
+    avs_crypto_security_info_tag_t tag;
+    avs_crypto_security_info_union_t *out_array;
+    size_t out_element_count;
+    size_t bytes_remaining;
+} read_security_info_ctx_t;
+
+static int read_security_info_ret_bytes_begin(
+        anjay_unlocked_output_ctx_t *ctx_,
+        size_t length,
+        anjay_unlocked_ret_bytes_ctx_t **out_bytes_ctx) {
+    read_security_info_ctx_t *ctx = (read_security_info_ctx_t *) ctx_;
+    if (ctx->out_array) {
+        anjay_log(ERROR, _("value already returned"));
+        return -1;
+    }
+    if (!(ctx->out_array = (avs_crypto_security_info_union_t *) avs_malloc(
+                  sizeof(*ctx->out_array) + length))) {
+        anjay_log(ERROR, _("out of memory"));
+        return -1;
+    }
+    *ctx->out_array = (const avs_crypto_security_info_union_t) {
+        .type = ctx->tag,
+        .source = AVS_CRYPTO_DATA_SOURCE_BUFFER,
+        .info.buffer = {
+            .buffer = (char *) ctx->out_array + sizeof(*ctx->out_array),
+            .buffer_size = length
+        }
+    };
+    ctx->out_element_count = 1;
+    ctx->bytes_remaining = length;
+    *out_bytes_ctx = (anjay_unlocked_ret_bytes_ctx_t *) &ctx->ret_bytes_vtable;
+    return 0;
+}
+
+static int read_security_info_ret_bytes_append(
+        anjay_unlocked_ret_bytes_ctx_t *ctx_, const void *data, size_t size) {
+    read_security_info_ctx_t *ctx =
+            (read_security_info_ctx_t *) AVS_CONTAINER_OF(
+                    ctx_, read_security_info_ctx_t, ret_bytes_vtable);
+    assert(ctx->out_array);
+    if (size > ctx->bytes_remaining) {
+        anjay_log(DEBUG, _("tried to write too many bytes"));
+        return -1;
+    }
+    memcpy(((char *) (intptr_t) ctx->out_array->info.buffer.buffer)
+                   + (ctx->out_array->info.buffer.buffer_size
+                      - ctx->bytes_remaining),
+           data, size);
+    ctx->bytes_remaining -= size;
+    return 0;
+}
+
+static const anjay_output_ctx_vtable_t READ_SECURITY_INFO_VTABLE = {
+    .bytes_begin = read_security_info_ret_bytes_begin
+};
+
+static const anjay_ret_bytes_ctx_vtable_t READ_SECURITY_INFO_BYTES_VTABLE = {
+    .append = read_security_info_ret_bytes_append
+};
+
+avs_error_t
+_anjay_dm_read_security_info(anjay_unlocked_t *anjay,
+                             anjay_iid_t security_iid,
+                             anjay_rid_t security_rid,
+                             avs_crypto_security_info_tag_t tag,
+                             avs_crypto_security_info_union_t **out_array,
+                             size_t *out_element_count) {
+    assert(anjay);
+    assert(out_array);
+    assert(!*out_array);
+    assert(out_element_count);
+    read_security_info_ctx_t ctx = {
+        .base = {
+            .vtable = &READ_SECURITY_INFO_VTABLE
+        },
+        .ret_bytes_vtable = &READ_SECURITY_INFO_BYTES_VTABLE,
+        .tag = tag
+    };
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               security_rid);
+    if (_anjay_dm_read_resource_into_ctx(anjay, &path,
+                                         (anjay_unlocked_output_ctx_t *) &ctx)
+            || ctx.bytes_remaining) {
+        anjay_log(WARNING, _("read ") "%s" _(" failed"),
+                  ANJAY_DEBUG_MAKE_PATH(&path));
+        avs_free(ctx.out_array);
+        return avs_errno(AVS_EPROTO);
+    }
+    *out_array = ctx.out_array;
+    *out_element_count = ctx.out_element_count;
+    return AVS_OK;
+}
+
 avs_error_t
 _anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
                                     anjay_iid_t security_iid,
                                     anjay_rid_t identity_rid,
                                     anjay_rid_t secret_key_rid,
                                     avs_net_security_info_t *security,
-                                    void **out_psk_buffer) {
+                                    anjay_security_config_cache_t *cache) {
     assert(anjay);
-    assert(out_psk_buffer && !*out_psk_buffer);
-    avs_stream_t *membuf = avs_stream_membuf_create();
-    if (!membuf) {
-        anjay_log(ERROR, _("out of memory"));
-        return avs_errno(AVS_ENOMEM);
-    }
+    avs_error_t err;
+    size_t element_count = 0;
 
-    avs_error_t err = AVS_OK;
-    avs_off_t psk_offset;
-    anjay_uri_path_t path;
-    if (((path = MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                                    identity_rid)),
-         _anjay_dm_read_resource_into_stream(anjay, &path, membuf))
-            || avs_is_err((err = avs_stream_offset(membuf, &psk_offset)))
-            || psk_offset < 0
-            || ((path = MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
-                                           secret_key_rid)),
-                _anjay_dm_read_resource_into_stream(anjay, &path, membuf))) {
-        anjay_log(WARNING, _("read ") "%s" _(" failed"),
-                  ANJAY_DEBUG_MAKE_PATH(&path));
-        if (avs_is_ok(err)) {
-            err = avs_errno(AVS_EPROTO);
-        }
-    }
+    avs_net_generic_psk_info_t psk_info;
+    memset(&psk_info, 0, sizeof(psk_info));
 
-    size_t buffer_size;
-    if (avs_is_ok(err)
-            && avs_is_ok((err = avs_stream_membuf_take_ownership(
-                                  membuf, out_psk_buffer, &buffer_size)))) {
-        *security = avs_net_security_info_from_psk((avs_net_psk_info_t) {
-            .identity = *out_psk_buffer,
-            .identity_size = (size_t) psk_offset,
-            .psk = (char *) *out_psk_buffer + psk_offset,
-            .psk_size = buffer_size - (size_t) psk_offset
-        });
+    AVS_STATIC_ASSERT(sizeof(*cache->psk_key)
+                              == sizeof(avs_crypto_security_info_union_t),
+                      psk_key_info_equivalent_to_union);
+    if (avs_is_err(
+                (err = _anjay_dm_read_security_info(
+                         anjay, security_iid, secret_key_rid,
+                         AVS_CRYPTO_SECURITY_INFO_PSK_KEY,
+                         (avs_crypto_security_info_union_t **) &cache->psk_key,
+                         &element_count)))) {
+        return err;
     }
+    assert(element_count == 1);
+    psk_info.key = *cache->psk_key;
 
-    avs_stream_cleanup(&membuf);
-    return err;
+    AVS_STATIC_ASSERT(sizeof(*cache->psk_identity)
+                              == sizeof(avs_crypto_security_info_union_t),
+                      psk_identity_info_equivalent_to_union);
+    if (avs_is_err((err = _anjay_dm_read_security_info(
+                            anjay, security_iid, identity_rid,
+                            AVS_CRYPTO_SECURITY_INFO_PSK_IDENTITY,
+                            (avs_crypto_security_info_union_t **) &cache
+                                    ->psk_identity,
+                            &element_count)))) {
+        return err;
+    }
+    assert(element_count == 1);
+    psk_info.identity = *cache->psk_identity;
+
+    *security = avs_net_security_info_from_generic_psk(psk_info);
+    return AVS_OK;
 }
 
 static const anjay_connection_type_definition_t *

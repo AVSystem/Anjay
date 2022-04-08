@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,9 @@ static bool uri_protocol_matching(anjay_security_mode_t security_mode,
     return is_secure_uri == needs_secure_uri;
 }
 
-static bool sec_key_or_data_valid(const sec_key_or_data_t *value) {
+static bool
+sec_key_or_data_valid(const sec_key_or_data_t *value,
+                      const avs_crypto_security_info_tag_t *expected_tag) {
     switch (value->type) {
     case SEC_KEY_AS_DATA:
         return value->value.data.data;
@@ -75,19 +77,11 @@ static bool sec_key_or_data_valid(const sec_key_or_data_t *value) {
     }
 }
 
-#    define LOG_VALIDATION_FAILED(SecInstance, ...)                     \
-        do {                                                            \
-            char buffer[256];                                           \
-            int offset = snprintf(buffer, sizeof(buffer),               \
-                                  "/%u/%u: ", ANJAY_DM_OID_SECURITY,    \
-                                  (unsigned) (SecInstance)->iid);       \
-            if (offset < 0) {                                           \
-                offset = 0;                                             \
-            }                                                           \
-            snprintf(&buffer[offset], sizeof(buffer) - (size_t) offset, \
-                     __VA_ARGS__);                                      \
-            security_log(WARNING, "%s", buffer);                        \
-        } while (0)
+#    define LOG_VALIDATION_FAILED(SecInstance, ...)           \
+        security_log(                                         \
+                WARNING, "/%u/%u: " AVS_VARARG0(__VA_ARGS__), \
+                ANJAY_DM_OID_SECURITY,                        \
+                (unsigned) (SecInstance)->iid AVS_VARARG_REST(__VA_ARGS__))
 
 static int validate_instance(sec_instance_t *it) {
     if (!it->server_uri) {
@@ -125,8 +119,18 @@ static int validate_instance(sec_instance_t *it) {
     }
     if (it->security_mode != ANJAY_SECURITY_NOSEC
             && it->security_mode != ANJAY_SECURITY_EST) {
-        if (!sec_key_or_data_valid(&it->public_cert_or_psk_identity)
-                || !sec_key_or_data_valid(&it->private_cert_or_psk_key)) {
+        if (!sec_key_or_data_valid(
+                    &it->public_cert_or_psk_identity,
+                    &(const avs_crypto_security_info_tag_t) {
+                            it->security_mode == ANJAY_SECURITY_PSK
+                                    ? AVS_CRYPTO_SECURITY_INFO_PSK_IDENTITY
+                                    : AVS_CRYPTO_SECURITY_INFO_CERTIFICATE_CHAIN })
+                || !sec_key_or_data_valid(
+                           &it->private_cert_or_psk_key,
+                           &(const avs_crypto_security_info_tag_t) {
+                                   it->security_mode == ANJAY_SECURITY_PSK
+                                           ? AVS_CRYPTO_SECURITY_INFO_PSK_KEY
+                                           : AVS_CRYPTO_SECURITY_INFO_PRIVATE_KEY })) {
             LOG_VALIDATION_FAILED(it,
                                   "security credentials not fully configured");
             return -1;
@@ -141,7 +145,19 @@ static int validate_instance(sec_instance_t *it) {
         }
         if ((it->sms_security_mode == ANJAY_SMS_SECURITY_DTLS_PSK
              || it->sms_security_mode == ANJAY_SMS_SECURITY_SECURE_PACKET)
-                && (!it->sms_key_params.data || !it->sms_secret_key.data)) {
+                && (!it->has_sms_key_params || !it->has_sms_secret_key
+                    || !sec_key_or_data_valid(
+                               &it->sms_key_params,
+                               it->sms_security_mode
+                                               == ANJAY_SMS_SECURITY_DTLS_PSK
+                                       ? &(const avs_crypto_security_info_tag_t) { AVS_CRYPTO_SECURITY_INFO_PSK_IDENTITY }
+                                       : NULL)
+                    || !sec_key_or_data_valid(
+                               &it->sms_secret_key,
+                               it->sms_security_mode
+                                               == ANJAY_SMS_SECURITY_DTLS_PSK
+                                       ? &(const avs_crypto_security_info_tag_t) { AVS_CRYPTO_SECURITY_INFO_PSK_KEY }
+                                       : NULL))) {
             LOG_VALIDATION_FAILED(
                     it, "SMS security credentials not fully configured");
             return -1;
@@ -150,7 +166,7 @@ static int validate_instance(sec_instance_t *it) {
     return 0;
 }
 
-int _anjay_sec_object_validate(anjay_unlocked_t *anjay, sec_repr_t *repr) {
+static int sec_object_validate(anjay_unlocked_t *anjay, sec_repr_t *repr) {
     AVS_LIST(ssid_transport_pair_t) seen_ssid_transport_pairs = NULL;
     AVS_LIST(sec_instance_t) it;
     int result = 0;
@@ -207,6 +223,12 @@ finish:
     return result;
 }
 
+int _anjay_sec_object_validate_and_process_keys(anjay_unlocked_t *anjay,
+                                                sec_repr_t *repr) {
+    int result = sec_object_validate(anjay, repr);
+    return result;
+}
+
 int _anjay_sec_transaction_begin_impl(sec_repr_t *repr) {
     assert(!repr->saved_instances);
     assert(!repr->in_transaction);
@@ -221,7 +243,7 @@ int _anjay_sec_transaction_begin_impl(sec_repr_t *repr) {
 
 int _anjay_sec_transaction_commit_impl(sec_repr_t *repr) {
     assert(repr->in_transaction);
-    _anjay_sec_destroy_instances(&repr->saved_instances);
+    _anjay_sec_destroy_instances(&repr->saved_instances, true);
     repr->in_transaction = false;
     return 0;
 }
@@ -229,12 +251,12 @@ int _anjay_sec_transaction_commit_impl(sec_repr_t *repr) {
 int _anjay_sec_transaction_validate_impl(anjay_unlocked_t *anjay,
                                          sec_repr_t *repr) {
     assert(repr->in_transaction);
-    return _anjay_sec_object_validate(anjay, repr);
+    return _anjay_sec_object_validate_and_process_keys(anjay, repr);
 }
 
 int _anjay_sec_transaction_rollback_impl(sec_repr_t *repr) {
     assert(repr->in_transaction);
-    _anjay_sec_destroy_instances(&repr->instances);
+    _anjay_sec_destroy_instances(&repr->instances, true);
     repr->instances = repr->saved_instances;
     repr->saved_instances = NULL;
     repr->modified_since_persist = repr->saved_modified_since_persist;

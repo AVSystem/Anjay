@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,19 +35,11 @@ static int ssid_cmp(const void *a, const void *b, size_t size) {
     return *((const anjay_ssid_t *) a) - *((const anjay_ssid_t *) b);
 }
 
-#    define LOG_VALIDATION_FAILED(ServInstance, ...)                    \
-        do {                                                            \
-            char buffer[128];                                           \
-            int offset = snprintf(buffer, sizeof(buffer),               \
-                                  "/%u/%u: ", ANJAY_DM_OID_SERVER,      \
-                                  (unsigned) (ServInstance)->iid);      \
-            if (offset < 0) {                                           \
-                offset = 0;                                             \
-            }                                                           \
-            snprintf(&buffer[offset], sizeof(buffer) - (size_t) offset, \
-                     __VA_ARGS__);                                      \
-            server_log(WARNING, "%s", buffer);                          \
-        } while (0)
+#    define LOG_VALIDATION_FAILED(ServInstance, ...)          \
+        server_log(                                           \
+                WARNING, "/%u/%u: " AVS_VARARG0(__VA_ARGS__), \
+                ANJAY_DM_OID_SERVER,                          \
+                (unsigned) (ServInstance)->iid AVS_VARARG_REST(__VA_ARGS__))
 
 static int validate_instance(server_instance_t *it) {
     if (!it->has_ssid) {

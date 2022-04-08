@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ later.
 .. important::
 
     Remember to include ``anjay/attr_storage.h``, ``anjay/security.h`` and
-    ``anjay/server.h`` headers to use the the functions mentioned above.
+    ``anjay/server.h`` headers to use the functions mentioned above.
 
 Setting up Server and Security Objects
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

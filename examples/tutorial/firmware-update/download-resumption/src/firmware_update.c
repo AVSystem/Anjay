@@ -17,9 +17,10 @@ static const char *FW_DOWNLOAD_STATE_NAME = "firmware_dl_state.bin";
 
 static int store_etag(FILE *fp, const anjay_etag_t *etag) {
     assert(etag);
-    assert(etag->size > 0);
-    if (fwrite(&etag->size, sizeof(etag->size), 1, fp) != 1
-            || fwrite(etag->value, etag->size, 1, fp) != 1) {
+    if (fwrite(&etag->size, sizeof(etag->size), 1, fp) != 1) {
+        return -1;
+    }
+    if (etag->size > 0 && fwrite(etag->value, etag->size, 1, fp) != 1) {
         return -1;
     }
     return 0;
@@ -52,7 +53,7 @@ static int store_download_state(const download_state_t *state) {
 static int restore_etag(FILE *fp, anjay_etag_t **out_etag) {
     assert(out_etag && !*out_etag); // make sure out_etag is zero-initialized
     uint8_t size;
-    if (fread(&size, sizeof(size), 1, fp) != 1 || size == 0) {
+    if (fread(&size, sizeof(size), 1, fp) != 1) {
         return -1;
     }
     anjay_etag_t *etag = anjay_etag_new(size);
@@ -60,7 +61,7 @@ static int restore_etag(FILE *fp, anjay_etag_t **out_etag) {
         return -1;
     }
 
-    if (fread(etag->value, size, 1, fp) != 1) {
+    if (size > 0 && fread(etag->value, size, 1, fp) != 1) {
         avs_free(etag);
         return -1;
     }

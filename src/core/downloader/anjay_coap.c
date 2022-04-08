@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,7 +225,8 @@ handle_coap_response(avs_coap_ctx_t *ctx,
                                 &dl_ctx->common,
                                 (const uint8_t *) response->payload,
                                 response->payload_size,
-                                (const anjay_etag_t *) &etag)))) {
+                                etag.size > 0 ? (const anjay_etag_t *) &etag
+                                              : NULL)))) {
             abort_download_transfer(dl_ctx, _anjay_download_status_failed(err));
             return;
         }

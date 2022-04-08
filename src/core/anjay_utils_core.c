@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -454,7 +454,10 @@ static bool has_valid_keys(const avs_net_security_info_t *info) {
                || info->data.cert.client_cert.desc.info.buffer.buffer_size > 0
                || info->data.cert.client_key.desc.info.buffer.buffer_size > 0;
     case AVS_NET_SECURITY_PSK:
-        return info->data.psk.identity_size > 0 || info->data.psk.psk_size > 0;
+        return info->data.psk.identity.desc.source
+                       != AVS_CRYPTO_DATA_SOURCE_EMPTY
+               || info->data.psk.key.desc.source
+                          != AVS_CRYPTO_DATA_SOURCE_EMPTY;
     }
     return false;
 }

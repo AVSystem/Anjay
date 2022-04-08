@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ _anjay_dm_installed_object_get_unlocked(
     return *obj_ptr;
 }
 
-static inline const bool _anjay_dm_installed_object_is_valid_unlocked(
+static inline bool _anjay_dm_installed_object_is_valid_unlocked(
         const anjay_dm_installed_object_t *obj_ptr) {
     return obj_ptr && (*obj_ptr) && (**obj_ptr);
 }

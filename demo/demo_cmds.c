@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -441,11 +441,10 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
         return;
     }
 
-    avs_net_psk_info_t psk = {
-        .psk = psk_key,
-        .psk_size = strlen(psk_key),
-        .identity = psk_identity,
-        .identity_size = strlen(psk_identity)
+    avs_net_generic_psk_info_t psk = {
+        .key = avs_crypto_psk_key_info_from_buffer(psk_key, strlen(psk_key)),
+        .identity = avs_crypto_psk_identity_info_from_buffer(
+                psk_identity, strlen(psk_identity))
     };
     anjay_download_config_t cfg = {
         .url = url,
@@ -453,7 +452,7 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
         .on_download_finished = dl_finished_new,
         .user_data = user_data,
         .security_config = {
-            .security_info = avs_net_security_info_from_psk(psk)
+            .security_info = avs_net_security_info_from_generic_psk(psk)
         }
     };
 

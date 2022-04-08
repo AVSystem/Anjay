@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,13 +90,18 @@ static int security_object_reload(anjay_demo_t *demo) {
         instance.server_uri = server->uri;
         if (instance.security_mode != ANJAY_SECURITY_EST
                 || server->is_bootstrap) {
-            instance.public_cert_or_psk_identity =
-                    args->public_cert_or_psk_identity;
-            instance.public_cert_or_psk_identity_size =
-                    args->public_cert_or_psk_identity_size;
-            instance.private_cert_or_psk_key = args->private_cert_or_psk_key;
-            instance.private_cert_or_psk_key_size =
-                    args->private_cert_or_psk_key_size;
+            {
+                instance.public_cert_or_psk_identity =
+                        args->public_cert_or_psk_identity;
+                instance.public_cert_or_psk_identity_size =
+                        args->public_cert_or_psk_identity_size;
+            }
+            {
+                instance.private_cert_or_psk_key =
+                        args->private_cert_or_psk_key;
+                instance.private_cert_or_psk_key_size =
+                        args->private_cert_or_psk_key_size;
+            }
         }
         instance.server_public_key = args->server_public_key;
         instance.server_public_key_size = args->server_public_key_size;

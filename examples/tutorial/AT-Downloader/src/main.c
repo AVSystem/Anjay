@@ -62,11 +62,10 @@ static int request_coap_download(anjay_t *anjay,
         return -1;
     }
 
-    avs_net_psk_info_t psk = {
-        .psk = psk_key,
-        .psk_size = strlen(psk_key),
-        .identity = psk_identity,
-        .identity_size = strlen(psk_identity)
+    avs_net_generic_psk_info_t psk = {
+        .key = avs_crypto_psk_key_info_from_buffer(psk_key, strlen(psk_key)),
+        .identity = avs_crypto_psk_identity_info_from_buffer(
+                psk_identity, strlen(psk_identity))
     };
 
     anjay_download_config_t cfg = {
@@ -75,7 +74,7 @@ static int request_coap_download(anjay_t *anjay,
         .on_download_finished = coap_download_finished,
         .user_data = file,
         .security_config = {
-            .security_info = avs_net_security_info_from_psk(psk)
+            .security_info = avs_net_security_info_from_generic_psk(psk)
         }
     };
 

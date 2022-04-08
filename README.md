@@ -268,11 +268,12 @@ docker run -it anjay
 
 ## Embedded operating systems ports
 
-If you want to use Anjay on Mbed OS, Zephyr OS or FreeRTOS, check our demo
+If you want to use Anjay on Mbed OS, Zephyr OS, FreeRTOS or ESP-IDF check our demo
 applications available in other repositories:
 - [Anjay-mbedos-client](https://github.com/AVSystem/Anjay-mbedos-client) (uses [Anjay-mbedos](https://github.com/AVSystem/Anjay-mbedos) integration layer)
-- [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client)
+- [Anjay-zephyr-client](https://github.com/AVSystem/Anjay-zephyr-client) (uses [Anjay-zephyr](https://github.com/AVSystem/Anjay-zephyr) integration layer)
 - [Anjay-freertos-client](https://github.com/AVSystem/Anjay-freertos-client)
+- [Anjay-esp32-client](https://github.com/AVSystem/Anjay-esp32-client)
 
 ## Raspberry Pi client
 

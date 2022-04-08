@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -208,153 +208,13 @@ The rest of the code in this function calls auxiliary functions that load all
 the security credential types: trusted certificates, certificate revocation
 lists, the client certificate and the client private key.
 
-The ``avs_crypto_security_info_union_t`` type
----------------------------------------------
-
-Loading of security credentials related to the public key infrastructure in
-``avs_net`` and ``avs_crypto`` is centered around the
-``avs_crypto_security_info_union_t`` type, declared as follows:
-
-
-.. highlight:: c
-.. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
-
-    typedef enum {
-        AVS_CRYPTO_SECURITY_INFO_CERTIFICATE_CHAIN,
-        AVS_CRYPTO_SECURITY_INFO_PRIVATE_KEY,
-        AVS_CRYPTO_SECURITY_INFO_CERT_REVOCATION_LIST
-    } avs_crypto_security_info_tag_t;
-
-    typedef enum {
-        AVS_CRYPTO_DATA_SOURCE_EMPTY,
-        AVS_CRYPTO_DATA_SOURCE_FILE,
-        AVS_CRYPTO_DATA_SOURCE_PATH,
-        AVS_CRYPTO_DATA_SOURCE_BUFFER,
-        AVS_CRYPTO_DATA_SOURCE_ARRAY,
-        AVS_CRYPTO_DATA_SOURCE_LIST,
-    #ifdef AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE
-        AVS_CRYPTO_DATA_SOURCE_ENGINE
-    #endif // AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE
-    } avs_crypto_data_source_t;
-
-    /**
-     * This struct is for internal use only and should not be filled manually. One
-     * should construct appropriate instances of:
-     * - @ref avs_crypto_certificate_chain_info_t,
-     * - @ref avs_crypto_private_key_info_t
-     * - @ref avs_crypto_cert_revocation_list_info_t
-     * using methods declared below.
-     */
-    struct avs_crypto_security_info_union_struct {
-        avs_crypto_security_info_tag_t type;
-        avs_crypto_data_source_t source;
-        union {
-            avs_crypto_security_info_union_internal_file_t file;
-            avs_crypto_security_info_union_internal_path_t path;
-            avs_crypto_security_info_union_internal_buffer_t buffer;
-            avs_crypto_security_info_union_internal_array_t array;
-            avs_crypto_security_info_union_internal_list_t list;
-    #ifdef AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE
-            avs_crypto_security_info_union_internal_engine_t engine;
-    #endif // AVS_COMMONS_WITH_AVS_CRYPTO_ENGINE
-        } info;
-    };
-
-The ``source`` fields acts as a tag to the ``info`` union, deciding from which
-source the credential shall be loaded. There are a number of "simple" sources
-supported:
-
-* ``AVS_CRYPTO_DATA_SOURCE_EMPTY`` - signifies that the object does not
-  represent any valid credential information
-* ``AVS_CRYPTO_DATA_SOURCE_FILE`` - the credential shall be loaded from a file,
-  specified as a file path (``info.file.filename``); in case of private keys,
-  an optional password for encrypted PEM keys can be specified
-  (``info.file.password``)
-* ``AVS_CRYPTO_DATA_SOURCE_PATH`` - the credentials shall be loaded from a
-  directory, specified as a file system path (``info.path.path``); this
-  generally only makes sense for certificate chains
-* ``AVS_CRYPTO_DATA_SOURCE_BUFFER`` - the credentials shall be loaded from a
-  memory buffer (``info.buffer.buffer`` of the size
-  ``info.buffer.buffer_size``); in case of private keys, an optional password
-  for encrypted PEM keys can be specified (``info.buffer.password``); **this is
-  the case that is almost exclusively used in Anjay**
-* ``AVS_CRYPTO_DATA_SOURCE_ENGINE`` - the object refers to a credential stored
-  in a hardware cryptography source, such as a secure element; information on
-  the credential is stored as a "query string" at ``info.engine.query``; the
-  format of the query string is platform-specific and may be arbitrary; **this
-  case is only supported in the commercial version of Anjay**
-
-In addition to the "simple" sources listed above, two additional "compound"
-sources are supported:
-
-* ``AVS_CRYPTO_DATA_SOURCE_ARRAY`` - the object specifies multiple credentials,
-  stored as an array of other ``avs_crypto_security_info_union_t`` objects -
-  ``info.array.element_count`` structures stored at ``info.array.array_ptr``
-* ``AVS_CRYPTO_DATA_SOURCE_LIST`` - the object specifies multiple credentials,
-  stored as an ``AVS_LIST`` whose first element is ``info.list.list_head``; the
-  ``AVS_LIST`` macro is not explicitly used in the declaration of the
-  ``list_head`` field for dependency management reasons, but that field shall
-  still be treated as such
-
-.. note::
-
-    "Compound" credential sources are most commonly used for trust store
-    information, i.e. trusted certificates and certificate revocation lists.
-
-    "Compound" credential sources are not used for private keys.
-
-    "Compound" credential sources MAY be used for client certificates, to
-    signify additional CA certificates that shall be sent to the server during
-    handshake. This is, however, only possible in the commercial version of
-    Anjay.
-
-    "Compound" credential sources, in general, MAY contain other "compound"
-    credential sources, forming a tree-like structure. Those SHOULD be loaded
-    recursively. However, the credentials provided by Anjay are expected to not
-    be formed in this way.
-
-.. important::
-
-    Anjay uses both ``AVS_CRYPTO_DATA_SOURCE_ARRAY`` and
-    ``AVS_CRYPTO_DATA_SOURCE_LIST`` for different purposes, so support for both
-    needs to be implemented.
-
-The ``avs_crypto_security_info_union_t`` structure additionally contains the
-``type`` field, which may be used for validating the credential type (i.e.,
-whether the object represents a certificate chain, certificate revocation lists,
-or a private key.
-
-In typical usage, the type is conveyed by composing the
-``avs_crypto_security_info_union_t`` object into one of the wrapper objects:
-
-.. highlight:: c
-.. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
-
-    typedef struct avs_crypto_certificate_chain_info_struct {
-        avs_crypto_security_info_union_t desc;
-    } avs_crypto_certificate_chain_info_t;
-
-.. highlight:: c
-.. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
-
-    typedef struct {
-        avs_crypto_security_info_union_t desc;
-    } avs_crypto_cert_revocation_list_info_t;
-
-.. highlight:: c
-.. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_crypto_pki.h
-
-    typedef struct {
-        avs_crypto_security_info_union_t desc;
-    } avs_crypto_private_key_info_t;
-
-We will only implement support for the ``AVS_CRYPTO_DATA_SOURCE_BUFFER`` mode
-for loading client certificates and private keys; for loading trusted
-certificates and certificate revocation lists, we also need to handle the
-``AVS_CRYPTO_DATA_SOURCE_ARRAY`` and ``AVS_CRYPTO_DATA_SOURCE_LIST`` cases.
-
 Loading security credentials
 ----------------------------
+
+The security credentials related to the public key infrastructure utilize the
+``avs_crypto_security_info_union_t`` that has been previously described in
+:ref:`custom-tls-security-info-union-type` chapter. You might want to recap the
+information contained there before continuing with this tutorial.
 
 .. important::
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,6 +221,7 @@ static void expect_read_notif_storing(anjay_t *anjay,
                                     ID_TOKEN(0xFA3E, "SuccsTkn"), OBSERVE(0), \
                                     CONTENT_FORMAT(PLAINTEXT),                \
                                     PAYLOAD("514"));                          \
+            expect_timeout(mocksocks[i]);                                     \
             DM_TEST_EXPECT_READ_NULL_ATTRS(ssids[i], 69, 4);                  \
             AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[i]));        \
             assert_observe_size(anjay, i + 1);                                \
@@ -237,6 +238,7 @@ AVS_UNIT_TEST(observe, read_failed) {
             anjay, &OBJ, 0, (const anjay_iid_t[]) { 14, 42, ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, NOT_FOUND,
                             ID_TOKEN(0xFA3E, "Res7"), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -286,6 +288,7 @@ AVS_UNIT_TEST(observe, read_attrs_failed) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -317,6 +320,7 @@ AVS_UNIT_TEST(observe, multiple_equivalent_observations) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res4"), OBSERVE(0),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("42"));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -374,6 +378,7 @@ AVS_UNIT_TEST(observe, overwrite) {
                             ID_TOKEN(0xFA3E, "SuccsTkn"), OBSERVE(0),
                             CONTENT_FORMAT(OMA_LWM2M_TLV),
                             PAYLOAD(TLV_RESPONSE));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 5);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
@@ -426,6 +431,7 @@ AVS_UNIT_TEST(observe, instance_overwrite) {
                             ID_TOKEN(0xFA3E, "ObjToken"), OBSERVE(0),
                             CONTENT_FORMAT(OMA_LWM2M_TLV),
                             PAYLOAD(TLV_RESPONSE));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, -1);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -472,6 +478,7 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res6"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("Hello"));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
@@ -497,6 +504,7 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "SuccsTkn"),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Good-bye"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -527,6 +535,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res5"), OBSERVE(0),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("42"));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 5);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -555,6 +564,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res5"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("Good-bye"));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
@@ -583,6 +593,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3F, "SuccsTkn"),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Sayonara"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -743,6 +754,7 @@ static void notify_max_period_test(const char *con_notify_ack,
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -808,6 +820,7 @@ static void notify_max_period_test(const char *con_notify_ack,
                                     con_notify_response->length);
     anjay_sched_run(anjay);
     avs_unit_mocksock_input(mocksocks[0], con_notify_ack, con_notify_ack_size);
+    expect_timeout(mocksocks[0]);
     anjay_serve(anjay, mocksocks[0]);
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, observe_size_after_ack);
@@ -882,6 +895,7 @@ AVS_UNIT_TEST(notify, min_period) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -951,6 +965,7 @@ AVS_UNIT_TEST(notify, epmin_greater_than_pmax) {
                             ID_TOKEN(0x69ED, "I love C"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("314159"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     ////// NOTIFICATION BEFORE EPMIN EXPIRATION //////
@@ -1005,6 +1020,7 @@ AVS_UNIT_TEST(notify, epmin_less_than_pmax) {
                             ID_TOKEN(0x69ED, "I love C"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("314159"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     ////// NOTIFY ABOUT RESOURCE CHANGE //////
@@ -1057,6 +1073,7 @@ AVS_UNIT_TEST(notify, confirmable) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
@@ -1086,6 +1103,7 @@ AVS_UNIT_TEST(notify, confirmable) {
             COAP_MSG(ACK, EMPTY, ID(MSG_ID_BASE), NO_PAYLOAD);
     avs_unit_mocksock_input(mocksocks[0], notify_ack->content,
                             notify_ack->length);
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     anjay_serve(anjay, mocksocks[0]);
 
@@ -1116,6 +1134,7 @@ AVS_UNIT_TEST(notify, extremes) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -1279,6 +1298,7 @@ AVS_UNIT_TEST(notify, greater_only) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -1368,6 +1388,7 @@ AVS_UNIT_TEST(notify, less_only) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("1337"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -1478,6 +1499,7 @@ AVS_UNIT_TEST(notify, step) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_size(anjay, 1);
 
@@ -1688,6 +1710,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID_TOKEN(0x69ED, "N"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     // Token: P
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID_TOKEN(0x69ED, "P"), OBSERVE(0),
@@ -1697,6 +1720,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID_TOKEN(0x69ED, "P"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("514"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     // Token: T
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID_TOKEN(0x69ED, "T"),
@@ -1707,6 +1731,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID_TOKEN(0x69ED, "T"),
                             CONTENT_FORMAT(OMA_LWM2M_TLV), OBSERVE(0),
                             PAYLOAD("\xC4\x04\x44\x00\x80\x00"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 3);
@@ -2120,6 +2145,7 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
                                         ANJAY_MOCK_DM_STRING(0, "Mayu"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFB3E),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Mayu"));
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     // now the notifications shall arrive
@@ -2219,6 +2245,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
                                         ANJAY_MOCK_DM_STRING(0, "Mayu"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFB3E),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Mayu"));
+    expect_timeout(mocksocks[0]);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
@@ -2264,6 +2291,7 @@ static void storing_of_errors_test_impl(bool storing_resource_value) {
     const coap_test_msg_t *con_ack =
             COAP_MSG(ACK, EMPTY, ID(MSG_ID_BASE + 1), NO_PAYLOAD);
     avs_unit_mocksock_input(mocksocks[0], con_ack->content, con_ack->length);
+    expect_timeout(mocksocks[0]);
     anjay_serve(anjay, mocksocks[0]);
 
     // now the notification shall be gone

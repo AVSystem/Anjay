@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -942,7 +942,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     avs_net_security_info_from_certificates(cert_info);
             break;
         }
-        case 259:
+        case 259: {
             if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.mode
                                    != (avs_net_security_mode_t) -1) {
@@ -951,20 +951,24 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
-                    && parsed_args->fw_security_info.data.psk.identity) {
+                    && parsed_args->fw_security_info.data.psk.identity.desc
+                                       .source
+                                   != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
                 demo_log(ERROR, "--fw-psk-identity specified more than once");
                 goto finish;
             }
-            if (parse_hexstring(optarg,
-                                (uint8_t **) (intptr_t) &parsed_args
-                                        ->fw_security_info.data.psk.identity,
-                                &parsed_args->fw_security_info.data.psk
-                                         .identity_size)) {
+            uint8_t *identity_buf = NULL;
+            size_t identity_size = 0;
+            if (parse_hexstring(optarg, &identity_buf, &identity_size)) {
                 demo_log(ERROR, "Invalid PSK identity for firmware upgrade");
                 goto finish;
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
+            parsed_args->fw_security_info.data.psk.identity =
+                    avs_crypto_psk_identity_info_from_buffer(identity_buf,
+                                                             identity_size);
             break;
+        }
         case 260: {
             if (parsed_args->fw_security_info.mode != AVS_NET_SECURITY_PSK
                     && parsed_args->fw_security_info.mode
@@ -974,20 +978,20 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
-                    && parsed_args->fw_security_info.data.psk.psk) {
+                    && parsed_args->fw_security_info.data.psk.key.desc.source
+                                   != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
                 demo_log(ERROR, "--fw-psk-key specified more than once");
                 goto finish;
             }
-
-            uint8_t **psk_ptr = (uint8_t **) (intptr_t) &parsed_args
-                                        ->fw_security_info.data.psk.psk;
-            if (parse_hexstring(
-                        optarg, psk_ptr,
-                        &parsed_args->fw_security_info.data.psk.psk_size)) {
+            uint8_t *psk_buf = NULL;
+            size_t psk_size = 0;
+            if (parse_hexstring(optarg, &psk_buf, &psk_size)) {
                 demo_log(ERROR, "Invalid pre-shared key for firmware upgrade");
                 goto finish;
             }
             parsed_args->fw_security_info.mode = AVS_NET_SECURITY_PSK;
+            parsed_args->fw_security_info.data.psk.key =
+                    avs_crypto_psk_key_info_from_buffer(psk_buf, psk_size);
             break;
         }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
@@ -1279,8 +1283,10 @@ process:
     }
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     if (parsed_args->fw_security_info.mode == AVS_NET_SECURITY_PSK
-            && (!parsed_args->fw_security_info.data.psk.identity
-                || !parsed_args->fw_security_info.data.psk.psk)) {
+            && (parsed_args->fw_security_info.data.psk.identity.desc.source
+                        == AVS_CRYPTO_DATA_SOURCE_EMPTY
+                || parsed_args->fw_security_info.data.psk.key.desc.source
+                           == AVS_CRYPTO_DATA_SOURCE_EMPTY)) {
         demo_log(ERROR, "Both identity and key must be provided when using PSK "
                         "for firmware upgrade security");
         retval = -1;

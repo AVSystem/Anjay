@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -395,8 +395,6 @@ static int serv_execute(anjay_unlocked_t *anjay,
                 "Execute called on unknown or non-executable Server resource");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-
-    return ANJAY_ERR_NOT_IMPLEMENTED;
 }
 
 static int serv_transaction_begin(anjay_unlocked_t *anjay,

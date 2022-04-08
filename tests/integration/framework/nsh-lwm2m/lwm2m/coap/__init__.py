@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ from .code import Code
 from .content_format import ContentFormat
 from .option import Option, ContentFormatOption, AcceptOption
 from .packet import Packet
-from .server import Server, DtlsServer
+from .server import Server, TlsServer, DtlsServer
 from .type import Type
 
 __all__ = [
@@ -29,6 +29,6 @@ __all__ = [
     'ContentFormat',
     'Option', 'ContentFormatOption', 'AcceptOption',
     'Packet',
-    'Server', 'DtlsServer',
+    'Server', 'TlsServer', 'DtlsServer',
     'Type'
 ]

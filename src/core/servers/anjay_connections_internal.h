@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,12 +68,20 @@ extern const anjay_connection_type_definition_t ANJAY_CONNECTION_DEF_UDP;
 #endif // WITH_AVS_COAP_UDP
 
 avs_error_t
+_anjay_dm_read_security_info(anjay_unlocked_t *anjay,
+                             anjay_iid_t security_iid,
+                             anjay_rid_t security_rid,
+                             avs_crypto_security_info_tag_t tag,
+                             avs_crypto_security_info_union_t **out_array,
+                             size_t *out_element_count);
+
+avs_error_t
 _anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
                                     anjay_iid_t security_iid,
                                     anjay_rid_t identity_rid,
                                     anjay_rid_t secret_key_rid,
                                     avs_net_security_info_t *security,
-                                    void **out_psk_buffer);
+                                    anjay_security_config_cache_t *cache);
 
 VISIBILITY_PRIVATE_HEADER_END
 

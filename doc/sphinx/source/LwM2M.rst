@@ -1,5 +1,5 @@
 ..
-   Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+   Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -317,7 +317,7 @@ and a CoAP client. The messages that may be exchanged between those include:
 
 - **PUT** requests sent from the Bootstrap Server to the Client are interpreted
   as **Bootstrap Write** commands. These allow creating and writing to Object
-  Instances and Resources in order initialize the data model to a state
+  Instances and Resources in order to initialize the data model to a state
   appropriate for communication with regular LwM2M Servers.
 
 - **Bootstrap Delete** command, represented as **DELETE** requests from the

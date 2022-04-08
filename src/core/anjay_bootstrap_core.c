@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -435,9 +435,9 @@ static int bootstrap_delete(anjay_unlocked_t *anjay,
     }
 }
 
-#    ifdef ANJAY_WITH_DISCOVER
 static int bootstrap_discover(anjay_unlocked_t *anjay,
                               const anjay_request_t *request) {
+#    ifdef ANJAY_WITH_DISCOVER
     if (_anjay_uri_path_has(&request->uri, ANJAY_ID_IID)) {
         return ANJAY_ERR_BAD_REQUEST;
     }
@@ -454,13 +454,14 @@ static int bootstrap_discover(anjay_unlocked_t *anjay,
 
     return _anjay_bootstrap_discover(anjay, response_stream,
                                      request->uri.ids[ANJAY_ID_OID]);
-}
-#    else // ANJAY_WITH_DISCOVER
-#        define bootstrap_discover(anjay, details)                          \
-            (anjay_log(ERROR, _("Not supported: Bootstrap Discover ") "%s", \
-                       ANJAY_DEBUG_MAKE_PATH(&details->uri)),               \
-             ANJAY_ERR_NOT_IMPLEMENTED)
+#    else  // ANJAY_WITH_DISCOVER
+    (void) anjay;
+    (void) request;
+    anjay_log(ERROR, _("Not supported: Bootstrap Discover ") "%s",
+              ANJAY_DEBUG_MAKE_PATH(&request->uri));
+    return ANJAY_ERR_NOT_IMPLEMENTED;
 #    endif // ANJAY_WITH_DISCOVER
+}
 
 static void purge_bootstrap(avs_sched_t *sched, const void *dummy) {
     (void) dummy;

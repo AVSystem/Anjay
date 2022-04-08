@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ AVS_UNIT_TEST(bootstrap_write, resource) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 4, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -70,6 +71,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_with_create) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 4, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -83,6 +85,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_with_present_error) {
             (const anjay_iid_t[]) { 14, 42, ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -97,6 +100,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_with_create_error) {
     _anjay_mock_dm_expect_instance_create(anjay, &OBJ, 514, -1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -121,6 +125,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_error) {
                     ANJAY_MOCK_DM_RES_END });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, NOT_FOUND, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -137,6 +142,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_with_mismatched_tlv_rid) {
     // mismatched resource id, RID Uri-Path was 4 but in the payload it is 5
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -163,6 +169,7 @@ AVS_UNIT_TEST(bootstrap_write, resource_error_with_create) {
     // TODO: should expect transaction_rollback here
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, NOT_FOUND, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -203,6 +210,7 @@ AVS_UNIT_TEST(bootstrap_write, instance) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 6, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -231,6 +239,7 @@ AVS_UNIT_TEST(bootstrap_write, instance_with_redundant_tlv_header) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 69, 6, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_STRING(0, "DDDDDD"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -248,6 +257,7 @@ AVS_UNIT_TEST(bootstrap_write,
             (const anjay_iid_t[]) { 14, 42, 69, 514, ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -277,6 +287,7 @@ AVS_UNIT_TEST(bootstrap_write, instance_wrong_type) {
                                          ANJAY_MOCK_DM_INT(0, 13), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -306,6 +317,7 @@ AVS_UNIT_TEST(bootstrap_write, instance_error) {
                                          ANJAY_MOCK_DM_INT(0, 13), -1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -345,6 +357,7 @@ AVS_UNIT_TEST(bootstrap_write, instance_some_unsupported) {
                     { 6, ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
                     ANJAY_MOCK_DM_RES_END });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -389,6 +402,7 @@ AVS_UNIT_TEST(bootstrap_write, object) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 42, 3, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_INT(0, 69), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -434,6 +448,7 @@ AVS_UNIT_TEST(bootstrap_write, object_error) {
                                          ANJAY_MOCK_DM_INT(0, 69), -1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -480,6 +495,7 @@ AVS_UNIT_TEST(bootstrap_write, object_error_index_end) {
                                          ANJAY_GET_PATH_END);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -510,6 +526,7 @@ AVS_UNIT_TEST(bootstrap_write, object_wrong_type) {
                                          ANJAY_MOCK_DM_INT(0, 42), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -524,6 +541,7 @@ AVS_UNIT_TEST(bootstrap_write, object_not_found) {
                             "\xc1\x03\x45" /* RID == 3 */));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, NOT_FOUND, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -538,6 +556,7 @@ AVS_UNIT_TEST(bootstrap_write, object_missing) {
                             "\xc1\x03\x45" /* RID == 3 */));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, METHOD_NOT_ALLOWED, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -549,6 +568,7 @@ AVS_UNIT_TEST(bootstrap_delete, instance) {
             anjay, &OBJ, 0, (const anjay_iid_t[]) { 34, ANJAY_ID_INVALID });
     _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 34, 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, DELETED, ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -559,6 +579,7 @@ AVS_UNIT_TEST(bootstrap_delete, instance_missing) {
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ, 0, (const anjay_iid_t[]) { ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, DELETED, ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -571,6 +592,7 @@ AVS_UNIT_TEST(bootstrap_delete, instance_error) {
     _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 34, -1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -582,6 +604,7 @@ AVS_UNIT_TEST(bootstrap_delete, instance_present_error) {
             anjay, &OBJ, -1, (const anjay_iid_t[]) { 34, ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -596,6 +619,7 @@ AVS_UNIT_TEST(bootstrap_delete, object) {
     _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 69, 0);
     _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 514, 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, DELETED, ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -608,6 +632,7 @@ AVS_UNIT_TEST(bootstrap_delete, object_it_error) {
             (const anjay_iid_t[]) { 34, 69, ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -622,6 +647,7 @@ AVS_UNIT_TEST(bootstrap_delete, object_error) {
     _anjay_mock_dm_expect_instance_remove(anjay, &OBJ, 69, -1);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -630,6 +656,7 @@ AVS_UNIT_TEST(bootstrap_delete, object_missing) {
     DM_TEST_INIT_WITH_SSIDS(ANJAY_SSID_BOOTSTRAP);
     DM_TEST_REQUEST(mocksocks[0], CON, DELETE, ID(0xFA3E), PATH("77"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, DELETED, ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -655,6 +682,7 @@ AVS_UNIT_TEST(bootstrap_delete, everything) {
             anjay, (const anjay_dm_object_def_t *const *) &EXECUTE_OBJ, 0,
             (const anjay_iid_t[]) { ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, DELETED, ID(0xfa3e), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -665,6 +693,7 @@ AVS_UNIT_TEST(bootstrap_delete, resource) {
                     PATH("42", "34", "7"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xfa3e),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -674,6 +703,7 @@ AVS_UNIT_TEST(bootstrap_delete, bs) {
     DM_TEST_REQUEST(mocksocks[0], CON, DELETE, ID(0xFA3E), PATH("bs"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, BAD_REQUEST, ID(0xfa3e),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }
@@ -710,12 +740,14 @@ AVS_UNIT_TEST(bootstrap_finish, error) {
     _anjay_mock_dm_expect_resource_write(anjay, &OBJ, 514, 4, ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_STRING(0, "Hello"), 0);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     // Bootstrap Finish
     DM_TEST_REQUEST(mocksocks[0], CON, POST, ID(0xFA3E), PATH("bs"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, INTERNAL_SERVER_ERROR,
                             ID(0xFA3E), NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_FAILED(anjay_serve(anjay, mocksocks[0]));
     AVS_UNIT_ASSERT_EQUAL(
             AVS_UNIT_MOCK_INVOCATIONS(_anjay_dm_call_instance_remove), 0);
@@ -737,6 +769,7 @@ AVS_UNIT_TEST(bootstrap_invalid, invalid) {
                     NO_PAYLOAD);
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, METHOD_NOT_ALLOWED, ID(0xFA3E),
                             NO_PAYLOAD);
+    expect_timeout(mocksocks[0]);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     DM_TEST_FINISH;
 }

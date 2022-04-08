@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,56 +99,67 @@ int _anjay_sec_fetch_short_server_id(anjay_unlocked_input_ctx_t *ctx,
     return retval;
 }
 
-void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value) {
-    switch (value->type) {
-    case SEC_KEY_AS_DATA:
-        _anjay_raw_buffer_clear(&value->value.data);
-        break;
-    default:
-        AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value,
+                                    bool remove_from_engine) {
+    if (!value->prev_ref && !value->next_ref) {
+        switch (value->type) {
+        case SEC_KEY_AS_DATA:
+            memset(value->value.data.data, 0, value->value.data.capacity);
+            _anjay_raw_buffer_clear(&value->value.data);
+            break;
+        default:
+            AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+        }
+    } else {
+        if (value->prev_ref) {
+            value->prev_ref->next_ref = value->next_ref;
+        }
+        if (value->next_ref) {
+            value->next_ref->prev_ref = value->prev_ref;
+        }
     }
     memset(value, 0, sizeof(*value));
     assert(value->type == SEC_KEY_AS_DATA);
 }
 
-void _anjay_sec_destroy_instance_fields(sec_instance_t *instance) {
+void _anjay_sec_destroy_instance_fields(sec_instance_t *instance,
+                                        bool remove_from_engine) {
     if (!instance) {
         return;
     }
     avs_free((char *) (intptr_t) instance->server_uri);
-    _anjay_sec_key_or_data_cleanup(&instance->public_cert_or_psk_identity);
-    _anjay_sec_key_or_data_cleanup(&instance->private_cert_or_psk_key);
+    _anjay_sec_key_or_data_cleanup(&instance->public_cert_or_psk_identity,
+                                   remove_from_engine);
+    _anjay_sec_key_or_data_cleanup(&instance->private_cert_or_psk_key,
+                                   remove_from_engine);
     _anjay_raw_buffer_clear(&instance->server_public_key);
-    _anjay_raw_buffer_clear(&instance->sms_key_params);
-    _anjay_raw_buffer_clear(&instance->sms_secret_key);
+    _anjay_sec_key_or_data_cleanup(&instance->sms_key_params,
+                                   remove_from_engine);
+    _anjay_sec_key_or_data_cleanup(&instance->sms_secret_key,
+                                   remove_from_engine);
     avs_free((char *) (intptr_t) instance->sms_number);
 }
 
-void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr) {
+void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr,
+                                  bool remove_from_engine) {
     AVS_LIST_CLEAR(instances_ptr) {
-        _anjay_sec_destroy_instance_fields(*instances_ptr);
+        _anjay_sec_destroy_instance_fields(*instances_ptr, remove_from_engine);
     }
 }
 
-static int sec_key_or_data_clone(sec_key_or_data_t *dest,
-                                 const sec_key_or_data_t *src) {
-    memset(dest, 0, sizeof(*dest));
-    int result = -1;
-    switch (src->type) {
-    case SEC_KEY_AS_DATA:
-        result = _anjay_raw_buffer_clone(&dest->value.data, &src->value.data);
-        break;
-    default:
-        AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
+static void sec_key_or_data_create_ref(sec_key_or_data_t *dest,
+                                       sec_key_or_data_t *src) {
+    *dest = *src;
+    dest->prev_ref = src;
+    dest->next_ref = src->next_ref;
+    if (src->next_ref) {
+        src->next_ref->prev_ref = dest;
     }
-    if (!result) {
-        dest->type = src->type;
-    }
-    return result;
+    src->next_ref = dest;
 }
 
 static int _anjay_sec_clone_instance(sec_instance_t *dest,
-                                     const sec_instance_t *src) {
+                                     sec_instance_t *src) {
     *dest = *src;
 
     assert(src->server_uri);
@@ -158,17 +169,10 @@ static int _anjay_sec_clone_instance(sec_instance_t *dest,
         return -1;
     }
 
-    if (sec_key_or_data_clone(&dest->public_cert_or_psk_identity,
-                              &src->public_cert_or_psk_identity)) {
-        security_log(ERROR, _("Cannot clone Pk Or Identity resource"));
-        return -1;
-    }
-
-    if (sec_key_or_data_clone(&dest->private_cert_or_psk_key,
-                              &src->private_cert_or_psk_key)) {
-        security_log(ERROR, _("Cannot clone Secret Key resource"));
-        return -1;
-    }
+    sec_key_or_data_create_ref(&dest->public_cert_or_psk_identity,
+                               &src->public_cert_or_psk_identity);
+    sec_key_or_data_create_ref(&dest->private_cert_or_psk_key,
+                               &src->private_cert_or_psk_key);
 
     dest->server_public_key = ANJAY_RAW_BUFFER_EMPTY;
     if (_anjay_raw_buffer_clone(&dest->server_public_key,
@@ -177,19 +181,8 @@ static int _anjay_sec_clone_instance(sec_instance_t *dest,
         return -1;
     }
 
-    dest->sms_key_params = ANJAY_RAW_BUFFER_EMPTY;
-    if (_anjay_raw_buffer_clone(&dest->sms_key_params, &src->sms_key_params)) {
-        security_log(ERROR,
-                     _("Cannot clone SMS Binding Key Parameters resource"));
-        return -1;
-    }
-
-    dest->sms_secret_key = ANJAY_RAW_BUFFER_EMPTY;
-    if (_anjay_raw_buffer_clone(&dest->sms_secret_key, &src->sms_secret_key)) {
-        security_log(ERROR,
-                     _("Cannot clone SMS Binding Secret Key(s) resource"));
-        return -1;
-    }
+    sec_key_or_data_create_ref(&dest->sms_key_params, &src->sms_key_params);
+    sec_key_or_data_create_ref(&dest->sms_secret_key, &src->sms_secret_key);
 
     dest->sms_number = NULL;
     if (src->sms_number) {
@@ -214,7 +207,7 @@ AVS_LIST(sec_instance_t) _anjay_sec_clone_instances(const sec_repr_t *repr) {
             if (_anjay_sec_clone_instance(*last, current)) {
                 security_log(ERROR,
                              _("Cannot clone Security Object Instances"));
-                _anjay_sec_destroy_instances(&retval);
+                _anjay_sec_destroy_instances(&retval, false);
                 return NULL;
             }
             AVS_LIST_ADVANCE_PTR(&last);

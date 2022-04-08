@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ struct
        // defined(ANJAY_ATOMIC_FIELDS_DEFINED)
 };
 
-#define ANJAY_DM_DEFAULT_PMIN_VALUE 1
+#define ANJAY_DM_DEFAULT_PMIN_VALUE 0
 
 uint8_t _anjay_make_error_response_code(int handler_result);
 

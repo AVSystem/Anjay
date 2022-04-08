@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -227,8 +227,9 @@ static handle_sockets_result_t handle_sockets(event_loop_state_t *state) {
     return result;
 }
 
-int anjay_event_loop_run(anjay_t *anjay_locked,
-                         avs_time_duration_t max_wait_time) {
+static int event_loop_run_with_error_handling(anjay_t *anjay_locked,
+                                              avs_time_duration_t max_wait_time,
+                                              bool enable_error_handling) {
     if (!avs_time_duration_valid(max_wait_time)
             || avs_time_duration_less(max_wait_time, AVS_TIME_DURATION_ZERO)) {
         anjay_log(ERROR, "max_wait_time needs to be valid and non-negative");
@@ -261,10 +262,29 @@ int anjay_event_loop_run(anjay_t *anjay_locked,
         case HANDLE_SOCKETS_CONTINUE:
             anjay_sched_run(anjay_locked);
             running = should_event_loop_still_run(anjay_locked);
+
+            if (enable_error_handling) {
+                if (anjay_all_connections_failed(anjay_locked)) {
+                    anjay_transport_schedule_reconnect(anjay_locked,
+                                                       ANJAY_TRANSPORT_SET_ALL);
+                }
+            }
         }
     }
     event_loop_state_cleanup(&state);
     return handle_sockets_result == HANDLE_SOCKETS_ERROR ? -1 : 0;
+}
+
+int anjay_event_loop_run(anjay_t *anjay_locked,
+                         avs_time_duration_t max_wait_time) {
+    return event_loop_run_with_error_handling(anjay_locked, max_wait_time,
+                                              false);
+}
+
+int anjay_event_loop_run_with_error_handling(
+        anjay_t *anjay_locked, avs_time_duration_t max_wait_time) {
+    return event_loop_run_with_error_handling(anjay_locked, max_wait_time,
+                                              true);
 }
 
 int anjay_event_loop_interrupt(anjay_t *anjay) {

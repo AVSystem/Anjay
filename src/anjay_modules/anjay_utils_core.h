@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+ * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -377,7 +377,8 @@ void _anjay_find_matching_coap_context_and_socket(
         avs_net_socket_t **out_socket);
 
 typedef struct {
-    void *psk_buffer;
+    avs_crypto_psk_key_info_t *psk_key;
+    avs_crypto_psk_identity_info_t *psk_identity;
     avs_crypto_certificate_chain_info_t *trusted_certs_array;
     avs_crypto_cert_revocation_list_info_t *cert_revocation_lists_array;
     avs_crypto_certificate_chain_info_t *client_cert_array;

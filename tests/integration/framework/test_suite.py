@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017-2021 AVSystem <avsystem@avsystem.com>
+# Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 import enum
 import inspect
+import logging
 import os
 import re
 import shutil
@@ -23,12 +24,11 @@ import subprocess
 import threading
 import time
 import unittest
-import logging
 from typing import TypeVar
 
+from framework.lwm2m.coap.transport import Transport
 from .asserts import Lwm2mAsserts
 from .lwm2m_test import *
-from framework.lwm2m.coap.transport import Transport
 
 try:
     import dpkt
@@ -879,24 +879,24 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
         pass
 
     def setUp(self, extra_cmdline_args=None, psk_identity=None, psk_key=None, client_ca_path=None,
-              client_ca_file=None, server_crt_file=None, server_key_file=None, binding=None,
-              *args, **kwargs):
+              client_ca_file=None, server_crt_file=None, server_key_file=None,
+              transport=Transport.UDP, binding=None, *args, **kwargs):
         assert ((psk_identity is None) == (psk_key is None))
         extra_args = []
-        dtls_server_kwargs = {}
+        tls_server_kwargs = {'transport': transport}
         if 'ciphersuites' in kwargs:
-            dtls_server_kwargs['ciphersuites'] = kwargs['ciphersuites']
+            tls_server_kwargs['ciphersuites'] = kwargs['ciphersuites']
         if psk_identity:
             extra_args += ['--identity', str(binascii.hexlify(psk_identity), 'ascii'),
                            '--key', str(binascii.hexlify(psk_key), 'ascii')]
-            coap_server = coap.DtlsServer(psk_identity=psk_identity, psk_key=psk_key,
-                                          **dtls_server_kwargs)
+            coap_server = coap.TlsServer(psk_identity=psk_identity, psk_key=psk_key,
+                                         **tls_server_kwargs)
         elif server_crt_file:
-            coap_server = coap.DtlsServer(ca_path=client_ca_path, ca_file=client_ca_file,
-                                          crt_file=server_crt_file, key_file=server_key_file,
-                                          **dtls_server_kwargs)
+            coap_server = coap.TlsServer(ca_path=client_ca_path, ca_file=client_ca_file,
+                                         crt_file=server_crt_file, key_file=server_key_file,
+                                         **tls_server_kwargs)
         else:
-            coap_server = coap.Server()
+            coap_server = coap.Server(transport=transport)
         if extra_cmdline_args is not None:
             extra_args += extra_cmdline_args
 
