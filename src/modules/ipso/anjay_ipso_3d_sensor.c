@@ -159,8 +159,8 @@ static int update_values(anjay_unlocked_t *anjay,
                          anjay_oid_t oid,
                          anjay_iid_t iid,
                          anjay_ipso_3d_sensor_instance_t *inst) {
-    double x_value, y_value, z_value;
-    int err;
+    double x_value = NAN, y_value = NAN, z_value = NAN;
+    int err = -1;
     ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
     err = inst->impl.get_values(iid, inst->impl.user_context, &x_value,
                                 &y_value, &z_value);

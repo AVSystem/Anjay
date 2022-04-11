@@ -165,8 +165,8 @@ static int update_curr_value(anjay_unlocked_t *anjay,
                              anjay_oid_t oid,
                              anjay_iid_t iid,
                              anjay_ipso_basic_sensor_instance_t *inst) {
-    double value;
-    int err;
+    double value = NAN;
+    int err = -1;
     ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
     err = inst->impl.get_value(iid, inst->impl.user_context, &value);
     ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
