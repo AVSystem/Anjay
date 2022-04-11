@@ -46,6 +46,20 @@ int process_python_socket_error(py::error_already_set &err, int default_err) {
     }
 }
 
+int get_socket_type(const py::object &py_socket) {
+    int result = py_socket.attr("type").cast<int>();
+    // On Linux, some flags may be stored in the socket type value, and some
+    // versions of Python update them when changing socket blocking state.
+    // We need to strip them for the values to meaningfully compare to anything.
+#ifdef SOCK_NONBLOCK
+    result &= ~SOCK_NONBLOCK;
+#endif // SOCK_NONBLOCK
+#ifdef SOCK_CLOEXEC
+    result &= ~SOCK_CLOEXEC;
+#endif // SOCK_CLOEXEC
+    return result;
+}
+
 } // namespace
 
 namespace ssl {
@@ -109,7 +123,7 @@ int Socket::_recv(void *self,
         --timeout_ms;
     }
 
-    int socket_type = socket->py_socket_.attr("type").cast<int>();
+    int socket_type = get_socket_type(socket->py_socket_);
 
     int bytes_received = 0;
     do {
@@ -256,7 +270,7 @@ Socket::Socket(std::shared_ptr<Context> context,
         throw mbedtls_error("mbedtls_ctr_drbg_seed failed", result);
     }
 
-    int socket_type = py_socket_.attr("type").cast<int>();
+    int socket_type = get_socket_type(py_socket_);
     result = mbedtls_ssl_config_defaults(
             &config_,
             type == SocketType::Client ? MBEDTLS_SSL_IS_CLIENT
@@ -504,7 +518,7 @@ ServerSocket::ServerSocket(std::shared_ptr<Context> context,
 }
 
 unique_ptr<Socket> ServerSocket::accept(py::object handshake_timeouts_s) {
-    int socket_type = py_socket_.attr("type").cast<int>();
+    int socket_type = get_socket_type(py_socket_);
     py::object client_py_sock;
     py::tuple remote_addr;
 
