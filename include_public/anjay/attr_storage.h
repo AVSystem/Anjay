@@ -77,7 +77,7 @@ void anjay_attr_storage_purge(anjay_t *anjay);
  *
  * @param anjay         Anjay instance with the Attribute Storage installed.
  * @param out_stream    Stream to write to.
- * @return 0 in case of success, negative value in case of an error.
+ * @returns AVS_OK in case of success, or an error code.
  */
 avs_error_t anjay_attr_storage_persist(anjay_t *anjay,
                                        avs_stream_t *out_stream);
@@ -92,7 +92,7 @@ avs_error_t anjay_attr_storage_persist(anjay_t *anjay,
  *
  * @param anjay     Anjay instance with Security Object installed.
  * @param in_stream Stream to read from.
- * @return 0 in case of success, negative value in case of an error.
+ * @returns AVS_OK in case of success, or an error code.
  *
  * <strong>NOTE:</strong> For historical reasons, this function behaves
  * differently than all other <c>*_restore()</c> functions in Anjay in two ways:

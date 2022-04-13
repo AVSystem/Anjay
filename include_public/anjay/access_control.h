@@ -54,7 +54,7 @@ void anjay_access_control_purge(anjay_t *anjay);
  *
  * @param anjay         ANJAY object with the Access Control module installed
  * @param out_stream    stream to write to
- * @return 0 in case of success, negative value in case of an error
+ * @returns AVS_OK in case of success, or an error code.
  */
 avs_error_t anjay_access_control_persist(anjay_t *anjay,
                                          avs_stream_t *out_stream);
@@ -64,7 +64,7 @@ avs_error_t anjay_access_control_persist(anjay_t *anjay,
  *
  * @param anjay         ANJAY object with the Access Control module installed
  * @param in_stream     stream used for reading Access Control Object Instances
- * @return 0 in case of success, negative value in case of an error
+ * @returns AVS_OK in case of success, or an error code.
  */
 avs_error_t anjay_access_control_restore(anjay_t *anjay,
                                          avs_stream_t *in_stream);
