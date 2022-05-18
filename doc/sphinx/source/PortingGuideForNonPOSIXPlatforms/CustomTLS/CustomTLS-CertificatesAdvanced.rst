@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Advanced certificate support
 ============================
@@ -49,11 +42,10 @@ Support for multiple client certificates
 .. note::
 
     Loading multiple client certificates is only possible by setting the
-    ``public_cert`` field in ``anjay_security_instance_t``, which is only
-    supported in the commercial version of Anjay.
+    ``public_cert`` field in ``anjay_security_instance_t``.
 
-    If you are using the open source version or don't intend to use that field,
-    there is no point in making this change.
+
+    If you don't intend to use that field there is no point in making this change.
 
 Using multiple certificates in the client certificate chain is rarely used, but
 it may be necessary to properly initiate a connection to some LwM2M servers.

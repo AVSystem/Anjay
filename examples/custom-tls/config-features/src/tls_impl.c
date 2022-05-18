@@ -266,6 +266,9 @@ static avs_error_t tls_get_opt(avs_net_socket_t *sock_,
         }
         return err;
     }
+    case AVS_NET_SOCKET_HAS_BUFFERED_DATA:
+        out_option_value->flag = (sock->ssl && SSL_pending(sock->ssl) > 0);
+        return AVS_OK;
     case AVS_NET_SOCKET_OPT_SESSION_RESUMED:
         out_option_value->flag = (sock->ssl && SSL_session_reused(sock->ssl));
         return AVS_OK;
@@ -340,7 +343,7 @@ static unsigned int psk_client_cb(SSL *ssl,
 }
 
 static avs_error_t configure_psk(tls_socket_impl_t *sock,
-                                 const avs_net_generic_psk_info_t *psk) {
+                                 const avs_net_psk_info_t *psk) {
     if (!psk->key.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER
             || psk->identity.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER) {
         return avs_errno(AVS_EINVAL);

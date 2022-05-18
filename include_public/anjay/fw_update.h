@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_FW_UPDATE_H
@@ -40,7 +33,7 @@ typedef enum {
     ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE = 6,
     ANJAY_FW_UPDATE_RESULT_INVALID_URI = 7,
     ANJAY_FW_UPDATE_RESULT_FAILED = 8,
-    ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL = 9
+    ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL = 9,
 } anjay_fw_update_result_t;
 
 /** @name Firmware update result codes
@@ -62,6 +55,7 @@ typedef enum {
     (-ANJAY_FW_UPDATE_RESULT_INTEGRITY_FAILURE)
 #define ANJAY_FW_UPDATE_ERR_UNSUPPORTED_PACKAGE_TYPE \
     (-ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE)
+
 /** @} */
 
 /**
@@ -177,6 +171,23 @@ typedef struct {
      * Idle state.
      */
     const struct anjay_etag *resume_etag;
+
+    /**
+     * Informs the module to try reusing sockets of existing LwM2M Servers to
+     * download the firmware image if the download URI matches any of the LwM2M
+     * Servers.
+     */
+    bool prefer_same_socket_downloads;
+
+#ifdef ANJAY_WITH_SEND
+    /**
+     * Enables using LwM2M Send to report State, Update Result and Firmware
+     * Version to the LwM2M Server (if LwM2M Send is enabled) during firmware
+     * update.
+     */
+    bool use_lwm2m_send;
+#endif // ANJAY_WITH_SEND
+
 } anjay_fw_update_initial_state_t;
 
 /**
@@ -396,13 +407,12 @@ typedef int anjay_fw_update_perform_upgrade_t(void *user_ptr);
  * to <c>NULL</c>), @ref anjay_security_config_from_dm will be used as a default
  * way to get security information.
  *
- * In that (no user-defined handler) case, in the commercial version,
- * <c>anjay_security_config_pkix()</c> will be used as an additional fallback if
- * <c>ANJAY_WITH_LWM2M11</c> is enabled and a valid trust store is available
- * (either specified through <c>use_system_trust_store</c>,
- * <c>trust_store_certs</c> or <c>trust_store_crls</c> fields in
- * <c>anjay_configuration_t</c>, or obtained via <c>/est/crts</c> request if
- * <c>est_cacerts_policy</c> is set to
+ * In that (no user-defined handler) case, <c>anjay_security_config_pkix()</c>
+ * will be used as an additional fallback if <c>ANJAY_WITH_LWM2M11</c> is
+ * enabled and a valid trust store is available (either specified through
+ * <c>use_system_trust_store</c>, <c>trust_store_certs</c> or
+ * <c>trust_store_crls</c> fields in <c>anjay_configuration_t</c>, or obtained
+ * via <c>/est/crts</c> request if <c>est_cacerts_policy</c> is set to
  * <c>ANJAY_EST_CACERTS_IF_EST_CONFIGURED</c> or
  * <c>ANJAY_EST_CACERTS_ALWAYS</c>).
  *
@@ -574,7 +584,8 @@ int anjay_fw_update_install(
  *
  * Some state transitions are disallowed and cause this function to fail:
  *
- * - @ref ANJAY_FW_UPDATE_RESULT_INITIAL is never allowed and causes this
+ * - @ref ANJAY_FW_UPDATE_RESULT_INITIAL and @ref
+ *   ANJAY_FW_UPDATE_RESULT_UPDATE_CANCELLED are never allowed and cause this
  *   function to fail.
  *
  * - @ref ANJAY_FW_UPDATE_RESULT_SUCCESS is only allowed if the firmware

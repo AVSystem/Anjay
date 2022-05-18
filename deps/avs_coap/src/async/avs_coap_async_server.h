@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef AVS_COAP_SRC_ASYNC_SERVER_H
@@ -238,13 +231,45 @@ avs_error_t _avs_coap_async_incoming_packet_simple_handle_single(
         avs_coap_server_new_async_request_handler_t *on_new_request,
         void *on_new_request_arg);
 
-avs_error_t
-_avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
+/**
+ * Calls @ref _avs_coap_async_incoming_packet_simple_handle_single in a loop,
+ * until there is no more data to be received on the socket.
+ *
+ * The stop condition is checked either using
+ * @ref _avs_coap_socket_definitely_exhausted (the loop stops if that function
+ * returns true) or by waiting for the socket receive operation to time out
+ * (while the receive timeout is set to zero).
+ *
+ * @ref _avs_coap_async_incoming_packet_simple_handle_single is called at least
+ * once.
+ */
+avs_error_t _avs_coap_async_incoming_packet_handle_and_exhaust_socket(
         avs_coap_ctx_t *ctx,
         uint8_t *in_buffer,
         size_t in_buffer_size,
         avs_coap_server_new_async_request_handler_t *on_new_request,
         void *on_new_request_arg);
+
+/**
+ * Calls @ref _avs_coap_async_incoming_packet_handle_and_exhaust_socket, unless
+ * the socket already can be conclusively determined to have no data already
+ * buffered.
+ *
+ * This is intended to make sure that all the incoming data available on the
+ * socket is exhausted after performing some other receive operation.
+ */
+static inline avs_error_t _avs_coap_async_incoming_packet_exhaust_socket(
+        avs_coap_ctx_t *ctx,
+        uint8_t *in_buffer,
+        size_t in_buffer_size,
+        avs_coap_server_new_async_request_handler_t *on_new_request,
+        void *on_new_request_arg) {
+    if (_avs_coap_socket_definitely_exhausted(ctx)) {
+        return AVS_OK;
+    }
+    return _avs_coap_async_incoming_packet_handle_and_exhaust_socket(
+            ctx, in_buffer, in_buffer_size, on_new_request, on_new_request_arg);
+}
 
 VISIBILITY_PRIVATE_HEADER_END
 

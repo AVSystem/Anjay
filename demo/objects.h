@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef DEMO_OBJECTS_H
@@ -61,6 +54,13 @@ typedef struct {
     bool is_bootstrap;
     const char *uri;
     const char *binding_mode;
+#ifdef ANJAY_WITH_LWM2M11
+    const char *sni;
+    uint32_t retry_count;
+    uint32_t retry_timer;
+    uint32_t sequence_retry_count;
+    uint32_t sequence_delay_timer;
+#endif // ANJAY_WITH_LWM2M11
 } server_entry_t;
 
 typedef struct {
@@ -76,6 +76,13 @@ typedef struct {
 
     uint8_t *private_cert_or_psk_key;
     size_t private_cert_or_psk_key_size;
+
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+    avs_crypto_certificate_chain_info_t public_cert;
+    avs_crypto_private_key_info_t private_key;
+    avs_crypto_psk_identity_info_t psk_identity;
+    avs_crypto_psk_key_info_t psk_key;
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
 
     uint8_t *server_public_key;
     size_t server_public_key_size;

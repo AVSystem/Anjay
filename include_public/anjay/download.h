@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_DOWNLOAD_H
@@ -191,6 +184,15 @@ typedef struct anjay_download_config {
      */
     avs_coap_udp_tx_params_t *coap_tx_params;
 
+    /**
+     * If set to true, the downloader module will attempt performing downloads
+     * over the same sockets as existing LwM2M Servers (if the download URI is
+     * found to match the URI of some LwM2M Server). Moreover, if set to true,
+     * @p security_config as well as @p coap_tx_params MAY or MAY NOT be used
+     * depending on whether the new socket is created or an existing one can
+     * be reused.
+     */
+    bool prefer_same_socket_downloads;
 } anjay_download_config_t;
 
 typedef void *anjay_download_handle_t;

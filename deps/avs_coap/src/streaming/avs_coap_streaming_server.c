@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avs_coap_init.h>
@@ -722,9 +715,7 @@ static avs_error_t handle_incoming_packet_with_acquired_in_buffer(
         if (streaming_req_ctx.err.category == AVS_ERRNO_CATEGORY
                 && streaming_req_ctx.err.code == AVS_ETIMEDOUT) {
             // Timeout - as the contract of this function does not mandate that
-            // we must always receive anything, we just return success. Also,
-            // because we loop, wanting to flush internal socket buffers, this
-            // is actually the only success return point of this function.
+            // we must always receive anything, we just return success.
             return AVS_OK;
         } else if (avs_is_ok(streaming_req_ctx.err)
                    && streaming_req_ctx.server_ctx.chunk_buffer) {
@@ -772,6 +763,13 @@ static avs_error_t handle_incoming_packet_with_acquired_in_buffer(
             // error
             return streaming_req_ctx.err;
         }
+
+        if (_avs_coap_socket_definitely_exhausted(coap_ctx)) {
+            // We can conclusively say that the socket is already exhausted,
+            // so no need to try receiving more packets.
+            return AVS_OK;
+        }
+        // Otherwise we loop again to make sure the socket is exhausted.
     }
 }
 
@@ -985,8 +983,12 @@ finish:
     avs_buffer_free(&notify_streaming_ctx.server_ctx.chunk_buffer);
     if (avs_is_ok(notify_streaming_ctx.err)
             && notify_streaming_ctx.required_receiving) {
+        // We needed to receive some data from the socket (most likely an ACK
+        // for a confirmable notification), so we also need to make sure that
+        // all data that might be internally buffered in the socket structures
+        // is exhausted, so that the user can safely use select()/poll().
         notify_streaming_ctx.err =
-                _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
+                _avs_coap_async_incoming_packet_exhaust_socket(
                         ctx, notify_streaming_ctx.server_ctx.acquired_in_buffer,
                         notify_streaming_ctx.server_ctx.acquired_in_buffer_size,
                         reject_new_request, NULL);

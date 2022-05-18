@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -71,6 +64,9 @@ void _anjay_serv_reset_instance(server_instance_t *serv) {
     memset(serv, 0, sizeof(*serv));
     /* This is not a resource, therefore must be restored */
     serv->iid = iid;
+#    ifdef ANJAY_WITH_LWM2M11
+    serv->bootstrap_on_registration_failure = true;
+#    endif // ANJAY_WITH_LWM2M11
 }
 
 #endif // ANJAY_WITH_MODULE_SERVER

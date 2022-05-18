@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import socket
 
@@ -31,9 +24,7 @@ class BootstrapTransactionTest(test_suite.Lwm2mTest):
         self.teardown_demo_with_servers(auto_deregister=False)
 
     def runTest(self):
-        pkt = self.bootstrap_server.recv()
-        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME), pkt)
-        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
+        self.assertDemoRequestsBootstrap()
 
         # Create Server object
         req = Lwm2mWrite('/%d/1' % (OID.Server,),
@@ -103,9 +94,7 @@ class BootstrapTransactionPersistenceTest(test_suite.Lwm2mTest, test_suite.Lwm2m
             self._dm_persistence_file.close()
 
     def runTest(self):
-        pkt = self.bootstrap_server.recv()
-        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME), pkt)
-        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
+        self.assertDemoRequestsBootstrap()
 
         # Create Server object without Binding
         req = Lwm2mWrite('/%d/1' % (OID.Server,),
@@ -142,12 +131,11 @@ class BootstrapTransactionPersistenceTest(test_suite.Lwm2mTest, test_suite.Lwm2m
 
         self._start_demo(['--dm-persistence-file', self._dm_persistence_file.name]
                          + self.make_demo_args(DEMO_ENDPOINT_NAME, [],
+                                               '1.0', '1.0',
                                                None))
 
         # Demo shall launch, with the initial server configuration
-        pkt = self.bootstrap_server.recv()
-        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME), pkt)
-        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
+        self.assertDemoRequestsBootstrap()
 
         # The previously created instances shall not be present
         discover_result = self.discover(self.bootstrap_server).content.decode()
@@ -155,3 +143,216 @@ class BootstrapTransactionPersistenceTest(test_suite.Lwm2mTest, test_suite.Lwm2m
         self.assertNotIn('</%d/2' % (OID.Security,), discover_result)
 
 
+class UnregisteringAndRegisteringObjectsDuringBootstrapTransaction(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+
+        self.assertDemoRequestsBootstrap()
+        self.write_instance(self.bootstrap_server, oid=OID.Test, iid=42, content=b'')
+        self.communicate('unregister-object %d' % OID.Test, timeout=5)
+        self.communicate('reregister-object %d' % OID.Test, timeout=5)
+
+
+class NotificationDuringBootstrap(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1)
+
+    def runTest(self):
+        self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.assertDemoRequestsBootstrap()
+        self.serv.reset()
+
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=5))
+
+        self.perform_bootstrap_finish()
+
+        self.assertDemoRegisters()
+
+        notifications = 0
+        while True:
+            try:
+                self.assertIsInstance(self.serv.recv(timeout_s=0.8), Lwm2mNotify)
+                notifications += 1
+            except socket.timeout:
+                break
+
+        self.assertTrue(4 <= notifications <= 6)
+
+
+class NotificationDuringBootstrapInQueueMode(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1,
+                      extra_cmdline_args=['--binding=UQ'],
+                      auto_register=False)
+        self.assertDemoRegisters(binding='UQ')
+
+    def runTest(self):
+        self.observe(self.serv, OID.Device, 0, RID.Device.CurrentTime)
+
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.assertDemoRequestsBootstrap()
+        self.serv.reset()
+
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=5))
+
+        self.perform_bootstrap_finish()
+
+        self.assertDemoRegisters(binding='UQ')
+
+        notifications = 0
+        while True:
+            try:
+                self.assertIsInstance(self.serv.recv(timeout_s=0.8), Lwm2mNotify)
+                notifications += 1
+            except socket.timeout:
+                break
+
+        self.assertTrue(4 <= notifications <= 6)
+
+
+class ChangeServersDuringBootstrap(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(servers=2, num_servers_passed=2)
+
+    def tearDown(self):
+        super().tearDown(deregister_servers=[self.servers[0]])
+
+    def runTest(self):
+        self.servers[0].reset()
+        self.servers[1].reset()
+        self.bootstrap_server.connect_to_client(('127.0.0.1', self.get_demo_port()))
+        for i in (0, 1):
+            iid = i + 2
+            self.write_instance(self.bootstrap_server, OID.AccessControl, i + 1000,
+                                TLV.make_resource(RID.AccessControl.TargetOID,
+                                                  OID.Server).serialize() +
+                                TLV.make_resource(RID.AccessControl.TargetIID, iid).serialize() +
+                                TLV.make_resource(RID.AccessControl.Owner, iid).serialize())
+        self.perform_bootstrap_finish()
+
+        self.assertDemoRegisters(self.servers[0])
+        self.assertDemoRegisters(self.servers[1])
+        self.coap_ping(self.servers[0])
+        self.coap_ping(self.servers[1])
+
+        self.execute_resource(self.servers[0], OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.assertDemoRequestsBootstrap()
+        self.servers[0].reset()
+        self.servers[1].reset()
+
+        self.communicate('trim-servers 2', timeout=5)
+
+        with self.assertRaises(socket.timeout):
+            print(self.servers[0].recv(timeout_s=5))
+        with self.assertRaises(socket.timeout):
+            print(self.servers[1].recv(timeout_s=5))
+
+        self.perform_bootstrap_finish()
+        self.assertDemoRegisters(self.servers[0])
+
+
+class DisableServerDuringBootstrap(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.serv.reset()
+        self.assertDemoRequestsBootstrap()
+
+        self.communicate('disable-server 2 3', timeout=5)
+
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=5))
+
+
+class EnableServerDuringBootstrap(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.serv.reset()
+        self.assertDemoRequestsBootstrap()
+
+        self.communicate('disable-server 2 -1', timeout=5)
+        self.communicate('enable-server 2', timeout=5)
+
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=5))
+
+
+class ExitOfflineDuringBootstrap(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.serv.reset()
+        self.assertDemoRequestsBootstrap()
+
+        self.communicate('exit-offline', timeout=5)
+
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=5))
+
+
+class EnterAndExitOfflineDuringBootstrap(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.serv.reset()
+        self.assertDemoRequestsBootstrap()
+
+        self.communicate('enter-offline', timeout=5)
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=2))
+        self.communicate('exit-offline', timeout=5)
+
+        self.assertDemoRequestsBootstrap()
+
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=5))
+
+
+class ReconnectDuringBootstrap(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(num_servers_passed=1)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.execute_resource(self.serv, OID.Server, 2, RID.Server.RequestBootstrapTrigger)
+        self.serv.reset()
+        self.assertDemoRequestsBootstrap()
+
+        self.communicate('reconnect', timeout=5)
+        self.assertDemoRequestsBootstrap()
+
+        with self.assertRaises(socket.timeout):
+            print(self.serv.recv(timeout_s=5))

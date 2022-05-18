@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_IO_H
@@ -246,6 +239,38 @@ static inline int anjay_ret_i32(anjay_output_ctx_t *ctx, int32_t value) {
     return anjay_ret_i64(ctx, value);
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+/**
+ * Returns a 64-bit unsigned integer from the data model handler.
+ *
+ * Note: the only difference between @p anjay_ret_u32 and @p anjay_ret_u64 is
+ * the size of the @p value parameter. Actual number of bytes sent on the wire
+ * depends on the @p value.
+ *
+ * @param ctx   Output context to operate on.
+ * @param value The value to return.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_ret_u64(anjay_output_ctx_t *ctx, uint64_t value);
+
+/**
+ * Returns a 32-bit unsigned integer from the data model handler.
+ *
+ * Note: the only difference between @p anjay_ret_u32 and @p anjay_ret_u64 is
+ * the size of the @p value parameter. Actual number of bytes sent on the wire
+ * depends on the @p value.
+ *
+ * @param ctx   Output context to operate on.
+ * @param value The value to return.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+static inline int anjay_ret_u32(anjay_output_ctx_t *ctx, uint32_t value) {
+    return anjay_ret_u64(ctx, value);
+}
+#endif // ANJAY_WITH_LWM2M11
+
 /*
  * Returns a 64-bit floating-point value from the data model handler.
  *
@@ -292,6 +317,97 @@ int anjay_ret_bool(anjay_output_ctx_t *ctx, bool value);
  * @returns 0 on success, a negative value in case of error.
  */
 int anjay_ret_objlnk(anjay_output_ctx_t *ctx, anjay_oid_t oid, anjay_iid_t iid);
+
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+/**
+ * Returns information about a certificate chain from the data model handler.
+ *
+ * NOTE: This function is <strong>ONLY</strong> intended to be used when
+ * handling the "Public Key or Identity" resource in custom implementations of
+ * the LwM2M Security object (i.e., when not using
+ * @ref anjay_security_object_install). In this context, it may be used to pass
+ * client certificate configuration that is not representable through standard
+ * LwM2M format. In all other cases, @ref anjay_ret_bytes family of functions
+ * SHOULD be used.
+ *
+ * @param ctx                    Output context to operate on.
+ *
+ * @param certificate_chain_info Certificate chain information to return. A deep
+ *                               copy will immediately be created, so it is safe
+ *                               to invalidate any referenced buffers just after
+ *                               this call.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_ret_certificate_chain_info(
+        anjay_output_ctx_t *ctx,
+        avs_crypto_certificate_chain_info_t certificate_chain_info);
+
+/**
+ * Returns information about a private key from the data model handler.
+ *
+ * NOTE: This function is <strong>ONLY</strong> intended to be used when
+ * handling the "Secret Key" resource in custom implementations of the LwM2M
+ * Security object (i.e., when not using @ref anjay_security_object_install).
+ * In this context, it may be used to pass client certificate configuration that
+ * is not representable through standard LwM2M format. In all other cases,
+ * @ref anjay_ret_bytes family of functions SHOULD be used.
+ *
+ * @param ctx              Output context to operate on.
+ *
+ * @param private_key_info Private key information to return. A deep copy will
+ *                         immediately be created, so it is safe to invalidate
+ *                         any referenced buffers just after this call.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_ret_private_key_info(anjay_output_ctx_t *ctx,
+                               avs_crypto_private_key_info_t private_key_info);
+
+/**
+ * Returns information about a PSK identity from the data model handler.
+ *
+ * NOTE: This function is <strong>ONLY</strong> intended to be used when
+ * handling the "Public Key Or Identity" or "SMS Binding Key Parameters"
+ * resource in custom implementations of the LwM2M Security object (i.e., when
+ * not using @ref anjay_security_object_install). In this context, it may be
+ * used to pass key configuration that is not representable through standard
+ * LwM2M format. In all other cases, @ref anjay_ret_bytes family of functions
+ * SHOULD be used.
+ *
+ * @param ctx               Output context to operate on.
+ *
+ * @param psk_identity_info PSK identity information to return. A deep copy will
+ *                          immediately be created, so it is safe to invalidate
+ *                          any referenced buffers just after this call.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_ret_psk_identity_info(
+        anjay_output_ctx_t *ctx,
+        avs_crypto_psk_identity_info_t psk_identity_info);
+
+/**
+ * Returns information about a PSK key from the data model handler.
+ *
+ * NOTE: This function is <strong>ONLY</strong> intended to be used when
+ * handling the "Secret Key" or "SMS Binding Secret Key(s)" resource in custom
+ * implementations of the LwM2M Security object (i.e., when not using @ref
+ * anjay_security_object_install). In this context, it may be used to pass
+ * key configuration that is not representable through standard LwM2M format. In
+ * all other cases, @ref anjay_ret_bytes family of functions SHOULD be used.
+ *
+ * @param ctx          Output context to operate on.
+ *
+ * @param psk_key_info PSK key information to return. A deep copy will
+ *                     immediately be created, so it is safe to invalidate any
+ *                     referenced buffers just after this call.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_ret_psk_key_info(anjay_output_ctx_t *ctx,
+                           avs_crypto_psk_key_info_t psk_key_info);
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
 
 /** Type used to retrieve RPC content. */
 typedef struct anjay_input_ctx_struct anjay_input_ctx_t;
@@ -451,6 +567,32 @@ int anjay_get_i32(anjay_input_ctx_t *ctx, int32_t *out);
  * @returns 0 on success, a negative value in case of error.
  */
 int anjay_get_i64(anjay_input_ctx_t *ctx, int64_t *out);
+
+#ifdef ANJAY_WITH_LWM2M11
+/**
+ * Reads an unsigned integer as a 32-bit unsigned value from the RPC request
+ * content.
+ *
+ * @param      ctx Input context to operate on.
+ * @param[out] out Returned value. If the call is not successful, it is
+ *                 guaranteed to be left untouched.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_get_u32(anjay_input_ctx_t *ctx, uint32_t *out);
+
+/**
+ * Reads an unsigned integer as a 64-bit unsigned value from the RPC request
+ * content.
+ *
+ * @param      ctx Input context to operate on.
+ * @param[out] out Returned value. If the call is not successful, it is
+ *                 guaranteed to be left untouched.
+ *
+ * @returns 0 on success, a negative value in case of error.
+ */
+int anjay_get_u64(anjay_input_ctx_t *ctx, uint64_t *out);
+#endif // ANJAY_WITH_LWM2M11
 
 /**
  * Reads a floating-point value as a float from the RPC request content.

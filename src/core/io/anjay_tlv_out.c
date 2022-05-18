@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -326,6 +319,28 @@ DEF_IRET(8, 16)
 DEF_IRET(16, 32)
 DEF_IRET(32, 64)
 
+#    ifdef ANJAY_WITH_LWM2M11
+#        define DEF_URET(Half, Bits)                                     \
+            static int tlv_ret_u##Bits(anjay_unlocked_output_ctx_t *ctx, \
+                                       uint##Bits##_t value) {           \
+                if (value == (uint##Half##_t) value) {                   \
+                    return tlv_ret_u##Half(ctx, (uint##Half##_t) value); \
+                }                                                        \
+                uint##Bits##_t portable =                                \
+                        avs_convert_be##Bits((uint##Bits##_t) value);    \
+                return _anjay_ret_bytes_unlocked(ctx, &portable,         \
+                                                 sizeof(portable));      \
+            }
+
+static int tlv_ret_u8(anjay_unlocked_output_ctx_t *ctx, uint8_t value) {
+    return _anjay_ret_bytes_unlocked(ctx, &value, 1);
+}
+
+DEF_URET(8, 16)
+DEF_URET(16, 32)
+DEF_URET(32, 64)
+#    endif // ANJAY_WITH_LWM2M11
+
 static int tlv_ret_float(anjay_unlocked_output_ctx_t *ctx, float value) {
     uint32_t portable = avs_htonf(value);
     return _anjay_ret_bytes_unlocked(ctx, &portable, sizeof(portable));
@@ -579,6 +594,9 @@ static const anjay_output_ctx_vtable_t TLV_OUT_VTABLE = {
     .bytes_begin = tlv_ret_bytes,
     .string = tlv_ret_string,
     .integer = tlv_ret_i64,
+#    ifdef ANJAY_WITH_LWM2M11
+    .uint = tlv_ret_u64,
+#    endif // ANJAY_WITH_LWM2M11
     .floating = tlv_ret_double,
     .boolean = tlv_ret_bool,
     .objlnk = tlv_ret_objlnk,

@@ -1,5 +1,4 @@
 #include <anjay/anjay.h>
-#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
 #include <avsystem/commons/avs_log.h>
@@ -87,9 +86,8 @@ int main(int argc, char *argv[]) {
     }
 
     int result = 0;
-    // Install Attribute storage and setup necessary objects
-    if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-            || setup_server_object(anjay)) {
+    // Setup necessary objects
+    if (setup_security_object(anjay) || setup_server_object(anjay)) {
         result = -1;
     }
 

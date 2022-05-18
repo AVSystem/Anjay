@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Thread safety in Anjay
 ======================
@@ -523,13 +516,12 @@ separate thread - the main one will then be free to call
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-ThreadSafety/src/main.c
     :caption: main.c
-    :emphasize-lines: 1-2,12-16,81-85,123-135
+    :emphasize-lines: 1-2,11-15,80-84,121-133
 
     #include <pthread.h>
     #include <unistd.h>
 
     #include <anjay/anjay.h>
-    #include <anjay/attr_storage.h>
     #include <anjay/security.h>
     #include <anjay/server.h>
     #include <avsystem/commons/avs_log.h>
@@ -631,9 +623,8 @@ separate thread - the main one will then be free to call
         }
 
         int result = 0;
-        // Install Attribute storage and setup necessary objects
-        if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-                || setup_server_object(anjay)) {
+        // Setup necessary objects
+        if (setup_security_object(anjay) || setup_server_object(anjay)) {
             result = -1;
         }
 

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_OBSERVE_CORE_H
@@ -67,8 +60,14 @@ void _anjay_observe_cleanup(anjay_observe_state_t *observe);
 
 void _anjay_observe_gc(anjay_unlocked_t *anjay);
 
-int _anjay_observe_handle(anjay_unlocked_t *anjay,
+int _anjay_observe_handle(anjay_connection_ref_t ref,
                           const anjay_request_t *request);
+
+#    ifdef ANJAY_WITH_LWM2M11
+int _anjay_observe_composite_handle(anjay_connection_ref_t ref,
+                                    AVS_LIST(anjay_uri_path_t) paths,
+                                    const anjay_request_t *request);
+#    endif // ANJAY_WITH_LWM2M11
 
 void _anjay_observe_interrupt(anjay_connection_ref_t ref);
 

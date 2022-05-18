@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay/lwm2m_send.h>
@@ -236,6 +229,7 @@ static inline bool is_time_almost_equal(avs_time_real_t older,
                                                                 AVS_TIME_MS));
 }
 
+#ifdef ANJAY_WITH_SEND
 static bool is_entry_valid(anjay_batch_entry_t *entry,
                            anjay_rid_t rid,
                            anjay_riid_t riid,
@@ -461,6 +455,7 @@ AVS_UNIT_TEST(dm_batch, illegal_op) {
 
     TEST_TEARDOWN();
 }
+#endif // ANJAY_WITH_SEND
 
 AVS_UNIT_TEST(dm_batch, serialize_empty) {
     TEST_SETUP(MOCK_CLOCK_START_RELATIVE);

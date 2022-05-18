@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import operator
 import struct
@@ -82,6 +75,30 @@ class RandomTokenGenerator:
 
 _TOKEN_GENERATOR = RandomTokenGenerator()
 
+def _parse_tcp_header(packet):
+    if len(packet) < 2:
+        raise ValueError("invalid CoAP message: %s" % hexlify(packet))
+    len_tkl = packet[0]
+    short_len = len_tkl >> 4
+    token_length = len_tkl & 0x0F
+
+    curr_offset = 1
+
+    if short_len <= 12:
+        length = short_len
+    elif short_len == 13:
+        length = packet[1] + 13
+        curr_offset += 1
+    elif short_len == 14:
+        length = int.from_bytes(packet[1:3], byteorder='big') + 269
+        curr_offset += 2
+    else:
+        length = int.from_bytes(packet[1:5], byteorder='big') + 65805
+        curr_offset += 4
+
+    code = Code.from_byte(packet[curr_offset])
+    curr_offset += 1
+    return Header(code, None, None, None, token_length), curr_offset
 
 def _parse_udp_header(packet):
     if len(packet) < 4:
@@ -167,6 +184,8 @@ class Packet(object):
         packet = memoryview(self)
         if transport == Transport.UDP:
             header, offset = _parse_udp_header(packet)
+        elif transport == Transport.TCP:
+            header, offset = _parse_tcp_header(packet)
         else:
             raise ValueError("Invalid transport: %r" % (transport,))
 
@@ -211,6 +230,20 @@ class Packet(object):
 
         return self
 
+    def _serialize_tcp_header(self, options_length, content_length):
+        token_length = len(self.token)
+        if token_length > 8:
+            raise ValueError("invalid CoAP token length: %d, expected <= 8" % token_length)
+        length = options_length + content_length
+
+        if length < 13:
+            return struct.pack('BB', (length << 4) | token_length, self.code.as_byte())
+        elif length < 269:
+            return struct.pack('BBB', (13 << 4) | token_length, length - 13, self.code.as_byte())
+        elif length < 65805:
+            return struct.pack('!BHB', (14 << 4) | token_length, length - 269, self.code.as_byte())
+        else:
+            return struct.pack('!BIB', (15 << 4) | token_length, length - 65805, self.code.as_byte())
 
     def _serialize_udp_header(self):
         return struct.pack('!BBH',
@@ -233,6 +266,9 @@ class Packet(object):
         if transport == Transport.UDP:
             logging.debug('%s', self._size_breakdown('sent'))
             data = self._serialize_udp_header()
+        elif transport == Transport.TCP:
+            # TODO: add log for TCP
+            data = self._serialize_tcp_header(len(b''.join(serialized_opts)), len(content))
         else:
             raise ValueError("Invalid transport: %r" % (transport,))
 

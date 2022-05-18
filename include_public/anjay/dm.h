@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_DM_H
@@ -28,6 +21,13 @@ extern "C" {
 
 typedef struct anjay_dm_object_def_struct anjay_dm_object_def_t;
 
+/** Values for the con attribute. */
+typedef enum {
+    ANJAY_DM_CON_ATTR_NONE = -1,
+    ANJAY_DM_CON_ATTR_NON = 0,
+    ANJAY_DM_CON_ATTR_CON = 1
+} anjay_dm_con_attr_t;
+
 /** Object/Object Instance Attributes */
 typedef struct {
     /** Minimum Period as defined by LwM2M spec */
@@ -38,6 +38,10 @@ typedef struct {
     int32_t min_eval_period;
     /** Maximum Evaluation Period as defined by LwM2M spec */
     int32_t max_eval_period;
+#ifdef ANJAY_WITH_CON_ATTR
+    /** Confirmable Notification as defined by LwM2M spec */
+    anjay_dm_con_attr_t con;
+#endif // ANJAY_WITH_CON_ATTR
 } anjay_dm_oi_attributes_t;
 
 /** Resource attributes. */
@@ -52,12 +56,19 @@ typedef struct {
     double step;
 } anjay_dm_r_attributes_t;
 
-/** A value indicating that the Min/Max Period attribute is not set */
-#define ANJAY_ATTRIB_PERIOD_NONE (-1)
+/** A value indicating that the Min/Max Period or Maximum Historical Queue
+ * attribute is not set */
+#define ANJAY_ATTRIB_INTEGER_NONE (-1)
+
+/** An alias for @ref ANJAY_ATTRIB_INTEGER_NONE */
+#define ANJAY_ATTRIB_PERIOD_NONE ANJAY_ATTRIB_INTEGER_NONE
 
 /** A value indicating that the Less Than/Greater Than/Step attribute
  * is not set */
-#define ANJAY_ATTRIB_VALUE_NONE (NAN)
+#define ANJAY_ATTRIB_DOUBLE_NONE (NAN)
+
+/** An alias for @ref ANJAY_ATTRIB_DOUBLE_NONE */
+#define ANJAY_ATTRIB_VALUE_NONE ANJAY_ATTRIB_DOUBLE_NONE
 
 /** Convenience Object/Object Instance attributes constant, filled with
  * "attribute not set" values */
@@ -543,6 +554,62 @@ anjay_dm_resource_write_attrs_t(anjay_t *anjay,
                                 const anjay_dm_r_attributes_t *attrs);
 
 /**
+ * A handler that returns Resource Instance attributes.
+ *
+ * @param      anjay   Anjay object to operate on.
+ * @param      obj_ptr Object definition pointer, as passed to
+ *                     @ref anjay_register_object .
+ * @param      iid     Object Instance ID.
+ * @param      rid     Resource ID.
+ * @param      riid    Resource Instance ID.
+ * @param      ssid    Short Server ID of the LwM2M Server issuing the request.
+ * @param[out] out     Returned Resource attributes.
+ *
+ * @returns This handler should return:
+ * - 0 on success,
+ * - a negative value in case of error. If it returns one of ANJAY_ERR_
+ *   constants, the response message will have an appropriate CoAP response
+ *   code. Otherwise, the device will respond with an unspecified (but valid)
+ *   error code.
+ */
+typedef int anjay_dm_resource_instance_read_attrs_t(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        anjay_dm_r_attributes_t *out);
+
+/**
+ * A handler that sets attributes for given Resource Instance.
+ *
+ * @param anjay   Anjay object to operate on.
+ * @param obj_ptr Object definition pointer, as passed to
+ *                @ref anjay_register_object .
+ * @param iid     Object Instance ID.
+ * @param rid     Resource ID.
+ * @param riid    Resource Instance ID.
+ * @param ssid    Short Server ID of the LwM2M Server issuing the request.
+ * @param attrs   Attributes to set for this Resource.
+ *
+ * @returns This handler should return:
+ * - 0 on success,
+ * - a negative value in case of error. If it returns one of ANJAY_ERR_
+ *   constants, the response message will have an appropriate CoAP response
+ *   code. Otherwise, the device will respond with an unspecified (but valid)
+ *   error code.
+ */
+typedef int anjay_dm_resource_instance_write_attrs_t(
+        anjay_t *anjay,
+        const anjay_dm_object_def_t *const *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        const anjay_dm_r_attributes_t *attrs);
+
+/**
  * A handler that is called when there is a request that might modify an Object
  * and fail. Such situation often requires to rollback changes, and this handler
  * shall implement logic that prepares for possible failure in the future.
@@ -660,7 +727,7 @@ typedef struct {
      *
      * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
      *
-     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+     * Can be NULL if the *Attribute Storage* feature is enabled. Non-NULL
      * handler overrides *Attribute Storage* logic.
      */
     anjay_dm_object_read_default_attrs_t *object_read_default_attrs;
@@ -671,8 +738,8 @@ typedef struct {
      *
      * Required for handling *LwM2M Write-Attributes* operation.
      *
-     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-     * handler overrides *Attribute Storage* logic.
+     * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+     * overrides *Attribute Storage* logic.
      */
     anjay_dm_object_write_default_attrs_t *object_write_default_attrs;
 
@@ -707,7 +774,8 @@ typedef struct {
     /**
      * Delete an Object Instance, @ref anjay_dm_instance_remove_t
      *
-     * Required for handling *LwM2M Delete* operation.
+     * Required for handling *LwM2M Delete* operation performed on Object
+     * Instances.
      *
      * Can be NULL for single instance objects.
      */
@@ -719,8 +787,8 @@ typedef struct {
      *
      * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
      *
-     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-     * handler overrides *Attribute Storage* logic.
+     * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+     * overrides *Attribute Storage* logic.
      */
     anjay_dm_instance_read_default_attrs_t *instance_read_default_attrs;
 
@@ -730,8 +798,8 @@ typedef struct {
      *
      * Required for handling *LwM2M Write-Attributes* operation.
      *
-     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-     * handler overrides *Attribute Storage* logic.
+     * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+     * overrides *Attribute Storage* logic.
      */
     anjay_dm_instance_write_default_attrs_t *instance_write_default_attrs;
 
@@ -799,8 +867,8 @@ typedef struct {
      *
      * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
      *
-     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-     * handler overrides *Attribute Storage* logic.
+     * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+     * overrides *Attribute Storage* logic.
      */
     anjay_dm_resource_read_attrs_t *resource_read_attrs;
 
@@ -809,8 +877,8 @@ typedef struct {
      *
      * Required for handling *LwM2M Write-Attributes* operation.
      *
-     * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-     * handler overrides *Attribute Storage* logic.
+     * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+     * overrides *Attribute Storage* logic.
      */
     anjay_dm_resource_write_attrs_t *resource_write_attrs;
 
@@ -860,6 +928,31 @@ typedef struct {
      */
     anjay_dm_transaction_rollback_t *transaction_rollback;
 
+    /**
+     * Get Resource Instance attributes, @ref
+     * anjay_dm_resource_instance_read_attrs_t
+     *
+     * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
+     *
+     * Can be NULL if the object does not contain multiple resources, when
+     * *Attribute Storage* feature is enabled, or when the application only
+     * targets compliance with LwM2M TS 1.0. Non-NULL handler overrides
+     * *Attribute Storage* logic.
+     */
+    anjay_dm_resource_instance_read_attrs_t *resource_instance_read_attrs;
+
+    /**
+     * Set Resource Instance attributes, @ref
+     * anjay_dm_resource_instance_write_attrs_t
+     *
+     * Required for handling *LwM2M Write-Attributes* operation.
+     *
+     * Can be NULL if the object does not contain multiple resources, when
+     * *Attribute Storage* feature is enabled, or when the application only
+     * targets compliance with LwM2M TS 1.0. Non-NULL handler overrides
+     * *Attribute Storage* logic.
+     */
+    anjay_dm_resource_instance_write_attrs_t *resource_instance_write_attrs;
 } anjay_dm_handlers_t;
 
 /** A struct defining a LwM2M Object. */
@@ -937,7 +1030,7 @@ typedef struct {
     /**
      * The minimum effective value (in seconds) of the <c>epmax</c> attribute
      * for a given Resource. The value of this field equals @ref
-     * ANJAY_ATTRIB_PERIOD_NONE if <c>epmax</c> wasn't set for any server or
+     * ANJAY_ATTRIB_INTEGER_NONE if <c>epmax</c> wasn't set for any server or
      * <c>is_observed</c> is false.
      */
     int32_t max_eval_period;
@@ -1050,16 +1143,6 @@ typedef enum {
     ANJAY_SECURITY_NOSEC = 3,       //< NoSec mode
     ANJAY_SECURITY_EST = 4          //< Certificate mode with EST
 } anjay_security_mode_t;
-
-/**
- * Possible values of the SMS Security Mode Resource, as described in the
- * Security Object definition.
- */
-typedef enum {
-    ANJAY_SMS_SECURITY_DTLS_PSK = 1,      //< DTLS in PSK mode
-    ANJAY_SMS_SECURITY_SECURE_PACKET = 2, //< Secure Packet Structure
-    ANJAY_SMS_SECURITY_NOSEC = 3          //< NoSec mode
-} anjay_sms_security_mode_t;
 
 #define ANJAY_ACCESS_MASK_READ (1U << 0)
 #define ANJAY_ACCESS_MASK_WRITE (1U << 1)

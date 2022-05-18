@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import socket
 import time
@@ -43,6 +36,7 @@ class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
 
         # now enter offline mode
         self.communicate('enter-offline')
+        enter_offline_time = time.time()
 
         # if we were not fast enough, one more message might have come;
         # we try to support both cases
@@ -60,6 +54,7 @@ class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
 
         # client reconnects with DTLS session resumption
         self.assertDtlsReconnect()
+        exit_offline_time = time.time()
 
         notifications = 0
         while True:
@@ -69,8 +64,8 @@ class OfflineWithDtlsResumeTest(test_suite.Lwm2mDtlsSingleServerTest):
                 notifications += 1
             except socket.timeout:
                 break
-        self.assertGreaterEqual(notifications, OFFLINE_INTERVAL - 1)
-        self.assertLessEqual(notifications, OFFLINE_INTERVAL + 1)
+        self.assertGreaterEqual(notifications, exit_offline_time - enter_offline_time - 1)
+        self.assertLessEqual(notifications, exit_offline_time - enter_offline_time + 1)
 
         # Cancel Observe
         req = Lwm2mObserve(ResPath.Test[0].Timestamp, observe=1, token=observe_req.token)
@@ -240,3 +235,47 @@ class OfflineWithQueueModeScheduledNotify(retransmissions.RetransmissionTest.Tes
         self.assertMsgEqual(Lwm2mNotify(token=token), self.serv.recv())
 
 
+class OfflineWithQueueModeScheduledSend(retransmissions.RetransmissionTest.TestMixin,
+                                        test_suite.Lwm2mDtlsSingleServerTest,
+                                        test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False,
+                      minimum_version='1.1', maximum_version='1.1')
+        self.assertDemoRegisters(version='1.1', lwm2m11_queue_mode=True)
+
+    def runTest(self):
+        self.wait_until_socket_count(0, timeout_s=self.max_transmit_wait() + 2)
+        self.communicate('enter-offline')
+        time.sleep(2)
+
+        self.communicate('send_deferrable 1 %s' % (ResPath.Device.ModelNumber,))
+        time.sleep(1)
+        # After exiting offline mode, the client shall deliver the unsent notification
+        self.communicate('exit-offline')
+        self.assertDtlsReconnect()
+        pkt = self.serv.recv()
+        self.assertMsgEqual(Lwm2mSend(), pkt)
+        self.serv.send(Lwm2mChanged.matching(pkt)())
+
+
+class ExternalSetLifetimeWhenOffline(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        self.communicate('enter-offline')
+        self.communicate('set-lifetime 1 8192')
+        # Anjay does not wake up
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=3)
+        self.communicate('exit-offline')
+        self.assertDemoRegisters(lifetime=8192)
+
+
+class ExternalSetLifetimeWhenOfflineDtls(test_suite.Lwm2mDtlsSingleServerTest):
+    def runTest(self):
+        self.communicate('enter-offline')
+        self.communicate('set-lifetime 1 8192')
+        # Anjay does not wake up
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=3)
+        self.communicate('exit-offline')
+        self.assertDtlsReconnect()
+        self.assertDemoUpdatesRegistration(lifetime=8192)

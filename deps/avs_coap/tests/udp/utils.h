@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef AVS_COAP_SRC_UDP_TEST_UTILS_H
@@ -414,8 +407,13 @@ static inline void expect_recv(test_env_t *env, const test_msg_t *msg) {
     avs_unit_mocksock_input(env->mocksock, msg->data, msg->size);
 }
 
-static inline void expect_timeout(test_env_t *env) {
-    avs_unit_mocksock_input_fail(env->mocksock, avs_errno(AVS_ETIMEDOUT));
+static inline void expect_has_buffered_data_check(test_env_t *env,
+                                                  bool has_buffered_data) {
+    avs_unit_mocksock_expect_get_opt(env->mocksock,
+                                     AVS_NET_SOCKET_HAS_BUFFERED_DATA,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = has_buffered_data
+                                     });
 }
 
 typedef struct {

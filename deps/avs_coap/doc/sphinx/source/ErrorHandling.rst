@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem CoAP library
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Error handling
 ==============
@@ -35,9 +28,8 @@ CoAP-specific errors will have the ``category`` field set to
 - ``AVS_ENOENT`` - ``avs_coap_client_set_next_response_payload_offset()`` called
   for a nonexistent exchange
 - ``AVS_ENOMEM`` - generic "out of memory" error
-- ``AVS_ENOMSG`` - OSCORE encryption/decryption error (commercial version only)
-- ``AVS_EPROTO`` - message digest calculation error in OSCORE (commercial
-  version only)
+- ``AVS_ENOMSG`` - OSCORE encryption/decryption error (OSCORE feature only)
+- ``AVS_EPROTO`` - message digest calculation error in OSCORE (OSCORE feature only)
 - ``AVS_ERANGE`` - value out of range when trying to add CoAP option
 - other errors, as propagated from the network socket layer
 

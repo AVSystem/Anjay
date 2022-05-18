@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avsystem/commons/avs_stream.h>
@@ -104,6 +97,48 @@ static void assert_instances_equal(const server_instance_t *a,
     if (a->has_notification_storing) {
         AVS_UNIT_ASSERT_EQUAL(a->notification_storing, b->notification_storing);
     }
+#ifdef ANJAY_WITH_LWM2M11
+    AVS_UNIT_ASSERT_EQUAL(a->has_last_alert, b->has_last_alert);
+    if (a->has_last_alert) {
+        AVS_UNIT_ASSERT_EQUAL(a->last_alert, b->last_alert);
+    }
+    AVS_UNIT_ASSERT_EQUAL(a->has_last_bootstrapped_timestamp,
+                          b->has_last_bootstrapped_timestamp);
+    if (a->has_last_bootstrapped_timestamp) {
+        AVS_UNIT_ASSERT_EQUAL(a->last_bootstrapped_timestamp,
+                              b->last_bootstrapped_timestamp);
+    }
+    AVS_UNIT_ASSERT_EQUAL(a->bootstrap_on_registration_failure,
+                          b->bootstrap_on_registration_failure);
+    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_retry_count,
+                          b->has_server_communication_retry_count);
+    if (a->has_server_communication_retry_count) {
+        AVS_UNIT_ASSERT_EQUAL(a->server_communication_retry_count,
+                              b->server_communication_retry_count);
+    }
+    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_retry_timer,
+                          b->has_server_communication_retry_timer);
+    if (a->has_server_communication_retry_timer) {
+        AVS_UNIT_ASSERT_EQUAL(a->server_communication_retry_timer,
+                              b->server_communication_retry_timer);
+    }
+    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_sequence_retry_count,
+                          b->has_server_communication_sequence_retry_count);
+    if (a->has_server_communication_sequence_retry_count) {
+        AVS_UNIT_ASSERT_EQUAL(a->server_communication_sequence_retry_count,
+                              b->server_communication_sequence_retry_count);
+    }
+    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_sequence_delay_timer,
+                          b->has_server_communication_sequence_delay_timer);
+    if (a->has_server_communication_sequence_delay_timer) {
+        AVS_UNIT_ASSERT_EQUAL(a->server_communication_sequence_delay_timer,
+                              b->server_communication_sequence_delay_timer);
+    }
+    AVS_UNIT_ASSERT_EQUAL(a->preferred_transport, b->preferred_transport);
+#    ifdef ANJAY_WITH_SEND
+    AVS_UNIT_ASSERT_EQUAL(a->mute_send, b->mute_send);
+#    endif // ANJAY_WITH_SEND
+#endif     // ANJAY_WITH_LWM2M11
 }
 
 AVS_UNIT_TEST(server_persistence, empty_store_restore) {
@@ -156,6 +191,9 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore_version_1) {
         .has_ssid = true,
         .has_lifetime = true,
         .has_notification_storing = true,
+#ifdef ANJAY_WITH_LWM2M11
+        .bootstrap_on_registration_failure = true
+#endif // ANJAY_WITH_LWM2M11
     };
     assert_instances_equal(&expected_server_instance,
                            env->restored_repr->instances);
@@ -171,6 +209,13 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .disable_timeout = -1,
         .binding = "UQ",
         .notification_storing = true,
+#ifdef ANJAY_WITH_LWM2M11
+        .bootstrap_on_registration_failure = &(bool) { false },
+        .preferred_transport = 'U',
+        .mute_send = true,
+        .communication_sequence_retry_count = &(uint32_t) { 2 },
+        .communication_sequence_delay_timer = &(uint32_t) { 10 },
+#endif // ANJAY_WITH_LWM2M11
     };
 
     anjay_iid_t iid = 1;
@@ -193,6 +238,17 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
         .lifetime = 9001,
         .has_notification_storing = true,
         .notification_storing = true,
+#ifdef ANJAY_WITH_LWM2M11
+        .bootstrap_on_registration_failure = false,
+        .preferred_transport = 'U',
+#    ifdef ANJAY_WITH_SEND
+        .mute_send = true,
+#    endif // ANJAY_WITH_SEND
+        .has_server_communication_sequence_retry_count = true,
+        .server_communication_sequence_retry_count = 2,
+        .has_server_communication_sequence_delay_timer = true,
+        .server_communication_sequence_delay_timer = 10
+#endif // ANJAY_WITH_LWM2M11
     };
     assert_instances_equal(&expected_server_instance,
                            env->restored_repr->instances);

@@ -1,6 +1,5 @@
 #include <anjay/access_control.h>
 #include <anjay/anjay.h>
-#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
 #include <avsystem/commons/avs_log.h>
@@ -26,7 +25,7 @@ int main(int argc, char *argv[]) {
     }
 
     int result;
-    if (anjay_attr_storage_install(anjay) || anjay_access_control_install(anjay)
+    if (anjay_access_control_install(anjay)
             || anjay_security_object_install(anjay)
             || anjay_server_object_install(anjay)) {
         result = -1;

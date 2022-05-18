@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import collections
 from typing import Optional
@@ -140,7 +133,8 @@ class Lwm2mAsserts:
         serv = server or self.serv
 
         pkt = serv.recv(timeout_s=timeout_s)
-        self.assertMsgEqual(self._expected_register_message(version, endpoint, lifetime, binding, lwm2m11_queue_mode), pkt)
+        self.assertMsgEqual(self._expected_register_message(
+            version, endpoint, lifetime, binding, lwm2m11_queue_mode), pkt)
         self.assertIsNotNone(pkt.content)
         self.assertGreater(len(pkt.content), 0)
         if respond:
@@ -199,6 +193,13 @@ class Lwm2mAsserts:
             self.bootstrap_server.send(Lwm2mErrorResponse.matching(
                 pkt)(code=respond_with_error_code))
 
+    def assertDemoReleases(self, server=None, timeout_s=1):
+        serv = server or self.serv
+        if serv.transport != Transport.TCP:
+            raise ValueError('Expected Release on non-TCP server')
+
+        pkt = serv.recv(timeout_s=timeout_s)
+        self.assertMsgEqual(coap.Packet(code=coap.Code.SIGNALING_RELEASE, token=ANY), pkt)
 
     def assertDtlsReconnect(self, server=None, timeout_s=1):
         serv = server or self.serv

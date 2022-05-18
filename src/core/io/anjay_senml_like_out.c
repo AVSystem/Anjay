@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -177,6 +170,17 @@ static int senml_ret_integer(anjay_unlocked_output_ctx_t *ctx_, int64_t value) {
     return retval;
 }
 
+#    ifdef ANJAY_WITH_LWM2M11
+static int senml_ret_uint(anjay_unlocked_output_ctx_t *ctx_, uint64_t value) {
+    senml_out_t *ctx = (senml_out_t *) ctx_;
+    int retval;
+    (void) ((retval = element_begin(ctx))
+            || (retval = _anjay_senml_like_encode_uint(ctx->encoder, value))
+            || (retval = _anjay_senml_like_element_end(ctx->encoder)));
+    return retval;
+}
+#    endif // ANJAY_WITH_LWM2M11
+
 static int senml_ret_double(anjay_unlocked_output_ctx_t *ctx_, double value) {
     senml_out_t *ctx = (senml_out_t *) ctx_;
     int retval;
@@ -269,6 +273,9 @@ static const anjay_output_ctx_vtable_t SENML_OUT_VTABLE = {
     .bytes_begin = senml_ret_bytes,
     .string = senml_ret_string,
     .integer = senml_ret_integer,
+#    ifdef ANJAY_WITH_LWM2M11
+    .uint = senml_ret_uint,
+#    endif // ANJAY_WITH_LWM2M11
     .floating = senml_ret_double,
     .boolean = senml_ret_bool,
     .objlnk = senml_ret_objlnk,
@@ -302,6 +309,16 @@ anjay_unlocked_output_ctx_t *_anjay_output_senml_like_create(
         break;
     }
 #    endif // ANJAY_WITH_LWM2M_JSON
+#    ifdef ANJAY_WITH_SENML_JSON
+    case AVS_COAP_FORMAT_SENML_JSON:
+        ctx->encoder = _anjay_senml_json_encoder_new(stream);
+        break;
+#    endif // ANJAY_WITH_SENML_JSON
+#    ifdef ANJAY_WITH_CBOR
+    case AVS_COAP_FORMAT_SENML_CBOR:
+        ctx->encoder = _anjay_senml_cbor_encoder_new(stream);
+        break;
+#    endif // ANJAY_WITH_CBOR
     default:
         senml_log(WARNING, _("unsupported content format"));
         goto error;

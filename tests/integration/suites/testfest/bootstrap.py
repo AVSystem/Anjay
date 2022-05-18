@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import unittest
 
@@ -42,10 +35,7 @@ class Test0_ClientInitiatedBootstrap(DataModel.Test):
         #
         # A. In test step 1., the Bootstrap Server received a Success Message
         #    ("2.04" Changed) related to the BOOTSTRAP-REQUEST of the Client
-        pkt = self.bootstrap_server.recv()
-        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME),
-                            pkt)
-        self.bootstrap_server.send(Lwm2mChanged.matching(pkt)())
+        self.assertDemoRequestsBootstrap()
 
         # 2. The Bootstrap Server uploads the Configuration C.1 in the
         #    Client in performing two BOOTSTRAP-WRITE (CoAP PUT /0,

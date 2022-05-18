@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avs_coap_init.h>
@@ -43,7 +36,7 @@ AVS_UNIT_TEST(udp_streaming_client, streaming_request) {
 
     expect_send(&env, request);
     expect_recv(&env, response);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response_header;
@@ -79,7 +72,7 @@ AVS_UNIT_TEST(udp_streaming_client, reset_in_response) {
 
     expect_send(&env, expected_request);
     expect_recv(&env, expected_response);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_coap_response_header_t response;
     ASSERT_FAIL(avs_coap_streaming_send_request(
@@ -114,7 +107,7 @@ AVS_UNIT_TEST(udp_streaming_client, streaming_request_block_response) {
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
     expect_recv(&env, responses[1]);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response;
@@ -159,7 +152,7 @@ AVS_UNIT_TEST(udp_streaming_client,
 
     expect_send(&env, request);
     expect_recv(&env, response);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response_header;
@@ -200,7 +193,7 @@ AVS_UNIT_TEST(udp_streaming_client,
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
     expect_recv(&env, responses[1]);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response;
@@ -250,7 +243,7 @@ AVS_UNIT_TEST(udp_streaming_client, streaming_request_peek) {
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
     expect_recv(&env, responses[1]);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response;
@@ -299,7 +292,6 @@ AVS_UNIT_TEST(udp_streaming_client, streaming_request_block_error) {
     expect_send(&env, requests[0]);
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
-    expect_timeout(&env);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response;
@@ -360,7 +352,7 @@ AVS_UNIT_TEST(udp_streaming_client, streaming_block_request) {
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
     expect_recv(&env, responses[1]);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response;
@@ -419,7 +411,7 @@ AVS_UNIT_TEST(udp_streaming_client, small_block_request) {
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
     expect_recv(&env, responses[1]);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_stream_t *stream = NULL;
     avs_coap_response_header_t response;
@@ -477,7 +469,7 @@ AVS_UNIT_TEST(udp_streaming_client, write_equal_to_block_size) {
     expect_recv(&env, responses[0]);
     expect_send(&env, requests[1]);
     expect_recv(&env, responses[1]);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     avs_coap_request_header_t req_without_block1 = requests[0]->request_header;
     ASSERT_OK(_avs_coap_options_copy_as_dynamic(

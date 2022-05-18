@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_SERVERS_CONNECTIONS_H
@@ -273,6 +266,12 @@ void _anjay_server_connections_refresh(
         anjay_iid_t security_iid,
         avs_url_t **move_uri,
         const anjay_server_name_indication_t *sni);
+
+#ifdef ANJAY_WITH_LWM2M11
+void _anjay_server_update_last_ssl_alert_code(const anjay_server_info_t *info,
+                                              uint8_t level,
+                                              uint8_t description);
+#endif // ANJAY_WITH_LWM2M11
 
 bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t type);

@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Multi-instance read-only object with fixed number of instances
 ==============================================================
@@ -130,7 +123,7 @@ to correctly handle requests to different Object Instance IDs.
         test_object_t *test = get_test_object(obj_ptr);
 
         // IID validity was checked by the `anjay_dm_list_instances_t` handler.
-        // If the Object Instance set does not change, or can only be modifed
+        // If the Object Instance set does not change, or can only be modified
         // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
         assert((size_t) iid < sizeof(test->instances) / sizeof(test->instances[0]));
         const struct test_instance *current_instance = &test->instances[iid];

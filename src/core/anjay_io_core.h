@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_IO_CORE_H
@@ -34,6 +27,12 @@ VISIBILITY_PRIVATE_HEADER_BEGIN
 int _anjay_input_dynamic_construct(anjay_unlocked_input_ctx_t **out,
                                    avs_stream_t *stream,
                                    const anjay_request_t *request);
+
+int _anjay_input_dynamic_construct_raw(anjay_unlocked_input_ctx_t **out,
+                                       avs_stream_t *stream,
+                                       uint16_t format,
+                                       anjay_request_action_t action,
+                                       const anjay_uri_path_t *uri);
 
 int _anjay_output_dynamic_construct(anjay_unlocked_output_ctx_t **out_ctx,
                                     avs_stream_t *stream,
@@ -182,6 +181,10 @@ anjay_unlocked_output_ctx_t *_anjay_output_opaque_create(avs_stream_t *stream);
 anjay_unlocked_output_ctx_t *_anjay_output_text_create(avs_stream_t *stream);
 #endif // ANJAY_WITHOUT_PLAINTEXT
 
+#ifdef ANJAY_WITH_CBOR
+anjay_unlocked_output_ctx_t *_anjay_output_cbor_create(avs_stream_t *stream);
+#endif // ANJAY_WITH_CBOR
+
 #ifndef ANJAY_WITHOUT_TLV
 anjay_unlocked_output_ctx_t *
 _anjay_output_tlv_create(avs_stream_t *stream, const anjay_uri_path_t *uri);
@@ -258,6 +261,11 @@ typedef struct anjay_input_buf_ctx {
     bool msg_finished;
     anjay_uri_path_t path;
 } anjay_input_buf_ctx_t;
+
+#ifdef ANJAY_WITH_LWM2M11
+anjay_input_buf_ctx_t _anjay_input_buf_ctx_init(avs_stream_t *stream,
+                                                anjay_uri_path_t *path);
+#endif // ANJAY_WITH_LWM2M11
 
 bool _anjay_is_supported_hierarchical_format(uint16_t content_format);
 

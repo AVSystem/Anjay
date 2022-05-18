@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Custom LwM2M objects
 ====================
@@ -35,7 +28,7 @@ which holds:
          *
          * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
          *
-         * Can be NULL when *Attribute Storage* module is installed. Non-NULL
+         * Can be NULL if the *Attribute Storage* feature is enabled. Non-NULL
          * handler overrides *Attribute Storage* logic.
          */
         anjay_dm_object_read_default_attrs_t *object_read_default_attrs;
@@ -46,8 +39,8 @@ which holds:
          *
          * Required for handling *LwM2M Write-Attributes* operation.
          *
-         * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-         * handler overrides *Attribute Storage* logic.
+         * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+         * overrides *Attribute Storage* logic.
          */
         anjay_dm_object_write_default_attrs_t *object_write_default_attrs;
 
@@ -82,7 +75,8 @@ which holds:
         /**
          * Delete an Object Instance, @ref anjay_dm_instance_remove_t
          *
-         * Required for handling *LwM2M Delete* operation.
+         * Required for handling *LwM2M Delete* operation performed on Object
+         * Instances.
          *
          * Can be NULL for single instance objects.
          */
@@ -94,8 +88,8 @@ which holds:
          *
          * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
          *
-         * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-         * handler overrides *Attribute Storage* logic.
+         * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+         * overrides *Attribute Storage* logic.
          */
         anjay_dm_instance_read_default_attrs_t *instance_read_default_attrs;
 
@@ -105,8 +99,8 @@ which holds:
          *
          * Required for handling *LwM2M Write-Attributes* operation.
          *
-         * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-         * handler overrides *Attribute Storage* logic.
+         * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+         * overrides *Attribute Storage* logic.
          */
         anjay_dm_instance_write_default_attrs_t *instance_write_default_attrs;
 
@@ -174,8 +168,8 @@ which holds:
          *
          * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
          *
-         * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-         * handler overrides *Attribute Storage* logic.
+         * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+         * overrides *Attribute Storage* logic.
          */
         anjay_dm_resource_read_attrs_t *resource_read_attrs;
 
@@ -184,8 +178,8 @@ which holds:
          *
          * Required for handling *LwM2M Write-Attributes* operation.
          *
-         * Can be NULL when *Attribute Storage* module is installed. Non-NULL
-         * handler overrides *Attribute Storage* logic.
+         * Can be NULL when *Attribute Storage* feature is enabled. Non-NULL handler
+         * overrides *Attribute Storage* logic.
          */
         anjay_dm_resource_write_attrs_t *resource_write_attrs;
 
@@ -235,6 +229,31 @@ which holds:
          */
         anjay_dm_transaction_rollback_t *transaction_rollback;
 
+        /**
+         * Get Resource Instance attributes, @ref
+         * anjay_dm_resource_instance_read_attrs_t
+         *
+         * Required for handling *LwM2M Discover* and *LwM2M Observe* operations.
+         *
+         * Can be NULL if the object does not contain multiple resources, when
+         * *Attribute Storage* feature is enabled, or when the application only
+         * targets compliance with LwM2M TS 1.0. Non-NULL handler overrides
+         * *Attribute Storage* logic.
+         */
+        anjay_dm_resource_instance_read_attrs_t *resource_instance_read_attrs;
+
+        /**
+         * Set Resource Instance attributes, @ref
+         * anjay_dm_resource_instance_write_attrs_t
+         *
+         * Required for handling *LwM2M Write-Attributes* operation.
+         *
+         * Can be NULL if the object does not contain multiple resources, when
+         * *Attribute Storage* feature is enabled, or when the application only
+         * targets compliance with LwM2M TS 1.0. Non-NULL handler overrides
+         * *Attribute Storage* logic.
+         */
+        anjay_dm_resource_instance_write_attrs_t *resource_instance_write_attrs;
     } anjay_dm_handlers_t;
 
     /** A struct defining a LwM2M Object. */

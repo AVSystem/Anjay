@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Installing mandatory Objects
 ============================
@@ -23,7 +16,7 @@ packets our client has to have at least `LwM2M Security
 <https://www.openmobilealliance.org/tech/profiles/LWM2M_Server-v1_0.xml>`_
 (``/1``) Objects implemented.
 
-Fortunately, Anjay provides both of these Objects in the form of preimplemented
+Fortunately, Anjay provides both of these Objects in the form of pre-implemented
 modules, and they can be used easily.
 
 .. note::
@@ -45,22 +38,19 @@ structure. To add support for a new Object, you'd need to:
   - implement appropriate callback functions,
   - register created object in Anjay.
 
-However, for now, we are going to install our preimplemented LwM2M Objects
+However, for now, we are going to install our pre-implemented LwM2M Objects
 (Security, Server), so that you don't have to worry about initializing the
 structure and object registration on your own. In case you are interested in
 this topic, :doc:`BC-ObjectImplementation` section provides more information on
 this subject.
 
 To install the Objects we are going to use ``anjay_security_object_install()``
-and ``anjay_server_object_install()`` functions. We will also install Attribute
-storage module using ``anjay_attr_storage_install()`` to enable LwM2M Discover
-operation. Since it is not important right now, it will be described in details
-later.
+and ``anjay_server_object_install()`` functions.
 
 .. important::
 
-    Remember to include ``anjay/attr_storage.h``, ``anjay/security.h`` and
-    ``anjay/server.h`` headers to use the functions mentioned above.
+    Remember to include ``anjay/security.h`` and ``anjay/server.h`` headers to
+    use the functions mentioned above.
 
 Setting up Server and Security Objects
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -144,12 +134,11 @@ Resource (``ssid``). That is why we keep SSID matched in both
         return 0;
     }
 
-Now we are ready to call these functions from ``main()``, altogether with
-``anjay_attr_storage_install()`` mentioned previously.
+Now we are ready to call these functions from ``main()``.
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-MandatoryObjects/src/main.c
-    :emphasize-lines: 21-25
+    :emphasize-lines: 21-24
 
     int main(int argc, char *argv[]) {
         if (argc != 2) {
@@ -171,9 +160,8 @@ Now we are ready to call these functions from ``main()``, altogether with
         }
 
         int result = 0;
-        // Install Attribute storage and setup necessary objects
-        if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-                || setup_server_object(anjay)) {
+        // Setup necessary objects
+        if (setup_security_object(anjay) || setup_server_object(anjay)) {
             result = -1;
         }
 

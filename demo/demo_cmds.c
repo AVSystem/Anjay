@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include "demo_cmds.h"
@@ -28,6 +21,10 @@
 #include <anjay/attr_storage.h>
 #include <anjay/ipso_objects.h>
 #include <anjay/security.h>
+
+#ifdef ANJAY_WITH_SEND
+#    include <anjay/lwm2m_send.h>
+#endif // ANJAY_WITH_SEND
 
 #include <avsystem/commons/avs_memory.h>
 
@@ -188,7 +185,7 @@ static void cmd_add_server(anjay_demo_t *demo, const char *args_string) {
 static void cmd_trim_servers(anjay_demo_t *demo, const char *args_string) {
     size_t num_servers = count_servers(demo->connection_args);
     unsigned number;
-    if (sscanf(args_string, "%u", &number) != 1 || number >= num_servers) {
+    if (sscanf(args_string, "%u", &number) != 1 || number > num_servers) {
         demo_log(ERROR, "Invalid servers number: %s", args_string);
         return;
     }
@@ -269,7 +266,8 @@ static void cmd_non_lwm2m_socket_count(anjay_demo_t *demo,
             anjay_get_socket_entries(demo->anjay);
     unsigned long non_lwm2m_sockets = 0;
     AVS_LIST_ITERATE(entry) {
-        if (entry->ssid == ANJAY_SSID_ANY) {
+        if (entry->ssid == ANJAY_SSID_ANY
+                && entry->transport != ANJAY_SOCKET_TRANSPORT_SMS) {
             ++non_lwm2m_sockets;
         }
     }
@@ -309,6 +307,115 @@ static void cmd_notify(anjay_demo_t *demo, const char *args_string) {
         return;
     }
 }
+
+#ifdef ANJAY_WITH_SEND
+static void send_finished_handler(anjay_t *anjay,
+                                  anjay_ssid_t ssid,
+                                  const anjay_send_batch_t *batch,
+                                  int result,
+                                  void *data) {
+    (void) anjay;
+    (void) ssid;
+    (void) batch;
+    (void) data;
+    demo_log(INFO, "SEND FINISHED HANDLER: %d", result);
+}
+
+typedef anjay_send_result_t
+anjay_send_func_t(anjay_t *anjay,
+                  anjay_ssid_t ssid,
+                  const anjay_send_batch_t *data,
+                  anjay_send_finished_handler_t *finished_handler,
+                  void *finished_handler_data);
+
+static void print_send_usage(const char *command) {
+    demo_log(WARNING, "%s usage: %s SSID [/OID/IID/RID [...]]", command,
+             command);
+}
+
+static void cmd_send_impl(anjay_demo_t *demo,
+                          const char *command,
+                          anjay_send_func_t *send_func,
+                          const char *args_string) {
+    anjay_ssid_t ssid;
+    if (sscanf(args_string, " %" SCNu16, &ssid) != 1) {
+        print_send_usage(command);
+        return;
+    }
+    args_string++;
+
+    anjay_send_batch_builder_t *builder = anjay_send_batch_builder_new();
+    if (!builder) {
+        demo_log(ERROR, "Out of memory");
+        return;
+    }
+
+    anjay_send_resource_path_t paths[MAX_SEND_RESOURCES];
+    size_t paths_count = 0;
+
+    while ((args_string = strchr(args_string, ' '))) {
+        if (paths_count == MAX_SEND_RESOURCES) {
+            demo_log(ERROR, "Max. %d resources allowed in Send",
+                     MAX_SEND_RESOURCES);
+            anjay_send_batch_builder_cleanup(&builder);
+        }
+
+        args_string++;
+        anjay_oid_t oid;
+        anjay_iid_t iid;
+        anjay_rid_t rid;
+        if (sscanf(args_string, "/%" SCNu16 "/%" SCNu16 "/%" SCNu16, &oid, &iid,
+                   &rid)
+                != 3) {
+            print_send_usage(command);
+            anjay_send_batch_builder_cleanup(&builder);
+            return;
+        }
+
+        paths[paths_count++] = (anjay_send_resource_path_t) { oid, iid, rid };
+    }
+
+    int result = 0;
+    if (paths_count == 1) {
+        result = anjay_send_batch_data_add_current(
+                builder, demo->anjay, paths[0].oid, paths[0].iid, paths[0].rid);
+    } else if (paths_count) {
+        result =
+                anjay_send_batch_data_add_current_multiple(builder, demo->anjay,
+                                                           paths, paths_count);
+    }
+
+    if (result) {
+        demo_log(ERROR, "Error during reading values from data model");
+        anjay_send_batch_builder_cleanup(&builder);
+        return;
+    }
+
+    anjay_send_batch_t *data = anjay_send_batch_builder_compile(&builder);
+    if (!data) {
+        demo_log(ERROR, "Out of memory");
+        anjay_send_batch_builder_cleanup(&builder);
+        return;
+    }
+
+    const anjay_send_result_t send_result =
+            send_func(demo->anjay, ssid, data, send_finished_handler, NULL);
+    if (send_result) {
+        demo_log(ERROR, "cannot perform LwM2M Send, result: %d",
+                 (int) send_result);
+    }
+
+    anjay_send_batch_release(&data);
+}
+
+static void cmd_send(anjay_demo_t *demo, const char *args_string) {
+    cmd_send_impl(demo, "send", anjay_send, args_string);
+}
+
+static void cmd_send_deferrable(anjay_demo_t *demo, const char *args_string) {
+    cmd_send_impl(demo, "send_deferrable", anjay_send_deferrable, args_string);
+}
+#endif // ANJAY_WITH_SEND
 
 static void cmd_unregister_object(anjay_demo_t *demo, const char *args_string) {
     int oid;
@@ -441,7 +548,7 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
         return;
     }
 
-    avs_net_generic_psk_info_t psk = {
+    avs_net_psk_info_t psk = {
         .key = avs_crypto_psk_key_info_from_buffer(psk_key, strlen(psk_key)),
         .identity = avs_crypto_psk_identity_info_from_buffer(
                 psk_identity, strlen(psk_identity))
@@ -452,7 +559,7 @@ static void cmd_download(anjay_demo_t *demo, const char *args_string) {
         .on_download_finished = dl_finished_new,
         .user_data = user_data,
         .security_config = {
-            .security_info = avs_net_security_info_from_generic_psk(psk)
+            .security_info = avs_net_security_info_from_psk(psk)
         }
     };
 
@@ -559,7 +666,7 @@ static void cmd_download_blocks(anjay_demo_t *demo, const char *args_string) {
     avs_free(args_string_copy);
 }
 
-#ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
+#ifdef ANJAY_WITH_ATTR_STORAGE
 static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     char *path = (char *) avs_malloc(strlen(args_string) + 1);
     if (!path) {
@@ -614,7 +721,31 @@ static void cmd_set_attrs(anjay_demo_t *demo, const char *args_string) {
     }
 
     int oid, iid, rid;
-    switch (sscanf(path, "/%d/%d/%d", &oid, &iid, &rid)) {
+#    ifdef ANJAY_WITH_LWM2M11
+    int riid;
+#    endif // ANJAY_WITH_LWM2M11
+    switch (sscanf(path,
+                   "/%d/%d/%d"
+#    ifdef ANJAY_WITH_LWM2M11
+                   "/%d"
+#    endif // ANJAY_WITH_LWM2M11
+                   ,
+                   &oid, &iid, &rid
+#    ifdef ANJAY_WITH_LWM2M11
+                   ,
+                   &riid
+#    endif // ANJAY_WITH_LWM2M11
+                   )) {
+#    ifdef ANJAY_WITH_LWM2M11
+    case 4:
+        if (anjay_attr_storage_set_resource_instance_attrs(
+                    demo->anjay, (anjay_ssid_t) ssid, (anjay_oid_t) oid,
+                    (anjay_iid_t) iid, (anjay_rid_t) rid, (anjay_riid_t) riid,
+                    &attrs)) {
+            demo_log(ERROR, "failed to set resource instance level attributes");
+        }
+        goto finish;
+#    endif // ANJAY_WITH_LWM2M11
     case 3:
         if (anjay_attr_storage_set_resource_attrs(
                     demo->anjay, (anjay_ssid_t) ssid, (anjay_oid_t) oid,
@@ -642,7 +773,7 @@ error:
 finish:
     avs_free(path);
 }
-#endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#endif // ANJAY_WITH_ATTR_STORAGE
 
 static void cmd_disable_server(anjay_demo_t *demo, const char *args_string) {
     unsigned ssid;
@@ -691,6 +822,31 @@ static void cmd_schedule_update_on_exit(anjay_demo_t *demo,
     demo->schedule_update_on_exit = true;
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+static void cmd_set_queue_mode_preference(anjay_demo_t *demo,
+                                          const char *args_string) {
+    while (isspace(*args_string)) {
+        ++args_string;
+    }
+    anjay_queue_mode_preference_t value;
+    if (avs_strcasecmp(args_string, "FORCE_QUEUE_MODE") == 0) {
+        value = ANJAY_FORCE_QUEUE_MODE;
+    } else if (avs_strcasecmp(args_string, "PREFER_QUEUE_MODE") == 0) {
+        value = ANJAY_PREFER_QUEUE_MODE;
+    } else if (avs_strcasecmp(args_string, "PREFER_ONLINE_MODE") == 0) {
+        value = ANJAY_PREFER_ONLINE_MODE;
+    } else if (avs_strcasecmp(args_string, "FORCE_ONLINE_MODE") == 0) {
+        value = ANJAY_FORCE_ONLINE_MODE;
+    } else {
+        demo_log(ERROR, "Invaild queue mode preference; supported values: "
+                        "FORCE_QUEUE_MODE, PREFER_QUEUE_MODE, "
+                        "PREFER_ONLINE_MODE, FORCE_ONLINE_MODE");
+        return;
+    }
+    anjay_set_queue_mode_preference(demo->anjay, value);
+}
+#endif // ANJAY_WITH_LWM2M11
+
 #ifdef ANJAY_WITH_OBSERVATION_STATUS
 static void cmd_observation_status(anjay_demo_t *demo,
                                    const char *args_string) {
@@ -727,6 +883,17 @@ static void cmd_badc_write(anjay_demo_t *demo, const char *args_string) {
                                     iid, riid, &args_string[length]);
 }
 
+static void cmd_advance_time(anjay_demo_t *demo, const char *args_string) {
+    (void) demo;
+    double delta_s = 0;
+    if (sscanf(args_string, " %lf", &delta_s) != 1) {
+        demo_log(ERROR,
+                 "bad time format, expected seconds as floating point number");
+        return;
+    }
+    demo_advance_time(avs_time_duration_from_fscalar(delta_s, AVS_TIME_S));
+}
+
 static void cmd_set_event_log_data(anjay_demo_t *demo,
                                    const char *args_string) {
     const anjay_dm_object_def_t **obj_def =
@@ -757,6 +924,7 @@ static void cmd_set_fw_update_result(anjay_demo_t *demo,
     }
     anjay_fw_update_set_result(demo->anjay, (anjay_fw_update_result_t) result);
 }
+
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 static void cmd_ongoing_registration_exists(anjay_demo_t *demo,
@@ -764,6 +932,105 @@ static void cmd_ongoing_registration_exists(anjay_demo_t *demo,
     (void) args_string;
     printf("ONGOING_REGISTRATION==%s\n",
            anjay_ongoing_registration_exists(demo->anjay) ? "true" : "false");
+}
+
+static void cmd_set_lifetime(anjay_demo_t *demo, const char *args_string) {
+    anjay_iid_t iid;
+    int32_t lifetime;
+    if (sscanf(args_string, "%" SCNu16 " %" SCNd32, &iid, &lifetime) != 2) {
+        demo_log(ERROR, "The command requires both Instance ID and Lifetime");
+        return;
+    }
+    if (anjay_server_object_set_lifetime(demo->anjay, iid, lifetime)) {
+        demo_log(ERROR, "Could not set server lifetime to the desired value");
+    }
+}
+
+static void cmd_registration_expiration_time(anjay_demo_t *demo,
+                                             const char *args_string) {
+    anjay_ssid_t ssid;
+    if (parse_ssid(args_string, &ssid)) {
+        demo_log(ERROR, "invalid Short Server ID: %s", args_string);
+        return;
+    }
+
+    demo_log(INFO, "REGISTRATION_EXPIRATION_TIME=%s",
+             AVS_TIME_DURATION_AS_STRING(
+                     anjay_registration_expiration_time(demo->anjay, ssid)
+                             .since_real_epoch));
+}
+
+static void cmd_next_lifecycle_operation(anjay_demo_t *demo,
+                                         const char *args_string) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    anjay_transport_set_t transport_set;
+    if (!*args_string || !parse_ssid(args_string, &ssid)) {
+        result = anjay_next_planned_lifecycle_operation(demo->anjay, ssid);
+    } else if (!parse_transports(args_string, &transport_set)) {
+        result =
+                anjay_transport_next_planned_lifecycle_operation(demo->anjay,
+                                                                 transport_set);
+    } else {
+        return;
+    }
+
+    demo_log(INFO, "NEXT_LIFECYCLE_OPERATION=%s",
+             AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
+}
+
+static void cmd_next_planned_notify(anjay_demo_t *demo,
+                                    const char *args_string) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    anjay_transport_set_t transport_set;
+    if (!*args_string || !parse_ssid(args_string, &ssid)) {
+        result = anjay_next_planned_notify_trigger(demo->anjay, ssid);
+    } else if (!parse_transports(args_string, &transport_set)) {
+        result = anjay_transport_next_planned_notify_trigger(demo->anjay,
+                                                             transport_set);
+    } else {
+        return;
+    }
+
+    demo_log(INFO, "NEXT_PLANNED_NOTIFY=%s",
+             AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
+}
+
+static void cmd_next_planned_pmax_notify(anjay_demo_t *demo,
+                                         const char *args_string) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    anjay_transport_set_t transport_set;
+    if (!*args_string || !parse_ssid(args_string, &ssid)) {
+        result = anjay_next_planned_pmax_notify_trigger(demo->anjay, ssid);
+    } else if (!parse_transports(args_string, &transport_set)) {
+        result =
+                anjay_transport_next_planned_pmax_notify_trigger(demo->anjay,
+                                                                 transport_set);
+    } else {
+        return;
+    }
+
+    demo_log(INFO, "NEXT_PLANNED_PMAX_NOTIFY=%s",
+             AVS_TIME_DURATION_AS_STRING(result.since_real_epoch));
+}
+
+static void cmd_has_unsent_notifications(anjay_demo_t *demo,
+                                         const char *args_string) {
+    bool result = false;
+    anjay_ssid_t ssid = ANJAY_SSID_ANY;
+    anjay_transport_set_t transport_set;
+    if (!*args_string || !parse_ssid(args_string, &ssid)) {
+        result = anjay_has_unsent_notifications(demo->anjay, ssid);
+    } else if (!parse_transports(args_string, &transport_set)) {
+        result = anjay_transport_has_unsent_notifications(demo->anjay,
+                                                          transport_set);
+    } else {
+        return;
+    }
+
+    demo_log(INFO, "HAS_UNSENT_NOTIFICATIONS=%s", result ? "true" : "false");
 }
 
 #ifdef ANJAY_WITH_MODULE_IPSO_OBJECTS
@@ -887,7 +1154,11 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 cmd_add_server, "Adds another LwM2M Server to connect to"),
     CMD_HANDLER("trim-servers", "number",
                 cmd_trim_servers,
-                "Remove LwM2M Servers with specified ID and higher"),
+                "Remove LwM2M Servers with specified ID and higher from the "
+                "set of servers provided on the command line, and reload the "
+                "Server Accounts. Note that any changes to the Security and "
+                "Server objects performed by the Bootstrap Server will be "
+                "discarded."),
     CMD_HANDLER("socket-count", "", cmd_socket_count,
                 "Display number of sockets currently listening"),
     CMD_HANDLER("get-port", "index", cmd_get_port,
@@ -905,6 +1176,13 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "Exits Offline mode"),
     CMD_HANDLER("notify", "", cmd_notify,
                 "Executes anjay_notify_* on a specified path"),
+#ifdef ANJAY_WITH_SEND
+    CMD_HANDLER("send_deferrable", "SSID [/OID/IID/RID [...]]",
+                cmd_send_deferrable,
+                "Executes anjay_send_deferrable on a specified path"),
+    CMD_HANDLER("send", "SSID [/OID/IID/RID [...]]", cmd_send,
+                "Executes anjay_send on a specified path"),
+#endif // ANJAY_WITH_SEND
     CMD_HANDLER("unregister-object", "oid", cmd_unregister_object,
                 "Unregister an LwM2M Object"),
     CMD_HANDLER("reregister-object", "oid", cmd_reregister_object,
@@ -916,11 +1194,11 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("download", "url target_file [psk_identity psk_key]",
                 cmd_download,
                 "Download a file from given URL to target_file."),
-#ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
+#ifdef ANJAY_WITH_ATTR_STORAGE
     CMD_HANDLER("set-attrs", "", cmd_set_attrs, "Syntax [/a [/b [/c [/d] ] ] ] "
                 "ssid [pmin,pmax,lt,gt,st,epmin,epmax] "
                 "- e.g. /a/b 1 pmin=3,pmax=4"),
-#endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#endif // ANJAY_WITH_ATTR_STORAGE
     CMD_HANDLER("disable-server", "ssid reactivate_timeout", cmd_disable_server,
                 "Disables a server with given SSID for a given time "
                 "(use -1 to disable idefinitely)."),
@@ -931,6 +1209,17 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
     CMD_HANDLER("schedule-update-on-exit", "", cmd_schedule_update_on_exit,
                 "Ensure Registration Update is scheduled for immediate "
                 "execution at the point of calling anjay_delete()"),
+#ifdef ANJAY_WITH_LWM2M11
+    CMD_HANDLER("set-queue-mode-preference", "PREFERENCE",
+                cmd_set_queue_mode_preference,
+                "Sets queue mode preference; one of: FORCE_QUEUE_MODE, "
+                "PREFER_QUEUE_MODE, PREFER_ONLINE_MODE, FORCE_ONLINE_MODE"),
+#endif // ANJAY_WITH_LWM2M11
+    CMD_HANDLER("set-lifetime", "IID LIFETIME", cmd_set_lifetime,
+                "Sets the lifetime for the specified Server Instance ID"),
+    CMD_HANDLER("advance-time", "", cmd_advance_time,
+                "Advances real and monotonic clock readings by specified "
+                "number of seconds"),
 #ifdef ANJAY_WITH_OBSERVATION_STATUS
     CMD_HANDLER("observation-status", "/OID/IID/RID", cmd_observation_status,
                 "Queries the observation status of a given Resource"),
@@ -976,6 +1265,34 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 cmd_push_button_release,
                 "Releases the selected instance of the fake Push Button object."),
 #endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
+    CMD_HANDLER("registration-expiration-time", "SSID",
+                cmd_registration_expiration_time,
+                "Displays time when registration with a given server expires"),
+    CMD_HANDLER("next-lifecycle-operation", "[SSID|transports...]",
+                cmd_next_lifecycle_operation,
+                "Displays time when next lifecycle operation is scheduled for "
+                "any server (if no arguments specified), a given server (if "
+                "numeric SSID argument given) or a given set of transports "
+                "(if transport names given)"),
+    CMD_HANDLER("next-planned-notify", "[SSID|transports...]",
+                cmd_next_planned_notify,
+                "Displays time when next planned notification trigger is "
+                "scheduled for any server (if no arguments specified), a given "
+                "server (if numeric SSID argument given) or a given set of "
+                "transports (if transport names given)"),
+    CMD_HANDLER("next-planned-pmax-notify", "[SSID|transports...]",
+                cmd_next_planned_pmax_notify,
+                "Displays time when next planned notification trigger based on "
+                "the Maximum Period attribute is scheduled for any server (if "
+                "no arguments specified), a given server (if numeric SSID "
+                "argument given) or a given set of transports (if transport "
+                "names given)"),
+    CMD_HANDLER("has-unsent-notifications", "[SSID|transports...]",
+                cmd_has_unsent_notifications,
+                "Checks whether there are some notifications which have been "
+                "postponed to be sent later for any server (if no arguments "
+                "specified), a given server (if numeric SSID argument given) "
+                "or a given set of transports (if transport names given)"),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };

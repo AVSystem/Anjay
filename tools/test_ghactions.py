@@ -2,18 +2,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import argparse
 import copy
@@ -65,12 +58,14 @@ def validate_job(job):
         raise NotImplementedError('Unsupported job features used')
     if not 'container' in job:
         raise NotImplementedError('Container not specified')
-    first_step = job['steps'][0]
-    if first_step != {'uses': 'actions/checkout@v1', 'with': {'submodules': 'recursive'}}:
-        raise NotImplementedError('First step needs to be checkout')
-    for step in job['steps'][1:]:
-        if step.keys() != {'run'}:
+    checkout_steps = 0
+    for step in job['steps']:
+        if step == {'uses': 'actions/checkout@v1', 'with': {'submodules': 'recursive'}}:
+            checkout_steps += 1
+        elif step.keys() != {'run'}:
             raise NotImplementedError('Unsupported step type')
+    if checkout_steps != 1:
+        raise NotImplementedError('There needs to be a single checkout step')
 
 
 def run_job(job, root_dir):
@@ -85,8 +80,9 @@ def run_job(job, root_dir):
             script.write('TEMP_DIR="$(mktemp -d)"\n')
             script.write('cp -a ' + DOCKER_ROOT_DIR + ' "$TEMP_DIR"\n')
             script.write('cd "$TEMP_DIR"/' + os.path.basename(DOCKER_ROOT_DIR) + '\n')
-            for step in job['steps'][1:]:
-                script.write(step['run'] + '\n')
+            for step in job['steps']:
+                if step.keys() == {'run'}:
+                    script.write(step['run'] + '\n')
             script.flush()
             os.chmod(os.path.join(temp_dir, 'run.sh'), 0o777)
 

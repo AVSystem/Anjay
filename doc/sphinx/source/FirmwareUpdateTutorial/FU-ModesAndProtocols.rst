@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Download modes and protocols
 ============================
@@ -65,8 +58,7 @@ user is a matter of setting a few CMake options:
 - ``WITH_HTTP_DOWNLOAD`` - enables/disables **PULL** downloads over HTTP(s)
   (`ON` by default),
 - ``WITH_AVS_COAP_UDP`` - enables/disables CoAP/UDP (`ON` by default),
-- ``WITH_AVS_COAP_TCP`` - enables/disables CoAP/TCP (`ON` by default, in
-  **commercial version** only).
+- ``WITH_AVS_COAP_TCP`` - enables/disables CoAP/TCP (`ON` by default).
 
 Which download mode should you choose
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -94,7 +86,7 @@ download (of course out of the list of supported protocols, which you MAY
 control, at least partially, through the list of CMake options mentioned
 in former sections), but downloads using CoAP(s)/UDP tend to be slow due
 to limitation of the maximum CoAP BLOCK size of 1024 bytes. The fact that
-each Block-Wise packet needs an acknowledgement from the other side does
+each Block-Wise packet needs an acknowledgment from the other side does
 not help either.
 
 If the download speed is important you should stand with either CoAP(s)/TCP or

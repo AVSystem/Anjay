@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef AVS_COAP_CONFIG_H
@@ -93,15 +86,12 @@
  * Enable support for UDP transport.
  *
  * NOTE: Enabling at least one transport is necessary for the library to be
- * useful. UDP is the only transport available in the open source version.
+ * useful.
  */
 #cmakedefine WITH_AVS_COAP_UDP
 
 /**
  * Enable support for TCP transport (RFC 8323).
- *
- * IMPORTANT: Only available in the commercial version. Ignored in the open
- * source version.
  *
  * NOTE: Enabling at least one transport is necessary for the library to be
  * useful.
@@ -111,7 +101,7 @@
 /**
  * Enable support for OSCORE (RFC 8613).
  *
- * IMPORTANT: Only available in the commercial version. Ignored in the open
+ * IMPORTANT: Only available with the OSCORE feature. Ignored in the open
  * source version.
  */
 #cmakedefine WITH_AVS_COAP_OSCORE
@@ -122,7 +112,7 @@
  *
  * Only meaningful if <c>WITH_AVS_COAP_OSCORE</c> is enabled.
  *
- * IMPORTANT: Only available in the commercial version. Ignored in the open
+ * IMPORTANT: Only available with the OSCORE feature. Ignored in the open
  * source version.
  */
 #cmakedefine WITH_AVS_COAP_OSCORE_DRAFT_8

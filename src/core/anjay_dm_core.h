@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_DM_H
@@ -23,6 +16,7 @@
 #include <avsystem/commons/avs_stream.h>
 
 #include <anjay_modules/anjay_dm_utils.h>
+#include <anjay_modules/anjay_servers.h>
 
 #include <avsystem/coap/streaming.h>
 
@@ -51,10 +45,10 @@ typedef struct {
     bool has_step;
     bool has_min_eval_period;
     bool has_max_eval_period;
-#ifdef WITH_CUSTOM_ATTRIBUTES
-    anjay_dm_custom_request_attribute_flags_t custom;
-#endif
-    anjay_dm_internal_r_attrs_t values;
+#ifdef ANJAY_WITH_CON_ATTR
+    bool has_con;
+#endif // ANJAY_WITH_CON_ATTR
+    anjay_dm_r_attributes_t values;
 } anjay_request_attributes_t;
 
 typedef struct {
@@ -75,11 +69,11 @@ typedef struct {
     anjay_request_attributes_t attributes;
 } anjay_request_t;
 
-#define REQUEST_TO_ACTION_INFO(Anjay, Request)   \
+#define REQUEST_TO_ACTION_INFO(Request, Ssid)    \
     (const anjay_action_info_t) {                \
         .oid = (Request)->uri.ids[ANJAY_ID_OID], \
         .iid = (Request)->uri.ids[ANJAY_ID_IID], \
-        .ssid = _anjay_dm_current_ssid(Anjay),   \
+        .ssid = (Ssid),                          \
         .action = (Request)->action              \
     }
 
@@ -92,7 +86,7 @@ static inline int _anjay_dm_transaction_rollback(anjay_unlocked_t *anjay) {
     return (result == INT_MIN) ? 0 : result;
 }
 
-int _anjay_dm_perform_action(anjay_unlocked_t *anjay,
+int _anjay_dm_perform_action(anjay_connection_ref_t connection,
                              const anjay_request_t *request);
 
 static inline int _anjay_dm_map_present_result(int result) {

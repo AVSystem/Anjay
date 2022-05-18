@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avsystem/commons/avs_memory.h>
@@ -272,8 +265,9 @@ static int handle_packet(void) {
 
 static void perform_simple_download(void) {
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     do {
@@ -310,7 +304,7 @@ static void assert_download_not_possible(anjay_downloader_t *dl,
     AVS_LIST_CLEAR(&socks);
 
     anjay_download_handle_t handle = NULL;
-    avs_error_t err = _anjay_downloader_download(dl, &handle, cfg
+    avs_error_t err = _anjay_downloader_download(dl, &handle, cfg, NULL, NULL
 
     );
     AVS_UNIT_ASSERT_EQUAL(err.category, AVS_ERRNO_CATEGORY);
@@ -361,7 +355,7 @@ AVS_UNIT_TEST(downloader, coap_download_single_block) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_next_block(&SIMPLE_ENV.data,
@@ -413,8 +407,8 @@ AVS_UNIT_TEST(downloader, coap_download_multiple_blocks) {
         memcpy(args.data, &DESPAIR[i * BLOCK_SIZE], size);
         expect_next_block(&SIMPLE_ENV.data, args);
 
+        expect_has_buffered_data_check(SIMPLE_ENV.mocksock, !is_last_block);
         if (is_last_block) {
-            expect_timeout(SIMPLE_ENV.mocksock);
             expect_download_finished(&SIMPLE_ENV.data,
                                      _anjay_download_status_success());
         }
@@ -431,10 +425,11 @@ AVS_UNIT_TEST(downloader, download_abort_on_cleanup) {
     avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL
 
-            ));
+                                       ));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     expect_download_finished(&SIMPLE_ENV.data,
@@ -456,7 +451,7 @@ AVS_UNIT_TEST(downloader, download_abort_on_reset_response) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_download_finished(&SIMPLE_ENV.data,
@@ -476,7 +471,7 @@ AVS_UNIT_TEST(downloader, unsupported_protocol) {
     anjay_download_handle_t handle = NULL;
     avs_error_t err =
             _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
-                                       &handle, &SIMPLE_ENV.cfg);
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL);
     AVS_UNIT_ASSERT_EQUAL(err.category, AVS_ERRNO_CATEGORY);
     AVS_UNIT_ASSERT_EQUAL(err.code, AVS_EPROTONOSUPPORT);
     AVS_UNIT_ASSERT_NULL(handle);
@@ -510,7 +505,7 @@ AVS_UNIT_TEST(downloader, coap_download_separate_response) {
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &res_res->content,
                                     res_res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_next_block(&SIMPLE_ENV.data,
@@ -543,9 +538,11 @@ AVS_UNIT_TEST(downloader, coap_download_unexpected_packet) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &unk1->content, unk1->length);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, true);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &unk2->content, unk2->length);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, true);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_next_block(&SIMPLE_ENV.data,
@@ -576,7 +573,7 @@ AVS_UNIT_TEST(downloader, coap_download_abort_from_handler) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_next_block(&SIMPLE_ENV.data,
@@ -615,10 +612,11 @@ AVS_UNIT_TEST(downloader, coap_download_expired) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req1->content,
                                     req1->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res1->content, res1->length);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, true);
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req2->content,
                                     req2->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res2->content, res2->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     static const avs_coap_etag_t etag = {
         .size = 3,
@@ -650,8 +648,9 @@ AVS_UNIT_TEST(downloader, buffer_too_small_to_download) {
     avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     expect_download_finished(&SIMPLE_ENV.data,
@@ -682,8 +681,9 @@ AVS_UNIT_TEST(downloader, retry) {
     avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
@@ -723,7 +723,7 @@ AVS_UNIT_TEST(downloader, retry) {
 
     // handle response
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     static const avs_coap_etag_t etag = {
         .size = 3,
@@ -767,8 +767,9 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
     avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // initial request
@@ -791,7 +792,7 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
     // separate ACK
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &req_ack->content,
                             req_ack->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
     AVS_UNIT_ASSERT_SUCCESS(handle_packet());
 
     time_to_next = avs_sched_time_to_next(SIMPLE_ENV.base->anjay->sched);
@@ -831,8 +832,9 @@ AVS_UNIT_TEST(downloader, abort) {
     avs_unit_mocksock_expect_connect(SIMPLE_ENV.mocksock, "127.0.0.1", "5683");
 
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // start_download_job is scheduled
@@ -875,7 +877,7 @@ AVS_UNIT_TEST(downloader, uri_path_query) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_next_block(&SIMPLE_ENV.data,
@@ -913,7 +915,7 @@ AVS_UNIT_TEST(downloader, in_buffer_size_enforces_smaller_initial_block_size) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_next_block(&SIMPLE_ENV.data,
@@ -947,7 +949,7 @@ AVS_UNIT_TEST(downloader, renegotiation_while_requesting_more_than_available) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     // expect handler calls
     expect_next_block(&SIMPLE_ENV.data,
@@ -989,6 +991,7 @@ AVS_UNIT_TEST(downloader, renegotiation_after_first_packet) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, true);
 
     memset(args.data, 0, sizeof(args.data));
     assert(strlen(DESPAIR) > 64);
@@ -1007,6 +1010,7 @@ AVS_UNIT_TEST(downloader, renegotiation_after_first_packet) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, true);
 
     memset(args.data, 0, sizeof(args.data));
     strncpy(args.data, DESPAIR + 64, 32);
@@ -1020,7 +1024,7 @@ AVS_UNIT_TEST(downloader, renegotiation_after_first_packet) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
     avs_unit_mocksock_input(SIMPLE_ENV.mocksock, &res->content, res->length);
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
 
     memset(args.data, 0, sizeof(args.data));
     strncpy(args.data, DESPAIR + 64 + 32, 32);
@@ -1091,6 +1095,9 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
 
             current_offset += bytes_till_block_end;
             ++msg_id;
+
+            expect_has_buffered_data_check(
+                    SIMPLE_ENV.mocksock, sizeof(DESPAIR) - current_offset > 0);
         }
         expect_download_finished(&SIMPLE_ENV.data,
                                  _anjay_download_status_success());
@@ -1098,10 +1105,9 @@ AVS_UNIT_TEST(downloader, resumption_at_some_offset) {
         SIMPLE_ENV.cfg.start_offset = offset;
         anjay_download_handle_t handle = NULL;
         AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-                &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+                &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg,
+                NULL, NULL));
         AVS_UNIT_ASSERT_NOT_NULL(handle);
-
-        expect_timeout(SIMPLE_ENV.mocksock);
 
         do {
             ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked,
@@ -1145,8 +1151,9 @@ AVS_UNIT_TEST(downloader, resumption_without_etag_and_block_estimation) {
                                     req->length);
 
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
 
     // We only care about verifying initial BLOCK2 size.
@@ -1194,8 +1201,9 @@ AVS_UNIT_TEST(downloader, resumption_with_etag_and_block_estimation) {
                                     req->length);
 
     anjay_download_handle_t handle = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_download(
-            &SIMPLE_ENV.base->anjay->downloader, &handle, &SIMPLE_ENV.cfg));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_download(&SIMPLE_ENV.base->anjay->downloader,
+                                       &handle, &SIMPLE_ENV.cfg, NULL, NULL));
     AVS_UNIT_ASSERT_NOT_NULL(handle);
     ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, SIMPLE_ENV.base->anjay);
     while (avs_time_duration_equal(avs_sched_time_to_next(
@@ -1216,7 +1224,7 @@ AVS_UNIT_TEST(downloader, resumption_with_etag_and_block_estimation) {
     avs_unit_mocksock_expect_output(SIMPLE_ENV.mocksock, &req->content,
                                     req->length);
 
-    expect_timeout(SIMPLE_ENV.mocksock);
+    expect_has_buffered_data_check(SIMPLE_ENV.mocksock, false);
     handle_packet();
 
     // We only care about verifying initial BLOCK2 size.

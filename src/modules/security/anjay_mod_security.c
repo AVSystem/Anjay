@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -72,6 +65,10 @@ static int assign_iid(sec_repr_t *repr, anjay_iid_t *inout_iid) {
 static void init_instance(sec_instance_t *instance, anjay_iid_t iid) {
     memset(instance, 0, sizeof(sec_instance_t));
     instance->iid = iid;
+#    ifdef ANJAY_WITH_LWM2M11
+    instance->matching_type = -1;
+    instance->certificate_usage = -1;
+#    endif // ANJAY_WITH_LWM2M11
 }
 
 static int add_instance(sec_repr_t *repr,
@@ -102,6 +99,33 @@ static int add_instance(sec_repr_t *repr,
     new_instance->holdoff_s = instance->client_holdoff_s;
     new_instance->bs_timeout_s = instance->bootstrap_timeout_s;
 
+#    ifdef ANJAY_WITH_SECURITY_STRUCTURED
+    if ((instance->public_cert_or_psk_identity
+         || instance->public_cert_or_psk_identity_size)
+                    + (instance->public_cert.desc.source
+                       != AVS_CRYPTO_DATA_SOURCE_EMPTY)
+                    + (instance->psk_identity.desc.source
+                       != AVS_CRYPTO_DATA_SOURCE_EMPTY)
+            > 1) {
+        security_log(ERROR, _("more than one variant of the Public Key Or "
+                              "Identity field specified at the same time"));
+        goto error;
+    }
+    if (instance->public_cert.desc.source != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+        if (_anjay_sec_init_certificate_chain_resource(
+                    &new_instance->public_cert_or_psk_identity,
+                    SEC_KEY_AS_KEY_EXTERNAL, &instance->public_cert)) {
+            goto error;
+        }
+    } else if (instance->psk_identity.desc.source
+               != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+        if (_anjay_sec_init_psk_identity_resource(
+                    &new_instance->public_cert_or_psk_identity,
+                    SEC_KEY_AS_KEY_EXTERNAL, &instance->psk_identity)) {
+            goto error;
+        }
+    } else
+#    endif // ANJAY_WITH_SECURITY_STRUCTURED
     {
         new_instance->public_cert_or_psk_identity.type = SEC_KEY_AS_DATA;
         if (_anjay_raw_buffer_clone(
@@ -115,6 +139,34 @@ static int add_instance(sec_repr_t *repr,
         }
     }
 
+#    ifdef ANJAY_WITH_SECURITY_STRUCTURED
+    if ((instance->private_cert_or_psk_key
+         || instance->private_cert_or_psk_key_size)
+                    + (instance->private_key.desc.source
+                       != AVS_CRYPTO_DATA_SOURCE_EMPTY)
+                    + (instance->psk_key.desc.source
+                       != AVS_CRYPTO_DATA_SOURCE_EMPTY)
+            > 1) {
+        security_log(ERROR, _("more than one variant of the Secret Key field "
+                              "specified at the same time"));
+        goto error;
+    }
+    if (instance->private_key.desc.source != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+        if (_anjay_sec_init_private_key_resource(
+                    &new_instance->private_cert_or_psk_key,
+                    SEC_KEY_AS_KEY_EXTERNAL,
+                    &instance->private_key)) {
+            goto error;
+        }
+    } else if (instance->psk_key.desc.source != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+        if (_anjay_sec_init_psk_key_resource(
+                    &new_instance->private_cert_or_psk_key,
+                    SEC_KEY_AS_KEY_EXTERNAL,
+                    &instance->psk_key)) {
+            goto error;
+        }
+    } else
+#    endif // ANJAY_WITH_SECURITY_STRUCTURED
     {
         new_instance->private_cert_or_psk_key.type = SEC_KEY_AS_DATA;
         if (_anjay_raw_buffer_clone(
@@ -146,41 +198,43 @@ static int add_instance(sec_repr_t *repr,
         new_instance->has_ssid = true;
     }
 
-    new_instance->sms_security_mode = instance->sms_security_mode;
-    new_instance->has_sms_security_mode =
-            !_anjay_sec_validate_sms_security_mode(
-                    (int32_t) instance->sms_security_mode);
-
-    {
-        new_instance->sms_key_params.type = SEC_KEY_AS_DATA;
-        if (_anjay_raw_buffer_clone(
-                    &new_instance->sms_key_params.value.data,
-                    &(const anjay_raw_buffer_t) {
-                        .data = (void *) (intptr_t)
-                                        instance->sms_key_parameters,
-                        .size = instance->sms_key_parameters_size
-                    })) {
+#    ifdef ANJAY_WITH_LWM2M11
+    if (instance->matching_type) {
+        // values higher than INT8_MAX are invalid anyway,
+        // and validation will be done in _anjay_sec_object_validate().
+        // This is simpler than adding another validation here.
+        new_instance->matching_type =
+                (int8_t) AVS_MIN(*instance->matching_type, INT8_MAX);
+    }
+    if (instance->server_name_indication
+            && !(new_instance->server_name_indication =
+                         avs_strdup(instance->server_name_indication))) {
+        security_log(ERROR, _("Could not copy SNI: out of memory"));
+        goto error;
+    }
+    if (instance->certificate_usage) {
+        // same story as with Matching Type
+        new_instance->certificate_usage =
+                (int8_t) AVS_MIN(*instance->certificate_usage, INT8_MAX);
+    }
+    if (instance->ciphersuites.num_ids > ANJAY_ID_INVALID) {
+        security_log(ERROR, _("Too many ciphersuites specified"));
+        goto error;
+    }
+    for (int32_t i = (int32_t) instance->ciphersuites.num_ids - 1; i >= 0;
+         --i) {
+        AVS_LIST(sec_cipher_instance_t) cipher_instance =
+                AVS_LIST_NEW_ELEMENT(sec_cipher_instance_t);
+        if (!cipher_instance) {
+            security_log(ERROR,
+                         _("Could not copy ciphersuites: out of memory"));
             goto error;
         }
-        new_instance->has_sms_key_params = !!instance->sms_key_parameters;
+        cipher_instance->riid = (anjay_riid_t) i;
+        cipher_instance->cipher_id = instance->ciphersuites.ids[i];
+        AVS_LIST_INSERT(&new_instance->enabled_ciphersuites, cipher_instance);
     }
-
-    {
-        new_instance->sms_secret_key.type = SEC_KEY_AS_DATA;
-        if (_anjay_raw_buffer_clone(
-                    &new_instance->sms_secret_key.value.data,
-                    &(const anjay_raw_buffer_t) {
-                        .data = (void *) (intptr_t) instance->sms_secret_key,
-                        .size = instance->sms_secret_key_size
-                    })) {
-            goto error;
-        }
-        new_instance->has_sms_secret_key = !!instance->sms_secret_key;
-    }
-
-    if (instance->server_sms_number) {
-        new_instance->sms_number = avs_strdup(instance->server_sms_number);
-    }
+#    endif // ANJAY_WITH_LWM2M11
 
     AVS_LIST(sec_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -245,21 +299,6 @@ static int sec_list_resources(anjay_unlocked_t *anjay,
                                 ANJAY_DM_RES_PRESENT);
     _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SECRET_KEY, ANJAY_DM_RES_R,
                                 ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SMS_SECURITY_MODE, ANJAY_DM_RES_R,
-                                inst->has_sms_security_mode
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SMS_BINDING_KEY_PARAMS,
-                                ANJAY_DM_RES_R,
-                                inst->has_sms_key_params ? ANJAY_DM_RES_PRESENT
-                                                         : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SMS_BINDING_SECRET_KEYS,
-                                ANJAY_DM_RES_R,
-                                inst->has_sms_secret_key ? ANJAY_DM_RES_PRESENT
-                                                         : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SERVER_SMS_NUMBER, ANJAY_DM_RES_R,
-                                inst->sms_number ? ANJAY_DM_RES_PRESENT
-                                                 : ANJAY_DM_RES_ABSENT);
     _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SHORT_SERVER_ID, ANJAY_DM_RES_R,
                                 inst->has_ssid ? ANJAY_DM_RES_PRESENT
                                                : ANJAY_DM_RES_ABSENT);
@@ -269,8 +308,70 @@ static int sec_list_resources(anjay_unlocked_t *anjay,
     _anjay_dm_emit_res_unlocked(ctx, SEC_RES_BOOTSTRAP_TIMEOUT, ANJAY_DM_RES_R,
                                 inst->bs_timeout_s >= 0 ? ANJAY_DM_RES_PRESENT
                                                         : ANJAY_DM_RES_ABSENT);
+#    ifdef ANJAY_WITH_LWM2M11
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_MATCHING_TYPE, ANJAY_DM_RES_R,
+                                inst->matching_type >= 0 ? ANJAY_DM_RES_PRESENT
+                                                         : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SNI, ANJAY_DM_RES_R,
+                                inst->server_name_indication
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_CERTIFICATE_USAGE, ANJAY_DM_RES_R,
+                                inst->certificate_usage >= 0
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_DTLS_TLS_CIPHERSUITE,
+                                ANJAY_DM_RES_RM, ANJAY_DM_RES_PRESENT);
+#    endif // ANJAY_WITH_LWM2M11
     return 0;
 }
+
+#    ifdef ANJAY_WITH_LWM2M11
+static int
+sec_list_resource_instances(anjay_unlocked_t *anjay,
+                            const anjay_dm_installed_object_t obj_ptr,
+                            anjay_iid_t iid,
+                            anjay_rid_t rid,
+                            anjay_unlocked_dm_list_ctx_t *ctx) {
+    (void) anjay;
+
+    assert(rid == SEC_RES_DTLS_TLS_CIPHERSUITE);
+    (void) rid;
+
+    const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
+    assert(inst);
+
+    AVS_LIST(sec_cipher_instance_t) it;
+    AVS_LIST_FOREACH(it, inst->enabled_ciphersuites) {
+        _anjay_dm_emit_unlocked(ctx, it->riid);
+    }
+
+    return 0;
+}
+
+static AVS_LIST(sec_cipher_instance_t) *
+find_cipher_instance_insert_ptr(AVS_LIST(sec_cipher_instance_t) *instances,
+                                anjay_riid_t riid) {
+    AVS_LIST(sec_cipher_instance_t) *it;
+    AVS_LIST_FOREACH_PTR(it, instances) {
+        if ((*it)->riid >= riid) {
+            break;
+        }
+    }
+    return it;
+}
+
+static AVS_LIST(sec_cipher_instance_t)
+find_cipher_instance(AVS_LIST(sec_cipher_instance_t) instances,
+                     anjay_riid_t riid) {
+    AVS_LIST(sec_cipher_instance_t) *it =
+            find_cipher_instance_insert_ptr(&instances, riid);
+    if (it && (*it)->riid == riid) {
+        return *it;
+    }
+    return NULL;
+}
+#    endif // ANJAY_WITH_LWM2M11
 
 static int ret_sec_key_or_data(anjay_unlocked_output_ctx_t *ctx,
                                const sec_key_or_data_t *res) {
@@ -278,6 +379,12 @@ static int ret_sec_key_or_data(anjay_unlocked_output_ctx_t *ctx,
     case SEC_KEY_AS_DATA:
         return _anjay_ret_bytes_unlocked(ctx, res->value.data.data,
                                          res->value.data.size);
+#    if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+    case SEC_KEY_AS_KEY_EXTERNAL:
+    case SEC_KEY_AS_KEY_OWNED:
+        return _anjay_ret_security_info_unlocked(ctx, &res->value.key.info);
+#    endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+              defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
     default:
         AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
         return ANJAY_ERR_INTERNAL;
@@ -292,7 +399,11 @@ static int sec_read(anjay_unlocked_t *anjay,
                     anjay_unlocked_output_ctx_t *ctx) {
     (void) anjay;
     (void) riid;
+#    ifdef ANJAY_WITH_LWM2M11
+    assert(riid == ANJAY_ID_INVALID || rid == SEC_RES_DTLS_TLS_CIPHERSUITE);
+#    else  // ANJAY_WITH_LWM2M11
     assert(riid == ANJAY_ID_INVALID);
+#    endif // ANJAY_WITH_LWM2M11
 
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     assert(inst);
@@ -317,19 +428,46 @@ static int sec_read(anjay_unlocked_t *anjay,
         return _anjay_ret_i64_unlocked(ctx, inst->holdoff_s);
     case SEC_RES_BOOTSTRAP_TIMEOUT:
         return _anjay_ret_i64_unlocked(ctx, inst->bs_timeout_s);
-    case SEC_RES_SMS_SECURITY_MODE:
-        return _anjay_ret_i64_unlocked(ctx, (int32_t) inst->sms_security_mode);
-    case SEC_RES_SMS_BINDING_KEY_PARAMS:
-        return ret_sec_key_or_data(ctx, &inst->sms_key_params);
-    case SEC_RES_SMS_BINDING_SECRET_KEYS:
-        return ret_sec_key_or_data(ctx, &inst->sms_secret_key);
-    case SEC_RES_SERVER_SMS_NUMBER:
-        return _anjay_ret_string_unlocked(ctx, inst->sms_number);
+#    ifdef ANJAY_WITH_LWM2M11
+    case SEC_RES_MATCHING_TYPE:
+        return _anjay_ret_u64_unlocked(
+                ctx, (uint64_t) (uint32_t) inst->matching_type);
+    case SEC_RES_SNI:
+        assert(inst->server_name_indication);
+        return _anjay_ret_string_unlocked(ctx, inst->server_name_indication);
+    case SEC_RES_CERTIFICATE_USAGE:
+        return _anjay_ret_u64_unlocked(
+                ctx, (uint64_t) (uint32_t) inst->certificate_usage);
+    case SEC_RES_DTLS_TLS_CIPHERSUITE: {
+        AVS_LIST(const sec_cipher_instance_t) rinst =
+                find_cipher_instance(inst->enabled_ciphersuites, riid);
+        if (!rinst) {
+            return ANJAY_ERR_NOT_FOUND;
+        }
+        return _anjay_ret_u64_unlocked(ctx, rinst->cipher_id);
+    }
+#    endif // ANJAY_WITH_LWM2M11
     default:
         AVS_UNREACHABLE("Read handler called on unknown Security resource");
         return ANJAY_ERR_NOT_IMPLEMENTED;
     }
 }
+
+#    ifdef ANJAY_WITH_LWM2M11
+static AVS_LIST(sec_cipher_instance_t)
+find_or_create_cipher_instance(AVS_LIST(sec_cipher_instance_t) *instances,
+                               anjay_riid_t riid) {
+    AVS_LIST(sec_cipher_instance_t) *it =
+            find_cipher_instance_insert_ptr(instances, riid);
+
+    AVS_LIST(sec_cipher_instance_t) cipher =
+            AVS_LIST_INSERT_NEW(sec_cipher_instance_t, it);
+    if (cipher) {
+        cipher->riid = riid;
+    }
+    return cipher;
+}
+#    endif // ANJAY_WITH_LWM2M11
 
 static int fetch_sec_key_or_data(anjay_unlocked_input_ctx_t *ctx,
                                  sec_key_or_data_t *res) {
@@ -348,7 +486,11 @@ static int sec_write(anjay_unlocked_t *anjay,
                      anjay_unlocked_input_ctx_t *ctx) {
     (void) anjay;
     (void) riid;
+#    ifdef ANJAY_WITH_LWM2M11
+    assert(riid == ANJAY_ID_INVALID || rid == SEC_RES_DTLS_TLS_CIPHERSUITE);
+#    else  // ANJAY_WITH_LWM2M11
     assert(riid == ANJAY_ID_INVALID);
+#    endif // ANJAY_WITH_LWM2M11
     sec_repr_t *repr = _anjay_sec_get(obj_ptr);
     sec_instance_t *inst = find_instance(repr, iid);
     int retval;
@@ -385,27 +527,84 @@ static int sec_write(anjay_unlocked_t *anjay,
         return _anjay_get_i32_unlocked(ctx, &inst->holdoff_s);
     case SEC_RES_BOOTSTRAP_TIMEOUT:
         return _anjay_get_i32_unlocked(ctx, &inst->bs_timeout_s);
-    case SEC_RES_SMS_SECURITY_MODE:
-        if (!(retval = _anjay_sec_fetch_sms_security_mode(
-                      ctx, &inst->sms_security_mode))) {
-            inst->has_sms_security_mode = true;
+#    ifdef ANJAY_WITH_LWM2M11
+    case SEC_RES_MATCHING_TYPE: {
+        uint32_t matching_type;
+        int result = _anjay_get_u32_unlocked(ctx, &matching_type);
+        if (result) {
+            return result;
         }
-        return retval;
-    case SEC_RES_SMS_BINDING_KEY_PARAMS:
-        inst->has_sms_key_params =
-                !(retval = fetch_sec_key_or_data(ctx, &inst->sms_key_params));
-        return retval;
-    case SEC_RES_SMS_BINDING_SECRET_KEYS:
-        inst->has_sms_secret_key =
-                !(retval = fetch_sec_key_or_data(ctx, &inst->sms_secret_key));
-        return retval;
-    case SEC_RES_SERVER_SMS_NUMBER:
-        return _anjay_io_fetch_string(ctx, &inst->sms_number);
+        if (matching_type > 3) { // range defined in the spec
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+        inst->matching_type = (int8_t) matching_type;
+        return 0;
+    }
+    case SEC_RES_SNI:
+        return _anjay_io_fetch_string(ctx, &inst->server_name_indication);
+    case SEC_RES_CERTIFICATE_USAGE: {
+        uint32_t certificate_usage;
+        int result = _anjay_get_u32_unlocked(ctx, &certificate_usage);
+        if (result) {
+            return result;
+        }
+        if (certificate_usage > 3) { // range defined in the spec
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+        inst->certificate_usage = (int8_t) certificate_usage;
+        return 0;
+    }
+    case SEC_RES_DTLS_TLS_CIPHERSUITE: {
+        uint32_t cipher_id;
+        int result = _anjay_get_u32_unlocked(ctx, &cipher_id);
+        if (result) {
+            return result;
+        }
+
+        if (cipher_id == 0) {
+            security_log(WARNING,
+                         _("TLS-NULL-WITH-NULL-NULL cipher is not allowed"));
+            return ANJAY_ERR_BAD_REQUEST;
+        } else if (cipher_id > UINT16_MAX) {
+            security_log(WARNING, _("Ciphersuite ID > 65535 is not allowed"));
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+
+        AVS_LIST(sec_cipher_instance_t) cipher =
+                find_or_create_cipher_instance(&inst->enabled_ciphersuites,
+                                               riid);
+        if (!cipher) {
+            return ANJAY_ERR_INTERNAL;
+        } else {
+            cipher->cipher_id = cipher_id;
+            return 0;
+        }
+    }
+#    endif // ANJAY_WITH_LWM2M11
     default:
         AVS_UNREACHABLE("Write handler called on unknown Security resource");
         return ANJAY_ERR_NOT_FOUND;
     }
 }
+
+#    ifdef ANJAY_WITH_LWM2M11
+static int sec_resource_reset(anjay_unlocked_t *anjay,
+                              const anjay_dm_installed_object_t obj_ptr,
+                              anjay_iid_t iid,
+                              anjay_rid_t rid) {
+    (void) anjay;
+
+    assert(rid == SEC_RES_DTLS_TLS_CIPHERSUITE);
+    (void) rid;
+
+    const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
+    assert(inst);
+
+    AVS_LIST_CLEAR(&inst->enabled_ciphersuites);
+    return 0;
+}
+
+#    endif // ANJAY_WITH_LWM2M11
 
 static int sec_list_instances(anjay_unlocked_t *anjay,
                               const anjay_dm_installed_object_t obj_ptr,
@@ -497,8 +696,14 @@ static const anjay_unlocked_dm_object_def_t SECURITY = {
         .instance_remove = sec_instance_remove,
         .instance_reset = sec_instance_reset,
         .list_resources = sec_list_resources,
+#    ifdef ANJAY_WITH_LWM2M11
+        .list_resource_instances = sec_list_resource_instances,
+#    endif // ANJAY_WITH_LWM2M11
         .resource_read = sec_read,
         .resource_write = sec_write,
+#    ifdef ANJAY_WITH_LWM2M11
+        .resource_reset = sec_resource_reset,
+#    endif // ANJAY_WITH_LWM2M11
         .transaction_begin = sec_transaction_begin,
         .transaction_commit = sec_transaction_commit,
         .transaction_validate = sec_transaction_validate,
@@ -552,10 +757,12 @@ static void security_delete(void *repr_) {
     sec_repr_t *repr = (sec_repr_t *) repr_;
     if (repr->in_transaction) {
         _anjay_sec_destroy_instances(&repr->instances, true);
-        _anjay_sec_destroy_instances(&repr->saved_instances, false);
+        _anjay_sec_destroy_instances(&repr->saved_instances,
+                                     repr->saved_modified_since_persist);
     } else {
         assert(!repr->saved_instances);
-        _anjay_sec_destroy_instances(&repr->instances, false);
+        _anjay_sec_destroy_instances(&repr->instances,
+                                     repr->modified_since_persist);
     }
     // NOTE: repr itself will be freed when cleaning the objects list
 }

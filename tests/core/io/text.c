@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -85,6 +78,25 @@ AVS_UNIT_TEST(text_out, i64) {
 }
 
 #undef TEST_i64
+
+#ifdef ANJAY_WITH_LWM2M11
+#    define TEST_u64(Val)                                             \
+        do {                                                          \
+            TEST_ENV(512);                                            \
+            AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_u64_unlocked(          \
+                    (anjay_unlocked_output_ctx_t *) &out, Val##ULL)); \
+            stringify_buf(&outbuf);                                   \
+            AVS_UNIT_ASSERT_EQUAL_STRING(buf, #Val);                  \
+        } while (false)
+
+AVS_UNIT_TEST(text_out, u64) {
+    TEST_u64(0);
+    TEST_u64(4294967295);
+    TEST_u64(18446744073709551615);
+}
+
+#    undef TEST_u64
+#endif // ANJAY_WITH_LWM2M11
 
 #define TEST_DOUBLE_IMPL(Val, Str)                           \
     do {                                                     \

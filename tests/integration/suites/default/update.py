@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import socket
 import time
@@ -203,3 +196,15 @@ class NoUpdateDuringShutdownTest(test_suite.Lwm2mSingleServerTest):
         # tearDown() expects a De-Register operation and will fail on
         # unexpected Update
 
+class ExternalSetLifetimeForcesUpdate(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        self.communicate('set-lifetime 1 9001')
+        self.assertDemoUpdatesRegistration(lifetime=9001)
+
+
+class ExternalSetLifetimeForcesUpdateOnlyIfChanged(test_suite.Lwm2mSingleServerTest):
+    def runTest(self):
+        # default lifetime is 86400 or so, so we should not have any updates
+        self.communicate('set-lifetime 1 86400')
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=3)

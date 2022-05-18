@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_SERVERS_H
@@ -61,6 +54,10 @@ avs_error_t _anjay_get_security_config(anjay_unlocked_t *anjay,
                                        anjay_security_config_cache_t *cache,
                                        anjay_ssid_t ssid,
                                        anjay_iid_t security_iid);
+
+#if defined(ANJAY_WITH_LWM2M11)
+bool _anjay_bootstrap_server_exists(anjay_unlocked_t *anjay);
+#endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_EST)
 
 /**
  * Returns an active server object associated with given @p socket .

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -29,15 +22,17 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifdef ANJAY_WITH_OBSERVE
-static int observe_notify(anjay_unlocked_t *anjay, anjay_notify_queue_t queue) {
+static int observe_notify(anjay_unlocked_t *anjay,
+                          anjay_ssid_t origin_ssid,
+                          anjay_notify_queue_t queue) {
     int ret = 0;
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, queue) {
         if (it->instance_set_changes.instance_set_changed) {
-            _anjay_update_ret(
-                    &ret,
-                    _anjay_observe_notify(anjay, &MAKE_OBJECT_PATH(it->oid),
-                                          _anjay_dm_current_ssid(anjay), true));
+            _anjay_update_ret(&ret,
+                              _anjay_observe_notify(anjay,
+                                                    &MAKE_OBJECT_PATH(it->oid),
+                                                    origin_ssid, true));
         } else {
             AVS_LIST(anjay_notify_queue_resource_entry_t) it2;
             AVS_LIST_FOREACH(it2, it->resources_changed) {
@@ -46,14 +41,14 @@ static int observe_notify(anjay_unlocked_t *anjay, anjay_notify_queue_t queue) {
                                           anjay,
                                           &MAKE_RESOURCE_PATH(it->oid, it2->iid,
                                                               it2->rid),
-                                          _anjay_dm_current_ssid(anjay), true));
+                                          origin_ssid, true));
             }
         }
     }
     return ret;
 }
 #else // ANJAY_WITH_OBSERVE
-#    define observe_notify(anjay, queue) (0)
+#    define observe_notify(anjay, origin_ssid, queue) (0)
 #endif // ANJAY_WITH_OBSERVE
 
 static int
@@ -80,11 +75,24 @@ static int server_modified_notify(anjay_unlocked_t *anjay,
     int ret = 0;
     if (server->instance_set_changes.instance_set_changed) {
         _anjay_update_ret(&ret, _anjay_schedule_reload_servers(anjay));
+#ifdef ANJAY_WITH_SEND
+        // servers may have been removed from data model
+        // if so, abort their Send requests as well
+        _anjay_update_ret(
+                &ret, _anjay_send_sched_retry_deferred(anjay, ANJAY_SSID_ANY));
+#endif // ANJAY_WITH_SEND
     } else {
         AVS_LIST(anjay_notify_queue_resource_entry_t) it;
         AVS_LIST_FOREACH(it, server->resources_changed) {
             if (it->rid != ANJAY_DM_RID_SERVER_BINDING
-                    && it->rid != ANJAY_DM_RID_SERVER_LIFETIME) {
+                    && it->rid != ANJAY_DM_RID_SERVER_LIFETIME
+#ifdef ANJAY_WITH_LWM2M11
+                    && it->rid != ANJAY_DM_RID_SERVER_PREFERRED_TRANSPORT
+#    ifdef ANJAY_WITH_SEND
+                    && it->rid != ANJAY_DM_RID_SERVER_MUTE_SEND
+#    endif // ANJAY_WITH_SEND
+#endif     // ANJAY_WITH_LWM2M11
+            ) {
                 continue;
             }
             const anjay_uri_path_t path =
@@ -94,6 +102,12 @@ static int server_modified_notify(anjay_unlocked_t *anjay,
             if (_anjay_dm_read_resource_i64(anjay, &path, &ssid) || ssid <= 0
                     || ssid >= UINT16_MAX) {
                 _anjay_update_ret(&ret, -1);
+#ifdef ANJAY_WITH_SEND
+            } else if (it->rid == ANJAY_DM_RID_SERVER_MUTE_SEND) {
+                _anjay_update_ret(&ret, _anjay_send_sched_retry_deferred(
+                                                anjay, (anjay_ssid_t) ssid));
+                continue;
+#endif // ANJAY_WITH_SEND
             } else if (_anjay_servers_find_active(anjay, (anjay_ssid_t) ssid)) {
                 _anjay_update_ret(&ret,
                                   _anjay_schedule_registration_update_unlocked(
@@ -105,13 +119,15 @@ static int server_modified_notify(anjay_unlocked_t *anjay,
 }
 
 static int anjay_notify_perform_impl(anjay_unlocked_t *anjay,
+                                     anjay_ssid_t origin_ssid,
                                      anjay_notify_queue_t *queue_ptr,
                                      bool server_notify) {
     if (!queue_ptr || !*queue_ptr) {
         return 0;
     }
     int ret = 0;
-    _anjay_update_ret(&ret, _anjay_sync_access_control(anjay, queue_ptr));
+    _anjay_update_ret(&ret, _anjay_sync_access_control(anjay, origin_ssid,
+                                                       queue_ptr));
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, *queue_ptr) {
         if (it->oid > ANJAY_DM_OID_SERVER) {
@@ -122,7 +138,10 @@ static int anjay_notify_perform_impl(anjay_unlocked_t *anjay,
             _anjay_update_ret(&ret, server_modified_notify(anjay, it));
         }
     }
-    _anjay_update_ret(&ret, observe_notify(anjay, *queue_ptr));
+    _anjay_update_ret(&ret, observe_notify(anjay, origin_ssid, *queue_ptr));
+#ifdef ANJAY_WITH_ATTR_STORAGE
+    _anjay_update_ret(&ret, _anjay_attr_storage_notify(anjay, *queue_ptr));
+#endif // ANJAY_WITH_ATTR_STORAGE
     AVS_LIST(anjay_dm_installed_module_t) module;
     AVS_LIST_FOREACH(module, anjay->dm.modules) {
         if (module->def->notify_callback) {
@@ -135,18 +154,21 @@ static int anjay_notify_perform_impl(anjay_unlocked_t *anjay,
 }
 
 int _anjay_notify_perform(anjay_unlocked_t *anjay,
+                          anjay_ssid_t origin_ssid,
                           anjay_notify_queue_t *queue_ptr) {
-    return anjay_notify_perform_impl(anjay, queue_ptr, true);
+    return anjay_notify_perform_impl(anjay, origin_ssid, queue_ptr, true);
 }
 
 int _anjay_notify_perform_without_servers(anjay_unlocked_t *anjay,
+                                          anjay_ssid_t origin_ssid,
                                           anjay_notify_queue_t *queue_ptr) {
-    return anjay_notify_perform_impl(anjay, queue_ptr, false);
+    return anjay_notify_perform_impl(anjay, origin_ssid, queue_ptr, false);
 }
 
 int _anjay_notify_flush(anjay_unlocked_t *anjay,
+                        anjay_ssid_t origin_ssid,
                         anjay_notify_queue_t *queue_ptr) {
-    int result = _anjay_notify_perform(anjay, queue_ptr);
+    int result = _anjay_notify_perform(anjay, origin_ssid, queue_ptr);
     _anjay_notify_clear_queue(queue_ptr);
     return result;
 }
@@ -315,7 +337,8 @@ static void notify_clb(avs_sched_t *sched, const void *dummy) {
     (void) dummy;
     anjay_t *anjay_locked = _anjay_get_from_sched(sched);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    _anjay_notify_flush(anjay, &anjay->scheduled_notify.queue);
+    _anjay_notify_flush(anjay, ANJAY_SSID_BOOTSTRAP,
+                        &anjay->scheduled_notify.queue);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
@@ -385,7 +408,7 @@ anjay_resource_observation_status(anjay_t *anjay_locked,
     anjay_resource_observation_status_t retval = {
         .is_observed = false,
         .min_period = 0,
-        .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
+        .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
     };
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     if (oid != ANJAY_ID_INVALID && iid != ANJAY_ID_INVALID
@@ -398,7 +421,11 @@ anjay_resource_observation_status(anjay_t *anjay_locked,
             retval.is_observed = true;
         } else if (oid == ANJAY_DM_OID_SERVER
                    && (rid == ANJAY_DM_RID_SERVER_LIFETIME
-                       || rid == ANJAY_DM_RID_SERVER_BINDING)) {
+                       || rid == ANJAY_DM_RID_SERVER_BINDING
+#    ifdef ANJAY_WITH_LWM2M11
+                       || rid == ANJAY_DM_RID_SERVER_PREFERRED_TRANSPORT
+#    endif // ANJAY_WITH_LWM2M11
+                       )) {
             // Lifetime and Binding in Server Object are always considered
             // observed, as server connections need to be refreshed if they
             // changed; compare with _anjay_notify_perform()

@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import socket
 import unittest
@@ -80,3 +73,55 @@ class SeparateResponseTest(test_suite.Lwm2mSingleServerTest):
         with self.assertRaises(socket.timeout, msg='unexpected message'):
             print(self.serv.recv(timeout_s=3))
 
+class SeparateResponseToSendTest(test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        super().setUp(maximum_version='1.1')
+
+    def runTest(self):
+        self.communicate('send 1 %s' % (ResPath.Server[1].Lifetime,))
+        req = self.serv.recv()
+        self.assertEqual('/dp', req.get_uri_path())
+
+        # Separate Response: empty ACK
+        self.serv.send(Lwm2mEmpty.matching(req)())
+
+        # Separate Response
+        req = Lwm2mChanged(msg_id=(req.msg_id * 2) % (2 ** 16), token=req.token)
+        req.type = coap.Type.CONFIRMABLE
+        self.serv.send(req)
+
+        self.assertMsgEqual(Lwm2mEmpty.matching(req)(),
+                            self.serv.recv())
+
+        # should not send more messages after receiving a correct response
+        with self.assertRaises(socket.timeout, msg='unexpected message'):
+            print(self.serv.recv(timeout_s=6))
+
+class SeparateResponseToSendTimeoutTest(test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        super().setUp(maximum_version='1.1')
+
+    def runTest(self):
+        self.communicate('send 1 %s' % (ResPath.Server[1].Lifetime,))
+        req = self.serv.recv()
+        self.assertEqual('/dp', req.get_uri_path())
+
+        # Separate Response: empty ACK
+        self.serv.send(Lwm2mEmpty.matching(req)())
+
+        # Separate Response timeout in CoAP2 is arbitrarily set to 5 minutes
+        with self.assertRaises(socket.timeout, msg='unexpected message'):
+            print(self.serv.recv(timeout_s=305))
+
+        # Separate Response
+        req = Lwm2mChanged(msg_id=(req.msg_id * 2) % (2 ** 16), token=req.token)
+        req.type = coap.Type.CONFIRMABLE
+        self.serv.send(req)
+
+        # Anjay sees it as unknown message and responds with Reset
+        self.assertMsgEqual(Lwm2mReset.matching(req)(),
+                            self.serv.recv())
+
+        # should not send more messages after receiving a correct response
+        with self.assertRaises(socket.timeout, msg='unexpected message'):
+            print(self.serv.recv(timeout_s=6))

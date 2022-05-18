@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Attribute storage
 =================
@@ -34,31 +27,28 @@ case of Resources, or appropriately ``instance_read_default_attrs``,
 that the library will automatically call the "default" handlers if there are
 some unset attributes on the more specific level.
 
-``attr_storage`` module
------------------------
+Pre-implemented attribute storage subsystem
+-------------------------------------------
 
 As the cases described above are very common and generic -- and as such, usually
 implemented in exactly the same manner for all objects in the code base, the
-library includes a module that implements all the attribute-related handlers in
-a generic and reusable way.
+library includes a subsystem that implements all the attribute-related handlers
+in a generic and reusable way.
 
-To use the Attribute Storage module, you first need to include the appropriate
-header:
+To use the Attribute Storage subsystem, make sure that the library is compiled
+with it enabled, which means that:
 
-.. code-block:: c
+* If building using CMake: the ``WITH_ATTR_STORAGE`` CMake option needs to be
+  enabled, e.g. by specifying ``-DWITH_ATTR_STORAGE``. Note that it is enabled
+  by default.
+* If using an alternative build system: the ``ANJAY_WITH_ATTR_STORAGE`` macro
+  needs to be defined in the ``anjay_config.h`` file. Note that this is true for
+  all the sample configurations from the ``example_configs`` directory.
 
-    #include <anjay/attr_storage.h>
-
-
-Then, in the main program logic, you need to initialize the attribute storage
-module by calling ``anjay_attr_storage_install()``. After installation, its life
-cycle is automatically managed - it will be removed during the
-``anjay_delete()`` call.
-
-No additional steps are necessary - the Attribute Storage module will take over
-the implementations of attribute-related handlers in the original objects with
-its own implementation, unless some handlers are actually already implemented
-(set to anything else than ``NULL``). For a detailed description on how does the
+No additional steps are necessary - the Attribute Storage subsystem will provide
+implementations of attribute-related handlers in the original objects with its
+own implementation, unless some handlers are actually already implemented (set
+to anything else than ``NULL``). For a detailed description on how does the
 handler replacement behave when only some of the handlers are implemented, refer
 to the `documentation <../api/attr__storage_8h.html>`_.
 
@@ -68,11 +58,18 @@ Persistence
 ^^^^^^^^^^^
 
 To facilitate storing attribute values between executions of the program, the
-``attr_storage`` module contains a persistence code, that can be used to
+Attribute Storage subsystem contains a persistence code, that can be used to
 serialize and deserialize all the stored attributes to some kind of external
 memory.
 
-These two functions can be used for this purpose:
+To use the persistence code, you first need to include the appropriate header:
+
+.. code-block:: c
+
+    #include <anjay/attr_storage.h>
+
+It contains declarations of the two functions that can be used to manage the
+persistent information:
 
 .. snippet-source:: include_public/anjay/attr_storage.h
 

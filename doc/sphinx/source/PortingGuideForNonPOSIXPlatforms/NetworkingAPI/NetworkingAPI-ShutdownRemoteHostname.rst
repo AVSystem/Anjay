@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Remote hostname and shutdown operations
 =======================================
@@ -239,6 +232,9 @@ so that the "shut down" state is properly reported:
             return AVS_OK;
         case AVS_NET_SOCKET_OPT_INNER_MTU:
             out_option_value->mtu = 1464;
+            return AVS_OK;
+        case AVS_NET_SOCKET_HAS_BUFFERED_DATA:
+            out_option_value->flag = false;
             return AVS_OK;
         default:
             return avs_errno(AVS_ENOTSUP);

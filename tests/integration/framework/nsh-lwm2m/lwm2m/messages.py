@@ -1,28 +1,22 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import copy
 import functools
 import sys
-from typing import List, T
+from typing import List, Optional, T
 
 from . import coap
 from .coap.packet import ANY
 from .coap.utils import hexlify_nonprintable, hexlify
 from .path import CoapPath, Lwm2mPath, Lwm2mNonemptyPath, Lwm2mObjectPath, Lwm2mResourcePath
+from .senml_cbor import *
 from .tlv import TLV
 
 
@@ -116,6 +110,14 @@ class Lwm2mMsg(coap.Packet):
         import pprint
         return str(pprint.pformat(json.loads(content)))
 
+    @staticmethod
+    def _decode_cbor_content(content):
+        try:
+            return str(CBOR.parse(content))
+        except Exception as exc:
+            return ('(malformed CBOR: %s)\n' % (exc,)
+                    + Lwm2mMsg._decode_binary_content(content))
+
 
     def _decode_content(self):
         if self.content is ANY:
@@ -128,6 +130,7 @@ class Lwm2mMsg(coap.Packet):
             coap.ContentFormat.APPLICATION_OCTET_STREAM: Lwm2mMsg._decode_binary_content,
             coap.ContentFormat.APPLICATION_LWM2M_JSON: Lwm2mMsg._decode_json_content,
             coap.ContentFormat.APPLICATION_LWM2M_SENML_JSON: Lwm2mMsg._decode_json_content,
+            coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR: Lwm2mMsg._decode_cbor_content,
         }
 
         desired_decoders = set()
@@ -388,6 +391,144 @@ class Lwm2mDeregister(Lwm2mMsg):
         return 'De-register ' + self.get_full_uri()
 
 
+def add_attributes_to_query(query,
+                            lt: float = None,
+                            gt: float = None,
+                            st: float = None,
+                            pmin: int = None,
+                            pmax: int = None,
+                            epmin: int = None,
+                            epmax: int = None,
+                            hqmax: int = None):
+    if lt is not None:
+        query.append('lt=%f' % (lt,))
+    if gt is not None:
+        query.append('gt=%f' % (gt,))
+    if st is not None:
+        query.append('st=%f' % (st,))
+    if pmin is not None:
+        query.append('pmin=%d' % (pmin,))
+    if pmax is not None:
+        query.append('pmax=%d' % (pmax,))
+    if epmin is not None:
+        query.append('epmin=%d' % (epmin,))
+    if epmax is not None:
+        query.append('epmax=%d' % (epmax,))
+    if hqmax is not None:
+        query.append('hqmax=%d' % (hqmax,))
+
+    return query
+
+class Lwm2mSend(Lwm2mMsg):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        """Checks if the PKT is a LWM2M Send message."""
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_POST
+                and pkt.get_uri_path().endswith('/dp'))
+
+    def __init__(self,
+                 path: str or CoapPath = '/dp',
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 format: coap.ContentFormatOption = coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR,
+                 options: List[coap.Option] = ANY,
+                 content: EscapedBytes = ANY):
+        if isinstance(format, int):
+            format = coap.Option.CONTENT_FORMAT(format)
+
+        path, _ = _split_string_path(path)
+        format_opt = [format] if format is not ANY else ANY
+
+        super().__init__(type=coap.Type.CONFIRMABLE,
+                         code=coap.Code.REQ_POST,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             path.to_uri_options(),
+                             format_opt,
+                             options),
+                         content=content)
+
+    def summary(self):
+        return ('Send %s: %s' % (self.get_full_uri(), self.content_summary()))
+
+
+class Lwm2mReadComposite(Lwm2mMsg):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_FETCH)
+
+    def __init__(self,
+                 paths: List[str] or List[CoapPath],
+                 accept: coap.AcceptOption = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
+        self._requested_paths = paths
+
+        if isinstance(accept, int):
+            accept = coap.Option.ACCEPT(accept)
+
+        encoded_paths = CBOR.serialize([
+            {SenmlLabel.NAME: str(p)} for p in paths
+        ])
+
+        super().__init__(type=coap.Type.CONFIRMABLE,
+                         code=coap.Code.REQ_FETCH,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             CoapPath('/').to_uri_options(),
+                             ([accept] if accept is not None else []),
+                             options,
+                             [coap.ContentFormatOption.APPLICATION_LWM2M_SENML_CBOR]),
+                         content=encoded_paths)
+
+    def summary(self):
+        text = 'Read-Composite ' + \
+            ', '.join(str(p) for p in self._requested_paths)
+
+        accept = self.get_options(coap.Option.ACCEPT)
+        if accept:
+            accept_vals = [x.content_to_int() for x in accept]
+            text += ': accept ' + \
+                ', '.join(map(coap.ContentFormat.to_str, accept_vals))
+
+        return text
+
+
+class Lwm2mObserveComposite(Lwm2mReadComposite):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        return (Lwm2mReadComposite._pkt_matches(pkt)
+                and len(pkt.get_options(coap.Option.OBSERVE)) > 0)
+
+    def __init__(self,
+                 paths: List[str] or List[CoapPath],
+                 observe: int = 0,
+                 accept: coap.AcceptOption = None,
+                 lt: float = None,
+                 gt: float = None,
+                 st: float = None,
+                 pmin: int = None,
+                 pmax: int = None,
+                 epmin: int = None,
+                 epmax: int = None,
+                 hqmax: int = None,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
+        query = add_attributes_to_query([], lt, gt, st, pmin, pmax, epmin, epmax, hqmax)
+        super().__init__(paths=paths,
+                         accept=accept,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             [coap.Option.OBSERVE(observe)],
+                             [coap.Option.URI_QUERY(x) for x in query],
+                             options))
 
 
 class CoapGet(Lwm2mMsg):
@@ -427,6 +568,7 @@ class CoapGet(Lwm2mMsg):
                 ', '.join(map(coap.ContentFormat.to_str, accept_vals))
 
         return text
+
 
 
 class Lwm2mRead(CoapGet):
@@ -479,6 +621,7 @@ class Lwm2mObserve(Lwm2mRead):
         if isinstance(accept, int):
             accept = coap.Option.ACCEPT(accept)
 
+
         super().__init__(path=path,
                          accept=accept,
                          msg_id=msg_id,
@@ -520,6 +663,7 @@ class Lwm2mDiscover(CoapGet):
 
     def __init__(self,
                  path: str or Lwm2mPath,
+                 depth: Optional[int] = None,
                  msg_id: int = ANY,
                  token: EscapedBytes = ANY,
                  options: List[coap.Option] = ANY):
@@ -527,7 +671,8 @@ class Lwm2mDiscover(CoapGet):
                          msg_id=msg_id,
                          token=token,
                          accept=coap.Option.ACCEPT.APPLICATION_LINK,
-                         options=options)
+                         options=concat_if_not_any(options, [coap.Option.URI_QUERY(
+                             'depth=%d' % (depth,))] if depth is not None else []))
 
     def summary(self):
         return 'Discover ' + self.get_full_uri()
@@ -564,7 +709,7 @@ class Lwm2mWrite(Lwm2mMsg):
                          token=token,
                          options=concat_if_not_any(
                              path.to_uri_options(),
-                             [format],
+                             [format] if format is not None else [],
                              options),
                          content=content)
 
@@ -578,6 +723,42 @@ class Lwm2mWrite(Lwm2mMsg):
                    self.get_full_uri(), fmt, len(self.content)))
 
 
+class Lwm2mWriteComposite(Lwm2mMsg):
+    @staticmethod
+    def _pkt_matches(pkt: coap.Packet):
+        return (pkt.type in (None, coap.Type.CONFIRMABLE)
+                and pkt.code == coap.Code.REQ_IPATCH
+                and pkt.get_uri_path() == '/'
+                and not is_link_format(pkt))
+
+    def __init__(self,
+                 content: EscapedBytes,
+                 format: coap.ContentFormatOption,
+                 msg_id: int = ANY,
+                 token: EscapedBytes = ANY,
+                 options: List[coap.Option] = ANY):
+        if isinstance(content, str):
+            content = bytes(content, 'ascii')
+
+        if isinstance(format, int):
+            format = coap.Option.CONTENT_FORMAT(format)
+
+        super().__init__(type=coap.Type.CONFIRMABLE,
+                         code=coap.Code.REQ_IPATCH,
+                         msg_id=msg_id,
+                         token=token,
+                         options=concat_if_not_any(
+                             [format],
+                             options),
+                         content=content)
+
+    def summary(self):
+        fmt_vals = [x.content_to_int()
+                    for x in self.get_options(coap.Option.CONTENT_FORMAT)]
+        fmt = ', '.join(map(coap.ContentFormat.to_str, fmt_vals))
+
+        return ('Write Composite %s: %s, %d bytes'
+                % (self.get_full_uri(), fmt, len(self.content)))
 
 
 class Lwm2mWriteAttributes(Lwm2mMsg):
@@ -603,20 +784,7 @@ class Lwm2mWriteAttributes(Lwm2mMsg):
                  options: List[coap.Option] = ANY):
         path, query = _split_string_path(path, query)
 
-        if lt is not None:
-            query.append('lt=%f' % (lt,))
-        if gt is not None:
-            query.append('gt=%f' % (gt,))
-        if st is not None:
-            query.append('st=%f' % (st,))
-        if pmin is not None:
-            query.append('pmin=%d' % (pmin,))
-        if pmax is not None:
-            query.append('pmax=%d' % (pmax,))
-        if epmin is not None:
-            query.append('epmin=%d' % (epmin,))
-        if epmax is not None:
-            query.append('epmax=%d' % (epmax,))
+        query = add_attributes_to_query(query, lt, gt, st, pmin, pmax, epmin, epmax)
 
         super().__init__(type=coap.Type.CONFIRMABLE,
                          code=coap.Code.REQ_PUT,

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -211,6 +204,29 @@ int anjay_ret_i64(anjay_output_ctx_t *ctx, int64_t value) {
     return result;
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_ret_u64_unlocked(anjay_unlocked_output_ctx_t *ctx, uint64_t value) {
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->uint) {
+        result = ctx->vtable->uint(ctx, value);
+    }
+    _anjay_update_ret(&ctx->error, result);
+    return result;
+}
+
+int anjay_ret_u64(anjay_output_ctx_t *ctx, uint64_t value) {
+    int result = -1;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    result = _anjay_ret_u64_unlocked(_anjay_output_get_unlocked(ctx), value);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+#endif // ANJAY_WITH_LWM2M11
+
 int _anjay_ret_double_unlocked(anjay_unlocked_output_ctx_t *ctx, double value) {
     int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
     if (ctx->vtable->floating) {
@@ -278,6 +294,82 @@ int anjay_ret_objlnk(anjay_output_ctx_t *ctx,
 #endif // ANJAY_WITH_THREAD_SAFETY
     return result;
 }
+
+#if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+int _anjay_ret_security_info_unlocked(
+        anjay_unlocked_output_ctx_t *ctx,
+        const avs_crypto_security_info_union_t *desc) {
+    int result = ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED;
+    if (ctx->vtable->security_info) {
+        result = ctx->vtable->security_info(ctx, desc);
+    }
+    _anjay_update_ret(&ctx->error, result);
+    return result;
+}
+#endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+          defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
+
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+int anjay_ret_certificate_chain_info(
+        anjay_output_ctx_t *ctx,
+        avs_crypto_certificate_chain_info_t certificate_chain_info) {
+    assert(certificate_chain_info.desc.type
+           == AVS_CRYPTO_SECURITY_INFO_CERTIFICATE_CHAIN);
+    int result = -1;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    result = _anjay_ret_security_info_unlocked(_anjay_output_get_unlocked(ctx),
+                                               &certificate_chain_info.desc);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+
+int anjay_ret_private_key_info(anjay_output_ctx_t *ctx,
+                               avs_crypto_private_key_info_t private_key_info) {
+    int result = -1;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    result = _anjay_ret_security_info_unlocked(_anjay_output_get_unlocked(ctx),
+                                               &private_key_info.desc);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+
+int anjay_ret_psk_identity_info(
+        anjay_output_ctx_t *ctx,
+        avs_crypto_psk_identity_info_t psk_identity_info) {
+    int result = -1;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    result = _anjay_ret_security_info_unlocked(_anjay_output_get_unlocked(ctx),
+                                               &psk_identity_info.desc);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+
+int anjay_ret_psk_key_info(anjay_output_ctx_t *ctx,
+                           avs_crypto_psk_key_info_t psk_key_info) {
+    int result = -1;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    result = _anjay_ret_security_info_unlocked(_anjay_output_get_unlocked(ctx),
+                                               &psk_key_info.desc);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
 
 int _anjay_output_bytes_begin(anjay_unlocked_output_ctx_t *ctx,
                               size_t length,
@@ -481,6 +573,52 @@ int anjay_get_i64(anjay_input_ctx_t *ctx, int64_t *out) {
 #endif // ANJAY_WITH_THREAD_SAFETY
     return result;
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_get_u32_unlocked(anjay_unlocked_input_ctx_t *ctx, uint32_t *out) {
+    uint64_t tmp;
+    int result = _anjay_get_u64_unlocked(ctx, &tmp);
+    if (!result) {
+        if (tmp > UINT32_MAX) {
+            result = ANJAY_ERR_BAD_REQUEST;
+        } else {
+            *out = (uint32_t) tmp;
+        }
+    }
+    return result;
+}
+
+int anjay_get_u32(anjay_input_ctx_t *ctx, uint32_t *out) {
+    int result = -1;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    result = _anjay_get_u32_unlocked(_anjay_input_get_unlocked(ctx), out);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+
+int _anjay_get_u64_unlocked(anjay_unlocked_input_ctx_t *ctx, uint64_t *out) {
+    if (!ctx->vtable->uint) {
+        return -1;
+    }
+    return ctx->vtable->uint(ctx, out);
+}
+
+int anjay_get_u64(anjay_input_ctx_t *ctx, uint64_t *out) {
+    int result = -1;
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_LOCK(anjay, ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    result = _anjay_get_u64_unlocked(_anjay_input_get_unlocked(ctx), out);
+#    ifdef ANJAY_WITH_THREAD_SAFETY
+    ANJAY_MUTEX_UNLOCK(ctx->anjay_locked);
+#    endif // ANJAY_WITH_THREAD_SAFETY
+    return result;
+}
+#endif // ANJAY_WITH_LWM2M11
 
 int anjay_get_float(anjay_input_ctx_t *ctx, float *out) {
     double tmp;

@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Secure downloads
 ================
@@ -106,37 +99,37 @@ configuration is:
     typedef struct {
         avs_crypto_psk_key_info_t key;
         avs_crypto_psk_identity_info_t identity;
-    } avs_net_generic_psk_info_t;
+    } avs_net_psk_info_t;
 
 The ``avs_crypto_psk_key_info_t`` and ``avs_crypto_psk_identity_info_t`` are
 supposed to be populated using the ``avs_crypto_psk_key_info_from_*`` and
 ``avs_crypto_psk_identity_info_from_*`` functions.
 
 ``avs_crypto_psk_key_info_from_buffer()`` and
-``avs_crypto_psk_identity_info_from_buffer()``, although in the commercial
-version, other variants may be used to utilize PSK information stored on a
-hardware security module.
+``avs_crypto_psk_identity_info_from_buffer()`` are most commonly used, although
+other variants may be used to utilize PSK information stored on a hardware
+security module.
 
-After populating the ``avs_net_generic_psk_info_t`` structure, we may use:
+After populating the ``avs_net_psk_info_t`` structure, we may use:
 
 .. highlight:: c
 .. snippet-source:: deps/avs_commons/include_public/avsystem/commons/avs_socket.h
 
     avs_net_security_info_t
-    avs_net_security_info_from_generic_psk(avs_net_generic_psk_info_t psk);
+    avs_net_security_info_from_psk(avs_net_psk_info_t psk);
 
 to convert into into ``avs_net_security_info_t``, as in the following example:
 
 .. code-block:: c
 
-    avs_net_generic_psk_info_t psk_info = {
+    avs_net_psk_info_t psk_info = {
         .key = avs_crypto_psk_key_info_from_buffer(
                 "shared-key", strlen("shared-key")),
         .identity = avs_crypto_psk_identity_info_from_buffer(
                 "our-identity", strlen("our-identity"))
     };
     avs_net_security_info_t psk_security =
-            avs_net_security_info_from_generic_psk(psk_info);
+            avs_net_security_info_from_psk(psk_info);
 
 Configuration of Certificates
 """""""""""""""""""""""""""""

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -84,6 +77,19 @@ AVS_UNIT_TEST(dynamic_out, i64) {
 
     VERIFY_BYTES("424242424242");
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+AVS_UNIT_TEST(dynamic_out, u64) {
+    TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
+
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(0, 0, 42)));
+    ASSERT_OK(_anjay_ret_u64_unlocked(out, UINT64_MAX));
+    ASSERT_FAIL(_anjay_ret_u64_unlocked(out, 1));
+    ASSERT_FAIL(_anjay_output_ctx_destroy(&out));
+
+    VERIFY_BYTES("18446744073709551615");
+}
+#endif // ANJAY_WITH_LWM2M11
 
 AVS_UNIT_TEST(dynamic_out, f64) {
     TEST_ENV(512, AVS_COAP_FORMAT_PLAINTEXT, &MAKE_RESOURCE_PATH(0, 0, 0));
@@ -187,6 +193,30 @@ AVS_UNIT_TEST(dynamic_out, format_mismatch) {
     ASSERT_EQ(_anjay_output_ctx_destroy(&out),
               ANJAY_OUTCTXERR_METHOD_NOT_IMPLEMENTED);
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+AVS_UNIT_TEST(dynamic_out, senml_call_anjay_ret_twice) {
+    TEST_ENV(512, AVS_COAP_FORMAT_SENML_JSON, &MAKE_ROOT_PATH());
+
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(12, 34, 56)));
+    ASSERT_OK(_anjay_ret_i64_unlocked(out, 1337));
+    ASSERT_FAIL(_anjay_ret_i64_unlocked(out, 71830));
+    ASSERT_EQ(_anjay_output_ctx_destroy(&out), -1);
+
+    VERIFY_BYTES("[{\"n\":\"/12/34/56\",\"v\":1337}]");
+}
+
+AVS_UNIT_TEST(dynamic_out, senml_call_set_path_twice) {
+    TEST_ENV(512, AVS_COAP_FORMAT_SENML_JSON, &MAKE_ROOT_PATH());
+
+    ASSERT_OK(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(12, 34, 56)));
+    ASSERT_FAIL(_anjay_output_set_path(out, &MAKE_RESOURCE_PATH(65, 43, 21)));
+    ASSERT_OK(_anjay_ret_i64_unlocked(out, 1337));
+    ASSERT_EQ(_anjay_output_ctx_destroy(&out), -1);
+
+    VERIFY_BYTES("[{\"n\":\"/12/34/56\",\"v\":1337}]");
+}
+#endif // ANJAY_WITH_LWM2M11
 
 #undef VERIFY_BYTES
 #undef TEST_ENV
@@ -448,3 +478,37 @@ AVS_UNIT_TEST(dynamic_in, tlv_partial_string) {
     test_partial_string(AVS_COAP_FORMAT_OMA_LWM2M_TLV,
                         PAYLOAD_STRING(LOREM_IPSUM_AS_TLV));
 }
+
+#ifdef ANJAY_WITH_SENML_JSON
+AVS_UNIT_TEST(dynamic_in, senml_json_partial_bytes) {
+    test_partial_bytes(AVS_COAP_FORMAT_SENML_JSON,
+                       PAYLOAD_STRING(LOREM_IPSUM_AS_SENML_JSON_BYTES));
+}
+
+AVS_UNIT_TEST(dynamic_in, senml_json_partial_string) {
+    test_partial_string(AVS_COAP_FORMAT_SENML_JSON,
+                        PAYLOAD_STRING(LOREM_IPSUM_AS_SENML_JSON_STRING));
+}
+#endif // ANJAY_WITH_SENML_JSON
+
+#ifdef ANJAY_WITH_CBOR
+AVS_UNIT_TEST(dynamic_in, cbor_partial_bytes) {
+    test_partial_bytes(AVS_COAP_FORMAT_CBOR,
+                       PAYLOAD_STRING(LOREM_IPSUM_AS_CBOR_BYTES));
+}
+
+AVS_UNIT_TEST(dynamic_in, cbor_partial_string) {
+    test_partial_string(AVS_COAP_FORMAT_CBOR,
+                        PAYLOAD_STRING(LOREM_IPSUM_AS_CBOR_STRING));
+}
+
+AVS_UNIT_TEST(dynamic_in, senml_cbor_partial_bytes) {
+    test_partial_bytes(AVS_COAP_FORMAT_SENML_CBOR,
+                       PAYLOAD_STRING(LOREM_IPSUM_AS_SENML_CBOR_BYTES));
+}
+
+AVS_UNIT_TEST(dynamic_in, senml_cbor_partial_string) {
+    test_partial_string(AVS_COAP_FORMAT_SENML_CBOR,
+                        PAYLOAD_STRING(LOREM_IPSUM_AS_SENML_CBOR_STRING));
+}
+#endif // ANJAY_WITH_CBOR

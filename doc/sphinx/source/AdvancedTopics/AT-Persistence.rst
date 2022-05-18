@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Persistence support
 ===================
@@ -37,10 +30,10 @@ Persistence module is designed to abstract all endianness related issues,
 which makes persisted chunk of information on arbitrary architecture
 (having arbitrary endianness) easily restorable on any other architecture.
 
-Persistence of preimplemented objects/modules
----------------------------------------------
+Persistence of pre-implemented objects/modules
+----------------------------------------------
 
-Anjay's preimplemented objects (Security, Server, Access Control) and Attribute
+Anjay's pre-implemented objects (Security, Server, Access Control) and Attribute
 storage module all support persistence, for which the following functions can be
 used:
 
@@ -174,5 +167,5 @@ Object data when the LwM2M Client finishes its work and restore it on startup
 Persistence API
 ---------------
 
-Please refer to the `documentation of the `avs_persistence component
+Please refer to the `documentation of the avs_persistence component
 <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_persistence.h>`_.

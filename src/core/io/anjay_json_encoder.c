@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -52,6 +45,9 @@ struct json_encoder_struct {
     anjay_unlocked_ret_bytes_ctx_t *bytes;
     uint8_t level;
     bool needs_separator;
+#    ifdef ANJAY_WITH_SENML_JSON
+    double last_encoded_time_s;
+#    endif // ANJAY_WITH_SENML_JSON
 };
 
 static int begin_pair(json_encoder_t *ctx, senml_label_t type);
@@ -212,6 +208,101 @@ static int encoder_cleanup(anjay_senml_like_encoder_t **ctx_) {
 }
 #    endif // ANJAY_WITH_LWM2M_JSON
 
+#    ifdef ANJAY_WITH_SENML_JSON
+static inline int maybe_write_basetime(json_encoder_t *ctx, double time_s) {
+    if (isnan(time_s)) {
+        time_s = 0.0;
+    }
+    if (ctx->last_encoded_time_s == time_s) {
+        return 0;
+    }
+
+    ctx->last_encoded_time_s = time_s;
+
+    if (begin_pair(ctx, SENML_LABEL_BASE_TIME)
+            || avs_is_err(avs_stream_write_f(
+                       ctx->stream, "%s", AVS_DOUBLE_AS_STRING(time_s, 17)))) {
+        return -1;
+    }
+    return 0;
+}
+
+static inline int maybe_write_basename(json_encoder_t *ctx,
+                                       const char *basename) {
+    int retval = 0;
+    if (basename) {
+        (void) ((retval = begin_pair(ctx, SENML_LABEL_BASE_NAME))
+                || (retval = write_quoted_string(ctx->stream, basename)));
+    }
+    return retval;
+}
+
+static int senml_encode_key(json_encoder_t *ctx, senml_label_t type) {
+    const char *key = NULL;
+    switch (type) {
+    case SENML_LABEL_BASE_NAME:
+        key = "\"bn\":";
+        break;
+    case SENML_LABEL_NAME:
+        key = "\"n\":";
+        break;
+    case SENML_LABEL_VALUE:
+        key = "\"v\":";
+        break;
+    case SENML_LABEL_VALUE_STRING:
+        key = "\"vs\":";
+        break;
+    case SENML_LABEL_VALUE_BOOL:
+        key = "\"vb\":";
+        break;
+    case SENML_LABEL_VALUE_OPAQUE:
+        key = "\"vd\":";
+        break;
+    case SENML_LABEL_BASE_TIME:
+        key = "\"bt\":";
+        break;
+    case SENML_EXT_LABEL_OBJLNK:
+        key = "\"vlo\":";
+        break;
+    default:
+        AVS_UNREACHABLE("invalid data type");
+        return -1;
+    }
+    return avs_is_ok(avs_stream_write(ctx->stream, key, strlen(key))) ? 0 : -1;
+}
+
+static int senml_element_begin(anjay_senml_like_encoder_t *ctx_,
+                               const char *basename,
+                               const char *name,
+                               double time_s) {
+    json_encoder_t *ctx = (json_encoder_t *) ctx_;
+
+    nested_context_push(ctx, JSON_CONTEXT_LEVEL_MAP);
+    if (maybe_write_separator(ctx)
+            || avs_is_err(avs_stream_write(ctx->stream, "{", 1))
+            || maybe_write_basename(ctx, basename)
+            || maybe_write_name(ctx, name)
+            || maybe_write_basetime(ctx, time_s)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int senml_encoder_cleanup(anjay_senml_like_encoder_t **ctx_) {
+    json_encoder_t *ctx = (json_encoder_t *) *ctx_;
+    int retval = -1;
+
+    if (ctx->level == JSON_CONTEXT_LEVEL_ARRAY
+            && avs_is_ok(avs_stream_write(ctx->stream, "]", 1))) {
+        retval = 0;
+    }
+
+    avs_free(*ctx_);
+    *ctx_ = NULL;
+    return retval;
+}
+#    endif // ANJAY_WITH_SENML_JSON
+
 static int begin_pair(json_encoder_t *ctx, senml_label_t type) {
     int retval = -1;
     if (ctx->level == JSON_CONTEXT_LEVEL_MAP) {
@@ -349,6 +440,14 @@ static const anjay_senml_like_encoder_vtable_t LWM2M_JSON_ENCODER_VTABLE = {
 };
 #    endif // ANJAY_WITH_LWM2M_JSON
 
+#    ifdef ANJAY_WITH_SENML_JSON
+static const anjay_senml_like_encoder_vtable_t SENML_JSON_ENCODER_VTABLE = {
+    JSON_VTABLE_COMMON_DEF,
+    .senml_like_element_begin = senml_element_begin,
+    .senml_like_encoder_cleanup = senml_encoder_cleanup
+};
+#    endif // ANJAY_WITH_SENML_JSON
+
 static json_encoder_t *
 json_encoder_new(avs_stream_t *stream,
                  const anjay_senml_like_encoder_vtable_t *vtable,
@@ -397,5 +496,33 @@ _anjay_lwm2m_json_encoder_new(avs_stream_t *stream, const char *basename) {
     return (anjay_senml_like_encoder_t *) ctx;
 }
 #    endif // ANJAY_WITH_LWM2M_JSON
+
+#    ifdef ANJAY_WITH_SENML_JSON
+anjay_senml_like_encoder_t *
+_anjay_senml_json_encoder_new(avs_stream_t *stream) {
+    static const avs_base64_config_t BASE64_CONFIG = {
+        .alphabet = AVS_BASE64_URL_SAFE_CHARS,
+        .padding_char = '\0',
+        .allow_whitespace = false,
+        .require_padding = false
+    };
+    json_encoder_t *ctx = json_encoder_new(stream, &SENML_JSON_ENCODER_VTABLE,
+                                           senml_encode_key, BASE64_CONFIG);
+
+    if (ctx) {
+        if (avs_is_err(avs_stream_write(ctx->stream, "[", 1))) {
+            avs_free(ctx);
+            ctx = NULL;
+        }
+    }
+
+    if (!ctx) {
+        json_log(ERROR, _("failed to create json encoder"));
+        return NULL;
+    }
+
+    return (anjay_senml_like_encoder_t *) ctx;
+}
+#    endif // ANJAY_WITH_SENML_JSON
 
 #endif // defined(ANJAY_WITH_LWM2M_JSON) || defined(ANJAY_WITH_SENML_JSON)

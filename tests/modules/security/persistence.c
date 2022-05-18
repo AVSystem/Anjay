@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avsystem/commons/avs_stream.h>
@@ -133,15 +126,6 @@ static void assert_instances_equal(const sec_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->has_is_bootstrap, b->has_is_bootstrap);
     AVS_UNIT_ASSERT_EQUAL(a->has_security_mode, b->has_security_mode);
     AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
-    AVS_UNIT_ASSERT_EQUAL((uint32_t) a->sms_security_mode,
-                          (uint32_t) b->sms_security_mode);
-    assert_raw_buffers_equal(&a->sms_key_params, &b->sms_key_params);
-    assert_raw_buffers_equal(&a->sms_secret_key, &b->sms_secret_key);
-    AVS_UNIT_ASSERT_EQUAL_STRING(a->sms_number, b->sms_number);
-
-    AVS_UNIT_ASSERT_EQUAL(a->has_sms_security_mode, b->has_sms_security_mode);
-    AVS_UNIT_ASSERT_EQUAL(a->has_sms_key_params, b->has_sms_key_params);
-    AVS_UNIT_ASSERT_EQUAL(a->has_sms_secret_key, b->has_sms_secret_key);
 }
 
 static void assert_objects_equal(const sec_repr_t *a, const sec_repr_t *b) {

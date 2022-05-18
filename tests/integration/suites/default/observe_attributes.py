@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import socket
 import time
@@ -337,5 +330,47 @@ class ResetWithoutMatchingObservation(test_suite.Lwm2mSingleServerTest):
     # observation used to crash the application.
     def runTest(self):
         self.serv.send(Lwm2mReset(msg_id=0))
+
+
+class ObserveResourceInstance(test_suite.Lwm2mSingleServerTest,
+                              test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(maximum_version='1.1')
+
+    def runTest(self):
+        # Create object
+        self.create_instance(self.serv, oid=OID.Test, iid=0)
+        # Initialize integer array
+        self.execute_resource(self.serv, oid=OID.Test, iid=0,
+                              rid=RID.Test.ResInitIntArray, content=b"0='1337'")
+        discover_output = self.discover(self.serv, oid=OID.Test,
+                                        iid=0, rid=RID.Test.IntArray).content
+        self.assertEqual(b'</%d/0/%d>;dim=1,</%d/0/%d/0>' %
+                         (OID.Test, RID.Test.IntArray, OID.Test, RID.Test.IntArray), discover_output)
+        # Write gt attribute
+        self.write_attributes(self.serv, oid=OID.Test, iid=0,
+                              rid=RID.Test.IntArray, query=['gt=2000'])
+        discover_output = self.discover(self.serv, oid=OID.Test,
+                                        iid=0, rid=RID.Test.IntArray).content
+        self.assertEqual(b'</%d/0/%d>;dim=1;gt=2000,</%d/0/%d/0>' %
+                         (OID.Test, RID.Test.IntArray, OID.Test, RID.Test.IntArray), discover_output)
+        # Observe resource instance
+        observe_pkt = self.observe(self.serv, oid=OID.Test, iid=0, rid=RID.Test.IntArray, riid=0)
+        self.assertEqual(b'1337', observe_pkt.content)
+        # Change value of /33605/0/3/0 to 1500
+        self.execute_resource(self.serv, oid=OID.Test, iid=0,
+                              rid=RID.Test.ResInitIntArray, content=b"0='1500'")
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=1)
+        # Change value of /33605/0/3/0 to 2000
+        self.execute_resource(self.serv, oid=OID.Test, iid=0,
+                              rid=RID.Test.ResInitIntArray, content=b"0='2000'")
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=1)
+        # Change value of /33605/0/3/0 to 2001, notification is expected
+        self.execute_resource(self.serv, oid=OID.Test, iid=0,
+                              rid=RID.Test.ResInitIntArray, content=b"0='2001'")
+        notify_pkt = self.serv.recv(timeout_s=1)
+        self.assertMsgEqual(Lwm2mNotify(token=observe_pkt.token, content=b'2001'), notify_pkt)
 
 

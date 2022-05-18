@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef DEMO_ARGS_H
@@ -60,15 +53,18 @@ typedef struct cmdline_args {
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
-#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef ANJAY_WITH_ATTR_STORAGE
     const char *attr_storage_file;
-#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    endif // ANJAY_WITH_ATTR_STORAGE
 #    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     const char *dm_persistence_file;
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
 #endif     // AVS_COMMONS_STREAM_WITH_FILE
 
     bool disable_legacy_server_initiated_bootstrap;
+#ifdef AVS_COMMONS_STREAM_WITH_FILE
+#endif // AVS_COMMONS_STREAM_WITH_FILE
+
     avs_coap_udp_tx_params_t tx_params;
     avs_net_dtls_handshake_timeouts_t dtls_hs_tx_params;
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
@@ -81,6 +77,9 @@ typedef struct cmdline_args {
     bool fwu_tx_params_modified;
     avs_coap_udp_tx_params_t fwu_tx_params;
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
+#ifdef ANJAY_WITH_LWM2M11
+    anjay_lwm2m_version_config_t lwm2m_version_config;
+#endif // ANJAY_WITH_LWM2M11
     size_t stored_notification_limit;
 
     bool prefer_hierarchical_formats;
@@ -88,6 +87,14 @@ typedef struct cmdline_args {
 
     uint32_t *default_ciphersuites;
     size_t default_ciphersuites_count;
+    bool prefer_same_socket_downloads;
+#ifdef ANJAY_WITH_SEND
+    bool fw_update_use_send;
+#endif // ANJAY_WITH_SEND
+#ifdef ANJAY_WITH_LWM2M11
+    const char *pkix_trust_store;
+    bool rebuild_client_cert_chain;
+#endif // ANJAY_WITH_LWM2M11
 
     bool alternative_logger;
 } cmdline_args_t;

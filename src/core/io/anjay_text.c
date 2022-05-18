@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -94,6 +87,23 @@ static int text_ret_integer(anjay_unlocked_output_ctx_t *ctx_, int64_t value) {
     return -1;
 }
 
+#    ifdef ANJAY_WITH_LWM2M11
+static int text_ret_uint(anjay_unlocked_output_ctx_t *ctx_, uint64_t value) {
+    text_out_t *ctx = (text_out_t *) ctx_;
+    if (ctx->bytes) {
+        return -1;
+    }
+
+    if (ctx->state == STATE_PATH_SET
+            && avs_is_ok(avs_stream_write_f(ctx->stream, "%s",
+                                            AVS_UINT64_AS_STRING(value)))) {
+        ctx->state = STATE_FINISHED;
+        return 0;
+    }
+    return -1;
+}
+#    endif // ANJAY_WITH_LWM2M11
+
 static int text_ret_double(anjay_unlocked_output_ctx_t *ctx_, double value) {
     text_out_t *ctx = (text_out_t *) ctx_;
     if (ctx->bytes) {
@@ -170,6 +180,9 @@ static const anjay_output_ctx_vtable_t TEXT_OUT_VTABLE = {
     .bytes_begin = text_ret_bytes_begin,
     .string = text_ret_string,
     .integer = text_ret_integer,
+#    ifdef ANJAY_WITH_LWM2M11
+    .uint = text_ret_uint,
+#    endif // ANJAY_WITH_LWM2M11
     .floating = text_ret_double,
     .boolean = text_ret_bool,
     .objlnk = text_ret_objlnk,
@@ -324,6 +337,26 @@ static int text_get_integer(anjay_unlocked_input_ctx_t *ctx, int64_t *value) {
     return 0;
 }
 
+#    ifdef ANJAY_WITH_LWM2M11
+static int text_get_uint(anjay_unlocked_input_ctx_t *ctx, uint64_t *value) {
+    char buf[AVS_UINT_STR_BUF_SIZE(unsigned long long)];
+    int retval = _anjay_get_string_unlocked(ctx, buf, sizeof(buf));
+    if (retval) {
+        return map_get_string_error(retval);
+    }
+    unsigned long long ull;
+    if (_anjay_safe_strtoull(buf, &ull)
+#        if ULLONG_MAX != UINT64_MAX
+            || ull > UINT64_MAX
+#        endif
+    ) {
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+    *value = (uint64_t) ull;
+    return 0;
+}
+#    endif // ANJAY_WITH_LWM2M11
+
 static int text_get_bool(anjay_unlocked_input_ctx_t *ctx, bool *value) {
     int64_t i64;
     int retval = text_get_integer(ctx, &i64);
@@ -396,6 +429,9 @@ static const anjay_input_ctx_vtable_t TEXT_IN_VTABLE = {
     .some_bytes = text_get_some_bytes,
     .string = text_get_string,
     .integer = text_get_integer,
+#    ifdef ANJAY_WITH_LWM2M11
+    .uint = text_get_uint,
+#    endif // ANJAY_WITH_LWM2M11
     .floating = text_get_double,
     .boolean = text_get_bool,
     .objlnk = text_get_objlnk,

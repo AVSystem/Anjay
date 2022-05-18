@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -94,6 +87,14 @@ static void cleanup_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     avs_sched_del(&ctx->job_start);
     _anjay_url_cleanup(&ctx->uri);
 
+    if (ctx->common.same_socket_download) {
+        // nothing more to cleanup here - both CoAP ctx and socket are
+        // maintained by the upper layers
+        ctx->aborting = true;
+        avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
+        AVS_LIST_DELETE(ctx_ptr);
+        return;
+    }
     anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
 
     const cleanup_coap_context_args_t args = {
@@ -350,6 +351,7 @@ static void start_download_job(avs_sched_t *sched, const void *id_ptr) {
 }
 
 static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
+    assert(!ctx->common.same_socket_download);
     anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(ctx->common.dl);
 
     _anjay_coap_ctx_cleanup(anjay, &ctx->coap);
@@ -370,6 +372,14 @@ static avs_error_t reset_coap_ctx(anjay_coap_download_ctx_t *ctx) {
         break;
 #    endif // WITH_AVS_COAP_UDP
 
+#    ifdef WITH_AVS_COAP_TCP
+    case ANJAY_SOCKET_TRANSPORT_TCP:
+        ctx->coap = avs_coap_tcp_ctx_create(
+                _anjay_get_coap_sched(anjay), anjay->in_shared_buffer,
+                anjay->out_shared_buffer, anjay->coap_tcp_max_options_size,
+                anjay->coap_tcp_request_timeout, anjay->prng_ctx.ctx);
+        break;
+#    endif // WITH_AVS_COAP_TCP
     default:
         dl_log(ERROR,
                _("anjay_coap_download_ctx_t is compatible only with "
@@ -401,6 +411,9 @@ static void suspend_coap_transfer(anjay_download_ctx_t *ctx_) {
         assert(ctx->coap);
         avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
         assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
+    }
+    if (ctx->common.same_socket_download) {
+        return;
     }
     avs_error_t err = avs_net_socket_shutdown(ctx->socket);
     // not calling close because that might clean up remote hostname and
@@ -436,6 +449,13 @@ reconnect_coap_transfer(AVS_LIST(anjay_download_ctx_t) *ctx_ptr) {
     anjay_coap_download_ctx_t *ctx = (anjay_coap_download_ctx_t *) *ctx_ptr;
     ctx->reconnecting = true;
 
+    if (ctx->common.same_socket_download) {
+        // Cancel the exchange and schedule the download to let
+        // the Registration be sent even if NSTART=1.
+        avs_coap_exchange_cancel(ctx->coap, ctx->exchange_id);
+        assert(!avs_coap_exchange_id_valid(ctx->exchange_id));
+        return sched_download_resumption(ctx);
+    }
     char hostname[ANJAY_MAX_URL_HOSTNAME_SIZE];
     char port[ANJAY_MAX_URL_PORT_SIZE];
 
@@ -485,7 +505,9 @@ avs_error_t
 _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
                                AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
                                const anjay_download_config_t *cfg,
-                               uintptr_t id) {
+                               uintptr_t id,
+                               avs_coap_ctx_t *forced_coap_ctx,
+                               avs_net_socket_t *forced_coap_socket) {
     anjay_unlocked_t *anjay = _anjay_downloader_get_anjay(dl);
     assert(!*out_dl_ctx);
     AVS_LIST(anjay_coap_download_ctx_t) ctx =
@@ -493,6 +515,11 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     if (!ctx) {
         dl_log(ERROR, _("out of memory"));
         return avs_errno(AVS_ENOMEM);
+    }
+    if (forced_coap_ctx) {
+        ctx->common.same_socket_download = true;
+        ctx->coap = forced_coap_ctx;
+        ctx->socket = forced_coap_socket;
     }
 
     avs_net_ssl_configuration_t ssl_config;
@@ -529,7 +556,7 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
         goto error;
     }
 
-    {
+    if (!ctx->common.same_socket_download) {
         ssl_config = (avs_net_ssl_configuration_t) {
             .version = anjay->dtls_version,
             .security = cfg->security_config.security_info,
@@ -641,7 +668,8 @@ _anjay_downloader_coap_ctx_new(anjay_downloader_t *dl,
     }
 #    endif // WITH_AVS_COAP_UDP
 
-    if (avs_is_err((err = reset_coap_ctx(ctx)))) {
+    if (!ctx->common.same_socket_download
+            && avs_is_err((err = reset_coap_ctx(ctx)))) {
         goto error;
     }
 

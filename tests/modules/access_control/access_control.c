@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <string.h>
@@ -63,8 +56,6 @@ AVS_UNIT_TEST(access_control, set_acl) {
         anjay_notify_queue_t queue = NULL;
         AVS_UNIT_ASSERT_SUCCESS(
                 _anjay_notify_queue_instance_created(&queue, TEST->oid, iid));
-        anjay_unlocked->current_connection.server = anjay_unlocked->servers;
-        anjay_unlocked->current_connection.conn_type = ANJAY_CONNECTION_PRIMARY;
 
         // transaction validation
         _anjay_mock_dm_expect_list_instances(
@@ -82,9 +73,8 @@ AVS_UNIT_TEST(access_control, set_acl) {
                                             ANJAY_DM_RID_SERVER_SSID,
                                             ANJAY_ID_INVALID, 0,
                                             ANJAY_MOCK_DM_INT(0, ssid));
-        AVS_UNIT_ASSERT_SUCCESS(_anjay_notify_flush(anjay_unlocked, &queue));
-        memset(&anjay_unlocked->current_connection, 0,
-               sizeof(anjay_unlocked->current_connection));
+        AVS_UNIT_ASSERT_SUCCESS(
+                _anjay_notify_flush(anjay_unlocked, ssid, &queue));
         ANJAY_MUTEX_UNLOCK(anjay);
     }
 

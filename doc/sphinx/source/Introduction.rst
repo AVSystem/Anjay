@@ -1,20 +1,20 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Introduction
 ============
+
+.. attention::
+
+   With release of Anjay 3.0, the `library's license terms have changed
+   <https://github.com/AVSystem/Anjay/blob/master/LICENSE>`_. Please make sure
+   that you have reviewed it before updating to the new major release. Previous
+   versions of Anjay remain with the old, Apache 2.0 license.
 
 **Anjay** is a library that implements the *OMA Lightweight Machine to Machine*
 protocol, including the necessary subset of CoAP.
@@ -25,20 +25,22 @@ The project has been created and is actively maintained by
 Protocol support status
 -----------------------
 
-The basis for this implementation was the *OMA Lightweight Machine to Machine
-Technical Specification, Version 1.0.2 - 9 Feb 2018*, document number
-``OMA-TS-LightweightM2M-V1_0_2-20180209-A``. In case of ambiguities, existing
-implementations were considered as a reference.
+The basis for this implementation were the following documents:
 
-A version that includes support for version 1.1 of the specification
-(``OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A`` and
-``OMA-TS-LightweightM2M_Transport-V1_1_1-20190617-A``), including Composite
-operations, Send method, SenML JSON and CBOR data formats, TCP, SMS and NIDD
-bindings, is :doc:`available commercially <Commercial_support>`.
+- *Lightweight Machine to Machine Technical Specification: Core*,
+  document number ``OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A``
+- *Lightweight Machine to Machine Technical Specification: Transport Bindings*,
+  document number ``OMA-TS-LightweightM2M_Transport-V1_1_1-20190617-A``.
+
+In case of ambiguities, existing implementations were considered as a reference.
 
 The following features are **supported**:
 
 - Bootstrap - full support
+
+  - Enrollment over Secure Transport and smart card bootstrap are
+    :doc:`available commercially <CommercialFeatures>`
+
 - Client Registration - full support
 - Device Management and Service Enablement - full support
 - Information Reporting - full support
@@ -47,24 +49,30 @@ The following features are **supported**:
 
   - Plain Text
   - Opaque
+  - CBOR
   - TLV
-  - JSON (output only)
+  - SenML JSON
+  - SenML CBOR
+  - LwM2M JSON (output only)
 
 - Security
 
   - DTLS with Certificates, if supported by backend TLS library
   - DTLS with PSK, if supported by backend TLS library
   - NoSec mode
+  - Support for Hardware Security Modules (:doc:`available commercially <CommercialFeatures>`)
 
-- Mechanism
+- Transport
 
   - Support for UDP Binding
+  - Support for TCP Binding
+  - Support for SMS Binding (:doc:`available commercially <CommercialFeatures>`)
+  - Support for NIDD Binding (:doc:`available commercially <CommercialFeatures>`)
 
 The following features are **not implemented**:
 
-- Parsing of JSON format
 - RPK DTLS mode
-- Smartcard support
+- LwM2M JSON (input)
 
 Technical information
 ---------------------
@@ -72,11 +80,14 @@ Technical information
 Anjay is written in standards-compliant C99. It partly relies on some POSIX
 library extensions, although it can be easily ported to non-POSIX platforms.
 
+Some optional features require C11's ``stdatomic.h`` header to be available
+(``ANJAY_WITH_EVENT_LOOP``, ``AVS_COMMONS_COMPAT_THREADING_WITH_ATOMIC_SPINLOCK``).
+
 Its only external dependency is the open source
 `AVSystem Commons Library <https://github.com/AVSystem/avs_commons>`_. That
 library in turn may additionally depend either on
-`OpenSSL <https://www.openssl.org/>`_ or `mbedTLS <https://tls.mbed.org/>`_
-or `tinydtls <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
+`OpenSSL <https://www.openssl.org/>`_ or `Mbed TLS <https://tls.mbed.org/>`_
+or `TinyDTLS <https://projects.eclipse.org/projects/iot.tinydtls>`_ for DTLS
 support.
 
 To build Anjay from source, `CMake <https://www.cmake.org/>`_ version 3.6.0 or

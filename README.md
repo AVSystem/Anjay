@@ -3,15 +3,21 @@
 [![Build Status](https://github.com/AVSystem/Anjay/actions/workflows/anjay-tests.yml/badge.svg?branch=master)](https://github.com/AVSystem/Anjay/actions)
 [![Coverity Status](https://scan.coverity.com/projects/13206/badge.svg)](https://scan.coverity.com/projects/avsystem-anjay)
 
+## New license notice
+
+With release of Anjay 3.0, the [library's license terms have changed](LICENSE). Please make sure that you
+have reviewed it before updating to the new major release. Previous versions of Anjay remain with the old,
+Apache 2.0 license.
+
 ## What is Anjay?
 
 Anjay is a C library that aims to be the reference implementation of the OMA Lightweight Machine-to-Machine (LwM2M) device management protocol. It eases development of fully-featured LwM2M client applications by taking care of protocol details, allowing the user to focus on device-specific aspects.
 
 The project has been created and is actively maintained by [AVSystem](https://www.avsystem.com).
 
--   [Full documentation](https://AVSystem.github.io/Anjay-doc/)
--   [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicClient.html)
--   [API docs](https://AVSystem.github.io/Anjay-doc/api/)
+- [Full documentation](https://AVSystem.github.io/Anjay-doc/)
+- [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicClient.html)
+- [API docs](https://AVSystem.github.io/Anjay-doc/api/)
 
 <!-- toc -->
 
@@ -38,14 +44,15 @@ The project has been created and is actively maintained by [AVSystem](https://ww
 
 ## Supported features
 
-This version includes full support for OMA LwM2M TS 1.0 features. Version that supports TS 1.1 is [available commercially](#commercial-support).
+This version includes full support for OMA LwM2M TS 1.1 features. Some features, such as support for EST, SMS binding or HSM's are [available commercially](#commercial-support).
 
 - LwM2M Bootstrap Interface:
     - Request
-    - Finish
+    - Discover
+    - Read
     - Write
     - Delete
-    - Discover
+    - Finish
 
 - LwM2M Client Registration Interface:
     - Register
@@ -53,18 +60,23 @@ This version includes full support for OMA LwM2M TS 1.0 features. Version that s
     - De-register
 
 - LwM2M Device Management and Service Enablement Interface:
-    - Read
     - Discover
+    - Read
+    - Read-Composite
     - Write
-    - Write-Attributes
+    - Write-Composite
     - Execute
+    - Write-Attributes
     - Create
     - Delete
+    - Send
 
 - LwM2M Information Reporting Interface:
     - Observe
-    - Notify
+    - Observe-Composite
     - Cancel Observation
+    - Cancel Observation-Composite
+    - Notify
 
 - LwM2M Security modes:
     - DTLS with Certificates (if supported by backend TLS library)
@@ -85,9 +97,13 @@ This version includes full support for OMA LwM2M TS 1.0 features. Version that s
         - [example client](https://github.com/AVSystem/Anjay-zephyr-client) based on Zephyr OS is available
 
 - CoAP data formats:
-    - TLV
+    - Plain Text
     - Opaque
-    - Plain Text (including base64 encoding of opaque data)
+    - CBOR
+    - TLV
+    - SenML JSON
+    - SenML CBOR
+    - LwM2M JSON (output only)
 
 - CoAP BLOCK transfers (for transferring data that does not fit in a single UDP packet):
     - Block1 (sending / receiving requests)
@@ -97,6 +113,8 @@ This version includes full support for OMA LwM2M TS 1.0 features. Version that s
     - Access Control
     - Security
     - Server
+    - Firmware Update
+    - IPSO single and three-axis sensor objects
 
 - Stream-oriented persistence API
 
@@ -293,7 +311,7 @@ See [LICENSE](LICENSE) file.
 
 Anjay LwM2M library comes with the option of [full commercial support, provided by AVSystem](https://www.avsystem.com/products/anjay/).
 
-The commercial version supports the LwM2M 1.1 release, including Composite operations, Send method, SenML JSON and CBOR data formats, TCP, SMS and NIDD bindings.
+The list of features available commercially is [available here](https://AVSystem.github.io/Anjay-doc/CommercialFeatures.html).
 
 If you're interested in LwM2M Server, be sure to check out the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-dm/) platform by AVSystem. It also includes the [interoperability test module](https://www.avsystem.com/lwm2m-interoperability-test/) that you can use to test your LwM2M client implementation. Our automated tests and testing scenarios enable you to quickly check how interoperable your device is with LwM2M.
 

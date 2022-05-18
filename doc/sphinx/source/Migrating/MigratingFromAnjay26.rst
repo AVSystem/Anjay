@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Migrating from Anjay 2.5.x or 2.6.x
 ===================================
@@ -23,11 +16,12 @@ Migrating from Anjay 2.5.x or 2.6.x
 Introduction
 ------------
 
-While most changes since Anjay 2.6 are minor, improvements in security support
-required some redesigns in ``avs_commons`` cryptography support libraries. While
-backwards compatibility should be maintained in most practical usages, there are
-some changes which might prove to be breaking if old APIs have been used
-directly.
+While most changes since Anjay 2.6 are minor, some of them (changes to commonly
+used APIs such as Attribute Storage and offline mode control) are breaking.
+Additionally, ``avs_commons`` cryptography support libraries have undergone a
+significant redesign and there are some changes which might prove to be breaking
+if old APIs have been used directly.
+
 
 Additional slight updates might be necessary if you are using any alternative
 build system instead of CMake to compile your project, of if you maintain your
@@ -73,11 +67,71 @@ Change of security configuration lifetime
 
   * The security configuration is now returned through an output argument with
     any necessary internal buffers cached inside the Anjay object instead of
-    using heap allocation. Please refer to the Doxygen-based documenation of
+    using heap allocation. Please refer to the Doxygen-based documentation of
     this function for details.
 
     Due to the change in lifetime requirements, no compatibility variant is
     provided.
+
+Refactor of the Attribute Storage module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The Attribute Storage feature is no longer a standalone module and has been
+moved to the library core. From the user perspective, this has the following
+consequences:
+
+* Explicit installation of this module in runtime is no longer necessary. The
+  ``anjay_attr_storage_install()`` method has been removed.
+* The ``ANJAY_WITH_MODULE_ATTR_STORAGE`` configuration macro in
+  ``anjay_config.h`` has been renamed to ``ANJAY_WITH_ATTR_STORAGE``.
+* The ``WITH_MODULE_attr_storage`` CMake option (equivalent to the macro
+  mentioned above) has been renamed to ``WITH_ATTR_STORAGE``.
+
+Additionally, the behavior of ``anjay_attr_storage_restore()`` has been
+changed - from now on, this function fails if supplied source stream is
+empty. This change makes the function consistent with other
+``anjay_*_restore()`` APIs.
+
+Refactor of offline mode control API
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Since Anjay 2.4, offline mode is configurable independently per every
+transport. Below is a list of removed functions and counterparts that should
+be used:
+
++--------------------------------+------------------------------------------+
+| Removed function               | Counterpart                              |
++--------------------------------+------------------------------------------+
+| ``anjay_is_offline()``         | ``anjay_transport_is_offline()``         |
++--------------------------------+------------------------------------------+
+| ``anjay_enter_offline()``      | ``anjay_transport_enter_offline()``      |
++--------------------------------+------------------------------------------+
+| ``anjay_exit_offline()``       | ``anjay_transport_exit_offline()``       |
++--------------------------------+------------------------------------------+
+| ``anjay_schedule_reconnect()`` | ``anjay_transport_schedule_reconnect()`` |
++--------------------------------+------------------------------------------+
+
+New functions should be called with ``transport_set`` argument set to
+``ANJAY_TRANSPORT_SET_ALL`` to achieve the same behavior.
+
+Addition of the con attribute to public API
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``con`` attribute, enabled via the ``ANJAY_WITH_CON_ATTR`` compile-time
+option, has been previously supported as a custom extension. Since an identical
+flag has been standardized as part of LwM2M TS 1.2, it has been included in the
+public API as part of preparations to support the new protocol version.
+
+If you initialize ``anjay_dm_oi_attributes_t`` or ``anjay_dm_r_attributes_t``
+objects manually, you may need to initialize the new ``con`` field as well,
+since the empty ``ANJAY_DM_CON_ATTR_NONE`` value is **NOT** the default
+zero-initialized value.
+
+As more new attributes may be added in future versions of Anjay, it is
+recommended to initialize such structures with ``ANJAY_DM_OI_ATTRIBUTES_EMPTY``
+or ``ANJAY_DM_R_ATTRIBUTES_EMPTY`` constants, and then fill in the attributes
+you actually intend to set.
+
 
 Changes in avs_commons
 ----------------------
@@ -131,26 +185,35 @@ has been renamed to ``AVS_COMMONS_WITH_AVS_CRYPTO_PSK``.
 You may need to update your configuration files if you are not using CMake, or
 your preprocessor directives if you check this macro in your code.
 
-Compatibility features
-""""""""""""""""""""""
+Introduction of new socket option
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Because the changes are minor, attempts to improve backwards compatibility have
-been taken, specifically:
+avs_commons 4.10.1 bundled with Anjay 2.15.1 adds a new socket option key:
+``AVS_NET_SOCKET_HAS_BUFFERED_DATA``. This is used to make sure that when
+control is returned to the event loop, the ``poll()`` call will not stall
+waiting for new data that in reality has been already buffered and could be
+retrieved using the avs_commons APIs.
 
-* The new ``avsystem/commons/avs_net_pki_compat.h`` header can be included,
-  which aliases all the symbols mentioned in this chapter to their old names.
-* If the ``AVS_COMMONS_NET_WITH_PSK`` macro is defined (e.g. in a legacy
-  ``avs_commons_config.h`` file), it is interpreted as equivalent to
-  ``AVS_COMMONS_WITH_AVS_CRYPTO_PSK``. A warning message is displayed in that
-  case.
+This is usually meaningful for (D)TLS connections, but for almost all simple
+unencrypted socket implementations, this should always return ``false``.
+
+This was previously achieved by always trying to receive more packets with
+timeout set to zero. However, it has been determined that such logic could lead
+to heavy blocking of the event loop in case communication with the network stack
+is relatively slow, e.g. on devices which implement TCP/IP sockets through modem
+AT commands.
+
+If you maintain your own socket integration layer or (D)TLS integration layer,
+it is recommended that you add support for this option. This is not, however, a
+breaking change - if the option is not supported, the library will continue to
+use the old behavior.
 
 Refactor of PSK credential handling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``avs_net_security_info_t`` structure has been updated to use the new type,
-``avs_net_generic_psk_info_t``, to encapsulate the PSK credentials. The new
-type uses new types based on ``avs_crypto_security_info_union_t`` instead of
-raw buffers.
+``avs_net_psk_info_t`` structure has been changed to use new types based on
+``avs_crypto_security_info_union_t`` instead of raw buffers. This change also
+affects ``avs_net_security_info_t`` structure which contains the former.
 
 * **Old API:**
   ::
@@ -211,30 +274,23 @@ raw buffers.
       typedef struct {
           avs_crypto_psk_key_info_t key;
           avs_crypto_psk_identity_info_t identity;
-      } avs_net_generic_psk_info_t;
+      } avs_net_psk_info_t;
 
       // ...
 
       typedef struct {
           avs_net_security_mode_t mode;
           union {
-              avs_net_generic_psk_info_t psk;
+              avs_net_psk_info_t psk;
               avs_net_certificate_info_t cert;
           } data;
       } avs_net_security_info_t;
 
       avs_net_security_info_t
-      avs_net_security_info_from_generic_psk(avs_net_generic_psk_info_t psk);
+      avs_net_security_info_from_psk(avs_net_psk_info_t psk);
 
-The old ``avs_net_psk_info_t`` type is still available for compatibility. The
-``avs_crypto_psk_key_info_from_buffer()`` function has also been reimplemented
-as a ``static inline`` function that wraps calls to
-``avs_crypto_psk_identity_info_from_buffer()``,
-``avs_crypto_psk_key_info_from_buffer()`` and
-``avs_net_security_info_from_generic_psk()``.
-
-However, code that accesses the ``data.psk`` field of
-``avs_net_security_info_t`` directly will need to be updated.
+This change is breaking for code that accesses the ``data.psk`` field
+of ``avs_net_security_info_t`` directly.
 
 Separation of avs_url module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

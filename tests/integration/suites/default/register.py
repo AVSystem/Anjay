@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import concurrent.futures
 import os
@@ -58,10 +51,218 @@ class CertificatesTest:
                           server_key_file=getattr(self, 'server_key', None),
                           extra_cmdline_args=extra_cmdline_args, *args, **kwargs)
 
+    class PcapEnabledTestMixin:
+        def read_certificate(self, file):
+            import cryptography
+            import cryptography.hazmat
+            import cryptography.x509
+            with open(self._cert_file(file), 'rb') as f:
+                data = f.read()
+            if b'-----BEGIN' in data:
+                return cryptography.x509.load_pem_x509_certificate(
+                    data, backend=cryptography.hazmat.backends.default_backend())
+            else:
+                return cryptography.x509.load_der_x509_certificate(
+                    data, backend=cryptography.hazmat.backends.default_backend())
+
+        def read_public_key(self, cert):
+            import cryptography
+            import cryptography.hazmat
+            import cryptography.x509
+
+            if not isinstance(cert, cryptography.x509.Certificate):
+                cert = self.read_certificate(cert)
+
+            return cert.public_key().public_bytes(
+                cryptography.hazmat.primitives.serialization.Encoding.DER,
+                cryptography.hazmat.primitives.serialization.PublicFormat.SubjectPublicKeyInfo)
+
+        def get_certificate_packet(self, cert=None, common_name=None):
+            import dpkt
+            import cryptography
+            import cryptography.hazmat
+            assert cert is None or common_name is None
+
+            if common_name is None:
+                if cert is None:
+                    cert = self.client_crt_file
+                if isinstance(cert, str):
+                    cert = self.read_certificate(cert)
+                common_name = cert.subject
+            if not isinstance(common_name, bytes):
+                common_name = common_name.public_bytes(
+                    cryptography.hazmat.backends.default_backend())
+
+            for pkt in self.read_pcap():
+                if isinstance(pkt, dpkt.ip.IP) \
+                        and isinstance(pkt.data, dpkt.udp.UDP) \
+                        and pkt.data.dport == self.serv.get_listen_port() \
+                        and common_name in pkt.data.data:
+                    return pkt.data.data
+            return None
+
+    class PcapEnabledTest(test_suite.PcapEnabledTest, Test, PcapEnabledTestMixin):
+        pass
+
+
 
 class RegisterWithCertificates(CertificatesTest.Test):
     def setUp(self):
         super().setUp(server_crt='server.crt', server_key='server.key')
+
+
+class RegisterWithCertificateChainExternal(CertificatesTest.PcapEnabledTest):
+    def setUp(self, extra_cmdline_args=None, **kwargs):
+        if extra_cmdline_args is None:
+            extra_cmdline_args = []
+        extra_cmdline_args.append('--use-external-security-info')
+        super().setUp(client_ca_file='root.crt', server_crt='server.crt', server_key='server.key',
+                      client_crt_file='client2-full-path.crt', client_key_file='client2.key.der',
+                      extra_cmdline_args=extra_cmdline_args, **kwargs)
+
+    def runTest(self):
+        import time
+
+        certificate_packet = None
+        deadline = time.time() + self.DEFAULT_MSG_TIMEOUT
+        while certificate_packet is None and time.time() <= deadline:
+            time.sleep(0.1)
+            certificate_packet = self.get_certificate_packet()
+
+        self.assertIsNotNone(certificate_packet)
+        self.assertIn(self.read_public_key('client2.crt.der'), certificate_packet)
+        self.assertIn(self.read_public_key('client2_ca.crt.der'), certificate_packet)
+        self.assertIn(self.read_public_key('root.crt.der'), certificate_packet)
+
+
+class RegisterWithCertificateChainRebuilt(CertificatesTest.PcapEnabledTest):
+    def setUp(self):
+        super().setUp(client_ca_file='root.crt', server_crt='server.crt', server_key='server.key',
+                      client_crt_file='client2.crt.der', client_key_file='client2.key.der',
+                      extra_cmdline_args=['--pkix-trust-store',
+                                          self._cert_file('client2_ca-and-root.crt'),
+                                          '--rebuild-client-cert-chain'])
+
+    def runTest(self):
+        import time
+
+        certificate_packet = None
+        deadline = time.time() + self.DEFAULT_MSG_TIMEOUT
+        while certificate_packet is None and time.time() <= deadline:
+            time.sleep(0.1)
+            certificate_packet = self.get_certificate_packet()
+
+        self.assertIsNotNone(certificate_packet)
+        self.assertIn(self.read_public_key('client2.crt.der'), certificate_packet)
+        self.assertIn(self.read_public_key('client2_ca.crt.der'), certificate_packet)
+        self.assertIn(self.read_public_key('root.crt.der'), certificate_packet)
+
+
+class RegisterWithCyclicCertificateChainRebuilt(CertificatesTest.PcapEnabledTest):
+    def setUp(self):
+        self._cleanup_list = test_suite.CleanupList()
+
+        try:
+            # Generate cyclic root certificates
+            from cryptography.hazmat.primitives import serialization
+            from suites.default import firmware_update
+            TestWithTlsServer = firmware_update.FirmwareUpdate.TestWithTlsServer
+
+            key1 = TestWithTlsServer._generate_key()
+            key2 = TestWithTlsServer._generate_key()
+
+            self.cert1 = TestWithTlsServer._generate_cert(private_key=key2,
+                                                          public_key=key1.public_key(),
+                                                          issuer_cn='Root2', cn='Root1', ca=True)
+            self.cert2 = TestWithTlsServer._generate_cert(private_key=key1,
+                                                          public_key=key2.public_key(),
+                                                          issuer_cn='Root1', cn='Root2', ca=True)
+
+            cert1_pem = self.cert1.public_bytes(encoding=serialization.Encoding.PEM)
+            cert2_pem = self.cert2.public_bytes(encoding=serialization.Encoding.PEM)
+
+            trust_store_file = tempfile.NamedTemporaryFile()
+            self._cleanup_list.append(trust_store_file.close)
+            trust_store_file.write(cert1_pem)
+            trust_store_file.write(cert2_pem)
+            trust_store_file.flush()
+
+            client_key = TestWithTlsServer._generate_key()
+            self.client_cert = TestWithTlsServer._generate_cert(private_key=key1,
+                                                                public_key=client_key.public_key(),
+                                                                issuer_cn='Root1', cn='127.0.0.1',
+                                                                alt_ip='127.0.0.1')
+
+            client_key_der = client_key.private_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption())
+            self.client_cert_der = self.client_cert.public_bytes(encoding=serialization.Encoding.DER)
+
+            client_key_file = tempfile.NamedTemporaryFile()
+            self._cleanup_list.append(client_key_file.close)
+            client_key_file.write(client_key_der)
+            client_key_file.flush()
+
+            client_cert_file = tempfile.NamedTemporaryFile()
+            self._cleanup_list.append(client_cert_file.close)
+            client_cert_file.write(self.client_cert_der)
+            client_cert_file.flush()
+
+            super().setUp(client_ca_file=trust_store_file.name,
+                          server_crt='self-signed/server.crt',
+                          server_key='self-signed/server.key',
+                          client_crt_file=client_cert_file.name,
+                          client_key_file=client_key_file.name,
+                          extra_cmdline_args=['--pkix-trust-store', trust_store_file.name,
+                                              '--rebuild-client-cert-chain'],
+                          ciphersuites=[])
+        except:
+            self._cleanup_list()
+            raise
+
+    def runTest(self):
+        import time
+
+        certificate_packet = None
+        deadline = time.time() + self.DEFAULT_MSG_TIMEOUT
+        while certificate_packet is None and time.time() <= deadline:
+            time.sleep(0.1)
+            certificate_packet = self.get_certificate_packet()
+
+        self.assertIsNotNone(certificate_packet)
+        self.assertIn(self.read_public_key(self.client_cert), certificate_packet)
+        self.assertIn(self.read_public_key(self.cert1), certificate_packet)
+        self.assertIn(self.read_public_key(self.cert2), certificate_packet)
+
+    def tearDown(self):
+        try:
+            super().tearDown()
+        finally:
+            self._cleanup_list()
+
+
+class RegisterWithCertificateChainExternalPersistence(RegisterWithCertificateChainExternal):
+    def setUp(self):
+        self._dm_persistence_file = tempfile.NamedTemporaryFile()
+        super().setUp(extra_cmdline_args=['--dm-persistence-file', self._dm_persistence_file.name])
+
+    def runTest(self):
+        super().runTest()
+
+        self.request_demo_shutdown()
+        self.assertDemoDeregisters()
+        self._terminate_demo()
+
+        self._start_demo(['--dm-persistence-file', self._dm_persistence_file.name]
+                         + self.make_demo_args(DEMO_ENDPOINT_NAME, [], '1.0', '1.0', None))
+        self.assertDemoRegisters()
+
+    def tearDown(self):
+        try:
+            super().tearDown()
+        finally:
+            self._dm_persistence_file.close()
 
 
 class RegisterWithSelfSignedCertificatesAndServerPublicKey(CertificatesTest.Test):
@@ -130,6 +331,39 @@ class Register:
 class RegisterUdp:
     class TestCase(Register.TestCase, test_suite.Lwm2mSingleServerTest):
         pass
+
+
+class RegisterTcp:
+    class TestCase(Register.TestCase, test_suite.Lwm2mSingleTcpServerTest):
+        pass
+
+
+class RegisterTcpWithAbort(
+        test_suite.Lwm2mSingleTcpServerTest, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        # skip initial registration
+        super().setUp(auto_register=False)
+
+    def runTest(self):
+        pkt = self.serv.recv()
+        self.assertMsgEqual(
+            Lwm2mRegister(
+                '/rd?lwm2m=1.0&ep=%s&lt=86400&b=T' %
+                (DEMO_ENDPOINT_NAME)), pkt)
+
+        abort_pkt = coap.Packet(code=coap.Code.SIGNALING_ABORT)
+        self.serv.send(abort_pkt)
+
+        pkt = self.serv.recv()
+        self.assertMsgEqual(abort_pkt, pkt)
+
+        self.serv.reset()
+        # No message should arrive
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=5)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
 
 
 def expected_content(version='1.0'):
@@ -248,6 +482,8 @@ class ConcurrentRequestWhileWaitingForResponse:
         def runTest(self):
             pkt = self.serv.recv()
             path = '/rd?lwm2m=1.0&ep=%s&lt=86400' % DEMO_ENDPOINT_NAME
+            if self.serv.transport == Transport.TCP:
+                path += '&b=T'
             self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
             self.read_path(self.serv, ResPath.Device.Manufacturer)
             self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
@@ -258,6 +494,9 @@ class ConcurrentRequestWhileWaitingForResponseUdp(
     pass
 
 
+class ConcurrentRequestWhileWaitingForResponseTcp(
+    ConcurrentRequestWhileWaitingForResponse.TestMixin, RegisterTcp.TestCase):
+    pass
 
 
 class RegisterUri:
@@ -272,6 +511,8 @@ class RegisterUri:
         def runTest(self):
             pkt = self.serv.recv()
             path = '/i/am/crazy/and/rd?lwm2m=i&ep=know&lt=it&lwm2m=1.0&ep=%s&lt=86400' % DEMO_ENDPOINT_NAME
+            if self.serv.transport == Transport.TCP:
+                path += '&b=T'
             self.assertMsgEqual(Lwm2mRegister(path, content=expected_content()), pkt)
             self.serv.send(Lwm2mCreated.matching(pkt)(location='/some/weird/rd/point'))
 
@@ -290,3 +531,99 @@ class RegisterUriUdp(RegisterUri.TestMixin, RegisterUdp.TestCase):
     pass
 
 
+class RegisterUriTcp(RegisterUri.TestMixin, RegisterTcp.TestCase):
+    pass
+
+
+class RegisterWithPskExternal(test_suite.Lwm2mDtlsSingleServerTest):
+    def setUp(self, extra_cmdline_args=None, **kwargs):
+        if extra_cmdline_args is None:
+            extra_cmdline_args = []
+        extra_cmdline_args.append('--use-external-security-info')
+        super().setUp(extra_cmdline_args=extra_cmdline_args, **kwargs)
+
+
+class RegisterSni(test_suite.PcapEnabledTest,
+                  test_suite.Lwm2mDtlsSingleServerTest):
+    SNI = 'SomeServerHost'
+
+    def setUp(self):
+        extra_args = ['--sni', self.SNI]
+        super().setUp(extra_cmdline_args=extra_args, auto_register=False)
+
+    def runTest(self):
+        pkt = self.serv._raw_udp_socket.recv(4096)
+        self.assertPktIsDtlsClientHello(pkt, seq_number=0)
+        self.assertIn(bytes(self.SNI, 'ascii'), pkt)
+        self.assertDemoRegisters()
+
+
+class Lwm2m11BindingSemantics(bootstrap_client.BootstrapTest.Test):
+    @property
+    def tcp_serv(self) -> Lwm2mServer:
+        return self.servers[1]
+
+    def setUp(self):
+        super().setUp(servers=[Lwm2mServer(), Lwm2mServer(coap.Server(transport=Transport.TCP))],
+                      maximum_version='1.1')
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap(
+            preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+        self.bootstrap_server.send(Lwm2mDelete('/'))
+        self.assertIsInstance(self.bootstrap_server.recv(), Lwm2mDeleted)
+
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=101,
+                            content=TLV.make_resource(RID.Security.ServerURI,
+                                                      'coap://127.0.0.1:%d' % self.serv.get_listen_port()).serialize()
+                                    + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                                    + TLV.make_resource(RID.Security.Mode,
+                                                        SecurityMode.NoSec.value).serialize()
+                                    + TLV.make_resource(RID.Security.ShortServerID,
+                                                        100).serialize())
+
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=102,
+                            content=TLV.make_resource(RID.Security.ServerURI,
+                                                      'coap+tcp://127.0.0.1:%d' % self.tcp_serv.get_listen_port()).serialize()
+                                    + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                                    + TLV.make_resource(RID.Security.Mode,
+                                                        SecurityMode.NoSec.value).serialize()
+                                    + TLV.make_resource(RID.Security.ShortServerID,
+                                                        100).serialize())
+
+        self.write_instance(self.bootstrap_server, oid=OID.Server, iid=100,
+                            content=TLV.make_resource(RID.Server.Lifetime, 86400).serialize()
+                                    + TLV.make_resource(RID.Server.ShortServerID, 100).serialize()
+                                    + TLV.make_resource(RID.Server.NotificationStoring,
+                                                        True).serialize()
+                                    + TLV.make_resource(RID.Server.Binding, 'UT').serialize())
+
+        self.perform_bootstrap_finish()
+
+        # register with UDP binding
+        pkt = self.serv.recv()
+        self.assertIsInstance(pkt, Lwm2mRegister)
+        self.serv.send(Lwm2mCreated.matching(pkt)(location=self.DEFAULT_REGISTER_ENDPOINT))
+
+        # change binding and register with TCP binding
+        # receive register packet in background to avoid race condition
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(self.tcp_serv.recv, timeout_s=10)
+            self.write_resource(self.serv, OID.Server, 100, RID.Server.Binding, 'TU')
+            pkt = future.result()
+
+        self.assertIsInstance(pkt, Lwm2mRegister)
+        self.tcp_serv.send(Lwm2mCreated.matching(pkt)(location=self.DEFAULT_REGISTER_ENDPOINT))
+
+        self.serv.reset()
+
+        # set Preferred Transport
+        self.write_resource(self.tcp_serv, OID.Server, 100, RID.Server.PreferredTransport, 'U')
+
+        # register with UDP binding
+        pkt = self.serv.recv()
+        self.assertIsInstance(pkt, Lwm2mRegister)
+        self.serv.send(Lwm2mCreated.matching(pkt)(location=self.DEFAULT_REGISTER_ENDPOINT))
+
+    def tearDown(self):
+        super().tearDown(deregister_servers=[self.serv])

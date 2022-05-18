@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Notifications support
 =====================
@@ -56,8 +49,8 @@ LwM2M attributes
 Correct handling of LwM2M Observe requests requires being able to store
 Object/Instance/Resource attributes. For that, one needs to either implement
 a set of attribute handlers, or use the pre-defined
-:doc:`Attribute Storage module <../AdvancedTopics/AT-AttributeStorage>`. As
-before, we use pre-defined Attribute Storage module here.
+:doc:`Attribute Storage subsystem <../AdvancedTopics/AT-AttributeStorage>`. In
+this tutorial, we use pre-defined Attribute Storage subsystem here.
 
 Example
 -------
@@ -146,10 +139,9 @@ called from the main function to schedule the first run for simplicity.
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-Notifications/src/main.c
     :caption: main.c
-    :emphasize-lines: 9-23,125-130
+    :emphasize-lines: 8-22,123-128
 
     #include <anjay/anjay.h>
-    #include <anjay/attr_storage.h>
     #include <anjay/security.h>
     #include <anjay/server.h>
     #include <avsystem/commons/avs_log.h>
@@ -255,9 +247,8 @@ called from the main function to schedule the first run for simplicity.
         }
 
         int result = 0;
-        // Install Attribute storage and setup necessary objects
-        if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-                || setup_server_object(anjay)) {
+        // Setup necessary objects
+        if (setup_security_object(anjay) || setup_server_object(anjay)) {
             result = -1;
         }
 

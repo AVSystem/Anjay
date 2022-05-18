@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_NOTIFY_IO_H
@@ -51,6 +44,7 @@ typedef AVS_LIST(anjay_notify_queue_object_entry_t) anjay_notify_queue_t;
  * @ref _anjay_dm_current_ssid will be called to determine it.
  */
 int _anjay_notify_perform(anjay_unlocked_t *anjay,
+                          anjay_ssid_t origin_ssid,
                           anjay_notify_queue_t *queue_ptr);
 
 /**
@@ -58,6 +52,7 @@ int _anjay_notify_perform(anjay_unlocked_t *anjay,
  * server_modified_notify().
  */
 int _anjay_notify_perform_without_servers(anjay_unlocked_t *anjay,
+                                          anjay_ssid_t origin_ssid,
                                           anjay_notify_queue_t *queue_ptr);
 
 /**
@@ -65,6 +60,7 @@ int _anjay_notify_perform_without_servers(anjay_unlocked_t *anjay,
  * afterwards (regardless of success or failure).
  */
 int _anjay_notify_flush(anjay_unlocked_t *anjay,
+                        anjay_ssid_t origin_ssid,
                         anjay_notify_queue_t *queue_ptr);
 
 int _anjay_notify_queue_instance_created(anjay_notify_queue_t *out_queue,

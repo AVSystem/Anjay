@@ -1,29 +1,22 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Network error handling
 ======================
 
 Like any software that needs to communicate with other hosts over the network,
 Anjay needs to be prepared to handle communication errors. This page documents
-the library's behaviour during various error conditions.
+the library's behavior during various error conditions.
 
 Outgoing RPC error handling table
 ---------------------------------
 
-The following table describes the behaviour of Anjay when various error
+The following table describes the behavior of Anjay when various error
 conditions happen while performing each of the client-initiated RPC methods.
 
 +-----------------+------------------+------------------+------------------+-------------+-------------------+
@@ -64,10 +57,10 @@ This condition corresponds to the registration failure as used in the
 <http://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#6-2-1-1-0-6211-Bootstrap-and-LwM2M-Server-Registration-Mechanisms>`_
 section of LwM2M Core TS 1.1.
 
-If using the commercial version of Anjay, with the ``ANJAY_WITH_LWM2M11``
-compile-time configuration option enabled, the retry procedures as described in
-that section of the 1.1 TS will be performed, with respect to settings stored in
-the appropriate Server object instance, or the defaults values listen in the
+If the ``ANJAY_WITH_LWM2M11`` compile-time configuration option is enabled, the
+retry procedures as described in that section of the 1.1 TS will be performed,
+with respect to settings stored in the appropriate Server object instance, or
+the defaults values listen in the
 `"Registration Procedures Default Values" table
 <http://www.openmobilealliance.org/release/LightweightM2M/V1_1_1-20190617-A/HTML-Version/OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A.html#Table-6211-1-Registration-Procedures-Default-Values>`_.
 According to this configuration, further failures may result in the "abort all
@@ -77,19 +70,6 @@ condition.
 In builds of Anjay that do not support LwM2M 1.1, the "abort registration"
 condition is equivalent with the "fall back to Client-Initiated Bootstrap"
 [#bs]_ condition.
-
-.. note::
-
-    In accordance with the description above, the default behavior in case of
-    the "abort registration" condition is **different between the open source
-    and commercial versions of Anjay**:
-
-    * The commercial version will perform 5 retry attempts with exponential
-      back-off starting with 1 minute initial delay, as mandated by the LwM2M
-      1.1 defaults, and if all of them are unsuccessful, only then fall back to
-      Client-Initiated Bootstrap [#bs]_
-    * The open source version will fall back to Client-Initiated Bootstrap
-      [#bs]_ immediately after the initial failure
 
 Other error conditions
 ----------------------
@@ -130,12 +110,12 @@ Other error conditions
          <../api/structanjay__configuration.html#a9690621b087639e06dd0c747206d0679>`_
          and `sms_tx_params
          <../api/structanjay__configuration.html#ab656e5dad737416e5b66272f917df108>`_
-         fields in `anjay_configuration_t
-         <../api/structanjay__configuration.html>`_.
+         (in versions that include the SMS feature) fields in
+         `anjay_configuration_t <../api/structanjay__configuration.html>`_.
 
 .. [#hs] To prevent infinite loop of handshakes, DTLS handshake is only retried
          if the failed RPC was **not** performed immediately after the previous
-         handshake; otherwise the behaviour described in "Timeout (NoSec)" is
+         handshake; otherwise the behavior described in "Timeout (NoSec)" is
          used.
 
 .. [#a]  Communication with all servers will be aborted and

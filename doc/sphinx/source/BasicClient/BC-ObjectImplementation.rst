@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Implementing standard Object
 ============================
@@ -23,7 +16,7 @@ If you are interested in implementing your own Objects, please jump to
 in XML on your own.
 
 As an example, we are going to implement
-`Time Object with ID 3333 <https://www.openmobilealliance.org/tech/profiles/lwm2m/3333.xml>`_.
+`Time Object with ID 3333 in version 1.0 <https://raw.githubusercontent.com/OpenMobileAlliance/lwm2m-registry/prod/version_history/3333-1_0.xml>`_.
 It is one of the simplest Objects defined in OMA LwM2M Registry, which allows to
 understand basics of operations on Objects.
 
@@ -68,7 +61,7 @@ Implementing the Object
 To generate layout of Object's implementation, we will use the ``anjay_codegen.py``
 script, which is bundled with Anjay library. Without going into details, which
 are described in :doc:`/Tools` section, we may just call
-``./tools/lwm2m_object_registry.py --get-xml 3333 | ./tools/anjay_codegen.py -i - -o time_object.c``
+``./tools/lwm2m_object_registry.py --get-xml 3333 -v 1.0 | ./tools/anjay_codegen.py -i - -o time_object.c``
 from the Anjay root directory. This command downloads Object's definition from
 OMA LwM2M registry and converts it to source code with a lot of TODOs. Now we
 are going to replace them with actual code.
@@ -322,7 +315,7 @@ it in Anjay and update ``CMakeLists.txt`` file.
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-ObjectImplementation/src/main.c
     :caption: main.c
-    :emphasize-lines: 27-35,43
+    :emphasize-lines: 26-34,42
 
     int main(int argc, char *argv[]) {
         if (argc != 2) {
@@ -344,9 +337,8 @@ it in Anjay and update ``CMakeLists.txt`` file.
         }
 
         int result = 0;
-        // Install Attribute storage and setup necessary objects
-        if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-                || setup_server_object(anjay)) {
+        // Setup necessary objects
+        if (setup_security_object(anjay) || setup_server_object(anjay)) {
             result = -1;
         }
 

@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Download resumption
 ===================
@@ -90,6 +83,23 @@ Let's have a look at the ``anjay_fw_update_initial_state_t``:
          * Idle state.
          */
         const struct anjay_etag *resume_etag;
+
+        /**
+         * Informs the module to try reusing sockets of existing LwM2M Servers to
+         * download the firmware image if the download URI matches any of the LwM2M
+         * Servers.
+         */
+        bool prefer_same_socket_downloads;
+
+    #ifdef ANJAY_WITH_SEND
+        /**
+         * Enables using LwM2M Send to report State, Update Result and Firmware
+         * Version to the LwM2M Server (if LwM2M Send is enabled) during firmware
+         * update.
+         */
+        bool use_lwm2m_send;
+    #endif // ANJAY_WITH_SEND
+
     } anjay_fw_update_initial_state_t;
 
 

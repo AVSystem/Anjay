@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_READ_CORE_H
@@ -30,7 +23,7 @@ _anjay_dm_response_details_for_read(anjay_unlocked_t *anjay,
                                     bool requires_hierarchical_format,
                                     anjay_lwm2m_version_t lwm2m_version);
 
-int _anjay_dm_read_or_observe(anjay_unlocked_t *anjay,
+int _anjay_dm_read_or_observe(anjay_connection_ref_t connection,
                               const anjay_dm_installed_object_t *obj,
                               const anjay_request_t *request);
 
@@ -45,6 +38,12 @@ int _anjay_dm_read_and_destroy_ctx(anjay_unlocked_t *anjay,
                                    const anjay_dm_path_info_t *path_info,
                                    anjay_ssid_t requesting_ssid,
                                    anjay_unlocked_output_ctx_t **out_ctx_ptr);
+
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_dm_read_or_observe_composite(anjay_connection_ref_t connection,
+                                        const anjay_request_t *request,
+                                        anjay_unlocked_input_ctx_t *in_ctx);
+#endif // ANJAY_WITH_LWM2M11
 
 VISIBILITY_PRIVATE_HEADER_END
 

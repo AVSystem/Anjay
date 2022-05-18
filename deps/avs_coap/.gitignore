@@ -38,6 +38,7 @@ Testing/
 /build*
 /examples/build
 /include_public/avsystem/coap/avs_coap_config.h
+/tools/__pycache__
 
 # documentation
 /doc/doxygen

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_UTILS_CORE_H
@@ -361,6 +354,26 @@ typedef struct anjay_binding_info {
 int _anjay_security_config_from_dm_unlocked(anjay_unlocked_t *anjay,
                                             anjay_security_config_t *out_config,
                                             const char *raw_url);
+
+#ifdef ANJAY_WITH_LWM2M11
+typedef struct {
+    bool use_system_wide;
+    AVS_LIST(avs_crypto_certificate_chain_info_t) certs;
+    AVS_LIST(avs_crypto_cert_revocation_list_info_t) crls;
+} anjay_trust_store_t;
+
+const anjay_trust_store_t *
+_anjay_get_trust_store(anjay_unlocked_t *anjay,
+                       anjay_ssid_t for_ssid,
+                       anjay_security_mode_t security_mode);
+
+anjay_security_config_t
+_anjay_security_config_pkix_unlocked(anjay_unlocked_t *anjay);
+#endif // ANJAY_WITH_LWM2M11
+
+#if defined(ANJAY_WITH_LWM2M11)
+const anjay_binding_info_t *_anjay_binding_info_by_letter(char letter);
+#endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_CORE_PERSISTENCE)
 
 const anjay_binding_info_t *
 _anjay_binding_info_by_transport(anjay_socket_transport_t transport);

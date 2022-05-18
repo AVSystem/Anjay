@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef SECURITY_UTILS_H
@@ -40,20 +33,38 @@ int _anjay_sec_fetch_security_mode(anjay_unlocked_input_ctx_t *ctx,
 int _anjay_sec_validate_security_mode(int32_t security_mode);
 
 /**
- * Fetches SMS Security Mode from @p ctx, performs validation and in case of
- * success sets @p *out to one of @p anjay_sms_security_mode_t enum value.
- */
-int _anjay_sec_fetch_sms_security_mode(anjay_unlocked_input_ctx_t *ctx,
-                                       anjay_sms_security_mode_t *out);
-
-int _anjay_sec_validate_sms_security_mode(int32_t security_mode);
-
-/**
  * Fetches SSID from @p ctx, performs validation and in case of success sets
  * @p *out .
  */
 int _anjay_sec_fetch_short_server_id(anjay_unlocked_input_ctx_t *ctx,
                                      anjay_ssid_t *out);
+
+#if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+int _anjay_sec_init_certificate_chain_resource(
+        sec_key_or_data_t *out_resource,
+        sec_key_or_data_type_t type,
+        const avs_crypto_certificate_chain_info_t *in_value);
+
+int _anjay_sec_init_private_key_resource(
+        sec_key_or_data_t *out_resource,
+        sec_key_or_data_type_t type,
+        const avs_crypto_private_key_info_t *in_value);
+#endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) ||             \
+          (defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) && \
+          defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE)) */
+
+#if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+int _anjay_sec_init_psk_identity_resource(
+        sec_key_or_data_t *out_resource,
+        sec_key_or_data_type_t type,
+        const avs_crypto_psk_identity_info_t *in_value);
+
+int _anjay_sec_init_psk_key_resource(sec_key_or_data_t *out_resource,
+                                     sec_key_or_data_type_t type,
+                                     const avs_crypto_psk_key_info_t *in_value);
+#endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) ||             \
+          (defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) && \
+          defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE)) */
 
 void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value,
                                     bool remove_from_engine);

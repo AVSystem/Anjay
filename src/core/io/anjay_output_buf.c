@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -42,8 +35,11 @@ static int output_buf_ret_string(anjay_unlocked_output_ctx_t *ctx,
     }
 
 DEFINE_RET_HANDLER(integer, int64_t) // output_buf_ret_integer
-DEFINE_RET_HANDLER(double, double)   // output_buf_ret_double
-DEFINE_RET_HANDLER(bool, bool)       // output_buf_ret_bool
+#ifdef ANJAY_WITH_LWM2M11
+DEFINE_RET_HANDLER(uint, uint64_t) // output_buf_ret_u64
+#endif                             // ANJAY_WITH_LWM2M11
+DEFINE_RET_HANDLER(double, double) // output_buf_ret_double
+DEFINE_RET_HANDLER(bool, bool)     // output_buf_ret_bool
 
 static int
 output_buf_ret_bytes_begin(anjay_unlocked_output_ctx_t *ctx,
@@ -76,6 +72,9 @@ static const anjay_output_ctx_vtable_t BUF_OUT_VTABLE = {
     .bytes_begin = output_buf_ret_bytes_begin,
     .string = output_buf_ret_string,
     .integer = output_buf_ret_integer,
+#ifdef ANJAY_WITH_LWM2M11
+    .uint = output_buf_ret_uint,
+#endif // ANJAY_WITH_LWM2M11
     .floating = output_buf_ret_double,
     .boolean = output_buf_ret_bool,
     .objlnk = output_buf_ret_objlnk

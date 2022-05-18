@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef AVS_TEST_UTILS_H
@@ -69,23 +62,6 @@ static inline avs_coap_token_t from_bytes(const void *bytes, size_t size) {
 
 /* Used in COAP_MSG() to specify an Uri-Host option. */
 #define HOST(Host) .uri_host = Host
-
-#ifdef WITH_AVS_COAP_OSCORE
-/* Used in COAP_MSG() to specify an OSCORE option. */
-#    define OSCORE(PartialIV, KidContext, KidPresent, Kid) \
-        .oscore_opt_present = true,                        \
-        .oscore_opt = (avs_coap_option_oscore_view_t) {    \
-            .partial_iv = (uint8_t *) PartialIV,           \
-            .partial_iv_size = sizeof(PartialIV) - 1,      \
-            .kid_context = (uint8_t *) KidContext,         \
-            .kid_context_size = sizeof(KidContext) - 1,    \
-            .kid_present = KidPresent,                     \
-            .kid = (uint8_t *) Kid,                        \
-            .kid_size = sizeof(Kid) - 1                    \
-        }
-
-#    define OSCORE_EMPTY OSCORE("", "", false, "")
-#endif // WITH_AVS_COAP_OSCORE
 
 /* Used in COAP_MSG() to specify the Accept option. */
 #define ACCEPT(Format)              \

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avs_coap_init.h>
@@ -211,13 +204,13 @@ acquire_in_buffer_and_handle_incoming_packet(coap_stream_t *stream) {
             NULL);
     if (avs_is_ok(err) && !avs_coap_exchange_id_valid(stream->exchange_id)) {
         // We have just received a final response, the exchange is no longer
-        // valid. We want to flush all the data that might be still buffered
+        // valid. We want to exhaust all the data that might be still buffered
         // in the socket before returning control to the user.
         // This might cause sending 5.03 Service Unavailable even though we'd
         // probably be capable of perfectly handling that request, but it's
         // lesser evil than requiring the end user to worry about multiple
         // layers of in-socket buffering.
-        err = _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
+        err = _avs_coap_async_incoming_packet_exhaust_socket(
                 ctx, acquired_in_buffer, acquired_in_buffer_size,
                 reject_request, NULL);
     }
@@ -266,7 +259,7 @@ static avs_error_t try_wait_for_response(coap_stream_t *stream) {
                                        recv_timeout)))) {
             LOG(ERROR, _("could not set socket timeout"));
         } else {
-            // _avs_coap_async_incoming_packet_acquire_in_buffer_and_handle_multiple()
+            // _avs_coap_async_incoming_packet_handle_and_exhaust_socket()
             // cannot be used here, because we want to receive precisely one
             // packet here. The possible cases to be handled here:
             // - If we're called from flush_chunk(), the goal is to receive the

@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 OMA LwM2M - Brief description
 =============================
@@ -20,20 +13,29 @@ OMA LwM2M - Brief description
 
 `Lightweight Machine to Machine
 <https://www.omaspecworks.org/what-is-oma-specworks/iot/lightweight-m2m-lwm2m/>`_
-is a protocol developed by the `Open Mobile Alliance
-<https://openmobilealliance.org/>`_ for remote device management in the Internet
-of Things and other Machine-to-Machine applications.
+is a protocol developed by `OMA SpecWorks <https://omaspecworks.org/>`_ for
+remote device management in the Internet of Things and other
+Machine-to-Machine applications.
 
-It is designed to be transported either over UDP secured with DTLS in IP
-networks, or over SMS directly in cellular phone networks. The application data
-is encapsulated using the
-`Constrained Application Protocol <https://tools.ietf.org/html/rfc7252>`_
-(CoAP). CoAP is an application layer protocol similar to HTTP in philosophy and
-general semantics, but designed specifically with being lightweight in mind.
-CoAP makes it possible to transmit messages with low overhead - the minimal
-header size is just 4 bytes, which makes it feasible to send meaningful content
-within single, non-fragmented UDP datagrams, even over links with low MTU, such
-as SMS.
+Initially LwM2M was designed to be transported either over UDP, or over SMS
+directly in cellular phone networks. The next iteration of the standard, LwM2M
+1.1, added support for another IP transport, TCP, and two more non-IP transports,
+3GPP CIoT and LoRaWAN. All of these transports can be additionally secured with
+use of (D)TLS.
+
+The application data is encapsulated using the `Constrained Application Protocol
+<https://tools.ietf.org/html/rfc7252>`_ (CoAP). CoAP is an application layer
+protocol similar to HTTP in philosophy and general semantics, but designed
+specifically with being lightweight in mind. CoAP makes it possible to transmit
+messages with low overhead - the minimal header size is just 4 bytes, which makes
+it feasible to send meaningful content within single, non-fragmented UDP
+datagrams, even over links with low MTU, such as SMS.
+
+Since LwM2M 1.1, CoAP messages can be additionally secured using `OSCORE
+<https://datatracker.ietf.org/doc/html/rfc8613>`_, an application layer protocol
+with which it's possible to not only establish a secure communication channel
+between LwM2M Clients and Servers, but also between the Client and external
+applications. It's independent of security protocols used on other layers.
 
 Anjay is designed to hide most of the protocol details from application
 developers - however, a rudimentary understanding of the protocol is necessary
@@ -98,17 +100,19 @@ and modifying by LwM2M Servers. It can be thought of as a combination of a
 hierarchical configuration file, and a view on statistical information about the
 device and its environment.
 
-The LwM2M data model is very strictly organized as a three-level tree. Entities
-on each of those levels are identified with numerical identifiers. Those three
-levels are:
+The LwM2M data model organized as a tree up to four levels deep. Entities on
+each of those levels are identified with numerical identifiers, in range
+0-65534, inclusive. A reserved value of 65535 (called ``MAX_ID`` in protocol's
+specification) carries a special meaning in many contexts. Those levels
+are:
 
 - **Object** - each Object represent some different concept of data accessible
   via the LwM2M Client. For example, separate Objects are defined for managing
   connections with LwM2M Servers, for managing network connections, for
   accessing data from various types of sensors, etc.
 
-  Each Object is assigned a unique numerical identifier in the range 0-65535,
-  inclusive. OMA manages a `registry of known Object IDs
+  Each Object is assigned a unique numerical identifier. OMA manages a
+  `registry of known Object IDs
   <https://technical.openmobilealliance.org/OMNA/LwM2M/LwM2MRegistry.html>`_.
   Each Object defines a set of Resources whose meanings are common for each
   Object Instance.
@@ -123,22 +127,24 @@ levels are:
   Examples of such Objects include the Object that manages connections to LwM2M
   Servers, Object that represents optional software packages installed on the
   device, and Objects representing sensors (whose instances are, however, not
-  creatable). Identifiers for each Instance of such Objects may be arbitrarily
-  chosen in the range 0-65534, inclusive - note that 65535 is reserved and
-  forbidden in this context.
+  creatable).
 
 - **Resource** - each Object Instance of a given Object supports the same set
   of Resources, as defined by the Object definition. Within a given Object,
-  each Resource ID (which may be in the range 0-65535, inclusive) has a
-  well-defined meaning, and represent the same concept. However, some Resources
-  may not be present in some Object Instances, and, obviously, their values and
-  mapping onto real-world entities may be different.
+  each Resource ID has a well-defined meaning, and represent the same concept.
+  However, some Resources may not be present in some Object Instances, and,
+  obviously, their values and mapping onto real-world entities may be different.
+
+- **Resource Instance** - some Resources may have multiple instances (they're
+  sometimes called *Multiple-Resources*), effectively causing the type of that
+  resource to be an associative array with an integer index. Since LwM2M 1.1,
+  instances of these resources may be addressed individually.
 
 The numerical identifiers on each of these levels form a path, which is used
-as the path portion of CoAP URLs. For example, a path ``/1/2/3`` refers to
-Resource ID=3 in Object Instance ID=2 of Object ID=1. Whole Object Instances
-(``/1/2``) or event Objects (``/1``) may be referred to using this syntax as
-well.
+as the path portion of CoAP URLs. For example, a path ``/9/2/17/3`` refers to
+Resource Instance ID=3 of Resource ID=17 in Object Instance ID=2 of Object
+ID=9. Whole Resources (``/9/2/17``), Object Instances (``/9/2``) or even
+Objects (``/9``) may be referred to using this syntax as well.
 
 Objects
 ^^^^^^^
@@ -190,7 +196,7 @@ Resources
 Each of the Resource definitions, contained in each Object definition, features
 the following information:
 
-- **ID** - numerical identifier of the Object.
+- **ID** - numerical identifier of the Resource.
 
 - **Name** - short description of the resource; it is not used in the actual
   on-wire protocol.
@@ -230,8 +236,9 @@ the following information:
 Attributes
 ^^^^^^^^^^
 
-Each entity in the data model (Resource, Object Instance or Object) can have
-various "attributes" attached. There are two types of attributes currently
+Each entity in the data model (Object, Object Instance, Resource or Resource
+Instance) can have various "attributes" attached. Most of these attributes are
+handled automatically by Anjay. There are two types of attributes currently
 defined in the LwM2M specification:
 
 - **<PROPERTIES>** Class Attributes are read-only metadata that may be read by
@@ -239,12 +246,15 @@ defined in the LwM2M specification:
   more effectively. These include:
 
   - **Dimension** (``dim``) - in case of Multiple Resources, it is the number of
-    Resource Instances. Anjay calculates this Attribute automatically, but a
-    dedicated callback for calculating it can also be optionally supplied.
+    Resource Instances.
 
   - **Object Version** (``ver``) - provides a way for versioning Object
-    definitions. It is currently not supported in Anjay, so all Objects are
-    currently locked at version 1.0.
+    definitions. This attribute, if not present, implies 1.0 version of the
+    Object, although the user is free to adjust it in ``anjay_dm_object_def_t``
+    structure.
+
+  - additional properties used only in Bootstrap-Discover operation: **Short
+    Server ID** (``ssid``) and **Server URI** (``uri``).
 
 - **<NOTIFICATION>** Class Attributes are writeable by LwM2M Servers and affect
   the way changes in observed resources are notified over the
@@ -255,7 +265,7 @@ defined in the LwM2M specification:
   given Object Instance or Object, if the Observe request was called on such
   higher-level path).
 
-  This behaviour can be modified using the following available attributes:
+  This behavior can be modified using the following available attributes:
 
   - **Minimum Period** (``pmin``) - if set to a non-zero value, notifications
     will never be sent more often than once every ``pmin`` seconds.
@@ -273,6 +283,14 @@ defined in the LwM2M specification:
   - **Step** (``st``) - applicable only to numeric Resources - if set,
     notifications will only be sent if the numerical value is different from the
     previously notified value by at least ``st``.
+
+  - **Minimum Evaluation Period** (``epmin``) - if set, the notification
+    criteria won't be evaluated more often than every ``epmin`` seconds.
+
+  - **Maximum Evaluation Period** (``epmax``) - if set, the notification
+    criteria will be evaluated at least every ``epmax`` seconds (although this
+    attribute is ignored in Anjay, as the automatic evaluation happens when
+    ``pmax`` seconds pass).
 
   When several Attributes are specified at the same time, the relations between
   them are as follows:
@@ -315,6 +333,16 @@ and a CoAP client. The messages that may be exchanged between those include:
   Bootstrap Server to start issuing Bootstrap commands on its own, without
   receiving a Bootstrap Request message.
 
+- **GET Accept: application/link-format** request sent from the Bootstrap Server
+  to the Client is interpreted as **Bootstrap Discover**. It allows the
+  Bootstrap Server to get information about the data model supported by and
+  present on the client device.
+
+- **GET** with *Content Format* option sent from the Bootstrap Server to the
+  Client is a **Bootstrap Read**. It can be used to read LwM2M Server and Access
+  Control Objects during the Bootstrap phase to query for already configured
+  Servers on the Client.
+
 - **PUT** requests sent from the Bootstrap Server to the Client are interpreted
   as **Bootstrap Write** commands. These allow creating and writing to Object
   Instances and Resources in order to initialize the data model to a state
@@ -323,12 +351,6 @@ and a CoAP client. The messages that may be exchanged between those include:
 - **Bootstrap Delete** command, represented as **DELETE** requests from the
   Bootstrap Server to the Client, allows the Bootstrap Server to delete existing
   Object Instances.
-
-- The Bootstrap Server may also send **GET** requests, interpreted as
-  **Bootstrap Discover**. It allows the Bootstrap Server to get information
-  about the data model supported by and present on the client device. Only a
-  list of Object Instances with some additional metadata is accessible. The
-  Bootstrap Server *cannot* read Resource values.
 
 - Finally, the Bootstrap Server sends a **Bootstrap Finish** command,
   represented as a **POST /bs** CoAP request send to the Client. Upon receiving
@@ -391,14 +413,15 @@ Device Management and Service Enablement Interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This is the main interface on which the actual device management occurs. In this
-interface, the LwM2M Server acts as a CoAP client, sending requests to the LwM2M
-Client, which acts as a server on the CoAP layer. However, please note that
-the IP addresses and port numbers are exactly the same as previously established
-via the `Registration Interface`_ - it means that for given two endpoints, the
-client/server relationship on the CoAP layer is reversible at any time.
+interface, most of the requests are made by the LwM2M Server, that is, it acts as
+a CoAP client, sending requests to the LwM2M Client, which acts as a server on
+the CoAP layer. The exception is the **Send** request (available since LwM2M
+1.1), which is issued by the LwM2M Client. Please note that the IP addresses and
+port numbers are exactly the same as previously established via the `Registration
+Interface`_ - it means that for given two endpoints, the client/server
+relationship on the CoAP layer is reversible at any time.
 
-The Device Management and Service Enablement interface defines the following
-commands:
+Following operations can be issued by the LwM2M Server:
 
 - **Discover** (CoAP **GET Accept: application/link-format**) allows the Server
   to get a list of all supported and present Objects, Object Instances and
@@ -406,15 +429,17 @@ commands:
   is not returned.
 
 - **Read** (CoAP **GET** other than the above) reads data - either from a single
-  Resource, entire Object Instance, or even a whole Object at once.
+  Resource Instance, entire Resource, Object Instance, or even a whole Object
+  at once.
 
 - **Write** allows the Server to modify the data model. It comes in two
-  flavours:
+  flavors:
 
-  - **PUT /{Object ID}/{Instance ID}[/{Resource ID}]** request signifies the
-    *Replace* method. It can be called on either a single Resource to replace
-    its value, or on a whole Object Instance - in that case all existing
-    contents of that Instance are erased and replaced with the supplied data.
+  - **PUT /{Object ID}/{Instance ID}[/{Resource ID}[/{Resource Instance ID}]]**
+    request signifies the *Replace* method. It can be called on either a single
+    Resource to replace its value, or on a whole Object Instance - in that case
+    all existing contents of that Instance are erased and replaced with the
+    supplied data.
 
   - **POST /{Object ID}/{Instance ID}** request means *Partial Update*. It can
     only be called on a whole Object Instance and only replaces the Resources
@@ -449,8 +474,20 @@ commands:
   might have a variable and configurable number of similar but distinct entries
   - for example, software packages or APN connections.
 
+- Composite counterparts of **Read** and **Write** operations -
+  **Read-Composite** (CoAP **FETCH**) and **Write-Composite** (CoAP **iPATCH**),
+  which can target many Object Instances and Resources of different Objects.
+  These operations were added in LwM2M 1.1.
+
 - Finally, the **Delete** operation (CoAP **DELETE**) is the reverse of Create,
   allowing to remove previously created Object Instances.
+
+Following operations can be issued by the LwM2M Client:
+
+- A **POST /dp** request represents the **Send** operation. It's used by the
+  Client to send data to the Server without an explicit request, which is in
+  some circumstances a more flexible option compared to the standard Information
+  Reporting Interface described further.
 
 Information Reporting Interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -471,6 +508,11 @@ semantics mostly unchanged onto the LwM2M mapping of CoAP concepts.
   with **Observe option = 1** or by responding to the *Notify* message with a
   **CoAP RESET**.
 
+- Composite counterparts of **Observe** and **Cancel Observation** operations -
+  **Observe-Composite** (CoAP **FETCH** with **Observe option = 0**) and
+  **Cancel Observation-Composite** (CoAP **FETCH** with **Observe option = 1**),
+  which can target many entities at once.
+
 - **Notify** is an **asynchronous CoAP response** as described in
   `RFC 7641 <https://tools.ietf.org/html/rfc7641>`_. It is essentially a
   repeated reply to a *Read*, sent whenever the observed value changes, and/or
@@ -485,22 +527,12 @@ semantics mostly unchanged onto the LwM2M mapping of CoAP concepts.
 Queue mode
 ----------
 
-The *Register* and *Update* commands include a "Binding Mode" Parameter, which
-may be one of the following:
-
-- ``U`` - UDP connection in standard mode
-- ``UQ`` - UDP connection in queue mode
-- ``S`` - SMS connection in standard mode
-- ``SQ`` - SMS connection in queue mode
-- ``US`` - both UDP and SMS connections active, both in standard mode
-- ``UQS`` - both UDP and SMS connections active; UDP in queue mode, SMS in
-  standard mode
-
-The "queue mode" mentioned here is a special mode of operation in which the
-client device is not required to actively listen for incoming packets. The
-client is only required to listen for such packets for a limited period of time
-after each exchange of messages with the Server - typically after the *Update*
-command.
+The *Register* command includes a "Queue Mode" parameter which indicates if
+the client device is running in Queue Mode. It's a special mode of operation
+in which the client device is not required to actively listen for incoming
+packets. The client is only required to listen for such packets for a limited
+period of time after each exchange of messages with the Server - typically
+after the *Update* command.
 
 The specification recommends to use CoAP's ``MAX_TRANSMIT_WAIT`` value (93
 seconds by default) as that aforementioned limited period of time, and this
@@ -512,3 +544,24 @@ required to actively listen from the library user. In particular, if the
 active connections are in queue mode and the listening period has passed. In
 that case, it is safe to passively sleep for the period returned by
 ``anjay_sched_time_to_next()`` (or one of its convenience wrappers).
+
+In LwM2M 1.0 the use of Queue Mode was handled by Binding parameter, included
+in *Register* and *Update* commands.
+
+Trigger mode
+------------
+
+SMS messages can be used not only just a sole communication method for
+LwM2M-enabled devices, but they can be also used in coordination with any other
+binding to wake the device up from sleep in Queue Mode and send the Update
+message to the Server. This mode of operation is called "Trigger mode".
+
+To wake the device up, the LwM2M Server sends the Execute operation on ``1/x/8``
+Resource (*Registration Update Trigger*), expecting a response to that message
+on the other communication channel, like TCP or UDP.
+
+You can find more information about Trigger mode in :ref:`SMS Binding feature
+description <anjay-sms-trigger-mode>`.
+
+In LwM2M 1.0, similar mode of operation could be achieved with use of "UQS"
+Binding Mode.

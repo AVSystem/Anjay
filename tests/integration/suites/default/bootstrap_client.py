@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import socket
 import time
@@ -64,6 +57,15 @@ class BootstrapTest:
                 additional_server_data += TLV.make_resource(
                     RID.Server.BootstrapOnRegistrationFailure, bootstrap_on_registration_failure).serialize()
 
+            if server_communication_retry_count is not None:
+                additional_server_data += TLV.make_resource(
+                    RID.Server.ServerCommunicationRetryCount, server_communication_retry_count).serialize()
+                additional_server_data += TLV.make_resource(
+                    RID.Server.ServerCommunicationRetryTimer, server_communication_retry_timer).serialize()
+                additional_server_data += TLV.make_resource(RID.Server.ServerCommunicationSequenceRetryCount,
+                                                            server_communication_sequence_retry_count).serialize()
+                additional_server_data += TLV.make_resource(RID.Server.ServerCommunicationSequenceDelayTimer,
+                                                            server_communication_sequence_delay_timer).serialize()
 
             # Create typical Server Object instance
             self.write_instance(self.bootstrap_server, oid=OID.Server, iid=server_iid,
@@ -198,6 +200,34 @@ class BootstrapOneResourceAtATimeTest(BootstrapTest.Test):
         self.assertDemoRegisters(self.serv)
 
 
+class BootstrapOnRegistrationFailure(BootstrapTest.Test):
+    def runTest(self):
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+                                       lifetime=60,
+                                       additional_server_data=TLV.make_resource(
+                                           RID.Server.BootstrapOnRegistrationFailure,
+                                           True).serialize())
+
+        self.assertDemoRegisters(self.serv, lifetime=60, reject=True)
+
+        self.serv.reset()
+
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+                                       lifetime=60,
+                                       additional_server_data=TLV.make_resource(
+                                           RID.Server.BootstrapOnRegistrationFailure,
+                                           True).serialize())
+
+        # There was a race condition in Anjay, which causes different behavior
+        # if refresh_server_job was called before getting response to Register
+        # request. This sleep is added to ensure all jobs scheduled for 'now'
+        # will be called first.
+        time.sleep(1)
+        self.assertDemoRegisters(self.serv, lifetime=60)
 
 
 class ClientBootstrapNotSentAfterDisableWithinHoldoffTest(BootstrapTest.Test):
@@ -398,6 +428,55 @@ class ClientInitiatedBootstrapFallbackOnly(BootstrapTest.Test):
         self.assertDemoRequestsBootstrap()
 
 
+# Tests below take absurd amount of time when advance_time is unavailable
+class BootstrapNoInteractionFromBootstrapServer(BootstrapTest.Test):
+    ACK_TIMEOUT = 1
+    MAX_RETRANSMIT = 1
+
+    def setUp(self):
+        # Done to have a relatively short EXCHANGE_LIFETIME
+        super().setUp(extra_cmdline_args=['--ack-random-factor', '1',
+                                          '--ack-timeout', '%s' % self.ACK_TIMEOUT,
+                                          '--max-retransmit', '%s' % self.MAX_RETRANSMIT])
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        # We should get Bootstrap Request now
+        self.assertDemoRequestsBootstrap()
+
+        self.assertEqual(1, self.get_socket_count())
+        self.advance_demo_time(TxParams(ack_timeout=self.ACK_TIMEOUT,
+                                        max_retransmit=self.MAX_RETRANSMIT).exchange_lifetime())
+        self.wait_until_socket_count(0, timeout_s=5)
+
+
+class BootstrapNoInteractionFromBootstrapServerAfterSomeExchanges(BootstrapTest.Test):
+    ACK_TIMEOUT = 1
+    MAX_RETRANSMIT = 1
+
+    def setUp(self):
+        # Done to have a relatively short EXCHANGE_LIFETIME
+        super().setUp(extra_cmdline_args=['--ack-random-factor', '1',
+                                          '--ack-timeout', '%s' % self.ACK_TIMEOUT,
+                                          '--max-retransmit', '%s' % self.MAX_RETRANSMIT])
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        # Some random bootstrap operation, the data won't be used anyway.
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coap://127.0.0.1:9123',
+                                       security_mode=SecurityMode.NoSec,
+                                       finish=False)
+
+        self.assertEqual(1, self.get_socket_count())
+        self.advance_demo_time(TxParams(ack_timeout=self.ACK_TIMEOUT,
+                                        max_retransmit=self.MAX_RETRANSMIT).exchange_lifetime())
+        self.wait_until_socket_count(0, timeout_s=5)
 
 
 class DtlsBootstrap:
@@ -415,6 +494,334 @@ class DtlsBootstrap:
                                                                psk_identity=self.PSK_IDENTITY))])
 
 
+class DtlsTlsCiphersuitesSingleSupportedCipher(DtlsBootstrap.Test):
+    """
+    Verifies that setting DTLS/TLS Ciphersuite resource to a cipher supported
+    by the server makes the client register correctly.
+    """
+
+    def runTest(self):
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coaps://127.0.0.1:%s' % (
+                                           self.serv.get_listen_port(),),
+                                       security_mode=SecurityMode.PreSharedKey,
+                                       secure_identity=self.PSK_IDENTITY,
+                                       secure_key=self.PSK_KEY,
+                                       additional_security_data=TLV.make_multires(RID.Security.DtlsTlsCiphersuite,
+                                                                                  enumerate([
+                                                                                      self.SUPPORTED_CIPHER])).serialize())
+        self.assertDemoRegisters()
+
+
+class DtlsTlsCiphersuitesSingleUnsupportedCipher(DtlsBootstrap.Test):
+    """
+    Verifies that setting DTLS/TLS Ciphersuite resource to a cipher NOT
+    supported by the server makes the client fail to register, and not attempt
+    to continue. A DTLS alert should be observed.
+    """
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coaps://127.0.0.1:%s' % (
+                                           self.serv.get_listen_port(),),
+                                       security_mode=SecurityMode.PreSharedKey,
+                                       secure_identity=self.PSK_IDENTITY,
+                                       secure_key=self.PSK_KEY,
+                                       additional_security_data=TLV.make_multires(
+                                           RID.Security.DtlsTlsCiphersuite,
+                                           enumerate([self.UNSUPPORTED_CIPHER])).serialize())
+        with self.assertRaisesRegex(RuntimeError, r'The server has no ciphersuites in common|The handshake negotiation failed'):
+            self.assertDemoRegisters()
+        self.assertDemoRequestsBootstrap()
+
+
+class DtlsTlsCiphersuitesUnsupportedAndSupportedCiphers(DtlsBootstrap.Test):
+    """
+    Verifies that setting DTLS/TLS Ciphersuite resource to a list that contains
+    ciphers both supported and unsupported by server makes the client register
+    correctly.
+    """
+
+    def runTest(self):
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coaps://127.0.0.1:%s' % (
+                                           self.serv.get_listen_port(),),
+                                       security_mode=SecurityMode.PreSharedKey,
+                                       secure_identity=self.PSK_IDENTITY,
+                                       secure_key=self.PSK_KEY,
+                                       additional_security_data=TLV.make_multires(
+                                           RID.Security.DtlsTlsCiphersuite, enumerate(
+                                               [self.UNSUPPORTED_CIPHER,
+                                                self.SUPPORTED_CIPHER])).serialize())
+        self.assertDemoRegisters()
+
+
+class DtlsTlsConnectionFailedSetsAlertCode(BootstrapTest.Test):
+    def runTest(self):
+        dtls_server = coap.DtlsServer(psk_identity=b'foo', psk_key=b'bar')
+        self.perform_typical_bootstrap(server_iid=2,
+                                       security_iid=2,
+                                       server_uri='coaps://127.0.0.1:%d' % dtls_server.get_listen_port(),
+                                       lifetime=86400,
+                                       security_mode=SecurityMode.PreSharedKey,
+                                       binding='U',
+                                       secure_identity=b'foo',
+                                       secure_key=b'yyy')
+
+        try:
+            dtls_server.recv_raw(4096)
+        except RuntimeError as e:
+            self.assertIn('mbedtls_ssl_handshake failed', str(e))
+
+        # Bootstrap Finish succeeded, but the server was not reachable, due to bad credentials.
+        self.assertDemoRequestsBootstrap(timeout_s=5)
+
+        import json
+        response = json.loads(self.read_instance(self.bootstrap_server, oid=OID.Server, iid=2,
+                                                 accept=coap.ContentFormat.APPLICATION_LWM2M_SENML_JSON).content.decode())
+        for resource in response:
+            if resource['n'] == '/%d' % RID.Server.TlsDtlsAlertCode:
+                # 20 is "bad_record_mac" (see https://tools.ietf.org/html/rfc5246#section-7.2 for more details)
+                self.assertTrue(resource['v'] == 20)
+
+    def tearDown(self):
+        super().teardown_demo_with_servers(auto_deregister=False)
+
+
+
+
+class BootstrapFallback(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(minimum_version='1.0', maximum_version='1.1')
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap(respond_with_error_code=coap.Code.RES_BAD_REQUEST,
+                                         preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+        self.assertDemoRequestsBootstrap()
+
+
+class BootstrapNoFallback(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(minimum_version='1.1', maximum_version='1.1')
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap(respond_with_error_code=coap.Code.RES_BAD_REQUEST,
+                                         preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+        with self.assertRaises(socket.timeout):
+            self.bootstrap_server.recv(timeout_s=5)
+
+
+class LastBootstrappedResource(BootstrapTest.Test):
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def get_last_bootstrapped_timestamp(self, iid):
+        res = self.read_instance(self.bootstrap_server, oid=OID.Server,
+                                 iid=1, accept=coap.ContentFormat.APPLICATION_LWM2M_TLV)
+        self.assertEqual(coap.ContentFormat.APPLICATION_LWM2M_TLV,
+                         res.get_content_format())
+
+        tlv = TLV.parse(res.content)
+
+        for entry in tlv:
+            if entry.identifier == RID.Server.LastBootstrapped:
+                return entry
+
+    def runTest(self):
+        timestamp_before_bootstrap = int(time.time())
+        # Some random bootstrap operation, the data won't be used anyway.
+        self.perform_typical_bootstrap(server_iid=1,
+                                       security_iid=2,
+                                       server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+                                       security_mode=SecurityMode.NoSec,
+                                       finish=False)
+
+        last_bootstrapped_resource = self.get_last_bootstrapped_timestamp(1)
+        self.assertIsNotNone(last_bootstrapped_resource)
+        last_bootstrapped_timestamp = int.from_bytes(
+            last_bootstrapped_resource.value, byteorder='big')
+        self.assertGreaterEqual(
+            last_bootstrapped_timestamp, timestamp_before_bootstrap)
+        timestamp_before_bootstrap = last_bootstrapped_timestamp
+        time.sleep(1)
+
+        # Modify only Security object
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=2,
+                            content=TLV.make_resource(
+                                RID.Security.ServerURI,
+                                'coap://127.0.0.1:%d' % self.serv.get_listen_port()).serialize()
+                            + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                            + TLV.make_resource(RID.Security.Mode,
+                                                SecurityMode.NoSec.value).serialize()
+                            + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
+                            + TLV.make_resource(RID.Security.PKOrIdentity, b'').serialize()
+                            + TLV.make_resource(RID.Security.SecretKey, b'').serialize())
+
+        last_bootstrapped_resource = self.get_last_bootstrapped_timestamp(1)
+        self.assertIsNotNone(last_bootstrapped_resource)
+        last_bootstrapped_timestamp = int.from_bytes(
+            last_bootstrapped_resource.value, byteorder='big')
+        self.assertGreaterEqual(
+            last_bootstrapped_timestamp, timestamp_before_bootstrap)
+        timestamp_before_bootstrap = last_bootstrapped_timestamp
+        time.sleep(1)
+
+        # Modify only Server object
+        self.write_instance(self.bootstrap_server, oid=OID.Server, iid=1,
+                            content=TLV.make_resource(
+                                RID.Server.Lifetime, 86400).serialize()
+                            + TLV.make_resource(RID.Server.ShortServerID, 42).serialize()
+                            + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
+                            + TLV.make_resource(RID.Server.Binding, 'U').serialize())
+
+        last_bootstrapped_resource = self.get_last_bootstrapped_timestamp(1)
+        self.assertIsNotNone(last_bootstrapped_resource)
+        last_bootstrapped_timestamp = int.from_bytes(
+            last_bootstrapped_resource.value, byteorder='big')
+        self.assertGreaterEqual(
+            last_bootstrapped_timestamp, timestamp_before_bootstrap)
+
+
+class BootstrappedSecurityInstanceBindingAndUriMismatch(BootstrapTest.Test):
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap(endpoint=DEMO_ENDPOINT_NAME)
+
+        req = Lwm2mDelete('/')
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
+                            self.bootstrap_server.recv())
+
+        self.write_instance(self.bootstrap_server, oid=OID.Server, iid=1,
+                            content=TLV.make_resource(
+                                RID.Server.Lifetime, 86400).serialize()
+                            + TLV.make_resource(RID.Server.ShortServerID, 42).serialize()
+                            + TLV.make_resource(RID.Server.NotificationStoring, True).serialize()
+                            + TLV.make_resource(RID.Server.Binding, 'N').serialize())
+
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(('127.0.0.1', 0))
+        s.listen()
+        s.settimeout(5)
+
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=2,
+                            content=TLV.make_resource(
+                                RID.Security.ServerURI,
+                                'coap+tcp://127.0.0.1:%d' % s.getsockname()[1]).serialize()
+                            + TLV.make_resource(RID.Security.Bootstrap, 0).serialize()
+                            + TLV.make_resource(RID.Security.Mode,
+                                                SecurityMode.NoSec.value).serialize()
+                            + TLV.make_resource(RID.Security.ShortServerID, 42).serialize()
+                            + TLV.make_resource(RID.Security.PKOrIdentity, b'').serialize()
+                            + TLV.make_resource(RID.Security.SecretKey, b'').serialize())
+
+        self.perform_bootstrap_finish()
+
+        with self.assertRaises(socket.timeout):
+            s.accept()
+
+        self.assertDemoRequestsBootstrap(endpoint=DEMO_ENDPOINT_NAME)
+
+
+# NOTE: consecutive Bootstrap Requests are sent with exponential backoff (see schedule_request_bootstrap()),
+# starting with 3s. If we were to test like k different values for the resource that causes re-bootstrapping,
+# it makes more sense to do k separate tests and pay 3 seconds for each (O(k)), rather than one with cost:
+# 3*(1) + 3*(2) + 3*(3) + ... + 3*(k) = O(k^2)
+class BootstrapSingleServerRegistrationOnFailureNotSet(BootstrapTest.Test):
+    BOOTSTRAP_ON_REGISTRATION_FAILURE = None
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.perform_typical_bootstrap(clear_everything=True,
+                                       server_iid=1,
+                                       security_iid=2,
+                                       # Definitely an incorrect address.
+                                       server_uri='coap://256.0.0.1:5683',
+                                       security_mode=SecurityMode.NoSec,
+                                       bootstrap_on_registration_failure=self.BOOTSTRAP_ON_REGISTRATION_FAILURE,
+                                       finish=True)
+        # See the comment above to understand where the timeout_s came from.
+        self.assertDemoRequestsBootstrap(timeout_s=3 + 1)
+
+
+class BootstrapSingleServerRegistrationOnFailureFalse(BootstrapSingleServerRegistrationOnFailureNotSet):
+    BOOTSTRAP_ON_REGISTRATION_FAILURE = False
+
+
+class BootstrapSingleServerRegistrationOnFailureTrue(BootstrapSingleServerRegistrationOnFailureNotSet):
+    BOOTSTRAP_ON_REGISTRATION_FAILURE = True
+
+
+class BootstrapMultiServerRegistrationOnFailureTrue(BootstrapTest.Test):
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap()
+
+        self.add_server(server_iid=2,
+                        security_iid=2,
+                        server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+                        bootstrap_on_registration_failure=False)
+        self.add_server(server_iid=3,
+                        security_iid=3,
+                        server_uri='coap://256.0.0.1:5683',
+                        bootstrap_on_registration_failure=True)
+        self.perform_bootstrap_finish()
+        self.assertDemoRequestsBootstrap()
+
+
+class BootstrapMultiServerRegistrationOnFailureNotSet(BootstrapTest.Test):
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap()
+
+        self.add_server(server_iid=2,
+                        security_iid=2,
+                        server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port())
+        self.add_server(server_iid=3,
+                        security_iid=3,
+                        server_uri='coap://256.0.0.1:5683')
+        self.perform_bootstrap_finish()
+        self.assertDemoRequestsBootstrap()
+
+
+class BootstrapMultiServerRegistrationOnFailureFalse(BootstrapTest.Test):
+    def runTest(self):
+        self.assertDemoRequestsBootstrap()
+
+        self.add_server(server_iid=2,
+                        security_iid=2,
+                        server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+                        bootstrap_on_registration_failure=False)
+        self.add_server(server_iid=3,
+                        security_iid=3,
+                        server_uri='coap://256.0.0.1:5683',
+                        bootstrap_on_registration_failure=False)
+        self.perform_bootstrap_finish()
+        self.assertDemoRegisters(self.serv)
+
+        with self.assertRaises(socket.timeout):
+            print(self.bootstrap_server.recv(timeout_s=3))
 
 
 class NoBootstrapAfterCompleteFail(BootstrapTest.Test):

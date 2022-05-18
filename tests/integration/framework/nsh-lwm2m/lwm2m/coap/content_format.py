@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 
 class ContentFormat(object):
@@ -25,12 +18,15 @@ class ContentFormat(object):
     APPLICATION_PKCS7_CERTS_ONLY = 281
     APPLICATION_PKCS10 = 286
     APPLICATION_PKIX_CERT = 287
+    APPLICATION_LWM2M_SENML_ETCH_JSON = 320
+    APPLICATION_LWM2M_SENML_ETCH_CBOR = 322
     APPLICATION_LWM2M_TEXT_LEGACY = 1541
     APPLICATION_LWM2M_TLV_LEGACY = 1542
     APPLICATION_LWM2M_JSON_LEGACY = 1543
     APPLICATION_LWM2M_OPAQUE_LEGACY = 1544
     APPLICATION_LWM2M_TLV = 11542
     APPLICATION_LWM2M_JSON = 11543
+    APPLICATION_LWM2M_CBOR = 11544
 
     @staticmethod
     def to_str(fmt):

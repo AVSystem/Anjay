@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef SECURITY_SECURITY_H
@@ -37,14 +30,23 @@ typedef enum {
     SEC_RES_PK_OR_IDENTITY = 3,
     SEC_RES_SERVER_PK = 4,
     SEC_RES_SECRET_KEY = 5,
-    SEC_RES_SMS_SECURITY_MODE = 6,
-    SEC_RES_SMS_BINDING_KEY_PARAMS = 7,
-    SEC_RES_SMS_BINDING_SECRET_KEYS = 8,
-    SEC_RES_SERVER_SMS_NUMBER = 9,
     SEC_RES_SHORT_SERVER_ID = 10,
     SEC_RES_CLIENT_HOLD_OFF_TIME = 11,
     SEC_RES_BOOTSTRAP_TIMEOUT = 12,
+#ifdef ANJAY_WITH_LWM2M11
+    SEC_RES_MATCHING_TYPE = 13,
+    SEC_RES_SNI = 14,
+    SEC_RES_CERTIFICATE_USAGE = 15,
+    SEC_RES_DTLS_TLS_CIPHERSUITE = 16,
+#endif // ANJAY_WITH_LWM2M11
 } security_resource_t;
+
+#ifdef ANJAY_WITH_LWM2M11
+typedef struct {
+    anjay_riid_t riid;
+    uint32_t cipher_id;
+} sec_cipher_instance_t;
+#endif // ANJAY_WITH_LWM2M11
 
 typedef enum {
     SEC_KEY_AS_DATA,
@@ -57,6 +59,13 @@ struct sec_key_or_data_struct {
     sec_key_or_data_type_t type;
     union {
         anjay_raw_buffer_t data;
+#if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+        struct {
+            avs_crypto_security_info_union_t info;
+            void *heap_buf;
+        } key;
+#endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+          defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
     } value;
 
     // HERE GOES MAGIC.
@@ -100,18 +109,16 @@ typedef struct {
     int32_t holdoff_s;
     int32_t bs_timeout_s;
 
-    anjay_sms_security_mode_t sms_security_mode;
-    sec_key_or_data_t sms_key_params;
-    sec_key_or_data_t sms_secret_key;
-    char *sms_number;
-
     bool has_is_bootstrap;
     bool has_security_mode;
     bool has_ssid;
-    bool has_sms_security_mode;
-    bool has_sms_key_params;
-    bool has_sms_secret_key;
 
+#ifdef ANJAY_WITH_LWM2M11
+    int8_t matching_type;
+    char *server_name_indication;
+    int8_t certificate_usage;
+    AVS_LIST(sec_cipher_instance_t) enabled_ciphersuites;
+#endif // ANJAY_WITH_LWM2M11
 } sec_instance_t;
 
 typedef struct {

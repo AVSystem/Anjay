@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import binascii
 import struct
@@ -83,7 +76,6 @@ class OID:
     Portfolio = 16
     BinaryAppDataContainer = 19
     EventLog = 20
-    Oscore = 21
     Temperature = 3303
     Accelerometer = 3313
     PushButton = 3347
@@ -109,6 +101,10 @@ class RID:
         ShortServerID = 10
         ClientHoldOffTime = 11
         BootstrapTimeout = 12
+        MatchingType = 13
+        SNI = 14
+        CertificateUsage = 15
+        DtlsTlsCiphersuite = 16
 
     class Server:
         ShortServerID = 0
@@ -120,6 +116,17 @@ class RID:
         NotificationStoring = 6
         Binding = 7
         RegistrationUpdateTrigger = 8
+        RequestBootstrapTrigger = 9
+        TlsDtlsAlertCode = 11
+        LastBootstrapped = 12
+        BootstrapOnRegistrationFailure = 16
+        ServerCommunicationRetryCount = 17
+        ServerCommunicationRetryTimer = 18
+        ServerCommunicationSequenceRetryCount = 19
+        ServerCommunicationSequenceDelayTimer = 20
+        Trigger = 21
+        PreferredTransport = 22
+        MuteSend = 23
 
     class AccessControl:
         TargetOID = 0
@@ -175,6 +182,10 @@ class RID:
         PackageVersion = 7
         FirmwareUpdateProtocolSupport = 8
         FirmwareUpdateDeliveryMethod = 9
+        Cancel = 10
+        Severity = 11
+        LastStateChangeTime = 12
+        MaxDeferPeriod = 13
 
     class Location:
         Latitude = 0
@@ -289,6 +300,11 @@ class RID:
         ResObjlnk = 16
         ResBytesZeroBegin = 17
         ResDouble = 18
+        ResUnsignedInt = 19
+        ResUnsignedLong = 20
+        ToggleBool = 21
+        BoolArray = 22
+        ResInitBoolArray = 23
 
     class Portfolio:
         Identity = 0
@@ -338,14 +354,6 @@ class RID:
         TotalBytes = 5
         Run = 6
 
-    class Oscore:
-        MasterSecret = 0
-        SenderId = 1
-        RecipientId = 2
-        AeadAlgorithm = 3
-        HmacAlgorithm = 4
-        MasterSalt = 5
-        IdContext = 6
 
     class BinaryAppDataContainer:
         Data = 0

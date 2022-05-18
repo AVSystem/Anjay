@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef SERVER_MOD_SERVER_H
@@ -35,6 +28,20 @@ typedef enum {
     SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE = 6,
     SERV_RES_BINDING = 7,
     SERV_RES_REGISTRATION_UPDATE_TRIGGER = 8,
+#ifdef ANJAY_WITH_LWM2M11
+    SERV_RES_BOOTSTRAP_REQUEST_TRIGGER = 9,
+    SERV_RES_TLS_DTLS_ALERT_CODE = 11,
+    SERV_RES_LAST_BOOTSTRAPPED = 12,
+    SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE = 16,
+    SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT = 17,
+    SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER = 18,
+    SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT = 19,
+    SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER = 20,
+    SERV_RES_PREFERRED_TRANSPORT = 22,
+#    ifdef ANJAY_WITH_SEND
+    SERV_RES_MUTE_SEND = 23
+#    endif // ANJAY_WITH_SEND
+#endif     // ANJAY_WITH_LWM2M11
 } server_rid_t;
 
 typedef struct {
@@ -58,6 +65,25 @@ typedef struct {
 
     anjay_iid_t iid;
 
+#ifdef ANJAY_WITH_LWM2M11
+    int64_t last_bootstrapped_timestamp;
+    bool has_last_bootstrapped_timestamp;
+    uint8_t last_alert;
+    bool has_last_alert;
+    bool bootstrap_on_registration_failure;
+    uint32_t server_communication_retry_count;
+    bool has_server_communication_retry_count;
+    uint32_t server_communication_retry_timer;
+    bool has_server_communication_retry_timer;
+    uint32_t server_communication_sequence_retry_count;
+    bool has_server_communication_sequence_retry_count;
+    uint32_t server_communication_sequence_delay_timer;
+    bool has_server_communication_sequence_delay_timer;
+    char preferred_transport;
+#    ifdef ANJAY_WITH_SEND
+    bool mute_send;
+#    endif // ANJAY_WITH_SEND
+#endif     // ANJAY_WITH_LWM2M11
 } server_instance_t;
 
 typedef struct {

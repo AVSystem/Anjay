@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avs_coap_init.h>
@@ -24,6 +17,7 @@
 #include <avs_coap_x_log_config.h>
 
 #include "avs_coap_code_utils.h"
+#include "tcp/avs_coap_tcp_signaling.h"
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -68,6 +62,12 @@ const char *avs_coap_code_to_string(uint8_t code, char *buf, size_t buf_size) {
         { AVS_COAP_CODE_SERVICE_UNAVAILABLE,        "Service Unavailable"        },
         { AVS_COAP_CODE_GATEWAY_TIMEOUT,            "Gateway Timeout"            },
         { AVS_COAP_CODE_PROXYING_NOT_SUPPORTED,     "Proxying Not Supported"     },
+
+        { AVS_COAP_CODE_CSM,                        "CSM"                        },
+        { AVS_COAP_CODE_PING,                       "Ping"                       },
+        { AVS_COAP_CODE_PONG,                       "Pong"                       },
+        { AVS_COAP_CODE_RELEASE,                    "Release"                    },
+        { AVS_COAP_CODE_ABORT,                      "Abort"                      },
         // clang-format on
     };
 

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -22,6 +15,10 @@
 
 #    include <anjay/download.h>
 #    include <anjay/fw_update.h>
+
+#    ifdef ANJAY_WITH_SEND
+#        include <anjay/lwm2m_send.h>
+#    endif // ANJAY_WITH_SEND
 
 #    include <anjay_modules/anjay_dm_utils.h>
 #    include <anjay_modules/anjay_io_utils.h>
@@ -76,12 +73,106 @@ typedef struct fw_repr {
     bool retry_download_on_expired;
     anjay_download_handle_t download_handle;
     avs_sched_handle_t update_job;
+    bool prefer_same_socket_downloads;
+    avs_sched_handle_t resume_download_job;
+    avs_time_monotonic_t resume_download_deadline;
+#    ifdef ANJAY_WITH_SEND
+    bool use_lwm2m_send;
+#    endif // ANJAY_WITH_SEND
 } fw_repr_t;
 
 static inline fw_repr_t *get_fw(const anjay_dm_installed_object_t obj_ptr) {
     return AVS_CONTAINER_OF(_anjay_dm_installed_object_get_unlocked(&obj_ptr),
                             fw_repr_t, def);
 }
+
+#    ifdef ANJAY_WITH_SEND
+#        define SEND_RES_PATH(Oid, Iid, Rid) \
+            {                                \
+                .oid = (Oid),                \
+                .iid = (Iid),                \
+                .rid = (Rid)                 \
+            }
+
+#        define SEND_FW_RES_PATH(Res) SEND_RES_PATH(FW_OID, 0, FW_RES_##Res)
+
+static int perform_send(anjay_unlocked_t *anjay,
+                        const anjay_dm_installed_object_t *obj,
+                        anjay_iid_t iid,
+                        void *batch) {
+    (void) obj;
+    anjay_ssid_t ssid;
+    const anjay_uri_path_t ssid_path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, iid,
+                               ANJAY_DM_RID_SERVER_SSID);
+
+    if (_anjay_dm_read_resource_u16(anjay, &ssid_path, &ssid)) {
+        return 0;
+    }
+
+    if (_anjay_send_deferrable_unlocked(anjay, (anjay_ssid_t) ssid,
+                                        (anjay_send_batch_t *) batch, NULL,
+                                        NULL)
+            != ANJAY_SEND_OK) {
+        fw_log(WARNING, _("failed to perform Send, SSID: ") "%d", ssid);
+    }
+
+    return 0;
+}
+
+static void send_batch_to_all_servers(anjay_unlocked_t *anjay,
+                                      anjay_send_batch_t *batch) {
+    const anjay_dm_installed_object_t *obj =
+            _anjay_dm_find_object_by_oid(anjay, ANJAY_DM_OID_SERVER);
+
+    if (_anjay_dm_foreach_instance(anjay, obj, perform_send, batch)) {
+        fw_log(ERROR, _("failed to perform Send to all servers"));
+    }
+}
+
+static void perform_lwm2m_send(anjay_unlocked_t *anjay,
+                               const anjay_send_resource_path_t *paths,
+                               size_t paths_len) {
+    assert(paths);
+
+    anjay_send_batch_builder_t *batch_builder = anjay_send_batch_builder_new();
+    if (!batch_builder) {
+        fw_log(ERROR, _("out of memory"));
+        return;
+    }
+
+    if (_anjay_send_batch_data_add_current_multiple_unlocked(
+                batch_builder, anjay, paths, paths_len, true)) {
+        fw_log(ERROR, _("failed to add data to batch"));
+        anjay_send_batch_builder_cleanup(&batch_builder);
+        return;
+    }
+
+    anjay_send_batch_t *batch =
+            anjay_send_batch_builder_compile(&batch_builder);
+    if (!batch) {
+        anjay_send_batch_builder_cleanup(&batch_builder);
+        fw_log(ERROR, _("out of memory"));
+        return;
+    }
+
+    send_batch_to_all_servers(anjay, batch);
+
+    anjay_send_batch_release(&batch);
+}
+
+static void send_state_and_update_result(anjay_unlocked_t *anjay,
+                                         const fw_repr_t *fw) {
+    if (!fw->use_lwm2m_send) {
+        return;
+    }
+
+    const anjay_send_resource_path_t paths[] = {
+        SEND_FW_RES_PATH(STATE), SEND_FW_RES_PATH(UPDATE_RESULT)
+    };
+    perform_lwm2m_send(anjay, paths, AVS_ARRAY_SIZE(paths));
+}
+#    endif // ANJAY_WITH_SEND
 
 static void set_update_result(anjay_unlocked_t *anjay,
                               fw_repr_t *fw,
@@ -111,6 +202,9 @@ update_state_and_update_result(anjay_unlocked_t *anjay,
                                anjay_fw_update_result_t new_result) {
     set_update_result(anjay, fw, new_result);
     set_state(anjay, fw, new_state);
+#    ifdef ANJAY_WITH_SEND
+    send_state_and_update_result(anjay, fw);
+#    endif // ANJAY_WITH_SEND
 }
 
 static void set_user_state(fw_user_state_t *user, fw_update_state_t new_state) {
@@ -175,8 +269,8 @@ static const char *user_state_get_version(anjay_unlocked_t *anjay,
     return result;
 }
 
-static int user_state_perform_upgrade(anjay_unlocked_t *anjay,
-                                      fw_user_state_t *user) {
+static int user_state_perform_upgrade(anjay_unlocked_t *anjay, fw_repr_t *fw) {
+    fw_user_state_t *user = &fw->user_state;
     if (user->state != UPDATE_STATE_DOWNLOADED) {
         fw_log(WARNING,
                _("Update State ") "%d" _(" != ") "%d" _(
@@ -191,7 +285,8 @@ static int user_state_perform_upgrade(anjay_unlocked_t *anjay,
     ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
     // If the state was changed during perform_upgrade handler, this means
     // @ref anjay_fw_update_set_result was called and has overwritten the
-    // State and Result. In that case, do not change State to Updating.
+    // State and Result. In that case, change State to Updating if update was
+    // not deferred.
     if (!result && user->state == UPDATE_STATE_DOWNLOADED) {
         set_user_state(user, UPDATE_STATE_UPDATING);
     }
@@ -237,6 +332,13 @@ static int get_security_config(anjay_unlocked_t *anjay,
                                                      fw->package_uri)) {
             return 0;
         }
+#        ifdef ANJAY_WITH_LWM2M11
+        *out_security_config = _anjay_security_config_pkix_unlocked(anjay);
+        if (out_security_config->security_info.data.cert
+                    .server_cert_validation) {
+            return 0;
+        }
+#        endif // ANJAY_WITH_LWM2M11
         return -1;
     }
 }
@@ -336,6 +438,12 @@ static const int32_t SUPPORTED_PROTOCOLS[] = {
     3,         /* HTTPS 1.1 */
 #        endif // AVS_COMMONS_WITHOUT_TLS
 #    endif     // ANJAY_WITH_HTTP_DOWNLOAD
+#    ifdef WITH_AVS_COAP_TCP
+    4, /* CoAP over TCP */
+#        ifndef AVS_COMMONS_WITHOUT_TLS
+    5,         /* CoAP over TLS */
+#        endif // AVS_COMMONS_WITHOUT_TLS
+#    endif     // WITH_AVS_COAP_TCP
 };
 
 static int fw_read(anjay_unlocked_t *anjay,
@@ -379,7 +487,7 @@ static int fw_read(anjay_unlocked_t *anjay,
         return _anjay_ret_i64_unlocked(ctx, 2);
 #    else  // ANJAY_WITH_DOWNLOADER
            // 1 -> push only
-        return _anjay_ret_i64_unlocked(ctx, 1);
+        return anjay_ret_i32(ctx, 1);
 #    endif // ANJAY_WITH_DOWNLOADER
     default:
         AVS_UNREACHABLE("Read called on unknown or non-readable Firmware "
@@ -502,6 +610,9 @@ static void download_finished(anjay_t *anjay_locked,
             if (schedule_background_anjay_download(anjay, fw, 0, NULL)) {
                 fw_log(WARNING, _("Could not retry firmware download"));
                 set_state(anjay, fw, UPDATE_STATE_IDLE);
+#        ifdef ANJAY_WITH_SEND
+                send_state_and_update_result(anjay, fw);
+#        endif // ANJAY_WITH_SEND
             }
         } else {
             fw_log(WARNING, _("download aborted: result = ") "%d",
@@ -534,7 +645,8 @@ static int schedule_download(anjay_unlocked_t *anjay,
         .etag = etag,
         .on_next_block = download_write_block,
         .on_download_finished = download_finished,
-        .user_data = fw
+        .user_data = fw,
+        .prefer_same_socket_downloads = fw->prefer_same_socket_downloads
     };
 
     if (transport_security_from_uri(fw->package_uri)
@@ -574,6 +686,9 @@ static int schedule_download(anjay_unlocked_t *anjay,
         }
         reset_user_state(anjay, fw);
         set_update_result(anjay, fw, update_result);
+#        ifdef ANJAY_WITH_SEND
+        send_state_and_update_result(anjay, fw);
+#        endif // ANJAY_WITH_SEND
         return -1;
     }
 
@@ -584,10 +699,91 @@ static int schedule_download(anjay_unlocked_t *anjay,
     return 0;
 }
 
+typedef struct {
+    fw_repr_t *fw;
+    size_t start_offset;
+    // actually a FAM
+    anjay_etag_t etag;
+} schedule_download_args_t;
+
+static size_t schedule_download_args_size(size_t etag_length) {
+    return offsetof(schedule_download_args_t, etag)
+           + offsetof(anjay_etag_t, value) + etag_length;
+}
+
+static void resume_download_job(avs_sched_t *sched, const void *args_) {
+    schedule_download_args_t *args =
+            (schedule_download_args_t *) (intptr_t) args_;
+    anjay_t *anjay_locked = _anjay_get_from_sched(sched);
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    if (!_anjay_ongoing_registration_exists_unlocked(anjay)) {
+        fw_log(DEBUG,
+               _("all registrations settled down, scheduling download "
+                 "resumption"));
+        if (schedule_download(anjay, args->fw, args->start_offset,
+                              &args->etag)) {
+            fw_log(ERROR, _("could not resume firmware download"));
+        }
+    } else if (avs_time_monotonic_before(args->fw->resume_download_deadline,
+                                         avs_time_monotonic_now())) {
+        fw_log(DEBUG,
+               _("registrations not settled within 5 minutes, canceling "
+                 "download resumption"));
+        reset_user_state(anjay, args->fw);
+        update_state_and_update_result(anjay, args->fw, UPDATE_STATE_IDLE,
+                                       ANJAY_FW_UPDATE_RESULT_CONNECTION_LOST);
+    } else {
+        fw_log(DEBUG,
+               _("ongoing registration exists, delaying download resumption"));
+        if (AVS_SCHED_DELAYED(sched, &args->fw->resume_download_job,
+                              avs_time_duration_from_scalar(1, AVS_TIME_S),
+                              resume_download_job, args,
+                              schedule_download_args_size(args->etag.size))) {
+            fw_log(WARNING, _("could not schedule another resumption attempt"));
+            reset_user_state(anjay, args->fw);
+            update_state_and_update_result(
+                    anjay, args->fw, UPDATE_STATE_IDLE,
+                    ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY);
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+}
+
 static int schedule_background_anjay_download(anjay_unlocked_t *anjay,
                                               fw_repr_t *fw,
                                               size_t start_offset,
                                               const anjay_etag_t *etag) {
+    if (fw->prefer_same_socket_downloads && etag) {
+        avs_sched_t *sched = _anjay_get_scheduler_unlocked(anjay);
+        assert(sched);
+        schedule_download_args_t *args =
+                (schedule_download_args_t *) avs_malloc(
+                        schedule_download_args_size(etag->size));
+        if (args) {
+            args->fw = fw;
+            args->start_offset = start_offset;
+            args->etag.size = etag->size;
+            memcpy(args->etag.value, etag->value, etag->size);
+
+            fw->resume_download_deadline = avs_time_monotonic_add(
+                    avs_time_monotonic_now(),
+                    avs_time_duration_from_scalar(5, AVS_TIME_MIN));
+            if (!AVS_SCHED_NOW(sched, &fw->resume_download_job,
+                               resume_download_job, args,
+                               schedule_download_args_size(etag->size))) {
+                fw_log(DEBUG,
+                       _("same socket download initiated, waiting for "
+                         "server registrations to settle down"));
+                update_state_and_update_result(anjay, fw,
+                                               UPDATE_STATE_DOWNLOADING,
+                                               ANJAY_FW_UPDATE_RESULT_INITIAL);
+                avs_free(args);
+                return 0;
+            }
+        }
+        avs_free(args);
+        fw_log(WARNING, _("could not resume download on the same socket"));
+    }
     return schedule_download(anjay, fw, start_offset, etag);
 }
 #    endif // ANJAY_WITH_DOWNLOADER
@@ -682,6 +878,11 @@ static int write_firmware(anjay_unlocked_t *anjay,
 static void cancel_existing_download_if_in_progress(anjay_unlocked_t *anjay,
                                                     fw_repr_t *fw) {
     if (fw->state == UPDATE_STATE_DOWNLOADING) {
+        if (fw->resume_download_job) {
+            assert(!fw->download_handle);
+            avs_sched_del(&fw->resume_download_job);
+            return;
+        }
         AVS_ASSERT(fw->download_handle,
                    "download_handle is NULL - another Write handler called "
                    "during a PUSH-mode download?!");
@@ -757,6 +958,9 @@ static int fw_write(anjay_unlocked_t *anjay,
                    new_uri);
             set_update_result(anjay, fw,
                               ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL);
+#    ifdef ANJAY_WITH_SEND
+            send_state_and_update_result(anjay, fw);
+#    endif // ANJAY_WITH_SEND
             result = ANJAY_ERR_BAD_REQUEST;
         }
 
@@ -814,7 +1018,7 @@ static void perform_upgrade(avs_sched_t *sched, const void *fw_ptr) {
 
     anjay_t *anjay_locked = _anjay_get_from_sched(sched);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    int result = user_state_perform_upgrade(anjay, &fw->user_state);
+    int result = user_state_perform_upgrade(anjay, fw);
     if (result) {
         fw_log(ERROR, _("user_state_perform_upgrade() failed: ") "%d", result);
         handle_err_result(anjay, fw, UPDATE_STATE_DOWNLOADED, result,
@@ -829,24 +1033,25 @@ static int fw_execute(anjay_unlocked_t *anjay,
                       anjay_rid_t rid,
                       anjay_unlocked_execute_ctx_t *ctx) {
     (void) iid;
-    (void) rid;
     (void) ctx;
 
-    assert(rid == FW_RES_UPDATE);
-
     fw_repr_t *fw = get_fw(obj_ptr);
-    if (fw->state != UPDATE_STATE_DOWNLOADED) {
-        fw_log(WARNING,
-               _("Firmware Update requested, but firmware not yet downloaded "
-                 "(state = ") "%d" _(")"),
-               fw->state);
+    switch (rid) {
+    case FW_RES_UPDATE:
+        if (fw->state != UPDATE_STATE_DOWNLOADED) {
+            fw_log(WARNING,
+                   _("Firmware Update requested, but firmware not yet "
+                     "downloaded (state = ") "%d" _(")"),
+                   fw->state);
+            return ANJAY_ERR_METHOD_NOT_ALLOWED;
+        }
+        update_state_and_update_result(anjay, fw, UPDATE_STATE_UPDATING,
+                                       ANJAY_FW_UPDATE_RESULT_INITIAL);
+        // update process will be continued in fw_on_notify
+        return 0;
+    default:
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-
-    update_state_and_update_result(anjay, fw, UPDATE_STATE_UPDATING,
-                                   ANJAY_FW_UPDATE_RESULT_INITIAL);
-    // update process will be continued in fw_on_notify
-    return 0;
 }
 
 static int fw_transaction_noop(anjay_unlocked_t *anjay,
@@ -893,13 +1098,35 @@ static int fw_on_notify(anjay_unlocked_t *anjay,
         // we're already in the middle of it
         fw->state = UPDATE_STATE_DOWNLOADED;
         fw->result = ANJAY_FW_UPDATE_RESULT_OUT_OF_MEMORY;
+#    ifdef ANJAY_WITH_SEND
+        send_state_and_update_result(anjay, fw);
+#    endif // ANJAY_WITH_SEND
     }
     return 0;
 }
 
+#    ifdef ANJAY_WITH_SEND
+static void send_result_after_fw_update(anjay_unlocked_t *anjay,
+                                        fw_repr_t *fw) {
+    if (!fw->use_lwm2m_send) {
+        return;
+    }
+
+    const anjay_send_resource_path_t paths[] = {
+        SEND_FW_RES_PATH(STATE), SEND_FW_RES_PATH(UPDATE_RESULT),
+        SEND_RES_PATH(ANJAY_DM_OID_DEVICE, 0,
+                      ANJAY_DM_RID_DEVICE_FIRMWARE_VERSION),
+        SEND_RES_PATH(ANJAY_DM_OID_DEVICE, 0,
+                      ANJAY_DM_RID_DEVICE_SOFTWARE_VERSION)
+    };
+    perform_lwm2m_send(anjay, paths, AVS_ARRAY_SIZE(paths));
+}
+#    endif // ANJAY_WITH_SEND
+
 static void fw_delete(void *fw_) {
     fw_repr_t *fw = (fw_repr_t *) fw_;
     avs_sched_del(&fw->update_job);
+    avs_sched_del(&fw->resume_download_job);
     avs_free((void *) (intptr_t) fw->package_uri);
     // NOTE: fw itself will be freed when cleaning the objects list
 }
@@ -916,6 +1143,11 @@ initialize_fw_repr(anjay_unlocked_t *anjay,
     if (!initial_state) {
         return 0;
     }
+    repr->prefer_same_socket_downloads =
+            initial_state->prefer_same_socket_downloads;
+#    ifdef ANJAY_WITH_SEND
+    repr->use_lwm2m_send = initial_state->use_lwm2m_send;
+#    endif // ANJAY_WITH_SEND
 
     switch (initial_state->result) {
     case ANJAY_FW_UPDATE_INITIAL_DOWNLOADED:
@@ -1008,6 +1240,11 @@ int anjay_fw_update_install(
                 assert(!result);
                 result = -1;
             } else {
+#    ifdef ANJAY_WITH_SEND
+                if (initial_state->result != ANJAY_FW_UPDATE_INITIAL_NEUTRAL) {
+                    send_result_after_fw_update(anjay, repr);
+                }
+#    endif // ANJAY_WITH_SEND
                 result = 0;
             }
         }

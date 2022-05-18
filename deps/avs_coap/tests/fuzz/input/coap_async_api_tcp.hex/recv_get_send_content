@@ -1,0 +1,40 @@
+0008 # in buf size
+0008 # out buf size
+0008 # opts buf size
+05 # request timeout in seconds
+00 # default mtu
+
+00 # mock_send: don't fail during sending CSM
+
+# CSM
+0200 # mock_recv: msg size
+00 # mock_recv: msg length 0, token length 0
+E1 # mock_recv: code = CSM
+00 # mock_recv: do not override msg token with last sent
+
+03 # handle incoming packet
+0200 # mock_recv: msg size
+00 # mock_recv: msg length 0, token length 0
+01 # mock_recv: code = Get
+00 # mock_recv: do not override msg token with last sent
+
+00 # handle_new_request: do nothing in do_stuff
+00 # handle_new_request: don't return early
+00 # handle_new_request: do nothing in do_stuff
+00000000 # handle_new_request: succeed
+
+00 # handle_request: do nothing in do_stuff
+00 # handle_request: don't return early
+45 # handle_request: 2.05 Content
+0000 # handle_request: empty options
+0000 # handle_request: zero capacity
+00 # handle_request: don't pass payload_writer
+00 # handle_request: do nothing in do_stuff
+00000000 # handle_request: succeed
+00 # mock_send: don't fail
+
+00 # handle_request (cleanup): do nothing in do_stuff
+01 # handle_request (cleanup): return early
+00000000 # handle_request (cleanup): succeed
+
+0000 # mock_recv: msg size

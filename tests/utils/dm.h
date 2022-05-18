@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_TEST_DM_H
@@ -72,7 +65,7 @@ static const anjay_dm_object_def_t *const OBJ = &(const anjay_dm_object_def_t) {
 static const anjay_dm_object_def_t *const OBJ_NOATTRS =
         &(const anjay_dm_object_def_t) {
             .oid = 93,
-            .handlers = { ANJAY_MOCK_DM_HANDLERS_NOATTRS,
+            .handlers = { ANJAY_MOCK_DM_HANDLERS_BASIC,
                           .instance_reset = _anjay_test_dm_instance_reset_NOOP }
         };
 
@@ -121,14 +114,24 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
         .out_buffer_size = 4096, __VA_ARGS__      \
     }
 
-#define DM_TEST_INIT_OBJECTS__(ObjDefs, ...)                        \
-    reset_token_generator();                                        \
-    anjay_t *anjay = _anjay_test_dm_init((__VA_ARGS__));            \
-    do {                                                            \
-        for (size_t _i = 0; _i < AVS_ARRAY_SIZE((ObjDefs)); ++_i) { \
-            AVS_UNIT_ASSERT_SUCCESS(                                \
-                    anjay_register_object(anjay, (ObjDefs)[_i]));   \
-        }                                                           \
+#define DM_TEST_INIT_OBJECTS__(ObjDefs, ...)                           \
+    reset_token_generator();                                           \
+    anjay_t *anjay = _anjay_test_dm_init((__VA_ARGS__));               \
+    do {                                                               \
+        for (size_t _i = 0; _i < AVS_ARRAY_SIZE((ObjDefs)); ++_i) {    \
+            AVS_UNIT_ASSERT_SUCCESS(                                   \
+                    anjay_register_object(anjay, (ObjDefs)[_i]));      \
+            if (((*(ObjDefs)[_i])->oid == ANJAY_DM_OID_SECURITY        \
+                 || (*(ObjDefs)[_i])->oid == ANJAY_DM_OID_SERVER)      \
+                    && (*(ObjDefs)[_i])->handlers.list_instances       \
+                                   == _anjay_mock_dm_list_instances) { \
+                _anjay_mock_dm_expect_list_instances(                  \
+                        anjay,                                         \
+                        (ObjDefs)[_i],                                 \
+                        0,                                             \
+                        (const anjay_iid_t[]) { ANJAY_ID_INVALID });   \
+            }                                                          \
+        }                                                              \
     } while (false)
 
 #define DM_TEST_POST_INIT__                           \
@@ -204,46 +207,46 @@ static const anjay_dm_object_def_t *const FAKE_SERVER =
         avs_unit_mocksock_input(Mocksock, request->content, request->length); \
     } while (0)
 
-#define DM_TEST_EXPECT_READ_NULL_ATTRS(Ssid, Iid, Rid)                         \
-    do {                                                                       \
-        _anjay_mock_dm_expect_list_instances(                                  \
-                anjay,                                                         \
-                &OBJ,                                                          \
-                0,                                                             \
-                (const anjay_iid_t[]) { Iid, ANJAY_ID_INVALID });              \
-        if (Rid >= 0) {                                                        \
-            _anjay_mock_dm_expect_list_resources(                              \
-                    anjay,                                                     \
-                    &OBJ,                                                      \
-                    Iid,                                                       \
-                    0,                                                         \
-                    (const anjay_mock_dm_res_entry_t[]) {                      \
-                            { 0, ANJAY_DM_RES_RW, Rid == 0 },                  \
-                            { 1, ANJAY_DM_RES_RW, Rid == 1 },                  \
-                            { 2, ANJAY_DM_RES_RW, Rid == 2 },                  \
-                            { 3, ANJAY_DM_RES_RW, Rid == 3 },                  \
-                            { 4, ANJAY_DM_RES_RW, Rid == 4 },                  \
-                            { 5, ANJAY_DM_RES_RW, Rid == 5 },                  \
-                            { 6, ANJAY_DM_RES_RW, Rid == 6 },                  \
-                            ANJAY_MOCK_DM_RES_END });                          \
-            _anjay_mock_dm_expect_resource_read_attrs(                         \
-                    anjay,                                                     \
-                    &OBJ,                                                      \
-                    Iid,                                                       \
-                    (anjay_rid_t) Rid,                                         \
-                    Ssid,                                                      \
-                    0,                                                         \
-                    &ANJAY_DM_INTERNAL_R_ATTRS_EMPTY);                         \
-        }                                                                      \
-        _anjay_mock_dm_expect_instance_read_default_attrs(                     \
-                anjay, &OBJ, Iid, Ssid, 0, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY); \
-        _anjay_mock_dm_expect_object_read_default_attrs(                       \
-                anjay, &OBJ, Ssid, 0, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);      \
-        _anjay_mock_dm_expect_list_instances(anjay,                            \
-                                             &FAKE_SERVER,                     \
-                                             0,                                \
-                                             (const anjay_iid_t[]) {           \
-                                                     ANJAY_ID_INVALID });      \
+#define DM_TEST_EXPECT_READ_NULL_ATTRS(Ssid, Iid, Rid)                     \
+    do {                                                                   \
+        _anjay_mock_dm_expect_list_instances(                              \
+                anjay,                                                     \
+                &OBJ,                                                      \
+                0,                                                         \
+                (const anjay_iid_t[]) { Iid, ANJAY_ID_INVALID });          \
+        if (Rid >= 0) {                                                    \
+            _anjay_mock_dm_expect_list_resources(                          \
+                    anjay,                                                 \
+                    &OBJ,                                                  \
+                    Iid,                                                   \
+                    0,                                                     \
+                    (const anjay_mock_dm_res_entry_t[]) {                  \
+                            { 0, ANJAY_DM_RES_RW, Rid == 0 },              \
+                            { 1, ANJAY_DM_RES_RW, Rid == 1 },              \
+                            { 2, ANJAY_DM_RES_RW, Rid == 2 },              \
+                            { 3, ANJAY_DM_RES_RW, Rid == 3 },              \
+                            { 4, ANJAY_DM_RES_RW, Rid == 4 },              \
+                            { 5, ANJAY_DM_RES_RW, Rid == 5 },              \
+                            { 6, ANJAY_DM_RES_RW, Rid == 6 },              \
+                            ANJAY_MOCK_DM_RES_END });                      \
+            _anjay_mock_dm_expect_resource_read_attrs(                     \
+                    anjay,                                                 \
+                    &OBJ,                                                  \
+                    Iid,                                                   \
+                    (anjay_rid_t) Rid,                                     \
+                    Ssid,                                                  \
+                    0,                                                     \
+                    &ANJAY_DM_R_ATTRIBUTES_EMPTY);                         \
+        }                                                                  \
+        _anjay_mock_dm_expect_instance_read_default_attrs(                 \
+                anjay, &OBJ, Iid, Ssid, 0, &ANJAY_DM_OI_ATTRIBUTES_EMPTY); \
+        _anjay_mock_dm_expect_object_read_default_attrs(                   \
+                anjay, &OBJ, Ssid, 0, &ANJAY_DM_OI_ATTRIBUTES_EMPTY);      \
+        _anjay_mock_dm_expect_list_instances(anjay,                        \
+                                             &FAKE_SERVER,                 \
+                                             0,                            \
+                                             (const anjay_iid_t[]) {       \
+                                                     ANJAY_ID_INVALID });  \
     } while (0)
 
 #endif /* ANJAY_TEST_DM_H */

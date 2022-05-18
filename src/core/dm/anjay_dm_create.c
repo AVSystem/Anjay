@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -97,7 +90,7 @@ static int dm_create_inner(anjay_unlocked_t *anjay,
                            anjay_iid_t iid,
                            anjay_unlocked_input_ctx_t *in_ctx) {
     assert(iid != ANJAY_ID_INVALID);
-    int result = _anjay_dm_call_instance_create(anjay, obj, iid, NULL);
+    int result = _anjay_dm_call_instance_create(anjay, obj, iid);
     if (result) {
         dm_log(DEBUG,
                _("Instance Create handler for object ") "%" PRIu16 _(" failed"),
@@ -151,12 +144,13 @@ static int dm_create_with_explicit_iid(anjay_unlocked_t *anjay,
 int _anjay_dm_create(anjay_unlocked_t *anjay,
                      const anjay_dm_installed_object_t *obj,
                      const anjay_request_t *request,
+                     anjay_ssid_t ssid,
                      anjay_unlocked_input_ctx_t *in_ctx) {
     dm_log(LAZY_DEBUG, _("Create ") "%s", ANJAY_DEBUG_MAKE_PATH(&request->uri));
     assert(_anjay_uri_path_leaf_is(&request->uri, ANJAY_ID_OID));
 
-    if (!_anjay_instance_action_allowed(
-                anjay, &REQUEST_TO_ACTION_INFO(anjay, request))) {
+    if (!_anjay_instance_action_allowed(anjay, &REQUEST_TO_ACTION_INFO(request,
+                                                                       ssid))) {
         return ANJAY_ERR_UNAUTHORIZED;
     }
 
@@ -189,7 +183,7 @@ int _anjay_dm_create(anjay_unlocked_t *anjay,
         (void) ((result = _anjay_notify_queue_instance_created(
                          &notify_queue, request->uri.ids[ANJAY_ID_OID],
                          path.ids[ANJAY_ID_IID]))
-                || (result = _anjay_notify_flush(anjay, &notify_queue)));
+                || (result = _anjay_notify_flush(anjay, ssid, &notify_queue)));
     }
     return result;
 }

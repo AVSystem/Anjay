@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_IO_UTILS_H
@@ -41,6 +34,18 @@ anjay_input_ctx_constructor_t _anjay_input_text_create;
 #ifndef ANJAY_WITHOUT_TLV
 anjay_input_ctx_constructor_t _anjay_input_tlv_create;
 #endif // ANJAY_WITHOUT_TLV
+
+#ifdef ANJAY_WITH_CBOR
+anjay_input_ctx_constructor_t _anjay_input_cbor_create;
+anjay_input_ctx_constructor_t _anjay_input_senml_cbor_create;
+anjay_input_ctx_constructor_t _anjay_input_senml_cbor_composite_read_create;
+
+#endif // ANJAY_WITH_CBOR
+
+#ifdef ANJAY_WITH_SENML_JSON
+anjay_input_ctx_constructor_t _anjay_input_json_create;
+anjay_input_ctx_constructor_t _anjay_input_json_composite_read_create;
+#endif // ANJAY_WITH_SENML_JSON
 
 int _anjay_input_ctx_destroy(anjay_unlocked_input_ctx_t **ctx_ptr);
 

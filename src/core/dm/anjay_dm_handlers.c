@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -23,6 +16,10 @@
 #include "../anjay_core.h"
 #include "../anjay_io_core.h"
 #include "../anjay_utils_private.h"
+
+#ifdef ANJAY_WITH_ATTR_STORAGE
+#    include "../attr_storage/anjay_attr_storage.h"
+#endif // ANJAY_WITH_ATTR_STORAGE
 
 VISIBILITY_SOURCE_BEGIN
 
@@ -419,6 +416,54 @@ unlocking_transaction_rollback(anjay_unlocked_t *anjay,
     return result;
 }
 
+#    ifdef ANJAY_WITH_LWM2M11
+static int unlocking_resource_instance_read_attrs(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t obj_def,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        anjay_dm_r_attributes_t *out) {
+    assert(obj_def.type == ANJAY_DM_OBJECT_USER_PROVIDED);
+    assert(obj_def.impl.user_provided);
+    assert(*obj_def.impl.user_provided);
+    assert((*obj_def.impl.user_provided)
+                   ->handlers.resource_instance_read_attrs);
+    int result = -1;
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+    result = (*obj_def.impl.user_provided)
+                     ->handlers.resource_instance_read_attrs(
+                             anjay_locked, obj_def.impl.user_provided, iid, rid,
+                             riid, ssid, out);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+    return result;
+}
+
+static int unlocking_resource_instance_write_attrs(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t obj_def,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        const anjay_dm_r_attributes_t *attrs) {
+    assert(obj_def.type == ANJAY_DM_OBJECT_USER_PROVIDED);
+    assert(obj_def.impl.user_provided);
+    assert(*obj_def.impl.user_provided);
+    assert((*obj_def.impl.user_provided)
+                   ->handlers.resource_instance_write_attrs);
+    int result = -1;
+    ANJAY_MUTEX_UNLOCK_FOR_CALLBACK(anjay_locked, anjay);
+    result = (*obj_def.impl.user_provided)
+                     ->handlers.resource_instance_write_attrs(
+                             anjay_locked, obj_def.impl.user_provided, iid, rid,
+                             riid, ssid, attrs);
+    ANJAY_MUTEX_LOCK_AFTER_CALLBACK(anjay_locked);
+    return result;
+}
+#    endif // ANJAY_WITH_LWM2M11
+
 static const anjay_unlocked_dm_handlers_t UNLOCKING_HANDLER_WRAPPERS = {
     unlocking_object_read_default_attrs,
     unlocking_object_write_default_attrs,
@@ -439,7 +484,11 @@ static const anjay_unlocked_dm_handlers_t UNLOCKING_HANDLER_WRAPPERS = {
     unlocking_transaction_begin,
     unlocking_transaction_validate,
     unlocking_transaction_commit,
-    unlocking_transaction_rollback
+    unlocking_transaction_rollback,
+#    ifdef ANJAY_WITH_LWM2M11
+    unlocking_resource_instance_read_attrs,
+    unlocking_resource_instance_write_attrs,
+#    endif // ANJAY_WITH_LWM2M11
 };
 
 static bool has_handler_locked(const anjay_dm_handlers_t *def,
@@ -469,6 +518,10 @@ static bool has_handler_locked(const anjay_dm_handlers_t *def,
         HANDLER_CASE(transaction_validate);
         HANDLER_CASE(transaction_commit);
         HANDLER_CASE(transaction_rollback);
+#    ifdef ANJAY_WITH_LWM2M11
+        HANDLER_CASE(resource_instance_read_attrs);
+        HANDLER_CASE(resource_instance_write_attrs);
+#    endif // ANJAY_WITH_LWM2M11
     }
 #    undef HANDLER_CASE
     AVS_UNREACHABLE("unknown handler type passed");
@@ -504,6 +557,10 @@ static bool has_handler_unlocked(const anjay_unlocked_dm_handlers_t *def,
         HANDLER_CASE(transaction_validate);
         HANDLER_CASE(transaction_commit);
         HANDLER_CASE(transaction_rollback);
+#ifdef ANJAY_WITH_LWM2M11
+        HANDLER_CASE(resource_instance_read_attrs);
+        HANDLER_CASE(resource_instance_write_attrs);
+#endif // ANJAY_WITH_LWM2M11
     }
 #undef HANDLER_CASE
     AVS_UNREACHABLE("unknown handler type passed");
@@ -511,97 +568,106 @@ static bool has_handler_unlocked(const anjay_unlocked_dm_handlers_t *def,
 }
 
 static const anjay_unlocked_dm_handlers_t *
-get_handler_from_list(AVS_LIST(anjay_dm_installed_module_t) module_list,
-                      anjay_dm_handler_t handler_type) {
-    AVS_LIST_ITERATE(module_list) {
-        if (has_handler_unlocked(&module_list->def->overlay_handlers,
-                                 handler_type)) {
-            return &module_list->def->overlay_handlers;
-        }
-    }
-    return NULL;
-}
-
-static const anjay_unlocked_dm_handlers_t *
-get_next_handler_from_overlay(anjay_unlocked_t *anjay,
-                              const anjay_dm_module_t *current_module,
-                              anjay_dm_handler_t handler_type) {
-    assert(current_module);
-
-    AVS_LIST(anjay_dm_installed_module_t) *current_head =
-            _anjay_dm_module_find_ptr(anjay, current_module);
-    if (current_head) {
-        return get_handler_from_list(AVS_LIST_NEXT(*current_head),
-                                     handler_type);
-    }
-    return NULL;
-}
-
-static const anjay_unlocked_dm_handlers_t *
-get_handler_from_overlay(anjay_unlocked_t *anjay,
-                         const anjay_dm_module_t *current_module,
-                         anjay_dm_handler_t handler_type) {
-    if (current_module) {
-        return get_next_handler_from_overlay(anjay, current_module,
-                                             handler_type);
-    } else {
-        return get_handler_from_list(anjay->dm.modules, handler_type);
-    }
-}
-
-static const anjay_unlocked_dm_handlers_t *
-get_handler(anjay_unlocked_t *anjay,
-            const anjay_dm_installed_object_t *obj_ptr,
-            const anjay_dm_module_t *current_module,
+get_handler(const anjay_dm_installed_object_t *obj_ptr,
             anjay_dm_handler_t handler_type) {
-    const anjay_unlocked_dm_handlers_t *result = NULL;
-    if (anjay) {
-        result = get_handler_from_overlay(anjay, current_module, handler_type);
+#ifdef ANJAY_WITH_ATTR_STORAGE
+    switch (handler_type) {
+    case ANJAY_DM_HANDLER_object_read_default_attrs:
+    case ANJAY_DM_HANDLER_object_write_default_attrs:
+        if (!_anjay_dm_implements_any_object_default_attrs_handlers(obj_ptr)) {
+            return &_ANJAY_ATTR_STORAGE_HANDLERS;
+        }
+        break;
+
+    case ANJAY_DM_HANDLER_instance_read_default_attrs:
+    case ANJAY_DM_HANDLER_instance_write_default_attrs:
+        if (!_anjay_dm_implements_any_instance_default_attrs_handlers(
+                    obj_ptr)) {
+            return &_ANJAY_ATTR_STORAGE_HANDLERS;
+        }
+        break;
+
+    case ANJAY_DM_HANDLER_resource_read_attrs:
+    case ANJAY_DM_HANDLER_resource_write_attrs:
+        if (!_anjay_dm_implements_any_resource_attrs_handlers(obj_ptr)) {
+            return &_ANJAY_ATTR_STORAGE_HANDLERS;
+        }
+        break;
+
+#    ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_DM_HANDLER_resource_instance_read_attrs:
+    case ANJAY_DM_HANDLER_resource_instance_write_attrs:
+        if (!_anjay_dm_implements_any_resource_instance_attrs_handlers(
+                    obj_ptr)) {
+            return &_ANJAY_ATTR_STORAGE_HANDLERS;
+        }
+        break;
+#    endif // ANJAY_WITH_LWM2M11
+
+    default:
+        break;
     }
-    if (!result) {
+#endif // ANJAY_WITH_ATTR_STORAGE
 #ifdef ANJAY_WITH_THREAD_SAFETY
-        switch (obj_ptr->type) {
-        case ANJAY_DM_OBJECT_USER_PROVIDED:
-            assert(obj_ptr->impl.user_provided);
-            assert(*obj_ptr->impl.user_provided);
-            if (has_handler_locked(&(*obj_ptr->impl.user_provided)->handlers,
-                                   handler_type)) {
-                result = &UNLOCKING_HANDLER_WRAPPERS;
-            }
-            break;
+    switch (obj_ptr->type) {
+    case ANJAY_DM_OBJECT_USER_PROVIDED:
+        assert(obj_ptr->impl.user_provided);
+        assert(*obj_ptr->impl.user_provided);
+        if (has_handler_locked(&(*obj_ptr->impl.user_provided)->handlers,
+                               handler_type)) {
+            return &UNLOCKING_HANDLER_WRAPPERS;
+        }
+        return NULL;
 
-        case ANJAY_DM_OBJECT_UNLOCKED:
-            assert(obj_ptr->impl.unlocked);
-            assert(*obj_ptr->impl.unlocked);
-            if (has_handler_unlocked(&(*obj_ptr->impl.unlocked)->handlers,
-                                     handler_type)) {
-                result = &(*obj_ptr->impl.unlocked)->handlers;
-            }
-            break;
+    case ANJAY_DM_OBJECT_UNLOCKED:
+        assert(obj_ptr->impl.unlocked);
+        assert(*obj_ptr->impl.unlocked);
+        if (has_handler_unlocked(&(*obj_ptr->impl.unlocked)->handlers,
+                                 handler_type)) {
+            return &(*obj_ptr->impl.unlocked)->handlers;
         }
-#else  // ANJAY_WITH_THREAD_SAFETY
-        assert(*obj_ptr);
-        assert(**obj_ptr);
-        if (has_handler_unlocked(&(**obj_ptr)->handlers, handler_type)) {
-            result = &(**obj_ptr)->handlers;
-        }
-#endif // ANJAY_WITH_THREAD_SAFETY
+        return NULL;
     }
-    return result;
+    AVS_UNREACHABLE("Invalid value of anjay_dm_installed_object_type_t");
+    return NULL;
+#else  // ANJAY_WITH_THREAD_SAFETY
+    assert(*obj_ptr);
+    assert(**obj_ptr);
+    if (has_handler_unlocked(&(**obj_ptr)->handlers, handler_type)) {
+        return &(**obj_ptr)->handlers;
+    }
+#endif // ANJAY_WITH_THREAD_SAFETY
 }
 
-bool _anjay_dm_handler_implemented(anjay_unlocked_t *anjay,
-                                   const anjay_dm_installed_object_t *obj_ptr,
-                                   const anjay_dm_module_t *current_module,
+bool _anjay_dm_handler_implemented(const anjay_dm_installed_object_t *obj_ptr,
                                    anjay_dm_handler_t handler_type) {
-    return get_handler(anjay, obj_ptr, current_module, handler_type) != NULL;
+#ifdef ANJAY_WITH_THREAD_SAFETY
+    switch (obj_ptr->type) {
+    case ANJAY_DM_OBJECT_USER_PROVIDED:
+        assert(obj_ptr->impl.user_provided);
+        assert(*obj_ptr->impl.user_provided);
+        return has_handler_locked(&(*obj_ptr->impl.user_provided)->handlers,
+                                  handler_type);
+
+    case ANJAY_DM_OBJECT_UNLOCKED:
+        assert(obj_ptr->impl.unlocked);
+        assert(*obj_ptr->impl.unlocked);
+        return has_handler_unlocked(&(*obj_ptr->impl.unlocked)->handlers,
+                                    handler_type);
+    }
+    AVS_UNREACHABLE("Invalid value of anjay_dm_installed_object_type_t");
+    return false;
+#else  // ANJAY_WITH_THREAD_SAFETY
+    assert(*obj_ptr);
+    assert(**obj_ptr);
+    return has_handler_unlocked(&(**obj_ptr)->handlers, handler_type);
+#endif // ANJAY_WITH_THREAD_SAFETY
 }
 
-#define CHECKED_TAIL_CALL_HANDLER(Anjay, ObjPtr, Current, HandlerName, ...)   \
+#define CHECKED_TAIL_CALL_HANDLER(ObjPtr, HandlerName, ...)                   \
     do {                                                                      \
         const anjay_unlocked_dm_handlers_t *handler =                         \
-                get_handler((Anjay), (ObjPtr), (Current),                     \
-                            ANJAY_DM_HANDLER_##HandlerName);                  \
+                get_handler((ObjPtr), ANJAY_DM_HANDLER_##HandlerName);        \
         if (handler) {                                                        \
             int AVS_CONCAT(result, __LINE__) =                                \
                     handler->HandlerName(__VA_ARGS__);                        \
@@ -624,78 +690,66 @@ int _anjay_dm_call_object_read_default_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_ssid_t ssid,
-        anjay_dm_internal_oi_attrs_t *out,
-        const anjay_dm_module_t *current_module) {
+        anjay_dm_oi_attributes_t *out) {
     dm_log(TRACE, _("object_read_default_attrs ") "/%u",
            _anjay_dm_installed_object_oid(obj_ptr));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              object_read_default_attrs, anjay, *obj_ptr, ssid,
-                              &out->standard);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, object_read_default_attrs, anjay,
+                              *obj_ptr, ssid, out);
 }
 
 int _anjay_dm_call_object_write_default_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_oi_attrs_t *attrs,
-        const anjay_dm_module_t *current_module) {
+        const anjay_dm_oi_attributes_t *attrs) {
     dm_log(TRACE, _("object_write_default_attrs ") "/%u",
            _anjay_dm_installed_object_oid(obj_ptr));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              object_write_default_attrs, anjay, *obj_ptr, ssid,
-                              &attrs->standard);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, object_write_default_attrs, anjay,
+                              *obj_ptr, ssid, attrs);
 }
 
 int _anjay_dm_call_list_instances(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
-                                  anjay_unlocked_dm_list_ctx_t *ctx,
-                                  const anjay_dm_module_t *current_module) {
+                                  anjay_unlocked_dm_list_ctx_t *ctx) {
     dm_log(TRACE, _("list_instances ") "/%u",
            _anjay_dm_installed_object_oid(obj_ptr));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, list_instances,
-                              anjay, *obj_ptr, ctx);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, list_instances, anjay, *obj_ptr, ctx);
 }
 
 int _anjay_dm_call_instance_reset(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
-                                  anjay_iid_t iid,
-                                  const anjay_dm_module_t *current_module) {
+                                  anjay_iid_t iid) {
     dm_log(TRACE, _("instance_reset ") "/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid);
     int result = _anjay_dm_transaction_include_object(anjay, obj_ptr);
     if (result) {
         return result;
     }
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, instance_reset,
-                              anjay, *obj_ptr, iid);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, instance_reset, anjay, *obj_ptr, iid);
 }
 
 int _anjay_dm_call_instance_create(anjay_unlocked_t *anjay,
                                    const anjay_dm_installed_object_t *obj_ptr,
-                                   anjay_iid_t iid,
-                                   const anjay_dm_module_t *current_module) {
+                                   anjay_iid_t iid) {
     dm_log(TRACE, _("instance_create ") "/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid);
     int result = _anjay_dm_transaction_include_object(anjay, obj_ptr);
     if (result) {
         return result;
     }
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, instance_create,
-                              anjay, *obj_ptr, iid);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, instance_create, anjay, *obj_ptr, iid);
 }
 
 int _anjay_dm_call_instance_remove(anjay_unlocked_t *anjay,
                                    const anjay_dm_installed_object_t *obj_ptr,
-                                   anjay_iid_t iid,
-                                   const anjay_dm_module_t *current_module) {
+                                   anjay_iid_t iid) {
     dm_log(TRACE, _("instance_remove ") "/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid);
     int result = _anjay_dm_transaction_include_object(anjay, obj_ptr);
     if (result) {
         return result;
     }
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, instance_remove,
-                              anjay, *obj_ptr, iid);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, instance_remove, anjay, *obj_ptr, iid);
 }
 
 int _anjay_dm_call_instance_read_default_attrs(
@@ -703,13 +757,11 @@ int _anjay_dm_call_instance_read_default_attrs(
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        anjay_dm_internal_oi_attrs_t *out,
-        const anjay_dm_module_t *current_module) {
+        anjay_dm_oi_attributes_t *out) {
     dm_log(TRACE, _("instance_read_default_attrs ") "/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid);
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              instance_read_default_attrs, anjay, *obj_ptr, iid,
-                              ssid, &out->standard);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, instance_read_default_attrs, anjay,
+                              *obj_ptr, iid, ssid, out);
 }
 
 int _anjay_dm_call_instance_write_default_attrs(
@@ -717,24 +769,21 @@ int _anjay_dm_call_instance_write_default_attrs(
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_oi_attrs_t *attrs,
-        const anjay_dm_module_t *current_module) {
+        const anjay_dm_oi_attributes_t *attrs) {
     dm_log(TRACE, _("instance_write_default_attrs ") "/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid);
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              instance_write_default_attrs, anjay, *obj_ptr,
-                              iid, ssid, &attrs->standard);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, instance_write_default_attrs, anjay,
+                              *obj_ptr, iid, ssid, attrs);
 }
 
 int _anjay_dm_call_list_resources(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
                                   anjay_iid_t iid,
-                                  anjay_unlocked_dm_resource_list_ctx_t *ctx,
-                                  const anjay_dm_module_t *current_module) {
+                                  anjay_unlocked_dm_resource_list_ctx_t *ctx) {
     dm_log(TRACE, _("list_resources ") "/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid);
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, list_resources,
-                              anjay, *obj_ptr, iid, ctx);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, list_resources, anjay, *obj_ptr, iid,
+                              ctx);
 }
 
 int _anjay_dm_call_resource_read(anjay_unlocked_t *anjay,
@@ -742,13 +791,12 @@ int _anjay_dm_call_resource_read(anjay_unlocked_t *anjay,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
                                  anjay_riid_t riid,
-                                 anjay_unlocked_output_ctx_t *ctx,
-                                 const anjay_dm_module_t *current_module) {
+                                 anjay_unlocked_output_ctx_t *ctx) {
     dm_log(LAZY_TRACE, _("resource_read ") "%s",
            ANJAY_DEBUG_MAKE_PATH(&MAKE_RESOURCE_INSTANCE_PATH(
                    _anjay_dm_installed_object_oid(obj_ptr), iid, rid, riid)));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, resource_read,
-                              anjay, *obj_ptr, iid, rid, riid, ctx);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_read, anjay, *obj_ptr, iid, rid,
+                              riid, ctx);
 }
 
 int _anjay_dm_call_resource_write(anjay_unlocked_t *anjay,
@@ -756,8 +804,7 @@ int _anjay_dm_call_resource_write(anjay_unlocked_t *anjay,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_riid_t riid,
-                                  anjay_unlocked_input_ctx_t *ctx,
-                                  const anjay_dm_module_t *current_module) {
+                                  anjay_unlocked_input_ctx_t *ctx) {
     dm_log(LAZY_TRACE, _("resource_write ") "%s",
            ANJAY_DEBUG_MAKE_PATH(&MAKE_RESOURCE_INSTANCE_PATH(
                    _anjay_dm_installed_object_oid(obj_ptr), iid, rid, riid)));
@@ -765,35 +812,33 @@ int _anjay_dm_call_resource_write(anjay_unlocked_t *anjay,
     if (result) {
         return result;
     }
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, resource_write,
-                              anjay, *obj_ptr, iid, rid, riid, ctx);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_write, anjay, *obj_ptr, iid,
+                              rid, riid, ctx);
 }
 
 int _anjay_dm_call_resource_execute(anjay_unlocked_t *anjay,
                                     const anjay_dm_installed_object_t *obj_ptr,
                                     anjay_iid_t iid,
                                     anjay_rid_t rid,
-                                    anjay_unlocked_execute_ctx_t *execute_ctx,
-                                    const anjay_dm_module_t *current_module) {
+                                    anjay_unlocked_execute_ctx_t *execute_ctx) {
     dm_log(TRACE, _("resource_execute ") "/%u/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid, rid);
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, resource_execute,
-                              anjay, *obj_ptr, iid, rid, execute_ctx);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_execute, anjay, *obj_ptr, iid,
+                              rid, execute_ctx);
 }
 
 int _anjay_dm_call_resource_reset(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
                                   anjay_iid_t iid,
-                                  anjay_rid_t rid,
-                                  const anjay_dm_module_t *current_module) {
+                                  anjay_rid_t rid) {
     dm_log(TRACE, _("resource_reset ") "/%u/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid, rid);
     int result = _anjay_dm_transaction_include_object(anjay, obj_ptr);
     if (result) {
         return result;
     }
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, resource_reset,
-                              anjay, *obj_ptr, iid, rid);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_reset, anjay, *obj_ptr, iid,
+                              rid);
 }
 
 int _anjay_dm_call_list_resource_instances(
@@ -801,21 +846,18 @@ int _anjay_dm_call_list_resource_instances(
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
-        anjay_unlocked_dm_list_ctx_t *ctx,
-        const anjay_dm_module_t *current_module) {
+        anjay_unlocked_dm_list_ctx_t *ctx) {
     dm_log(TRACE, _("list_resource_instances ") "/%u/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid, rid);
     if (!_anjay_dm_handler_implemented(
-                anjay, obj_ptr, current_module,
-                ANJAY_DM_HANDLER_list_resource_instances)) {
+                obj_ptr, ANJAY_DM_HANDLER_list_resource_instances)) {
         dm_log(TRACE,
                _("list_resource_instances handler not set for object ") "/%u",
                _anjay_dm_installed_object_oid(obj_ptr));
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              list_resource_instances, anjay, *obj_ptr, iid,
-                              rid, ctx);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, list_resource_instances, anjay, *obj_ptr,
+                              iid, rid, ctx);
 }
 
 int _anjay_dm_call_resource_read_attrs(
@@ -824,13 +866,11 @@ int _anjay_dm_call_resource_read_attrs(
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        anjay_dm_internal_r_attrs_t *out,
-        const anjay_dm_module_t *current_module) {
+        anjay_dm_r_attributes_t *out) {
     dm_log(TRACE, _("resource_read_attrs ") "/%u/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid, rid);
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              resource_read_attrs, anjay, *obj_ptr, iid, rid,
-                              ssid, &out->standard);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_read_attrs, anjay, *obj_ptr,
+                              iid, rid, ssid, out);
 }
 
 int _anjay_dm_call_resource_write_attrs(
@@ -839,60 +879,87 @@ int _anjay_dm_call_resource_write_attrs(
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_r_attrs_t *attrs,
-        const anjay_dm_module_t *current_module) {
+        const anjay_dm_r_attributes_t *attrs) {
     dm_log(TRACE, _("resource_write_attrs ") "/%u/%u/%u",
            _anjay_dm_installed_object_oid(obj_ptr), iid, rid);
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              resource_write_attrs, anjay, *obj_ptr, iid, rid,
-                              ssid, &attrs->standard);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_write_attrs, anjay, *obj_ptr,
+                              iid, rid, ssid, attrs);
 }
 
-int _anjay_dm_call_transaction_begin(anjay_unlocked_t *anjay,
-                                     const anjay_dm_installed_object_t *obj_ptr,
-                                     const anjay_dm_module_t *current_module) {
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_dm_call_resource_instance_read_attrs(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        anjay_dm_r_attributes_t *out) {
+    dm_log(TRACE, _("resource_instance_read_attrs ") "/%u/%u/%u/%u",
+           _anjay_dm_installed_object_oid(obj_ptr), iid, rid, riid);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_instance_read_attrs, anjay,
+                              *obj_ptr, iid, rid, riid, ssid, out);
+}
+
+int _anjay_dm_call_resource_instance_write_attrs(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        const anjay_dm_r_attributes_t *attrs) {
+    dm_log(TRACE, _("resource_instance_write_attrs ") "/%u/%u/%u/%u",
+           _anjay_dm_installed_object_oid(obj_ptr), iid, rid, riid);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, resource_instance_write_attrs, anjay,
+                              *obj_ptr, iid, rid, riid, ssid, attrs);
+}
+
+#endif // ANJAY_WITH_LWM2M11
+
+int _anjay_dm_call_transaction_begin(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr) {
     dm_log(TRACE, _("begin_object_transaction ") "/%u",
            _anjay_dm_installed_object_oid(obj_ptr));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module, transaction_begin,
-                              anjay, *obj_ptr);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, transaction_begin, anjay, *obj_ptr);
 }
 
 int _anjay_dm_call_transaction_validate(
-        anjay_unlocked_t *anjay,
-        const anjay_dm_installed_object_t *obj_ptr,
-        const anjay_dm_module_t *current_module) {
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr) {
     dm_log(TRACE, _("validate_object ") "/%u",
            _anjay_dm_installed_object_oid(obj_ptr));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              transaction_validate, anjay, *obj_ptr);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, transaction_validate, anjay, *obj_ptr);
 }
 
 int _anjay_dm_call_transaction_commit(
-        anjay_unlocked_t *anjay,
-        const anjay_dm_installed_object_t *obj_ptr,
-        const anjay_dm_module_t *current_module) {
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr) {
     dm_log(TRACE, _("commit_object ") "/%u",
            _anjay_dm_installed_object_oid(obj_ptr));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              transaction_commit, anjay, *obj_ptr);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, transaction_commit, anjay, *obj_ptr);
 }
 
 int _anjay_dm_call_transaction_rollback(
-        anjay_unlocked_t *anjay,
-        const anjay_dm_installed_object_t *obj_ptr,
-        const anjay_dm_module_t *current_module) {
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr) {
     dm_log(TRACE, _("rollback_object ") "/%u",
            _anjay_dm_installed_object_oid(obj_ptr));
-    CHECKED_TAIL_CALL_HANDLER(anjay, obj_ptr, current_module,
-                              transaction_rollback, anjay, *obj_ptr);
+    CHECKED_TAIL_CALL_HANDLER(obj_ptr, transaction_rollback, anjay, *obj_ptr);
 }
 
 #define MAX_SANE_TRANSACTION_DEPTH 64
 
-void _anjay_dm_transaction_begin(anjay_unlocked_t *anjay) {
+avs_error_t _anjay_dm_transaction_begin(anjay_unlocked_t *anjay) {
     dm_log(TRACE, _("transaction_begin"));
-    ++anjay->transaction_state.depth;
+    avs_error_t err = AVS_OK;
+#ifdef ANJAY_WITH_ATTR_STORAGE
+    if (_anjay_attr_storage_transaction_begin(anjay)) {
+        err = avs_errno(AVS_ENOMEM);
+    }
+#endif // ANJAY_WITH_ATTR_STORAGE
+    if (avs_is_ok(err)) {
+        ++anjay->transaction_state.depth;
+    }
     assert(anjay->transaction_state.depth < MAX_SANE_TRANSACTION_DEPTH);
+    return err;
 }
 
 int _anjay_dm_transaction_include_object(
@@ -915,7 +982,7 @@ int _anjay_dm_transaction_include_object(
         }
         *new_entry = obj_ptr;
         AVS_LIST_INSERT(it, new_entry);
-        int result = _anjay_dm_call_transaction_begin(anjay, obj_ptr, NULL);
+        int result = _anjay_dm_call_transaction_begin(anjay, obj_ptr);
         if (result) {
             // transaction_begin may have added new entries
             while (*it != new_entry) {
@@ -933,14 +1000,14 @@ static int commit_or_rollback_object(anjay_unlocked_t *anjay,
                                      int predicate) {
     int result;
     if (predicate) {
-        if ((result = _anjay_dm_call_transaction_rollback(anjay, obj, NULL))) {
+        if ((result = _anjay_dm_call_transaction_rollback(anjay, obj))) {
             dm_log(ERROR,
                    _("cannot rollback transaction on ") "/%u" _(
                            ", object may be left in undefined state"),
                    _anjay_dm_installed_object_oid(obj));
             return result;
         }
-    } else if ((result = _anjay_dm_call_transaction_commit(anjay, obj, NULL))) {
+    } else if ((result = _anjay_dm_call_transaction_commit(anjay, obj))) {
         dm_log(ERROR, _("cannot commit transaction on ") "/%u",
                _anjay_dm_installed_object_oid(obj));
         predicate = result;
@@ -954,7 +1021,7 @@ int _anjay_dm_transaction_validate(anjay_unlocked_t *anjay) {
     AVS_LIST_FOREACH(obj, anjay->transaction_state.objs_in_transaction) {
         dm_log(TRACE, _("validate_object ") "/%u",
                _anjay_dm_installed_object_oid(*obj));
-        int result = _anjay_dm_call_transaction_validate(anjay, *obj, NULL);
+        int result = _anjay_dm_call_transaction_validate(anjay, *obj);
         if (result) {
             dm_log(ERROR, _("Validation failed for ") "/%u",
                    _anjay_dm_installed_object_oid(*obj));
@@ -979,6 +1046,13 @@ int _anjay_dm_transaction_finish_without_validation(anjay_unlocked_t *anjay,
             final_result = commit_result;
         }
     }
+#ifdef ANJAY_WITH_ATTR_STORAGE
+    if (!final_result) {
+        final_result = _anjay_attr_storage_transaction_commit(anjay);
+    } else {
+        _anjay_attr_storage_transaction_rollback(anjay);
+    }
+#endif // ANJAY_WITH_ATTR_STORAGE
     return final_result;
 }
 

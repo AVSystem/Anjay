@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Basic certificate support
 =========================
@@ -199,10 +192,9 @@ to loading the trust store is disabled if it is set to ``false``.
 
 The ``ignore_system_trust_store`` flag controls whether the default system trust
 store shall be loaded for this socket. In Anjay, it is usually set to ``true``.
-It may only be ``false`` in the commercial version, if the
-``use_system_trust_store`` is enabled in ``anjay_configuration_t``. If your
-platform does not have a concept of a system trust store, it is safe to ignore
-this setting altogether.
+It may only be ``false``, if the ``use_system_trust_store`` is enabled in
+``anjay_configuration_t``. If your platform does not have a concept of a system
+trust store, it is safe to ignore this setting altogether.
 
 The rest of the code in this function calls auxiliary functions that load all
 the security credential types: trusted certificates, certificate revocation
@@ -525,12 +517,11 @@ infrastructure, however it lacks a number of features that are supported by the
   This feature will be discussed in the next tutorial.
 
 * Lack of support for loading chains of more than one certificate as the client
-  certificate chain. This is rarely used, but supported in the commercial
-  version of Anjay.
+  certificate chain, although this is rarely used.
 
 * Lack of support for loading credential information from other sources than
-  memory buffers (e.g. files). This is generally only used in the commercial
-  version of Anjay, but may also be used e.g. for HTTPS downloads.
+  memory buffers (e.g. files). This may be used e.g. for HTTPS downloads and
+  support of Hardware Security Modules.
 
 * Lack of support for PEM encoding. This is not generally necessary for LwM2M
   compliance, but may be important for other cases, for example loading

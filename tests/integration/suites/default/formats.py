@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 from framework.lwm2m_test import *
 from framework.test_utils import *
@@ -134,6 +127,21 @@ class UnsupportedFormatWritesTest(FormatTest.Test):
                                     expect_error_code=coap.Code.RES_UNSUPPORTED_CONTENT_FORMAT)
 
 
+class NonTlvAndNonJsonCreate(FormatTest.Test):
+    def runTest(self):
+        # Note: iid=1 is already taken away, by parent's setUp().
+        IID = 2
+
+        for known_format in (coap.ContentFormat.TEXT_PLAIN,
+                             coap.ContentFormat.APPLICATION_OCTET_STREAM,
+                             coap.ContentFormat.APPLICATION_CBOR):
+            self.create_instance_with_arbitrary_payload(self.serv, oid=OID.Test, iid=IID,
+                                                        format=known_format,
+                                                        expect_error_code=coap.Code.RES_BAD_REQUEST)
+
+        self.create_instance_with_arbitrary_payload(self.serv, oid=OID.Test, iid=IID,
+                                                    format=FormatTest.UNSUPPORTED_FORMAT,
+                                                    expect_error_code=coap.Code.RES_UNSUPPORTED_CONTENT_FORMAT)
 
 
 class TlvRIDIncompatibleWithPathRID(FormatTest.Test):
@@ -155,3 +163,13 @@ class PreferredHierarchicalContentFormat_1_0(test_suite.Lwm2mSingleServerTest,
                          self.read_instance(self.serv, oid=OID.Device, iid=0).get_content_format())
 
 
+class PreferredHierarchicalContentFormat_1_1(test_suite.Lwm2mSingleServerTest,
+                                             test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--prefer-hierarchical-formats'],
+                      minimum_version='1.1',
+                      maximum_version='1.1')
+
+    def runTest(self):
+        self.assertEqual(coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR,
+                         self.read_instance(self.serv, oid=OID.Device, iid=0).get_content_format())

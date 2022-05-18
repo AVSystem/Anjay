@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -35,6 +28,62 @@
 
 VISIBILITY_SOURCE_BEGIN
 
+#ifdef ANJAY_WITH_LWM2M11
+static void try_read_server_resource_u32(anjay_server_info_t *server,
+                                         anjay_rid_t rid,
+                                         int64_t min_value,
+                                         uint32_t *out_result) {
+    anjay_iid_t server_iid = ANJAY_ID_INVALID;
+    (void) _anjay_find_server_iid(server->anjay, server->ssid, &server_iid);
+    int64_t result;
+
+    if (server_iid != ANJAY_ID_INVALID
+            && !_anjay_dm_read_resource_i64(
+                       server->anjay,
+                       &MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid,
+                                           rid),
+                       &result)
+            && result >= min_value && result <= UINT32_MAX) {
+        *out_result = (uint32_t) result;
+    }
+}
+
+typedef struct {
+    uint32_t retry_count;
+    uint32_t retry_timer_s;
+    uint32_t sequence_retry_count;
+    uint32_t sequence_delay_timer_s;
+} communication_retry_params_t;
+
+// NOTE: See "Table: 6.2.1.1.-1 Registration Procedures Default Values", it's
+// where the default values are taken from.
+static const communication_retry_params_t COMMUNICATION_RETRY_PARAMS_DEFAULT = {
+    .retry_count = 5,
+    .retry_timer_s = 60,
+    .sequence_retry_count = 1,
+    .sequence_delay_timer_s = 86400
+};
+
+static communication_retry_params_t
+query_server_communication_retry_params(anjay_server_info_t *server) {
+    assert(server->ssid != ANJAY_SSID_BOOTSTRAP);
+    communication_retry_params_t params = COMMUNICATION_RETRY_PARAMS_DEFAULT;
+    try_read_server_resource_u32(server,
+                                 ANJAY_DM_RID_SERVER_COMMUNICATION_RETRY_COUNT,
+                                 1, &params.retry_count);
+    try_read_server_resource_u32(server,
+                                 ANJAY_DM_RID_SERVER_COMMUNICATION_RETRY_TIMER,
+                                 0, &params.retry_timer_s);
+    try_read_server_resource_u32(
+            server, ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT, 0,
+            &params.sequence_retry_count);
+    try_read_server_resource_u32(
+            server, ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER, 0,
+            &params.sequence_delay_timer_s);
+    return params;
+}
+#endif // ANJAY_WITH_LWM2M11
+
 void _anjay_server_on_failure(anjay_server_info_t *server,
                               const char *debug_msg) {
     _anjay_server_clean_active_data(server);
@@ -48,8 +97,58 @@ void _anjay_server_on_failure(anjay_server_info_t *server,
         // Abort any further bootstrap retries.
         _anjay_bootstrap_cleanup(server->anjay);
     } else {
-        // Either a failure not due to registration, or the number of
-        // registration attempts already exceeded communication retry counter.
+#ifdef ANJAY_WITH_LWM2M11
+        if (server->registration_attempts > 0) {
+            // When this value is > 0, it means there is an ongoing registration
+            // sequence. Otherwise, this whole function was called due to some
+            // other communication failure.
+            const communication_retry_params_t params =
+                    query_server_communication_retry_params(server);
+            if (server->registration_attempts < params.retry_count) {
+                anjay_log(INFO, _("Registration Retry ") "%u/%u",
+                          server->registration_attempts,
+                          params.retry_count - 1);
+
+                const avs_time_duration_t retry_timer = avs_time_duration_mul(
+                        avs_time_duration_from_scalar(params.retry_timer_s,
+                                                      AVS_TIME_S),
+                        (1 << (server->registration_attempts - 1)));
+                if (!avs_time_duration_valid(retry_timer)) {
+                    anjay_log(WARNING, _("Calculated retry time overflowed. "
+                                         "Assuming infinity"));
+                }
+                _anjay_server_deactivate(server->anjay, server->ssid,
+                                         retry_timer);
+                return;
+            } else if (server->registration_sequences_performed + 1
+                       < params.sequence_retry_count) {
+                anjay_log(INFO, _("Sequence Retry ") "%u/%u",
+                          server->registration_sequences_performed + 1,
+                          params.sequence_retry_count - 1);
+
+                ++server->registration_sequences_performed;
+                server->registration_attempts = 0;
+                avs_time_duration_t disable_duration =
+                        avs_time_duration_from_scalar(
+                                params.sequence_delay_timer_s, AVS_TIME_S);
+                if (params.sequence_delay_timer_s == UINT32_MAX) {
+                    // E.2 LwM2M Object: LwM2M Server: "MAX_VALUE means do not
+                    // perform another communication sequence."
+                    anjay_log(INFO,
+                              _("Communication Sequence Delay Timer is "
+                                "saturated. Disabling server ") "%" PRIu16
+                                      _(" indefinitely."),
+                              server->ssid);
+                    disable_duration = AVS_TIME_DURATION_INVALID;
+                }
+                _anjay_server_deactivate(server->anjay, server->ssid,
+                                         disable_duration);
+                return;
+            }
+        }
+#endif // ANJAY_WITH_LWM2M11
+       // Either a failure not due to registration, or the number of
+       // registration attempts already exceeded communication retry counter.
         anjay_log(DEBUG,
                   _("Non-Bootstrap Server ") "%" PRIu16 _(": ") "%s" _("."),
                   server->ssid, debug_msg);
@@ -82,6 +181,13 @@ void _anjay_server_on_server_communication_error(anjay_server_info_t *server,
                   _("could not schedule server_communication_error_job"));
         server->refresh_failed = true;
     }
+#ifdef ANJAY_WITH_LWM2M11
+    if (err.category == AVS_NET_SSL_ALERT_CATEGORY) {
+        _anjay_server_update_last_ssl_alert_code(
+                server, avs_net_ssl_alert_level(err),
+                avs_net_ssl_alert_description(err));
+    }
+#endif // ANJAY_WITH_LWM2M11
 }
 
 void _anjay_server_on_server_communication_timeout(
@@ -195,6 +301,9 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
         // Register operation - hence, not checking return value.
         _anjay_bootstrap_notify_regular_connection_available(server->anjay);
         _anjay_connections_flush_notifications(&server->connections);
+#ifdef ANJAY_WITH_SEND
+        _anjay_send_sched_retry_deferred(server->anjay, server->ssid);
+#endif // ANJAY_WITH_SEND
         break;
     case ANJAY_REGISTRATION_ERROR_TIMEOUT:
         _anjay_server_on_server_communication_timeout(server);
@@ -205,6 +314,31 @@ void _anjay_server_on_updated_registration(anjay_server_info_t *server,
         break;
     }
 }
+
+#if defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
+static bool
+server_bootstrap_on_registration_failure(anjay_unlocked_t *anjay,
+                                         anjay_server_info_t *server) {
+    if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+        return false;
+    }
+    // See "Table: 6.2.1.1.-1 Registration Procedures Default Values"
+    bool force_bootstrap = true;
+
+    anjay_iid_t server_iid = ANJAY_ID_INVALID;
+    (void) _anjay_find_server_iid(anjay, server->ssid, &server_iid);
+
+    if (server_iid != ANJAY_ID_INVALID) {
+        (void) _anjay_dm_read_resource_bool(
+                anjay,
+                &MAKE_RESOURCE_PATH(
+                        ANJAY_DM_OID_SERVER, server_iid,
+                        ANJAY_DM_RID_SERVER_BOOTSTRAP_ON_REGISTRATION_FAILURE),
+                &force_bootstrap);
+    }
+    return force_bootstrap;
+}
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
 
 #ifdef ANJAY_WITH_BOOTSTRAP
 static bool should_retry_bootstrap(anjay_unlocked_t *anjay) {
@@ -227,6 +361,12 @@ static bool should_retry_bootstrap(anjay_unlocked_t *anjay) {
         } else if (!it->refresh_failed || _anjay_server_active(it)) {
             possibly_active_server_exists = true;
         }
+#    if defined(ANJAY_WITH_LWM2M11)
+        else if (!registration_failure_must_trigger_bootstrap
+                 && server_bootstrap_on_registration_failure(anjay, it)) {
+            registration_failure_must_trigger_bootstrap = true;
+        }
+#    endif // defined(ANJAY_WITH_LWM2M11)
     }
     return bootstrap_server_exists
            && (!possibly_active_server_exists
@@ -368,7 +508,12 @@ _anjay_servers_create_inactive(anjay_unlocked_t *anjay, anjay_ssid_t ssid) {
     _anjay_connection_get(&new_server->connections, ANJAY_CONNECTION_PRIMARY)
             ->transport = ANJAY_SOCKET_TRANSPORT_INVALID;
     new_server->reactivate_time = AVS_TIME_REAL_INVALID;
-    new_server->registration_info.lwm2m_version = ANJAY_LWM2M_VERSION_1_0;
+    new_server->registration_info.lwm2m_version =
+#ifdef ANJAY_WITH_LWM2M11
+            anjay->lwm2m_version_config.maximum_version;
+#else  // ANJAY_WITH_LWM2M11
+            ANJAY_LWM2M_VERSION_1_0;
+#endif // ANJAY_WITH_LWM2M11
     return new_server;
 }
 

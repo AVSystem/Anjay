@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_COAP_TEST_UTILS_H
@@ -484,8 +477,12 @@ coap_msg__(aligned_buffer_t *buf,
                                : (sizeof("" __VA_ARGS__) - 1               \
                                   - (Seq) * (Size)))
 
-static inline void expect_timeout(avs_net_socket_t *mocksock) {
-    avs_unit_mocksock_input_fail(mocksock, avs_errno(AVS_ETIMEDOUT));
+static inline void expect_has_buffered_data_check(avs_net_socket_t *mocksock,
+                                                  bool has_buffered_data) {
+    avs_unit_mocksock_expect_get_opt(mocksock, AVS_NET_SOCKET_HAS_BUFFERED_DATA,
+                                     (avs_net_socket_opt_value_t) {
+                                         .flag = has_buffered_data
+                                     });
 }
 
 #endif // ANJAY_COAP_TEST_UTILS_H

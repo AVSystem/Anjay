@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_IO_SENML_LIKE_ENCODER_H
@@ -33,6 +26,11 @@ typedef struct anjay_senml_like_encoder_struct anjay_senml_like_encoder_t;
  */
 
 int _anjay_senml_like_encode_int(anjay_senml_like_encoder_t *ctx, int64_t data);
+
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_senml_like_encode_uint(anjay_senml_like_encoder_t *ctx,
+                                  uint64_t data);
+#endif // ANJAY_WITH_LWM2M11
 
 int _anjay_senml_like_encode_double(anjay_senml_like_encoder_t *ctx,
                                     double data);
@@ -101,6 +99,32 @@ int _anjay_senml_like_bytes_end(anjay_senml_like_encoder_t *ctx);
  * @returns 0 in case of success, negative value otherwise.
  */
 int _anjay_senml_like_encoder_cleanup(anjay_senml_like_encoder_t **ctx);
+
+#ifdef ANJAY_WITH_CBOR
+/**
+ * Creates SenML CBOR encoder (content format 112).
+ *
+ * @param stream Stream to encode data to. Encoder doesn't take ownership of
+ *               stream.
+ * @returns Pointer to encoder in case of success, NULL otherwise.
+ *
+ * In current implementation, all data are cached and written to stream during
+ * call to <c>_anjay_senml_like_encoder_cleanup</c>.
+ */
+anjay_senml_like_encoder_t *_anjay_senml_cbor_encoder_new(avs_stream_t *stream);
+#endif // ANJAY_WITH_CBOR
+
+#ifdef ANJAY_WITH_SENML_JSON
+/**
+ * Creates SenML JSON encoder (content format 110).
+ * Writes <c>[</c> to stream.
+ *
+ * @param stream Stream to encode data to. Encoder doesn't take ownership of
+ *               stream.
+ * @returns Pointer to encoder in case of success, NULL otherwise.
+ */
+anjay_senml_like_encoder_t *_anjay_senml_json_encoder_new(avs_stream_t *stream);
+#endif // ANJAY_WITH_SENML_JSON
 
 /**
  * Creates LwM2M 1.0 JSON encoder (content format 11543).

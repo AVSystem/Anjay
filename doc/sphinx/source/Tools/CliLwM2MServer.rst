@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 LwM2M testing shell
 -------------------
@@ -32,7 +25,7 @@ with the following optional arguments:
 --listen PORT, -l PORT
                       Immediately starts listening on specified CoAP port. Default UDP, can be TCP if --tcp is passed. If `PORT` is not specified, default one is used (5683 for CoAP, 5684 for CoAP/(D)TLS)
 --tcp, -t
-                      Listen on TCP port *(only available in the commercial version)*
+                      Listen on TCP port
 --psk-identity IDENTITY, -i IDENTITY
                       PSK identity to use for DTLS connection (literal string).
 --psk-key KEY, -k KEY
@@ -152,7 +145,7 @@ the result of entering an empty line on Nsh side should be:
 .. note::
 
    Usually there is no need for passing all of the command arguments. To see which are optional
-   you can use **help** for the considred command. In the output they are printed with ``?`` signs.
+   you can use **help** for the considered command. In the output they are printed with ``?`` signs.
 
 Working with payloads
 ^^^^^^^^^^^^^^^^^^^^^
@@ -173,12 +166,12 @@ Each of them has its own set of commands, however, some of them are common.
 Other commands common for the subshells are:
 
 serialize
-   Displays the prepared strucure as an encoded hex-escaped string (ready to use as EscapedBytes).
+   Displays the prepared structure as an encoded hex-escaped string (ready to use as EscapedBytes).
 show
    Displays current element structure in a human-readable form.
 
-CBOR subshell (commercial version only)
-"""""""""""""""""""""""""""""""""""""""
+CBOR subshell
+"""""""""""""
 
 This subshell is entered by **cbor** command. The only extra command supported is:
 
@@ -345,7 +338,7 @@ To see how they work, let's send a few messages, e.g.:
    empty
    reset
 
-Now, we can check N-th message, sent or recieved, by running ``details N``
+Now, we can check N-th message, sent or received, by running ``details N``
 (important note: the last message has N=1). For example, in such case running ``details 4`` would return:
 
 .. code-block:: text
@@ -398,7 +391,7 @@ Payload buffer
 """"""""""""""
 
 Another important tool is **payload buffer**.
-It stores the contents of the messages recieved by the server and
+It stores the contents of the messages received by the server and
 can be accessed with a set of functions **payload_buffer_\***:
 
 payload_buffer_clear
@@ -452,7 +445,7 @@ To use the function **payload_buffer_show_tlv** we need some data in TLV format,
    attempted to take 7217722 bytes, but only 187 available (try "get_error" for details)
 
 Moreover, after reading the object instance with ``read /1/1 APPLICATION_LWM2M_TLV``, the result will be the same.
-The reason of such behaviour is that there is some data in payload which is not in TLV encoding.
+The reason of such behavior is that there is some data in payload which is not in TLV encoding.
 In such case **payload_buffer_clear** is needed before:
 
 .. code-block:: text
@@ -540,7 +533,7 @@ Dealing with connections
 
 To this point we always used the same setting of the client and the server, with the server port
 given as a command line parameter. This approach is sufficient for most of cases, but Nsh supports
-three commands for modyfing the connection in runtime:
+three commands for modifying the connection in runtime:
 
 connect ``HOST`` ``PORT``
    Connects the socket to given ``HOST:PORT``. Future packets will be sent to this address.
@@ -562,7 +555,7 @@ expect ``MSG_CODE``
 
    ``MSG_CODE`` can be:
 
-   - a string with Python code that evalutes to a correct message,
+   - a string with Python code that evaluates to a correct message,
 
    - None, if no messages are expected,
 
@@ -600,8 +593,10 @@ bootstrap ``URI`` ``SECURITY_MODE`` ``PSK_IDENTITY`` ``PSK_KEY`` ``CLIENT_CERT_P
 
    Both Security and Server object instances are created with given ``IID``.
 
-   If ``FINISH`` is set to True, a *Bootstap Finish* message will be sent
+   If ``FINISH`` is set to True, a *Bootstrap Finish* message will be sent
    after setting up Security/Server instances.
+
+
 file_server ``ROOT_DIRECTORY`` ``PORT`` ``PSK_IDENTITY`` ``PSK_KEY`` ``CA_PATH`` ``CA_FILE`` ``CRT_FILE`` ``KEY_FILE`` ``IPV6`` ``DEBUG``
    Serves files from ``ROOT_DIRECTORY`` over CoAP(s).
 
@@ -688,14 +683,14 @@ exit
    Terminates the command loop. Equivalent to ``Ctrl+D``.
 help
    Displays a description of given command or lists all available commands.
-set ``AUTO_UPDATE`` ``AUTO_REREGISTER`` ``AUTO_ACK``
+set ``AUTO_UPDATE`` ``AUTO_REREGISTER`` ``AUTO_ACK`` ``AUTO_BSPACK_ERROR``
    Sets in which situation server sends a message to a client automatically:
 
    - ``AUTO_UPDATE`` - when LwM2M Update is received from the client,
-
    - ``AUTO_REREGISTER`` - when LwM2M Register is received from the client,
-
    - ``AUTO_ACK`` - after any confirmable message from the client.
+   - ``AUTO_BSPACK_ERROR`` - after ``BootstrapPackRequest`` is received it
+     automatically responds with ``NOT FOUND``.
 
    If some of the options are absent, their state remains unchanged.
 

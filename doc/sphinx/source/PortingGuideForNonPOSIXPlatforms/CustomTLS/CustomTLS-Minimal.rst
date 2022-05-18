@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Minimal DTLS implementation
 ===========================
@@ -129,9 +122,9 @@ around the ``avs_crypto_security_info_union_t`` type, declared as follows:
     #if defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE) \
             || defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE)
         AVS_CRYPTO_DATA_SOURCE_ENGINE
-    #endif // defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE) ||
-           // defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE)
-    } avs_crypto_data_source_t;
+    #endif /* defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE) || \
+            defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE) */
+        } avs_crypto_data_source_t;
 
     /**
      * This struct is for internal use only and should not be filled manually. One
@@ -155,10 +148,10 @@ around the ``avs_crypto_security_info_union_t`` type, declared as follows:
     #if defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE) \
             || defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE)
             avs_crypto_security_info_union_internal_engine_t engine;
-    #endif // defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE) ||
-           // defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE)
-        } info;
-    };
+    #endif /* defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE) || \
+            defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE) */
+            } info;
+        };
 
 The ``source`` fields acts as a tag to the ``info`` union, deciding from which
 source the credential shall be loaded. There are a number of "simple" sources
@@ -182,7 +175,7 @@ supported:
   in a hardware cryptography source, such as a secure element; information on
   the credential is stored as a "query string" at ``info.engine.query``; the
   format of the query string is platform-specific and may be arbitrary; **this
-  case is only supported in the commercial version of Anjay**
+  case is supported in the HSM Feature**
 
 In addition to the "simple" sources listed above, two additional "compound"
 sources are supported:
@@ -206,8 +199,7 @@ sources are supported:
 
     "Compound" credential sources MAY be used for client certificates, to
     signify additional CA certificates that shall be sent to the server during
-    handshake. This is, however, only possible in the commercial version of
-    Anjay.
+    handshake.
 
     "Compound" credential sources, in general, MAY contain other "compound"
     credential sources, forming a tree-like structure. Those SHOULD be loaded
@@ -345,7 +337,7 @@ identity.
     }
 
     static avs_error_t configure_psk(tls_socket_impl_t *sock,
-                                     const avs_net_generic_psk_info_t *psk) {
+                                     const avs_net_psk_info_t *psk) {
         if (!psk->key.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER
                 || psk->identity.desc.source != AVS_CRYPTO_DATA_SOURCE_BUFFER) {
             return avs_errno(AVS_EINVAL);
@@ -492,15 +484,26 @@ implement:
 An additional check is also added in ``tls_connect()`` to avoid creating the
 ``SSL`` object multiple times.
 
-Fixing the reported inner MTU
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Fixing the socket option values
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``tls_get_opt()`` function has been previously implemented by simply
 forwarding the call to the underlying unencrypted socket.
 
 This yields inaccurate results for the ``AVS_NET_SOCKET_OPT_INNER_MTU`` option.
 The underlying socket will return the maximum number of bytes available on the
-UDP layer, while we need to take the DTLS headers into account:
+UDP layer, while we need to take the DTLS headers into account.
+
+It is also desirable to overload the ``AVS_NET_SOCKET_HAS_BUFFERED_DATA``. This
+option is designed to notify the Anjay library whether all data received from
+the underlying system socket has been processed. This is used to make sure that
+when control is returned to the event loop, the ``poll()`` call will not stall
+waiting for new data, while in reality it is already available, but stuck in the
+(D)TLS layer buffer.
+
+In this example based on OpenSSL, this condition can be checked by calling the
+`SSL_pending() <https://www.openssl.org/docs/man1.1.1/man3/SSL_pending.html>`_
+function.
 
 .. highlight:: c
 .. snippet-source:: examples/custom-tls/minimal/src/tls_impl.c
@@ -519,6 +522,9 @@ UDP layer, while we need to take the DTLS headers into account:
             }
             return err;
         }
+        case AVS_NET_SOCKET_HAS_BUFFERED_DATA:
+            out_option_value->flag = (sock->ssl && SSL_pending(sock->ssl) > 0);
+            return AVS_OK;
         default:
             return avs_net_socket_get_opt(sock->backend_socket, option_key,
                                           out_option_value);
@@ -560,7 +566,7 @@ mode, but a number of functionalities will not work:
   through the data model.
 * Socket file descriptor is used directly instead of wrapping ``avs_net`` APIs,
   and the ``decorate`` function is not implemented - the secure SMS mode will
-  thus not work in the commercial version of Anjay.
+  thus not work in versions that include the SMS commercial feature.
 
 We will expand this implementation to address these limitation in subsequent
 chapters.

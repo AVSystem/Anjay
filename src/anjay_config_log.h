@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_CONFIG_LOG_H
@@ -54,6 +47,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_ACCESS_CONTROL
     _anjay_log(anjay, TRACE, "ANJAY_WITH_ACCESS_CONTROL = OFF");
 #endif // ANJAY_WITH_ACCESS_CONTROL
+#ifdef ANJAY_WITH_ATTR_STORAGE
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_ATTR_STORAGE = ON");
+#else // ANJAY_WITH_ATTR_STORAGE
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_ATTR_STORAGE = OFF");
+#endif // ANJAY_WITH_ATTR_STORAGE
 #ifdef ANJAY_WITH_BOOTSTRAP
     _anjay_log(anjay, TRACE, "ANJAY_WITH_BOOTSTRAP = ON");
 #else // ANJAY_WITH_BOOTSTRAP
@@ -99,6 +97,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_EST
     _anjay_log(anjay, TRACE, "ANJAY_WITH_EST = OFF");
 #endif // ANJAY_WITH_EST
+#ifdef ANJAY_WITH_EST_ENGINE_SUPPORT
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_EST_ENGINE_SUPPORT = ON");
+#else // ANJAY_WITH_EST_ENGINE_SUPPORT
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_EST_ENGINE_SUPPORT = OFF");
+#endif // ANJAY_WITH_EST_ENGINE_SUPPORT
 #ifdef ANJAY_WITH_EVENT_LOOP
     _anjay_log(anjay, TRACE, "ANJAY_WITH_EVENT_LOOP = ON");
 #else // ANJAY_WITH_EVENT_LOOP
@@ -134,11 +137,6 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_MODULE_ACCESS_CONTROL
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_ACCESS_CONTROL = OFF");
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
-#ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
-    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_ATTR_STORAGE = ON");
-#else // ANJAY_WITH_MODULE_ATTR_STORAGE
-    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_ATTR_STORAGE = OFF");
-#endif // ANJAY_WITH_MODULE_ATTR_STORAGE
 #ifdef ANJAY_WITH_MODULE_AT_SMS
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_AT_SMS = ON");
 #else // ANJAY_WITH_MODULE_AT_SMS
@@ -174,6 +172,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_MODULE_SECURITY
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_SECURITY = OFF");
 #endif // ANJAY_WITH_MODULE_SECURITY
+#ifdef ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT = ON");
+#else // ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT = OFF");
+#endif // ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT
 #ifdef ANJAY_WITH_MODULE_SERVER
     _anjay_log(anjay, TRACE, "ANJAY_WITH_MODULE_SERVER = ON");
 #else // ANJAY_WITH_MODULE_SERVER
@@ -199,6 +202,11 @@ static inline void _anjay_log_feature_list(void) {
 #else // ANJAY_WITH_OBSERVE
     _anjay_log(anjay, TRACE, "ANJAY_WITH_OBSERVE = OFF");
 #endif // ANJAY_WITH_OBSERVE
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_SECURITY_STRUCTURED = ON");
+#else // ANJAY_WITH_SECURITY_STRUCTURED
+    _anjay_log(anjay, TRACE, "ANJAY_WITH_SECURITY_STRUCTURED = OFF");
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
 #ifdef ANJAY_WITH_SEND
     _anjay_log(anjay, TRACE, "ANJAY_WITH_SEND = ON");
 #else // ANJAY_WITH_SEND

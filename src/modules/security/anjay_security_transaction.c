@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -68,9 +61,18 @@ static bool uri_protocol_matching(anjay_security_mode_t security_mode,
 static bool
 sec_key_or_data_valid(const sec_key_or_data_t *value,
                       const avs_crypto_security_info_tag_t *expected_tag) {
+    (void) expected_tag;
     switch (value->type) {
     case SEC_KEY_AS_DATA:
         return value->value.data.data;
+#    if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+    case SEC_KEY_AS_KEY_EXTERNAL:
+    case SEC_KEY_AS_KEY_OWNED:
+        return expected_tag
+               && value->value.key.info.source != AVS_CRYPTO_DATA_SOURCE_EMPTY
+               && value->value.key.info.type == *expected_tag;
+#    endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+              defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
     default:
         AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
         return false;
@@ -136,33 +138,20 @@ static int validate_instance(sec_instance_t *it) {
             return -1;
         }
     }
-    if (it->has_sms_security_mode) {
-        if (_anjay_sec_validate_sms_security_mode(
-                    (int32_t) it->sms_security_mode)) {
-            LOG_VALIDATION_FAILED(it, "SMS Security mode %d not supported",
-                                  (int) it->sms_security_mode);
-            return -1;
-        }
-        if ((it->sms_security_mode == ANJAY_SMS_SECURITY_DTLS_PSK
-             || it->sms_security_mode == ANJAY_SMS_SECURITY_SECURE_PACKET)
-                && (!it->has_sms_key_params || !it->has_sms_secret_key
-                    || !sec_key_or_data_valid(
-                               &it->sms_key_params,
-                               it->sms_security_mode
-                                               == ANJAY_SMS_SECURITY_DTLS_PSK
-                                       ? &(const avs_crypto_security_info_tag_t) { AVS_CRYPTO_SECURITY_INFO_PSK_IDENTITY }
-                                       : NULL)
-                    || !sec_key_or_data_valid(
-                               &it->sms_secret_key,
-                               it->sms_security_mode
-                                               == ANJAY_SMS_SECURITY_DTLS_PSK
-                                       ? &(const avs_crypto_security_info_tag_t) { AVS_CRYPTO_SECURITY_INFO_PSK_KEY }
-                                       : NULL))) {
-            LOG_VALIDATION_FAILED(
-                    it, "SMS security credentials not fully configured");
-            return -1;
-        }
+#    ifdef ANJAY_WITH_LWM2M11
+    if (it->matching_type > 3) {
+        LOG_VALIDATION_FAILED(it, "Matching Type set to an invalid value");
+        return -1;
     }
+    if (it->matching_type == 2) {
+        LOG_VALIDATION_FAILED(it, "SHA-384 Matching Type is not supported");
+        return -1;
+    }
+    if (it->certificate_usage > 3) {
+        LOG_VALIDATION_FAILED(it, "Certificate Usage set to an invalid value");
+        return -1;
+    }
+#    endif // ANJAY_WITH_LWM2M11
     return 0;
 }
 

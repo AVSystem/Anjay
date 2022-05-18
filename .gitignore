@@ -55,6 +55,7 @@ __pycache__/
 *.orig
 *.egg-info
 *.pyc
+*.cache
 /tests/integration/framework/nsh-lwm2m/coap/pymbedtls*
 compile_commands.json
 
@@ -67,3 +68,6 @@ compile_commands.json
 
 # built tutorials
 examples/*-build
+
+# Anjay persistence files
+*-persistence.dat

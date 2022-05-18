@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import inspect
 import math
@@ -296,43 +289,6 @@ class BlockOption(IntOption):
                                                            self.has_more(),
                                                            self.block_size())
 
-class OscoreOption(OpaqueOption):
-    def __init__(self, number, content):
-        super().__init__(number, content)
-
-        piv_len = self.content[0] & int('111', 2)
-        has_kid = bool(self.content[0] & int('1000', 2))
-        has_kid_ctx = bool(self.content[0] & int('10000', 2))
-
-        if piv_len == 0:
-            self.piv = None
-        else:
-            self.piv = int.from_bytes(self.content[1:piv_len], byteorder='big', signed=False)
-
-        kid_ctx_len = 0
-        if has_kid_ctx:
-            kid_ctx_len = self.content[piv_len+1]
-            self.kid_ctx = self.content[piv_len+2:piv_len+2+kid_ctx_len]
-        else:
-            self.kid_ctx = None
-
-        if has_kid:
-            self.kid = self.content[(1 + piv_len + (1 + kid_ctx_len) if has_kid_ctx else 0):]
-        else:
-            self.kid = None
-
-    def content_to_str(self):
-        return 'piv=%d, kid=%a, kid_ctx=%a' \
-            % (self.piv, self.kid.hex() if self.kid else None, self.kid_ctx.hex() if self.kid_ctx else None)
-
-    def key_id(self):
-        return self.kid
-
-    def id_ctx(self):
-        return self.kid_ctx
-
-    def partial_iv(self):
-        return self.piv
 
 
 def is_power_of_2(num):
@@ -374,7 +330,6 @@ Option.SIZE1           = OptionConstructor(IntOption, 60, lambda int32: struct.p
 Option.BLOCK1          = OptionConstructor(BlockOption, 27, pack_block)
 Option.BLOCK2          = OptionConstructor(BlockOption, 23, pack_block)
 
-Option.OSCORE          = OptionConstructor(OscoreOption, 9, lambda data: data)
 
 
 def pack_content_format(fmt: ContentFormat):

@@ -1,23 +1,19 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_DM_H
 #define ANJAY_INCLUDE_ANJAY_MODULES_DM_H
 
-#include <anjay_modules/dm/anjay_attributes.h>
+#ifdef ANJAY_WITH_SEND
+#    include <anjay/lwm2m_send.h>
+#endif // ANJAY_WITH_SEND
+
 #include <anjay_modules/dm/anjay_modules.h>
 
 #include <assert.h>
@@ -126,6 +122,12 @@ static inline bool _anjay_uri_path_normalized(const anjay_uri_path_t *path) {
     return true;
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+void _anjay_uri_path_update_common_prefix(const anjay_uri_path_t **prefix_ptr,
+                                          anjay_uri_path_t *prefix_buf,
+                                          const anjay_uri_path_t *path);
+#endif // ANJAY_WITH_LWM2M11
+
 const char *_anjay_debug_make_path__(char *buffer,
                                      size_t buffer_size,
                                      const anjay_uri_path_t *uri);
@@ -181,8 +183,14 @@ const char *_anjay_debug_make_path__(char *buffer,
 
 typedef enum anjay_request_action {
     ANJAY_ACTION_READ,
+#ifdef ANJAY_WITH_LWM2M11
+    ANJAY_ACTION_READ_COMPOSITE,
+#endif // ANJAY_WITH_LWM2M11
     ANJAY_ACTION_DISCOVER,
     ANJAY_ACTION_WRITE,
+#ifdef ANJAY_WITH_LWM2M11
+    ANJAY_ACTION_WRITE_COMPOSITE,
+#endif // ANJAY_WITH_LWM2M11
     ANJAY_ACTION_WRITE_UPDATE,
     ANJAY_ACTION_WRITE_ATTRIBUTES,
     ANJAY_ACTION_EXECUTE,
@@ -204,6 +212,9 @@ static inline anjay_dm_write_type_t _anjay_dm_write_type_from_request_action(
         return ANJAY_DM_WRITE_TYPE_REPLACE;
     case ANJAY_ACTION_WRITE_UPDATE:
     case ANJAY_ACTION_CREATE:
+#ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_ACTION_WRITE_COMPOSITE:
+#endif // ANJAY_WITH_LWM2M11
         return ANJAY_DM_WRITE_TYPE_UPDATE;
     default:
         AVS_UNREACHABLE("Unexpected request action");
@@ -262,6 +273,20 @@ static inline int _anjay_dm_read_resource_i64(anjay_unlocked_t *anjay,
     return bytes_read != sizeof(*out_value);
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+static inline int _anjay_dm_read_resource_u64(anjay_unlocked_t *anjay,
+                                              const anjay_uri_path_t *path,
+                                              uint64_t *out_value) {
+    size_t bytes_read;
+    int result = _anjay_dm_read_resource_into_buffer(
+            anjay, path, (char *) out_value, sizeof(*out_value), &bytes_read);
+    if (result) {
+        return result;
+    }
+    return bytes_read != sizeof(*out_value);
+}
+#endif // ANJAY_WITH_LWM2M11
+
 static inline int _anjay_dm_read_resource_u16(anjay_unlocked_t *anjay,
                                               const anjay_uri_path_t *path,
                                               uint16_t *out_value) {
@@ -309,6 +334,36 @@ static inline int _anjay_dm_read_resource_objlnk(anjay_unlocked_t *anjay,
     *out_oid = (anjay_oid_t) (objlnk_encoded >> 16);
     return 0;
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+/**
+ * Reads an array of uint32_t values from the data model and returns them via an
+ * array allocated using @ref avs_malloc .
+ *
+ * @param      anjay                   Anjay object to operate on.
+ * @param      path                    Resource path to pull data from.
+ * @param[out] out_array               Pointer to a variable that on success
+ *                                     will be set to a pointer to array of read
+ *                                     values. Must not be NULL.
+ * @param[out] out_array_size_elements Pointer to a variable that on success
+ *                                     will be set to the number of uint32_t
+ *                                     values read from data model and available
+ *                                     in @p out_array . Must not be NULL.
+ *
+ * @returns 0 on success, a negative value (one of ANJAY_ERR_* constants) on
+ *          error.
+ *
+ * Notes:
+ * - on error, out_array and out_array_size_elements are not modified.
+ * - in case 0 elements are read successfully, @p out_array may or may not be
+ *   set to a non-NULL value. It is always necessary to call @ref avs_free on
+ *   @p out_array whenever this function succeeds.
+ */
+int _anjay_dm_read_resource_u32_array(anjay_unlocked_t *anjay,
+                                      const anjay_uri_path_t *path,
+                                      uint32_t **out_array,
+                                      size_t *out_array_size_elements);
+#endif // ANJAY_WITH_LWM2M11
 
 typedef struct anjay_dm anjay_dm_t;
 
@@ -458,6 +513,26 @@ int _anjay_dm_write_resource(anjay_unlocked_t *anjay,
                              anjay_unlocked_input_ctx_t *in_ctx,
                              anjay_notify_queue_t *notify_queue);
 
+#ifdef ANJAY_WITH_LWM2M11
+/**
+ * Works as @ref _anjay_dm_write_resource , but takes value of type @c int64_t
+ * instead of input context.
+ */
+int _anjay_dm_write_resource_i64(anjay_unlocked_t *anjay,
+                                 anjay_uri_path_t path,
+                                 int64_t value,
+                                 anjay_notify_queue_t *notify_queue);
+
+/**
+ * Works as @ref _anjay_dm_write_resource , but takes value of type @c uint64_t
+ * instead of input context.
+ */
+int _anjay_dm_write_resource_u64(anjay_unlocked_t *anjay,
+                                 anjay_uri_path_t path,
+                                 uint64_t value,
+                                 anjay_notify_queue_t *notify_queue);
+#endif // ANJAY_WITH_LWM2M11
+
 typedef enum {
     ANJAY_DM_HANDLER_object_read_default_attrs,
     ANJAY_DM_HANDLER_object_write_default_attrs,
@@ -478,155 +553,142 @@ typedef enum {
     ANJAY_DM_HANDLER_transaction_begin,
     ANJAY_DM_HANDLER_transaction_validate,
     ANJAY_DM_HANDLER_transaction_commit,
-    ANJAY_DM_HANDLER_transaction_rollback
+    ANJAY_DM_HANDLER_transaction_rollback,
+#ifdef ANJAY_WITH_LWM2M11
+    ANJAY_DM_HANDLER_resource_instance_read_attrs,
+    ANJAY_DM_HANDLER_resource_instance_write_attrs,
+#endif // ANJAY_WITH_LWM2M11
 } anjay_dm_handler_t;
 
 /**
  * Checks whether a specific data model handler is implemented for a given
- * Object, with respect to the overlay system.
+ * Object, with respect to the Attribute Storage subsystem.
  *
  * The basic idea is that if this function returns <c>true</c> for a given
  * handler, it means that the corresponding <c>_anjay_dm_*</c> function called
- * with the same <c>anjay</c>, <c>obj_ptr</c> and <c>current_module</c>
- * arguments will forward to some actually implemented code (rather than
- * defaulting to <c>ANJAY_ERR_METHOD_NOT_ALLOWED</c>).
- *
- * This is why there is <c>current_module</c> argument - "outside" code will
- * normally call this with <c>current_module == NULL</c> to check whether a
- * handler is implemented at all (either in the object or in some overlay).
- * Overlay handlers may then call it with self self pointer as
- * <c>current_module</c> to check whether the corresponding handler is
- * implemented in lower-layer code.
+ * with the same <c>anjay</c> and <c>obj_ptr</c> arguments will forward to some
+ * actually implemented code (rather than defaulting to
+ * <c>ANJAY_ERR_METHOD_NOT_ALLOWED</c>).
  *
  * @param anjay          Anjay object to operate on
  *
  * @param obj_ptr        Handle to an object to check handlers in
- *
- * @param current_module The module after which to start search for handlers in
- *                       the overlays
  *
  * @param handler_type   Type of handler to check
  *
  * @return Boolean value determining whether an applicable handler
  *         implementation is available
  */
-bool _anjay_dm_handler_implemented(anjay_unlocked_t *anjay,
-                                   const anjay_dm_installed_object_t *obj_ptr,
-                                   const anjay_dm_module_t *current_module,
+bool _anjay_dm_handler_implemented(const anjay_dm_installed_object_t *obj_ptr,
                                    anjay_dm_handler_t handler_type);
 
 int _anjay_dm_call_object_read_default_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_ssid_t ssid,
-        anjay_dm_internal_oi_attrs_t *out,
-        const anjay_dm_module_t *current_module);
+        anjay_dm_oi_attributes_t *out);
 int _anjay_dm_call_object_write_default_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_oi_attrs_t *attrs,
-        const anjay_dm_module_t *current_module);
+        const anjay_dm_oi_attributes_t *attrs);
 int _anjay_dm_call_list_instances(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
-                                  anjay_unlocked_dm_list_ctx_t *ctx,
-                                  const anjay_dm_module_t *current_module);
+                                  anjay_unlocked_dm_list_ctx_t *ctx);
 int _anjay_dm_call_instance_reset(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
-                                  anjay_iid_t iid,
-                                  const anjay_dm_module_t *current_module);
+                                  anjay_iid_t iid);
 int _anjay_dm_call_instance_create(anjay_unlocked_t *anjay,
                                    const anjay_dm_installed_object_t *obj_ptr,
-                                   anjay_iid_t iid,
-                                   const anjay_dm_module_t *current_module);
+                                   anjay_iid_t iid);
 int _anjay_dm_call_instance_remove(anjay_unlocked_t *anjay,
                                    const anjay_dm_installed_object_t *obj_ptr,
-                                   anjay_iid_t iid,
-                                   const anjay_dm_module_t *current_module);
+                                   anjay_iid_t iid);
 int _anjay_dm_call_instance_read_default_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        anjay_dm_internal_oi_attrs_t *out,
-        const anjay_dm_module_t *current_module);
+        anjay_dm_oi_attributes_t *out);
 int _anjay_dm_call_instance_write_default_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_oi_attrs_t *attrs,
-        const anjay_dm_module_t *current_module);
+        const anjay_dm_oi_attributes_t *attrs);
 int _anjay_dm_call_list_resources(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
                                   anjay_iid_t iid,
-                                  anjay_unlocked_dm_resource_list_ctx_t *ctx,
-                                  const anjay_dm_module_t *current_module);
+                                  anjay_unlocked_dm_resource_list_ctx_t *ctx);
 
 int _anjay_dm_call_resource_read(anjay_unlocked_t *anjay,
                                  const anjay_dm_installed_object_t *obj_ptr,
                                  anjay_iid_t iid,
                                  anjay_rid_t rid,
                                  anjay_riid_t riid,
-                                 anjay_unlocked_output_ctx_t *ctx,
-                                 const anjay_dm_module_t *current_module);
+                                 anjay_unlocked_output_ctx_t *ctx);
 int _anjay_dm_call_resource_write(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
                                   anjay_riid_t riid,
-                                  anjay_unlocked_input_ctx_t *ctx,
-                                  const anjay_dm_module_t *current_module);
+                                  anjay_unlocked_input_ctx_t *ctx);
 int _anjay_dm_call_resource_execute(anjay_unlocked_t *anjay,
                                     const anjay_dm_installed_object_t *obj_ptr,
                                     anjay_iid_t iid,
                                     anjay_rid_t rid,
-                                    anjay_unlocked_execute_ctx_t *execute_ctx,
-                                    const anjay_dm_module_t *current_module);
+                                    anjay_unlocked_execute_ctx_t *execute_ctx);
 int _anjay_dm_call_resource_reset(anjay_unlocked_t *anjay,
                                   const anjay_dm_installed_object_t *obj_ptr,
                                   anjay_iid_t iid,
-                                  anjay_rid_t rid,
-                                  const anjay_dm_module_t *current_module);
+                                  anjay_rid_t rid);
 int _anjay_dm_call_list_resource_instances(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
-        anjay_unlocked_dm_list_ctx_t *ctx,
-        const anjay_dm_module_t *current_module);
+        anjay_unlocked_dm_list_ctx_t *ctx);
 int _anjay_dm_call_resource_read_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        anjay_dm_internal_r_attrs_t *out,
-        const anjay_dm_module_t *current_module);
+        anjay_dm_r_attributes_t *out);
 int _anjay_dm_call_resource_write_attrs(
         anjay_unlocked_t *anjay,
         const anjay_dm_installed_object_t *obj_ptr,
         anjay_iid_t iid,
         anjay_rid_t rid,
         anjay_ssid_t ssid,
-        const anjay_dm_internal_r_attrs_t *attrs,
-        const anjay_dm_module_t *current_module);
+        const anjay_dm_r_attributes_t *attrs);
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_dm_call_resource_instance_read_attrs(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        anjay_dm_r_attributes_t *out);
+int _anjay_dm_call_resource_instance_write_attrs(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t *obj_ptr,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        const anjay_dm_r_attributes_t *attrs);
+#endif // ANJAY_WITH_LWM2M11
 
-int _anjay_dm_call_transaction_begin(anjay_unlocked_t *anjay,
-                                     const anjay_dm_installed_object_t *obj_ptr,
-                                     const anjay_dm_module_t *current_module);
+int _anjay_dm_call_transaction_begin(
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr);
 int _anjay_dm_call_transaction_validate(
-        anjay_unlocked_t *anjay,
-        const anjay_dm_installed_object_t *obj_ptr,
-        const anjay_dm_module_t *current_module);
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr);
 int _anjay_dm_call_transaction_commit(
-        anjay_unlocked_t *anjay,
-        const anjay_dm_installed_object_t *obj_ptr,
-        const anjay_dm_module_t *current_module);
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr);
 int _anjay_dm_call_transaction_rollback(
-        anjay_unlocked_t *anjay,
-        const anjay_dm_installed_object_t *obj_ptr,
-        const anjay_dm_module_t *current_module);
+        anjay_unlocked_t *anjay, const anjay_dm_installed_object_t *obj_ptr);
 
 /**
  * Starts a transaction on the data model. If a transaction is already in
@@ -634,7 +696,7 @@ int _anjay_dm_call_transaction_rollback(
  *
  * @param anjay ANJAY object to operate on.
  */
-void _anjay_dm_transaction_begin(anjay_unlocked_t *anjay);
+avs_error_t _anjay_dm_transaction_begin(anjay_unlocked_t *anjay);
 
 /**
  * Includes a given object in transaction, calling its <c>transaction_begin</c>
@@ -693,13 +755,18 @@ int _anjay_ssid_from_security_iid(anjay_unlocked_t *anjay,
                                   anjay_iid_t security_iid,
                                   uint16_t *out_ssid);
 
-bool _anjay_dm_attributes_empty(const anjay_dm_internal_oi_attrs_t *attrs);
-bool _anjay_dm_resource_attributes_empty(
-        const anjay_dm_internal_r_attrs_t *attrs);
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_server_uri_from_security_iid(anjay_unlocked_t *anjay,
+                                        anjay_iid_t security_iid,
+                                        char *out_uri,
+                                        size_t out_size);
+#endif // ANJAY_WITH_LWM2M11
 
-bool _anjay_dm_attributes_full(const anjay_dm_internal_oi_attrs_t *attrs);
-bool _anjay_dm_resource_attributes_full(
-        const anjay_dm_internal_r_attrs_t *attrs);
+bool _anjay_dm_attributes_empty(const anjay_dm_oi_attributes_t *attrs);
+bool _anjay_dm_resource_attributes_empty(const anjay_dm_r_attributes_t *attrs);
+
+bool _anjay_dm_attributes_full(const anjay_dm_oi_attributes_t *attrs);
+bool _anjay_dm_resource_attributes_full(const anjay_dm_r_attributes_t *attrs);
 
 int _anjay_dm_verify_resource_present(anjay_unlocked_t *anjay,
                                       const anjay_dm_installed_object_t *obj,
@@ -731,13 +798,15 @@ int _anjay_dm_verify_instance_present(
 #define ANJAY_DM_RID_SECURITY_PK_OR_IDENTITY 3
 #define ANJAY_DM_RID_SECURITY_SERVER_PK_OR_IDENTITY 4
 #define ANJAY_DM_RID_SECURITY_SECRET_KEY 5
-#define ANJAY_DM_RID_SECURITY_SMS_MODE 6
-#define ANJAY_DM_RID_SECURITY_SMS_KEY_PARAMETERS 7
-#define ANJAY_DM_RID_SECURITY_SMS_SECRET_KEY 8
-#define ANJAY_DM_RID_SECURITY_SMS_MSISDN 9
 #define ANJAY_DM_RID_SECURITY_SSID 10
 #define ANJAY_DM_RID_SECURITY_CLIENT_HOLD_OFF_TIME 11
 #define ANJAY_DM_RID_SECURITY_BOOTSTRAP_TIMEOUT 12
+#ifdef ANJAY_WITH_LWM2M11
+#    define ANJAY_DM_RID_SECURITY_MATCHING_TYPE 13
+#    define ANJAY_DM_RID_SECURITY_SNI 14
+#    define ANJAY_DM_RID_SECURITY_CERTIFICATE_USAGE 15
+#    define ANJAY_DM_RID_SECURITY_DTLS_TLS_CIPHERSUITE 16
+#endif // ANJAY_WITH_LWM2M11
 
 #define ANJAY_DM_RID_SERVER_SSID 0
 #define ANJAY_DM_RID_SERVER_LIFETIME 1
@@ -746,6 +815,17 @@ int _anjay_dm_verify_instance_present(
 #define ANJAY_DM_RID_SERVER_DISABLE_TIMEOUT 5
 #define ANJAY_DM_RID_SERVER_NOTIFICATION_STORING 6
 #define ANJAY_DM_RID_SERVER_BINDING 7
+#ifdef ANJAY_WITH_LWM2M11
+#    define ANJAY_DM_RID_SERVER_TLS_DTLS_ALERT_CODE 11
+#    define ANJAY_DM_RID_SERVER_LAST_BOOTSTRAPPED 12
+#    define ANJAY_DM_RID_SERVER_BOOTSTRAP_ON_REGISTRATION_FAILURE 16
+#    define ANJAY_DM_RID_SERVER_COMMUNICATION_RETRY_COUNT 17
+#    define ANJAY_DM_RID_SERVER_COMMUNICATION_RETRY_TIMER 18
+#    define ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT 19
+#    define ANJAY_DM_RID_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER 20
+#    define ANJAY_DM_RID_SERVER_PREFERRED_TRANSPORT 22
+#    define ANJAY_DM_RID_SERVER_MUTE_SEND 23
+#endif // ANJAY_WITH_LWM2M11
 
 #define ANJAY_DM_RID_ACCESS_CONTROL_OID 0
 #define ANJAY_DM_RID_ACCESS_CONTROL_OIID 1
@@ -754,9 +834,6 @@ int _anjay_dm_verify_instance_present(
 
 #define ANJAY_DM_RID_DEVICE_FIRMWARE_VERSION 3
 #define ANJAY_DM_RID_DEVICE_SOFTWARE_VERSION 19
-
-/** NOTE: Returns ANJAY_SSID_BOOTSTRAP if there is no active connection. */
-anjay_ssid_t _anjay_dm_current_ssid(anjay_unlocked_t *anjay);
 
 #ifdef ANJAY_WITH_THREAD_SAFETY
 
@@ -790,6 +867,29 @@ int _anjay_register_object_unlocked(
         anjay_unlocked_t *anjay,
         AVS_LIST(anjay_dm_installed_object_t) *elem_ptr_move);
 
+#ifdef ANJAY_WITH_SEND
+int _anjay_send_batch_data_add_current_unlocked(
+        anjay_send_batch_builder_t *builder,
+        anjay_unlocked_t *anjay,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid);
+
+int _anjay_send_batch_data_add_current_multiple_unlocked(
+        anjay_send_batch_builder_t *builder,
+        anjay_unlocked_t *anjay,
+        const anjay_send_resource_path_t *paths,
+        size_t paths_length,
+        bool ignore_not_found);
+
+anjay_send_result_t
+_anjay_send_deferrable_unlocked(anjay_unlocked_t *anjay,
+                                anjay_ssid_t ssid,
+                                const anjay_send_batch_t *data,
+                                anjay_send_finished_handler_t *finished_handler,
+                                void *finished_handler_data);
+#endif // ANJAY_WITH_SEND
+
 void _anjay_dm_emit_unlocked(anjay_unlocked_dm_list_ctx_t *ctx, uint16_t id);
 
 void _anjay_dm_emit_res_unlocked(anjay_unlocked_dm_resource_list_ctx_t *ctx,
@@ -822,6 +922,17 @@ int _anjay_ret_objlnk_unlocked(anjay_unlocked_output_ctx_t *ctx,
                                anjay_oid_t oid,
                                anjay_iid_t iid);
 
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_ret_u64_unlocked(anjay_unlocked_output_ctx_t *ctx, uint64_t value);
+#endif // ANJAY_WITH_LWM2M11
+
+#if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+int _anjay_ret_security_info_unlocked(
+        anjay_unlocked_output_ctx_t *ctx,
+        const avs_crypto_security_info_union_t *desc);
+#endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+          defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
+
 int _anjay_get_bytes_unlocked(anjay_unlocked_input_ctx_t *ctx,
                               size_t *out_bytes_read,
                               bool *out_message_finished,
@@ -835,6 +946,12 @@ int _anjay_get_string_unlocked(anjay_unlocked_input_ctx_t *ctx,
 int _anjay_get_i32_unlocked(anjay_unlocked_input_ctx_t *ctx, int32_t *out);
 
 int _anjay_get_i64_unlocked(anjay_unlocked_input_ctx_t *ctx, int64_t *out);
+
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_get_u32_unlocked(anjay_unlocked_input_ctx_t *ctx, uint32_t *out);
+
+int _anjay_get_u64_unlocked(anjay_unlocked_input_ctx_t *ctx, uint64_t *out);
+#endif // ANJAY_WITH_LWM2M11
 
 int _anjay_get_double_unlocked(anjay_unlocked_input_ctx_t *ctx, double *out);
 

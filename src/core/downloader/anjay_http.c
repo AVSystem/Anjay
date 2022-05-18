@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -420,8 +413,8 @@ static avs_error_t set_next_http_block_offset(anjay_download_ctx_t *ctx_,
     return AVS_OK;
 }
 
-static avs_error_t copy_psk_info(avs_net_generic_psk_info_t *dest,
-                                 const avs_net_generic_psk_info_t *src,
+static avs_error_t copy_psk_info(avs_net_psk_info_t *dest,
+                                 const avs_net_psk_info_t *src,
                                  anjay_security_config_cache_t *cache) {
     *dest = *src;
     avs_error_t err;
@@ -535,7 +528,11 @@ avs_error_t
 _anjay_downloader_http_ctx_new(anjay_downloader_t *dl,
                                AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
                                const anjay_download_config_t *cfg,
-                               uintptr_t id) {
+                               uintptr_t id,
+                               avs_coap_ctx_t *forced_coap_ctx,
+                               avs_net_socket_t *forced_coap_socket) {
+    (void) forced_coap_ctx;
+    (void) forced_coap_socket;
 
     if (!cfg->on_next_block || !cfg->on_download_finished) {
         dl_log(ERROR, _("invalid download config: handlers not set up"));

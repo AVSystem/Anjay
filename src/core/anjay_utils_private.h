@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_UTILS_PRIVATE_H
@@ -48,15 +41,19 @@ _anjay_make_string_list(const char *string, ... /* strings */) AVS_F_SENTINEL;
 #define ANJAY_MAKE_STRING_LIST(...) \
     _anjay_make_string_list(__VA_ARGS__, (const char *) NULL)
 
+#ifdef ANJAY_WITH_LWM2M11
+const char *_anjay_lwm2m_version_as_string(anjay_lwm2m_version_t version);
+#else // ANJAY_WITH_LWM2M11
 typedef enum { ANJAY_LWM2M_DUMMY_VERSION } anjay_lwm2m_dummy_version_t;
-#define anjay_lwm2m_version_t anjay_lwm2m_dummy_version_t
-#define ANJAY_LWM2M_VERSION_1_0 ANJAY_LWM2M_DUMMY_VERSION
+#    define anjay_lwm2m_version_t anjay_lwm2m_dummy_version_t
+#    define ANJAY_LWM2M_VERSION_1_0 ANJAY_LWM2M_DUMMY_VERSION
 
 static inline const char *
 _anjay_lwm2m_version_as_string(anjay_lwm2m_version_t version) {
     (void) version;
     return "1.0";
 }
+#endif // ANJAY_WITH_LWM2M11
 
 bool _anjay_socket_is_online(avs_net_socket_t *socket);
 

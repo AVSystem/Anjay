@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -288,6 +281,11 @@ static int query_dm_object(anjay_unlocked_t *anjay,
     const char *version = _anjay_dm_installed_object_version(obj);
     if (version) {
         const char *format = "</%u>;ver=\"%s\"";
+#ifdef ANJAY_WITH_LWM2M11
+        if (args->version > ANJAY_LWM2M_VERSION_1_0) {
+            format = "</%u>;ver=%s";
+        }
+#endif // ANJAY_WITH_LWM2M11
 
         if (avs_is_err(
                     avs_stream_write_f(args->stream, format, oid, version))) {
@@ -360,7 +358,14 @@ get_binding_mode_for_version(anjay_server_info_t *server,
     for (size_t in_ptr = 0; in_ptr < sizeof(*server_binding_mode) - 1
                             && server_binding_mode->data[in_ptr];
          ++in_ptr) {
+#ifdef ANJAY_WITH_LWM2M11
+        if (lwm2m_version >= ANJAY_LWM2M_VERSION_1_1
+                && server_binding_mode->data[in_ptr] == 'Q') {
+            continue;
+        }
+#else  // ANJAY_WITH_LWM2M11
         (void) lwm2m_version;
+#endif // ANJAY_WITH_LWM2M11
         out_binding_mode->data[out_ptr++] = server_binding_mode->data[in_ptr];
     }
 }
@@ -406,10 +411,46 @@ void _anjay_registration_exchange_state_cleanup(
 
 static bool should_use_queue_mode(anjay_server_info_t *server,
                                   anjay_lwm2m_version_t lwm2m_version) {
+#ifdef ANJAY_WITH_LWM2M11
+    switch (server->anjay->queue_mode_preference) {
+    case ANJAY_FORCE_QUEUE_MODE:
+        return true;
+    case ANJAY_PREFER_QUEUE_MODE:
+        if (lwm2m_version >= ANJAY_LWM2M_VERSION_1_1) {
+            return true;
+        }
+        // fall-through
+    case ANJAY_PREFER_ONLINE_MODE:
+#else  // ANJAY_WITH_LWM2M11
     (void) server;
     (void) lwm2m_version;
-    return !!strchr(_anjay_server_binding_mode(server)->data, 'Q');
+#endif // ANJAY_WITH_LWM2M11
+        return !!strchr(_anjay_server_binding_mode(server)->data, 'Q');
+#ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_FORCE_ONLINE_MODE:
+        return false;
+    }
+
+    AVS_UNREACHABLE("Invalid anjay_queue_mode_preference_t value");
+    return false;
+#endif // ANJAY_WITH_LWM2M11
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+static bool lwm2m11_queue_mode_changed(anjay_server_info_t *server) {
+    if (server->registration_info.lwm2m_version >= ANJAY_LWM2M_VERSION_1_1
+            && should_use_queue_mode(server,
+                                     server->registration_info.lwm2m_version)
+                           != server->registration_info.queue_mode) {
+        anjay_log(DEBUG,
+                  _("State of 1.1-style queue mode changed for SSID = ") "%u" _(
+                          ", forcing re-register"),
+                  server->ssid);
+        return true;
+    }
+    return false;
+}
+#endif // ANJAY_WITH_LWM2M11
 
 static int get_endpoint_path(AVS_LIST(const anjay_string_t) *out_path,
                              const avs_coap_options_t *opts) {
@@ -559,6 +600,16 @@ handle_register_response(anjay_server_info_t *server,
     }
 
     if (result == ANJAY_REGISTRATION_ERROR_FALLBACK_REQUESTED) {
+#ifdef ANJAY_WITH_LWM2M11
+        if (attempted_version
+                > server->anjay->lwm2m_version_config.minimum_version) {
+            attempted_version = (anjay_lwm2m_version_t) (attempted_version - 1);
+            anjay_log(WARNING,
+                      _("attempting to fall back to LwM2M version ") "%s",
+                      _anjay_lwm2m_version_as_string(attempted_version));
+            register_with_version(server, attempted_version, move_params);
+        } else
+#endif // ANJAY_WITH_LWM2M11
         {
             result = ANJAY_REGISTRATION_ERROR_REJECTED;
         }
@@ -704,9 +755,20 @@ static void register_with_version(anjay_server_info_t *server,
         _anjay_server_on_updated_registration(
                 server, ANJAY_REGISTRATION_ERROR_OTHER, avs_errno(AVS_EBADF));
     } else {
+#ifdef ANJAY_WITH_LWM2M11
+        bool queue_mode = should_use_queue_mode(server, lwm2m_version);
+        bool lwm2m11_queue_mode =
+                (queue_mode && lwm2m_version >= ANJAY_LWM2M_VERSION_1_1);
+#endif // ANJAY_WITH_LWM2M11
 
         send_register(server, _anjay_connection_get_coap(connection),
-                      lwm2m_version, false, move_params);
+                      lwm2m_version,
+#ifdef ANJAY_WITH_LWM2M11
+                      lwm2m11_queue_mode,
+#else  // ANJAY_WITH_LWM2M11
+                      false,
+#endif // ANJAY_WITH_LWM2M11
+                      move_params);
         _anjay_connection_schedule_queue_mode_close((anjay_connection_ref_t) {
             .server = server,
             .conn_type = ANJAY_CONNECTION_PRIMARY
@@ -716,7 +778,12 @@ static void register_with_version(anjay_server_info_t *server,
 
 static void do_register(anjay_server_info_t *server,
                         anjay_update_parameters_t *move_params) {
-    anjay_lwm2m_version_t attempted_version = ANJAY_LWM2M_VERSION_1_0;
+    anjay_lwm2m_version_t attempted_version =
+#ifdef ANJAY_WITH_LWM2M11
+            server->anjay->lwm2m_version_config.maximum_version;
+#else  // ANJAY_WITH_LWM2M11
+            ANJAY_LWM2M_VERSION_1_0;
+#endif // ANJAY_WITH_LWM2M11
     anjay_log(INFO, _("Attempting to register with LwM2M version ") "%s",
               _anjay_lwm2m_version_as_string(attempted_version));
     register_with_version(server, attempted_version, move_params);
@@ -1001,6 +1068,11 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
         bool registration_expired = _anjay_server_registration_expired(server);
         bool needs_reregistration =
                 !registration_or_update_in_progress && registration_expired;
+#ifdef ANJAY_WITH_LWM2M11
+        if (!needs_reregistration && lwm2m11_queue_mode_changed(server)) {
+            needs_reregistration = true;
+        }
+#endif // ANJAY_WITH_LWM2M11
         bool needs_update = !needs_reregistration
                             && needs_registration_update(server, &new_params);
         if (needs_reregistration
@@ -1218,6 +1290,103 @@ bool anjay_ongoing_registration_exists(anjay_t *anjay_locked) {
     bool result = false;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     result = _anjay_ongoing_registration_exists_unlocked(anjay);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+avs_time_real_t anjay_registration_expiration_time(anjay_t *anjay_locked,
+                                                   anjay_ssid_t ssid) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    anjay_server_info_t *server = _anjay_servers_find_active(anjay, ssid);
+    if (server && !_anjay_server_registration_expired(server)) {
+        result = _anjay_server_registration_info(server)->expire_time;
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+static avs_time_real_t
+next_planned_lifecycle_operation(anjay_server_info_t *server) {
+    // If the server is inactive, but scheduled for reactivation - return the
+    // time at which it is scheduled. The additional server->next_action_handle
+    // check is intended to filter out the case when the transport is offline
+    // (see _anjay_server_on_refreshed(), ANJAY_SERVER_CONNECTION_OFFLINE case).
+    bool server_active = _anjay_server_active(server);
+    if (!server_active && server->next_action_handle
+            && avs_time_real_valid(server->reactivate_time)) {
+        return server->reactivate_time;
+    }
+
+    assert(server->anjay);
+    if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+        avs_time_real_t result = AVS_TIME_REAL_INVALID;
+#ifdef ANJAY_WITH_BOOTSTRAP
+        avs_time_monotonic_t client_initiated_bootstrap_time_monotonic =
+                avs_sched_time(&server->anjay->bootstrap
+                                        .client_initiated_bootstrap_handle);
+        result = avs_time_real_add(
+                avs_time_real_now(),
+                avs_time_monotonic_diff(
+                        client_initiated_bootstrap_time_monotonic,
+                        avs_time_monotonic_now()));
+#endif // ANJAY_WITH_BOOTSTRAP
+        return result;
+    } else if (_anjay_bootstrap_in_progress(server->anjay)) {
+        return AVS_TIME_REAL_INVALID;
+    } else if (server_active && server->registration_info.update_forced) {
+        return avs_time_real_now();
+    } else {
+        return time_of_next_update(server);
+    }
+}
+
+avs_time_real_t anjay_next_planned_lifecycle_operation(anjay_t *anjay_locked,
+                                                       anjay_ssid_t ssid) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    if (ssid == ANJAY_SSID_ANY) {
+        AVS_LIST(anjay_server_info_t) it;
+        AVS_LIST_FOREACH(it, anjay->servers) {
+            avs_time_real_t server_result =
+                    next_planned_lifecycle_operation(it);
+            if (!avs_time_real_valid(result)
+                    || avs_time_real_before(server_result, result)) {
+                result = server_result;
+            }
+        }
+    } else {
+        anjay_server_info_t *server = _anjay_servers_find(anjay, ssid);
+        if (!server) {
+            anjay_log(WARNING, _("no server with SSID = ") "%u", ssid);
+        } else {
+            result = next_planned_lifecycle_operation(server);
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+avs_time_real_t anjay_transport_next_planned_lifecycle_operation(
+        anjay_t *anjay_locked, anjay_transport_set_t transport_set) {
+    avs_time_real_t result = AVS_TIME_REAL_INVALID;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    AVS_LIST(anjay_server_info_t) it;
+    AVS_LIST_FOREACH(it, anjay->servers) {
+        anjay_server_connection_t *conn =
+                _anjay_connection_get(&it->connections,
+                                      ANJAY_CONNECTION_PRIMARY);
+        if (conn->transport != ANJAY_SOCKET_TRANSPORT_INVALID
+                && _anjay_socket_transport_included(transport_set,
+                                                    conn->transport)) {
+            avs_time_real_t server_result =
+                    next_planned_lifecycle_operation(it);
+            if (!avs_time_real_valid(result)
+                    || avs_time_real_before(server_result, result)) {
+                result = server_result;
+            }
+        }
+    }
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
 }

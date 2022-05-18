@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import unittest
 
@@ -126,6 +119,10 @@ class Test215_SettingBasicInformationInTLVFormat(DataModel.Test):
                            RID.Server.DisableTimeout,
                            RID.Server.NotificationStoring,
                            RID.Server.Binding,
+                           RID.Server.ServerCommunicationRetryCount,
+                           RID.Server.ServerCommunicationRetryTimer,
+                           RID.Server.ServerCommunicationSequenceRetryCount,
+                           RID.Server.ServerCommunicationSequenceDelayTimer,
                            )
         prev_values = self.test_read('/%d/0' % OID.Server)
         prev_values_tlv = TLV.parse(prev_values)
@@ -334,3 +331,50 @@ class Test260_DiscoverCommand(DataModel.Test):
         self.assertTrue(any(attr.startswith(b'dim=') for attr in attrs))
 
 
+class Test261_WriteAttributeOperationOnMultipleResource(DataModel.Test):
+    def setUp(self):
+        super().setUp(maximum_version='1.1')
+
+    def runTest(self):
+        # 1. A DISCOVER operation is performed on Error Code resource (ID: 11) of the Object Device
+        #    (ID: 3)
+        #
+        # A. In test step 1, the Success Message (“2.05” Content) is received by the Server along
+        #    with the payload related to the DISCOVER request and containing:
+        #    </3/0/11>;dim=1,</3/0/11/0>
+        discover_result = self.test_discover('/%d/0/%d' % (OID.Device, RID.Device.ErrorCode))
+        self.assertEqual(b'</%d/0/%d>;dim=1,</%d/0/%d/0>'
+                         % (OID.Device, RID.Device.ErrorCode, OID.Device, RID.Device.ErrorCode),
+                         discover_result)
+
+        # 2. A WRITE-ATTRIBUTES operation set the pmin=10&pmax=200 <NOTIFICATION> Attributes at the
+        #    Object level (ID: /3)
+        #
+        # B. In test step 2., 3. et 4. a Success message is received by the Server (“2.04” Changed)
+        #    related to the WRITE-ATTRIBUTES operation
+        self.test_write_attributes('/%d' % (OID.Device,), pmin=10, pmax=200)
+
+        # 3. A WRITE-ATTRIBUTES operation set the pmax=320 <NOTIFICATION> Attributes at the Object
+        #    Instance level (ID: /3/0)
+        #
+        # B. In test step 2., 3. et 4. a Success message is received by the Server (“2.04” Changed)
+        #    related to the WRITE-ATTRIBUTES operation
+        self.test_write_attributes('/%d/0' % (OID.Device,), pmax=320)
+
+        # 4. A WRITE-ATTRIBUTES operation set the pmax=100&epmin=1&epmax=20 <NOTIFICATION>
+        #    Attributes at the Resource Instance level (ID: /3/0/11/0)
+        #
+        # B. In test step 2., 3. et 4. a Success message is received by the Server (“2.04” Changed)
+        #    related to the WRITE-ATTRIBUTES operation
+        self.test_write_attributes('/%d/0/%d/0' % (OID.Device, RID.Device.ErrorCode), pmax=100,
+                                   epmin=1, epmax=20)
+
+        # 5. The same DISCOVER than in step 1. is performed
+        #
+        # C. In test step 5, the Success Message (“2.05” Content) is received by the Server along
+        #    with the payload related to the DISCOVER request and containing:
+        #    </3/0/11>;dim=1;pmin=10;pmax=320,</3/0/11/0>;pmax=100;epmin=1;epmax=20
+        discover_result = self.test_discover('/%d/0/%d' % (OID.Device, RID.Device.ErrorCode))
+        self.assertEqual(b'</%d/0/%d>;dim=1;pmin=10;pmax=320,</%d/0/%d/0>;pmax=100;epmin=1;epmax=20'
+                         % (OID.Device, RID.Device.ErrorCode, OID.Device, RID.Device.ErrorCode),
+                         discover_result)

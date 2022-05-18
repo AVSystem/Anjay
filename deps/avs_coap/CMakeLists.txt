@@ -1,16 +1,9 @@
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem CoAP library
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 cmake_minimum_required(VERSION 3.4.0)
 project(avs_coap C)
@@ -39,6 +32,9 @@ option(WITH_TEST "Compile unit tests" OFF)
 option(WITH_POISONING "Poison libc symbols that shall not be used" OFF)
 option(WITH_AVS_COAP_DIAGNOSTIC_MESSAGES "Include diagnostic payload in Abort messages" ON)
 option(WITH_AVS_COAP_UDP "Enable CoAP over UDP support" ON)
+option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" ON)
+
+
 option(WITH_AVS_COAP_STREAMING_API "Enable streaming API" ON)
 option(WITH_AVS_COAP_OBSERVE "Enable support for observations" ON)
 cmake_dependent_option(WITH_AVS_COAP_OBSERVE_PERSISTENCE "Enable observations persistence" ON "WITH_AVS_COAP_OBSERVE" OFF)
@@ -76,9 +72,10 @@ if(NOT TARGET avs_commons_global_headers)
         string(TOUPPER "${MOD}" MOD_UPPER)
         set(WITH_${MOD_UPPER} ON CACHE STRING "")
     endforeach()
+
     add_subdirectory(deps/avs_commons)
     set(AVS_COMMONS_INCLUDE_DIRS
-        "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/include_public")
+       "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons/include_public")
 endif()
 
 ### feature support
@@ -96,6 +93,7 @@ set(PUBLIC_INCLUDES
     include_public/avsystem/coap/coap.h
     include_public/avsystem/coap/async_client.h
     include_public/avsystem/coap/code.h
+    include_public/avsystem/coap/tcp.h
     include_public/avsystem/coap/option.h
     include_public/avsystem/coap/token.h
     include_public/avsystem/coap/async_exchange.h
@@ -140,6 +138,19 @@ set(SOURCES
     src/udp/avs_coap_udp_msg_cache.h
     src/udp/avs_coap_udp_tx_params.c
     src/udp/avs_coap_udp_tx_params.h
+    src/tcp/avs_coap_tcp_ctx.c
+    src/tcp/avs_coap_tcp_ctx.h
+    src/tcp/avs_coap_tcp_header.c
+    src/tcp/avs_coap_tcp_header.h
+    src/tcp/avs_coap_tcp_msg.c
+    src/tcp/avs_coap_tcp_msg.h
+    src/tcp/avs_coap_tcp_pending_requests.c
+    src/tcp/avs_coap_tcp_pending_requests.h
+    src/tcp/avs_coap_tcp_signaling.c
+    src/tcp/avs_coap_tcp_signaling.h
+    src/tcp/avs_coap_tcp_utils.c
+    src/tcp/avs_coap_tcp_utils.h
+
 
     src/streaming/avs_coap_streaming_client.c
     src/streaming/avs_coap_streaming_client.h
@@ -182,6 +193,15 @@ if(WITH_TEST)
     set_target_properties(avs_coap_for_tests PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
     set(TEST_SOURCES
+        tests/tcp/async_client.c
+        tests/tcp/async_server.c
+        tests/tcp/ctx.c
+        tests/tcp/header.c
+        tests/tcp/payload_escaper.c
+        tests/tcp/responding.c
+        tests/tcp/requesting.c
+        tests/tcp/setsock.c
+
         tests/socket.c
         tests/socket.h
         tests/mock_clock.c
@@ -341,6 +361,9 @@ if(WITH_TEST)
 endif()
 
 add_subdirectory(doc)
+if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/deps/avs_commons")
+    add_subdirectory(examples)
+endif()
 
 ### distribution
 

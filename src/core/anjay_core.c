@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -49,11 +42,20 @@
 #include "anjay_servers_utils.h"
 #include "anjay_utils_private.h"
 
+#include "dm/anjay_dm_write_attrs.h"
+
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "2.15.0"
+#    define ANJAY_VERSION "3.0.0"
 #endif // ANJAY_VERSION
+
+#ifdef ANJAY_WITH_LWM2M11
+static anjay_lwm2m_version_config_t ALL_VERSIONS = {
+    .minimum_version = ANJAY_LWM2M_VERSION_1_0,
+    .maximum_version = ANJAY_LWM2M_VERSION_1_1
+};
+#endif // ANJAY_WITH_LWM2M11
 
 static int init_anjay(anjay_unlocked_t *anjay,
                       const anjay_configuration_t *config) {
@@ -64,9 +66,52 @@ static int init_anjay(anjay_unlocked_t *anjay,
     }
 #endif // ANJAY_WITH_THREAD_SAFETY
 
+#ifdef ANJAY_WITH_LWM2M11
+    if (config->lwm2m_version_config) {
+        if (config->lwm2m_version_config->maximum_version
+                < config->lwm2m_version_config->minimum_version) {
+            anjay_log(ERROR,
+                      _("lwm2m_version_config->maximum_version must not be "
+                        "less than lwm2m_version_config->minimum_version"));
+            return -1;
+        } else if (config->lwm2m_version_config->minimum_version
+                           < ALL_VERSIONS.minimum_version
+                   || config->lwm2m_version_config->maximum_version
+                              > ALL_VERSIONS.maximum_version) {
+            anjay_log(ERROR, _("invalid values in lwm2m_version_config"));
+            return -1;
+        }
+        anjay->lwm2m_version_config = *config->lwm2m_version_config;
+    } else {
+        anjay->lwm2m_version_config = ALL_VERSIONS;
+    }
+
+    anjay->initial_trust_store.use_system_wide = config->use_system_trust_store;
+    anjay->rebuild_client_cert_chain = config->rebuild_client_cert_chain;
+
+    avs_error_t err;
+    if (avs_is_err((err = avs_crypto_certificate_chain_info_copy_as_list(
+                            &anjay->initial_trust_store.certs,
+                            config->trust_store_certs)))
+            || avs_is_err(
+                       (err = avs_crypto_cert_revocation_list_info_copy_as_list(
+                                &anjay->initial_trust_store.crls,
+                                config->trust_store_crls)))) {
+        anjay_log(ERROR, _("Could not copy trust store: ") "%s",
+                  AVS_COAP_STRERROR(err));
+        return -1;
+    }
+#endif // ANJAY_WITH_LWM2M11
+
 #ifdef ANJAY_WITH_BOOTSTRAP
     bool legacy_server_initiated_bootstrap =
             !config->disable_legacy_server_initiated_bootstrap;
+#    ifdef ANJAY_WITH_LWM2M11
+    legacy_server_initiated_bootstrap =
+            (legacy_server_initiated_bootstrap
+             && anjay->lwm2m_version_config.minimum_version
+                        == ANJAY_LWM2M_VERSION_1_0);
+#    endif // ANJAY_WITH_LWM2M11
     _anjay_bootstrap_init(&anjay->bootstrap, legacy_server_initiated_bootstrap);
 #endif // ANJAY_WITH_BOOTSTRAP
 
@@ -87,7 +132,6 @@ static int init_anjay(anjay_unlocked_t *anjay,
 
     anjay->socket_config = config->socket_config;
     anjay->udp_listen_port = config->udp_listen_port;
-    anjay->current_connection.conn_type = ANJAY_CONNECTION_UNSET;
 
     const char *error_msg;
 #ifdef WITH_AVS_COAP_UDP
@@ -132,6 +176,33 @@ static int init_anjay(anjay_unlocked_t *anjay,
         return -1;
     }
 
+#ifdef ANJAY_WITH_LWM2M11
+    anjay->queue_mode_preference = ANJAY_PREFER_ONLINE_MODE;
+
+#    ifdef WITH_AVS_COAP_TCP
+    // completely arbitrary default value
+    static const size_t ANJAY_DEFAULT_COAP_TCP_MAX_OPTIONS_SIZE = 128;
+    if (config->coap_tcp_max_options_size == 0) {
+        anjay->coap_tcp_max_options_size =
+                ANJAY_DEFAULT_COAP_TCP_MAX_OPTIONS_SIZE;
+    } else {
+        anjay->coap_tcp_max_options_size = config->coap_tcp_max_options_size;
+    }
+
+    static const avs_time_duration_t ANJAY_DEFAULT_COAP_TCP_REQUEST_TIMEOUT = {
+        .seconds = 30
+    };
+    if (avs_time_duration_valid(config->coap_tcp_request_timeout)
+            && !avs_time_duration_equal(config->coap_tcp_request_timeout,
+                                        AVS_TIME_DURATION_ZERO)) {
+        anjay->coap_tcp_request_timeout = config->coap_tcp_request_timeout;
+    } else {
+        anjay->coap_tcp_request_timeout =
+                ANJAY_DEFAULT_COAP_TCP_REQUEST_TIMEOUT;
+    }
+#    endif // WITH_AVS_COAP_TCP
+#endif     // ANJAY_WITH_LWM2M11
+
     anjay->in_shared_buffer = avs_shared_buffer_new(config->in_buffer_size);
     if (!anjay->in_shared_buffer) {
         anjay_log(ERROR, _("out of memory"));
@@ -171,6 +242,13 @@ static int init_anjay(anjay_unlocked_t *anjay,
             return -1;
         }
     }
+
+#ifdef ANJAY_WITH_ATTR_STORAGE
+    if (_anjay_attr_storage_init(anjay)) {
+        return -1;
+    }
+#endif // ANJAY_WITH_ATTR_STORAGE
+
     return 0;
 }
 
@@ -244,6 +322,13 @@ static anjay_t *alloc_anjay(void) {
     return out;
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+void _anjay_trust_store_cleanup(anjay_trust_store_t *trust_store) {
+    AVS_LIST_CLEAR(&trust_store->certs);
+    AVS_LIST_CLEAR(&trust_store->crls);
+}
+#endif // ANJAY_WITH_LWM2M11
+
 static void anjay_cleanup_impl(anjay_unlocked_t *anjay, bool deregister) {
     anjay_log(TRACE, _("deleting anjay object"));
 
@@ -266,8 +351,15 @@ static void anjay_cleanup_impl(anjay_unlocked_t *anjay, bool deregister) {
     // avs_sched_cleanup()
     _anjay_observe_cleanup(&anjay->observe);
 
+#ifdef ANJAY_WITH_ATTR_STORAGE
+    _anjay_attr_storage_cleanup(&anjay->attr_storage);
+#endif // ANJAY_WITH_ATTR_STORAGE
     _anjay_dm_cleanup(anjay);
     _anjay_notify_clear_queue(&anjay->scheduled_notify.queue);
+
+#ifdef ANJAY_WITH_SEND
+    _anjay_send_cleanup(&anjay->sender);
+#endif // ANJAY_WITH_SEND
 
     avs_free(anjay->default_tls_ciphersuites.ids);
     avs_free(anjay->endpoint_name);
@@ -293,6 +385,10 @@ static void anjay_cleanup_impl(anjay_unlocked_t *anjay, bool deregister) {
     avs_free(anjay->in_shared_buffer);
     avs_free(anjay->out_shared_buffer);
     _anjay_security_config_cache_cleanup(&anjay->security_config_from_dm_cache);
+
+#ifdef ANJAY_WITH_LWM2M11
+    _anjay_trust_store_cleanup(&anjay->initial_trust_store);
+#endif // ANJAY_WITH_LWM2M11
 }
 
 anjay_t *anjay_new(const anjay_configuration_t *config) {
@@ -357,20 +453,20 @@ split_query_string(char *query, const char **out_key, const char **out_value) {
     }
 }
 
-static int parse_nullable_period(const char *key_str,
-                                 const char *period_str,
-                                 bool *out_present,
-                                 int32_t *out_value) {
+static int parse_nullable_integer(const char *key_str,
+                                  const char *integer_str,
+                                  bool *out_present,
+                                  int32_t *out_value) {
     long long num;
     if (*out_present) {
         anjay_log(WARNING, _("Duplicated attribute in query string: ") "%s",
                   key_str);
         return -1;
-    } else if (!period_str) {
+    } else if (!integer_str) {
         *out_present = true;
-        *out_value = ANJAY_ATTRIB_PERIOD_NONE;
+        *out_value = ANJAY_ATTRIB_INTEGER_NONE;
         return 0;
-    } else if (_anjay_safe_strtoll(period_str, &num) || num < 0) {
+    } else if (_anjay_safe_strtoll(integer_str, &num) || num < 0) {
         return -1;
     } else {
         *out_present = true;
@@ -389,7 +485,7 @@ static int parse_nullable_double(const char *key_str,
         return -1;
     } else if (!double_str) {
         *out_present = true;
-        *out_value = ANJAY_ATTRIB_VALUE_NONE;
+        *out_value = ANJAY_ATTRIB_DOUBLE_NONE;
         return 0;
     } else if (_anjay_safe_strtod(double_str, out_value) || isnan(*out_value)) {
         return -1;
@@ -408,7 +504,7 @@ static int parse_con(const char *value,
         return -1;
     } else if (!value) {
         *out_present = true;
-        *out_value = ANJAY_DM_CON_ATTR_DEFAULT;
+        *out_value = ANJAY_DM_CON_ATTR_NONE;
         return 0;
     } else if (strcmp(value, "0") == 0) {
         *out_present = true;
@@ -425,38 +521,36 @@ static int parse_con(const char *value,
 }
 #endif // ANJAY_WITH_CON_ATTR
 
-static int parse_attribute(anjay_request_attributes_t *out_attrs,
-                           const char *key,
-                           const char *value) {
+static int parse_query(anjay_request_attributes_t *out_attrs,
+                       const char *key,
+                       const char *value) {
     if (!strcmp(key, ANJAY_ATTR_PMIN)) {
-        return parse_nullable_period(
-                key, value, &out_attrs->has_min_period,
-                &out_attrs->values.standard.common.min_period);
+        return parse_nullable_integer(key, value, &out_attrs->has_min_period,
+                                      &out_attrs->values.common.min_period);
     } else if (!strcmp(key, ANJAY_ATTR_PMAX)) {
-        return parse_nullable_period(
-                key, value, &out_attrs->has_max_period,
-                &out_attrs->values.standard.common.max_period);
+        return parse_nullable_integer(key, value, &out_attrs->has_max_period,
+                                      &out_attrs->values.common.max_period);
     } else if (!strcmp(key, ANJAY_ATTR_EPMIN)) {
-        return parse_nullable_period(
+        return parse_nullable_integer(
                 key, value, &out_attrs->has_min_eval_period,
-                &out_attrs->values.standard.common.min_eval_period);
+                &out_attrs->values.common.min_eval_period);
     } else if (!strcmp(key, ANJAY_ATTR_EPMAX)) {
-        return parse_nullable_period(
+        return parse_nullable_integer(
                 key, value, &out_attrs->has_max_eval_period,
-                &out_attrs->values.standard.common.max_eval_period);
+                &out_attrs->values.common.max_eval_period);
     } else if (!strcmp(key, ANJAY_ATTR_GT)) {
         return parse_nullable_double(key, value, &out_attrs->has_greater_than,
-                                     &out_attrs->values.standard.greater_than);
+                                     &out_attrs->values.greater_than);
     } else if (!strcmp(key, ANJAY_ATTR_LT)) {
         return parse_nullable_double(key, value, &out_attrs->has_less_than,
-                                     &out_attrs->values.standard.less_than);
+                                     &out_attrs->values.less_than);
     } else if (!strcmp(key, ANJAY_ATTR_ST)) {
         return parse_nullable_double(key, value, &out_attrs->has_step,
-                                     &out_attrs->values.standard.step);
+                                     &out_attrs->values.step);
 #ifdef ANJAY_WITH_CON_ATTR
     } else if (!strcmp(key, ANJAY_CUSTOM_ATTR_CON)) {
-        return parse_con(value, &out_attrs->custom.has_con,
-                         &out_attrs->values.custom.data.con);
+        return parse_con(value, &out_attrs->has_con,
+                         &out_attrs->values.common.con);
 #endif // ANJAY_WITH_CON_ATTR
     } else {
         anjay_log(DEBUG, _("unrecognized query string: ") "%s" _(" = ") "%s",
@@ -465,10 +559,10 @@ static int parse_attribute(anjay_request_attributes_t *out_attrs,
     }
 }
 
-static int parse_attributes(const avs_coap_request_header_t *hdr,
-                            anjay_request_attributes_t *out_attrs) {
+static int parse_queries(const avs_coap_request_header_t *hdr,
+                         anjay_request_attributes_t *out_attrs) {
     memset(out_attrs, 0, sizeof(*out_attrs));
-    out_attrs->values = ANJAY_DM_INTERNAL_R_ATTRS_EMPTY;
+    out_attrs->values = ANJAY_DM_R_ATTRIBUTES_EMPTY;
 
     char buffer[ANJAY_MAX_URI_QUERY_SEGMENT_SIZE];
     size_t attr_size;
@@ -486,7 +580,7 @@ static int parse_attributes(const avs_coap_request_header_t *hdr,
         split_query_string(buffer, &key, &value);
         assert(key != NULL);
 
-        if (parse_attribute(out_attrs, key, value)) {
+        if (parse_query(out_attrs, key, value)) {
             anjay_log(DEBUG, _("invalid query string: ") "%s" _(" = ") "%s",
                       key, value ? value : "(null)");
             return -1;
@@ -505,6 +599,10 @@ static const char *action_to_string(anjay_request_action_t action) {
     switch (action) {
     case ANJAY_ACTION_READ:
         return "Read";
+#ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_ACTION_READ_COMPOSITE:
+        return "Read Composite";
+#endif // ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_DISCOVER:
         return "Discover";
     case ANJAY_ACTION_WRITE:
@@ -513,6 +611,10 @@ static const char *action_to_string(anjay_request_action_t action) {
         return "Write (Update)";
     case ANJAY_ACTION_WRITE_ATTRIBUTES:
         return "Write Attributes";
+#ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_ACTION_WRITE_COMPOSITE:
+        return "Write Composite";
+#endif // ANJAY_WITH_LWM2M11
     case ANJAY_ACTION_EXECUTE:
         return "Execute";
     case ANJAY_ACTION_CREATE:
@@ -564,6 +666,14 @@ static int code_to_action(uint8_t code,
     case AVS_COAP_CODE_DELETE:
         *out_action = ANJAY_ACTION_DELETE;
         return 0;
+#ifdef ANJAY_WITH_LWM2M11
+    case AVS_COAP_CODE_FETCH:
+        *out_action = ANJAY_ACTION_READ_COMPOSITE;
+        return 0;
+    case AVS_COAP_CODE_IPATCH:
+        *out_action = ANJAY_ACTION_WRITE_COMPOSITE;
+        return 0;
+#endif // ANJAY_WITH_LWM2M11
     default:
         anjay_log(DEBUG, _("unrecognized CoAP method: ") "%s",
                   AVS_COAP_CODE_STRING(code));
@@ -684,15 +794,24 @@ static int parse_request_uri(const avs_coap_request_header_t *hdr,
     }
 }
 
-int _anjay_parse_request(const avs_coap_request_header_t *hdr,
-                         anjay_request_t *out_request) {
+static int parse_request(const avs_coap_request_header_t *hdr,
+                         anjay_request_t *out_request,
+                         const avs_coap_observe_id_t *observe_id) {
     memset(out_request, 0, sizeof(*out_request));
     out_request->request_code = hdr->code;
     if (parse_request_uri(hdr, &out_request->is_bs_uri, &out_request->uri)
-            || parse_attributes(hdr, &out_request->attributes)
+            || parse_queries(hdr, &out_request->attributes)
             || avs_coap_options_get_content_format(&hdr->options,
                                                    &out_request->content_format)
             || parse_action(hdr, out_request)) {
+        return -1;
+    }
+    if (out_request->action != ANJAY_ACTION_WRITE_ATTRIBUTES
+            && !_anjay_dm_request_attrs_empty(&out_request->attributes)) {
+        (void) observe_id;
+        anjay_log(WARNING,
+                  _("NOTIFICATION-class attributes present in request "
+                    "other than Write-Attributes"));
         return -1;
     }
     return 0;
@@ -721,7 +840,6 @@ static bool critical_option_validator(uint8_t msg_code, uint32_t optnum) {
     /* Note: BLOCK Options are handled inside stream.c */
     switch (msg_code) {
     case AVS_COAP_CODE_GET:
-        return optnum == AVS_COAP_OPTION_URI_PATH;
     case AVS_COAP_CODE_PUT:
     case AVS_COAP_CODE_POST:
         return optnum == AVS_COAP_OPTION_URI_PATH
@@ -733,24 +851,21 @@ static bool critical_option_validator(uint8_t msg_code, uint32_t optnum) {
     }
 }
 
-static int handle_request(anjay_unlocked_t *anjay,
+static int handle_request(anjay_connection_ref_t connection,
                           const anjay_request_t *request) {
     int result = -1;
 
-    if (_anjay_dm_current_ssid(anjay) == ANJAY_SSID_BOOTSTRAP) {
-        result = _anjay_bootstrap_perform_action(anjay, request);
+    if (_anjay_server_ssid(connection.server) == ANJAY_SSID_BOOTSTRAP) {
+        result = _anjay_bootstrap_perform_action(connection, request);
     } else {
-        result = _anjay_dm_perform_action(anjay, request);
-    }
-
-    if (_anjay_dm_current_ssid(anjay) != ANJAY_SSID_BOOTSTRAP) {
-        _anjay_observe_sched_flush(anjay->current_connection);
+        result = _anjay_dm_perform_action(connection, request);
+        _anjay_observe_sched_flush(connection);
     }
     return result;
 }
 
 typedef struct {
-    anjay_unlocked_t *anjay;
+    anjay_connection_ref_t connection;
     int serve_result;
 } handle_incoming_message_args_t;
 
@@ -763,24 +878,24 @@ handle_incoming_message(avs_coap_streaming_request_ctx_t *ctx,
     handle_incoming_message_args_t *args =
             (handle_incoming_message_args_t *) args_;
 
-    if (_anjay_dm_current_ssid(args->anjay) == ANJAY_SSID_BOOTSTRAP) {
+    if (_anjay_server_ssid(args->connection.server) == ANJAY_SSID_BOOTSTRAP) {
         anjay_log(DEBUG, _("bootstrap server"));
     } else {
         anjay_log(DEBUG, _("server ID = ") "%u",
-                  _anjay_dm_current_ssid(args->anjay));
+                  _anjay_server_ssid(args->connection.server));
     }
 
     anjay_request_t request;
     if (avs_coap_options_validate_critical(request_header,
                                            critical_option_validator)
-            || _anjay_parse_request(request_header, &request)) {
+            || parse_request(request_header, &request, observe_id)) {
         return AVS_COAP_CODE_BAD_OPTION;
     }
     request.ctx = ctx;
     request.payload_stream = payload_stream;
     request.observe = observe_id;
 
-    int result = handle_request(args->anjay, &request);
+    int result = handle_request(args->connection, &request);
     if (result) {
         const uint8_t error_code = _anjay_make_error_response_code(result);
         if (error_code != -result) {
@@ -812,6 +927,10 @@ _anjay_max_transmit_wait_for_transport(anjay_unlocked_t *anjay,
     case ANJAY_SOCKET_TRANSPORT_UDP:
         return avs_coap_udp_max_transmit_wait(&anjay->udp_tx_params);
 #endif // WITH_AVS_COAP_UDP
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    case ANJAY_SOCKET_TRANSPORT_TCP:
+        return anjay->coap_tcp_request_timeout;
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
     default:
         AVS_UNREACHABLE("Should never happen");
         return AVS_TIME_DURATION_INVALID;
@@ -826,6 +945,26 @@ _anjay_exchange_lifetime_for_transport(anjay_unlocked_t *anjay,
     case ANJAY_SOCKET_TRANSPORT_UDP:
         return avs_coap_udp_exchange_lifetime(&anjay->udp_tx_params);
 #endif // WITH_AVS_COAP_UDP
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    case ANJAY_SOCKET_TRANSPORT_TCP:
+        // By transforming the formulas from RFC 7252, we can get:
+        //
+        //   EXCHANGE_LIFETIME =
+        //     (MAX_TRANSMIT_WAIT + ACK_TIMEOUT * (2 - ACK_RANDOM_FACTOR)) / 2
+        //     + 2 * MAX_LATENCY
+        //
+        // Which, when using default values of ACK_TIMEOUT, ACK_RANDOM_FACTOR
+        // and MAX_LATENCY, degenerates to:
+        //
+        //   EXCHANGE_LIFETIME = (MAX_TRANSMIT_WAIT + 1) / 2 + 200
+        //
+        // ...and this is exactly what we're calculating here.
+        return avs_time_duration_div(
+                avs_time_duration_add(
+                        anjay->coap_tcp_request_timeout,
+                        avs_time_duration_from_scalar(401, AVS_TIME_S)),
+                2);
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
     case ANJAY_SOCKET_TRANSPORT_INVALID:
     default:
         AVS_UNREACHABLE("Should never happen");
@@ -833,27 +972,9 @@ _anjay_exchange_lifetime_for_transport(anjay_unlocked_t *anjay,
     }
 }
 
-int _anjay_bind_connection(anjay_unlocked_t *anjay,
-                           anjay_connection_ref_t ref) {
-    avs_net_socket_t *socket = _anjay_connection_get_online_socket(ref);
-    if (!socket) {
+static int serve_connection(anjay_connection_ref_t connection) {
+    if (!_anjay_connection_get_online_socket(connection)) {
         anjay_log(ERROR, _("server connection is not online"));
-        return -1;
-    }
-    assert(!anjay->current_connection.server);
-    anjay->current_connection = ref;
-    return 0;
-}
-
-void _anjay_release_connection(anjay_unlocked_t *anjay) {
-    _anjay_connection_schedule_queue_mode_close(anjay->current_connection);
-    anjay->current_connection.server = NULL;
-    anjay->current_connection.conn_type = ANJAY_CONNECTION_UNSET;
-}
-
-static int serve_connection(anjay_unlocked_t *anjay,
-                            anjay_connection_ref_t connection) {
-    if (_anjay_bind_connection(anjay, connection)) {
         return -1;
     }
 
@@ -861,12 +982,12 @@ static int serve_connection(anjay_unlocked_t *anjay,
     assert(coap);
 
     handle_incoming_message_args_t args = {
-        .anjay = anjay,
+        .connection = connection,
         .serve_result = 0
     };
     avs_error_t err = avs_coap_streaming_handle_incoming_packet(
             coap, handle_incoming_message, &args);
-    _anjay_release_connection(anjay);
+    _anjay_connection_schedule_queue_mode_close(connection);
 
     avs_coap_error_recovery_action_t recovery_action =
             avs_coap_error_recovery_action(err);
@@ -901,7 +1022,7 @@ int _anjay_serve_unlocked(anjay_unlocked_t *anjay,
     if (!connection.server) {
         return -1;
     }
-    return serve_connection(anjay, connection);
+    return serve_connection(connection);
 }
 
 int anjay_serve(anjay_t *anjay_locked, avs_net_socket_t *ready_socket) {
@@ -997,7 +1118,14 @@ anjay_etag_t *anjay_etag_clone(const anjay_etag_t *old_etag) {
 avs_error_t _anjay_download_unlocked(anjay_unlocked_t *anjay,
                                      const anjay_download_config_t *config,
                                      anjay_download_handle_t *out_handle) {
-    return _anjay_downloader_download(&anjay->downloader, out_handle, config);
+    avs_coap_ctx_t *forced_coap_ctx = NULL;
+    avs_net_socket_t *forced_coap_socket = NULL;
+    if (config->prefer_same_socket_downloads) {
+        _anjay_find_matching_coap_context_and_socket(
+                anjay, config->url, &forced_coap_ctx, &forced_coap_socket);
+    }
+    return _anjay_downloader_download(&anjay->downloader, out_handle, config,
+                                      forced_coap_ctx, forced_coap_socket);
 }
 #endif // ANJAY_WITH_DOWNLOADER
 
@@ -1058,6 +1186,124 @@ void anjay_download_abort(anjay_t *anjay_locked,
     anjay_log(ERROR, _("CoAP download support disabled"));
 #endif // ANJAY_WITH_DOWNLOADER
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+int anjay_set_queue_mode_preference(anjay_t *anjay_locked,
+                                    anjay_queue_mode_preference_t preference) {
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    switch (preference) {
+    case ANJAY_FORCE_QUEUE_MODE:
+    case ANJAY_PREFER_QUEUE_MODE:
+    case ANJAY_PREFER_ONLINE_MODE:
+    case ANJAY_FORCE_ONLINE_MODE:
+        anjay->queue_mode_preference = preference;
+        result = 0;
+    }
+    if (result) {
+        anjay_log(WARNING, _("Invalid anjay_queue_mode_preference_t value"));
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+#endif // ANJAY_WITH_LWM2M11
+
+#if defined(ANJAY_WITH_ATTR_STORAGE)
+static avs_error_t persistence_dm_oi_attributes(avs_persistence_context_t *ctx,
+                                                anjay_dm_oi_attributes_t *attrs,
+                                                int32_t bitmask) {
+    avs_error_t err;
+    if (avs_is_err((err = avs_persistence_u32(ctx,
+                                              (uint32_t *) &attrs->min_period)))
+            || avs_is_err((err = avs_persistence_u32(
+                                   ctx, (uint32_t *) &attrs->max_period)))) {
+        return err;
+    }
+    if (bitmask & ANJAY_PERSIST_EVAL_PERIODS_ATTR) {
+        (void) (avs_is_err((err = avs_persistence_u32(
+                                    ctx, (uint32_t *) &attrs->min_eval_period)))
+                || avs_is_err((err = avs_persistence_u32(
+                                       ctx,
+                                       (uint32_t *) &attrs->max_eval_period))));
+    } else if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
+        attrs->min_eval_period = ANJAY_ATTRIB_INTEGER_NONE;
+        attrs->max_eval_period = ANJAY_ATTRIB_INTEGER_NONE;
+    }
+    if (bitmask & ANJAY_PERSIST_HQMAX_ATTR) {
+        err = avs_persistence_i32(ctx, &(int32_t) { -1 });
+    }
+    return err;
+}
+
+static avs_error_t persistence_dm_r_attributes(avs_persistence_context_t *ctx,
+                                               anjay_dm_r_attributes_t *attrs,
+                                               int32_t bitmask) {
+    avs_error_t err;
+    if (avs_is_err((err = persistence_dm_oi_attributes(ctx, &attrs->common,
+                                                       bitmask)))
+            || avs_is_err((
+                       err = avs_persistence_double(ctx, &attrs->greater_than)))
+            || avs_is_err(
+                       (err = avs_persistence_double(ctx, &attrs->less_than)))
+            || avs_is_err((err = avs_persistence_double(ctx, &attrs->step)))) {
+        return err;
+    }
+    if (bitmask & ANJAY_PERSIST_EDGE_ATTR) {
+        err = avs_persistence_bytes(ctx, &(int8_t) { -1 }, 1);
+    }
+    return err;
+}
+
+static avs_error_t persistence_con_attr(avs_persistence_context_t *ctx,
+                                        anjay_dm_oi_attributes_t *attrs,
+                                        int32_t bitmask) {
+    avs_error_t err = AVS_OK;
+    int8_t con = ANJAY_DM_CON_ATTR_NONE;
+    if (bitmask & ANJAY_PERSIST_CON_ATTR) {
+        (void) attrs;
+#    ifdef ANJAY_WITH_CON_ATTR
+        con = (int8_t) attrs->con;
+#    endif // ANJAY_WITH_CON_ATTR
+        err = avs_persistence_bytes(ctx, (uint8_t *) &con, 1);
+    }
+#    ifdef ANJAY_WITH_CON_ATTR
+    if (avs_is_ok(err)) {
+        switch (con) {
+        case ANJAY_DM_CON_ATTR_NONE:
+        case ANJAY_DM_CON_ATTR_NON:
+        case ANJAY_DM_CON_ATTR_CON:
+            attrs->con = (anjay_dm_con_attr_t) con;
+            break;
+        default:
+            err = avs_errno(AVS_EBADMSG);
+        }
+    }
+#    endif // ANJAY_WITH_CON_ATTR
+    return err;
+}
+
+avs_error_t _anjay_persistence_dm_oi_attributes(avs_persistence_context_t *ctx,
+                                                anjay_dm_oi_attributes_t *attrs,
+                                                int32_t bitmask) {
+    avs_error_t err;
+    (void) (avs_is_err(
+                    (err = persistence_dm_oi_attributes(ctx, attrs, bitmask)))
+            || avs_is_err((err = persistence_con_attr(ctx, attrs, bitmask))));
+    return err;
+}
+
+avs_error_t _anjay_persistence_dm_r_attributes(avs_persistence_context_t *ctx,
+                                               anjay_dm_r_attributes_t *attrs,
+                                               int32_t bitmask) {
+    avs_error_t err;
+    (void) (avs_is_err((err = persistence_dm_r_attributes(ctx, attrs, bitmask)))
+            || avs_is_err((err = persistence_con_attr(ctx, &attrs->common,
+                                                      bitmask))));
+    return err;
+}
+#endif /* (defined(ANJAY_WITH_CORE_PERSISTENCE) &&       \
+          defined(ANJAY_WITH_OBSERVATION_ATTRIBUTES)) || \
+          defined(ANJAY_WITH_ATTR_STORAGE) */
 
 #ifdef ANJAY_TEST
 #    include "tests/core/anjay.c"

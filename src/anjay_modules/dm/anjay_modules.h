@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_MODULES_DM_MODULES_H
@@ -201,6 +194,24 @@ anjay_unlocked_dm_resource_write_attrs_t(anjay_unlocked_t *anjay,
                                          anjay_rid_t rid,
                                          anjay_ssid_t ssid,
                                          const anjay_dm_r_attributes_t *attrs);
+#ifdef ANJAY_WITH_LWM2M11
+typedef int anjay_unlocked_dm_resource_instance_read_attrs_t(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t obj,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        anjay_dm_r_attributes_t *out);
+typedef int anjay_unlocked_dm_resource_instance_write_attrs_t(
+        anjay_unlocked_t *anjay,
+        const anjay_dm_installed_object_t obj,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        anjay_ssid_t ssid,
+        const anjay_dm_r_attributes_t *attrs);
+#endif // ANJAY_WITH_LWM2M11
 typedef int
 anjay_unlocked_dm_transaction_begin_t(anjay_unlocked_t *anjay,
                                       const anjay_dm_installed_object_t obj);
@@ -238,42 +249,18 @@ typedef struct {
     anjay_unlocked_dm_transaction_validate_t *transaction_validate;
     anjay_unlocked_dm_transaction_commit_t *transaction_commit;
     anjay_unlocked_dm_transaction_rollback_t *transaction_rollback;
+#    ifdef ANJAY_WITH_LWM2M11
+    anjay_unlocked_dm_resource_instance_read_attrs_t
+            *resource_instance_read_attrs;
+    anjay_unlocked_dm_resource_instance_write_attrs_t
+            *resource_instance_write_attrs;
+#    endif // ANJAY_WITH_LWM2M11
 } anjay_unlocked_dm_handlers_t;
 #endif // ANJAY_WITH_THREAD_SAFETY
 
 typedef void anjay_dm_module_deleter_t(void *arg);
 
 typedef struct {
-    /**
-     * Global overlay of handlers that may replace handlers natively declared
-     * for all LwM2M Objects.
-     *
-     * When modules are installed, upon calling any of the <c>_anjay_dm_*</c>
-     * callback wrapper functions with the <c>current_module</c> argument set to
-     * <c>NULL</c>, the following happens:
-     *
-     * - The installed modules are searched in such order so that most recently
-     *   installed module is first.
-     * - The first module in which the appropriate handler field (e.g.
-     *   <c>overlay_handlers.resource_read</c>) is non-<c>NULL</c>, is selected.
-     * - If no such overlay is installed, the function declared in the LwM2M
-     *   Object is selected, if non-<c>NULL</c>.
-     * - If a function could be selected, it is called.
-     * - If no appropriate non-<c>NULL</c> handler was found,
-     *   @ref ANJAY_ERR_METHOD_NOT_ALLOWED is returned.
-     *
-     * Functions declared in an overlay handler may call the appropriate
-     * <c>_anjay_dm_*</c> function (e.g. @ref _anjay_dm_resource_read) with the
-     * <c>current_module</c> argument set to its own corresponding module
-     * definition pointer (the same value that was passed as <c>module</c> to
-     * <c>_anjay_dm_module_install</c>). This will cause the "underlying"
-     * handler to be called - the above procedure will restart, but skipping all
-     * the modules from the beginning to <c>current_module</c>, inclusive - so
-     * the underlying original implementation (or another overlay, if multiple
-     * are installed) will be called.
-     */
-    anjay_unlocked_dm_handlers_t overlay_handlers;
-
     /**
      * A function to be called every time when Anjay is notified of some data
      * model change - this also includes changes made through LwM2M protocol

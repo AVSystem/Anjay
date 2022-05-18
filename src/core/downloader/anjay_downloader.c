@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -179,6 +172,9 @@ find_ctx_ptr_by_socket(anjay_downloader_t *dl, avs_net_socket_t *socket) {
     assert(socket);
     AVS_LIST(anjay_download_ctx_t) *ctx;
     AVS_LIST_FOREACH_PTR(ctx, &dl->downloads) {
+        if ((*ctx)->common.same_socket_download) {
+            continue;
+        }
         if (get_ctx_socket(*ctx) == socket) {
             return ctx;
         }
@@ -192,6 +188,9 @@ int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
     AVS_LIST(anjay_download_ctx_t) dl_ctx;
 
     AVS_LIST_FOREACH(dl_ctx, dl->downloads) {
+        if (dl_ctx->common.same_socket_download) {
+            continue;
+        }
         avs_net_socket_t *socket = get_ctx_socket(dl_ctx);
         if (_anjay_socket_is_online(socket)) {
             AVS_LIST(anjay_socket_entry_t) elem =
@@ -293,7 +292,9 @@ static avs_error_t find_downloader_ctx_constructor(
 
 avs_error_t _anjay_downloader_download(anjay_downloader_t *dl,
                                        anjay_download_handle_t *out_handle,
-                                       const anjay_download_config_t *config) {
+                                       const anjay_download_config_t *config,
+                                       avs_coap_ctx_t *forced_coap_ctx,
+                                       avs_net_socket_t *forced_coap_socket) {
     assert(&_anjay_downloader_get_anjay(dl)->downloader == dl);
     assert(out_handle);
 
@@ -308,7 +309,8 @@ avs_error_t _anjay_downloader_download(anjay_downloader_t *dl,
         if (_anjay_socket_transport_included(
                     _anjay_downloader_get_anjay(dl)->online_transports,
                     transport)) {
-            err = constructor(dl, &dl_ctx, config, find_free_id(dl));
+            err = constructor(dl, &dl_ctx, config, find_free_id(dl),
+                              forced_coap_ctx, forced_coap_socket);
         } else {
             dl_log(WARNING, _("transport currently offline for URL: ") "%s",
                    config->url);
@@ -356,6 +358,39 @@ void _anjay_downloader_abort(anjay_downloader_t *dl,
                _("download id = ") "%" PRIuPTR _(" not found (expired?)"), id);
     } else {
         _anjay_downloader_abort_transfer(ctx, _anjay_download_status_aborted());
+    }
+}
+
+void _anjay_downloader_suspend_same_socket(anjay_downloader_t *dl,
+                                           avs_net_socket_t *socket) {
+    assert(dl);
+    if (!socket) {
+        return;
+    }
+    AVS_LIST(anjay_download_ctx_t) *ctx;
+    AVS_LIST(anjay_download_ctx_t) helper;
+    AVS_LIST_DELETABLE_FOREACH_PTR(ctx, helper, &dl->downloads) {
+        if ((*ctx)->common.same_socket_download
+                && get_ctx_socket(*ctx) == socket) {
+            suspend_transfer(*ctx);
+        }
+    }
+}
+
+void _anjay_downloader_abort_same_socket(anjay_downloader_t *dl,
+                                         avs_net_socket_t *socket) {
+    assert(dl);
+    if (!socket) {
+        return;
+    }
+    AVS_LIST(anjay_download_ctx_t) *ctx;
+    AVS_LIST(anjay_download_ctx_t) helper;
+    AVS_LIST_DELETABLE_FOREACH_PTR(ctx, helper, &dl->downloads) {
+        if ((*ctx)->common.same_socket_download
+                && get_ctx_socket(*ctx) == socket) {
+            _anjay_downloader_abort_transfer(&dl->downloads,
+                                             _anjay_download_status_aborted());
+        }
     }
 }
 

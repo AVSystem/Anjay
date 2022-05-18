@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -19,7 +12,12 @@
 #include <avsystem/commons/avs_errno.h>
 #include <avsystem/commons/avs_utils.h>
 
-#include <avsystem/coap/udp.h>
+#ifdef WITH_AVS_COAP_UDP
+#    include <avsystem/coap/udp.h>
+#endif // WITH_AVS_COAP_UDP
+#ifdef WITH_AVS_COAP_TCP
+#    include <avsystem/coap/tcp.h>
+#endif // WITH_AVS_COAP_TCP
 
 #include <inttypes.h>
 
@@ -31,6 +29,8 @@
 
 VISIBILITY_SOURCE_BEGIN
 
+#if defined(WITH_AVS_COAP_UDP) \
+        || (defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP))
 static const avs_net_dtls_handshake_timeouts_t *
 get_tls_handshake_timeouts(anjay_unlocked_t *anjay) {
     return &anjay->udp_dtls_hs_tx_params;
@@ -143,6 +143,26 @@ static avs_error_t connect_socket(anjay_unlocked_t *anjay,
 
     return AVS_OK;
 }
+#endif /* defined(WITH_AVS_COAP_UDP) \
+          || (defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)) */
+
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+static int ensure_tcp_coap_context(anjay_unlocked_t *anjay,
+                                   anjay_server_connection_t *connection) {
+    if (!connection->coap_ctx) {
+        connection->coap_ctx = avs_coap_tcp_ctx_create(
+                _anjay_get_coap_sched(anjay), anjay->in_shared_buffer,
+                anjay->out_shared_buffer, anjay->coap_tcp_max_options_size,
+                anjay->coap_tcp_request_timeout, anjay->prng_ctx.ctx);
+        if (!connection->coap_ctx) {
+            anjay_log(ERROR, _("could not create CoAP/TCP context"));
+            return -1;
+        }
+    }
+
+    return 0;
+}
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
 
 #ifdef WITH_AVS_COAP_UDP
 static int ensure_udp_coap_context(anjay_unlocked_t *anjay,
@@ -267,3 +287,13 @@ const anjay_connection_type_definition_t ANJAY_CONNECTION_DEF_UDP = {
     .connect_socket = connect_udp_socket
 };
 #endif // WITH_AVS_COAP_UDP
+
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+const anjay_connection_type_definition_t ANJAY_CONNECTION_DEF_TCP = {
+    .name = "TCP",
+    .get_dtls_handshake_timeouts = get_tls_handshake_timeouts,
+    .prepare_connection = prepare_connection,
+    .ensure_coap_context = ensure_tcp_coap_context,
+    .connect_socket = connect_socket
+};
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)

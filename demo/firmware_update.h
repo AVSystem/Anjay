@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef FIRMWARE_UPDATE_H
@@ -46,7 +39,13 @@ int firmware_update_install(anjay_t *anjay,
                             const char *persistence_file,
                             const avs_net_security_info_t *security_info,
                             const avs_coap_udp_tx_params_t *tx_params,
-                            anjay_fw_update_result_t delayed_result);
+                            anjay_fw_update_result_t delayed_result,
+                            bool prefer_same_socket_downloads
+#ifdef ANJAY_WITH_SEND
+                            ,
+                            bool use_lwm2m_send
+#endif // ANJAY_WITH_SEND
+);
 
 void firmware_update_destroy(fw_update_logic_t *fw_update);
 

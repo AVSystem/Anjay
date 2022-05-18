@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -115,6 +108,23 @@ int _anjay_ssid_from_security_iid(anjay_unlocked_t *anjay,
     *out_ssid = (uint16_t) _ssid;
     return 0;
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_server_uri_from_security_iid(anjay_unlocked_t *anjay,
+                                        anjay_iid_t security_iid,
+                                        char *out_uri,
+                                        size_t out_size) {
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SERVER_URI);
+    if (_anjay_dm_read_resource_string(anjay, &path, out_uri, out_size)) {
+        anjay_log(ERROR, _("could not get Server URI from ") "%s",
+                  ANJAY_DEBUG_MAKE_PATH(&path));
+        return -1;
+    }
+    return 0;
+}
+#endif // ANJAY_WITH_LWM2M11
 
 #ifdef ANJAY_WITH_BOOTSTRAP
 bool _anjay_is_bootstrap_security_instance(anjay_unlocked_t *anjay,

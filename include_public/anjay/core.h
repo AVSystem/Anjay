@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_CORE_H
@@ -76,6 +69,36 @@ typedef struct anjay_struct anjay_t;
         /* .max = */ { 60, 0 }              \
     }
 // clang-format on
+
+#ifdef ANJAY_WITH_LWM2M11
+typedef enum {
+    /**
+     * Lightweight Machine to Machine Technical Specification, Approved Version
+     * 1.0.2 - 2018-02-09 (OMA-TS-LightweightM2M-V1_0_2-20180209-A).
+     */
+    ANJAY_LWM2M_VERSION_1_0,
+    /**
+     * Lightweight Machine to Machine Technical Specification, Approved Version
+     * 1.1.1 - 2019-06-17; Core (OMA-TS-LightweightM2M_Core-V1_1_1-20190617-A)
+     * and Transport Bindings
+     * (OMA-TS-LightweightM2M_Transport-V1_1_1-20190617-A).
+     */
+    ANJAY_LWM2M_VERSION_1_1
+} anjay_lwm2m_version_t;
+
+typedef struct {
+    /**
+     * The lowest version to attempt using when registering to LwM2M Servers.
+     */
+    anjay_lwm2m_version_t minimum_version;
+
+    /**
+     * The highest version to attempt using when registering to LwM2M Servers.
+     * This is also the version number sent in reponse to Bootstrap Discover.
+     */
+    anjay_lwm2m_version_t maximum_version;
+} anjay_lwm2m_version_config_t;
+#endif // ANJAY_WITH_LWM2M11
 
 typedef struct anjay_configuration {
     /**
@@ -271,6 +294,112 @@ typedef struct anjay_configuration {
      */
     avs_ssl_additional_configuration_clb_t *additional_tls_config_clb;
 
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    /**
+     * Maximum expected TCP options size. CoAP messages with options longer
+     * than this value will be rejected.
+     *
+     * If set to 0, a hard-coded default value (128) will be used.
+     */
+    size_t coap_tcp_max_options_size;
+
+    /**
+     * Time to wait for incoming response after sending a request. After this
+     * time request is considered unsuccessful.
+     *
+     * If zero-initialized or set to @c AVS_TIME_DURATION_ZERO, a default
+     * value of 30s is used.
+     */
+    avs_time_duration_t coap_tcp_request_timeout;
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+
+#ifdef ANJAY_WITH_LWM2M11
+    /**
+     * Configuration of LwM2M protocol versions to use when attempting to
+     * register to LwM2M servers.
+     *
+     * If NULL, the default configuration, that allows all supported versions to
+     * be used, will be selected.
+     *
+     * Notes:
+     * - Configuration is copied during @ref anjay_new() and cannot be
+     *   modified later on.
+     * - Restricting the set of supported versions may speed up the Register
+     *   operation, as less versions will be attempted for registration.
+     * - If <c>minimum_version</c> is set to a higher value than
+     *   <c>maximum_version</c>, @ref anjay_new will fail.
+     * - If <c>minimum_version</c> is set to a version higher than LwM2M 1.0,
+     *   <c>disable_legacy_server_initiated_bootstrap</c> will be effectively
+     *   implied even if that field is set to <c>false</c>.
+     */
+    const anjay_lwm2m_version_config_t *lwm2m_version_config;
+
+    /**
+     * Enable usage of system-wide trust store (e.g. <c>/etc/ssl/certs</c> on
+     * most Unix-like systems) for PKIX certificate verification in addition to
+     * those specified via <c>trust_store_certs</c> and <c>trust_store_crls</c>.
+     *
+     * NOTE: System-wide trust store is currently supported only by the OpenSSL
+     * backend. This field will not have the intended effect with the Mbed TLS
+     * backend.
+     *
+     * NOTE: PKIX certificate verification is only used in certain "Certificate
+     * Usage" modes configured in the Security object of the data model. It is
+     * also not automatically propagated to downloads, although is passed
+     * through by @ref anjay_security_config_from_dm.
+     *
+     * NOTE: System-wide trust store will be disabled for connections using the
+     * trust store updated through the <c>/est/crts</c> request, regardless of
+     * the value of this flag.
+     */
+    bool use_system_trust_store;
+
+    /**
+     * Store of trust anchor certificates to use for PKIX certificate
+     * verification. This field is optional and can be left zero-initialized. If
+     * used, it shall be initialized using one of the
+     * <c>avs_crypto_trusted_cert_info_from_*</c> helper functions.
+     *
+     * Any data passed is copied immediately, so it is safe to free any
+     * associated buffers after calling @ref anjay_new.
+     *
+     * NOTE: PKIX certificate verification is only used in certain "Certificate
+     * Usage" modes configured in the Security object of the data model. It is
+     * also not automatically propagated to downloads, although is passed
+     * through by @ref anjay_security_config_from_dm.
+     */
+    avs_crypto_certificate_chain_info_t trust_store_certs;
+
+    /**
+     * Store of certificate revocation lists to use for PKIX certificate
+     * verification. This field is optional and can be left zero-initialized. If
+     * used, it shall be initialized using one of the
+     * <c>avs_crypto_cert_revocation_list_info_from_*</c> helper functions.
+     *
+     * Any data passed is copied immediately, so it is safe to free any
+     * associated buffers after calling @ref anjay_new.
+     *
+     * NOTE: PKIX certificate verification is only used in certain "Certificate
+     * Usage" modes configured in the Security object of the data model. It is
+     * also not automatically propagated to downloads, although is passed
+     * through by @ref anjay_security_config_from_dm.
+     */
+    avs_crypto_cert_revocation_list_info_t trust_store_crls;
+
+    /**
+     * Enable rebuilding of client certificate chain based on certificates in
+     * the trust store.
+     *
+     * If this field is set to <c>true</c>, when performing a (D)TLS handshake,
+     * if the client certificate configured in the data model (or the last
+     * certificate in a chain) is not self-signed, Anjay will attempt to find
+     * its ancestors in the appropriate trust store (which may be
+     * <c>trust_store_certs</c> or the one provisioned by <c>/est/crts</c>
+     * operation) and append them to the chain presented during handshake.
+     */
+    bool rebuild_client_cert_chain;
+#endif // ANJAY_WITH_LWM2M11
+
 } anjay_configuration_t;
 
 /**
@@ -336,7 +465,9 @@ AVS_LIST(avs_net_socket_t *const) anjay_get_sockets(anjay_t *anjay);
 typedef enum {
     ANJAY_SOCKET_TRANSPORT_INVALID = -1,
     ANJAY_SOCKET_TRANSPORT_UDP = 0,
-    ANJAY_SOCKET_TRANSPORT_TCP
+    ANJAY_SOCKET_TRANSPORT_TCP,
+    ANJAY_SOCKET_TRANSPORT_SMS,
+    ANJAY_SOCKET_TRANSPORT_NIDD
 } anjay_socket_transport_t;
 
 /**
@@ -364,7 +495,8 @@ typedef struct {
      * - <c>ANJAY_SSID_ANY</c> if the socket is not directly and unambiguously
      *   related to any server, which includes:
      *   - download sockets
-     *   - SMS communication socket (common for all servers)
+     *   - SMS communication socket (common for all servers; only in versions of
+     *     Anjay that include the SMS commercial feature)
      * - <c>ANJAY_SSID_BOOTSTRAP</c> for the Bootstrap Server socket
      * - any other value for sockets related to regular LwM2M servers
      */
@@ -375,7 +507,8 @@ typedef struct {
      * - it is a UDP communication socket for a regular LwM2M server that is
      *   configured to use the "queue mode", or
      * - it is an SMS communication socket and all LwM2M servers that use this
-     *   transport use the "queue mode"
+     *   transport use the "queue mode" (only relevant to versions of Anjay that
+     *   include the SMS commercial feature)
      *
      * In either case, a queue mode socket will stop being returned from
      * @ref anjay_get_sockets and @ref anjay_get_socket_entries after period
@@ -598,8 +731,8 @@ void anjay_sched_run(anjay_t *anjay);
  * compatible with <c>poll()</c> or <c>select()</c> through
  * <c>avs_net_socket_get_system()</c>.
  *
- * In particular, please be cautious when using SMS or NIDD transports
- * (applicable to commercial version only) - your
+ * In particular, please be cautious when using SMS or NIDD transports (in
+ * versions of Anjay that include the relevant commercial features) - your
  * <c>anjay_smsdrv_system_socket_t</c> and
  * <c>anjay_nidd_driver_system_descriptor_t</c> functions need to populate the
  * output argument with a valid file descriptor (e.g.
@@ -737,6 +870,22 @@ int anjay_serve_any(anjay_t *anjay, avs_time_duration_t max_wait_time);
  * @returns 0 on success, a negative value in case of error.
  */
 int anjay_schedule_registration_update(anjay_t *anjay, anjay_ssid_t ssid);
+
+#ifdef ANJAY_WITH_LWM2M11
+/**
+ * Schedules sending a Bootstrap-Request message to the LwM2M Bootstrap Server.
+ *
+ * The Bootstrap-Request will be sent during one of subsequent
+ * @ref anjay_sched_run calls.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @returns 0 on success, or a negative value in case of error (including the
+ *          case where there might not be a Bootstrap Server available or
+ *          Bootstrap support might not be enabled at compile time).
+ */
+int anjay_schedule_bootstrap_request(anjay_t *anjay);
+#endif // ANJAY_WITH_LWM2M11
 
 /**
  * This function shall be called when an LwM2M Server Object shall be disabled.
@@ -937,58 +1086,6 @@ int anjay_transport_schedule_reconnect(anjay_t *anjay,
                                        anjay_transport_set_t transport_set);
 
 /**
- * Checks whether all the transports are currently in offline mode.
- *
- * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
- *
- * @param anjay Anjay object to operate on.
- * @returns true if Anjay's instance is offline, false otherwise.
- */
-static inline bool anjay_is_offline(anjay_t *anjay) {
-    return anjay_transport_is_offline(anjay, ANJAY_TRANSPORT_SET_ALL);
-}
-
-/**
- * Puts all the transports into offline mode.
- *
- * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
- *
- * @param anjay Anjay object to operate on.
- *
- * @returns 0 on success, a negative value in case of error.
- */
-static inline int anjay_enter_offline(anjay_t *anjay) {
-    return anjay_transport_enter_offline(anjay, ANJAY_TRANSPORT_SET_ALL);
-}
-
-/**
- * Puts all the available transports into online mode.
- *
- * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
- *
- * @param anjay Anjay object to operate on.
- *
- * @returns 0 on success, a negative value in case of error.
- */
-static inline int anjay_exit_offline(anjay_t *anjay) {
-    return anjay_transport_exit_offline(anjay, ANJAY_TRANSPORT_SET_ALL);
-}
-
-/**
- * Reconnects sockets associated with all connected servers and ongoing
- * downloads over all transports.
- *
- * DEPRECATED since Anjay 2.4. Provided for backwards compatibility.
- *
- * @param anjay Anjay object to operate on.
- *
- * @returns 0 on success, a negative value in case of error.
- */
-static inline int anjay_schedule_reconnect(anjay_t *anjay) {
-    return anjay_transport_schedule_reconnect(anjay, ANJAY_TRANSPORT_SET_ALL);
-}
-
-/**
  * Tests if Anjay gave up on any further server connection attempts. It will
  * happen if none of the configured servers could be reached.
  *
@@ -1004,6 +1101,76 @@ static inline int anjay_schedule_reconnect(anjay_t *anjay) {
  * @returns 0 on success, a negative value in case of error.
  */
 bool anjay_all_connections_failed(anjay_t *anjay);
+
+#ifdef ANJAY_WITH_LWM2M11
+typedef enum {
+    /**
+     * Force Queue Mode: Anjay will always register with LwM2M Servers with
+     * Queue Mode enabled, even if LwM2M 1.0 is used and server-configured
+     * Binding Mode does not contain the "Q" letter.
+     *
+     * Use of this setting breaks strict LwM2M 1.0 compliance, but makes sure
+     * that all idle connections will be suspended.
+     */
+    ANJAY_FORCE_QUEUE_MODE,
+
+    /**
+     * Prefer Queue Mode: Anjay will register with LwM2M Servers with Queue Mode
+     * enabled if LwM2M 1.1 is used. For LwM2M 1.0 registrations, the
+     * server-configured Binding Mode will be respected.
+     */
+    ANJAY_PREFER_QUEUE_MODE,
+
+    /**
+     * Prefer Online Mode: Anjay will use Queue Mode only when the
+     * server-configured Binding Mode contains the "Q" letter - either in
+     * compliance with LwM2M 1.0, or as a custom extension to LwM2M 1.1.
+     *
+     * This is the default setting.
+     */
+    ANJAY_PREFER_ONLINE_MODE,
+
+    /**
+     * Force Online Mode: Anjay will always register with LwM2M Server with
+     * Queue Mode disabled, even if LwM2M 1.0 is used and server-configured
+     * Binding Mode contains the "Q" letter.
+     *
+     * Use of this setting breaks strict LwM2M 1.0 compliance, but makes sure
+     * that all server connections are kept in connected state even when idle.
+     */
+    ANJAY_FORCE_ONLINE_MODE
+} anjay_queue_mode_preference_t;
+
+/**
+ * Configures the client's usage of the LwM2M Queue Mode.
+ *
+ * Please see the documentation of @ref anjay_queue_mode_preference_t for the
+ * description of available configurations. The default value is
+ * <c>ANJAY_PREFER_ONLINE_MODE</c>.
+ *
+ * NOTE: Changing the Queue Mode status of an existing registration is not
+ * possible without sending the Register (for LwM2M 1.1) or Update (for LwM2M
+ * 1.0) message again. For this reason, this call does <strong>NOT</strong>
+ * immediately take effect for connections that already have active
+ * registrations at the time of a call to this function. The changes will be
+ * applied at the time when next Register or Update message is scheduled to be
+ * sent. If you wish to apply the queue mode state change immediately, you can
+ * call either of @ref anjay_schedule_registration_update,
+ * @ref anjay_schedule_reconnect, @ref anjay_transport_schedule_reconnect,
+ * @ref anjay_exit_offline, @ref anjay_transport_exit_offline or
+ * @ref anjay_transport_set_online .
+ *
+ *
+ * @param anjay      Anjay object to operate on.
+ *
+ * @param preference Queue Mode preference to use.
+ *
+ * @returns 0 for success, or a negative value if @p preference is not any of
+ *          the supported values.
+ */
+int anjay_set_queue_mode_preference(anjay_t *anjay,
+                                    anjay_queue_mode_preference_t preference);
+#endif // ANJAY_WITH_LWM2M11
 
 typedef struct {
     /**
@@ -1066,11 +1233,311 @@ int anjay_security_config_from_dm(anjay_t *anjay,
                                   const char *uri);
 
 /**
+ * Returns the security configuration that Anjay is configured to use for X.509
+ * certificate-based security, if no server-specific certificate is known, but
+ * PKIX certificate validation is requested.
+ *
+ * The returned security information is determined by the
+ * <c>default_tls_ciphersuites</c>, <c>use_system_trust_store</c>,
+ * <c>trust_store_certs</c> and <c>trust_store_crls</c> fields of
+ * @ref anjay_configuration_t, which may be overridden by an <c>/est/crts</c>
+ * request if <c>est_cacerts_policy</c> is set to
+ * <c>ANJAY_EST_CACERTS_IF_EST_CONFIGURED</c> or
+ * <c>ANJAY_EST_CACERTS_ALWAYS</c>.
+ *
+ * @returns Security configuration for the global trust store. The structure
+ *          contains no dynamically allocated data.
+ *
+ * NOTE: Pointers in the returned structure will point to internal Anjay
+ * structures. Attempting to modify or deallocate them will result in undefined
+ * behavior.
+ *
+ * NOTE: If no valid trust store is available, an unsafe "trust everything"
+ * configuration is returned
+ * (<c>security_info.data.cert.server_cert_validation</c> is set to false).
+ */
+anjay_security_config_t anjay_security_config_pkix(anjay_t *anjay);
+
+/**
  * Returns @c false if registration to all LwM2M Servers either succeeded or
  * failed with no more retries pending and @c true if a registration or
  * bootstrap is in progress.
  */
 bool anjay_ongoing_registration_exists(anjay_t *anjay);
+
+/**
+ * Returns the time at which the lifetime of a registration to a given LwM2M
+ * Server expires.
+ *
+ * Note that this is <strong>not</strong> the time at which the Update message
+ * will be sent. Update messages are planned for <c>MAX_TRANSMIT_WAIT</c> before
+ * the expiration time (or at halfway between last registration update and the
+ * expiration time if that is less than <c>MAX_TRANSMIT_WAIT</c>) to allow some
+ * leeway to make sure that the registration is renewed strictly <em>before</em>
+ * it expires.
+ *
+ * If you want to retrieve the information about the next scheduled Update
+ * operation, please use @ref anjay_next_planned_lifecycle_operation.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @param ssid  Short Server ID of a non-bootstrap LwM2M Server for which to get
+ *              the information.
+ *
+ * @returns Point in time according to the real-time clock at which the
+ *          registration expires, or <c>AVS_TIME_REAL_INVALID</c> if there is
+ *          no active registration for a given server or no such server
+ *          connection exists.
+ */
+avs_time_real_t anjay_registration_expiration_time(anjay_t *anjay,
+                                                   anjay_ssid_t ssid);
+
+/**
+ * Returns the time at which next outgoing lifecycle message is planned to be
+ * sent if no outside intervention that might reschedule it (e.g. change of
+ * Lifetime - either by user code or from a server) happens until that time.
+ *
+ * Lifecycle operations may include:
+ * - DTLS handshake
+ * - for non-bootstrap LwM2M Server:
+ *   - Register
+ *   - Registration Update
+ * - for the Bootstrap Server:
+ *   - Request Bootstrap
+ *   - EST Simple Re-enroll
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @param ssid  Either one of:
+ *              - Short Server ID of a single regular LwM2M Server for which to
+ *                get the information
+ *              - @ref ANJAY_SSID_BOOTSTRAP if information about the Bootstrap
+ *                Server is requested
+ *              - @ref ANJAY_SSID_ANY to get time of the nearest operation
+ *                scheduled for any known server connection
+ *
+ * @returns Point in time according to the real-time clock at which some of the
+ *          operations mentioned above is scheduled, or
+ *          <c>AVS_TIME_REAL_INVALID</c> if there are none.
+ */
+avs_time_real_t anjay_next_planned_lifecycle_operation(anjay_t *anjay,
+                                                       anjay_ssid_t ssid);
+
+/**
+ * Returns the time at which next outgoing lifecycle message is planned to be
+ * sent via any of the given transports if no outside intervention that might
+ * reschedule it (e.g. change of Lifetime - either by user code or from a
+ * server) happens until that time.
+ *
+ * <c>anjay_transport_next_planned_lifecycle_operation(anjay,
+ * ANJAY_TRANSPORT_SET_ALL)</c> is mostly equivalent to
+ * <c>anjay_next_planned_lifecycle_operation(anjay, ANJAY_SSID_ANY)</c> (see
+ * below for more details). Different transport sets may be used to filter the
+ * set of server connections queried to only those for which the last known
+ * transport matches the provided set.
+ *
+ * Server connection entries which have not yet been matched to any transport
+ * are ignored. Such entries may exist for a short time between refreshing the
+ * list of known servers (triggered e.g. by adding a new instance to the
+ * Security or Server object) and the actual attempt to connect to that server,
+ * as those two actions are performed in separate runs of @ref anjay_sched_run.
+ * During that brief period when such entries exist,
+ * <c>anjay_next_planned_lifecycle_operation(anjay, ANJAY_SSID_ANY)</c> will
+ * return the current time, while
+ * <c>anjay_transport_next_planned_lifecycle_operation(anjay,
+ * ANJAY_TRANSPORT_SET_ALL)</c> may return time of some later planned operation
+ * or <c>AVS_TIME_REAL_INVALID</c>.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param transport_set Set of transports to include in calculation.
+ *
+ * @returns Point in time according to the real-time clock at which some
+ *          lifecycle operation is scheduled, or <c>AVS_TIME_REAL_INVALID</c>
+ *          if there are none.
+ */
+avs_time_real_t anjay_transport_next_planned_lifecycle_operation(
+        anjay_t *anjay, anjay_transport_set_t transport_set);
+
+/**
+ * Returns the time at which the earliest notification trigger is scheduled if
+ * no outside intervention that might reschedule it (e.g. @ref
+ * anjay_notify_changed or a Write Attributes request from a server) happens
+ * until that time.
+ *
+ * Notification trigger checks value of one or more resources and might send a
+ * notification (if the resource value actually changed and other criteria
+ * specified by the &lt;NOTIFICATION&gt; Class attributes are met), but it might
+ * also not cause any action. In this sense, the time point returned by this
+ * function is the earliest point in time at which a notification MAY be
+ * generated, i.e. the lower bound estimate for time of the nearest
+ * notification.
+ *
+ * Notification triggers may be scheduled:
+ * - by @ref anjay_notify_changed (it might not be scheduled for immediate
+ *   execution if the Minimum Period attribute is in effect)
+ * - by certain requests from a server, including Write, Write Composite, Write
+ *   Attributes and Bootstrap Finish
+ * - after generating every new notification, if Maximum Period is in effect
+ *   (see @ref anjay_next_planned_pmax_notify_trigger that only reports this
+ *   case)
+ *
+ * The point in time is calculated for one specific server, or for all known
+ * servers at once. In versions that include the SMS commercial feature, only
+ * the primary connections are included (including the case where SMS transport
+ * is the only one in use for a given Server Account), secondary SMS Trigger
+ * connections are not.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @param ssid  A Short Server ID of a single regular LwM2M Server for which to
+ *              get the information, or @ref ANJAY_SSID_ANY to get time of the
+ *              nearest notification trigger scheduled for any known server
+ *              connection.
+ *
+ * @returns Point in time according to the real-time clock at which the earliest
+ *          notification trigger is scheduled, or <c>AVS_TIME_REAL_INVALID</c>
+ *          if there are none.
+ */
+avs_time_real_t anjay_next_planned_notify_trigger(anjay_t *anjay,
+                                                  anjay_ssid_t ssid);
+
+/**
+ * Returns the time at which the earliest notification trigger based on the
+ * Maximum Period attribute is scheduled if no outside intervention that might
+ * reschedule it (e.g. @ref anjay_notify_changed or a Write Attributes request
+ * from a server) happens until that time.
+ *
+ * This type of notification triggers are scheduled after sending each
+ * notification, for after a period of time specified by the Maximum Period
+ * attribute. In this sense, the time point returned by this function is the
+ * earliest point in time at which a notification is REQUIRED to be generated,
+ * i.e. the upper bound estimate for time of a the nearest notification.
+ *
+ * The point in time is calculated for one specific server, or for all known
+ * servers at once. In versions that include the SMS commercial feature, only
+ * the primary connections are included (including the case where SMS transport
+ * is the only one in use for a given Server Account), secondary SMS Trigger
+ * connections are not.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @param ssid  A Short Server ID of a single regular LwM2M Server for which to
+ *              get the information, or @ref ANJAY_SSID_ANY to get time of the
+ *              nearest notification trigger based on the Maximum Period
+ *              attribute scheduled for any known server connection.
+ *
+ * @returns Point in time according to the real-time clock at which the earliest
+ *          notification trigger based on the Maximum Period attribute is
+ *          scheduled, or <c>AVS_TIME_REAL_INVALID</c> if there are none.
+ */
+avs_time_real_t anjay_next_planned_pmax_notify_trigger(anjay_t *anjay,
+                                                       anjay_ssid_t ssid);
+
+/**
+ * Returns the time at which the earliest notification trigger is scheduled for
+ * any of the given transports if no outside intervention that might reschedule
+ * it (e.g. @ref anjay_notify_changed or a Write Attributes request from a
+ * server) happens until that time.
+ *
+ * In versions that do not include the SMS commercial feature, or if no SMS
+ * trigger connections exist,
+ * <c>anjay_transport_next_planned_notify_trigger(anjay,
+ * ANJAY_TRANSPORT_SET_ALL)</c> is equivalent to
+ * <c>anjay_next_planned_notify_trigger(anjay, ANJAY_SSID_ANY)</c>. In contrast
+ * to that function, both primary and secondary (SMS trigger) connections are
+ * queried, if present. Different transport sets may be used to filter the set
+ * of server connections queried to only those for which the connection
+ * transport matches the provided set.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param transport_set Set of transports to include in calculation.
+ *
+ * @returns Point in time according to the real-time clock at which the earliest
+ *          notification trigger is scheduled, or <c>AVS_TIME_REAL_INVALID</c>
+ *          if there are none.
+ */
+avs_time_real_t anjay_transport_next_planned_notify_trigger(
+        anjay_t *anjay, anjay_transport_set_t transport_set);
+
+/**
+ * Returns the time at which the earliest notification trigger based on the
+ * Maximum Period attribute is scheduled for any given transports if no outside
+ * intervention that might reschedule it (e.g. @ref anjay_notify_changed or a
+ * Write Attributes request from a server) happens until that time.
+ *
+ * In versions that do not include the SMS commercial feature, or if no SMS
+ * trigger connections exist,
+ * <c>anjay_transport_next_planned_pmax_notify_trigger(anjay,
+ * ANJAY_TRANSPORT_SET_ALL)</c> is equivalent to
+ * <c>anjay_next_planned_pmax_notify_trigger(anjay, ANJAY_SSID_ANY)</c>. In
+ * contrast to that function, both primary and secondary (SMS trigger)
+ * connections are queried, if present. Different transport sets may be used to
+ * filter the set of server connections queried to only those for which the
+ * connection transport matches the provided set.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param transport_set Set of transports to include in calculation.
+ *
+ * @returns Point in time according to the real-time clock at which the earliest
+ *          notification trigger based on the Maximum Period attribute is
+ *          scheduled, or <c>AVS_TIME_REAL_INVALID</c> if there are none.
+ */
+avs_time_real_t anjay_transport_next_planned_pmax_notify_trigger(
+        anjay_t *anjay, anjay_transport_set_t transport_set);
+
+/**
+ * Returns whether there are some notifications which have been postponed to be
+ * sent later, either due to the connection being offline or a previous failure
+ * to send some notification.
+ *
+ * The check is performed for one specific server, or for all known servers at
+ * once. In versions that do not include the SMS commercial feature, only the
+ * primary connections are included (including the case where SMS transport is
+ * the only one in use for a given Server Account), secondary SMS Trigger
+ * connections are not.
+ *
+ * @param anjay Anjay object to operate on.
+ *
+ * @param ssid  A Short Server ID of a single regular LwM2M Server for which to
+ *              get the information, or @ref ANJAY_SSID_ANY to check whether
+ *              unsent notifications exist for any known server connection.
+ *
+ * @returns False if all generated notifications for given server(s) have been
+ *          either successfully sent, discarded or are being sent at the moment.
+ *          True otherwise, i.e. if unsent, postponed notifications exist in
+ *          memory.
+ */
+bool anjay_has_unsent_notifications(anjay_t *anjay, anjay_ssid_t ssid);
+
+/**
+ * Returns whether there are some notifications which have been postponed to be
+ * sent later on any of the given transports, either due to the connection being
+ * offline or a previous failure to send some notification.
+ *
+ * In versions that do not include the SMS commercial feature, or if no SMS
+ * trigger connections exist,
+ * <c>anjay_transport_has_unsent_notifications(anjay,
+ * ANJAY_TRANSPORT_SET_ALL)</c> is equivalent to
+ * <c>anjay_has_unsent_notifications(anjay, ANJAY_SSID_ANY)</c>. In contrast to
+ * that function, both primary and secondary (SMS trigger) connections are
+ * queried, if present. Different transport sets may be used to filter the set
+ * of server connections queried to only those for which the connection
+ * transport matches the provided set.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param transport_set Set of transports to include in the check.
+ *
+ * @returns False if all generated notifications for given transports(s) have
+ *          been either successfully sent, discarded or are being sent at the
+ *          moment. True otherwise, i.e. if unsent, postponed notifications
+ *          exist in memory.
+ */
+bool anjay_transport_has_unsent_notifications(
+        anjay_t *anjay, anjay_transport_set_t transport_set);
 
 #ifdef __cplusplus
 } /* extern "C" */

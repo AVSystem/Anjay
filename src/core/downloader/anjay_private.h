@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_DOWNLOADER_PRIVATE_H
@@ -50,6 +43,8 @@ typedef struct {
     anjay_download_finished_handler_t *on_download_finished;
     void *user_data;
 
+    // This download re-uses socket of the already existing connection.
+    bool same_socket_download;
 } anjay_download_ctx_common_t;
 
 static inline anjay_unlocked_t *
@@ -111,7 +106,9 @@ typedef avs_error_t
 anjay_downloader_ctx_constructor_t(anjay_downloader_t *dl,
                                    AVS_LIST(anjay_download_ctx_t) *out_dl_ctx,
                                    const anjay_download_config_t *cfg,
-                                   uintptr_t id);
+                                   uintptr_t id,
+                                   avs_coap_ctx_t *forced_coap_ctx,
+                                   avs_net_socket_t *forced_coap_socket);
 
 #ifdef ANJAY_WITH_COAP_DOWNLOAD
 anjay_downloader_ctx_constructor_t _anjay_downloader_coap_ctx_new;

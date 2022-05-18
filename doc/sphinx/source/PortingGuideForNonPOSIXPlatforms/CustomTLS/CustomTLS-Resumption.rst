@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Session resumption support
 ==========================
@@ -256,7 +249,7 @@ For OpenSSL, this can be forwarded to the call to ``SSL_session_reused()``:
 
 .. highlight:: c
 .. snippet-source:: examples/custom-tls/resumption-simple/src/tls_impl.c
-    :emphasize-lines: 15-17
+    :emphasize-lines: 18-20
 
     static avs_error_t tls_get_opt(avs_net_socket_t *sock_,
                                    avs_net_socket_opt_key_t option_key,
@@ -272,6 +265,9 @@ For OpenSSL, this can be forwarded to the call to ``SSL_session_reused()``:
             }
             return err;
         }
+        case AVS_NET_SOCKET_HAS_BUFFERED_DATA:
+            out_option_value->flag = (sock->ssl && SSL_pending(sock->ssl) > 0);
+            return AVS_OK;
         case AVS_NET_SOCKET_OPT_SESSION_RESUMED:
             out_option_value->flag = (sock->ssl && SSL_session_reused(sock->ssl));
             return AVS_OK;
@@ -326,8 +322,8 @@ Limitations
 ^^^^^^^^^^^
 
 As implemented above, the session is only persisted for as long as the socket
-object exists. This is fine for most of the cases. However, the commercial
-version of Anjay offers the ``anjay_new_from_core_persistence()`` and
+object exists. This is fine for most of the cases. However, the persistence
+feature of Anjay offers the ``anjay_new_from_core_persistence()`` and
 ``anjay_delete_with_core_persistence()`` APIs that allow persisting the
 transient connection state to non-volatile memory. This transient state includes
 the (D)TLS session information.
@@ -570,7 +566,7 @@ option, which in this case looks identical:
 
 .. highlight:: c
 .. snippet-source:: examples/custom-tls/resumption-buffer/src/tls_impl.c
-    :emphasize-lines: 15-17
+    :emphasize-lines: 18-20
 
     static avs_error_t tls_get_opt(avs_net_socket_t *sock_,
                                    avs_net_socket_opt_key_t option_key,
@@ -586,6 +582,9 @@ option, which in this case looks identical:
             }
             return err;
         }
+        case AVS_NET_SOCKET_HAS_BUFFERED_DATA:
+            out_option_value->flag = (sock->ssl && SSL_pending(sock->ssl) > 0);
+            return AVS_OK;
         case AVS_NET_SOCKET_OPT_SESSION_RESUMED:
             out_option_value->flag = (sock->ssl && SSL_session_reused(sock->ssl));
             return AVS_OK;

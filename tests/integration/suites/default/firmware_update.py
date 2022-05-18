@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import asyncio
 import http
@@ -31,21 +24,28 @@ from framework.lwm2m_test import *
 from .access_control import AccessMask
 from .block_write import Block, equal_chunk_splitter
 
-UPDATE_STATE_IDLE = 0
-UPDATE_STATE_DOWNLOADING = 1
-UPDATE_STATE_DOWNLOADED = 2
-UPDATE_STATE_UPDATING = 3
 
-UPDATE_RESULT_INITIAL = 0
-UPDATE_RESULT_SUCCESS = 1
-UPDATE_RESULT_NOT_ENOUGH_SPACE = 2
-UPDATE_RESULT_OUT_OF_MEMORY = 3
-UPDATE_RESULT_CONNECTION_LOST = 4
-UPDATE_RESULT_INTEGRITY_FAILURE = 5
-UPDATE_RESULT_UNSUPPORTED_PACKAGE_TYPE = 6
-UPDATE_RESULT_INVALID_URI = 7
-UPDATE_RESULT_FAILED = 8
-UPDATE_RESULT_UNSUPPORTED_PROTOCOL = 9
+class UpdateState:
+    IDLE = 0
+    DOWNLOADING = 1
+    DOWNLOADED = 2
+    UPDATING = 3
+
+
+class UpdateResult:
+    INITIAL = 0
+    SUCCESS = 1
+    NOT_ENOUGH_SPACE = 2
+    OUT_OF_MEMORY = 3
+    CONNECTION_LOST = 4
+    INTEGRITY_FAILURE = 5
+    UNSUPPORTED_PACKAGE_TYPE = 6
+    INVALID_URI = 7
+    FAILED = 8
+    UNSUPPORTED_PROTOCOL = 9
+    CANCELLED = 10
+    DEFERRED = 11
+
 
 FIRMWARE_PATH = '/firmware'
 FIRMWARE_SCRIPT_TEMPLATE = '#!/bin/sh\n%secho updated > "%s"\nrm "$0"\n'
@@ -108,8 +108,8 @@ class FirmwareUpdate:
                         self.assertMsgEqual(Lwm2mSend(), pkt)
                         CBOR.parse(pkt.content).verify_values(test=self,
                                                               expected_value_map={
-                                                                  ResPath.FirmwareUpdate.State: UPDATE_STATE_IDLE,
-                                                                  ResPath.FirmwareUpdate.UpdateResult: UPDATE_RESULT_INITIAL
+                                                                  ResPath.FirmwareUpdate.State: UpdateState.IDLE,
+                                                                  ResPath.FirmwareUpdate.UpdateResult: UpdateResult.INITIAL
                                                               })
                         self.serv.send(Lwm2mChanged.matching(pkt)())
                 super().tearDown(auto_deregister=auto_deregister)
@@ -141,7 +141,7 @@ class FirmwareUpdate:
             while time.time() < deadline:
                 time.sleep(0.5)
 
-                if self.read_state() == UPDATE_STATE_DOWNLOADED:
+                if self.read_state() == UpdateState.DOWNLOADED:
                     return
 
             self.fail('firmware still not downloaded')
@@ -376,7 +376,7 @@ class FirmwareUpdate:
 
         def wait_for_half_download(self):
             # roughly twice the time expected as per SlowServer
-            deadline = time.time() + self.GARBAGE_SIZE / 1000
+            deadline = time.time() + self.GARBAGE_SIZE / 500
             fsize = 0
             while time.time() < deadline:
                 time.sleep(0.5)
@@ -399,7 +399,7 @@ class FirmwareUpdate:
                              (os.path.abspath(self.fw_file_name)))
 
     class TestWithPartialDownloadAndRestart(
-            TestWithPartialDownload, DemoArgsExtractorMixin):
+        TestWithPartialDownload, DemoArgsExtractorMixin):
         def tearDown(self):
             with open(self.fw_file_name, "rb") as f:
                 self.assertEqual(f.read(), self.FIRMWARE_SCRIPT_CONTENT)
@@ -583,6 +583,79 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         self.assertEqual(['/firmware'], self.requests)
 
 
+class FirmwareUpdateSendStateChangeTest(FirmwareUpdate.TestWithHttpServer):
+    def setUp(self):
+        super().setUp(minimum_version='1.1', maximum_version='1.1',
+                      extra_cmdline_args=['--fw-update-use-send'])
+        self.set_check_marker(False)
+        self.set_auto_deregister(True)
+        self.set_expect_send_after_state_machine_reset(True)
+
+    def runTest(self):
+        self.serv.set_timeout(timeout_s=3)
+
+        self.assertEqual(self.read_state(), UpdateState.IDLE)
+
+        # Write /5/0/1 (Firmware URI)
+        req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI,
+                         self.get_firmware_uri())
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
+
+        pkt = self.serv.recv()
+        self.assertMsgEqual(Lwm2mSend(), pkt)
+        CBOR.parse(pkt.content).verify_values(test=self,
+                                              expected_value_map={
+                                                  ResPath.FirmwareUpdate.UpdateResult: UpdateResult.INITIAL,
+                                                  ResPath.FirmwareUpdate.State: UpdateState.DOWNLOADING
+                                              })
+        self.serv.send(Lwm2mChanged.matching(pkt)())
+
+        self.provide_response(use_real_app=True)
+
+        pkt = self.serv.recv()
+        self.assertMsgEqual(Lwm2mSend(), pkt)
+        CBOR.parse(pkt.content).verify_values(test=self,
+                                              expected_value_map={
+                                                  ResPath.FirmwareUpdate.UpdateResult: UpdateResult.INITIAL,
+                                                  ResPath.FirmwareUpdate.State: UpdateState.DOWNLOADED
+                                              })
+        self.serv.send(Lwm2mChanged.matching(pkt)())
+
+        # Execute /5/0/2 (Update)
+        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
+
+        pkt = self.serv.recv()
+        self.assertMsgEqual(Lwm2mSend(), pkt)
+        CBOR.parse(pkt.content).verify_values(test=self,
+                                              expected_value_map={
+                                                  ResPath.FirmwareUpdate.UpdateResult: UpdateResult.INITIAL,
+                                                  ResPath.FirmwareUpdate.State: UpdateState.UPDATING
+                                              })
+        self.serv.send(Lwm2mChanged.matching(pkt)())
+
+        # there should be exactly one request
+        self.assertEqual(['/firmware'], self.requests)
+
+        self.serv.reset()
+        self.assertDemoRegisters(version='1.1')
+
+        pkt = self.serv.recv()
+        self.assertMsgEqual(Lwm2mSend(), pkt)
+        parsed_cbor = CBOR.parse(pkt.content)
+        parsed_cbor.verify_values(test=self,
+                                  expected_value_map={
+                                      ResPath.FirmwareUpdate.UpdateResult: UpdateResult.SUCCESS,
+                                      ResPath.FirmwareUpdate.State: UpdateState.IDLE
+                                  })
+        # Check if Send contains firmware and software version
+        self.assertEqual(parsed_cbor[2].get(SenmlLabel.NAME), '/3/0/3')
+        self.assertEqual(parsed_cbor[3].get(SenmlLabel.NAME), '/3/0/19')
+        self.serv.send(Lwm2mChanged.matching(pkt)())
+
 
 class FirmwareUpdateBadBase64(FirmwareUpdate.Test):
     def runTest(self):
@@ -617,8 +690,8 @@ class FirmwareUpdateNullPkg(FirmwareUpdate.TestWithHttpServer):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateEmptyPkgUri(FirmwareUpdate.TestWithHttpServer):
@@ -630,8 +703,8 @@ class FirmwareUpdateEmptyPkgUri(FirmwareUpdate.TestWithHttpServer):
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateInvalidUri(FirmwareUpdate.Test):
@@ -650,11 +723,11 @@ class FirmwareUpdateInvalidUri(FirmwareUpdate.Test):
         while True:
             notify = self.serv.recv()
             self.assertMsgEqual(Lwm2mNotify(observe_req.token), notify)
-            if int(notify.content) != UPDATE_RESULT_INITIAL:
+            if int(notify.content) != UpdateResult.INITIAL:
                 break
-        self.assertEqual(UPDATE_RESULT_INVALID_URI, int(notify.content))
+        self.assertEqual(UpdateResult.INVALID_URI, int(notify.content))
         self.serv.send(Lwm2mReset(msg_id=notify.msg_id))
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
 
 
 class FirmwareUpdateUnsupportedUri(FirmwareUpdate.Test):
@@ -666,8 +739,8 @@ class FirmwareUpdateUnsupportedUri(FirmwareUpdate.Test):
                             self.serv.recv())
         # This does not even change state or anything, because according to the LwM2M spec
         # Server can't feed us with unsupported URI type
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_UNSUPPORTED_PROTOCOL,
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.UNSUPPORTED_PROTOCOL,
                          self.read_update_result())
 
 
@@ -675,16 +748,16 @@ class FirmwareUpdateOfflineUriTest(FirmwareUpdate.TestWithHttpServer):
     def runTest(self):
         self.communicate('enter-offline tcp')
 
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
         req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI,
                          self.get_firmware_uri())
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
 
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_CONNECTION_LOST,
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.CONNECTION_LOST,
                          self.read_update_result())
 
 
@@ -700,8 +773,8 @@ class FirmwareUpdateReplacingPkgUri(FirmwareUpdate.TestWithHttpServer):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_BAD_REQUEST),
                             self.serv.recv())
 
-        self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.DOWNLOADED, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
@@ -717,8 +790,8 @@ class FirmwareUpdateReplacingPkg(FirmwareUpdate.TestWithHttpServer):
         self.assertMsgEqual(Lwm2mErrorResponse.matching(req)(coap.Code.RES_BAD_REQUEST),
                             self.serv.recv())
 
-        self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.DOWNLOADED, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateHttpsResumptionTest(FirmwareUpdate.TestWithPartialDownloadAndRestart,
@@ -755,7 +828,7 @@ class FirmwareUpdateHttpsResumptionTest(FirmwareUpdate.TestWithPartialDownloadAn
         while time.time() < deadline:
             time.sleep(0.5)
 
-            if self.read_state() == UPDATE_STATE_DOWNLOADED:
+            if self.read_state() == UpdateState.DOWNLOADED:
                 break
         else:
             raise
@@ -793,8 +866,8 @@ class FirmwareUpdateHttpsCancelPackageTest(FirmwareUpdate.TestWithPartialDownloa
 
         self.wait_until_socket_count(expected=1, timeout_s=5)
 
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateHttpsCancelPackageUriTest(FirmwareUpdate.TestWithPartialDownload,
@@ -822,8 +895,8 @@ class FirmwareUpdateHttpsCancelPackageUriTest(FirmwareUpdate.TestWithPartialDown
 
         self.wait_until_socket_count(expected=1, timeout_s=5)
 
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateCoapCancelPackageUriTest(FirmwareUpdate.TestWithPartialDownload,
@@ -852,8 +925,8 @@ class FirmwareUpdateCoapCancelPackageUriTest(FirmwareUpdate.TestWithPartialDownl
 
         self.wait_until_socket_count(expected=1, timeout_s=5)
 
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateHttpsOfflineTest(FirmwareUpdate.TestWithPartialDownloadAndRestart,
@@ -888,7 +961,7 @@ class FirmwareUpdateHttpsOfflineTest(FirmwareUpdate.TestWithPartialDownloadAndRe
         while time.time() < deadline:
             time.sleep(0.5)
 
-            if self.read_state() == UPDATE_STATE_DOWNLOADED:
+            if self.read_state() == UpdateState.DOWNLOADED:
                 break
         else:
             raise
@@ -947,14 +1020,14 @@ class FirmwareUpdateUnconfiguredHttpsTest(FirmwareUpdate.TestWithHttpsServer):
         notify_msg = self.serv.recv()
         # no security information => "Unsupported protocol"
         self.assertMsgEqual(Lwm2mNotify(observe_req.token,
-                                        str(UPDATE_RESULT_UNSUPPORTED_PROTOCOL).encode()),
+                                        str(UpdateResult.UNSUPPORTED_PROTOCOL).encode()),
                             notify_msg)
         self.serv.send(Lwm2mReset(msg_id=notify_msg.msg_id))
         self.assertEqual(0, self.read_state())
 
 
 class FirmwareUpdateUnconfiguredHttpsWithFallbackAttemptTest(
-        FirmwareUpdate.TestWithHttpsServer):
+    FirmwareUpdate.TestWithHttpsServer):
     def setUp(self):
         super().setUp(pass_cert_to_demo=False,
                       psk_identity=b'test-identity', psk_key=b'test-key')
@@ -985,7 +1058,7 @@ class FirmwareUpdateUnconfiguredHttpsWithFallbackAttemptTest(
         # no security information => client will attempt PSK from data model
         # and fail handshake => "Connection lost"
         self.assertMsgEqual(Lwm2mNotify(observe_req.token,
-                                        str(UPDATE_RESULT_CONNECTION_LOST).encode()),
+                                        str(UpdateResult.CONNECTION_LOST).encode()),
                             notify_msg)
         self.serv.send(Lwm2mReset(msg_id=notify_msg.msg_id))
         self.assertEqual(0, self.read_state())
@@ -1020,7 +1093,7 @@ class FirmwareUpdateInvalidHttpsTest(FirmwareUpdate.TestWithHttpsServer):
         notify_msg = self.serv.recv()
         # handshake failure => "Connection lost"
         self.assertMsgEqual(Lwm2mNotify(observe_req.token,
-                                        str(UPDATE_RESULT_CONNECTION_LOST).encode()),
+                                        str(UpdateResult.CONNECTION_LOST).encode()),
                             notify_msg)
         self.serv.send(Lwm2mReset(msg_id=notify_msg.msg_id))
         self.assertEqual(0, self.read_state())
@@ -1028,20 +1101,20 @@ class FirmwareUpdateInvalidHttpsTest(FirmwareUpdate.TestWithHttpsServer):
 
 class FirmwareUpdateResetInIdleState(FirmwareUpdate.Test):
     def runTest(self):
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
 
         req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, b'')
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
         req = Lwm2mWrite(ResPath.FirmwareUpdate.Package, b'\0',
                          format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
         self.serv.send(req)
         self.assertMsgEqual(Lwm2mChanged.matching(req)(), self.serv.recv())
-        self.assertEqual(UPDATE_STATE_IDLE, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.IDLE, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
 
 class FirmwareUpdateCoapUri(FirmwareUpdate.TestWithCoapServer):
@@ -1082,8 +1155,8 @@ class FirmwareUpdateRestartWithDownloaded(FirmwareUpdate.Test):
         self.setup_demo_with_servers(
             fw_updated_marker_path=self.ANJAY_MARKER_FILE)
 
-        self.assertEqual(UPDATE_STATE_DOWNLOADED, self.read_state())
-        self.assertEqual(UPDATE_RESULT_INITIAL, self.read_update_result())
+        self.assertEqual(UpdateState.DOWNLOADED, self.read_state())
+        self.assertEqual(UpdateResult.INITIAL, self.read_update_result())
 
         # Execute /5/0/2 (Update)
         req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
@@ -1093,7 +1166,7 @@ class FirmwareUpdateRestartWithDownloaded(FirmwareUpdate.Test):
 
 
 class FirmwareUpdateRestartWithDownloading(
-        FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
     def runTest(self):
         # Write /5/0/1 (Firmware URI)
         req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, self.fw_uri)
@@ -1119,14 +1192,14 @@ class FirmwareUpdateRestartWithDownloading(
             self.assertGreater(fsize * 2, self.GARBAGE_SIZE)
             state = self.read_state()
             self.assertIn(
-                state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
-            if state == UPDATE_STATE_DOWNLOADED:
+                state, {UpdateState.DOWNLOADING, UpdateState.DOWNLOADED})
+            if state == UpdateState.DOWNLOADED:
                 break
-        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertEqual(state, UpdateState.DOWNLOADED)
 
 
 class FirmwareUpdateRestartWithDownloadingETagChange(
-        FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialCoapDownloadAndRestart):
     def runTest(self):
         # Write /5/0/1 (Firmware URI)
         req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, self.fw_uri)
@@ -1163,18 +1236,18 @@ class FirmwareUpdateRestartWithDownloadingETagChange(
                 file_truncated = True
             state = self.read_state()
             self.assertIn(
-                state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
-            if state == UPDATE_STATE_DOWNLOADED:
+                state, {UpdateState.DOWNLOADING, UpdateState.DOWNLOADED})
+            if state == UpdateState.DOWNLOADED:
                 break
             # prevent test from reading Result hundreds of times per second
             time.sleep(0.5)
 
-        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertEqual(state, UpdateState.DOWNLOADED)
         self.assertTrue(file_truncated)
 
 
 class FirmwareUpdateRestartWithDownloadingOverHttp(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def get_etag(self, response_content):
         return None
 
@@ -1214,20 +1287,20 @@ class FirmwareUpdateRestartWithDownloadingOverHttp(
                 file_truncated = True
             state = self.read_state()
             self.assertIn(
-                state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
-            if state == UPDATE_STATE_DOWNLOADED:
+                state, {UpdateState.DOWNLOADING, UpdateState.DOWNLOADED})
+            if state == UpdateState.DOWNLOADED:
                 break
             # prevent test from reading Result hundreds of times per second
             time.sleep(0.5)
 
-        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertEqual(state, UpdateState.DOWNLOADED)
         self.assertTrue(file_truncated)
 
         self.assertEqual(len(self.requests), 2)
 
 
 class FirmwareUpdateResumeDownloadingOverHttp(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def send_headers(self, handler, response_content, response_etag):
         if 'Range' in handler.headers:
             self.assertEqual(handler.headers['If-Match'], response_etag)
@@ -1265,19 +1338,19 @@ class FirmwareUpdateResumeDownloadingOverHttp(
             self.assertGreater(fsize * 2, self.GARBAGE_SIZE)
             state = self.read_state()
             self.assertIn(
-                state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
-            if state == UPDATE_STATE_DOWNLOADED:
+                state, {UpdateState.DOWNLOADING, UpdateState.DOWNLOADED})
+            if state == UpdateState.DOWNLOADED:
                 break
             # prevent test from reading Result hundreds of times per second
             time.sleep(0.5)
 
-        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertEqual(state, UpdateState.DOWNLOADED)
 
         self.assertEqual(len(self.requests), 2)
 
 
 class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def _get_valgrind_args(self):
         # we don't kill the process here, so we want Valgrind
         return FirmwareUpdate.TestWithHttpServer._get_valgrind_args(self)
@@ -1316,19 +1389,19 @@ class FirmwareUpdateResumeDownloadingOverHttpWithReconnect(
             self.assertGreater(fsize * 2, self.GARBAGE_SIZE)
             state = self.read_state()
             self.assertIn(
-                state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
-            if state == UPDATE_STATE_DOWNLOADED:
+                state, {UpdateState.DOWNLOADING, UpdateState.DOWNLOADED})
+            if state == UpdateState.DOWNLOADED:
                 break
             # prevent test from reading Result hundreds of times per second
             time.sleep(0.5)
 
-        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertEqual(state, UpdateState.DOWNLOADED)
 
         self.assertEqual(len(self.requests), 2)
 
 
 class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def runTest(self):
         self.provide_response()
         # Write /5/0/1 (Firmware URI)
@@ -1356,19 +1429,19 @@ class FirmwareUpdateResumeFromStartWithDownloadingOverHttp(
             self.assertGreater(fsize * 2, self.GARBAGE_SIZE)
             state = self.read_state()
             self.assertIn(
-                state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
-            if state == UPDATE_STATE_DOWNLOADED:
+                state, {UpdateState.DOWNLOADING, UpdateState.DOWNLOADED})
+            if state == UpdateState.DOWNLOADED:
                 break
             # prevent test from reading Result hundreds of times per second
             time.sleep(0.5)
 
-        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertEqual(state, UpdateState.DOWNLOADED)
 
         self.assertEqual(len(self.requests), 2)
 
 
 class FirmwareUpdateRestartAfter412WithDownloadingOverHttp(
-        FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
+    FirmwareUpdate.TestWithPartialHttpDownloadAndRestart):
     def check_success(self, handler, response_content, response_etag):
         if 'If-Match' in handler.headers:
             self.assertEqual(handler.headers['If-Match'], response_etag)
@@ -1406,13 +1479,13 @@ class FirmwareUpdateRestartAfter412WithDownloadingOverHttp(
                 file_truncated = True
             state = self.read_state()
             self.assertIn(
-                state, {UPDATE_STATE_DOWNLOADING, UPDATE_STATE_DOWNLOADED})
-            if state == UPDATE_STATE_DOWNLOADED:
+                state, {UpdateState.DOWNLOADING, UpdateState.DOWNLOADED})
+            if state == UpdateState.DOWNLOADED:
                 break
             # prevent test from reading Result hundreds of times per second
             time.sleep(0.5)
 
-        self.assertEqual(state, UPDATE_STATE_DOWNLOADED)
+        self.assertEqual(state, UpdateState.DOWNLOADED)
         self.assertTrue(file_truncated)
 
         self.assertEqual(len(self.requests), 3)
@@ -1438,21 +1511,21 @@ class FirmwareUpdateWithDelayedResultTest:
             self.serv.reset()
             self.assertDemoRegisters()
             self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content,
-                                str(result).encode())
+                             str(result).encode())
             self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content,
-                         str(UPDATE_STATE_IDLE).encode())
+                             str(UpdateState.IDLE).encode())
 
 
 class FirmwareUpdateWithDelayedSuccessTest(
-        FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
+    FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
     def runTest(self):
-        super().runTest(FirmwareUpdateForcedError.DelayedSuccess, UPDATE_RESULT_SUCCESS)
+        super().runTest(FirmwareUpdateForcedError.DelayedSuccess, UpdateResult.SUCCESS)
 
 
 class FirmwareUpdateWithDelayedFailureTest(
-        FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
+    FirmwareUpdateWithDelayedResultTest.TestMixin, Block.Test):
     def runTest(self):
-        super().runTest(FirmwareUpdateForcedError.DelayedFailedUpdate, UPDATE_RESULT_FAILED)
+        super().runTest(FirmwareUpdateForcedError.DelayedFailedUpdate, UpdateResult.FAILED)
 
 
 class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
@@ -1477,7 +1550,7 @@ class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
         observed_states = []
         deadline = time.time() + 5  # arbitrary limit
         while not observed_states or observed_states[-1] == str(
-                UPDATE_STATE_UPDATING):
+                UpdateState.UPDATING):
             if time.time() > deadline:
                 self.fail('Firmware Update did not finish on time, last state = %s' % (
                     observed_states[-1] if observed_states else 'NONE'))
@@ -1486,9 +1559,9 @@ class FirmwareUpdateWithSetSuccessInPerformUpgrade(Block.Test):
             time.sleep(0.5)
 
         self.assertNotEqual([], observed_states)
-        self.assertEqual(observed_states[-1], str(UPDATE_STATE_IDLE))
+        self.assertEqual(observed_states[-1], str(UpdateState.IDLE))
         self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content,
-                         str(UPDATE_RESULT_SUCCESS).encode())
+                         str(UpdateResult.SUCCESS).encode())
 
 
 class FirmwareUpdateWithSetFailureInPerformUpgrade(Block.Test):
@@ -1513,7 +1586,7 @@ class FirmwareUpdateWithSetFailureInPerformUpgrade(Block.Test):
         observed_states = []
         deadline = time.time() + 5  # arbitrary limit
         while not observed_states or observed_states[-1] == str(
-                UPDATE_STATE_UPDATING):
+                UpdateState.UPDATING):
             if time.time() > deadline:
                 self.fail('Firmware Update did not finish on time, last state = %s' % (
                     observed_states[-1] if observed_states else 'NONE'))
@@ -1522,11 +1595,92 @@ class FirmwareUpdateWithSetFailureInPerformUpgrade(Block.Test):
             time.sleep(0.5)
 
         self.assertNotEqual([], observed_states)
-        self.assertEqual(observed_states[-1], str(UPDATE_STATE_IDLE))
+        self.assertEqual(observed_states[-1], str(UpdateState.IDLE))
         self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content,
-                         str(UPDATE_RESULT_FAILED).encode())
+                         str(UpdateResult.FAILED).encode())
 
 
+try:
+    import aiocoap
+    import aiocoap.resource
+    import aiocoap.transports.tls
+except ImportError:
+    # FirmwareUpdateCoapTlsTest requires a bleeding-edge version of aiocoap, that at the time of
+    # writing this code, is not available even in the prerelease channel.
+    # So we're not enforcing this dependency for now.
+    pass
+
+
+@unittest.skipIf('aiocoap.transports.tls' not in sys.modules,
+                 'aiocoap.transports.tls not available')
+@unittest.skipIf(sys.version_info < (3, 5, 3),
+                 'SSLContext signature changed in Python 3.5.3')
+class FirmwareUpdateCoapTlsTest(
+    FirmwareUpdate.TestWithTlsServer, test_suite.Lwm2mDmOperations):
+    def setUp(self):
+        super().setUp(garbage=8000)
+
+        class FirmwareResource(aiocoap.resource.Resource):
+            async def render_get(resource, request):
+                return aiocoap.Message(payload=make_firmware_package(
+                    self.FIRMWARE_SCRIPT_CONTENT))
+
+        serversite = aiocoap.resource.Site()
+        serversite.add_resource(('firmware',), FirmwareResource())
+
+        sslctx = ssl.SSLContext()
+        sslctx.load_cert_chain(self._cert_file, self._key_file)
+
+        class EphemeralTlsServer(aiocoap.transports.tls.TLSServer):
+            _default_port = 0
+
+        class CoapTcpFileServerThread(threading.Thread):
+            def __init__(self):
+                super().__init__()
+                self.loop = asyncio.new_event_loop()
+                ctx = aiocoap.Context(loop=self.loop, serversite=serversite)
+                self.loop.run_until_complete(ctx._append_tokenmanaged_transport(
+                    lambda tman: EphemeralTlsServer.create_server(('127.0.0.1', 0), tman, ctx.log,
+                                                                  self.loop, sslctx)))
+
+                socket = ctx.request_interfaces[0].token_interface.server.sockets[0]
+                self.server_address = socket.getsockname()
+
+            def run(self):
+                asyncio.set_event_loop(self.loop)
+                try:
+                    self.loop.run_forever()
+                finally:
+                    self.loop.run_until_complete(
+                        self.loop.shutdown_asyncgens())
+                    self.loop.close()
+
+        self.server_thread = CoapTcpFileServerThread()
+        self.server_thread.start()
+
+        self.set_check_marker(True)
+        self.set_auto_deregister(False)
+
+    def tearDown(self):
+        try:
+            super().tearDown()
+        finally:
+            self.server_thread.loop.call_soon_threadsafe(
+                self.server_thread.loop.stop)
+            self.server_thread.join()
+
+    def get_firmware_uri(self):
+        return 'coaps+tcp://127.0.0.1:%d/firmware' % (
+            self.server_thread.server_address[1],)
+
+    def runTest(self):
+        self.write_firmware_and_wait_for_download(self.get_firmware_uri())
+
+        # Execute /5/0/2 (Update)
+        req = Lwm2mExecute(ResPath.FirmwareUpdate.Update)
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.serv.recv())
 
 
 class FirmwareUpdateWeakEtagTest(FirmwareUpdate.TestWithHttpServer):
@@ -1559,3 +1713,490 @@ class FirmwareUpdateWeakEtagTest(FirmwareUpdate.TestWithHttpServer):
                             self.serv.recv())
 
 
+class SameSocketDownload:
+    class Test(test_suite.Lwm2mSingleServerTest, test_suite.Lwm2mDmOperations):
+        GARBAGE_SIZE = 2048
+        # Set to be able to comfortably test interleaved requests
+        ACK_TIMEOUT = 10
+        MAX_RETRANSMIT = 4
+        # Sometimes we want to allow the client to send more than one request at a time
+        # e.g. Update and GET.
+        NSTART = 1
+        LIFETIME = 86400
+        BINDING = 'U'
+        BLK_SZ = 1024
+
+        def setUp(self, *args, **kwargs):
+            if 'extra_cmdline_args' not in kwargs:
+                kwargs['extra_cmdline_args'] = []
+
+            kwargs['extra_cmdline_args'] += [
+                '--prefer-same-socket-downloads',
+                '--ack-timeout', str(self.ACK_TIMEOUT),
+                '--max-retransmit', str(self.MAX_RETRANSMIT),
+                '--ack-random-factor', str(1.0),
+                '--nstart', str(self.NSTART)
+            ]
+            kwargs['lifetime'] = self.LIFETIME
+            super().setUp(*args, **kwargs)
+            self.file_server = CoapFileServer(
+                self.serv._coap_server, binding=self.BINDING)
+            self.file_server.set_resource(path=FIRMWARE_PATH,
+                                          data=make_firmware_package(b'a' * self.GARBAGE_SIZE))
+
+        def read_state(self, serv=None):
+            return int(self.read_resource(serv or self.serv,
+                                          oid=OID.FirmwareUpdate,
+                                          iid=0,
+                                          rid=RID.FirmwareUpdate.State).content)
+
+        def read_result(self, serv=None):
+            return int(self.read_resource(serv or self.serv,
+                                          oid=OID.FirmwareUpdate,
+                                          iid=0,
+                                          rid=RID.FirmwareUpdate.UpdateResult).content)
+
+        def start_download(self):
+            self.write_resource(self.serv,
+                                oid=OID.FirmwareUpdate,
+                                iid=0,
+                                rid=RID.FirmwareUpdate.PackageURI,
+                                content=self.file_server.get_resource_uri(FIRMWARE_PATH))
+
+        def handle_get(self, pkt=None):
+            if pkt is None:
+                pkt = self.serv.recv()
+            block2 = pkt.get_options(coap.Option.BLOCK2)
+            if block2:
+                self.assertEqual(block2[0].block_size(), self.BLK_SZ)
+            self.file_server.handle_recvd_request(pkt)
+
+        def num_blocks(self):
+            return (len(
+                self.file_server._resources[FIRMWARE_PATH].data) + self.BLK_SZ - 1) // self.BLK_SZ
+
+
+class FirmwareDownloadSameSocket(SameSocketDownload.Test):
+    def runTest(self):
+        self.start_download()
+
+        for _ in range(self.num_blocks()):
+            pkt = self.serv.recv()
+            self.handle_get(pkt)
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketAndOngoingBlockwiseWrite(
+    SameSocketDownload.Test):
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        self.start_download()
+
+        resource_num_blocks = 10
+        self.assertGreaterEqual(resource_num_blocks, self.num_blocks())
+        for seq_num in range(resource_num_blocks):
+            if seq_num < self.num_blocks():
+                dl_req_get = self.serv.recv()
+
+            has_more = seq_num < resource_num_blocks - 1
+            # Server does blockwise write on the unrelated resource
+            pkt = Lwm2mWrite(ResPath.Test[1].ResRawBytes, b'x' * 16,
+                             format=coap.ContentFormat.APPLICATION_OCTET_STREAM,
+                             options=[coap.Option.BLOCK1(seq_num, has_more, 16)])
+            self.serv.send(pkt)
+            if has_more:
+                self.assertMsgEqual(
+                    Lwm2mContinue.matching(pkt)(), self.serv.recv())
+            else:
+                self.assertMsgEqual(
+                    Lwm2mChanged.matching(pkt)(), self.serv.recv())
+
+            if seq_num < self.num_blocks():
+                # Client waits for next chunk of Raw Bytes, but gets firmware
+                # block instead
+                self.handle_get(dl_req_get)
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketAndOngoingBlockwiseRead(
+    SameSocketDownload.Test):
+    BYTES = 160
+
+    def runTest(self):
+        self.create_instance(self.serv, oid=OID.Test, iid=1)
+        self.write_resource(self.serv, oid=OID.Test, iid=1, rid=RID.Test.ResBytesSize,
+                            content=bytes(str(self.BYTES), 'ascii'))
+        self.start_download()
+
+        block_size = 16
+        self.assertGreaterEqual(self.BYTES // block_size, self.num_blocks())
+        for seq_num in range(self.BYTES // block_size):
+            if seq_num < self.num_blocks():
+                dl_req_get = self.serv.recv()
+
+            # Server does blockwise write on the unrelated resource
+            pkt = Lwm2mRead(ResPath.Test[1].ResBytes,
+                            accept=coap.ContentFormat.APPLICATION_OCTET_STREAM,
+                            options=[coap.Option.BLOCK2(seq_num, 0, block_size)])
+            self.serv.send(pkt)
+            res = self.serv.recv()
+            self.assertEqual(pkt.msg_id, res.msg_id)
+            self.assertTrue(len(res.get_options(coap.Option.BLOCK2)) > 0)
+
+            if seq_num < self.num_blocks():
+                # Client waits for next chunk of Raw Bytes, but gets firmware
+                # block instead
+                self.handle_get(dl_req_get)
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketUpdateDuringDownloadNstart2(
+    SameSocketDownload.Test):
+    NSTART = 2
+
+    def runTest(self):
+        self.start_download()
+
+        for _ in range(self.num_blocks()):
+            dl_req_get = self.serv.recv()
+            # rather than responding to a request, force Update
+            self.communicate('send-update')
+            self.assertDemoUpdatesRegistration(timeout_s=5)
+            # and only then respond with next block
+            self.handle_get(dl_req_get)
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketUpdateDuringDownloadNstart1(
+    SameSocketDownload.Test):
+    def runTest(self):
+        self.start_download()
+
+        for _ in range(self.num_blocks()):
+            dl_req_get = self.serv.recv()
+            # rather than responding to a request, force Update
+            self.communicate('send-update')
+            # the Update won't be received, because of NSTART=1
+            with self.assertRaises(socket.timeout):
+                self.serv.recv(timeout_s=3)
+            # so we respond to a block
+            self.handle_get(dl_req_get)
+            # and only then the Update arrives
+            self.assertDemoUpdatesRegistration(timeout_s=5)
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketAndReconnectNstart1(SameSocketDownload.Test):
+    def runTest(self):
+        self.start_download()
+
+        for _ in range(self.num_blocks()):
+            # get dl request and ignore it
+            self.serv.recv()
+            # rather than responding to a request force reconnect
+            self.communicate('reconnect')
+            self.serv.reset()
+            # blockwise exchange is canceled, that's why register is sent even
+            # though nstart=1
+            self.assertDemoRegisters()
+            # download request is retried
+            dl_req_get = self.serv.recv()
+            # and finally we respond to a block
+            self.handle_get(dl_req_get)
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketUpdateTimeoutNstart2(SameSocketDownload.Test):
+    NSTART = 2
+    LIFETIME = 5
+    MAX_RETRANSMIT = 1
+    ACK_TIMEOUT = 2
+
+    def runTest(self):
+        time.sleep(self.LIFETIME + 1)
+        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, content=b''),
+                            self.serv.recv())
+        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, content=b''),
+                            self.serv.recv())
+        self.start_download()
+
+        dl_get0_0 = self.serv.recv()
+        dl_get0_1 = self.serv.recv()  # retry
+        self.handle_get(dl_get0_0)
+        self.assertEqual(dl_get0_0.msg_id, dl_get0_1.msg_id)
+        dl_get1_0 = self.serv.recv()
+
+        # lifetime expired, demo re-registers
+        self.assertDemoRegisters(lifetime=self.LIFETIME)
+
+        # this is a retransmission
+        dl_get1_1 = self.serv.recv()
+        self.assertEqual(dl_get1_0.msg_id, dl_get1_1.msg_id)
+        self.handle_get(dl_get1_1)
+        self.handle_get(self.serv.recv())
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketUpdateTimeoutNstart1(SameSocketDownload.Test):
+    LIFETIME = 5
+    MAX_RETRANSMIT = 1
+    ACK_TIMEOUT = 2
+
+    def runTest(self):
+        time.sleep(self.LIFETIME + 1)
+        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, content=b''),
+                            self.serv.recv())
+        self.assertMsgEqual(Lwm2mUpdate(self.DEFAULT_REGISTER_ENDPOINT, content=b''),
+                            self.serv.recv())
+        self.start_download()
+
+        # registration temporarily held due to ongoing download
+        self.handle_get(self.serv.recv())
+        # and only after handling the GET, it can be sent finally
+        self.assertDemoRegisters(lifetime=self.LIFETIME)
+        self.handle_get(self.serv.recv())
+        self.handle_get(self.serv.recv())
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketDontCare(SameSocketDownload.Test):
+    def runTest(self):
+        self.start_download()
+        self.serv.recv()  # recv GET and ignore it
+
+
+class FirmwareDownloadSameSocketSuspendDueToOffline(SameSocketDownload.Test):
+    ACK_TIMEOUT = 1.5
+
+    def runTest(self):
+        self.start_download()
+        self.serv.recv()  # ignore first GET
+        self.communicate('enter-offline')
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=2 * self.ACK_TIMEOUT)
+        self.communicate('exit-offline')
+        self.assertDemoRegisters()
+
+        for _ in range(self.num_blocks()):
+            self.handle_get(self.serv.recv())
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketSuspendDueToOfflineDuringUpdate(
+    SameSocketDownload.Test):
+    ACK_TIMEOUT = 1.5
+
+    def runTest(self):
+        self.start_download()
+        self.serv.recv()  # ignore first GET
+        self.communicate('send-update', match_regex=re.escape('Update sent'))
+        # actual Update message will not arrive due to NSTART
+        with self.serv.fake_close():
+            self.communicate('enter-offline')
+            self.wait_until_socket_count(expected=0, timeout_s=5)
+        self.communicate('exit-offline')
+        self.assertDemoRegisters()
+
+        for _ in range(self.num_blocks()):
+            self.handle_get(self.serv.recv())
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketSuspendDueToOfflineDuringUpdateNoMessagesCheck(
+    SameSocketDownload.Test):
+    ACK_TIMEOUT = 1.5
+
+    def runTest(self):
+        # Note: This test is almost identical to the one above, but does not close the socket
+        # during the offline period. This is to check that the client does not attempt to send any
+        # packets during that time. With the bug that triggered the addition of these test cases,
+        # these were two distinct code flow paths.
+
+        self.start_download()
+        self.serv.recv()  # ignore first GET
+        self.communicate('send-update', match_regex=re.escape('Update sent'))
+        # actual Update message will not arrive due to NSTART
+        self.communicate('enter-offline')
+        with self.assertRaises(socket.timeout):
+            self.serv.recv(timeout_s=2 * self.ACK_TIMEOUT)
+        self.communicate('exit-offline')
+        self.assertDemoRegisters()
+
+        for _ in range(self.num_blocks()):
+            self.handle_get(self.serv.recv())
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketAndBootstrap(SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(bootstrap_server=True)
+
+    def tearDown(self):
+        super().tearDown(deregister_servers=[self.new_server])
+
+    def runTest(self):
+        self.start_download()
+        self.serv.recv()  # recv GET and ignore it
+
+        self.execute_resource(self.serv,
+                              oid=OID.Server,
+                              iid=2,
+                              rid=RID.Server.RequestBootstrapTrigger)
+
+        self.assertDemoRequestsBootstrap()
+
+        self.new_server = Lwm2mServer()
+        self.write_resource(self.bootstrap_server,
+                            oid=OID.Security,
+                            iid=2,
+                            rid=RID.Security.ServerURI,
+                            content=bytes('coap://127.0.0.1:%d' % self.new_server.get_listen_port(),
+                                          'ascii'))
+        req = Lwm2mBootstrapFinish()
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mChanged.matching(req)(),
+                            self.bootstrap_server.recv())
+
+        self.assertDemoRegisters(self.new_server)
+        self.assertEqual(self.read_state(self.new_server), UpdateState.IDLE)
+
+
+class FirmwareDownloadSameSocketInterruptedByReboot(FirmwareUpdate.DemoArgsExtractorMixin,
+                                                    SameSocketDownload.Test):
+    def runTest(self):
+        self.start_download()
+
+        for i in range(self.num_blocks()):
+            self.handle_get(self.serv.recv(timeout_s=5))
+            if i == 0:
+                dl_req = self.serv.recv(timeout_s=5)
+                self.demo_process.kill()
+                self.serv.reset()
+                self._start_demo(self.cmdline_args)
+                self.assertDemoRegisters()
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketInterruptedByRebootTwoServers(FirmwareUpdate.DemoArgsExtractorMixin,
+                                                              SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(servers=2, extra_cmdline_args=[
+            '--access-entry', '/%d/0,1,%d' % (OID.FirmwareUpdate,
+                                              AccessMask.OWNER),
+            '--access-entry', '/%d/0,2,%d' % (OID.FirmwareUpdate, AccessMask.OWNER)])
+
+    def runTest(self):
+        assert self.serv == self.servers[0]
+
+        self.start_download()
+        self.handle_get(self.serv.recv(timeout_s=5))
+        dl_req = self.serv.recv(timeout_s=5)
+
+        self.demo_process.kill()
+        self.servers[0].reset()
+        self.servers[1].reset()
+        self._start_demo(self.cmdline_args)
+
+        self.assertDemoRegisters(self.servers[1])
+        # Still not registered with server=0, but the download is "already
+        # started"
+        self.assertEqual(self.read_state(
+            self.servers[1]), UpdateState.DOWNLOADING)
+        self.assertDemoRegisters(self.servers[0])
+
+        for _ in range(self.num_blocks() - 1):
+            self.handle_get(self.serv.recv(timeout_s=5))
+
+        self.assertEqual(self.read_state(), UpdateState.DOWNLOADED)
+
+
+class FirmwareDownloadSameSocketInterruptedByRebootTwoServersFail(
+    FirmwareUpdate.DemoArgsExtractorMixin,
+    SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(servers=2, extra_cmdline_args=[
+            '--access-entry', '/%d/0,1,%d' % (OID.FirmwareUpdate,
+                                              AccessMask.OWNER),
+            '--access-entry', '/%d/0,2,%d' % (OID.FirmwareUpdate, AccessMask.OWNER)])
+
+    def runTest(self):
+        assert self.serv == self.servers[0]
+
+        self.start_download()
+        self.handle_get(self.serv.recv(timeout_s=5))
+        dl_req = self.serv.recv(timeout_s=5)
+
+        self.demo_process.kill()
+        self.servers[0].reset()
+        self.servers[1].reset()
+        self._start_demo(self.cmdline_args)
+
+        self.assertDemoRegisters(self.servers[1])
+        # Still not registered with server=0, but the download is "already
+        # started"
+        self.assertEqual(self.read_state(
+            self.servers[1]), UpdateState.DOWNLOADING)
+
+        # After 5 min, should stop trying.
+        self.advance_demo_time(5 * 60 + 1)
+        # Anjay checks server state every 1 second or so let's have some leeway
+        time.sleep(3)
+
+        self.assertEqual(self.read_result(
+            self.servers[1]), UpdateResult.CONNECTION_LOST)
+        self.assertEqual(self.read_state(self.servers[1]), UpdateState.IDLE)
+
+    def tearDown(self):
+        super().tearDown(deregister_servers=[self.servers[1]])
+
+
+class FirmwareDownloadSameSocketInterruptedByRebootTwoServersCancel(
+    FirmwareUpdate.DemoArgsExtractorMixin,
+    SameSocketDownload.Test):
+    def setUp(self):
+        super().setUp(servers=2, extra_cmdline_args=[
+            '--access-entry', '/%d/0,1,%d' % (OID.FirmwareUpdate,
+                                              AccessMask.OWNER),
+            '--access-entry', '/%d/0,2,%d' % (OID.FirmwareUpdate, AccessMask.OWNER)])
+
+    def runTest(self):
+        assert self.serv == self.servers[0]
+
+        self.start_download()
+        self.handle_get(self.serv.recv(timeout_s=5))
+        dl_req = self.serv.recv(timeout_s=5)
+
+        self.demo_process.kill()
+        self.servers[0].reset()
+        self.servers[1].reset()
+        self._start_demo(self.cmdline_args)
+
+        self.assertDemoRegisters(self.servers[1])
+        # Still not registered with server=0, but the download is "already
+        # started"
+        self.assertEqual(self.read_state(
+            self.servers[1]), UpdateState.DOWNLOADING)
+
+        self.write_resource(self.servers[1],
+                            oid=OID.FirmwareUpdate,
+                            iid=0,
+                            rid=RID.FirmwareUpdate.Package,
+                            content=b'\x00',
+                            format=coap.ContentFormat.APPLICATION_OCTET_STREAM)
+
+        self.assertEqual(self.read_result(
+            self.servers[1]), UpdateResult.INITIAL)
+        self.assertEqual(self.read_state(self.servers[1]), UpdateState.IDLE)
+        self.assertDemoRegisters(self.servers[0])

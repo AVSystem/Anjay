@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Networking API
 ==============
@@ -113,8 +106,8 @@ If POSIX socket API is not available:
 
   - ``_avs_net_create_tcp_socket`` - only required if the ``fw_update`` module
     should support HTTP/HTTPS transfers, or if support for CoAP over TCP is
-    desired (only available in the commercial version). Otherwise, it can be
-    safely implemented as ``return avs_errno(AVS_ENOTSUP);``.
+    desired. Otherwise, it can be safely implemented as
+    ``return avs_errno(AVS_ENOTSUP);``.
 
     Function signature:
 

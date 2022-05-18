@@ -430,7 +430,7 @@ static const anjay_dm_object_def_t OBJECT_DEF = {
         .transaction_begin = test_transaction_begin,
         .transaction_validate = test_transaction_validate,
         .transaction_commit = test_transaction_commit,
-        .transaction_rollback = test_transaction_rollback
+        .transaction_rollback = test_transaction_rollback,
     }
 };
 

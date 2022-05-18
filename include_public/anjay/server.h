@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_SERVER_H
@@ -43,6 +36,23 @@ typedef struct {
     const char *binding;
     /** Resource: Notification Storing When Disabled or Offline */
     bool notification_storing;
+#ifdef ANJAY_WITH_LWM2M11
+    /** Resource: Bootstrap on Registration Failure. True if not set. */
+    const bool *bootstrap_on_registration_failure;
+    /** Resource: Preferred Transport */
+    char preferred_transport;
+    /** Resource: Mute Send */
+    bool mute_send;
+    /** Resource: Communication Retry Count. NULL if not set. */
+    const uint32_t *communication_retry_count;
+    /** Resource: Communication Retry Timer. NULL if not set. */
+    const uint32_t *communication_retry_timer;
+    /** Resource: Communication Sequence Retry Count. NULL if not set. */
+    const uint32_t *communication_sequence_retry_count;
+    /** Resource: Communication Sequence Delay Timer (in seconds). NULL if not
+     * set. */
+    const uint32_t *communication_sequence_delay_timer;
+#endif // ANJAY_WITH_LWM2M11
 } anjay_server_instance_t;
 
 /**
@@ -143,6 +153,25 @@ bool anjay_server_object_is_modified(anjay_t *anjay);
  * @returns 0 on success, or a negative value in case of error.
  */
 int anjay_server_object_install(anjay_t *anjay);
+
+/**
+ * Sets the Lifetime value for the specified Server Instance ID.
+ *
+ * NOTE: Calling this function MAY trigger sending LwM2M Update message to
+ * an associated LwM2M Server.
+ *
+ * @param anjay     Anjay instance for which the Server Object is installed.
+ * @param iid       Server Object Instance for which the Lifetime shall be
+ *                  altered.
+ * @param lifetime  New value of the Lifetime Resource. MUST BE strictly
+ *                  positive.
+ *
+ * @returns 0 on success, negative value in case of an error. If an error
+ * is returned, the Lifetime value remains unchanged.
+ */
+int anjay_server_object_set_lifetime(anjay_t *anjay,
+                                     anjay_iid_t iid,
+                                     int32_t lifetime);
 
 #ifdef __cplusplus
 }

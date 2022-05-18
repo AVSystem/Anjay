@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -68,66 +61,80 @@ AVS_UNIT_TEST(parse_headers, split_query_string) {
 #undef TEST_SPLIT_QUERY_STRING
 #undef TEST_NULLABLE_STRING_EQUAL
 
-#define TEST_PARSE_ATTRIBUTE_SUCCESS(Key, Value, ExpectedField,       \
-                                     ExpectedHasField, ExpectedValue) \
-    do {                                                              \
-        anjay_request_attributes_t attrs;                             \
-        memset(&attrs, 0, sizeof(attrs));                             \
-        ASSERT_OK(parse_attribute(&attrs, (Key), (Value)));           \
-        ASSERT_EQ(attrs.values.ExpectedField, (ExpectedValue));       \
-        anjay_request_attributes_t expected;                          \
-        memset(&expected, 0, sizeof(expected));                       \
-        expected.ExpectedHasField = true;                             \
-        expected.values.ExpectedField = (ExpectedValue);              \
-        ASSERT_EQ_BYTES_SIZED(&attrs, &expected,                      \
-                              sizeof(anjay_request_attributes_t));    \
+#define PARSE_QUERY_WRAPPED(OutAttrs, OutDepth, Key, Value)               \
+    ({                                                                    \
+        int parse_query_result = parse_query((OutAttrs), (Key), (Value)); \
+        *(OutDepth) = -1;                                                 \
+        parse_query_result;                                               \
+    })
+#define PARSE_QUERIES_WRAPPED(Header, OutAttrs, OutDepth)               \
+    ({                                                                  \
+        int parse_queries_result = parse_queries((Header), (OutAttrs)); \
+        *(OutDepth) = -1;                                               \
+        parse_queries_result;                                           \
+    })
+
+#define TEST_PARSE_ATTRIBUTE_SUCCESS(Key, Value, ExpectedField,         \
+                                     ExpectedHasField, ExpectedValue)   \
+    do {                                                                \
+        anjay_request_attributes_t attrs;                               \
+        int8_t depth = -1;                                              \
+        memset(&attrs, 0, sizeof(attrs));                               \
+        ASSERT_OK(PARSE_QUERY_WRAPPED(&attrs, &depth, (Key), (Value))); \
+        ASSERT_EQ(depth, -1);                                           \
+        ASSERT_EQ(attrs.values.ExpectedField, (ExpectedValue));         \
+        anjay_request_attributes_t expected;                            \
+        memset(&expected, 0, sizeof(expected));                         \
+        expected.ExpectedHasField = true;                               \
+        expected.values.ExpectedField = (ExpectedValue);                \
+        ASSERT_EQ_BYTES_SIZED(&attrs, &expected,                        \
+                              sizeof(anjay_request_attributes_t));      \
     } while (0)
 
-#define TEST_PARSE_ATTRIBUTE_FAIL(Key, Value)                 \
-    do {                                                      \
-        anjay_request_attributes_t attrs;                     \
-        memset(&attrs, 0, sizeof(attrs));                     \
-        ASSERT_FAIL(parse_attribute(&attrs, (Key), (Value))); \
+#define TEST_PARSE_ATTRIBUTE_FAIL(Key, Value)                             \
+    do {                                                                  \
+        anjay_request_attributes_t attrs;                                 \
+        int8_t depth = -1;                                                \
+        memset(&attrs, 0, sizeof(attrs));                                 \
+        ASSERT_FAIL(PARSE_QUERY_WRAPPED(&attrs, &depth, (Key), (Value))); \
     } while (0);
 
 AVS_UNIT_TEST(parse_headers, parse_attribute) {
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", "123", standard.common.min_period,
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", "123", common.min_period,
                                  has_min_period, 123);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", NULL, standard.common.min_period,
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmin", NULL, common.min_period,
                                  has_min_period, -1);
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "123.4");
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "woof");
     TEST_PARSE_ATTRIBUTE_FAIL("pmin", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", "234", standard.common.max_period,
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", "234", common.max_period,
                                  has_max_period, 234);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", NULL, standard.common.max_period,
+    TEST_PARSE_ATTRIBUTE_SUCCESS("pmax", NULL, common.max_period,
                                  has_max_period, -1);
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "234.5");
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "meow");
     TEST_PARSE_ATTRIBUTE_FAIL("pmax", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345", standard.greater_than,
-                                 has_greater_than, 345.0);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345.6", standard.greater_than,
-                                 has_greater_than, 345.6);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", NULL, standard.greater_than,
-                                 has_greater_than, NAN);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345", greater_than, has_greater_than,
+                                 345.0);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", "345.6", greater_than, has_greater_than,
+                                 345.6);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("gt", NULL, greater_than, has_greater_than,
+                                 NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("gt", "tweet");
     TEST_PARSE_ATTRIBUTE_FAIL("gt", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456", standard.less_than, has_less_than,
-                                 456.0);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456.7", standard.less_than,
-                                 has_less_than, 456.7);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", NULL, standard.less_than, has_less_than,
-                                 NAN);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456", less_than, has_less_than, 456.0);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", "456.7", less_than, has_less_than,
+                                 456.7);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("lt", NULL, less_than, has_less_than, NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("lt", "squeak");
     TEST_PARSE_ATTRIBUTE_FAIL("lt", "");
 
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567", standard.step, has_step, 567.0);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567.8", standard.step, has_step, 567.8);
-    TEST_PARSE_ATTRIBUTE_SUCCESS("st", NULL, standard.step, has_step, NAN);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567", step, has_step, 567.0);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", "567.8", step, has_step, 567.8);
+    TEST_PARSE_ATTRIBUTE_SUCCESS("st", NULL, step, has_step, NAN);
     TEST_PARSE_ATTRIBUTE_FAIL("st", "moo");
     TEST_PARSE_ATTRIBUTE_FAIL("st", "");
 
@@ -139,42 +146,51 @@ AVS_UNIT_TEST(parse_headers, parse_attribute) {
 #undef TEST_PARSE_ATTRIBUTE_SUCCESS
 #undef TEST_PARSE_ATTRIBUTE_FAILED
 
-#ifdef WITH_CUSTOM_ATTRIBUTES
-#    define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
-        ASSERT_EQ(actual.custom.data.con, expected.custom.data.con)
-#else // WITH_CUSTOM_ATTRIBUTES
-#    define ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
-#endif // WITH_CUSTOM_ATTRIBUTES
+#ifdef ANJAY_WITH_CON_ATTR
+#    define ASSERT_CON_ATTRIBUTE_VALUES_EQUAL(actual, expected) \
+        ASSERT_EQ(actual.common.con, expected.common.con)
+#else // ANJAY_WITH_CON_ATTR
+#    define ASSERT_CON_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
+#endif // ANJAY_WITH_CON_ATTR
 
-#define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected)                    \
-    do {                                                                   \
-        ASSERT_CUSTOM_ATTRIBUTE_VALUES_EQUAL(actual, expected);            \
-        ASSERT_EQ(actual.standard.common.min_period,                       \
-                  expected.standard.common.min_period);                    \
-        ASSERT_EQ(actual.standard.common.max_period,                       \
-                  expected.standard.common.max_period);                    \
-        ASSERT_EQ(actual.standard.greater_than,                            \
-                  expected.standard.greater_than);                         \
-        ASSERT_EQ(actual.standard.less_than, expected.standard.less_than); \
-        ASSERT_EQ(actual.standard.step, expected.standard.step);           \
+#define ASSERT_LWM2M12_ATTRIBUTE_VALUES_EQUAL(actual, expected) ((void) 0)
+
+#define ASSERT_ATTRIBUTE_VALUES_EQUAL(actual, expected)                  \
+    do {                                                                 \
+        ASSERT_EQ(actual.common.min_period, expected.common.min_period); \
+        ASSERT_EQ(actual.common.max_period, expected.common.max_period); \
+        ASSERT_EQ(actual.common.min_eval_period,                         \
+                  expected.common.min_eval_period);                      \
+        ASSERT_EQ(actual.common.max_eval_period,                         \
+                  expected.common.max_eval_period);                      \
+        ASSERT_EQ(actual.greater_than, expected.greater_than);           \
+        ASSERT_EQ(actual.less_than, expected.less_than);                 \
+        ASSERT_EQ(actual.step, expected.step);                           \
+        ASSERT_CON_ATTRIBUTE_VALUES_EQUAL(actual, expected);             \
+        ASSERT_LWM2M12_ATTRIBUTE_VALUES_EQUAL(actual, expected);         \
     } while (0)
 
-#ifdef WITH_CUSTOM_ATTRIBUTES
-#    define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) \
-        ASSERT_EQ(actual.custom.has_con, expected.custom.has_con)
-#else // WITH_CUSTOM_ATTRIBUTES
-#    define ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
-#endif // WITH_CUSTOM_ATTRIBUTES
+#ifdef ANJAY_WITH_CON_ATTR
+#    define ASSERT_CON_ATTRIBUTE_FLAGS_EQUAL(actual, expected) \
+        ASSERT_EQ(actual.has_con, expected.has_con)
+#else // ANJAY_WITH_CON_ATTR
+#    define ASSERT_CON_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
+#endif // ANJAY_WITH_CON_ATTR
 
-#define ASSERT_ATTRIBUTES_EQUAL(actual, expected)                      \
-    do {                                                               \
-        ASSERT_EQ(actual.has_min_period, expected.has_min_period);     \
-        ASSERT_EQ(actual.has_max_period, expected.has_max_period);     \
-        ASSERT_EQ(actual.has_greater_than, expected.has_greater_than); \
-        ASSERT_EQ(actual.has_less_than, expected.has_less_than);       \
-        ASSERT_EQ(actual.has_step, expected.has_step);                 \
-        ASSERT_CUSTOM_ATTRIBUTE_FLAGS_EQUAL(actual, expected);         \
-        ASSERT_ATTRIBUTE_VALUES_EQUAL(actual.values, expected.values); \
+#define ASSERT_LWM2M12_ATTRIBUTE_FLAGS_EQUAL(actual, expected) ((void) 0)
+
+#define ASSERT_ATTRIBUTES_EQUAL(actual, expected)                            \
+    do {                                                                     \
+        ASSERT_EQ(actual.has_min_period, expected.has_min_period);           \
+        ASSERT_EQ(actual.has_max_period, expected.has_max_period);           \
+        ASSERT_EQ(actual.has_min_eval_period, expected.has_min_eval_period); \
+        ASSERT_EQ(actual.has_max_eval_period, expected.has_max_eval_period); \
+        ASSERT_EQ(actual.has_greater_than, expected.has_greater_than);       \
+        ASSERT_EQ(actual.has_less_than, expected.has_less_than);             \
+        ASSERT_EQ(actual.has_step, expected.has_step);                       \
+        ASSERT_CON_ATTRIBUTE_FLAGS_EQUAL(actual, expected);                  \
+        ASSERT_LWM2M12_ATTRIBUTE_FLAGS_EQUAL(actual, expected);              \
+        ASSERT_ATTRIBUTE_VALUES_EQUAL(actual.values, expected.values);       \
     } while (0)
 
 typedef struct {
@@ -201,98 +217,102 @@ static avs_coap_request_header_t *header_with_string_opts(
 
 AVS_UNIT_TEST(parse_headers, parse_attributes) {
     anjay_request_attributes_t attrs;
+    int8_t depth;
     anjay_request_attributes_t empty_attrs;
     memset(&empty_attrs, 0, sizeof(empty_attrs));
-    empty_attrs.values = ANJAY_DM_INTERNAL_R_ATTRS_EMPTY;
+    empty_attrs.values = ANJAY_DM_R_ATTRIBUTES_EMPTY;
     anjay_request_attributes_t expected_attrs;
     header_with_opts_storage_t header_storage;
 
     // no query-strings
-    ASSERT_OK(parse_attributes(
+    ASSERT_OK(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     NULL),
-            &attrs));
+            &attrs, &depth));
     ASSERT_EQ_BYTES_SIZED(&attrs, &empty_attrs, sizeof(attrs));
+    ASSERT_EQ(depth, -1);
 
     // single query-string
     memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
     expected_attrs.has_min_period = true;
-    expected_attrs.values.standard.common.min_period = 10;
-    ASSERT_OK(parse_attributes(
+    expected_attrs.values.common.min_period = 10;
+    ASSERT_OK(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "pmin=10", NULL),
-            &attrs));
+            &attrs, &depth));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
+    ASSERT_EQ(depth, -1);
 
     // multiple query-strings
     memcpy(&expected_attrs, &empty_attrs, sizeof(expected_attrs));
     expected_attrs.has_min_period = true;
-    expected_attrs.values.standard.common.min_period = 10;
+    expected_attrs.values.common.min_period = 10;
     expected_attrs.has_max_period = true;
-    expected_attrs.values.standard.common.max_period = 20;
-    ASSERT_OK(parse_attributes(
+    expected_attrs.values.common.max_period = 20;
+    ASSERT_OK(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "pmin=10", "pmax=20", NULL),
-            &attrs));
+            &attrs, &depth));
     ASSERT_ATTRIBUTES_EQUAL(attrs, expected_attrs);
+    ASSERT_EQ(depth, -1);
 
     // duplicate options
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "pmin=10", "pmin=20", NULL),
-            &attrs));
+            &attrs, &depth));
 
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "lt=4", "lt=6", NULL),
-            &attrs));
+            &attrs, &depth));
 
     // unrecognized query-string only
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "WhatsTheMeaningOf=Stonehenge", NULL),
-            &attrs));
+            &attrs, &depth));
 
     // unrecognized query-string first
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "WhyDidTheyBuildThe=Stonehenge", "pmax=20",
                                     NULL),
-            &attrs));
+            &attrs, &depth));
 
     // unrecognized query-string last
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "gt=30.5", "AllICanThinkOfIsStonehenge",
                                     NULL),
-            &attrs));
+            &attrs, &depth));
 
     // multiple unrecognized query-strings
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "Stonehenge", "Stonehenge",
                                     "LotsOfStonesInARow", NULL),
-            &attrs));
+            &attrs, &depth));
 
     // single query-string among multiple unrecognized ones
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "TheyWere=25Tons", "EachStoneMyFriend",
                                     "lt=40.5", "ButAmazinglyThey",
                                     "GotThemAllDownInTheSand", NULL),
-            &attrs));
+            &attrs, &depth));
 
     // invalid query-string value
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "st=What'sTheDealWithStonehenge", NULL),
-            &attrs));
+            &attrs, &depth));
 
     // unexpected value
-    ASSERT_FAIL(parse_attributes(
+    ASSERT_FAIL(PARSE_QUERIES_WRAPPED(
             header_with_string_opts(&header_storage, AVS_COAP_OPTION_URI_QUERY,
                                     "YouShouldHaveLeftATinyHint", NULL),
-            &attrs));
+            &attrs, &depth));
 }
 
 #undef ASSERT_ATTRIBUTES_EQUAL
@@ -553,29 +573,36 @@ AVS_UNIT_TEST(queue_mode, change) {
                                          ANJAY_DM_RID_SERVER_BINDING,
                                          ANJAY_ID_INVALID,
                                          ANJAY_MOCK_DM_STRING(0, "dummy"), 0);
-    // SSID will be read afterwards
-    _anjay_mock_dm_expect_list_resources(
-            anjay, &FAKE_SERVER, 1, 0,
-            (const anjay_mock_dm_res_entry_t[]) {
-                    { ANJAY_DM_RID_SERVER_SSID, ANJAY_DM_RES_R,
-                      ANJAY_DM_RES_PRESENT },
-                    { ANJAY_DM_RID_SERVER_LIFETIME, ANJAY_DM_RES_RW,
-                      ANJAY_DM_RES_ABSENT },
-                    { ANJAY_DM_RID_SERVER_DEFAULT_PMIN, ANJAY_DM_RES_RW,
-                      ANJAY_DM_RES_ABSENT },
-                    { ANJAY_DM_RID_SERVER_DEFAULT_PMAX, ANJAY_DM_RES_RW,
-                      ANJAY_DM_RES_ABSENT },
-                    { ANJAY_DM_RID_SERVER_NOTIFICATION_STORING, ANJAY_DM_RES_RW,
-                      ANJAY_DM_RES_ABSENT },
-                    { ANJAY_DM_RID_SERVER_BINDING, ANJAY_DM_RES_RW,
-                      ANJAY_DM_RES_ABSENT },
-                    ANJAY_MOCK_DM_RES_END });
-    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
-                                        ANJAY_DM_RID_SERVER_SSID,
-                                        ANJAY_ID_INVALID, 0,
-                                        ANJAY_MOCK_DM_INT(0, 1));
+    // SSID will be read afterwards, twice (second time for attr_storage)
+    for (size_t i = 0; i < 2; ++i) {
+        if (i == 1) {
+            _anjay_mock_dm_expect_list_instances(
+                    anjay, &FAKE_SERVER, 0,
+                    (const anjay_iid_t[]) { 1, ANJAY_ID_INVALID });
+        }
+        _anjay_mock_dm_expect_list_resources(
+                anjay, &FAKE_SERVER, 1, 0,
+                (const anjay_mock_dm_res_entry_t[]) {
+                        { ANJAY_DM_RID_SERVER_SSID, ANJAY_DM_RES_R,
+                          ANJAY_DM_RES_PRESENT },
+                        { ANJAY_DM_RID_SERVER_LIFETIME, ANJAY_DM_RES_RW,
+                          ANJAY_DM_RES_ABSENT },
+                        { ANJAY_DM_RID_SERVER_DEFAULT_PMIN, ANJAY_DM_RES_RW,
+                          ANJAY_DM_RES_ABSENT },
+                        { ANJAY_DM_RID_SERVER_DEFAULT_PMAX, ANJAY_DM_RES_RW,
+                          ANJAY_DM_RES_ABSENT },
+                        { ANJAY_DM_RID_SERVER_NOTIFICATION_STORING,
+                          ANJAY_DM_RES_RW, ANJAY_DM_RES_ABSENT },
+                        { ANJAY_DM_RID_SERVER_BINDING, ANJAY_DM_RES_RW,
+                          ANJAY_DM_RES_ABSENT },
+                        ANJAY_MOCK_DM_RES_END });
+        _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 1,
+                                            ANJAY_DM_RID_SERVER_SSID,
+                                            ANJAY_ID_INVALID, 0,
+                                            ANJAY_MOCK_DM_INT(0, 1));
+    }
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CHANGED, ID(0xFA3E), NO_PAYLOAD);
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     ASSERT_OK(anjay_serve(anjay, mocksocks[0]));
 
     {
@@ -641,6 +668,25 @@ AVS_UNIT_TEST(queue_mode, change) {
                                         ANJAY_DM_RID_SERVER_BINDING,
                                         ANJAY_ID_INVALID, 0,
                                         ANJAY_MOCK_DM_STRING(0, "UQ"));
+#ifdef ANJAY_WITH_LWM2M11
+    // attempt to read Preferred Transport
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SERVER, 1, 0,
+            (const anjay_mock_dm_res_entry_t[]) {
+                    { ANJAY_DM_RID_SERVER_SSID, ANJAY_DM_RES_R,
+                      ANJAY_DM_RES_PRESENT },
+                    { ANJAY_DM_RID_SERVER_LIFETIME, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT },
+                    { ANJAY_DM_RID_SERVER_DEFAULT_PMIN, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_ABSENT },
+                    { ANJAY_DM_RID_SERVER_DEFAULT_PMAX, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_ABSENT },
+                    { ANJAY_DM_RID_SERVER_NOTIFICATION_STORING, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_ABSENT },
+                    { ANJAY_DM_RID_SERVER_BINDING, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT },
+                    ANJAY_MOCK_DM_RES_END });
+#endif // ANJAY_WITH_LWM2M11
     // query SSID in Security
     _anjay_mock_dm_expect_list_instances(
             anjay, &FAKE_SECURITY2, 0,
@@ -694,6 +740,15 @@ AVS_UNIT_TEST(queue_mode, change) {
     _anjay_mock_dm_expect_resource_read(
             anjay, &FAKE_SECURITY2, 1, ANJAY_DM_RID_SECURITY_SERVER_URI,
             ANJAY_ID_INVALID, 0, ANJAY_MOCK_DM_STRING(0, "coap://127.0.0.1"));
+#ifdef ANJAY_WITH_LWM2M11
+    // get SNI
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SECURITY2, 1, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SECURITY_SNI,
+                                                    ANJAY_DM_RES_R,
+                                                    ANJAY_DM_RES_ABSENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+#endif // ANJAY_WITH_LWM2M11
 
     // data model for the Update message - just fake an empty one
     _anjay_mock_dm_expect_list_instances(
@@ -759,7 +814,7 @@ AVS_UNIT_TEST(queue_mode, change) {
                      NO_PAYLOAD);
     avs_unit_mocksock_input(mocksocks[0], update_response->content,
                             update_response->length);
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     ASSERT_OK(anjay_serve(anjay, mocksocks[0]));
 
     ASSERT_NOT_NULL(connection->queue_mode_close_socket_clb);

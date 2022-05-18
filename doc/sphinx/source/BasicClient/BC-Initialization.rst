@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Anjay initialization
 ====================
@@ -169,7 +162,7 @@ Let's build our minimal client:
 If that succeeds, we can now run it. We need to pass an endpoint name as the
 program's argument - this is not important now, but when we get to the point of
 being able to communicate with a server, this will be a name that the client
-uses to identify itself to the server. Please look ino the :ref:`brief
+uses to identify itself to the server. Please look into the :ref:`brief
 description of LwM2M <clients-and-servers>` for details on recommended formats
 of the endpoint name.
 

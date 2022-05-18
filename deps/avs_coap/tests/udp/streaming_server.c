@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avs_coap_init.h>
@@ -141,7 +134,7 @@ AVS_UNIT_TEST(udp_streaming_server, no_payload) {
 
     expect_recv(&env, request);
     expect_send(&env, response);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -175,7 +168,7 @@ AVS_UNIT_TEST(udp_streaming_server, small_payload) {
 
     expect_recv(&env, request);
     expect_send(&env, response);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -228,7 +221,7 @@ AVS_UNIT_TEST(udp_streaming_server, large_payload) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -262,7 +255,7 @@ AVS_UNIT_TEST(udp_streaming_server, invalid_block1_req) {
 
     expect_recv(&env, request);
     expect_send(&env, response);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
 #        undef REQUEST_PAYLOAD
@@ -346,7 +339,7 @@ AVS_UNIT_TEST(udp_streaming_server, invalid_block2_req) {
 
     expect_recv(&env, request);
     expect_send(&env, response);
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
 #        undef RESPONSE_PAYLOAD
@@ -417,7 +410,7 @@ AVS_UNIT_TEST(udp_streaming_server, invalid_block2_req_after_block1) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -528,7 +521,7 @@ AVS_UNIT_TEST(udp_streaming_server, weird_block_sizes) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -594,7 +587,7 @@ AVS_UNIT_TEST(udp_streaming_server, weird_block_sizes_peek) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -657,7 +650,7 @@ AVS_UNIT_TEST(udp_streaming_server, increasing_block2_size) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -701,7 +694,7 @@ AVS_UNIT_TEST(udp_streaming_server, setup_response_error) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -749,7 +742,7 @@ AVS_UNIT_TEST(udp_streaming_server, large_payload_ignored) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));
@@ -805,7 +798,7 @@ AVS_UNIT_TEST(udp_streaming_server, incorrect_block2_in_block1_request) {
         expect_recv(&env, requests[i]);
         expect_send(&env, responses[i]);
     }
-    expect_timeout(&env);
+    expect_has_buffered_data_check(&env, false);
 
     ASSERT_OK(avs_coap_streaming_handle_incoming_packet(
             env.coap_ctx, streaming_handle_request, &args));

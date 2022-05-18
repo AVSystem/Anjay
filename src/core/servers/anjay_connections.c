@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -23,7 +16,12 @@
 #include <avsystem/commons/avs_stream_membuf.h>
 #include <avsystem/commons/avs_utils.h>
 
-#include <avsystem/coap/udp.h>
+#ifdef WITH_AVS_COAP_UDP
+#    include <avsystem/coap/udp.h>
+#endif // WITH_AVS_COAP_UDP
+#ifdef WITH_AVS_COAP_TCP
+#    include <avsystem/coap/tcp.h>
+#endif // WITH_AVS_COAP_TCP
 
 #define ANJAY_SERVERS_CONNECTION_SOURCE
 #define ANJAY_SERVERS_INTERNALS
@@ -32,6 +30,9 @@
 #include "../anjay_io_core.h"
 #include "../anjay_servers_reload.h"
 #include "../anjay_servers_utils.h"
+#if defined(ANJAY_WITH_DOWNLOADER) && defined(ANJAY_WITH_LWM2M11)
+#    include "../anjay_downloader.h"
+#endif // defined(ANJAY_WITH_DOWNLOADER) && defined(ANJAY_WITH_LWM2M11)
 
 #include "../dm/anjay_query.h"
 
@@ -51,6 +52,14 @@ avs_net_socket_t *_anjay_connection_internal_get_socket(
 
 void _anjay_connection_internal_clean_socket(
         anjay_unlocked_t *anjay, anjay_server_connection_t *connection) {
+#ifdef ANJAY_WITH_DOWNLOADER
+    // This would normally happen as part of _anjay_coap_ctx_cleanup() anyway
+    // (by means of the exchange result callback), but on rare occasions the
+    // download might be being suspended, and deliberately keep existing even
+    // though the exchange is cancelled. So let's abort download manually.
+    _anjay_downloader_abort_same_socket(&anjay->downloader,
+                                        connection->conn_socket_);
+#endif // ANJAY_WITH_DOWNLOADER
     _anjay_coap_ctx_cleanup(anjay, &connection->coap_ctx);
     _anjay_socket_cleanup(anjay, &connection->conn_socket_);
     avs_sched_del(&connection->queue_mode_close_socket_clb);
@@ -111,8 +120,88 @@ static int read_security_info_ret_bytes_append(
     return 0;
 }
 
+#if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+static int read_security_info_ret_security_info(
+        anjay_unlocked_output_ctx_t *ctx_,
+        const avs_crypto_security_info_union_t *info) {
+    read_security_info_ctx_t *ctx = (read_security_info_ctx_t *) ctx_;
+    if (ctx->out_array) {
+        anjay_log(ERROR, _("value already returned"));
+        return -1;
+    }
+    if (info->type != ctx->tag) {
+        anjay_log(ERROR, _("wrong type of security info passed"));
+        return -1;
+    }
+    switch (ctx->tag) {
+    case AVS_CRYPTO_SECURITY_INFO_CERTIFICATE_CHAIN:
+        if (avs_is_err(avs_crypto_certificate_chain_info_copy_as_array(
+                    (avs_crypto_certificate_chain_info_t **) &ctx->out_array,
+                    &ctx->out_element_count,
+                    (const avs_crypto_certificate_chain_info_t) {
+                        .desc = *info
+                    }))) {
+            assert(!ctx->out_array);
+            assert(!ctx->out_element_count);
+            return -1;
+        } else {
+            assert(ctx->out_array || !ctx->out_element_count);
+            return 0;
+        }
+    case AVS_CRYPTO_SECURITY_INFO_PRIVATE_KEY:
+        if (avs_is_err(avs_crypto_private_key_info_copy(
+                    (avs_crypto_private_key_info_t **) &ctx->out_array,
+                    (const avs_crypto_private_key_info_t) {
+                        .desc = *info
+                    }))) {
+            assert(!ctx->out_array);
+            return -1;
+        } else {
+            assert(ctx->out_array);
+            ctx->out_element_count = 1;
+            return 0;
+        }
+    case AVS_CRYPTO_SECURITY_INFO_PSK_IDENTITY:
+        if (avs_is_err(avs_crypto_psk_identity_info_copy(
+                    (avs_crypto_psk_identity_info_t **) &ctx->out_array,
+                    (const avs_crypto_psk_identity_info_t) {
+                        .desc = *info
+                    }))) {
+            assert(!ctx->out_array);
+            return -1;
+        } else {
+            assert(ctx->out_array);
+            ctx->out_element_count = 1;
+            return 0;
+        }
+    case AVS_CRYPTO_SECURITY_INFO_PSK_KEY:
+        if (avs_is_err(avs_crypto_psk_key_info_copy(
+                    (avs_crypto_psk_key_info_t **) &ctx->out_array,
+                    (const avs_crypto_psk_key_info_t) {
+                        .desc = *info
+                    }))) {
+            assert(!ctx->out_array);
+            return -1;
+        } else {
+            assert(ctx->out_array);
+            ctx->out_element_count = 1;
+            return 0;
+        }
+    default:
+        AVS_UNREACHABLE("invalid tag");
+        return -1;
+    }
+}
+#endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+          defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
+
 static const anjay_output_ctx_vtable_t READ_SECURITY_INFO_VTABLE = {
     .bytes_begin = read_security_info_ret_bytes_begin
+#if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+    ,
+    .security_info = read_security_info_ret_security_info
+#endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+          defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
 };
 
 static const anjay_ret_bytes_ctx_vtable_t READ_SECURITY_INFO_BYTES_VTABLE = {
@@ -164,7 +253,7 @@ _anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
     avs_error_t err;
     size_t element_count = 0;
 
-    avs_net_generic_psk_info_t psk_info;
+    avs_net_psk_info_t psk_info;
     memset(&psk_info, 0, sizeof(psk_info));
 
     AVS_STATIC_ASSERT(sizeof(*cache->psk_key)
@@ -195,7 +284,7 @@ _anjay_connection_init_psk_security(anjay_unlocked_t *anjay,
     assert(element_count == 1);
     psk_info.identity = *cache->psk_identity;
 
-    *security = avs_net_security_info_from_generic_psk(psk_info);
+    *security = avs_net_security_info_from_psk(psk_info);
     return AVS_OK;
 }
 
@@ -206,6 +295,10 @@ get_connection_type_def(anjay_socket_transport_t type) {
     case ANJAY_SOCKET_TRANSPORT_UDP:
         return &ANJAY_CONNECTION_DEF_UDP;
 #endif // WITH_AVS_COAP_UDP
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    case ANJAY_SOCKET_TRANSPORT_TCP:
+        return &ANJAY_CONNECTION_DEF_TCP;
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
     default:
         return NULL;
     }
@@ -220,7 +313,6 @@ avs_error_t _anjay_server_connection_internal_bring_online(
             _anjay_connection_get(&server->connections, conn_type);
     assert(connection);
     assert(connection->conn_socket_);
-    assert(!connection->queue_mode_close_socket_clb);
 
     const anjay_connection_type_definition_t *def =
             get_connection_type_def(connection->transport);
@@ -394,7 +486,12 @@ static bool should_primary_connection_be_online(anjay_server_info_t *server) {
            // if queue mode is not enabled, server shall always be online
            || !server->registration_info.queue_mode
            // if there are notifications to be sent, we need to send them
-           || _anjay_observe_needs_flushing(ref);
+           || _anjay_observe_needs_flushing(ref)
+#ifdef ANJAY_WITH_SEND
+           // if there are Send messages to be sent, we need to send them
+           || _anjay_send_has_deferred(server->anjay, server->ssid)
+#endif // ANJAY_WITH_SEND
+            ;
 }
 
 static avs_error_t refresh_connection(anjay_server_info_t *server,
@@ -525,11 +622,41 @@ avs_error_t _anjay_get_security_config(anjay_unlocked_t *anjay,
     return err;
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+void _anjay_server_update_last_ssl_alert_code(const anjay_server_info_t *info,
+                                              uint8_t level,
+                                              uint8_t description) {
+    (void) level;
+
+    if (info->ssid == ANJAY_SSID_BOOTSTRAP) {
+        // This operation does not make sense for Bootstrap Server, because it
+        // has no Server Instance.
+        return;
+    }
+
+    anjay_iid_t server_iid;
+    if (_anjay_find_server_iid(info->anjay, info->ssid, &server_iid)) {
+        anjay_log(
+                DEBUG,
+                _("could not find Server Instance associated with SSID ") "%u",
+                (unsigned) info->ssid);
+        return;
+    }
+
+    anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, server_iid,
+                               ANJAY_DM_RID_SERVER_TLS_DTLS_ALERT_CODE);
+
+    (void) _anjay_dm_write_resource_u64(info->anjay, path, description, NULL);
+}
+#endif // ANJAY_WITH_LWM2M11
+
 bool _anjay_socket_transport_supported(anjay_unlocked_t *anjay,
                                        anjay_socket_transport_t type) {
     if (get_connection_type_def(type) == NULL) {
         return false;
     }
+
     (void) anjay;
     return true;
 }

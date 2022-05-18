@@ -2,18 +2,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import argparse
 import datetime
@@ -27,7 +20,8 @@ from collections import defaultdict
 
 import requests
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+PROJECT_ROOT = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '..', '..'))
 HTTP_STATUS_OK = 200
 FILE_EXTENSION = '.rst'
 REGEX = r'<(http.*?)>`_'
@@ -72,11 +66,13 @@ def is_url_valid(url, attempt=1, max_attempts=5):
     elif url.startswith(PUBLIC_REPO_TREE_PREFIX):
         return os.path.isdir(os.path.join(PROJECT_ROOT, url[len(PUBLIC_REPO_TREE_PREFIX):]))
     if any(pattern in url for pattern in IGNORED_PATTERNS):
-        logging.warning('URL %s not checked due to ANJAY_DOC_CHECK_WHITELIST' % (url,))
+        logging.warning(
+            'URL %s not checked due to ANJAY_DOC_CHECK_WHITELIST' % (url,))
         return True
 
     if attempt > max_attempts:
-        logging.error('URL %s could not be reached %d times. Giving up.' % (url, max_attempts))
+        logging.error(
+            'URL %s could not be reached %d times. Giving up.' % (url, max_attempts))
         logging.error(('If you believe this is a problem on the remote site, you can set the '
                        + 'ANJAY_DOC_CHECK_WHITELIST=%s=%s environment variable to ignore this '
                        + 'error for today.')
@@ -87,7 +83,9 @@ def is_url_valid(url, attempt=1, max_attempts=5):
     status = None
     exception = None
     try:
-        status = requests.head(url, allow_redirects=True, timeout=10)
+        # The browser is just copied from Stack, some websites needs it
+        status = requests.head(url, allow_redirects=True, timeout=10, headers={
+                               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     except:
         exception = sys.exc_info()[0]
 

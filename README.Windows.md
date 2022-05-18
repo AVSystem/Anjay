@@ -9,7 +9,7 @@ Anjay is currently not supported or regularly tested (which means that builds ma
 - Building as a shared library (DLL) is not currently supported
 - IP Ping object is not available in the demo application
 - Testing frameworks are not supported
-- SMS binding is not supported (applicable to commercial version only)
+- SMS binding (available as a commercial feature) is not supported
 
 ## Prerequisites
 

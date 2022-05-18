@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include "../demo.h"
@@ -44,11 +37,23 @@
 #define TEST_RES_OBJLNK 16
 #define TEST_RES_BYTES_ZERO_BEGIN 17
 #define TEST_RES_DOUBLE 18
+#ifdef ANJAY_WITH_LWM2M11
+#    define TEST_RES_UINT 19
+#    define TEST_RES_ULONG 20
+#endif // ANJAY_WITH_LWM2M11
+#define TEST_RES_TOGGLE_BOOL 21
+#define TEST_RES_BOOL_ARRAY 22
+#define TEST_RES_INIT_BOOL_ARRAY 23
 
-typedef struct test_array_entry_struct {
+typedef struct test_int_array_entry_struct {
     anjay_riid_t index;
     int32_t value;
-} test_array_entry_t;
+} test_int_array_entry_t;
+
+typedef struct test_bool_array_entry_struct {
+    anjay_riid_t index;
+    bool value;
+} test_bool_array_entry_t;
 
 typedef struct {
     int number;
@@ -65,11 +70,13 @@ typedef struct test_instance_struct {
     bool bytes_zero_begin;
     void *raw_bytes;
     size_t raw_bytes_size;
-    AVS_LIST(test_array_entry_t) array;
+    AVS_LIST(test_int_array_entry_t) int_array;
     AVS_LIST(test_exec_arg_t) last_exec_args;
     int32_t test_res_int;
+#ifdef ANJAY_WITH_LWM2M11
     uint32_t test_res_uint;
     uint64_t test_res_ulong;
+#endif // ANJAY_WITH_LWM2M11
     bool test_res_bool;
     float test_res_float;
     double test_res_double;
@@ -78,6 +85,7 @@ typedef struct test_instance_struct {
         anjay_oid_t oid;
         anjay_iid_t iid;
     } test_res_objlnk;
+    AVS_LIST(test_bool_array_entry_t) bool_array;
 } test_instance_t;
 
 typedef struct {
@@ -150,7 +158,8 @@ static void release_instance(test_instance_t *inst) {
     }
 
     avs_free(inst->raw_bytes);
-    AVS_LIST_CLEAR(&inst->array);
+    AVS_LIST_CLEAR(&inst->int_array);
+    AVS_LIST_CLEAR(&inst->bool_array);
 }
 
 static int test_instance_remove(anjay_t *anjay,
@@ -226,6 +235,18 @@ static int test_list_resources(anjay_t *anjay,
                       ANJAY_DM_RES_PRESENT);
     anjay_dm_emit_res(ctx, TEST_RES_DOUBLE, ANJAY_DM_RES_RW,
                       ANJAY_DM_RES_PRESENT);
+#ifdef ANJAY_WITH_LWM2M11
+    anjay_dm_emit_res(ctx, TEST_RES_UINT, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, TEST_RES_ULONG, ANJAY_DM_RES_RW,
+                      ANJAY_DM_RES_PRESENT);
+#endif // ANJAY_WITH_LWM2M11
+    anjay_dm_emit_res(ctx, TEST_RES_TOGGLE_BOOL, ANJAY_DM_RES_E,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, TEST_RES_BOOL_ARRAY, ANJAY_DM_RES_RWM,
+                      ANJAY_DM_RES_PRESENT);
+    anjay_dm_emit_res(ctx, TEST_RES_INIT_BOOL_ARRAY, ANJAY_DM_RES_E,
+                      ANJAY_DM_RES_PRESENT);
     return 0;
 }
 
@@ -249,8 +270,8 @@ static int test_resource_read(anjay_t *anjay,
         assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i32(ctx, (int32_t) inst->execute_counter);
     case TEST_RES_INT_ARRAY: {
-        test_array_entry_t *it;
-        AVS_LIST_FOREACH(it, inst->array) {
+        test_int_array_entry_t *it;
+        AVS_LIST_FOREACH(it, inst->int_array) {
             if (it->index == riid) {
                 return anjay_ret_i32(ctx, it->value);
             }
@@ -321,8 +342,8 @@ static int test_resource_read(anjay_t *anjay,
         assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i32(ctx, inst->bytes_burst);
     case TEST_RES_OPAQUE_ARRAY: {
-        test_array_entry_t *it;
-        AVS_LIST_FOREACH(it, inst->array) {
+        test_int_array_entry_t *it;
+        AVS_LIST_FOREACH(it, inst->int_array) {
             if (it->index == riid) {
                 break;
             }
@@ -336,6 +357,14 @@ static int test_resource_read(anjay_t *anjay,
     case TEST_RES_INT:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_i32(ctx, inst->test_res_int);
+#ifdef ANJAY_WITH_LWM2M11
+    case TEST_RES_UINT:
+        assert(riid == ANJAY_ID_INVALID);
+        return anjay_ret_u32(ctx, inst->test_res_uint);
+    case TEST_RES_ULONG:
+        assert(riid == ANJAY_ID_INVALID);
+        return anjay_ret_u64(ctx, inst->test_res_ulong);
+#endif // ANJAY_WITH_LWM2M11
     case TEST_RES_BOOL:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_bool(ctx, inst->test_res_bool);
@@ -355,6 +384,15 @@ static int test_resource_read(anjay_t *anjay,
     case TEST_RES_BYTES_ZERO_BEGIN:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_ret_bool(ctx, inst->bytes_zero_begin);
+    case TEST_RES_BOOL_ARRAY: {
+        test_bool_array_entry_t *it;
+        AVS_LIST_FOREACH(it, inst->bool_array) {
+            if (it->index == riid) {
+                return anjay_ret_bool(ctx, it->value);
+            }
+        }
+        return ANJAY_ERR_NOT_FOUND;
+    }
     default:
         AVS_UNREACHABLE("Read called on unknown or non-readable resource");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
@@ -362,9 +400,9 @@ static int test_resource_read(anjay_t *anjay,
 }
 
 static int
-test_resource_write_to_array(AVS_LIST(test_array_entry_t) *inst_array,
-                             anjay_riid_t riid,
-                             anjay_input_ctx_t *ctx) {
+test_resource_write_to_int_array(AVS_LIST(test_int_array_entry_t) *inst_array,
+                                 anjay_riid_t riid,
+                                 anjay_input_ctx_t *ctx) {
     assert(inst_array);
     assert(ctx);
     int32_t value;
@@ -376,7 +414,7 @@ test_resource_write_to_array(AVS_LIST(test_array_entry_t) *inst_array,
         return ANJAY_ERR_INTERNAL;
     }
     bool value_updated = false;
-    AVS_LIST(test_array_entry_t) *it;
+    AVS_LIST(test_int_array_entry_t) *it;
     AVS_LIST_FOREACH_PTR(it, inst_array) {
         if ((*it)->index >= riid) {
             if ((*it)->index == riid) {
@@ -388,8 +426,48 @@ test_resource_write_to_array(AVS_LIST(test_array_entry_t) *inst_array,
     }
 
     if (!value_updated) {
-        AVS_LIST(test_array_entry_t) list_entry =
-                AVS_LIST_NEW_ELEMENT(test_array_entry_t);
+        AVS_LIST(test_int_array_entry_t) list_entry =
+                AVS_LIST_NEW_ELEMENT(test_int_array_entry_t);
+        if (!list_entry) {
+            demo_log(ERROR, "out of memory");
+            return ANJAY_ERR_INTERNAL;
+        }
+        list_entry->index = riid;
+        list_entry->value = value;
+        AVS_LIST_INSERT(it, list_entry);
+    }
+    return 0;
+}
+
+static int
+test_resource_write_to_bool_array(AVS_LIST(test_bool_array_entry_t) *inst_array,
+                                  anjay_riid_t riid,
+                                  anjay_input_ctx_t *ctx) {
+    assert(inst_array);
+    assert(ctx);
+    bool value;
+
+    /* New element will be inserted to the array, value of existing one will get
+     * overwritten. */
+    if (anjay_get_bool(ctx, &value)) {
+        demo_log(ERROR, "could not read bool");
+        return ANJAY_ERR_INTERNAL;
+    }
+    bool value_updated = false;
+    AVS_LIST(test_bool_array_entry_t) *it;
+    AVS_LIST_FOREACH_PTR(it, inst_array) {
+        if ((*it)->index >= riid) {
+            if ((*it)->index == riid) {
+                (*it)->value = value;
+                value_updated = true;
+            }
+            break;
+        }
+    }
+
+    if (!value_updated) {
+        AVS_LIST(test_bool_array_entry_t) list_entry =
+                AVS_LIST_NEW_ELEMENT(test_bool_array_entry_t);
         if (!list_entry) {
             demo_log(ERROR, "out of memory");
             return ANJAY_ERR_INTERNAL;
@@ -418,7 +496,7 @@ static int test_resource_write(anjay_t *anjay,
         assert(riid == ANJAY_ID_INVALID);
         return anjay_get_i32(ctx, &inst->execute_counter);
     case TEST_RES_INT_ARRAY:
-        return test_resource_write_to_array(&inst->array, riid, ctx);
+        return test_resource_write_to_int_array(&inst->int_array, riid, ctx);
     case TEST_RES_BYTES_SIZE: {
         assert(riid == ANJAY_ID_INVALID);
         int32_t value;
@@ -452,6 +530,14 @@ static int test_resource_write(anjay_t *anjay,
     case TEST_RES_INT:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_get_i32(ctx, &inst->test_res_int);
+#ifdef ANJAY_WITH_LWM2M11
+    case TEST_RES_UINT:
+        assert(riid == ANJAY_ID_INVALID);
+        return anjay_get_u32(ctx, &inst->test_res_uint);
+    case TEST_RES_ULONG:
+        assert(riid == ANJAY_ID_INVALID);
+        return anjay_get_u64(ctx, &inst->test_res_ulong);
+#endif // ANJAY_WITH_LWM2M11
     case TEST_RES_BOOL:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_get_bool(ctx, &inst->test_res_bool);
@@ -472,6 +558,8 @@ static int test_resource_write(anjay_t *anjay,
     case TEST_RES_BYTES_ZERO_BEGIN:
         assert(riid == ANJAY_ID_INVALID);
         return anjay_get_bool(ctx, &inst->bytes_zero_begin);
+    case TEST_RES_BOOL_ARRAY:
+        return test_resource_write_to_bool_array(&inst->bool_array, riid, ctx);
     default:
         // Bootstrap Server may try to write to other resources,
         // so no AVS_UNREACHABLE() here
@@ -583,7 +671,7 @@ static int read_exec_args(anjay_execute_ctx_t *arg_ctx,
     return result;
 }
 
-static int init_int_array_read_element(test_array_entry_t *out_entry,
+static int init_int_array_read_element(test_int_array_entry_t *out_entry,
                                        anjay_execute_ctx_t *arg_ctx) {
     int arg_number;
     bool has_value;
@@ -613,14 +701,44 @@ static int init_int_array_read_element(test_array_entry_t *out_entry,
     return 0;
 }
 
-static int init_int_array(AVS_LIST(test_array_entry_t) *out_array,
+static int init_bool_array_read_element(test_bool_array_entry_t *out_entry,
+                                        anjay_execute_ctx_t *arg_ctx) {
+    int arg_number;
+    bool has_value;
+
+    int result = anjay_execute_get_next_arg(arg_ctx, &arg_number, &has_value);
+    if (result) {
+        return result;
+    }
+
+    char value_buf[16];
+    if ((result = anjay_execute_get_arg_value(arg_ctx, NULL, value_buf,
+                                              sizeof(value_buf)))
+            < 0) {
+        return result;
+    }
+
+    long value;
+    if (demo_parse_long(value_buf, &value) || value < INT32_MIN
+            || value > INT32_MAX) {
+        demo_log(WARNING, "invalid resource %d value", arg_number);
+        return ANJAY_ERR_BAD_REQUEST;
+    }
+
+    assert(0 <= arg_number && arg_number <= UINT16_MAX);
+    out_entry->index = (anjay_riid_t) arg_number;
+    out_entry->value = (bool) value;
+    return 0;
+}
+
+static int init_int_array(AVS_LIST(test_int_array_entry_t) *out_array,
                           anjay_execute_ctx_t *arg_ctx) {
-    AVS_LIST(test_array_entry_t) new_array = NULL;
+    AVS_LIST(test_int_array_entry_t) new_array = NULL;
 
     int result = 0;
     while (!result) {
-        AVS_LIST(test_array_entry_t) list_entry =
-                AVS_LIST_NEW_ELEMENT(test_array_entry_t);
+        AVS_LIST(test_int_array_entry_t) list_entry =
+                AVS_LIST_NEW_ELEMENT(test_int_array_entry_t);
         if (!list_entry) {
             demo_log(ERROR, "out of memory");
             result = ANJAY_ERR_INTERNAL;
@@ -628,7 +746,40 @@ static int init_int_array(AVS_LIST(test_array_entry_t) *out_array,
                             init_int_array_read_element(list_entry, arg_ctx))) {
             AVS_LIST_DELETE(&list_entry);
         } else {
-            AVS_LIST(test_array_entry_t) *insert_ptr = &new_array;
+            AVS_LIST(test_int_array_entry_t) *insert_ptr = &new_array;
+            while (*insert_ptr && (*insert_ptr)->index < list_entry->index) {
+                AVS_LIST_ADVANCE_PTR(&insert_ptr);
+            }
+            AVS_LIST_INSERT(insert_ptr, list_entry);
+        }
+    }
+
+    if (result != ANJAY_EXECUTE_GET_ARG_END) {
+        AVS_LIST_CLEAR(&new_array);
+        return result;
+    }
+
+    AVS_LIST_CLEAR(out_array);
+    *out_array = new_array;
+    return 0;
+}
+
+static int init_bool_array(AVS_LIST(test_bool_array_entry_t) *out_array,
+                           anjay_execute_ctx_t *arg_ctx) {
+    AVS_LIST(test_bool_array_entry_t) new_array = NULL;
+
+    int result = 0;
+    while (!result) {
+        AVS_LIST(test_bool_array_entry_t) list_entry =
+                AVS_LIST_NEW_ELEMENT(test_bool_array_entry_t);
+        if (!list_entry) {
+            demo_log(ERROR, "out of memory");
+            result = ANJAY_ERR_INTERNAL;
+        } else if ((result = init_bool_array_read_element(list_entry,
+                                                          arg_ctx))) {
+            AVS_LIST_DELETE(&list_entry);
+        } else {
+            AVS_LIST(test_bool_array_entry_t) *insert_ptr = &new_array;
             while (*insert_ptr && (*insert_ptr)->index < list_entry->index) {
                 AVS_LIST_ADVANCE_PTR(&insert_ptr);
             }
@@ -672,7 +823,7 @@ static int test_resource_execute(anjay_t *anjay,
         return 0;
     }
     case TEST_RES_INIT_INT_ARRAY: {
-        int result = init_int_array(&inst->array, arg_ctx);
+        int result = init_int_array(&inst->int_array, arg_ctx);
         if (result) {
             return result;
         }
@@ -680,6 +831,25 @@ static int test_resource_execute(anjay_t *anjay,
         anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, TEST_RES_INT_ARRAY);
         anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
                              TEST_RES_OPAQUE_ARRAY);
+        return 0;
+    }
+    case TEST_RES_TOGGLE_BOOL:
+        inst->test_res_bool = !inst->test_res_bool;
+        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, TEST_RES_BOOL);
+
+        if (inst->bool_array) {
+            inst->bool_array->value = !inst->bool_array->value;
+            anjay_notify_changed(anjay, (*obj_ptr)->oid, iid,
+                                 TEST_RES_BOOL_ARRAY);
+        }
+        return 0;
+    case TEST_RES_INIT_BOOL_ARRAY: {
+        int result = init_bool_array(&inst->bool_array, arg_ctx);
+        if (result) {
+            return result;
+        }
+
+        anjay_notify_changed(anjay, (*obj_ptr)->oid, iid, TEST_RES_BOOL_ARRAY);
         return 0;
     }
     default:
@@ -699,8 +869,18 @@ static int test_resource_reset(anjay_t *anjay,
     test_instance_t *inst = find_instance(test, iid);
     assert(inst);
 
-    assert(rid == TEST_RES_INT_ARRAY);
-    AVS_LIST_CLEAR(&inst->array);
+    switch (rid) {
+    case TEST_RES_INT_ARRAY:
+        AVS_LIST_CLEAR(&inst->int_array);
+        break;
+    case TEST_RES_BOOL_ARRAY:
+        AVS_LIST_CLEAR(&inst->bool_array);
+        break;
+    default:
+        AVS_UNREACHABLE(
+                "Resource reset called on non-mutliple-instance resource");
+        return ANJAY_ERR_METHOD_NOT_ALLOWED;
+    }
     return 0;
 }
 
@@ -719,8 +899,8 @@ test_list_resource_instances(anjay_t *anjay,
     switch (rid) {
     case TEST_RES_INT_ARRAY:
     case TEST_RES_OPAQUE_ARRAY: {
-        AVS_LIST(test_array_entry_t) it;
-        AVS_LIST_FOREACH(it, inst->array) {
+        AVS_LIST(test_int_array_entry_t) it;
+        AVS_LIST_FOREACH(it, inst->int_array) {
             anjay_dm_emit(ctx, it->index);
         }
         return 0;
@@ -732,9 +912,16 @@ test_list_resource_instances(anjay_t *anjay,
         }
         return 0;
     }
+    case TEST_RES_BOOL_ARRAY: {
+        AVS_LIST(test_bool_array_entry_t) it;
+        AVS_LIST_FOREACH(it, inst->bool_array) {
+            anjay_dm_emit(ctx, it->index);
+        }
+        return 0;
+    }
     default:
-        AVS_UNREACHABLE(
-                "Attempted to list instances in a single-instance resource");
+        AVS_UNREACHABLE("Attempted to list instances in a single-instance "
+                        "resource");
         return ANJAY_ERR_INTERNAL;
     }
 }

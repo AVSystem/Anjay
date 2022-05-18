@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -102,6 +95,91 @@ static int get_security_mode(anjay_unlocked_t *anjay,
     }
 }
 
+static bool
+security_matches_transport(anjay_security_mode_t security_mode,
+                           const anjay_transport_info_t *transport_info) {
+    assert(transport_info);
+    if (transport_info->security == ANJAY_TRANSPORT_SECURITY_UNDEFINED) {
+        // URI scheme does not specify security,
+        // so it is valid for all security modes
+        return true;
+    }
+
+    const bool is_secure_transport =
+            (transport_info->security == ANJAY_TRANSPORT_ENCRYPTED);
+    const bool needs_secure_transport = (security_mode != ANJAY_SECURITY_NOSEC);
+
+    if (is_secure_transport != needs_secure_transport) {
+        anjay_log(WARNING,
+                  _("security mode ") "%d" _(" requires ") "%s" _(
+                          "secure protocol, but '") "%s" _("' was configured"),
+                  (int) security_mode, needs_secure_transport ? "" : "in",
+                  transport_info->uri_scheme);
+        return false;
+    }
+
+    return true;
+}
+
+#ifdef ANJAY_WITH_LWM2M11
+static avs_error_t
+get_tlsa_settings(anjay_unlocked_t *anjay,
+                  anjay_iid_t security_iid,
+                  anjay_security_mode_t security_mode,
+                  avs_net_socket_dane_tlsa_record_t *out_record) {
+    if (security_mode != ANJAY_SECURITY_CERTIFICATE
+            && security_mode != ANJAY_SECURITY_EST) {
+        return AVS_OK;
+    }
+
+    uint64_t tmp;
+    if (!_anjay_dm_read_resource_u64(
+                anjay,
+                &MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                                    ANJAY_DM_RID_SECURITY_MATCHING_TYPE),
+                &tmp)) {
+        switch (tmp) {
+        case 0:
+            out_record->matching_type = AVS_NET_SOCKET_DANE_MATCH_FULL;
+            break;
+        case 1:
+            out_record->matching_type = AVS_NET_SOCKET_DANE_MATCH_SHA256;
+            break;
+        case 3:
+            out_record->matching_type = AVS_NET_SOCKET_DANE_MATCH_SHA512;
+            break;
+        case 2:
+            // Matching Type 2 is defined in LwM2M as SHA384
+            // which is not supported
+        default:
+            anjay_log(WARNING, _("unsupported matching type: ") "%s",
+                      AVS_UINT64_AS_STRING(tmp));
+        }
+    }
+
+    if (!_anjay_dm_read_resource_u64(
+                anjay,
+                &MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                                    ANJAY_DM_RID_SECURITY_CERTIFICATE_USAGE),
+                &tmp)) {
+        switch (tmp) {
+        case (uint64_t) AVS_NET_SOCKET_DANE_CA_CONSTRAINT:
+        case (uint64_t) AVS_NET_SOCKET_DANE_SERVICE_CERTIFICATE_CONSTRAINT:
+        case (uint64_t) AVS_NET_SOCKET_DANE_TRUST_ANCHOR_ASSERTION:
+        case (uint64_t) AVS_NET_SOCKET_DANE_DOMAIN_ISSUED_CERTIFICATE:
+            out_record->certificate_usage =
+                    (avs_net_socket_dane_certificate_usage_t) tmp;
+            break;
+        default:
+            anjay_log(WARNING, _("unsupported certificate usage: ") "%s",
+                      AVS_UINT64_AS_STRING(tmp));
+        }
+    }
+
+    return AVS_OK;
+}
+#endif // ANJAY_WITH_LWM2M11
+
 static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
                                       anjay_ssid_t ssid,
                                       anjay_iid_t security_iid,
@@ -164,6 +242,10 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
         .certificate_usage = AVS_NET_SOCKET_DANE_DOMAIN_ISSUED_CERTIFICATE
     };
     avs_error_t err = AVS_OK;
+#ifdef ANJAY_WITH_LWM2M11
+    err = get_tlsa_settings(anjay, security_iid, security_mode,
+                            &dane_tlsa_record);
+#endif // ANJAY_WITH_LWM2M11
     if (avs_is_ok(err)) {
         err = avs_stream_write(server_pk_membuf, &dane_tlsa_record,
                                sizeof(dane_tlsa_record));
@@ -218,6 +300,33 @@ static avs_error_t init_cert_security(anjay_unlocked_t *anjay,
         security->dane_tlsa_record = cache->dane_tlsa_record;
     }
 
+#ifdef ANJAY_WITH_LWM2M11
+    const anjay_trust_store_t *trust_store =
+            _anjay_get_trust_store(anjay, ssid, security_mode);
+    if (trust_store) {
+        certificate_info.ignore_system_trust_store =
+                !trust_store->use_system_wide;
+        certificate_info.trusted_certs =
+                avs_crypto_certificate_chain_info_from_list(trust_store->certs);
+        certificate_info.cert_revocation_lists =
+                avs_crypto_cert_revocation_list_info_from_list(
+                        trust_store->crls);
+        certificate_info.rebuild_client_cert_chain =
+                anjay->rebuild_client_cert_chain;
+        if (trust_store != &anjay->initial_trust_store) {
+            // Enforce usage of non-initial trust store
+            certificate_info.server_cert_validation = true;
+        }
+    }
+    if (dane_tlsa_record.certificate_usage == AVS_NET_SOCKET_DANE_CA_CONSTRAINT
+            || dane_tlsa_record.certificate_usage
+                           == AVS_NET_SOCKET_DANE_SERVICE_CERTIFICATE_CONSTRAINT) {
+        // Certificate Usage modes 0 and 1 require PKIX validation,
+        // so enable validation even if no certificate is explicitly
+        // specified
+        certificate_info.server_cert_validation = true;
+    }
+#endif // ANJAY_WITH_LWM2M11
     (void) ssid;
     (void) security_mode;
 
@@ -253,6 +362,49 @@ static avs_error_t init_security(anjay_unlocked_t *anjay,
     }
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+static int read_ciphersuite_list(anjay_unlocked_t *anjay,
+                                 anjay_iid_t security_iid,
+                                 uint32_t **out_u32_ciphersuites,
+                                 size_t *out_num_ciphersuites) {
+    assert(out_u32_ciphersuites);
+    assert(!*out_u32_ciphersuites);
+    assert(out_num_ciphersuites);
+    assert(!*out_num_ciphersuites);
+
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_DTLS_TLS_CIPHERSUITE);
+
+    int result = _anjay_dm_read_resource_u32_array(
+            anjay, &path, out_u32_ciphersuites, out_num_ciphersuites);
+    if (result) {
+        assert(!*out_u32_ciphersuites);
+        assert(!*out_num_ciphersuites);
+        if (result == ANJAY_ERR_NOT_FOUND
+                || result == ANJAY_ERR_METHOD_NOT_ALLOWED) {
+            return 0;
+        } else {
+            return result;
+        }
+    }
+
+    for (size_t i = 0; i < *out_num_ciphersuites; ++i) {
+        if ((*out_u32_ciphersuites)[i] > UINT16_MAX) {
+            anjay_log(ERROR,
+                      _("cipher ID too large: ") "%" PRIu32 _(" > ") "%" PRIu16,
+                      (*out_u32_ciphersuites)[i], UINT16_MAX);
+            avs_free(*out_u32_ciphersuites);
+            *out_u32_ciphersuites = NULL;
+            *out_num_ciphersuites = 0;
+            return -1;
+        }
+    }
+
+    return 0;
+}
+#endif // ANJAY_WITH_LWM2M11
+
 avs_error_t _anjay_connection_security_generic_get_config(
         anjay_unlocked_t *anjay,
         anjay_security_config_t *out_config,
@@ -265,6 +417,34 @@ avs_error_t _anjay_connection_security_generic_get_config(
 
     memset(out_config, 0, sizeof(*out_config));
     out_config->tls_ciphersuites = anjay->default_tls_ciphersuites;
+
+    if (inout_info->transport_info
+            && !security_matches_transport(security_mode,
+                                           inout_info->transport_info)) {
+        return avs_errno(AVS_EPROTO);
+    }
+
+#ifdef ANJAY_WITH_LWM2M11
+    if (security_mode != ANJAY_SECURITY_NOSEC
+            && read_ciphersuite_list(anjay, inout_info->security_iid,
+                                     &cache->ciphersuites.ids,
+                                     &cache->ciphersuites.num_ids)) {
+        assert(!cache->ciphersuites.ids);
+        return avs_errno(AVS_EPROTO);
+    }
+
+    if (cache->ciphersuites.num_ids == 0) {
+        anjay_log(DEBUG,
+                  _("no ciphers configured for security IID ") "%" PRIu16 _(
+                          ", using ") "%s" _(" defaults"),
+                  inout_info->security_iid,
+                  anjay->default_tls_ciphersuites.num_ids > 0
+                          ? "anjay_configuration_t"
+                          : "TLS backend");
+    } else {
+        out_config->tls_ciphersuites = cache->ciphersuites;
+    }
+#endif // ANJAY_WITH_LWM2M11
 
     avs_error_t err =
             init_security(anjay, inout_info->ssid, inout_info->security_iid,

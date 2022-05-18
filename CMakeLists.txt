@@ -1,21 +1,14 @@
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "2.15.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.0.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -109,6 +102,8 @@ set(DTLS_SESSION_BUFFER_SIZE 1024 CACHE STRING
 option(WITH_BOOTSTRAP "Enable LwM2M Bootstrap Interface support" ON)
 option(WITH_DOWNLOADER "Enable support for downloader API" ON)
 cmake_dependent_option(WITH_HTTP_DOWNLOAD "Enable support for HTTP(S) downloads" OFF "WITH_DOWNLOADER" OFF)
+option(WITH_LWM2M11 "Enable support for LwM2M 1.1" ON)
+# NOTE: WITH_EST is moved below due to dependencies
 
 set(THREAD_SAFETY_DEFAULT OFF)
 if(WIN32 OR UNIX)
@@ -199,11 +194,22 @@ else()
     message(STATUS "DTLS backend: ${_DTLS_BACKEND_LOWERCASE}")
 endif()
 
+if(NOT WITH_LWM2M11)
+    set(WITH_AVS_COAP_TCP OFF CACHE "" INTERNAL)
+endif()
+
+cmake_dependent_option(WITH_AVS_COAP_TCP "Enable CoAP over TCP support" ON WITH_LWM2M11 OFF)
+
+
+
+set(ENABLE_ADVANCED_CRYPTO OFF)
+
 option(WITH_AVS_LOG "Enable logging support" ON)
 option(WITH_AVS_PERSISTENCE "Enable support for persisting objects data" ON)
 
 if(NOT WITH_LOCAL_AVS_COMMONS)
     set(WITH_SCHEDULER_THREAD_SAFE "${WITH_THREAD_SAFETY}" CACHE INTERNAL "")
+    set(WITH_AVS_CRYPTO_ADVANCED_FEATURES ${ENABLE_ADVANCED_CRYPTO} CACHE INTERNAL "")
 
     add_subdirectory(deps/avs_commons)
 endif()
@@ -224,6 +230,7 @@ if(WITH_LOCAL_AVS_COAP)
     endfunction()
 
     read_avs_coap_compile_time_option(WITH_AVS_COAP_UDP)
+    read_avs_coap_compile_time_option(WITH_AVS_COAP_TCP)
     read_avs_coap_compile_time_option(WITH_AVS_COAP_OBSERVE)
     read_avs_coap_compile_time_option(WITH_AVS_COAP_BLOCK)
     read_avs_coap_compile_time_option(WITH_AVS_COAP_STREAMING_API)
@@ -244,7 +251,7 @@ endif()
 option(WITH_ACCESS_CONTROL "Enable core support for Access Control mechanism" ON)
 option(WITH_DISCOVER "Enable support for LwM2M Discover operation" ON)
 cmake_dependent_option(WITH_OBSERVE "Enable support for Information Reporting interface (Observe)" ON "WITH_AVS_COAP_OBSERVE" OFF)
-cmake_dependent_option(WITH_CON_ATTR "Enable support for a custom attribute that controls Confirmable notifications" OFF WITH_OBSERVE OFF)
+cmake_dependent_option(WITH_CON_ATTR "Enable support for the Confirmable Notification attribute" "${WITH_LWM2M12}" WITH_OBSERVE OFF)
 option(WITH_LEGACY_CONTENT_FORMAT_SUPPORT
        "Enable support for pre-LwM2M 1.0 CoAP Content-Format values (1541-1543)" OFF)
 option(WITH_LWM2M_JSON "Enable support for LwM2M 1.0 JSON (output only)" ON)
@@ -252,6 +259,11 @@ option(WITHOUT_TLV "Disable support for TLV content format" OFF)
 option(WITHOUT_PLAINTEXT "Disable support for Plain Text content format" OFF)
 option(WITHOUT_DEREGISTER "Disable use of the Deregister message" OFF)
 option(WITHOUT_IP_STICKINESS "Disable support for IP stickiness" OFF)
+cmake_dependent_option(WITH_SENML_JSON "Enable support for SenML JSON content format" ON WITH_LWM2M11 OFF)
+cmake_dependent_option(WITH_CBOR "Enable support for CBOR and SenML CBOR content formats" ON WITH_LWM2M11 OFF)
+cmake_dependent_option(WITH_SEND "Enable support for LwM2M 1.1 Send operation" ON "WITH_CBOR OR WITH_SENML_JSON" OFF)
+
+
 
 cmake_dependent_option(WITH_OBSERVATION_STATUS "Enable support for anjay_resource_observation_status() API" ON "WITH_OBSERVE" OFF)
 cmake_dependent_option(WITH_COAP_DOWNLOAD "Enable support for CoAP(S) downloads" ON WITH_DOWNLOADER OFF)
@@ -266,6 +278,14 @@ cmake_dependent_option(WITH_INTERNAL_TRACE "Enable TRACE-level logs inside AVSys
 option(WITH_NET_STATS "Enable measuring amount of LwM2M traffic" ON)
 
 option(WITH_EVENT_LOOP "Enable default implementation of the event loop" "${WITH_POSIX_AVS_SOCKET}")
+
+if(DEFINED WITH_MODULE_attr_storage)
+    message(FATAL_ERROR "WITH_MODULE_attr_storage has been removed since Anjay 3.0. Please use WITH_ATTR_STORAGE instead.")
+endif()
+
+cmake_dependent_option(WITH_ATTR_STORAGE "Enable automatic attribute storage" ON WITH_AVS_PERSISTENCE OFF)
+
+option(WITH_SECURITY_STRUCTURED "Enable support for avs_crypto types in the data model" "${WITH_LWM2M11}")
 
 # ANJAY_MUTEX_LOCK() variant based on nested functions
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/CMakeTmp/nested_funcs.c"
@@ -292,7 +312,6 @@ endif()
 ################# MODULES ######################################################
 
 
-cmake_dependent_option(WITH_MODULE_attr_storage "Automatic attribute storage module" ON WITH_AVS_PERSISTENCE OFF)
 cmake_dependent_option(WITH_MODULE_access_control "Access control object implementation module" ON WITH_ACCESS_CONTROL OFF)
 option(WITH_MODULE_ipso_objects "Generic implementation of certain kinds of IPSO objects" ON)
 option(WITH_MODULE_security "Security object module" ON)
@@ -302,118 +321,21 @@ option(WITH_MODULE_fw_update "Firmware Update object module" ON)
 ################# CODE #########################################################
 
 add_library(anjay
-            src/core/anjay_access_utils.c
-            src/core/anjay_bootstrap_core.c
-            src/core/anjay_core.c
-            src/core/anjay_dm_core.c
-            src/core/anjay_event_loop.c
-            src/core/anjay_io_core.c
-            src/core/anjay_io_utils.c
-            src/core/anjay_notify.c
-            src/core/anjay_raw_buffer.c
-            src/core/anjay_servers_utils.c
-            src/core/anjay_stats.c
-            src/core/anjay_utils_core.c
-            src/core/dm/anjay_discover.c
-            src/core/dm/anjay_dm_attributes.c
-            src/core/dm/anjay_dm_create.c
-            src/core/dm/anjay_dm_execute.c
-            src/core/dm/anjay_dm_handlers.c
-            src/core/dm/anjay_dm_read.c
-            src/core/dm/anjay_dm_write_attrs.c
-            src/core/dm/anjay_dm_write.c
-            src/core/dm/anjay_modules.c
-            src/core/dm/anjay_query.c
-            src/core/downloader/anjay_coap.c
-            src/core/downloader/anjay_downloader.c
-            src/core/downloader/anjay_http.c
-            src/core/io/anjay_base64_out.c
-            src/core/io/anjay_batch_builder.c
-            src/core/io/anjay_common.c
-            src/core/io/anjay_dynamic.c
-            src/core/io/anjay_json_encoder.c
-            src/core/io/anjay_opaque.c
-            src/core/io/anjay_output_buf.c
-            src/core/io/anjay_senml_like_encoder.c
-            src/core/io/anjay_senml_like_out.c
-            src/core/io/anjay_text.c
-            src/core/io/anjay_tlv_in.c
-            src/core/io/anjay_tlv_out.c
-            src/core/observe/anjay_observe_core.c
-            src/core/servers/anjay_activate.c
-            src/core/servers/anjay_connection_ip.c
-            src/core/servers/anjay_connections.c
-            src/core/servers/anjay_register.c
-            src/core/servers/anjay_reload.c
-            src/core/servers/anjay_security_generic.c
-            src/core/servers/anjay_server_connections.c
-            src/core/servers/anjay_servers_internal.c
-            src/modules/access_control/anjay_access_control_handlers.c
-            src/modules/access_control/anjay_access_control_persistence.c
-            src/modules/access_control/anjay_mod_access_control.c
-            src/modules/attr_storage/anjay_attr_storage_persistence.c
-            src/modules/attr_storage/anjay_mod_attr_storage.c
-            src/modules/fw_update/anjay_fw_update.c
-            src/modules/ipso/anjay_ipso_3d_sensor.c
-            src/modules/ipso/anjay_ipso_basic_sensor.c
-            src/modules/ipso/anjay_ipso_button.c
-            src/modules/security/anjay_mod_security.c
-            src/modules/security/anjay_security_persistence.c
-            src/modules/security/anjay_security_transaction.c
-            src/modules/security/anjay_security_utils.c
-            src/modules/server/anjay_mod_server.c
-            src/modules/server/anjay_server_persistence.c
-            src/modules/server/anjay_server_transaction.c
-            src/modules/server/anjay_server_utils.c
+            include_public/anjay/access_control.h
+            include_public/anjay/anjay.h
+            include_public/anjay/attr_storage.h
+            include_public/anjay/core.h
+            include_public/anjay/dm.h
+            include_public/anjay/download.h
+            include_public/anjay/fw_update.h
+            include_public/anjay/io.h
+            include_public/anjay/ipso_objects.h
+            include_public/anjay/lwm2m_send.h
+            include_public/anjay/security.h
+            include_public/anjay/server.h
+            include_public/anjay/stats.h
             src/anjay_config_log.h
             src/anjay_init.h
-            src/core/anjay_access_utils_private.h
-            src/core/anjay_bootstrap_core.h
-            src/core/anjay_core.h
-            src/core/anjay_dm_core.h
-            src/core/anjay_downloader.h
-            src/core/anjay_io_core.h
-            src/core/anjay_servers_inactive.h
-            src/core/anjay_servers_private.h
-            src/core/anjay_servers_reload.h
-            src/core/anjay_servers_utils.h
-            src/core/anjay_stats.h
-            src/core/anjay_utils_private.h
-            src/core/coap/anjay_content_format.h
-            src/core/coap/anjay_msg_details.h
-            src/core/dm/anjay_discover.h
-            src/core/dm/anjay_dm_attributes.h
-            src/core/dm/anjay_dm_create.h
-            src/core/dm/anjay_dm_execute.h
-            src/core/dm/anjay_dm_read.h
-            src/core/dm/anjay_dm_write.h
-            src/core/dm/anjay_dm_write_attrs.h
-            src/core/dm/anjay_query.h
-            src/core/downloader/anjay_private.h
-            src/core/io/anjay_base64_out.h
-            src/core/io/anjay_batch_builder.h
-            src/core/io/anjay_common.h
-            src/core/io/anjay_senml_like_encoder.h
-            src/core/io/anjay_senml_like_encoder_vtable.h
-            src/core/io/anjay_tlv.h
-            src/core/io/anjay_vtable.h
-            src/core/observe/anjay_observe_core.h
-            src/core/observe/anjay_observe_internal.h
-            src/core/servers/anjay_activate.h
-            src/core/servers/anjay_connections.h
-            src/core/servers/anjay_connections_internal.h
-            src/core/servers/anjay_register.h
-            src/core/servers/anjay_security.h
-            src/core/servers/anjay_server_connections.h
-            src/core/servers/anjay_servers_internal.h
-            src/modules/access_control/anjay_mod_access_control.h
-            src/modules/attr_storage/anjay_mod_attr_storage.h
-            src/modules/security/anjay_mod_security.h
-            src/modules/security/anjay_security_transaction.h
-            src/modules/security/anjay_security_utils.h
-            src/modules/server/anjay_mod_server.h
-            src/modules/server/anjay_server_transaction.h
-            src/modules/server/anjay_server_utils.h
             src/anjay_modules/anjay_access_utils.h
             src/anjay_modules/anjay_bootstrap.h
             src/anjay_modules/anjay_dm_utils.h
@@ -424,21 +346,137 @@ add_library(anjay
             src/anjay_modules/anjay_servers.h
             src/anjay_modules/anjay_time_defs.h
             src/anjay_modules/anjay_utils_core.h
-            src/anjay_modules/dm/anjay_attributes.h
             src/anjay_modules/dm/anjay_execute.h
             src/anjay_modules/dm/anjay_modules.h
-            include_public/anjay/access_control.h
-            include_public/anjay/anjay.h
-            include_public/anjay/attr_storage.h
-            include_public/anjay/core.h
-            include_public/anjay/dm.h
-            include_public/anjay/download.h
-            include_public/anjay/fw_update.h
-            include_public/anjay/io.h
-            include_public/anjay/ipso_objects.h
-            include_public/anjay/security.h
-            include_public/anjay/server.h
-            include_public/anjay/stats.h)
+            src/core/anjay_access_utils.c
+            src/core/anjay_access_utils_private.h
+            src/core/anjay_bootstrap_core.c
+            src/core/anjay_bootstrap_core.h
+            src/core/anjay_core.c
+            src/core/anjay_core.h
+            src/core/anjay_dm_core.c
+            src/core/anjay_dm_core.h
+            src/core/anjay_downloader.h
+            src/core/anjay_event_loop.c
+            src/core/anjay_io_core.c
+            src/core/anjay_io_core.h
+            src/core/anjay_io_utils.c
+            src/core/anjay_lwm2m_send.c
+            src/core/anjay_lwm2m_send.h
+            src/core/anjay_notify.c
+            src/core/anjay_raw_buffer.c
+            src/core/anjay_servers_inactive.h
+            src/core/anjay_servers_private.h
+            src/core/anjay_servers_reload.h
+            src/core/anjay_servers_utils.c
+            src/core/anjay_servers_utils.h
+            src/core/anjay_stats.c
+            src/core/anjay_stats.h
+            src/core/anjay_utils_core.c
+            src/core/anjay_utils_private.h
+            src/core/attr_storage/anjay_attr_storage.h
+            src/core/attr_storage/anjay_attr_storage_persistence.c
+            src/core/attr_storage/anjay_attr_storage_private.h
+            src/core/attr_storage/anjay_attr_storage.c
+            src/core/coap/anjay_content_format.h
+            src/core/coap/anjay_msg_details.h
+            src/core/dm/anjay_discover.c
+            src/core/dm/anjay_discover.h
+            src/core/dm/anjay_dm_attributes.c
+            src/core/dm/anjay_dm_attributes.h
+            src/core/dm/anjay_dm_create.c
+            src/core/dm/anjay_dm_create.h
+            src/core/dm/anjay_dm_execute.c
+            src/core/dm/anjay_dm_execute.h
+            src/core/dm/anjay_dm_handlers.c
+            src/core/dm/anjay_dm_read.c
+            src/core/dm/anjay_dm_read.h
+            src/core/dm/anjay_dm_write_attrs.c
+            src/core/dm/anjay_dm_write_attrs.h
+            src/core/dm/anjay_dm_write.c
+            src/core/dm/anjay_dm_write.h
+            src/core/dm/anjay_modules.c
+            src/core/dm/anjay_query.c
+            src/core/dm/anjay_query.h
+            src/core/downloader/anjay_coap.c
+            src/core/downloader/anjay_downloader.c
+            src/core/downloader/anjay_http.c
+            src/core/downloader/anjay_private.h
+            src/core/io/anjay_base64_out.c
+            src/core/io/anjay_base64_out.h
+            src/core/io/anjay_batch_builder.c
+            src/core/io/anjay_batch_builder.h
+            src/core/io/anjay_cbor_in.c
+            src/core/io/anjay_cbor_out.c
+            src/core/io/anjay_common.c
+            src/core/io/anjay_common.h
+            src/core/io/anjay_dynamic.c
+            src/core/io/anjay_input_buf.c
+            src/core/io/anjay_json_encoder.c
+            src/core/io/anjay_json_like_decoder.c
+            src/core/io/anjay_json_like_decoder.h
+            src/core/io/anjay_json_like_decoder_vtable.h
+            src/core/io/anjay_opaque.c
+            src/core/io/anjay_output_buf.c
+            src/core/io/anjay_senml_in.c
+            src/core/io/anjay_senml_like_encoder.c
+            src/core/io/anjay_senml_like_encoder.h
+            src/core/io/anjay_senml_like_encoder_vtable.h
+            src/core/io/anjay_senml_like_out.c
+            src/core/io/anjay_text.c
+            src/core/io/anjay_tlv.h
+            src/core/io/anjay_tlv_in.c
+            src/core/io/anjay_tlv_out.c
+            src/core/io/anjay_vtable.h
+            src/core/io/cbor/anjay_cbor_encoder_ll.c
+            src/core/io/cbor/anjay_cbor_encoder_ll.h
+            src/core/io/cbor/anjay_cbor_types.h
+            src/core/io/cbor/anjay_json_like_cbor_decoder.c
+            src/core/io/cbor/anjay_json_like_cbor_decoder.h
+            src/core/io/cbor/anjay_senml_cbor_encoder.c
+            src/core/io/json/anjay_json_decoder.c
+            src/core/io/json/anjay_json_decoder.h
+            src/core/observe/anjay_observe_core.c
+            src/core/observe/anjay_observe_core.h
+            src/core/observe/anjay_observe_internal.h
+            src/core/observe/anjay_observe_planning.c
+            src/core/servers/anjay_activate.c
+            src/core/servers/anjay_activate.h
+            src/core/servers/anjay_connection_ip.c
+            src/core/servers/anjay_connections.c
+            src/core/servers/anjay_connections.h
+            src/core/servers/anjay_connections_internal.h
+            src/core/servers/anjay_register.c
+            src/core/servers/anjay_register.h
+            src/core/servers/anjay_reload.c
+            src/core/servers/anjay_security_generic.c
+            src/core/servers/anjay_security.h
+            src/core/servers/anjay_server_connections.c
+            src/core/servers/anjay_server_connections.h
+            src/core/servers/anjay_servers_internal.c
+            src/core/servers/anjay_servers_internal.h
+            src/modules/access_control/anjay_access_control_handlers.c
+            src/modules/access_control/anjay_access_control_persistence.c
+            src/modules/access_control/anjay_mod_access_control.c
+            src/modules/access_control/anjay_mod_access_control.h
+            src/modules/fw_update/anjay_fw_update.c
+            src/modules/ipso/anjay_ipso_3d_sensor.c
+            src/modules/ipso/anjay_ipso_basic_sensor.c
+            src/modules/ipso/anjay_ipso_button.c
+            src/modules/security/anjay_mod_security.c
+            src/modules/security/anjay_mod_security.h
+            src/modules/security/anjay_security_persistence.c
+            src/modules/security/anjay_security_transaction.c
+            src/modules/security/anjay_security_transaction.h
+            src/modules/security/anjay_security_utils.c
+            src/modules/security/anjay_security_utils.h
+            src/modules/server/anjay_mod_server.c
+            src/modules/server/anjay_mod_server.h
+            src/modules/server/anjay_server_persistence.c
+            src/modules/server/anjay_server_transaction.c
+            src/modules/server/anjay_server_transaction.h
+            src/modules/server/anjay_server_utils.c
+            src/modules/server/anjay_server_utils.h)
 
 target_include_directories(anjay PUBLIC
                            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include_public>
@@ -452,6 +490,7 @@ set_property(TARGET anjay APPEND PROPERTY COMPILE_DEFINITIONS "ANJAY_VERSION=\"$
 ################# LINK #########################################################
 
 set(ANJAY_WITH_ACCESS_CONTROL "${WITH_ACCESS_CONTROL}")
+set(ANJAY_WITH_ATTR_STORAGE "${WITH_ATTR_STORAGE}")
 set(ANJAY_WITH_BOOTSTRAP "${WITH_BOOTSTRAP}")
 set(ANJAY_WITH_COAP_DOWNLOAD "${WITH_COAP_DOWNLOAD}")
 set(ANJAY_WITH_CON_ATTR "${WITH_CON_ATTR}")
@@ -466,7 +505,6 @@ set(ANJAY_WITHOUT_PLAINTEXT "${WITHOUT_PLAINTEXT}")
 set(ANJAY_WITHOUT_DEREGISTER "${WITHOUT_DEREGISTER}")
 set(ANJAY_WITHOUT_IP_STICKINESS "${WITHOUT_IP_STICKINESS}")
 set(ANJAY_WITH_MODULE_ACCESS_CONTROL "${WITH_MODULE_access_control}")
-set(ANJAY_WITH_MODULE_ATTR_STORAGE "${WITH_MODULE_attr_storage}")
 set(ANJAY_WITH_MODULE_IPSO_OBJECTS "${WITH_MODULE_ipso_objects}")
 set(ANJAY_WITH_MODULE_FW_UPDATE "${WITH_MODULE_fw_update}")
 set(ANJAY_WITH_MODULE_SECURITY "${WITH_MODULE_security}")
@@ -478,6 +516,11 @@ set(ANJAY_WITH_OBSERVE "${WITH_OBSERVE}")
 set(ANJAY_WITH_THREAD_SAFETY "${WITH_THREAD_SAFETY}")
 set(ANJAY_WITH_TRACE_LOGS "${WITH_ANJAY_TRACE_LOGS}")
 
+set(ANJAY_WITH_CBOR "${WITH_CBOR}")
+set(ANJAY_WITH_LWM2M11 "${WITH_LWM2M11}")
+set(ANJAY_WITH_SECURITY_STRUCTURED "${WITH_SECURITY_STRUCTURED}")
+set(ANJAY_WITH_SEND "${WITH_SEND}")
+set(ANJAY_WITH_SENML_JSON "${WITH_SENML_JSON}")
 
 configure_file(include_public/anjay/anjay_config.h.in
                include_public/anjay/anjay_config.h)
@@ -555,6 +598,15 @@ if(WITH_TEST)
                    tests/utils/utils.h
                    tests/utils/coap/socket.h
                    tests/utils/coap/socket.c)
+    if(WITH_SENML_JSON)
+        target_sources(anjay_test PRIVATE tests/core/io/senml_json_encoder.c)
+    endif()
+    if(WITH_CBOR)
+        target_sources(anjay_test PRIVATE tests/core/io/senml_cbor_encoder.c)
+    endif()
+    if(WITH_SEND)
+        target_sources(anjay_test PRIVATE tests/core/lwm2m_send.c)
+    endif()
     target_include_directories(anjay_test PRIVATE
                                "${CMAKE_CURRENT_SOURCE_DIR}"
                                $<TARGET_PROPERTY:anjay,INCLUDE_DIRECTORIES>)
@@ -647,7 +699,7 @@ if(WITH_TEST)
         option(WITH_LICENSE_TEST "Enable checking if all files have the license boilerplate" OFF)
         if(WITH_LICENSE_TEST)
             add_custom_target(anjay_license_check
-                              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_license_headers.py"
+                              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/license_headers.py"
                               WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
             add_dependencies(anjay_unit_check anjay_license_check)
         endif()
@@ -759,12 +811,16 @@ install(FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/io.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/stats.h"
         DESTINATION include/anjay)
-if(WITH_MODULE_access_control)
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/access_control.h"
+if(WITH_ATTR_STORAGE)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/attr_storage.h"
             DESTINATION include/anjay)
 endif()
-if(WITH_MODULE_attr_storage)
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/attr_storage.h"
+if(WITH_SEND)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/lwm2m_send.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_access_control)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/access_control.h"
             DESTINATION include/anjay)
 endif()
 if(WITH_MODULE_ipso_objects)

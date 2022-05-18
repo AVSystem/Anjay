@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef AVS_COAP_SRC_CTX_VTABLE_H
@@ -333,6 +326,20 @@ typedef struct avs_coap_ctx_vtable {
     avs_coap_get_stats_t *get_stats;
     avs_coap_next_observe_option_value_t *next_observe_option_value;
 } avs_coap_ctx_vtable_t;
+
+/**
+ * Checks whether the socket is definitely exhausted, e.g. that we can
+ * conclusively say that there is no more data ready to be retrieved from
+ * internal buffers (without calling the receive operation on the system
+ * socket).
+ *
+ * Note that if getting the AVS_NET_SOCKET_HAS_BUFFERED_DATA option fails or is
+ * not implemented, this will always return false.
+ *
+ * Also note: This declaration would be more fitting in avs_coap_ctx.h, but is
+ * declared here due to include file dependency madness.
+ */
+bool _avs_coap_socket_definitely_exhausted(avs_coap_ctx_t *ctx);
 
 VISIBILITY_PRIVATE_HEADER_END
 

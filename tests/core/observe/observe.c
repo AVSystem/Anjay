@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -221,7 +214,7 @@ static void expect_read_notif_storing(anjay_t *anjay,
                                     ID_TOKEN(0xFA3E, "SuccsTkn"), OBSERVE(0), \
                                     CONTENT_FORMAT(PLAINTEXT),                \
                                     PAYLOAD("514"));                          \
-            expect_timeout(mocksocks[i]);                                     \
+            expect_has_buffered_data_check(mocksocks[i], false);              \
             DM_TEST_EXPECT_READ_NULL_ATTRS(ssids[i], 69, 4);                  \
             AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[i]));        \
             assert_observe_size(anjay, i + 1);                                \
@@ -238,7 +231,7 @@ AVS_UNIT_TEST(observe, read_failed) {
             anjay, &OBJ, 0, (const anjay_iid_t[]) { 14, 42, ANJAY_ID_INVALID });
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, NOT_FOUND,
                             ID_TOKEN(0xFA3E, "Res7"), NO_PAYLOAD);
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -288,7 +281,7 @@ AVS_UNIT_TEST(observe, read_attrs_failed) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -320,7 +313,7 @@ AVS_UNIT_TEST(observe, multiple_equivalent_observations) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res4"), OBSERVE(0),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("42"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -378,7 +371,7 @@ AVS_UNIT_TEST(observe, overwrite) {
                             ID_TOKEN(0xFA3E, "SuccsTkn"), OBSERVE(0),
                             CONTENT_FORMAT(OMA_LWM2M_TLV),
                             PAYLOAD(TLV_RESPONSE));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 5);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
@@ -431,7 +424,7 @@ AVS_UNIT_TEST(observe, instance_overwrite) {
                             ID_TOKEN(0xFA3E, "ObjToken"), OBSERVE(0),
                             CONTENT_FORMAT(OMA_LWM2M_TLV),
                             PAYLOAD(TLV_RESPONSE));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, -1);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -478,7 +471,7 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res6"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("Hello"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
@@ -504,7 +497,7 @@ AVS_UNIT_TEST(observe, cancel_deregister) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "SuccsTkn"),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Good-bye"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -535,7 +528,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res5"), OBSERVE(0),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("42"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 5);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
@@ -564,7 +557,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3E, "Res5"), CONTENT_FORMAT(PLAINTEXT),
                             PAYLOAD("Good-bye"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
@@ -593,7 +586,7 @@ AVS_UNIT_TEST(observe, cancel_deregister_keying) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0xFA3F, "SuccsTkn"),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Sayonara"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 0);
@@ -657,7 +650,7 @@ static void expect_read_res_attrs(anjay_t *anjay,
                                   anjay_ssid_t ssid,
                                   anjay_iid_t iid,
                                   anjay_rid_t rid,
-                                  const anjay_dm_internal_r_attrs_t *attrs) {
+                                  const anjay_dm_r_attributes_t *attrs) {
     _anjay_mock_dm_expect_list_instances(
             anjay, obj_ptr, 0, (const anjay_iid_t[]) { iid, ANJAY_ID_INVALID });
     anjay_mock_dm_res_entry_t resources[] = {
@@ -681,13 +674,11 @@ static void expect_read_res_attrs(anjay_t *anjay,
     _anjay_mock_dm_expect_list_resources(anjay, obj_ptr, iid, 0, resources);
     _anjay_mock_dm_expect_resource_read_attrs(anjay, obj_ptr, iid, rid, ssid, 0,
                                               attrs);
-    if (!_anjay_dm_attributes_full(_anjay_dm_get_internal_oi_attrs_const(
-                &attrs->standard.common))) {
+    if (!_anjay_dm_attributes_full(&attrs->common)) {
         _anjay_mock_dm_expect_instance_read_default_attrs(
-                anjay, obj_ptr, iid, ssid, 0,
-                &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
+                anjay, obj_ptr, iid, ssid, 0, &ANJAY_DM_OI_ATTRIBUTES_EMPTY);
         _anjay_mock_dm_expect_object_read_default_attrs(
-                anjay, obj_ptr, ssid, 0, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY);
+                anjay, obj_ptr, ssid, 0, &ANJAY_DM_OI_ATTRIBUTES_EMPTY);
     }
 }
 
@@ -731,18 +722,16 @@ static const avs_coap_observe_id_t RES4_IDENTITY = {
 static void notify_max_period_test(const char *con_notify_ack,
                                    size_t con_notify_ack_size,
                                    size_t observe_size_after_ack) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 1,
-                .max_period = 10,
-                .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 1,
+            .max_period = 10,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION //////
@@ -754,7 +743,7 @@ static void notify_max_period_test(const char *con_notify_ack,
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -820,7 +809,7 @@ static void notify_max_period_test(const char *con_notify_ack,
                                     con_notify_response->length);
     anjay_sched_run(anjay);
     avs_unit_mocksock_input(mocksocks[0], con_notify_ack, con_notify_ack_size);
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     anjay_serve(anjay, mocksocks[0]);
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, observe_size_after_ack);
@@ -872,18 +861,16 @@ AVS_UNIT_TEST(notify, max_period) {
 }
 
 AVS_UNIT_TEST(notify, min_period) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 10,
-                .max_period = 365 * 24 * 60 * 60 /* a year */,
-                .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 10,
+            .max_period = 365 * 24 * 60 * 60 /* a year */,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION //////
@@ -895,7 +882,7 @@ AVS_UNIT_TEST(notify, min_period) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -941,18 +928,16 @@ AVS_UNIT_TEST(notify, min_period) {
 }
 
 AVS_UNIT_TEST(notify, epmin_greater_than_pmax) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 0,
-                .max_period = 5,
-                .min_eval_period = 8,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 5,
+            .min_eval_period = 8,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION //////
@@ -965,7 +950,7 @@ AVS_UNIT_TEST(notify, epmin_greater_than_pmax) {
                             ID_TOKEN(0x69ED, "I love C"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("314159"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     ////// NOTIFICATION BEFORE EPMIN EXPIRATION //////
@@ -996,18 +981,16 @@ AVS_UNIT_TEST(notify, epmin_greater_than_pmax) {
 }
 
 AVS_UNIT_TEST(notify, epmin_less_than_pmax) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 0,
-                .max_period = 365 * 24 * 60 * 60 /* a year */,
-                .min_eval_period = 15,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 /* a year */,
+            .min_eval_period = 15,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION //////
@@ -1020,7 +1003,7 @@ AVS_UNIT_TEST(notify, epmin_less_than_pmax) {
                             ID_TOKEN(0x69ED, "I love C"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("314159"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     ////// NOTIFY ABOUT RESOURCE CHANGE //////
@@ -1073,7 +1056,7 @@ AVS_UNIT_TEST(notify, confirmable) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
@@ -1103,7 +1086,7 @@ AVS_UNIT_TEST(notify, confirmable) {
             COAP_MSG(ACK, EMPTY, ID(MSG_ID_BASE), NO_PAYLOAD);
     avs_unit_mocksock_input(mocksocks[0], notify_ack->content,
                             notify_ack->length);
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     anjay_serve(anjay, mocksocks[0]);
 
@@ -1111,18 +1094,16 @@ AVS_UNIT_TEST(notify, confirmable) {
 }
 
 AVS_UNIT_TEST(notify, extremes) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 0,
-                .max_period = 365 * 24 * 60 * 60 /* a year */,
-                .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = 777.0,
-            .less_than = 69.0,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 /* a year */,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = 777.0,
+        .less_than = 69.0,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION //////
@@ -1134,7 +1115,7 @@ AVS_UNIT_TEST(notify, extremes) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -1275,18 +1256,16 @@ AVS_UNIT_TEST(notify, extremes) {
 }
 
 AVS_UNIT_TEST(notify, greater_only) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 0,
-                .max_period = 365 * 24 * 60 * 60 /* a year */,
-                .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = 69.0,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 /* a year */,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = 69.0,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION (GREATER) //////
@@ -1298,7 +1277,7 @@ AVS_UNIT_TEST(notify, greater_only) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -1365,18 +1344,16 @@ AVS_UNIT_TEST(notify, greater_only) {
 }
 
 AVS_UNIT_TEST(notify, less_only) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 0,
-                .max_period = 365 * 24 * 60 * 60 /* a year */,
-                .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = 777.0,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 /* a year */,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = 777.0,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION (GREATER) //////
@@ -1388,7 +1365,7 @@ AVS_UNIT_TEST(notify, less_only) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("1337"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 1);
@@ -1476,18 +1453,16 @@ AVS_UNIT_TEST(notify, less_only) {
 }
 
 AVS_UNIT_TEST(notify, step) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 0,
-                .max_period = 365 * 24 * 60 * 60 /* a year */,
-                .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = 10.0
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 0,
+            .max_period = 365 * 24 * 60 * 60 /* a year */,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = 10.0
     };
 
     ////// INITIALIZATION //////
@@ -1499,7 +1474,7 @@ AVS_UNIT_TEST(notify, step) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT,
                             ID_TOKEN(0x69ED, "Res4"), CONTENT_FORMAT(PLAINTEXT),
                             OBSERVE(0), PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     assert_observe_size(anjay, 1);
 
@@ -1686,18 +1661,16 @@ AVS_UNIT_TEST(notify, step) {
 }
 
 AVS_UNIT_TEST(notify, multiple_formats) {
-    static const anjay_dm_internal_r_attrs_t ATTRS = {
-        .standard = {
-            .common = {
-                .min_period = 1,
-                .max_period = 10,
-                .min_eval_period = ANJAY_ATTRIB_PERIOD_NONE,
-                .max_eval_period = ANJAY_ATTRIB_PERIOD_NONE
-            },
-            .greater_than = ANJAY_ATTRIB_VALUE_NONE,
-            .less_than = ANJAY_ATTRIB_VALUE_NONE,
-            .step = ANJAY_ATTRIB_VALUE_NONE
-        }
+    static const anjay_dm_r_attributes_t ATTRS = {
+        .common = {
+            .min_period = 1,
+            .max_period = 10,
+            .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+            .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE
+        },
+        .greater_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .less_than = ANJAY_ATTRIB_DOUBLE_NONE,
+        .step = ANJAY_ATTRIB_DOUBLE_NONE
     };
 
     ////// INITIALIZATION //////
@@ -1710,7 +1683,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID_TOKEN(0x69ED, "N"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     // Token: P
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID_TOKEN(0x69ED, "P"), OBSERVE(0),
@@ -1720,7 +1693,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID_TOKEN(0x69ED, "P"),
                             CONTENT_FORMAT(PLAINTEXT), OBSERVE(0),
                             PAYLOAD("514"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
     // Token: T
     DM_TEST_REQUEST(mocksocks[0], CON, GET, ID_TOKEN(0x69ED, "T"),
@@ -1731,7 +1704,7 @@ AVS_UNIT_TEST(notify, multiple_formats) {
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID_TOKEN(0x69ED, "T"),
                             CONTENT_FORMAT(OMA_LWM2M_TLV), OBSERVE(0),
                             PAYLOAD("\xC4\x04\x44\x00\x80\x00"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     assert_observe_size(anjay, 3);
@@ -1935,11 +1908,10 @@ AVS_UNIT_TEST(notify, storing_when_inactive) {
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 2);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    anjay_unlocked->current_connection.server = anjay_unlocked->servers;
-    anjay_unlocked->current_connection.conn_type = ANJAY_CONNECTION_PRIMARY;
-    _anjay_observe_sched_flush(anjay_unlocked->current_connection);
-    memset(&anjay_unlocked->current_connection, 0,
-           sizeof(anjay_unlocked->current_connection));
+    _anjay_observe_sched_flush((anjay_connection_ref_t) {
+        .server = anjay_unlocked->servers,
+        .conn_type = ANJAY_CONNECTION_PRIMARY
+    });
     ANJAY_MUTEX_UNLOCK(anjay);
 
     const coap_test_msg_t *notify_response3 =
@@ -2055,12 +2027,11 @@ AVS_UNIT_TEST(notify, no_storing_when_disabled) {
     assert_observe_consistency(anjay);
     assert_observe_size(anjay, 2);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    anjay_unlocked->current_connection.server = anjay_unlocked->servers;
-    anjay_unlocked->current_connection.conn_type = ANJAY_CONNECTION_PRIMARY;
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
-    _anjay_observe_sched_flush(anjay_unlocked->current_connection);
-    memset(&anjay_unlocked->current_connection, 0,
-           sizeof(anjay_unlocked->current_connection));
+    _anjay_observe_sched_flush((anjay_connection_ref_t) {
+        .server = anjay_unlocked->servers,
+        .conn_type = ANJAY_CONNECTION_PRIMARY
+    });
     ANJAY_MUTEX_UNLOCK(anjay);
 
     anjay_sched_run(anjay);
@@ -2145,7 +2116,7 @@ AVS_UNIT_TEST(notify, storing_on_send_error) {
                                         ANJAY_MOCK_DM_STRING(0, "Mayu"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFB3E),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Mayu"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
     // now the notifications shall arrive
@@ -2245,7 +2216,7 @@ AVS_UNIT_TEST(notify, no_storing_on_send_error) {
                                         ANJAY_MOCK_DM_STRING(0, "Mayu"));
     DM_TEST_EXPECT_RESPONSE(mocksocks[0], ACK, CONTENT, ID(0xFB3E),
                             CONTENT_FORMAT(PLAINTEXT), PAYLOAD("Mayu"));
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     DM_TEST_EXPECT_READ_NULL_ATTRS(14, 69, 4);
     AVS_UNIT_ASSERT_SUCCESS(anjay_serve(anjay, mocksocks[0]));
 
@@ -2291,7 +2262,7 @@ static void storing_of_errors_test_impl(bool storing_resource_value) {
     const coap_test_msg_t *con_ack =
             COAP_MSG(ACK, EMPTY, ID(MSG_ID_BASE + 1), NO_PAYLOAD);
     avs_unit_mocksock_input(mocksocks[0], con_ack->content, con_ack->length);
-    expect_timeout(mocksocks[0]);
+    expect_has_buffered_data_check(mocksocks[0], false);
     anjay_serve(anjay, mocksocks[0]);
 
     // now the notification shall be gone
@@ -2342,6 +2313,12 @@ AVS_UNIT_TEST(notify, send_error) {
     anjay_sched_run(anjay);
 
     _anjay_mocksock_expect_stats_zero(mocksocks[0]);
+#if defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
+    // Anjay will attempt to read "Bootstrap on Registration Failure" resource
+    _anjay_mock_dm_expect_list_instances(anjay, &FAKE_SERVER, -1,
+                                         (const anjay_iid_t[]) {
+                                                 ANJAY_ID_INVALID });
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
     anjay_sched_run(anjay);
 
     DM_TEST_FINISH;

@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import enum
 import inspect
@@ -194,6 +187,11 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
+    def read_resource_instance(self, server, oid, iid, rid, riid, expect_error_code=None,
+                               accept=None, **kwargs):
+        return self.read_path(server, '/%d/%d/%d/%d' % (oid, iid, rid, riid), expect_error_code,
+                              accept=accept, **kwargs)
+
     def read_resource(self, server, oid, iid, rid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d/%d/%d' % (oid, iid, rid), expect_error_code,
                               accept=accept, **kwargs)
@@ -204,6 +202,26 @@ class Lwm2mDmOperations(Lwm2mAsserts):
 
     def read_object(self, server, oid, expect_error_code=None, accept=None, **kwargs):
         return self.read_path(server, '/%d' % oid, expect_error_code, accept=accept, **kwargs)
+
+    def read_composite(self, server, paths=[], expect_error_code=None, accept=None, **kwargs):
+        req = Lwm2mReadComposite(paths=paths, accept=accept)
+        expected_res = self._make_expected_res(
+            req, Lwm2mContent, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
+    def observe_composite(self, server, paths=[], expect_error_code=None, accept=None, **kwargs):
+        req = Lwm2mObserveComposite(paths=paths, accept=accept)
+        expected_res = self._make_expected_res(
+            req, Lwm2mContent, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
+    def write_composite(self, server, content=b'', expect_error_code=None,
+                        format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR,
+                        **kwargs):
+        req = Lwm2mWriteComposite(content=content, format=format)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
 
     def write_object(self, server, oid, content=b'', expect_error_code=None,
                      format=coap.ContentFormat.APPLICATION_LWM2M_TLV, **kwargs):
@@ -230,6 +248,15 @@ class Lwm2mDmOperations(Lwm2mAsserts):
             req, Lwm2mChanged, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
 
+    def write_resource_instance(self, server, oid, iid, rid, riid, content=b'', partial=False,
+                                format=coap.ContentFormat.TEXT_PLAIN,
+                                expect_error_code=None, **kwargs):
+        req = Lwm2mWrite('/%d/%d/%d/%d' % (oid, iid, rid, riid), content, format=format,
+                         update=partial)
+        expected_res = self._make_expected_res(
+            req, Lwm2mChanged, expect_error_code)
+        return self._perform_action(server, req, expected_res, **kwargs)
+
     def execute_resource(self, server, oid, iid, rid, content=b'', expect_error_code=None,
                          **kwargs):
         req = Lwm2mExecute('/%d/%d/%d' % (oid, iid, rid), content=content)
@@ -249,8 +276,9 @@ class Lwm2mDmOperations(Lwm2mAsserts):
 
         return '/' + '/'.join(map(lambda arg: '%d' % arg, ensure_valid_path(list(args))))
 
-    def discover(self, server, oid=None, iid=None, rid=None, expect_error_code=None, **kwargs):
-        req = Lwm2mDiscover(self.make_path(oid, iid, rid))
+    def discover(self, server, oid=None, iid=None, rid=None, depth=None, expect_error_code=None,
+                 **kwargs):
+        req = Lwm2mDiscover(self.make_path(oid, iid, rid), depth)
         expected_res = self._make_expected_res(
             req, Lwm2mContent, expect_error_code)
         return self._perform_action(server, req, expected_res, **kwargs)
@@ -315,6 +343,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
     def make_demo_args(self,
                        endpoint_name,
                        servers,
+                       minimum_version,
+                       maximum_version,
                        fw_updated_marker_path,
                        ciphersuites=(0xC030, 0xC0A8, 0xC0AE)):
         """
@@ -337,6 +367,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             protocol = 'coaps'
 
         args = ['--endpoint-name', endpoint_name,
+                '-v', minimum_version, '-V', maximum_version,
                 '--security-mode', security_mode]
         if fw_updated_marker_path is not None:
             args += ['--fw-updated-marker-path', fw_updated_marker_path]
@@ -344,6 +375,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             args += ['--ciphersuites', ','.join(map(hex, ciphersuites))]
 
         for serv in servers:
+            if serv.transport == Transport.TCP:
+                protocol += '+' + str(Transport.TCP)
             args += ['--server-uri', '%s://127.0.0.1:%d' %
                      (protocol, serv.get_listen_port(),)]
 
@@ -547,6 +580,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                                 legacy_server_initiated_bootstrap_allowed=True,
                                 extra_cmdline_args=[],
                                 auto_register=True,
+                                minimum_version='1.0',
+                                maximum_version='1.0',
                                 endpoint_name=DEMO_ENDPOINT_NAME,
                                 lifetime=None,
                                 binding=None,
@@ -621,6 +656,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         demo_args += self.make_demo_args(
             endpoint_name, all_servers_passed,
+            minimum_version, maximum_version,
             fw_updated_marker_path, **kwargs)
         demo_args += extra_cmdline_args
         if lifetime is not None:
@@ -638,6 +674,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                         serv.listen()
                 for serv in servers_passed:
                     self.assertDemoRegisters(serv,
+                                             version=maximum_version,
                                              lifetime=lifetime,
                                              binding=binding)
         except Exception:
@@ -792,6 +829,11 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
     def coap_ping(self, server=None, timeout_s=-1):
         serv = server or self.serv
+        if serv.transport == Transport.TCP:
+            req = coap.Packet(code=coap.Code.SIGNALING_PING)
+            serv.send(req)
+            self.assertEqual(coap.Code.SIGNALING_PONG, serv.recv(timeout_s=timeout_s).code)
+            return
         req = Lwm2mEmpty(type=coap.Type.CONFIRMABLE)
         serv.send(req)
         self.assertMsgEqual(Lwm2mReset.matching(req)(), serv.recv(timeout_s=timeout_s))
@@ -817,6 +859,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
 
         for serv in deregister_servers:
             self.assertDemoDeregisters(serv, reset=False, timeout_s=timeout_s, *args, **kwargs)
+            if serv.transport == Transport.TCP:
+                self.assertDemoReleases(serv)
 
         logging.debug('demo terminated')
 
@@ -850,6 +894,9 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
         return bool(int(self.communicate('get-all-connections-failed',
                                          match_regex='ALL_CONNECTIONS_FAILED==([0-9])\n').group(1)))
 
+    def advance_demo_time(self, duration_s=0.0):
+        self.communicate('advance-time %s' % duration_s)
+
     def ongoing_registration_exists(self):
         result = self.communicate('ongoing-registration-exists',
                                   match_regex='ONGOING_REGISTRATION==(true|false)\n').group(1)
@@ -872,6 +919,27 @@ class SingleServerAccessor:
     @serv.deleter
     def serv(self):
         del self.servers[0]
+
+
+class Lwm2mSingleTcpServerTest(Lwm2mTest, SingleServerAccessor):
+    def runTest(self):
+        pass
+
+    def setUp(self, extra_cmdline_args=None, *args, **kwargs):
+        extra_args = ['-q', 'T']
+        coap_server = coap.Server(transport=Transport.TCP)
+        if extra_cmdline_args is not None:
+            extra_args += extra_cmdline_args
+
+        if 'servers' not in kwargs:
+            kwargs['servers'] = [Lwm2mServer(coap_server)]
+
+        self.setup_demo_with_servers(extra_cmdline_args=extra_args,
+                                     *args,
+                                     **kwargs)
+
+    def tearDown(self, *args, **kwargs):
+        self.teardown_demo_with_servers(*args, **kwargs)
 
 
 class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
@@ -913,6 +981,23 @@ class Lwm2mSingleServerTest(Lwm2mTest, SingleServerAccessor):
 
 
 class Lwm2mDtlsSingleServerTest(Lwm2mSingleServerTest):
+    PSK_IDENTITY = b'test-identity'
+    PSK_KEY = b'test-key'
+
+    def setUp(self, *args, **kwargs):
+        super().setUp(psk_identity=self.PSK_IDENTITY, psk_key=self.PSK_KEY, *args, **kwargs)
+
+
+class Lwm2mSingleTcpServerTest(Lwm2mSingleServerTest):
+    def setUp(self, extra_cmdline_args=None, *args, **kwargs):
+        extra_args = ['-q', 'T']
+        if extra_cmdline_args is not None:
+            extra_args += extra_cmdline_args
+
+        super().setUp(extra_cmdline_args=extra_args, transport=Transport.TCP, *args, **kwargs)
+
+
+class Lwm2mTlsSingleServerTest(Lwm2mSingleTcpServerTest):
     PSK_IDENTITY = b'test-identity'
     PSK_KEY = b'test-key'
 

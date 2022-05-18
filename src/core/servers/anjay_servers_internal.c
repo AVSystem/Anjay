@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -144,9 +137,6 @@ _anjay_collect_socket_entries(anjay_unlocked_t *anjay) {
     AVS_LIST(anjay_socket_entry_t) result = NULL;
     AVS_LIST(anjay_socket_entry_t) *tail_ptr = &result;
 
-    // Note that there is at most one SMS socket (as the modem connection is
-    // common to all servers) so "sms_active" and "sms_queue_mode" are common
-    // for all of them.
     anjay_connection_ref_t ref;
     AVS_LIST_FOREACH(ref.server, anjay->servers) {
         if (!_anjay_server_active(ref.server)) {
@@ -211,6 +201,13 @@ _anjay_servers_find_ptr(AVS_LIST(anjay_server_info_t) *servers,
 
     anjay_log(TRACE, _("no server with SSID ") "%u", ssid);
     return NULL;
+}
+
+anjay_server_info_t *_anjay_servers_find(anjay_unlocked_t *anjay,
+                                         anjay_ssid_t ssid) {
+    AVS_LIST(anjay_server_info_t) *ptr =
+            _anjay_servers_find_ptr(&anjay->servers, ssid);
+    return ptr ? *ptr : NULL;
 }
 
 bool _anjay_server_active(anjay_server_info_t *server) {
@@ -291,3 +288,12 @@ int _anjay_servers_foreach_active(anjay_unlocked_t *anjay,
 
     return 0;
 }
+
+#if defined(ANJAY_WITH_LWM2M11)
+bool _anjay_bootstrap_server_exists(anjay_unlocked_t *anjay) {
+    AVS_STATIC_ASSERT(ANJAY_SSID_BOOTSTRAP == UINT16_MAX,
+                      bootstrap_server_is_last);
+    AVS_LIST(anjay_server_info_t) candidate = AVS_LIST_TAIL(anjay->servers);
+    return candidate && candidate->ssid == ANJAY_SSID_BOOTSTRAP;
+}
+#endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_EST)

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -72,8 +65,8 @@ static int assign_iid(server_repr_t *repr, anjay_iid_t *inout_iid) {
     return 0;
 }
 
-static int insert_created_instance(server_repr_t *repr,
-                                   AVS_LIST(server_instance_t) new_instance) {
+static void insert_created_instance(server_repr_t *repr,
+                                    AVS_LIST(server_instance_t) new_instance) {
     AVS_LIST(server_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
         assert((*ptr)->iid != new_instance->iid);
@@ -83,7 +76,6 @@ static int insert_created_instance(server_repr_t *repr,
     }
     _anjay_serv_mark_modified(repr);
     AVS_LIST_INSERT(ptr, new_instance);
-    return 0;
 }
 
 static int add_instance(server_repr_t *repr,
@@ -136,11 +128,42 @@ static int add_instance(server_repr_t *repr,
 #    endif // ANJAY_WITHOUT_DEREGISTER
     new_instance->has_notification_storing = true;
     new_instance->notification_storing = instance->notification_storing;
-
-    if (insert_created_instance(repr, new_instance)) {
-        AVS_LIST_CLEAR(&new_instance);
-        return -1;
+#    ifdef ANJAY_WITH_LWM2M11
+    new_instance->bootstrap_on_registration_failure =
+            instance->bootstrap_on_registration_failure
+                    ? *instance->bootstrap_on_registration_failure
+                    : true;
+    new_instance->has_server_communication_retry_count =
+            !!instance->communication_retry_count;
+    if (new_instance->has_server_communication_retry_count) {
+        new_instance->server_communication_retry_count =
+                *instance->communication_retry_count;
     }
+    new_instance->has_server_communication_retry_timer =
+            !!instance->communication_retry_timer;
+    if (new_instance->has_server_communication_retry_timer) {
+        new_instance->server_communication_retry_timer =
+                *instance->communication_retry_timer;
+    }
+    new_instance->preferred_transport = instance->preferred_transport;
+    new_instance->has_server_communication_sequence_retry_count =
+            !!instance->communication_sequence_retry_count;
+    if (new_instance->has_server_communication_sequence_retry_count) {
+        new_instance->server_communication_sequence_retry_count =
+                *instance->communication_sequence_retry_count;
+    }
+    new_instance->has_server_communication_sequence_delay_timer =
+            !!instance->communication_sequence_delay_timer;
+    if (new_instance->has_server_communication_sequence_delay_timer) {
+        new_instance->server_communication_sequence_delay_timer =
+                *instance->communication_sequence_delay_timer;
+    }
+#        ifdef ANJAY_WITH_SEND
+    new_instance->mute_send = instance->mute_send;
+#        endif // ANJAY_WITH_SEND
+#    endif     // ANJAY_WITH_LWM2M11
+
+    insert_created_instance(repr, new_instance);
     server_log(INFO, _("Added instance ") "%u" _(" (SSID: ") "%u" _(")"),
                *inout_iid, instance->ssid);
     return 0;
@@ -189,10 +212,7 @@ static int serv_instance_create(anjay_unlocked_t *anjay,
     created->iid = iid;
     _anjay_serv_reset_instance(created);
 
-    if (insert_created_instance(repr, created)) {
-        AVS_LIST_CLEAR(&created);
-        return ANJAY_ERR_INTERNAL;
-    }
+    insert_created_instance(repr, created);
     return 0;
 }
 
@@ -258,6 +278,59 @@ static int serv_list_resources(anjay_unlocked_t *anjay,
                                                   : ANJAY_DM_RES_ABSENT);
     _anjay_dm_emit_res_unlocked(ctx, SERV_RES_REGISTRATION_UPDATE_TRIGGER,
                                 ANJAY_DM_RES_E, ANJAY_DM_RES_PRESENT);
+#    ifdef ANJAY_WITH_LWM2M11
+#        ifdef ANJAY_WITH_BOOTSTRAP
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_BOOTSTRAP_REQUEST_TRIGGER,
+                                ANJAY_DM_RES_E,
+                                _anjay_bootstrap_server_exists(anjay)
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+#        endif // ANJAY_WITH_BOOTSTRAP
+    _anjay_dm_emit_res_unlocked(
+            ctx, SERV_RES_TLS_DTLS_ALERT_CODE, ANJAY_DM_RES_R,
+            inst->has_last_alert ? ANJAY_DM_RES_PRESENT : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_LAST_BOOTSTRAPPED, ANJAY_DM_RES_R,
+                                inst->has_last_bootstrapped_timestamp
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+#        ifdef ANJAY_WITH_BOOTSTRAP
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE,
+                                ANJAY_DM_RES_BS_RW, ANJAY_DM_RES_PRESENT);
+#        endif // ANJAY_WITH_BOOTSTRAP
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT,
+                                ANJAY_DM_RES_RW,
+                                inst->has_server_communication_retry_count
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER,
+                                ANJAY_DM_RES_RW,
+                                inst->has_server_communication_retry_timer
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(
+            ctx,
+            SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT,
+            ANJAY_DM_RES_RW,
+            inst->has_server_communication_sequence_retry_count
+                    ? ANJAY_DM_RES_PRESENT
+                    : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(
+            ctx,
+            SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER,
+            ANJAY_DM_RES_RW,
+            inst->has_server_communication_sequence_delay_timer
+                    ? ANJAY_DM_RES_PRESENT
+                    : ANJAY_DM_RES_ABSENT);
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_PREFERRED_TRANSPORT,
+                                ANJAY_DM_RES_RW,
+                                inst->preferred_transport
+                                        ? ANJAY_DM_RES_PRESENT
+                                        : ANJAY_DM_RES_ABSENT);
+#        ifdef ANJAY_WITH_SEND
+    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_MUTE_SEND, ANJAY_DM_RES_RW,
+                                ANJAY_DM_RES_PRESENT);
+#        endif // ANJAY_WITH_SEND
+#    endif     // ANJAY_WITH_LWM2M11
     return 0;
 }
 
@@ -292,6 +365,37 @@ static int serv_read(anjay_unlocked_t *anjay,
         return _anjay_ret_bool_unlocked(ctx, inst->notification_storing);
     case SERV_RES_BINDING:
         return _anjay_ret_string_unlocked(ctx, inst->binding.data);
+#    ifdef ANJAY_WITH_LWM2M11
+    case SERV_RES_TLS_DTLS_ALERT_CODE:
+        return _anjay_ret_u64_unlocked(ctx, inst->last_alert);
+    case SERV_RES_LAST_BOOTSTRAPPED:
+        return _anjay_ret_i64_unlocked(ctx, inst->last_bootstrapped_timestamp);
+#        ifdef ANJAY_WITH_BOOTSTRAP
+    case SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE:
+        return _anjay_ret_bool_unlocked(
+                ctx, inst->bootstrap_on_registration_failure);
+#        endif // ANJAY_WITH_BOOTSTRAP
+    case SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT:
+        return _anjay_ret_u64_unlocked(ctx,
+                                       inst->server_communication_retry_count);
+    case SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER:
+        return _anjay_ret_u64_unlocked(ctx,
+                                       inst->server_communication_retry_timer);
+    case SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT:
+        return _anjay_ret_u64_unlocked(
+                ctx, inst->server_communication_sequence_retry_count);
+    case SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER:
+        return _anjay_ret_u64_unlocked(
+                ctx, inst->server_communication_sequence_delay_timer);
+    case SERV_RES_PREFERRED_TRANSPORT: {
+        char tmp[2] = { inst->preferred_transport, '\0' };
+        return _anjay_ret_string_unlocked(ctx, tmp);
+    }
+#        ifdef ANJAY_WITH_SEND
+    case SERV_RES_MUTE_SEND:
+        return _anjay_ret_bool_unlocked(ctx, inst->mute_send);
+#        endif // ANJAY_WITH_SEND
+#    endif     // ANJAY_WITH_LWM2M11
     default:
         AVS_UNREACHABLE(
                 "Read called on unknown or non-readable Server resource");
@@ -358,6 +462,74 @@ static int serv_write(anjay_unlocked_t *anjay,
             inst->has_notification_storing = true;
         }
         return retval;
+#    ifdef ANJAY_WITH_LWM2M11
+    case SERV_RES_TLS_DTLS_ALERT_CODE: {
+        uint32_t last_alert;
+        if (!(retval = _anjay_get_u32_unlocked(ctx, &last_alert))) {
+            inst->last_alert = (uint8_t) last_alert;
+            inst->has_last_alert = true;
+        }
+        return retval;
+    }
+    case SERV_RES_LAST_BOOTSTRAPPED:
+        if (!(retval = _anjay_get_i64_unlocked(
+                      ctx, &inst->last_bootstrapped_timestamp))) {
+            inst->has_last_bootstrapped_timestamp = true;
+        }
+        return retval;
+#        ifdef ANJAY_WITH_BOOTSTRAP
+    case SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE:
+        return _anjay_get_bool_unlocked(
+                ctx, &inst->bootstrap_on_registration_failure);
+#        endif // ANJAY_WITH_BOOTSTRAP
+    case SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT:
+        if (!(retval = _anjay_get_u32_unlocked(
+                      ctx, &inst->server_communication_retry_count))) {
+            inst->has_server_communication_retry_count = true;
+            if (inst->server_communication_retry_count == 0) {
+                server_log(ERROR,
+                           "Server Communication Retry Count cannot be 0");
+                retval = ANJAY_ERR_BAD_REQUEST;
+            }
+        }
+        return retval;
+    case SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER:
+        if (!(retval = _anjay_get_u32_unlocked(
+                      ctx, &inst->server_communication_retry_timer))) {
+            inst->has_server_communication_retry_timer = true;
+        }
+        return retval;
+    case SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT:
+        if (!(retval = _anjay_get_u32_unlocked(
+                      ctx, &inst->server_communication_sequence_retry_count))) {
+            inst->has_server_communication_sequence_retry_count = true;
+            if (inst->server_communication_sequence_retry_count == 0) {
+                server_log(ERROR,
+                           "Server Sequence Communication Retry Count cannot "
+                           "be 0");
+                retval = ANJAY_ERR_BAD_REQUEST;
+            }
+        }
+        return retval;
+    case SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER:
+        if (!(retval = _anjay_get_u32_unlocked(
+                      ctx, &inst->server_communication_sequence_delay_timer))) {
+            inst->has_server_communication_sequence_delay_timer = true;
+        }
+        return retval;
+    case SERV_RES_PREFERRED_TRANSPORT: {
+        char tmp[2];
+        if (!(retval = _anjay_get_string_unlocked(ctx, tmp, sizeof(tmp)))) {
+            inst->preferred_transport = tmp[0];
+        }
+        return retval == ANJAY_BUFFER_TOO_SHORT ? ANJAY_ERR_BAD_REQUEST
+                                                : retval;
+    }
+#        ifdef ANJAY_WITH_SEND
+    case SERV_RES_MUTE_SEND:
+        return _anjay_get_bool_unlocked(ctx, &inst->mute_send);
+#        endif // ANJAY_WITH_SEND
+#    endif     // ANJAY_WITH_LWM2M11
     default:
         AVS_UNREACHABLE(
                 "Write called on unknown or non-read/writable Server resource");
@@ -390,6 +562,10 @@ static int serv_execute(anjay_unlocked_t *anjay,
         return _anjay_schedule_registration_update_unlocked(anjay, inst->ssid)
                        ? ANJAY_ERR_BAD_REQUEST
                        : 0;
+#    if defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
+    case SERV_RES_BOOTSTRAP_REQUEST_TRIGGER:
+        return _anjay_schedule_bootstrap_request_unlocked(anjay);
+#    endif // defined(ANJAY_WITH_LWM2M11) && defined(ANJAY_WITH_BOOTSTRAP)
     default:
         AVS_UNREACHABLE(
                 "Execute called on unknown or non-executable Server resource");
@@ -582,6 +758,47 @@ int anjay_server_object_install(anjay_t *anjay_locked) {
         }
         if (result) {
             AVS_LIST_CLEAR(&repr);
+        }
+    }
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+
+int anjay_server_object_set_lifetime(anjay_t *anjay_locked,
+                                     anjay_iid_t iid,
+                                     int32_t lifetime) {
+    if (lifetime <= 0) {
+        server_log(ERROR, _("lifetime MUST BE strictly positive"));
+        return -1;
+    }
+    assert(anjay_locked);
+    int result = -1;
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    const anjay_dm_installed_object_t *server_obj =
+            _anjay_dm_find_object_by_oid(anjay, SERVER.oid);
+    server_repr_t *repr = _anjay_serv_get(*server_obj);
+    if (repr->saved_instances) {
+        server_log(ERROR, _("cannot set Lifetime while some transaction is "
+                            "started on the Server Object"));
+    } else {
+        AVS_LIST(server_instance_t) it;
+        AVS_LIST_FOREACH(it, repr->instances) {
+            if (it->iid >= iid) {
+                break;
+            }
+        }
+
+        if (!it || it->iid != iid) {
+            server_log(ERROR, _("instance ") "%" PRIu16 _(" not found"), iid);
+        } else if (it->lifetime != lifetime) {
+            if (_anjay_notify_changed_unlocked(anjay, ANJAY_DM_OID_SERVER,
+                                               it->iid,
+                                               ANJAY_DM_RID_SERVER_LIFETIME)) {
+                server_log(WARNING, _("could not notify lifetime change"));
+            }
+            repr->modified_since_persist = true;
+            it->lifetime = lifetime;
+            result = 0;
         }
     }
     ANJAY_MUTEX_UNLOCK(anjay_locked);

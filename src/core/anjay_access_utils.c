@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -82,8 +75,7 @@ static int write_u16(anjay_unlocked_t *anjay,
         .value = value
     };
     return _anjay_dm_call_resource_write(anjay, ac_obj_ptr, iid, rid, riid,
-                                         (anjay_unlocked_input_ctx_t *) &ctx,
-                                         NULL);
+                                         (anjay_unlocked_input_ctx_t *) &ctx);
 }
 
 static int read_ids_from_ac_instance(anjay_unlocked_t *anjay,
@@ -121,8 +113,7 @@ static int read_mask(anjay_unlocked_t *anjay,
             _anjay_output_buf_ctx_init((avs_stream_t *) &stream);
     int result =
             _anjay_dm_call_resource_read(anjay, obj, iid, rid, riid,
-                                         (anjay_unlocked_output_ctx_t *) &ctx,
-                                         NULL);
+                                         (anjay_unlocked_output_ctx_t *) &ctx);
     if (!result) {
         if (avs_stream_outbuf_offset(&stream) != sizeof(mask)) {
             return -1;
@@ -622,7 +613,7 @@ process_orphaned_instances_clb(anjay_unlocked_t *anjay,
         // Rewrite the modified ACL to the data model
         if (!result) {
             result = _anjay_dm_call_resource_reset(
-                    anjay, obj, iid, ANJAY_DM_RID_ACCESS_CONTROL_ACL, NULL);
+                    anjay, obj, iid, ANJAY_DM_RID_ACCESS_CONTROL_ACL);
         }
         AVS_LIST_CLEAR(&acl) {
             if (!result) {
@@ -657,7 +648,7 @@ static int remove_referred_instance(anjay_unlocked_t *anjay,
                                           (anjay_iid_t) it->target_iid)
                            > 0
             && !(result = _anjay_dm_call_instance_remove(
-                         anjay, obj, (anjay_iid_t) it->target_iid, NULL))) {
+                         anjay, obj, (anjay_iid_t) it->target_iid))) {
         result = _anjay_notify_queue_instance_removed(
                 out_dm_changes, it->target_oid, it->target_iid);
     }
@@ -711,7 +702,7 @@ remove_orphaned_instances(anjay_unlocked_t *anjay,
                             remove_referred_instance(anjay, instances_to_remove,
                                                      new_notifications_queue))
                 || (result = _anjay_dm_call_instance_remove(
-                            anjay, ac_obj, instances_to_remove->ac_iid, NULL))
+                            anjay, ac_obj, instances_to_remove->ac_iid))
                 || (result = _anjay_notify_queue_instance_removed(
                             new_notifications_queue,
                             ANJAY_DM_OID_ACCESS_CONTROL,
@@ -851,7 +842,7 @@ static int perform_removes(anjay_unlocked_t *anjay,
     AVS_LIST_CLEAR(&args.iids_to_remove) {
         (void) (result
                 || (result = _anjay_dm_call_instance_remove(
-                            anjay, ac_obj, *args.iids_to_remove, NULL))
+                            anjay, ac_obj, *args.iids_to_remove))
                 || (result = _anjay_notify_queue_instance_removed(
                             new_notifications_queue,
                             ANJAY_DM_OID_ACCESS_CONTROL,
@@ -940,9 +931,8 @@ validate_resources_to_write(anjay_unlocked_t *anjay,
  */
 static int perform_adds(anjay_unlocked_t *anjay,
                         const anjay_dm_installed_object_t *ac_obj,
+                        anjay_ssid_t origin_ssid,
                         anjay_notify_queue_t *notifications_queue) {
-    const anjay_ssid_t origin_ssid = _anjay_dm_current_ssid(anjay);
-
     AVS_LIST(anjay_notify_queue_object_entry_t) it;
     AVS_LIST_FOREACH(it, *notifications_queue) {
         if (it->oid == ANJAY_DM_OID_SECURITY
@@ -964,7 +954,7 @@ static int perform_adds(anjay_unlocked_t *anjay,
                     || (result = _anjay_dm_select_free_iid(anjay, ac_obj,
                                                            &ac_iid))
                     || (result = _anjay_dm_call_instance_create(anjay, ac_obj,
-                                                                ac_iid, NULL))
+                                                                ac_iid))
                     || (result = validate_resources_to_write(anjay, ac_obj,
                                                              ac_iid))
                     || (result = write_u16(anjay, ac_obj, ac_iid,
@@ -1040,6 +1030,7 @@ static int generate_apparent_instance_set_change_notifications(
 #endif // ANJAY_WITH_ACCESS_CONTROL
 
 int _anjay_sync_access_control(anjay_unlocked_t *anjay,
+                               anjay_ssid_t origin_ssid,
                                anjay_notify_queue_t *notifications_queue) {
 #ifndef ANJAY_WITH_ACCESS_CONTROL
     (void) anjay;
@@ -1053,11 +1044,13 @@ int _anjay_sync_access_control(anjay_unlocked_t *anjay,
     bool might_caused_orphaned_ac_instances;
     bool have_adds;
     bool might_have_removes;
-    what_changed(_anjay_dm_current_ssid(anjay), *notifications_queue,
+    what_changed(origin_ssid, *notifications_queue,
                  &might_caused_orphaned_ac_instances, &have_adds,
                  &might_have_removes);
+    if (avs_is_err(_anjay_dm_transaction_begin(anjay))) {
+        return ANJAY_ERR_INTERNAL;
+    }
     int result = 0;
-    _anjay_dm_transaction_begin(anjay);
     if (might_have_removes) {
         result = perform_removes(anjay, ac_obj, notifications_queue);
     }
@@ -1065,7 +1058,7 @@ int _anjay_sync_access_control(anjay_unlocked_t *anjay,
         result = remove_orphaned_instances(anjay, ac_obj, notifications_queue);
     }
     if (!result && have_adds) {
-        result = perform_adds(anjay, ac_obj, notifications_queue);
+        result = perform_adds(anjay, ac_obj, origin_ssid, notifications_queue);
     }
     if (!result) {
         result = generate_apparent_instance_set_change_notifications(

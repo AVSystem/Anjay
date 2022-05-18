@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Migrating from Anjay 2.2.5
 ==========================
@@ -84,17 +77,77 @@ Here is a summary of the relevant API changes:
     it can also be ``NULL`` if that is not necessary.
 
 
+Refactor of the Attribute Storage module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The Attribute Storage feature is no longer a standalone module and has been
+moved to the library core. From the user perspective, this has the following
+consequences:
+
+* Explicit installation of this module in runtime is no longer necessary. The
+  ``anjay_attr_storage_install()`` method has been removed.
+* The ``ANJAY_WITH_MODULE_ATTR_STORAGE`` configuration macro in
+  ``anjay_config.h`` has been renamed to ``ANJAY_WITH_ATTR_STORAGE``.
+* The ``WITH_MODULE_attr_storage`` CMake option (equivalent to the macro
+  mentioned above) has been renamed to ``WITH_ATTR_STORAGE``.
+
+Additionally, the behavior of ``anjay_attr_storage_restore()`` has been
+changed - from now on, this function fails if supplied source stream is
+empty. This change makes the function consistent with other
+``anjay_*_restore()`` APIs.
+
+Refactor of offline mode control API
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Since Anjay 2.4, offline mode is configurable independently per every
+transport. Below is a list of removed functions and counterparts that should
+be used:
+
++--------------------------------+------------------------------------------+
+| Removed function               | Counterpart                              |
++--------------------------------+------------------------------------------+
+| ``anjay_is_offline()``         | ``anjay_transport_is_offline()``         |
++--------------------------------+------------------------------------------+
+| ``anjay_enter_offline()``      | ``anjay_transport_enter_offline()``      |
++--------------------------------+------------------------------------------+
+| ``anjay_exit_offline()``       | ``anjay_transport_exit_offline()``       |
++--------------------------------+------------------------------------------+
+| ``anjay_schedule_reconnect()`` | ``anjay_transport_schedule_reconnect()`` |
++--------------------------------+------------------------------------------+
+
+New functions should be called with ``transport_set`` argument set to
+``ANJAY_TRANSPORT_SET_ALL`` to achieve the same behavior.
+
+Addition of the con attribute to public API
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``con`` attribute, enabled via the ``WITH_CON_ATTR`` CMake option, has been
+previously supported as a custom extension. Since an identical flag has been
+standardized as part of LwM2M TS 1.2, it has been included in the public API as
+part of preparations to support the new protocol version.
+
+If you initialize ``anjay_dm_oi_attributes_t`` or ``anjay_dm_r_attributes_t``
+objects manually, you may need to initialize the new ``con`` field as well,
+since the empty ``ANJAY_DM_CON_ATTR_NONE`` value is **NOT** the default
+zero-initialized value.
+
+As more new attributes may be added in future versions of Anjay, it is
+recommended to initialize such structures with ``ANJAY_DM_OI_ATTRIBUTES_EMPTY``
+or ``ANJAY_DM_R_ATTRIBUTES_EMPTY`` constants, and then fill in the attributes
+you actually intend to set.
+
+
 Other changes
 ^^^^^^^^^^^^^
 
-* Declaration of ``anjay_smsdrv_cleanup()`` (only relevant for the commercial
-  version) has been moved from ``anjay/core.h`` to ``anjay/sms.h``.
+* Declaration of ``anjay_smsdrv_cleanup()`` has been moved from ``anjay/core.h``
+  to ``anjay/sms.h`` in versions that include the SMS commercial feature. It has
+  been removed altogether from versions that do not support SMS.
 * The following compile-time constants have been removed. None of them have been
   actually used in Anjay 2.x:
 
   * ``MAX_FLOAT_STRING_SIZE``
   * ``MAX_OBSERVABLE_RESOURCE_SIZE``
-  * ``WITH_ATTR_STORAGE``
 
 * **Getter function for retrieving security information from data model**
 
@@ -114,7 +167,7 @@ Other changes
 
   * The security configuration is now returned through an output argument with
     any necessary internal buffers cached inside the Anjay object instead of
-    using heap allocation. Please refer to the Doxygen-based documenation of
+    using heap allocation. Please refer to the Doxygen-based documentation of
     this function for details.
 
     Due to the change in lifetime requirements, no compatibility variant is
@@ -160,6 +213,28 @@ component:
                                    avs_coap_udp_response_cache_t *cache,
                                    avs_crypto_prng_ctx_t *prng_ctx);
 
+   * **TCP context creation**
+
+     - **Old API:**
+       ::
+
+           avs_coap_ctx_t *avs_coap_tcp_ctx_create(avs_sched_t *sched,
+                                                   avs_shared_buffer_t *in_buffer,
+                                                   avs_shared_buffer_t *out_buffer,
+                                                   size_t max_opts_size,
+                                                   avs_time_duration_t request_timeout);
+
+     - **New API:**
+
+       .. snippet-source:: deps/avs_coap/include_public/avsystem/coap/tcp.h
+         :emphasize-lines: 6
+
+           avs_coap_ctx_t *avs_coap_tcp_ctx_create(avs_sched_t *sched,
+                                                   avs_shared_buffer_t *in_buffer,
+                                                   avs_shared_buffer_t *out_buffer,
+                                                   size_t max_opts_size,
+                                                   avs_time_duration_t request_timeout,
+                                                   avs_crypto_prng_ctx_t *prng_ctx);
 
 .. note ::
 
@@ -189,102 +264,99 @@ The general rename patterns are:
 
 Below is a detailed list of all renamed files:
 
-+------------------------------------------------+-----------------------------------------------------+
-| Old header file                                | New header file                                     |
-+================================================+=====================================================+
-| ``avsystem/commons/addrinfo.h``                | ``avsystem/commons/avs_addrinfo.h``                 |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/aead.h``                    | ``avsystem/commons/avs_aead.h``                     |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/base64.h``                  | ``avsystem/commons/avs_base64.h``                   |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/buffer.h``                  | ``avsystem/commons/avs_buffer.h``                   |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/cleanup.h``                 | ``avsystem/commons/avs_cleanup.h``                  |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/condvar.h``                 | ``avsystem/commons/avs_condvar.h``                  |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/defs.h``                    | ``avsystem/commons/avs_defs.h``                     |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/errno.h``                   | ``avsystem/commons/avs_errno.h``                    |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/errno_map.h``               | ``avsystem/commons/avs_errno_map.h``                |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/hkdf.h``                    | ``avsystem/commons/avs_hkdf.h``                     |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/http.h``                    | ``avsystem/commons/avs_http.h``                     |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/init_once.h``               | ``avsystem/commons/avs_init_once.h``                |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/list.h``                    | ``avsystem/commons/avs_list.h``                     |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/log.h``                     | ``avsystem/commons/avs_log.h``                      |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/memory.h``                  | ``avsystem/commons/avs_memory.h``                   |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/mutex.h``                   | ``avsystem/commons/avs_mutex.h``                    |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/net.h``                     | ``avsystem/commons/avs_net.h``                      |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/persistence.h``             | ``avsystem/commons/avs_persistence.h``              |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/rbtree.h``                  | ``avsystem/commons/avs_rbtree.h``                   |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/sched.h``                   | ``avsystem/commons/avs_sched.h``                    |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/shared_buffer.h``           | ``avsystem/commons/avs_shared_buffer.h``            |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/socket.h``                  | | ``avsystem/commons/avs_socket.h``                 |
-|                                                | | ``avsystem/commons/avs_crypto_pki.h`` [#pki]_     |
-|                                                | | ``avsystem/commons/avs_net_pki_compat.h`` [#pki]_ |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/socket_v_table.h``          | ``avsystem/commons/avs_socket_v_table.h``           |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream.h``                  | ``avsystem/commons/avs_stream.h``                   |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/stream_buffered.h``  | ``avsystem/commons/avs_stream_buffered.h``          |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/stream_file.h``      | ``avsystem/commons/avs_stream_file.h``              |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/stream_inbuf.h``     | ``avsystem/commons/avs_stream_inbuf.h``             |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/md5.h``              | ``avsystem/commons/avs_stream_md5.h``               |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/stream_membuf.h``    | ``avsystem/commons/avs_stream_membuf.h``            |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/stream_net.h``       | ``avsystem/commons/avs_stream_net.h``               |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/netbuf.h``           | ``avsystem/commons/avs_stream_netbuf.h``            |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/stream_outbuf.h``    | ``avsystem/commons/avs_stream_outbuf.h``            |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream/stream_simple_io.h`` | ``avsystem/commons/avs_stream_simple_io.h``         |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/stream_v_table.h``          | ``avsystem/commons/avs_stream_v_table.h``           |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/time.h``                    | ``avsystem/commons/avs_time.h``                     |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/unit/memstream.h``          | ``avsystem/commons/avs_unit_memstream.h``           |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/unit/mock_helpers.h``       | ``avsystem/commons/avs_unit_mock_helpers.h``        |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/unit/mocksock.h``           | ``avsystem/commons/avs_unit_mocksock.h``            |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/unit/test.h``               | ``avsystem/commons/avs_unit_test.h``                |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/url.h``                     | ``avsystem/commons/avs_url.h``                      |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/utils.h``                   | ``avsystem/commons/avs_utils.h``                    |
-+------------------------------------------------+-----------------------------------------------------+
-| ``avsystem/commons/vector.h``                  | ``avsystem/commons/avs_vector.h``                   |
-+------------------------------------------------+-----------------------------------------------------+
++------------------------------------------------+-------------------------------------------------+
+| Old header file                                | New header file                                 |
++================================================+=================================================+
+| ``avsystem/commons/addrinfo.h``                | ``avsystem/commons/avs_addrinfo.h``             |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/aead.h``                    | ``avsystem/commons/avs_aead.h``                 |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/base64.h``                  | ``avsystem/commons/avs_base64.h``               |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/buffer.h``                  | ``avsystem/commons/avs_buffer.h``               |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/cleanup.h``                 | ``avsystem/commons/avs_cleanup.h``              |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/condvar.h``                 | ``avsystem/commons/avs_condvar.h``              |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/defs.h``                    | ``avsystem/commons/avs_defs.h``                 |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/errno.h``                   | ``avsystem/commons/avs_errno.h``                |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/errno_map.h``               | ``avsystem/commons/avs_errno_map.h``            |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/hkdf.h``                    | ``avsystem/commons/avs_hkdf.h``                 |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/http.h``                    | ``avsystem/commons/avs_http.h``                 |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/init_once.h``               | ``avsystem/commons/avs_init_once.h``            |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/list.h``                    | ``avsystem/commons/avs_list.h``                 |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/log.h``                     | ``avsystem/commons/avs_log.h``                  |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/memory.h``                  | ``avsystem/commons/avs_memory.h``               |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/mutex.h``                   | ``avsystem/commons/avs_mutex.h``                |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/net.h``                     | ``avsystem/commons/avs_net.h``                  |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/persistence.h``             | ``avsystem/commons/avs_persistence.h``          |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/rbtree.h``                  | ``avsystem/commons/avs_rbtree.h``               |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/sched.h``                   | ``avsystem/commons/avs_sched.h``                |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/shared_buffer.h``           | ``avsystem/commons/avs_shared_buffer.h``        |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/socket.h``                  | | ``avsystem/commons/avs_socket.h``             |
+|                                                | | ``avsystem/commons/avs_crypto_pki.h`` [#pki]_ |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/socket_v_table.h``          | ``avsystem/commons/avs_socket_v_table.h``       |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream.h``                  | ``avsystem/commons/avs_stream.h``               |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/stream_buffered.h``  | ``avsystem/commons/avs_stream_buffered.h``      |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/stream_file.h``      | ``avsystem/commons/avs_stream_file.h``          |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/stream_inbuf.h``     | ``avsystem/commons/avs_stream_inbuf.h``         |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/md5.h``              | ``avsystem/commons/avs_stream_md5.h``           |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/stream_membuf.h``    | ``avsystem/commons/avs_stream_membuf.h``        |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/stream_net.h``       | ``avsystem/commons/avs_stream_net.h``           |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/netbuf.h``           | ``avsystem/commons/avs_stream_netbuf.h``        |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/stream_outbuf.h``    | ``avsystem/commons/avs_stream_outbuf.h``        |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream/stream_simple_io.h`` | ``avsystem/commons/avs_stream_simple_io.h``     |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/stream_v_table.h``          | ``avsystem/commons/avs_stream_v_table.h``       |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/time.h``                    | ``avsystem/commons/avs_time.h``                 |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/unit/memstream.h``          | ``avsystem/commons/avs_unit_memstream.h``       |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/unit/mock_helpers.h``       | ``avsystem/commons/avs_unit_mock_helpers.h``    |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/unit/mocksock.h``           | ``avsystem/commons/avs_unit_mocksock.h``        |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/unit/test.h``               | ``avsystem/commons/avs_unit_test.h``            |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/url.h``                     | ``avsystem/commons/avs_url.h``                  |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/utils.h``                   | ``avsystem/commons/avs_utils.h``                |
++------------------------------------------------+-------------------------------------------------+
+| ``avsystem/commons/vector.h``                  | ``avsystem/commons/avs_vector.h``               |
++------------------------------------------------+-------------------------------------------------+
 
 .. [#pki] Some symbols related to public-key cryptography have been refactored
           by moving from ``avsystem/commons/avs_socket.h`` to
-          ``avsystem/commons/avs_crypto_pki.h``, with additional renames. Old
-          names are available for compatibility via
-          ``avsystem/commons/avs_net_pki_compat.h``. For details, see
-          :ref:`avs-commons-pki-move-225`.
+          ``avsystem/commons/avs_crypto_pki.h``, with additional renames. For
+          details, see :ref:`avs-commons-pki-move-225`.
 
 Changes to avs_net socket API
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -324,6 +396,27 @@ Below is a reference of changes made to the ``avs_net`` socket API:
     have been **removed**. If you relied on those features in your non-POSIX
     environment, please replace them with the new PRNG context mechanism.
     See :doc:`MigratingCustomEntropy` for details.
+
+Introduction of new socket option
+"""""""""""""""""""""""""""""""""
+
+avs_commons 4.10.1 bundled with Anjay 2.15.1 adds a new socket option key:
+``AVS_NET_SOCKET_HAS_BUFFERED_DATA``. This is used to make sure that when
+control is returned to the event loop, the ``poll()`` call will not stall
+waiting for new data that in reality has been already buffered and could be
+retrieved using the avs_commons APIs.
+
+This is usually meaningful for (D)TLS connections, but for almost all simple
+unencrypted socket implementations, this should always return ``false``.
+
+This was previously achieved by always trying to receive more packets with
+timeout set to zero. However, it has been determined that such logic could lead
+to heavy blocking of the event loop in case communication with the network stack
+is relatively slow, e.g. on devices which implement TCP/IP sockets through modem
+AT commands.
+
+If you maintain your own socket integration layer or (D)TLS integration layer,
+it is recommended that you add support for this option.
 
 .. _ssize-t-removal-in-commons-225:
 
@@ -476,10 +569,9 @@ Here is a summary of renames:
 Refactor of PSK credential handling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``avs_net_security_info_t`` structure has been updated to use the new type,
-``avs_net_generic_psk_info_t``, to encapsulate the PSK credentials. The new
-type uses new types based on ``avs_crypto_security_info_union_t`` instead of
-raw buffers.
+``avs_net_psk_info_t`` structure has been changed to use new types based on
+``avs_crypto_security_info_union_t`` instead of raw buffers. This change also
+affects ``avs_net_security_info_t`` structure which contains the former.
 
 * **Old API:**
   ::
@@ -540,30 +632,23 @@ raw buffers.
       typedef struct {
           avs_crypto_psk_key_info_t key;
           avs_crypto_psk_identity_info_t identity;
-      } avs_net_generic_psk_info_t;
+      } avs_net_psk_info_t;
 
       // ...
 
       typedef struct {
           avs_net_security_mode_t mode;
           union {
-              avs_net_generic_psk_info_t psk;
+              avs_net_psk_info_t psk;
               avs_net_certificate_info_t cert;
           } data;
       } avs_net_security_info_t;
 
       avs_net_security_info_t
-      avs_net_security_info_from_generic_psk(avs_net_generic_psk_info_t psk);
+      avs_net_security_info_from_psk(avs_net_psk_info_t psk);
 
-The old ``avs_net_psk_info_t`` type is still available for compatibility. The
-``avs_crypto_psk_key_info_from_buffer()`` function has also been reimplemented
-as a ``static inline`` function that wraps calls to
-``avs_crypto_psk_identity_info_from_buffer()``,
-``avs_crypto_psk_key_info_from_buffer()`` and
-``avs_net_security_info_from_generic_psk()``.
-
-However, code that accesses the ``data.psk`` field of
-``avs_net_security_info_t`` directly will need to be updated.
+This change is breaking for code that accesses the ``data.psk`` field
+of ``avs_net_security_info_t`` directly.
 
 Changes to public configuration macros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -604,7 +689,8 @@ adjustments.
 .. important::
 
     In the case of ``WITH_X509``, the corresponding CMake variable has also been
-    renamed to ``WITH_PKI``. The old name is still recognized, but deprecated.
+    renamed to ``WITH_PKI``. Attempting to use ``WITH_X509`` will trigger an
+    error.
 
 .. note::
 
@@ -637,7 +723,7 @@ Changes in component dependencies
 * ``avs_net`` now depends on ``avs_crypto``
 
   * ``avs_crypto`` itself was previously only used for advanced features, only
-    used by the OSCORE component in the commercial version of Anjay.
+    used by the OSCORE commercial feature.
   * In the new version, ``avs_crypto`` also contains an abstraction over
     cryptographically-safe PRNGs.
   * The functionality that comprised the "old" ``avs_crypto`` is now controlled

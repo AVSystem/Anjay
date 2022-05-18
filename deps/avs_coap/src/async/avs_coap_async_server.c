@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem CoAP library
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 /*
@@ -1169,8 +1162,7 @@ avs_error_t _avs_coap_async_incoming_packet_simple_handle_single(
     return err;
 }
 
-avs_error_t
-_avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
+avs_error_t _avs_coap_async_incoming_packet_handle_and_exhaust_socket(
         avs_coap_ctx_t *ctx,
         uint8_t *in_buffer,
         size_t in_buffer_size,
@@ -1193,6 +1185,11 @@ _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
         err = _avs_coap_async_incoming_packet_simple_handle_single(
                 ctx, in_buffer, in_buffer_size, on_new_request,
                 on_new_request_arg);
+        if (avs_is_ok(err) && _avs_coap_socket_definitely_exhausted(ctx)) {
+            // We can conclusively say that the socket is already exhausted,
+            // so no need to try receiving more packets.
+            break;
+        }
     }
     if (err.category == AVS_ERRNO_CATEGORY && err.code == AVS_ETIMEDOUT) {
         // No more data possible to receive in a non-blocking way,
@@ -1217,7 +1214,7 @@ avs_error_t avs_coap_async_handle_incoming_packet(
         return err;
     }
 
-    err = _avs_coap_async_incoming_packet_handle_while_possible_without_blocking(
+    err = _avs_coap_async_incoming_packet_handle_and_exhaust_socket(
             ctx, acquired_in_buffer, acquired_in_buffer_size, on_new_request,
             on_new_request_arg);
     _avs_coap_in_buffer_release(ctx);

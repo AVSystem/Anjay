@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <avsystem/commons/avs_unit_test.h>
@@ -100,6 +93,45 @@ AVS_UNIT_TEST(batch_builder, string_copy) {
 
     builder_teardown(builder);
 }
+
+#ifdef ANJAY_WITH_LWM2M11
+AVS_UNIT_TEST(batch_builder, bytes_copy) {
+    anjay_batch_builder_t *builder = builder_setup();
+
+    test_data_t test_bytes = MAKE_TEST_DATA("\x01\x02\x03\x04\x05");
+
+    char *bytes = (char *) avs_malloc(test_bytes.size);
+    AVS_UNIT_ASSERT_NOT_NULL(bytes);
+    memcpy(bytes, test_bytes.data, test_bytes.size);
+
+    _anjay_batch_add_bytes(builder, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 0, 0),
+                           AVS_TIME_REAL_INVALID, bytes, test_bytes.size);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(builder->list), 1);
+
+    // Passed bytes shouldn't be required anymore.
+    avs_free(bytes);
+
+    AVS_LIST(anjay_batch_entry_t) entry = AVS_LIST_TAIL(builder->list);
+    AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(entry->data.value.bytes.data,
+                                      test_bytes.data, test_bytes.size);
+
+    builder_teardown(builder);
+}
+
+AVS_UNIT_TEST(batch_builder, empty_bytes) {
+    anjay_batch_builder_t *builder = builder_setup();
+
+    _anjay_batch_add_bytes(builder, &MAKE_RESOURCE_INSTANCE_PATH(0, 0, 0, 0),
+                           AVS_TIME_REAL_INVALID, NULL, 0);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(builder->list), 1);
+
+    AVS_LIST(anjay_batch_entry_t) entry = AVS_LIST_TAIL(builder->list);
+    AVS_UNIT_ASSERT_NULL(entry->data.value.bytes.data);
+    AVS_UNIT_ASSERT_EQUAL(entry->data.value.bytes.length, 0);
+
+    builder_teardown(builder);
+}
+#endif // ANJAY_WITH_LWM2M11
 
 AVS_UNIT_TEST(batch_builder, compile) {
     anjay_batch_builder_t *builder = builder_setup();

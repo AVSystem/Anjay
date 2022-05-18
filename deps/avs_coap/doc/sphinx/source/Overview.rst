@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem CoAP library
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Overview
 ========
@@ -23,9 +16,9 @@ Directory structure
 
   - ``async/`` - :ref:`async-api`
   - ``options/`` - :ref:`avs_coap_options_t-implementation`
-  - ``oscore/`` (commercial version only)
+  - ``oscore/`` (OSCORE feature only)
   - ``streaming/`` - :ref:`streaming-api`
-  - ``tcp/`` - :ref:`transport-specific-impls` (commercial version only)
+  - ``tcp/`` - :ref:`transport-specific-impls`
   - ``udp/`` - :ref:`transport-specific-impls`
 
 
@@ -83,7 +76,7 @@ transport-specific. Their responsibilities include:
     - CoAP Ping
     - Observe cancel via Reset response
 
-  - TCP (commercial version only):
+  - TCP:
 
     - CSM and other 7.xx signaling messages
 

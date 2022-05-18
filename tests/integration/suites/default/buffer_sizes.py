@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import socket
 import unittest
@@ -40,11 +33,13 @@ class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
     def runTest(self):
         self.create_instance(self.serv, oid=OID.Test, iid=1)
 
+        # these will be technically interpreted as Write-Attributes because of no Content-Format
         pkt = Lwm2mWrite(ResPath.Test[1].ResBytesSize,
                          options=[coap.Option.URI_QUERY('lt=0.' + '0' * 128),
                                   coap.Option.URI_QUERY('gt=9.' + '0' * 128),
                                   coap.Option.URI_QUERY('st=1.' + '0' * 128)],
-                         content=b'3')
+                         content=b'3',
+                         format=None)
         self.serv.send(pkt)
         self.assertMsgEqual(
             Lwm2mErrorResponse.matching(pkt)(code=coap.Code.RES_REQUEST_ENTITY_TOO_LARGE),
@@ -55,7 +50,8 @@ class SmallInputBufferAndLargeOptions(BufferSizeTest.Base):
                          options=[coap.Option.URI_QUERY('lt=0.0'),
                                   coap.Option.URI_QUERY('gt=9.0'),
                                   coap.Option.URI_QUERY('st=1.0')],
-                         content=b'3')
+                         content=b'3',
+                         format=None)
         self.serv.send(pkt)
         self.assertMsgEqual(Lwm2mChanged.matching(pkt)(), self.serv.recv())
 
@@ -145,3 +141,25 @@ class ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize(BufferSizeTest.Ba
         self.assertDemoRegisters(location='/rd')
 
 
+class InputBufferSizeTooSmallToHoldRegisterResponse(RetransmissionTest.TestMixin,
+                                                    BufferSizeTest.Base):
+    def setUp(self):
+        # see calculation in ConfiguredInputBufferSizeDeterminesMaxIncomingPacketSize
+        # the buffer is 1B too short to hold Register response
+        super().setUp(inbuf_size=14, auto_register=False, bootstrap_server=True)
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        expected_req = Lwm2mRegister('/rd?lwm2m=1.0&ep=%s&lt=%d' % (DEMO_ENDPOINT_NAME, 86400))
+        # client should not be able to read the whole packet, ignoring it and causing a backoff
+        for _ in range(self.MAX_RETRANSMIT + 1):
+            req = self.serv.recv(timeout_s=self.last_retransmission_timeout())
+            self.assertMsgEqual(expected_req, req)
+            self.serv.send(Lwm2mCreated.matching(req)(location='/rd'))
+
+        # and after failing completely, client falls back to Client-Initiated Bootstrap
+        req = self.bootstrap_server.recv(timeout_s=self.last_retransmission_timeout() + 5)
+        self.assertIsInstance(req, Lwm2mRequestBootstrap)
+        self.bootstrap_server.send(Lwm2mChanged.matching(req)())

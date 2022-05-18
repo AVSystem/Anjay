@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -62,7 +55,20 @@ static int read_binding_info(anjay_unlocked_t *anjay,
                   out_binding_mode->data, ssid);
         return -1;
     }
-    { *out_preferred_transport = '\0'; }
+#ifdef ANJAY_WITH_LWM2M11
+    char preferred_transport[2];
+    if (!_anjay_dm_read_resource_string(
+                anjay,
+                &MAKE_RESOURCE_PATH(ANJAY_DM_OID_SERVER, path.ids[ANJAY_ID_IID],
+                                    ANJAY_DM_RID_SERVER_PREFERRED_TRANSPORT),
+                preferred_transport, sizeof(preferred_transport))
+            && _anjay_binding_info_by_letter(preferred_transport[0]) != NULL) {
+        *out_preferred_transport = preferred_transport[0];
+    } else
+#endif // ANJAY_WITH_LWM2M11
+    {
+        *out_preferred_transport = '\0';
+    }
     return 0;
 }
 
@@ -222,6 +228,31 @@ static int select_security_instance(anjay_unlocked_t *anjay,
     return 0;
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+static int read_server_sni(anjay_unlocked_t *anjay,
+                           anjay_iid_t security_iid,
+                           anjay_server_name_indication_t *out_sni) {
+    out_sni->sni[0] = '\0';
+
+    const anjay_uri_path_t path =
+            MAKE_RESOURCE_PATH(ANJAY_DM_OID_SECURITY, security_iid,
+                               ANJAY_DM_RID_SECURITY_SNI);
+    int result = _anjay_dm_read_resource_string(anjay, &path, out_sni->sni,
+                                                sizeof(out_sni->sni));
+    if (result == ANJAY_ERR_NOT_FOUND
+            || result == ANJAY_ERR_METHOD_NOT_ALLOWED) {
+        anjay_log(TRACE, _("no SNI for /0/") "%u" _(", using defaults"),
+                  (unsigned) security_iid);
+        return 0;
+    }
+    if (!result) {
+        anjay_log(TRACE, _("using SNI ") "%s" _(" for /0/") "%u", out_sni->sni,
+                  (unsigned) security_iid);
+    }
+    return result;
+}
+#endif // ANJAY_WITH_LWM2M11
+
 void _anjay_active_server_refresh(anjay_server_info_t *server) {
     anjay_log(TRACE, _("refreshing SSID ") "%u", server->ssid);
 
@@ -247,7 +278,11 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
                                                       transport_info->transport)
                                                       ->letter))
                     >= 0) {
+#ifdef ANJAY_WITH_LWM2M11
+                result = read_server_sni(server->anjay, security_iid, &sni);
+#else  // ANJAY_WITH_LWM2M11
                 result = 0;
+#endif // ANJAY_WITH_LWM2M11
             }
         }
     } else {
@@ -257,7 +292,11 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
                                             &preferred_transport))
                 || (result = select_security_instance(
                             server->anjay, server->ssid, &server->binding_mode,
-                            preferred_transport, &security_iid, &uri)));
+                            preferred_transport, &security_iid, &uri))
+#ifdef ANJAY_WITH_LWM2M11
+                || (result = read_server_sni(server->anjay, security_iid, &sni))
+#endif // ANJAY_WITH_LWM2M11
+        );
     }
     if (!result) {
         _anjay_server_connections_refresh(server, security_iid, &uri, &sni);
@@ -271,6 +310,11 @@ void _anjay_active_server_refresh(anjay_server_info_t *server) {
 
 static void cancel_exchanges(anjay_connection_ref_t conn_ref) {
     anjay_server_connection_t *conn = _anjay_get_server_connection(conn_ref);
+#ifdef ANJAY_WITH_DOWNLOADER
+    _anjay_downloader_suspend_same_socket(&conn_ref.server->anjay->downloader,
+                                          _anjay_connection_internal_get_socket(
+                                                  conn));
+#endif // ANJAY_WITH_DOWNLOADER
     if (conn_ref.conn_type == ANJAY_CONNECTION_PRIMARY) {
 #ifdef ANJAY_WITH_BOOTSTRAP
         if (conn_ref.server->ssid == ANJAY_SSID_BOOTSTRAP) {
@@ -292,6 +336,9 @@ static void cancel_exchanges(anjay_connection_ref_t conn_ref) {
         }
     }
     _anjay_observe_interrupt(conn_ref);
+#ifdef ANJAY_WITH_SEND
+    _anjay_send_interrupt(conn_ref);
+#endif // ANJAY_WITH_SEND
 }
 
 void _anjay_servers_interrupt_offline(anjay_unlocked_t *anjay) {

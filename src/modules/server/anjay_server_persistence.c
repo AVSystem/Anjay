@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -119,6 +112,7 @@ static avs_error_t handle_v0_v1_sized_fields(avs_persistence_context_t *ctx,
 static avs_error_t
 handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
                                server_instance_t *element) {
+#        ifndef ANJAY_WITH_LWM2M11
     (void) element;
     struct {
         bool has_last_bootstrapped_timestamp;
@@ -139,7 +133,8 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
     } dummy_element = {
         .bootstrap_on_registration_failure = true
     };
-#        define element (&dummy_element)
+#            define element (&dummy_element)
+#        endif // ANJAY_WITH_LWM2M11
 
     avs_error_t err;
     (void) (avs_is_err(
@@ -187,8 +182,13 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
             || avs_is_err((
                        err = avs_persistence_u8(
                                ctx, (uint8_t *) &element->preferred_transport)))
-            || avs_is_err(
-                       (err = avs_persistence_bool(ctx, &(bool) { false }))));
+            || avs_is_err((err = avs_persistence_bool(ctx,
+#        ifdef ANJAY_WITH_SEND
+                                                      &element->mute_send
+#        else  // ANJAY_WITH_SEND
+                                                      &(bool) { false }
+#        endif // ANJAY_WITH_SEND
+                                                      ))));
     return err;
 #        undef element
 }

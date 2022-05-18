@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -32,7 +25,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 static int
-print_period_attr(avs_stream_t *stream, const char *name, int32_t t) {
+print_integer_attr(avs_stream_t *stream, const char *name, int32_t t) {
     if (t < 0) {
         return 0;
     }
@@ -68,17 +61,17 @@ print_double_attr(avs_stream_t *stream, const char *name, double value) {
 }
 
 static int print_oi_attrs(avs_stream_t *stream,
-                          const anjay_dm_internal_oi_attrs_t *attrs) {
+                          const anjay_dm_oi_attributes_t *attrs) {
     int result = 0;
-    (void) ((result = print_period_attr(stream, ANJAY_ATTR_PMIN,
-                                        attrs->standard.min_period))
-            || (result = print_period_attr(stream, ANJAY_ATTR_PMAX,
-                                           attrs->standard.max_period))
-            || (result = print_period_attr(stream, ANJAY_ATTR_EPMIN,
-                                           attrs->standard.min_eval_period))
-            || (result = print_period_attr(stream, ANJAY_ATTR_EPMAX,
-                                           attrs->standard.max_eval_period))
-            || (result = print_con_attr(stream, attrs->custom.data.con)));
+    (void) ((result = print_integer_attr(stream, ANJAY_ATTR_PMIN,
+                                         attrs->min_period))
+            || (result = print_integer_attr(stream, ANJAY_ATTR_PMAX,
+                                            attrs->max_period))
+            || (result = print_integer_attr(stream, ANJAY_ATTR_EPMIN,
+                                            attrs->min_eval_period))
+            || (result = print_integer_attr(stream, ANJAY_ATTR_EPMAX,
+                                            attrs->max_eval_period))
+            || (result = print_con_attr(stream, attrs->con)));
     return result;
 }
 
@@ -93,23 +86,21 @@ static int print_resource_dim(avs_stream_t *stream, int32_t dim) {
 }
 
 static int print_r_attrs(avs_stream_t *stream,
-                         const anjay_dm_internal_r_attrs_t *attrs) {
+                         const anjay_dm_r_attributes_t *attrs) {
     int result;
-    (void) ((result = print_oi_attrs(stream,
-                                     _anjay_dm_get_internal_oi_attrs_const(
-                                             &attrs->standard.common)))
+    (void) ((result = print_oi_attrs(stream, &attrs->common))
             || (result = print_double_attr(stream, ANJAY_ATTR_GT,
-                                           attrs->standard.greater_than))
+                                           attrs->greater_than))
             || (result = print_double_attr(stream, ANJAY_ATTR_LT,
-                                           attrs->standard.less_than))
-            || (result = print_double_attr(stream, ANJAY_ATTR_ST,
-                                           attrs->standard.step)));
+                                           attrs->less_than))
+            || (result =
+                        print_double_attr(stream, ANJAY_ATTR_ST, attrs->step)));
     return result;
 }
 
 static int print_discovered_object(avs_stream_t *stream,
                                    const anjay_dm_installed_object_t *obj,
-                                   const anjay_dm_internal_oi_attrs_t *attrs,
+                                   const anjay_dm_oi_attributes_t *attrs,
                                    anjay_lwm2m_version_t version) {
     if (avs_is_err(avs_stream_write_f(stream, "</%" PRIu16 ">",
                                       _anjay_dm_installed_object_oid(obj)))) {
@@ -117,6 +108,11 @@ static int print_discovered_object(avs_stream_t *stream,
     }
     (void) version;
     const char *format = ";ver=\"%s\"";
+#    ifdef ANJAY_WITH_LWM2M11
+    if (version > ANJAY_LWM2M_VERSION_1_0) {
+        format = ";ver=%s";
+    }
+#    endif // ANJAY_WITH_LWM2M11
     if (_anjay_dm_installed_object_version(obj)
             && avs_is_err(avs_stream_write_f(stream, format,
                                              _anjay_dm_installed_object_version(
@@ -126,11 +122,10 @@ static int print_discovered_object(avs_stream_t *stream,
     return print_oi_attrs(stream, attrs);
 }
 
-static int
-print_discovered_instance(avs_stream_t *stream,
-                          const anjay_dm_installed_object_t *obj,
-                          anjay_iid_t iid,
-                          const anjay_dm_internal_oi_attrs_t *attrs) {
+static int print_discovered_instance(avs_stream_t *stream,
+                                     const anjay_dm_installed_object_t *obj,
+                                     anjay_iid_t iid,
+                                     const anjay_dm_oi_attributes_t *attrs) {
     if (avs_is_err(avs_stream_write_f(stream, "</%" PRIu16 "/%" PRIu16 ">",
                                       _anjay_dm_installed_object_oid(obj),
                                       iid))) {
@@ -144,7 +139,7 @@ static int print_discovered_resource(avs_stream_t *stream,
                                      anjay_iid_t iid,
                                      anjay_rid_t rid,
                                      int32_t resource_dim,
-                                     const anjay_dm_internal_r_attrs_t *attrs) {
+                                     const anjay_dm_r_attributes_t *attrs) {
     if (avs_is_err(avs_stream_write_f(
                 stream, "</%" PRIu16 "/%" PRIu16 "/%" PRIu16 ">",
                 _anjay_dm_installed_object_oid(obj), iid, rid))
@@ -191,74 +186,151 @@ static int read_resource_dim(anjay_unlocked_t *anjay,
     return result;
 }
 
-static anjay_lwm2m_version_t current_lwm2m_version(anjay_unlocked_t *anjay) {
-    assert(anjay->current_connection.server);
-    return _anjay_server_registration_info(anjay->current_connection.server)
-            ->lwm2m_version;
+static int read_attrs(anjay_unlocked_t *anjay,
+                      const anjay_dm_installed_object_t *obj,
+                      anjay_iid_t iid,
+                      anjay_rid_t rid,
+                      anjay_riid_t riid,
+                      anjay_ssid_t ssid,
+                      anjay_lwm2m_version_t lwm2m_version,
+                      anjay_id_type_t root_path_type,
+                      anjay_dm_r_attributes_t *out) {
+    (void) riid;
+    (void) lwm2m_version;
+    *out = ANJAY_DM_R_ATTRIBUTES_EMPTY;
+    if (iid == ANJAY_ID_INVALID) {
+        return _anjay_dm_call_object_read_default_attrs(anjay, obj, ssid,
+                                                        &out->common);
+    }
+    if (root_path_type == ANJAY_ID_OID) {
+        // When Discover is issued on an Object,
+        // attributes from lower levels are not reported in LwM2M <=1.1
+        return 0;
+    }
+    if (root_path_type == ANJAY_ID_RIID
+            || (root_path_type == ANJAY_ID_RID && riid == ANJAY_ID_INVALID)
+            || (root_path_type == ANJAY_ID_IID && rid == ANJAY_ID_INVALID)) {
+        // Read all attached attributes
+        return _anjay_dm_effective_attrs(
+                anjay,
+                &(const anjay_dm_attrs_query_details_t) {
+                    .obj = obj,
+                    .iid = iid,
+                    .rid = rid,
+                    .riid = riid,
+                    .ssid = ssid,
+                    /**
+                     * Spec says we care about inherited attributes only.
+                     */
+                    .with_server_level_attrs = false
+                },
+                out);
+    }
+#    ifdef ANJAY_WITH_LWM2M11
+    if (riid != ANJAY_ID_INVALID) {
+        return _anjay_dm_call_resource_instance_read_attrs(anjay, obj, iid, rid,
+                                                           riid, ssid, out);
+    }
+#    endif // ANJAY_WITH_LWM2M11
+    if (rid != ANJAY_ID_INVALID) {
+        return _anjay_dm_call_resource_read_attrs(anjay, obj, iid, rid, ssid,
+                                                  out);
+    }
+    return _anjay_dm_call_instance_read_default_attrs(anjay, obj, iid, ssid,
+                                                      &out->common);
 }
+
+typedef struct {
+    avs_stream_t *stream;
+    anjay_ssid_t ssid;
+    anjay_lwm2m_version_t lwm2m_version;
+    anjay_id_type_t root_path_type;
+    anjay_id_type_t leaf_path_type;
+} discover_clb_args_t;
+
+#    ifdef ANJAY_WITH_LWM2M11
+static int
+print_discovered_resource_instance(avs_stream_t *stream,
+                                   const anjay_dm_installed_object_t *obj,
+                                   anjay_iid_t iid,
+                                   anjay_rid_t rid,
+                                   anjay_riid_t riid,
+                                   const anjay_dm_r_attributes_t *attrs) {
+    if (avs_is_err(avs_stream_write_f(
+                stream, "</%" PRIu16 "/%" PRIu16 "/%" PRIu16 "/%" PRIu16 ">",
+                _anjay_dm_installed_object_oid(obj), iid, rid, riid))
+            || print_r_attrs(stream, attrs)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int
+discover_resource_instance_clb(anjay_unlocked_t *anjay,
+                               const anjay_dm_installed_object_t *obj,
+                               anjay_iid_t iid,
+                               anjay_rid_t rid,
+                               anjay_riid_t riid,
+                               void *args_) {
+    discover_clb_args_t *args = (discover_clb_args_t *) args_;
+
+    anjay_dm_r_attributes_t attributes = ANJAY_DM_R_ATTRIBUTES_EMPTY;
+    int result;
+    (void) ((result = read_attrs(anjay, obj, iid, rid, riid, args->ssid,
+                                 args->lwm2m_version, args->root_path_type,
+                                 &attributes))
+            || (result = print_separator(args->stream))
+            || (result = print_discovered_resource_instance(
+                        args->stream, obj, iid, rid, riid, &attributes)));
+    return result;
+}
+#    endif // ANJAY_WITH_LWM2M11
 
 static int discover_resource(anjay_unlocked_t *anjay,
                              avs_stream_t *stream,
                              const anjay_dm_installed_object_t *obj,
                              anjay_iid_t iid,
                              anjay_rid_t rid,
+                             anjay_ssid_t ssid,
+                             anjay_lwm2m_version_t lwm2m_version,
                              anjay_dm_resource_kind_t kind,
-                             anjay_id_type_t requested_path_type) {
+                             anjay_id_type_t root_path_type,
+                             anjay_id_type_t leaf_path_type) {
     int32_t resource_dim = -1;
     int result = 0;
 
-    if (requested_path_type != ANJAY_ID_OID && _anjay_dm_res_kind_multiple(kind)
+    if (_anjay_dm_res_kind_multiple(kind) && (root_path_type != ANJAY_ID_OID)
             && (result = read_resource_dim(anjay, obj, iid, rid,
                                            &resource_dim))) {
         return result;
     }
 
-    anjay_dm_internal_r_attrs_t resource_attributes =
-            ANJAY_DM_INTERNAL_R_ATTRS_EMPTY;
-    switch (requested_path_type) {
-    case ANJAY_ID_OID:
+    anjay_dm_r_attributes_t attributes;
+    result = read_attrs(anjay, obj, iid, rid, ANJAY_ID_INVALID, ssid,
+                        lwm2m_version, root_path_type, &attributes);
+    if (!result) {
         result = print_discovered_resource(stream, obj, iid, rid, resource_dim,
-                                           &resource_attributes);
-        break;
-    case ANJAY_ID_IID:
-        (void) ((result = _anjay_dm_call_resource_read_attrs(
-                         anjay, obj, iid, rid, _anjay_dm_current_ssid(anjay),
-                         &resource_attributes, NULL))
-                || (result = print_discovered_resource(stream, obj, iid, rid,
-                                                       resource_dim,
-                                                       &resource_attributes)));
-        break;
-    case ANJAY_ID_RID:
-        (void) ((result = _anjay_dm_effective_attrs(
-                         anjay,
-                         &(const anjay_dm_attrs_query_details_t) {
-                             .obj = obj,
-                             .iid = iid,
-                             .rid = rid,
-                             .riid = ANJAY_ID_INVALID,
-                             .ssid = _anjay_dm_current_ssid(anjay),
-                             /**
-                              * Spec says we care about inherited attributes
-                              * from Object and Instance levels only.
-                              */
-                             .with_server_level_attrs = false
-                         },
-                         &resource_attributes))
-                || (result = print_discovered_resource(stream, obj, iid, rid,
-                                                       resource_dim,
-                                                       &resource_attributes)));
-        break;
-    default:
-        AVS_UNREACHABLE("LwM2M Discover can be performed only on Object, "
-                        "Object Instance or Resource path");
+                                           &attributes);
     }
+#    ifdef ANJAY_WITH_LWM2M11
+    if (!result && leaf_path_type > ANJAY_ID_RID
+            && lwm2m_version >= ANJAY_LWM2M_VERSION_1_1
+            && _anjay_dm_res_kind_multiple(kind)) {
+        result = _anjay_dm_foreach_resource_instance(
+                anjay, obj, iid, rid, discover_resource_instance_clb,
+                &(discover_clb_args_t) {
+                    .stream = stream,
+                    .ssid = ssid,
+                    .lwm2m_version = lwm2m_version,
+                    .root_path_type = root_path_type,
+                    .leaf_path_type = leaf_path_type
+                });
+    }
+#    else  // ANJAY_WITH_LWM2M11
+    (void) leaf_path_type;
+#    endif // ANJAY_WITH_LWM2M11
     return result;
 }
-
-typedef struct {
-    anjay_id_type_t requested_path_type;
-    avs_stream_t *stream;
-} discover_instance_resource_args_t;
 
 static int
 discover_instance_resource_clb(anjay_unlocked_t *anjay,
@@ -268,90 +340,103 @@ discover_instance_resource_clb(anjay_unlocked_t *anjay,
                                anjay_dm_resource_kind_t kind,
                                anjay_dm_resource_presence_t presence,
                                void *args_) {
-    discover_instance_resource_args_t *args =
-            (discover_instance_resource_args_t *) args_;
+    discover_clb_args_t *args = (discover_clb_args_t *) args_;
     int result = 0;
     if (presence != ANJAY_DM_RES_ABSENT
             && !(result = print_separator(args->stream))) {
-        result = discover_resource(anjay, args->stream, obj, iid, rid, kind,
-                                   args->requested_path_type);
+        result = discover_resource(anjay, args->stream, obj, iid, rid,
+                                   args->ssid, args->lwm2m_version, kind,
+                                   args->root_path_type, args->leaf_path_type);
+    }
+    return result;
+}
+static int discover_instance(anjay_unlocked_t *anjay,
+                             avs_stream_t *stream,
+                             const anjay_dm_installed_object_t *obj,
+                             anjay_iid_t iid,
+                             anjay_ssid_t ssid,
+                             anjay_lwm2m_version_t lwm2m_version,
+                             anjay_id_type_t root_path_type,
+                             anjay_id_type_t leaf_path_type) {
+    anjay_dm_r_attributes_t attributes;
+    int result = 0;
+    (void) ((result = read_attrs(anjay, obj, iid, ANJAY_ID_INVALID,
+                                 ANJAY_ID_INVALID, ssid, lwm2m_version,
+                                 root_path_type, &attributes))
+            || (result = print_discovered_instance(stream, obj, iid,
+                                                   &attributes.common)));
+    if (!result && leaf_path_type > ANJAY_ID_IID) {
+        result =
+                _anjay_dm_foreach_resource(anjay, obj, iid,
+                                           discover_instance_resource_clb,
+                                           &(discover_clb_args_t) {
+                                               .stream = stream,
+                                               .ssid = ssid,
+                                               .lwm2m_version = lwm2m_version,
+                                               .root_path_type = root_path_type,
+                                               .leaf_path_type = leaf_path_type
+                                           });
     }
     return result;
 }
 
-static int discover_instance_resources(anjay_unlocked_t *anjay,
-                                       avs_stream_t *stream,
-                                       const anjay_dm_installed_object_t *obj,
-                                       anjay_iid_t iid,
-                                       anjay_id_type_t requested_path_type) {
-    return _anjay_dm_foreach_resource(
-            anjay, obj, iid, discover_instance_resource_clb,
-            &(discover_instance_resource_args_t) {
-                .requested_path_type = requested_path_type,
-                .stream = stream
-            });
-}
-
-static int discover_object_instance(anjay_unlocked_t *anjay,
-                                    const anjay_dm_installed_object_t *obj,
-                                    anjay_iid_t iid,
-                                    void *stream_) {
-    avs_stream_t *stream = (avs_stream_t *) stream_;
+static int discover_object_instance_clb(anjay_unlocked_t *anjay,
+                                        const anjay_dm_installed_object_t *obj,
+                                        anjay_iid_t iid,
+                                        void *args_) {
+    discover_clb_args_t *args = (discover_clb_args_t *) args_;
     int result = 0;
-    (void) ((result = print_separator(stream))
-            || (result = print_discovered_instance(
-                        stream, obj, iid, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY))
-            || (result = discover_instance_resources(anjay, stream, obj, iid,
-                                                     ANJAY_ID_OID)));
+    (void) ((result = print_separator(args->stream))
+            || (result = discover_instance(anjay, args->stream, obj, iid,
+                                           args->ssid, args->lwm2m_version,
+                                           args->root_path_type,
+                                           args->leaf_path_type)));
     return result;
 }
 
 static int discover_object(anjay_unlocked_t *anjay,
                            avs_stream_t *stream,
-                           const anjay_dm_installed_object_t *obj) {
-    anjay_lwm2m_version_t version = current_lwm2m_version(anjay);
-    anjay_dm_internal_oi_attrs_t object_attributes =
-            ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
+                           const anjay_dm_installed_object_t *obj,
+                           anjay_ssid_t ssid,
+                           anjay_lwm2m_version_t lwm2m_version,
+                           anjay_id_type_t root_path_type,
+                           anjay_id_type_t leaf_path_type) {
+    anjay_dm_r_attributes_t attributes = ANJAY_DM_R_ATTRIBUTES_EMPTY;
     int result = 0;
-    (void) ((result = _anjay_dm_call_object_read_default_attrs(
-                     anjay, obj, _anjay_dm_current_ssid(anjay),
-                     &object_attributes, NULL))
-            || (result = print_discovered_object(stream, obj,
-                                                 &object_attributes, version)));
-    if (result) {
-        return result;
+    (void) ((result = read_attrs(anjay, obj, ANJAY_ID_INVALID, ANJAY_ID_INVALID,
+                                 ANJAY_ID_INVALID, ssid, lwm2m_version,
+                                 root_path_type, &attributes))
+            || (result = print_discovered_object(
+                        stream, obj, &attributes.common, lwm2m_version)));
+    if (!result && leaf_path_type > ANJAY_ID_OID) {
+        result =
+                _anjay_dm_foreach_instance(anjay, obj,
+                                           discover_object_instance_clb,
+                                           &(discover_clb_args_t) {
+                                               .stream = stream,
+                                               .ssid = ssid,
+                                               .lwm2m_version = lwm2m_version,
+                                               .root_path_type = root_path_type,
+                                               .leaf_path_type = leaf_path_type
+                                           });
     }
-    return _anjay_dm_foreach_instance(anjay, obj, discover_object_instance,
-                                      stream);
-}
-
-static int discover_instance(anjay_unlocked_t *anjay,
-                             avs_stream_t *stream,
-                             const anjay_dm_installed_object_t *obj,
-                             anjay_iid_t iid) {
-    anjay_dm_internal_oi_attrs_t instance_attributes =
-            ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY;
-    int result = 0;
-    (void) ((result = _anjay_dm_call_instance_read_default_attrs(
-                     anjay, obj, iid, _anjay_dm_current_ssid(anjay),
-                     &instance_attributes, NULL))
-            || (result = print_discovered_instance(stream, obj, iid,
-                                                   &instance_attributes)));
-    if (result) {
-        return result;
-    }
-    return discover_instance_resources(anjay, stream, obj, iid, ANJAY_ID_IID);
+    return result;
 }
 
 int _anjay_discover(anjay_unlocked_t *anjay,
                     avs_stream_t *stream,
                     const anjay_dm_installed_object_t *obj,
                     anjay_iid_t iid,
-                    anjay_rid_t rid) {
+                    anjay_rid_t rid,
+                    uint8_t depth,
+                    anjay_ssid_t ssid,
+                    anjay_lwm2m_version_t lwm2m_version) {
     assert(obj);
 
     if (iid == ANJAY_ID_INVALID) {
-        return discover_object(anjay, stream, obj);
+        return discover_object(
+                anjay, stream, obj, ssid, lwm2m_version, ANJAY_ID_OID,
+                (anjay_id_type_t) AVS_MIN(ANJAY_ID_OID + depth, ANJAY_ID_RIID));
     }
 
     int result = _anjay_dm_verify_instance_present(anjay, obj, iid);
@@ -362,7 +447,7 @@ int _anjay_discover(anjay_unlocked_t *anjay,
     const anjay_action_info_t info = {
         .oid = _anjay_dm_installed_object_oid(obj),
         .iid = iid,
-        .ssid = _anjay_dm_current_ssid(anjay),
+        .ssid = ssid,
         .action = ANJAY_ACTION_DISCOVER
     };
     if (!_anjay_instance_action_allowed(anjay, &info)) {
@@ -370,7 +455,9 @@ int _anjay_discover(anjay_unlocked_t *anjay,
     }
 
     if (rid == ANJAY_ID_INVALID) {
-        return discover_instance(anjay, stream, obj, iid);
+        return discover_instance(
+                anjay, stream, obj, iid, ssid, lwm2m_version, ANJAY_ID_IID,
+                (anjay_id_type_t) AVS_MIN(ANJAY_ID_IID + depth, ANJAY_ID_RIID));
     }
 
     anjay_dm_resource_kind_t kind;
@@ -379,7 +466,10 @@ int _anjay_discover(anjay_unlocked_t *anjay,
         return result;
     }
 
-    return discover_resource(anjay, stream, obj, iid, rid, kind, ANJAY_ID_RID);
+    return discover_resource(anjay, stream, obj, iid, rid, ssid, lwm2m_version,
+                             kind, ANJAY_ID_RID,
+                             (anjay_id_type_t) AVS_MIN(ANJAY_ID_RID + depth,
+                                                       ANJAY_ID_RIID));
 }
 
 #    ifdef ANJAY_WITH_BOOTSTRAP
@@ -394,14 +484,42 @@ static int print_enabler_version(avs_stream_t *stream,
                                  anjay_lwm2m_version_t version) {
     (void) version;
     const char *format = "lwm2m=\"%s\"";
+#        ifdef ANJAY_WITH_LWM2M11
+    // Bug in specification.
+    // Technically it should be always with `</>;`, but we can't be sure 1.0
+    // servers will accept it, because it's defined in 1.1.1 TS.
+    if (version > ANJAY_LWM2M_VERSION_1_0) {
+        format = "</>;lwm2m=%s";
+    }
+#        endif // ANJAY_WITH_LWM2M11
     return avs_is_ok(avs_stream_write_f(
                    stream, format, _anjay_lwm2m_version_as_string(version)))
                    ? 0
                    : -1;
 }
 
+#        ifdef ANJAY_WITH_LWM2M11
+static int print_uri_attr(avs_stream_t *stream, const char *uri) {
+    avs_error_t err = avs_stream_write_f(stream, ";uri=\"");
+    // escape '"' and
+    for (const char *ch = uri; avs_is_ok(err) && *ch; ++ch) {
+        if (*ch == '\\' || *ch == '"') {
+            err = avs_stream_write(stream, "\\", 1);
+        }
+        if (avs_is_ok(err)) {
+            err = avs_stream_write(stream, ch, 1);
+        }
+    }
+    if (avs_is_ok(err)) {
+        err = avs_stream_write(stream, "\"", 1);
+    }
+    return avs_is_ok(err) ? 0 : -1;
+}
+#        endif // ANJAY_WITH_LWM2M11
+
 typedef struct {
     avs_stream_t *stream;
+    anjay_lwm2m_version_t lwm2m_version;
 } bootstrap_discover_object_instance_args_t;
 
 static int
@@ -415,7 +533,7 @@ bootstrap_discover_object_instance(anjay_unlocked_t *anjay,
     (void) ((result = print_separator(args->stream))
             || (result = print_discovered_instance(
                         args->stream, obj, iid,
-                        &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY)));
+                        &ANJAY_DM_OI_ATTRIBUTES_EMPTY)));
     if (result) {
         return result;
     }
@@ -425,6 +543,17 @@ bootstrap_discover_object_instance(anjay_unlocked_t *anjay,
         if (!query_result && ssid != ANJAY_SSID_BOOTSTRAP) {
             result = print_ssid_attr(args->stream, ssid);
         }
+#        ifdef ANJAY_WITH_LWM2M11
+        if (!result && args->lwm2m_version > ANJAY_LWM2M_VERSION_1_0) {
+            char buffer[ANJAY_MAX_URL_RAW_LENGTH];
+            query_result =
+                    _anjay_server_uri_from_security_iid(anjay, iid, buffer,
+                                                        sizeof(buffer));
+            if (!query_result) {
+                result = print_uri_attr(args->stream, buffer);
+            }
+        }
+#        endif // ANJAY_WITH_LWM2M11
     } else if (_anjay_dm_installed_object_oid(obj) == ANJAY_DM_OID_SERVER) {
         anjay_ssid_t ssid;
         int query_result = _anjay_ssid_from_server_iid(anjay, iid, &ssid);
@@ -435,27 +564,35 @@ bootstrap_discover_object_instance(anjay_unlocked_t *anjay,
     return result;
 }
 
+typedef struct {
+    avs_stream_t *stream;
+    anjay_lwm2m_version_t lwm2m_version;
+} bootstrap_discover_object_args_t;
+
 static int bootstrap_discover_object(anjay_unlocked_t *anjay,
                                      const anjay_dm_installed_object_t *obj,
-                                     void *stream_) {
-    anjay_lwm2m_version_t version = current_lwm2m_version(anjay);
-    bootstrap_discover_object_instance_args_t args = {
-        .stream = (avs_stream_t *) stream_
+                                     void *args_) {
+    bootstrap_discover_object_args_t *args =
+            (bootstrap_discover_object_args_t *) args_;
+    bootstrap_discover_object_instance_args_t instance_args = {
+        .stream = args->stream,
+        .lwm2m_version = args->lwm2m_version
     };
     int result;
-    (void) ((result = print_separator(args.stream))
-            || (result = print_discovered_object(
-                        args.stream, obj, &ANJAY_DM_INTERNAL_OI_ATTRS_EMPTY,
-                        version))
+    (void) ((result = print_separator(instance_args.stream))
+            || (result = print_discovered_object(instance_args.stream, obj,
+                                                 &ANJAY_DM_OI_ATTRIBUTES_EMPTY,
+                                                 instance_args.lwm2m_version))
             || (result = _anjay_dm_foreach_instance(
                         anjay, obj, bootstrap_discover_object_instance,
-                        &args)));
+                        &instance_args)));
     return result;
 }
 
 int _anjay_bootstrap_discover(anjay_unlocked_t *anjay,
                               avs_stream_t *stream,
-                              anjay_oid_t oid) {
+                              anjay_oid_t oid,
+                              anjay_lwm2m_version_t lwm2m_version) {
     const anjay_dm_installed_object_t *obj = NULL;
     if (oid != ANJAY_ID_INVALID) {
         obj = _anjay_dm_find_object_by_oid(anjay, oid);
@@ -463,15 +600,19 @@ int _anjay_bootstrap_discover(anjay_unlocked_t *anjay,
             return ANJAY_ERR_NOT_FOUND;
         }
     }
-    int result = print_enabler_version(stream, current_lwm2m_version(anjay));
+    int result = print_enabler_version(stream, lwm2m_version);
     if (result) {
         return result;
     }
+    bootstrap_discover_object_args_t args = {
+        .stream = stream,
+        .lwm2m_version = lwm2m_version
+    };
     if (obj) {
-        return bootstrap_discover_object(anjay, obj, stream);
+        return bootstrap_discover_object(anjay, obj, &args);
     } else {
         return _anjay_dm_foreach_object(anjay, bootstrap_discover_object,
-                                        stream);
+                                        &args);
     }
 }
 #    endif

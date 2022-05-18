@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_ATTR_STORAGE_H
@@ -26,9 +19,13 @@ extern "C" {
 #endif
 
 /**
- * Installs the Attribute Storage handlers in an Anjay object, making it
- * possible to automatically manage attributes for LwM2M Objects, their
- * instances and resources.
+ * @file attr_storage.h
+ *
+ * Automatic Attribute Storage module.
+ *
+ * This feature is enabled using the <c>ANJAY_WITH_ATTR_STORAGE</c> compile-time
+ * feature macro. It makes it possible to automatically manage attributes for
+ * LwM2M Objects, their instances and resources.
  *
  * In accordance to the LwM2M specification, there are three levels on which
  * attributes may be stored:
@@ -48,15 +45,7 @@ extern "C" {
  * If both read and write handlers are left as NULL in a given object for a
  * given level, attribute storage will be handled by the Attribute Storage
  * module instead, implementing both handlers.
- *
- * The Attribute Storage module does not require explicit cleanup; all resources
- * will be automatically freed up during the call to @ref anjay_delete.
- *
- * @param anjay ANJAY object for which the Attribute Storage is installed.
- *
- * @returns 0 on success, or a negative value in case of error.
  */
-int anjay_attr_storage_install(anjay_t *anjay);
 
 /**
  * Checks whether the attribute storage has been modified since last successful
@@ -68,14 +57,14 @@ bool anjay_attr_storage_is_modified(anjay_t *anjay);
  * Removes all attributes from all entities, leaving the Attribute Storage in an
  * empty state.
  *
- * @param anjay Anjay instance with the Attribute Storage installed to purge.
+ * @param anjay Anjay instance.
  */
 void anjay_attr_storage_purge(anjay_t *anjay);
 
 /**
  * Dumps all set attributes to the @p out_stream.
  *
- * @param anjay         Anjay instance with the Attribute Storage installed.
+ * @param anjay         Anjay instance.
  * @param out_stream    Stream to write to.
  * @returns AVS_OK in case of success, or an error code.
  */
@@ -90,22 +79,19 @@ avs_error_t anjay_attr_storage_persist(anjay_t *anjay,
  * then the Attribute Storage will be completely cleared and
  * @ref anjay_attr_storage_is_modified will return <c>true</c>.
  *
- * @param anjay     Anjay instance with Security Object installed.
+ * @param anjay     Anjay instance.
  * @param in_stream Stream to read from.
  * @returns AVS_OK in case of success, or an error code.
  *
  * <strong>NOTE:</strong> For historical reasons, this function behaves
- * differently than all other <c>*_restore()</c> functions in Anjay in two ways:
+ * differently than all other <c>*_restore()</c> functions - on failed
+ * restoration, the storage is cleared, rather than left untouched.
  *
- * - On failed restoration, the storage is cleared, rather than left untouched
- * - Zero-length stream is treated as valid, and causes the storage to be
- *   cleared with success returned, instead of causing an error
- *
- * Relying on these behaviours is <strong>DEPRECATED</strong>. Future versions
+ * Relying on this behaviour is <strong>DEPRECATED</strong>. Future versions
  * of Anjay may change the semantics of this function so that it retains the
- * contents of Attribute Storage on failure, and does not treat empty streams as
- * valid. It is <strong>RECOMMENDED</strong> that any new code involving this
- * function is written to work properly with both semantics.
+ * contents of Attribute Storage on failure. It is <strong>RECOMMENDED</strong>
+ * that any new code involving this function is written to work properly with
+ * both semantics.
  */
 avs_error_t anjay_attr_storage_restore(anjay_t *anjay, avs_stream_t *in_stream);
 
@@ -171,6 +157,34 @@ int anjay_attr_storage_set_resource_attrs(anjay_t *anjay,
                                           anjay_iid_t iid,
                                           anjay_rid_t rid,
                                           const anjay_dm_r_attributes_t *attrs);
+
+#ifdef ANJAY_WITH_LWM2M11
+/**
+ * Sets Resource Instance level attributes for the specified @p ssid.
+ *
+ * @param anjay Anjay object to operate on.
+ * @param ssid  SSID for which given Attributes shall be set (must be a valid
+ *              SSID corresponding to one of the non-Bootstrap LwM2M Servers).
+ * @param oid   Object ID owning the specified Instance.
+ * @param iid   Instance ID owning the specified Resource.
+ * @param rid   Resource ID owning the specified Resource Instance.
+ * @param riid  Resource Instance ID for which given Attributes shall be set.
+ * @param attrs Attributes to be set (MUST NOT be NULL).
+ *
+ * NOTE: This function will fail if the object has resource_read_attrs
+ * or resource_write_attrs handler implemented.
+ *
+ * @returns 0 on success, negative value in case of an error.
+ */
+int anjay_attr_storage_set_resource_instance_attrs(
+        anjay_t *anjay,
+        anjay_ssid_t ssid,
+        anjay_oid_t oid,
+        anjay_iid_t iid,
+        anjay_rid_t rid,
+        anjay_riid_t riid,
+        const anjay_dm_r_attributes_t *attrs);
+#endif // ANJAY_WITH_LWM2M11
 
 #ifdef __cplusplus
 }

@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
 import contextlib
 import socket
@@ -135,6 +128,18 @@ class Server(object):
                 _, remote_addr_port = self.socket.recvfrom(1, socket.MSG_PEEK)
 
             self.connect_to_client(remote_addr_port)
+        elif self.transport == Transport.TCP:
+            self.socket.listen()
+            with _override_timeout(self.socket, timeout_s):
+                client_socket, _ = self.socket.accept()
+                if self.server_socket is not None:
+                    self.server_socket.close()
+                self.server_socket = self.socket
+                self.socket = client_socket
+                pkt = self.recv()
+
+            assert pkt.code == Code.SIGNALING_CSM
+            self.send(Packet(code=Code.SIGNALING_CSM, token=b''))
         else:
             raise ValueError("Invalid transport: %r" % (self.transport,))
 
@@ -326,6 +331,9 @@ class TlsServer(Server):
         from pymbedtls import ServerSocket
         assert isinstance(self.socket, ServerSocket)
 
+        if self.transport == Transport.TCP:
+            self.socket.py_socket.listen()
+
         with _override_timeout(self.socket, timeout_s):
             client_socket = self.socket.accept()
             if self.socket_timeout is not None:
@@ -334,6 +342,15 @@ class TlsServer(Server):
         if self.transport == Transport.UDP:
             self.socket.close()
             self.socket = client_socket
+        elif self.transport == Transport.TCP:
+            if self.server_socket is not None:
+                self.server_socket.close()
+            self.server_socket = self.socket
+            self.socket = client_socket
+
+            pkt = self.recv()
+            assert pkt.code == Code.SIGNALING_CSM
+            self.send(Packet(code=Code.SIGNALING_CSM, token=b''))
         else:
             raise ValueError("Invalid transport: %r" % (self.transport,))
 

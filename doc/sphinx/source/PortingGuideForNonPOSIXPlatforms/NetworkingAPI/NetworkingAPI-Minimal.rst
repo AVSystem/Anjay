@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Minimal socket implementation
 =============================
@@ -502,6 +495,9 @@ Get/set socket options
         case AVS_NET_SOCKET_OPT_INNER_MTU:
             out_option_value->mtu = 1464;
             return AVS_OK;
+        case AVS_NET_SOCKET_HAS_BUFFERED_DATA:
+            out_option_value->flag = false;
+            return AVS_OK;
         default:
             return avs_errno(AVS_ENOTSUP);
         }
@@ -540,6 +536,17 @@ Three of there options are essential for the operation of Anjay:
 * ``AVS_NET_SOCKET_OPT_INNER_MTU`` (get-only; only used for UDP) - used to check
   the number of bytes that can be safely sent and received in a single UDP
   datagram over the given socket.
+* ``AVS_NET_SOCKET_HAS_BUFFERED_DATA`` (get-only; optional but highly
+  recommended) - used to check whether all data received from the underlying
+  system socket has been processed. This is used to make sure that when control
+  is returned to the event loop, the ``poll()`` call will not stall waiting for
+  new data that in reality has been already buffered and could be retrieved
+  using the avs_commons APIs. This is usually meaningful for (D)TLS connections,
+  but for almost all simple unencrypted socket implementations, this should
+  always return ``false``. If this option is not supported, then the library
+  will always retry receiving data until a timeout condition occurs (timeout is
+  set to zero for subsequent retries), which may lead to stalling of the event
+  loop.
 
 .. note::
 

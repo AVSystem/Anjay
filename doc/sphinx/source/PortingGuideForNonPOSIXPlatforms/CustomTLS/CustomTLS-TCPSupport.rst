@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Support for TLS over TCP
 ========================
@@ -576,7 +569,7 @@ Specifically, the following topics were not covered:
 
 * **Socket file descriptor is used directly instead of wrapping** ``avs_net``
   **APIs, and the** ``decorate`` **function is not implemented.** The secure SMS
-  mode will thus not work in the commercial version of Anjay.
+  mode will thus not work in versions that include the SMS commercial feature.
 
 * **The** ``rebuild_client_cert_chain`` **flag in**
   ``avs_net_certificate_info_t`` **is not supported.** The implications of that

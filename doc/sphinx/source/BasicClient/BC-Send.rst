@@ -1,26 +1,13 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Send method
 ===========
-
-.. note::
-   A version that includes support for Send method as well as version 1.1 of the
-   specification, including Composite operations, SenML JSON and CBOR data
-   formats, TCP, SMS and NIDD bindings, is :doc:`available commercially
-   <../Commercial_support>`.
 
 The "Send" operation is used by the LwM2M Client to send data to the LwM2M
 Server without explicit request by that LwM2M Server. Messages are created using
@@ -41,7 +28,6 @@ functions in the ``time_object.c`` file.
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-Send/src/time_object.c
     :caption: time_object.c
-    :commercial:
 
     static void send_finished_handler(anjay_t *anjay,
                                     anjay_ssid_t ssid,
@@ -119,7 +105,6 @@ And include ``anjay/lwm2m_send.h`` and ``<avsystem/commons/avs_log.h>`` in
 .. snippet-source:: examples/tutorial/BC-Send/src/time_object.c
     :caption: time_object.c
     :emphasize-lines: 5, 9
-    :commercial:
 
     #include <assert.h>
     #include <stdbool.h>
@@ -137,7 +122,6 @@ At last, we need to declare the function in the object's header file.
 .. snippet-source:: examples/tutorial/BC-Send/src/time_object.h
     :caption: time_object.h
     :emphasize-lines: 9
-    :commercial:
 
     #ifndef TIME_OBJECT_H
     #define TIME_OBJECT_H
@@ -162,11 +146,9 @@ Please note that the ``notify_job_args_t`` has additionally been renamed to
 .. highlight:: c
 .. snippet-source:: examples/tutorial/BC-Send/src/main.c
     :caption: main.c
-    :emphasize-lines: 26-37,145-148
-    :commercial:
+    :emphasize-lines: 25-36,143-146
 
     #include <anjay/anjay.h>
-    #include <anjay/attr_storage.h>
     #include <anjay/security.h>
     #include <anjay/server.h>
     #include <avsystem/commons/avs_log.h>
@@ -286,9 +268,8 @@ Please note that the ``notify_job_args_t`` has additionally been renamed to
         }
 
         int result = 0;
-        // Install Attribute storage and setup necessary objects
-        if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-                || setup_server_object(anjay)) {
+        // Setup necessary objects
+        if (setup_security_object(anjay) || setup_server_object(anjay)) {
             result = -1;
         }
 
@@ -325,7 +306,3 @@ Please note that the ``notify_job_args_t`` has additionally been renamed to
 
 
 That's all you need to make your client support LwM2M Send operation!
-
-.. note::
-    Complete code of this example can be found in `examples/tutorial/BC-Send`
-    subdirectory of the commercial Anjay release.

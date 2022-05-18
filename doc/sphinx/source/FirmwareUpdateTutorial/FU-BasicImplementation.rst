@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Basic implementation
 ====================
@@ -95,10 +88,9 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
 
 .. highlight:: c
 .. snippet-source:: examples/tutorial/firmware-update/basic-implementation/src/main.c
-    :emphasize-lines: 7, 113
+    :emphasize-lines: 6, 112
 
     #include <anjay/anjay.h>
-    #include <anjay/attr_storage.h>
     #include <anjay/security.h>
     #include <anjay/server.h>
     #include <avsystem/commons/avs_log.h>
@@ -207,9 +199,9 @@ We invoke it in ``main.c`` by performing two (highlighted) modifications:
         }
 
         int result = 0;
-        // Install Attribute storage and setup necessary objects
-        if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-                || setup_server_object(anjay) || fw_update_install(anjay)) {
+        // Setup necessary objects
+        if (setup_security_object(anjay) || setup_server_object(anjay)
+                || fw_update_install(anjay)) {
             result = -1;
         }
 

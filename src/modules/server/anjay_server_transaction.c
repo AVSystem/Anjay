@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -95,6 +88,31 @@ static int validate_instance(server_instance_t *it) {
                               it->binding.data);
         return -1;
     }
+#    ifdef ANJAY_WITH_LWM2M11
+    if (it->has_last_bootstrapped_timestamp
+            && it->last_bootstrapped_timestamp < 0) {
+        LOG_VALIDATION_FAILED(it, _("Last Bootstrapped is negative"));
+        return -1;
+    }
+    if (it->preferred_transport
+            && !_anjay_binding_info_by_letter(it->preferred_transport)) {
+        LOG_VALIDATION_FAILED(it, _("Incorrect Preferred Transport: ") "%c",
+                              it->preferred_transport);
+        return -1;
+    }
+    if (it->has_server_communication_retry_count
+            && it->server_communication_retry_count == 0) {
+        LOG_VALIDATION_FAILED(it,
+                              _("Communication Retry Count cannot be zero"));
+        return -1;
+    }
+    if (it->has_server_communication_sequence_retry_count
+            && it->server_communication_sequence_retry_count == 0) {
+        LOG_VALIDATION_FAILED(
+                it, _("Communication Sequence Retry Count cannot be zero"));
+        return -1;
+    }
+#    endif // ANJAY_WITH_LWM2M11
 
     return 0;
 }

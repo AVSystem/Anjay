@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_BATCH_BUILDER_H
@@ -57,6 +50,13 @@ int _anjay_batch_add_int(anjay_batch_builder_t *builder,
                          avs_time_real_t timestamp,
                          int64_t value);
 
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_batch_add_uint(anjay_batch_builder_t *builder,
+                          const anjay_uri_path_t *uri,
+                          avs_time_real_t timestamp,
+                          uint64_t value);
+#endif // ANJAY_WITH_LWM2M11
+
 int _anjay_batch_add_double(anjay_batch_builder_t *builder,
                             const anjay_uri_path_t *uri,
                             avs_time_real_t timestamp,
@@ -71,6 +71,14 @@ int _anjay_batch_add_string(anjay_batch_builder_t *builder,
                             const anjay_uri_path_t *uri,
                             avs_time_real_t timestamp,
                             const char *str);
+
+#ifdef ANJAY_WITH_LWM2M11
+int _anjay_batch_add_bytes(anjay_batch_builder_t *builder,
+                           const anjay_uri_path_t *uri,
+                           avs_time_real_t timestamp,
+                           const void *data,
+                           size_t length);
+#endif // ANJAY_WITH_LWM2M11
 
 int _anjay_batch_add_objlnk(anjay_batch_builder_t *builder,
                             const anjay_uri_path_t *uri,
@@ -243,10 +251,24 @@ bool _anjay_batch_data_requires_hierarchical_format(const anjay_batch_t *batch);
 double _anjay_batch_data_numeric_value(const anjay_batch_t *batch);
 
 /**
+ * If batch consists of a single entry pertaining to a Single Resource or
+ * Resource Instance, with a value of boolean type, then writes the value to
+ * @c out_value pointer and returns 0. Otherwise returns -1.
+ */
+int _anjay_batch_data_boolean_value(const anjay_batch_t *batch,
+                                    bool *out_value);
+
+/**
  * Returns the time when the batch was returned from @ref
  * _anjay_batch_builder_compile
  */
 avs_time_real_t _anjay_batch_get_compilation_time(const anjay_batch_t *batch);
+
+#ifdef ANJAY_WITH_LWM2M11
+void _anjay_batch_update_common_path_prefix(const anjay_uri_path_t **prefix_ptr,
+                                            anjay_uri_path_t *prefix_buf,
+                                            const anjay_batch_t *batch);
+#endif // ANJAY_WITH_LWM2M11
 
 VISIBILITY_PRIVATE_HEADER_END
 

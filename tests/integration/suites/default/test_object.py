@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 import json
 import time
 
@@ -22,8 +15,8 @@ from framework.lwm2m_test import *
 
 class TestObject:
     class TestCase(test_suite.Lwm2mSingleServerTest):
-        def setUp(self):
-            super().setUp()
+        def setUp(self, *args, **kwargs):
+            super().setUp(*args, **kwargs)
 
             self.serv.set_timeout(timeout_s=1)
 
@@ -233,6 +226,9 @@ class EmptyBytesTest(TestObject.TestCase, test_suite.Lwm2mDmOperations):
             TLV.make_resource(RID.Test.ResObjlnk, b'\0\0\0\0'),
             TLV.make_resource(RID.Test.ResBytesZeroBegin, 1),
             TLV.make_resource(RID.Test.ResDouble, 0.0),
+            TLV.make_resource(RID.Test.ResUnsignedInt, 0),
+            TLV.make_resource(RID.Test.ResUnsignedLong, 0),
+            TLV.make_multires(RID.Test.BoolArray, {}),
         ]
         self.assertEqual(len(tlv), len(expected_rest) + 1)
         for i in range(len(expected_rest)):
@@ -261,6 +257,8 @@ class EmptyBytesTest(TestObject.TestCase, test_suite.Lwm2mDmOperations):
             {'n': '/%s' % (RID.Test.ResObjlnk,), 'ov': '0:0'},
             {'n': '/%s' % (RID.Test.ResBytesZeroBegin,), 'bv': True},
             {'n': '/%s' % (RID.Test.ResDouble,), 'v': 0.0},
+            {'n': '/%s' % (RID.Test.ResUnsignedInt,), 'v': 0},
+            {'n': '/%s' % (RID.Test.ResUnsignedLong,), 'v': 0},
         ]
         self.assertEqual(len(e), len(expected_rest) + 1)
         for i in range(len(expected_rest)):

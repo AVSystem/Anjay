@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include "demo_args.h"
@@ -34,6 +27,10 @@
 #define DEFAULT_PSK_IDENTITY "sesame"
 #define DEFAULT_PSK_KEY "password"
 
+#ifdef ANJAY_WITH_LWM2M11
+#    define DEFAULT_MAX_LWM2M_VER "1.1"
+#endif // ANJAY_WITH_LWM2M11
+
 static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .connection_args = {
         .servers[0] = {
@@ -41,6 +38,12 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
             .server_iid = ANJAY_ID_INVALID,
             .id = 1,
             .binding_mode = NULL,
+#ifdef ANJAY_WITH_LWM2M11
+            .retry_count = 1,
+            .retry_timer = 0,
+            .sequence_retry_count = 1,
+            .sequence_delay_timer = 0,
+#endif // ANJAY_WITH_LWM2M11
         },
 #ifdef ANJAY_WITH_BOOTSTRAP
         .bootstrap_holdoff_s = 0,
@@ -66,21 +69,30 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
 
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
-#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef ANJAY_WITH_ATTR_STORAGE
     .attr_storage_file = NULL,
-#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    endif // ANJAY_WITH_ATTR_STORAGE
 #    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     .dm_persistence_file = NULL,
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
 #endif     // AVS_COMMONS_STREAM_WITH_FILE
     .disable_legacy_server_initiated_bootstrap = false,
+#ifdef AVS_COMMONS_STREAM_WITH_FILE
+#endif // AVS_COMMONS_STREAM_WITH_FILE
     .tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
     .dtls_hs_tx_params = ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS,
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     .fwu_tx_params_modified = false,
     .fwu_tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
-    .prefer_hierarchical_formats = false
+#ifdef ANJAY_WITH_LWM2M11
+    .lwm2m_version_config = {
+        .minimum_version = ANJAY_LWM2M_VERSION_1_0,
+        .maximum_version = ANJAY_LWM2M_VERSION_1_1
+    },
+#endif // ANJAY_WITH_LWM2M11
+    .prefer_hierarchical_formats = false,
+    .prefer_same_socket_downloads = false,
 };
 
 static int parse_security_mode(const char *mode_string,
@@ -249,6 +261,11 @@ static void print_help(const struct option *options) {
           "mechanism." },
         { 'N', NULL, NULL,
           "Send notifications as Confirmable messages by default" },
+#ifdef ANJAY_WITH_LWM2M11
+        { 'v', "VERSION", "1.0", "Lowest version of LwM2M Enabler to allow" },
+        { 'V', "VERSION", DEFAULT_MAX_LWM2M_VER,
+          "Highest version of LwM2M Enabler to allow" },
+#endif // ANJAY_WITH_LWM2M11
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
         { 'r', "RESULT", NULL,
           "If specified and nonzero, initializes the Firmware Update object in "
@@ -277,12 +294,11 @@ static void print_help(const struct option *options) {
           "with the specified key (provided as hexlified string); must be used "
           "together with --fw-psk-identity" },
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
-#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) \
-        && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#if defined(ANJAY_WITH_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 261, "PERSISTENCE_FILE", NULL,
           "File to load attribute storage data from at startup, and "
           "store it at shutdown" },
-#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) &&
+#endif // defined(ANJAY_WITH_ATTR_STORAGE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 267, "ACK_RANDOM_FACTOR", "1.5",
           "Configures ACK_RANDOM_FACTOR (defined in RFC7252)" },
@@ -310,11 +326,40 @@ static void print_help(const struct option *options) {
         { 275, NULL, NULL,
           "Sets the library to use hierarchical content formats by default for "
           "all responses." },
+#ifdef ANJAY_WITH_LWM2M11
+        { 276, "SNI", "server hostname",
+          "Sets the Server Name Indication value for currently configured "
+          "server." },
+#endif // ANJAY_WITH_LWM2M11
         { 277, NULL, NULL, "Enables DTLS connection_id extension." },
         { 278, "CIPHERSUITE[,CIPHERSUITE...]", "TLS library defaults",
           "Sets the ciphersuites to be used by default for (D)TLS "
           "connections." },
+#ifdef ANJAY_WITH_LWM2M11
+        { 279, "RETRY_COUNT", "1",
+          "Configures the number of registration retry sequences for a last "
+          "server" },
+        { 280, "RETRY_TIMER", "0",
+          "Configures the exponential delay between registration retries" },
+        { 281, "SEQUENCE_RETRY_COUNT", "1",
+          "Configures the number of registration sequences" },
+        { 282, "SEQUENCE_DELAY_TIMER", "86400",
+          "Configures the delay between consecutive communication sequences" },
+#endif // ANJAY_WITH_LWM2M11
+        { 283, NULL, NULL,
+          "Configures preference of re-using existing LwM2M CoAP contexts for "
+          "firmware download" },
         { 284, "NSTART", "1", "Configures NSTART (defined in RFC7252)" },
+#ifdef ANJAY_WITH_SEND
+        { 287, NULL, NULL,
+          "Enables using LwM2M Send to report state and result of firmware "
+          "update" },
+#endif // ANJAY_WITH_SEND
+#ifdef ANJAY_WITH_LWM2M11
+        { 288, "TRUST_STORE_PATH", NULL,
+          "Path (file or directory) to use as the trust store for "
+          "PKIX verification" },
+#endif // ANJAY_WITH_LWM2M11
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
         && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { 289, "PERSISTENCE_FILE", NULL,
@@ -322,6 +367,16 @@ static void print_help(const struct option *options) {
           "startup, and store it at shutdown" },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+        { 298, NULL, NULL,
+          "Causes security credentials to be loaded as external security info "
+          "objects instead of loading them into internal buffers" },
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
+#ifdef ANJAY_WITH_LWM2M11
+        { 299, NULL, NULL,
+          "Enables rebuilding of client certificate chain based on the trust "
+          "store" },
+#endif // ANJAY_WITH_LWM2M11
         { 306, NULL, NULL,
           "Enable alternative logger as a showcase of extended logger "
           "feature." },
@@ -542,6 +597,22 @@ finish:
     return result;
 }
 
+#ifdef ANJAY_WITH_LWM2M11
+static int parse_version(const char *str, anjay_lwm2m_version_t *out_version) {
+    assert(str);
+    if (strcmp(str, "1.0") == 0) {
+        *out_version = ANJAY_LWM2M_VERSION_1_0;
+        return 0;
+    } else if (strcmp(str, "1.1") == 0) {
+        *out_version = ANJAY_LWM2M_VERSION_1_1;
+        return 0;
+    } else {
+        demo_log(ERROR, "Invalid LwM2M version: %s", str);
+        return -1;
+    }
+}
+#endif // ANJAY_WITH_LWM2M11
+
 int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     static const char DEFAULT_CERT_FILE[] = "../certs/client.crt.der";
     static const char DEFAULT_KEY_FILE[] = "../certs/client.key.der";
@@ -585,6 +656,10 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "outbuf-size",                   required_argument, 0, 'O' },
         { "cache-size",                    required_argument, 0, '$' },
         { "confirmable-notifications",     no_argument,       0, 'N' },
+#ifdef ANJAY_WITH_LWM2M11
+        { "minimum-version",               required_argument, 0, 'v' },
+        { "maximum-version",               required_argument, 0, 'V' },
+#endif // ANJAY_WITH_LWM2M11
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
         { "delayed-upgrade-result",        required_argument, 0, 'r' },
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
@@ -595,9 +670,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "fw-psk-identity",               required_argument, 0, 259 },
         { "fw-psk-key",                    required_argument, 0, 260 },
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
-#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#if defined(ANJAY_WITH_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "attribute-storage-persistence-file", required_argument, 0, 261 },
-#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#endif // defined(ANJAY_WITH_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "ack-random-factor",             required_argument, 0, 267 },
         { "ack-timeout",                   required_argument, 0, 268 },
         { "max-retransmit",                required_argument, 0, 269 },
@@ -609,12 +684,34 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "fwu-max-retransmit",            required_argument, 0, 274 },
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
         { "prefer-hierarchical-formats",   no_argument,       0, 275 },
+#ifdef ANJAY_WITH_LWM2M11
+        { "sni",                           required_argument, 0, 276 },
+#endif // ANJAY_WITH_LWM2M11
         { "use-connection-id",             no_argument,       0, 277 },
         { "ciphersuites",                  required_argument, 0, 278 },
+#ifdef ANJAY_WITH_LWM2M11
+        { "retry-count",                   required_argument, 0, 279 },
+        { "retry-timer",                   required_argument, 0, 280 },
+        { "sequence-retry-count",          required_argument, 0, 281 },
+        { "sequence-delay-timer",          required_argument, 0, 282 },
+#endif // ANJAY_WITH_LWM2M11
+        { "prefer-same-socket-downloads",  no_argument,       0, 283 },
         { "nstart",                        required_argument, 0, 284 },
+#if defined(ANJAY_WITH_SEND) && defined(ANJAY_WITH_MODULE_FW_UPDATE)
+        { "fw-update-use-send",            no_argument,       0, 287 },
+#endif // defined(ANJAY_WITH_SEND) && defined(ANJAY_WITH_MODULE_FW_UPDATE)
+#ifdef ANJAY_WITH_LWM2M11
+        { "pkix-trust-store",              required_argument, 0, 288 },
+#endif // ANJAY_WITH_LWM2M11
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "dm-persistence-file",           required_argument, 0, 289 },
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+        { "use-external-security-info",    no_argument,       0, 298 },
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
+#ifdef ANJAY_WITH_LWM2M11
+        { "rebuild-client-cert-chain",     no_argument,       0, 299 },
+#endif // ANJAY_WITH_LWM2M11
         { "alternative-logger",            no_argument,       0, 306 },
         { "identity-as-string",            required_argument, 0, 307 },
         { "key-as-string",                 required_argument, 0, 308 },
@@ -633,6 +730,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
     const char *cert_path = default_cert_path;
     const char *key_path = default_key_path;
     const char *server_public_key_path = NULL;
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+    bool use_external_security_info = false;
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
 
     if (!default_cert_path || !default_key_path) {
         demo_log(ERROR, "Out of memory");
@@ -893,6 +993,22 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 'N':
             parsed_args->confirmable_notifications = true;
             break;
+#ifdef ANJAY_WITH_LWM2M11
+        case 'v':
+            if (parse_version(
+                        optarg,
+                        &parsed_args->lwm2m_version_config.minimum_version)) {
+                goto finish;
+            }
+            break;
+        case 'V':
+            if (parse_version(
+                        optarg,
+                        &parsed_args->lwm2m_version_config.maximum_version)) {
+                goto finish;
+            }
+            break;
+#endif // ANJAY_WITH_LWM2M11
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
         case 'r': {
             int result;
@@ -900,7 +1016,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                     || result < (int) ANJAY_FW_UPDATE_RESULT_INITIAL
                     || result > (int) ANJAY_FW_UPDATE_RESULT_UNSUPPORTED_PROTOCOL) {
                 demo_log(ERROR, "invalid update result value: %s", optarg);
-                return -1;
+                goto finish;
             }
             parsed_args->fw_update_delayed_result =
                     (anjay_fw_update_result_t) result;
@@ -995,12 +1111,11 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
         }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
-#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) \
-        && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#if defined(ANJAY_WITH_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 261:
             parsed_args->attr_storage_file = optarg;
             break;
-#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) &&
+#endif // defined(ANJAY_WITH_ATTR_STORAGE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 267:
             if (parse_double(optarg,
@@ -1089,6 +1204,13 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         case 275:
             parsed_args->prefer_hierarchical_formats = true;
             break;
+#ifdef ANJAY_WITH_LWM2M11
+        case 276: {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            parsed_args->connection_args.servers[idx].sni = optarg;
+            break;
+        }
+#endif // ANJAY_WITH_LWM2M11
         case 277:
             parsed_args->use_connection_id = true;
             break;
@@ -1117,6 +1239,49 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         }
+#ifdef ANJAY_WITH_LWM2M11
+        case 279: {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (parse_u32(optarg, &parsed_args->connection_args.servers[idx]
+                                           .retry_count)) {
+                demo_log(ERROR, "Invalid Retry Count value: %s", optarg);
+                goto finish;
+            }
+            break;
+        }
+        case 280: {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (parse_u32(optarg, &parsed_args->connection_args.servers[idx]
+                                           .retry_timer)) {
+                demo_log(ERROR, "Invalid Retry Timer value: %s", optarg);
+                goto finish;
+            }
+            break;
+        }
+        case 281: {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (parse_u32(optarg, &parsed_args->connection_args.servers[idx]
+                                           .sequence_retry_count)) {
+                demo_log(ERROR, "Invalid Sequence Retry Count value: %s",
+                         optarg);
+                goto finish;
+            }
+            break;
+        }
+        case 282: {
+            int idx = num_servers == 0 ? 0 : num_servers - 1;
+            if (parse_u32(optarg, &parsed_args->connection_args.servers[idx]
+                                           .sequence_delay_timer)) {
+                demo_log(ERROR, "Invalid Sequence Delay Timer value: %s",
+                         optarg);
+                goto finish;
+            }
+            break;
+        }
+#endif // ANJAY_WITH_LWM2M11
+        case 283:
+            parsed_args->prefer_same_socket_downloads = true;
+            break;
         case 284:
             if (parse_size(optarg, &parsed_args->tx_params.nstart)) {
                 demo_log(ERROR,
@@ -1126,6 +1291,16 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
                 goto finish;
             }
             break;
+#ifdef ANJAY_WITH_SEND
+        case 287:
+            parsed_args->fw_update_use_send = true;
+            break;
+#endif // ANJAY_WITH_SEND
+#ifdef ANJAY_WITH_LWM2M11
+        case 288:
+            parsed_args->pkix_trust_store = optarg;
+            break;
+#endif // ANJAY_WITH_LWM2M11
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
         && defined(AVS_COMMONS_STREAM_WITH_FILE)
         case 289:
@@ -1133,6 +1308,16 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
 #endif // defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+        case 298:
+            use_external_security_info = true;
+            break;
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
+#ifdef ANJAY_WITH_LWM2M11
+        case 299:
+            parsed_args->rebuild_client_cert_chain = true;
+            break;
+#endif // ANJAY_WITH_LWM2M11
         case 306:
             parsed_args->alternative_logger = true;
             break;
@@ -1239,6 +1424,21 @@ process:
                                 DEFAULT_PSK_KEY, sizeof(DEFAULT_PSK_KEY) - 1)) {
             retval = -1;
         }
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+        if (use_external_security_info) {
+            // NOTE: psk_identity and psk_key take priority in
+            // security_object_reload()
+            parsed_args->connection_args
+                    .psk_identity = avs_crypto_psk_identity_info_from_buffer(
+                    parsed_args->connection_args.public_cert_or_psk_identity,
+                    parsed_args->connection_args
+                            .public_cert_or_psk_identity_size);
+            parsed_args->connection_args
+                    .psk_key = avs_crypto_psk_key_info_from_buffer(
+                    parsed_args->connection_args.private_cert_or_psk_key,
+                    parsed_args->connection_args.private_cert_or_psk_key_size);
+        }
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
     } else if (parsed_args->connection_args.security_mode
                        == ANJAY_SECURITY_CERTIFICATE
                || parsed_args->connection_args.security_mode
@@ -1248,6 +1448,14 @@ process:
                             "other way around) makes little sense");
             retval = -1;
         } else if (!identity_set) {
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+            if (use_external_security_info) {
+                parsed_args->connection_args.public_cert =
+                        avs_crypto_certificate_chain_info_from_file(cert_path);
+                parsed_args->connection_args.private_key =
+                        avs_crypto_private_key_info_from_file(key_path, NULL);
+            } else
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
             {
                 if (load_buffer_from_file(
                             &parsed_args->connection_args
@@ -1271,6 +1479,23 @@ process:
                 }
             }
         }
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+        else if (use_external_security_info) {
+            // NOTE: public_cert and private_key take priority in
+            // security_object_reload()
+            parsed_args->connection_args.public_cert =
+                    avs_crypto_certificate_chain_info_from_buffer(
+                            parsed_args->connection_args
+                                    .public_cert_or_psk_identity,
+                            parsed_args->connection_args
+                                    .public_cert_or_psk_identity_size);
+            parsed_args->connection_args
+                    .private_key = avs_crypto_private_key_info_from_buffer(
+                    parsed_args->connection_args.private_cert_or_psk_key,
+                    parsed_args->connection_args.private_cert_or_psk_key_size,
+                    NULL);
+        }
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
         if (server_public_key_path
                 && load_buffer_from_file(
                            &parsed_args->connection_args.server_public_key,

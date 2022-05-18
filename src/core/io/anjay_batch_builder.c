@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -42,6 +35,9 @@ typedef enum {
     ANJAY_BATCH_DATA_BYTES,
     ANJAY_BATCH_DATA_STRING,
     ANJAY_BATCH_DATA_INT,
+#    ifdef ANJAY_WITH_LWM2M11
+    ANJAY_BATCH_DATA_UINT,
+#    endif // ANJAY_WITH_LWM2M11
     ANJAY_BATCH_DATA_DOUBLE,
     ANJAY_BATCH_DATA_BOOL,
     ANJAY_BATCH_DATA_OBJLNK,
@@ -57,6 +53,9 @@ typedef struct {
         } bytes;
         const char *string;
         int64_t int_value;
+#    ifdef ANJAY_WITH_LWM2M11
+        uint64_t uint_value;
+#    endif // ANJAY_WITH_LWM2M11
         double double_value;
         bool bool_value;
         struct {
@@ -172,6 +171,21 @@ int _anjay_batch_add_int(anjay_batch_builder_t *builder,
     return batch_data_add(builder, uri, timestamp, data);
 }
 
+#    ifdef ANJAY_WITH_LWM2M11
+int _anjay_batch_add_uint(anjay_batch_builder_t *builder,
+                          const anjay_uri_path_t *uri,
+                          avs_time_real_t timestamp,
+                          uint64_t value) {
+    const anjay_batch_data_t data = {
+        .type = ANJAY_BATCH_DATA_UINT,
+        .value = {
+            .uint_value = value
+        }
+    };
+    return batch_data_add(builder, uri, timestamp, data);
+}
+#    endif // ANJAY_WITH_LWM2M11
+
 int _anjay_batch_add_double(anjay_batch_builder_t *builder,
                             const anjay_uri_path_t *uri,
                             avs_time_real_t timestamp,
@@ -208,6 +222,49 @@ int _anjay_batch_add_string(anjay_batch_builder_t *builder,
     }
     return batch_data_add(builder, uri, timestamp, str_data);
 }
+
+#    ifdef ANJAY_WITH_LWM2M11
+static int make_data_with_duplicated_bytes(anjay_batch_data_t *batch_data,
+                                           const void *data,
+                                           size_t length) {
+    assert(batch_data);
+    if (!data && length) {
+        return -1;
+    }
+    void *new_data = NULL;
+
+    if (data && length) {
+        new_data = avs_malloc(length);
+        if (!new_data) {
+            return -1;
+        }
+        memcpy(new_data, data, length);
+    }
+
+    *batch_data = (anjay_batch_data_t) {
+        .type = ANJAY_BATCH_DATA_BYTES,
+        .value = {
+            .bytes = {
+                .data = new_data,
+                .length = length
+            }
+        }
+    };
+    return 0;
+}
+
+int _anjay_batch_add_bytes(anjay_batch_builder_t *builder,
+                           const anjay_uri_path_t *uri,
+                           avs_time_real_t timestamp,
+                           const void *data,
+                           size_t length) {
+    anjay_batch_data_t bytes_data;
+    if (make_data_with_duplicated_bytes(&bytes_data, data, length)) {
+        return -1;
+    }
+    return batch_data_add(builder, uri, timestamp, bytes_data);
+}
+#    endif // ANJAY_WITH_LWM2M11
 
 int _anjay_batch_add_objlnk(anjay_batch_builder_t *builder,
                             const anjay_uri_path_t *uri,
@@ -325,6 +382,18 @@ void _anjay_batch_release(anjay_batch_t **batch) {
     *batch = NULL;
 }
 
+#    ifdef ANJAY_WITH_LWM2M11
+void _anjay_batch_update_common_path_prefix(const anjay_uri_path_t **prefix_ptr,
+                                            anjay_uri_path_t *prefix_buf,
+                                            const anjay_batch_t *batch) {
+    AVS_LIST(anjay_batch_entry_t) element;
+    AVS_LIST_FOREACH(element, batch->list) {
+        _anjay_uri_path_update_common_prefix(prefix_ptr, prefix_buf,
+                                             &element->path);
+    }
+}
+#    endif // ANJAY_WITH_LWM2M11
+
 static void value_returned(builder_out_ctx_t *ctx) {
     ctx->path = MAKE_ROOT_PATH();
 }
@@ -415,6 +484,19 @@ static int ret_integer(anjay_unlocked_output_ctx_t *ctx_, int64_t value) {
     }
     return result;
 }
+
+#    ifdef ANJAY_WITH_LWM2M11
+static int ret_uint(anjay_unlocked_output_ctx_t *ctx_, uint64_t value) {
+    builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
+    int result = -1;
+    if (_anjay_uri_path_has(&ctx->path, ANJAY_ID_RID)) {
+        result = _anjay_batch_add_uint(ctx->builder, &ctx->path, ctx->timestamp,
+                                       value);
+        value_returned(ctx);
+    }
+    return result;
+}
+#    endif // ANJAY_WITH_LWM2M11
 
 static int ret_double(anjay_unlocked_output_ctx_t *ctx_, double value) {
     builder_out_ctx_t *ctx = (builder_out_ctx_t *) ctx_;
@@ -512,6 +594,9 @@ static const anjay_output_ctx_vtable_t BUILDER_OUT_VTABLE = {
     .bytes_begin = bytes_begin,
     .string = ret_string,
     .integer = ret_integer,
+#    ifdef ANJAY_WITH_LWM2M11
+    .uint = ret_uint,
+#    endif // ANJAY_WITH_LWM2M11
     .floating = ret_double,
     .boolean = ret_bool,
     .objlnk = ret_objlnk,
@@ -638,6 +723,10 @@ static int serialize_batch_entry(const anjay_batch_entry_t *entry,
         return _anjay_ret_string_unlocked(output, entry->data.value.string);
     case ANJAY_BATCH_DATA_INT:
         return _anjay_ret_i64_unlocked(output, entry->data.value.int_value);
+#    ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_BATCH_DATA_UINT:
+        return _anjay_ret_u64_unlocked(output, entry->data.value.uint_value);
+#    endif // ANJAY_WITH_LWM2M11
     case ANJAY_BATCH_DATA_DOUBLE:
         return _anjay_ret_double_unlocked(output,
                                           entry->data.value.double_value);
@@ -727,6 +816,10 @@ static bool batch_data_equal(const anjay_batch_data_t *a,
         return !strcmp(a->value.string, b->value.string);
     case ANJAY_BATCH_DATA_INT:
         return a->value.int_value == b->value.int_value;
+#    ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_BATCH_DATA_UINT:
+        return a->value.uint_value == b->value.uint_value;
+#    endif // ANJAY_WITH_LWM2M11
     case ANJAY_BATCH_DATA_DOUBLE:
         return a->value.double_value == b->value.double_value;
     case ANJAY_BATCH_DATA_BOOL:
@@ -780,11 +873,31 @@ double _anjay_batch_data_numeric_value(const anjay_batch_t *batch) {
     switch (entry->data.type) {
     case ANJAY_BATCH_DATA_INT:
         return (double) entry->data.value.int_value;
+#    ifdef ANJAY_WITH_LWM2M11
+    case ANJAY_BATCH_DATA_UINT:
+        return (double) entry->data.value.uint_value;
+#    endif // ANJAY_WITH_LWM2M11
     case ANJAY_BATCH_DATA_DOUBLE:
         return entry->data.value.double_value;
     default:
         return NAN;
     }
+}
+
+int _anjay_batch_data_boolean_value(const anjay_batch_t *batch,
+                                    bool *out_value) {
+    if (_anjay_batch_data_requires_hierarchical_format(batch)) {
+        // not a simple value
+        return -1;
+    }
+    const anjay_batch_entry_t *const entry = batch->list;
+    if (entry->data.type == ANJAY_BATCH_DATA_BOOL) {
+        if (out_value) {
+            *out_value = entry->data.value.bool_value;
+        }
+        return 0;
+    }
+    return -1;
 }
 
 avs_time_real_t _anjay_batch_get_compilation_time(const anjay_batch_t *batch) {
@@ -793,6 +906,9 @@ avs_time_real_t _anjay_batch_get_compilation_time(const anjay_batch_t *batch) {
 
 #    ifdef ANJAY_TEST
 #        include "tests/core/io/batch_builder.c"
+#        ifdef ANJAY_WITH_LWM2M11
+#            include "tests/core/io/dm_batch.c"
+#        endif // ANJAY_WITH_LWM2M11
 #    endif
 
 #endif // defined(ANJAY_WITH_OBSERVE) || defined(ANJAY_WITH_SEND)

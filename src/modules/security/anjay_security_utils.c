@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -55,33 +48,6 @@ int _anjay_sec_fetch_security_mode(anjay_unlocked_input_ctx_t *ctx,
     return retval;
 }
 
-int _anjay_sec_validate_sms_security_mode(int32_t security_mode) {
-    switch (security_mode) {
-    case ANJAY_SMS_SECURITY_DTLS_PSK:
-    case ANJAY_SMS_SECURITY_NOSEC:
-        return 0;
-    case ANJAY_SMS_SECURITY_SECURE_PACKET:
-        security_log(DEBUG, _("Secure Packet mode not supported"));
-        return ANJAY_ERR_NOT_IMPLEMENTED;
-    default:
-        security_log(DEBUG, _("Invalid SMS Security Mode"));
-        return ANJAY_ERR_BAD_REQUEST;
-    }
-}
-
-int _anjay_sec_fetch_sms_security_mode(anjay_unlocked_input_ctx_t *ctx,
-                                       anjay_sms_security_mode_t *out) {
-    int32_t value;
-    int retval = _anjay_get_i32_unlocked(ctx, &value);
-    if (!retval) {
-        retval = _anjay_sec_validate_sms_security_mode(value);
-    }
-    if (!retval) {
-        *out = (anjay_sms_security_mode_t) value;
-    }
-    return retval;
-}
-
 static int _anjay_sec_validate_short_server_id(int32_t ssid) {
     return ssid > 0 && ssid <= UINT16_MAX ? 0 : -1;
 }
@@ -99,14 +65,109 @@ int _anjay_sec_fetch_short_server_id(anjay_unlocked_input_ctx_t *ctx,
     return retval;
 }
 
+#    if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+int _anjay_sec_init_certificate_chain_resource(
+        sec_key_or_data_t *out_resource,
+        sec_key_or_data_type_t type,
+        const avs_crypto_certificate_chain_info_t *in_value) {
+    avs_crypto_certificate_chain_info_t *array = NULL;
+    size_t array_element_count;
+    if (avs_is_err(avs_crypto_certificate_chain_info_copy_as_array(
+                &array, &array_element_count, *in_value))) {
+        return -1;
+    }
+    assert(array || !array_element_count);
+    assert(!out_resource->prev_ref);
+    assert(!out_resource->next_ref);
+    assert(type == SEC_KEY_AS_KEY_EXTERNAL || type == SEC_KEY_AS_KEY_OWNED);
+    out_resource->type = type;
+    out_resource->value.key.info =
+            avs_crypto_certificate_chain_info_from_array(array,
+                                                         array_element_count)
+                    .desc;
+    out_resource->value.key.heap_buf = array;
+    return 0;
+}
+
+int _anjay_sec_init_private_key_resource(
+        sec_key_or_data_t *out_resource,
+        sec_key_or_data_type_t type,
+        const avs_crypto_private_key_info_t *in_value) {
+    avs_crypto_private_key_info_t *private_key = NULL;
+    if (avs_is_err(avs_crypto_private_key_info_copy(&private_key, *in_value))) {
+        return -1;
+    }
+    assert(private_key);
+    assert(!out_resource->prev_ref);
+    assert(!out_resource->next_ref);
+    assert(type == SEC_KEY_AS_KEY_EXTERNAL || type == SEC_KEY_AS_KEY_OWNED);
+    out_resource->type = type;
+    out_resource->value.key.info = private_key->desc;
+    out_resource->value.key.heap_buf = private_key;
+    return 0;
+}
+#    endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) ||             \
+              (defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) && \
+              defined(AVS_COMMONS_WITH_AVS_CRYPTO_PKI_ENGINE)) */
+
+#    if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+int _anjay_sec_init_psk_identity_resource(
+        sec_key_or_data_t *out_resource,
+        sec_key_or_data_type_t type,
+        const avs_crypto_psk_identity_info_t *in_value) {
+    avs_crypto_psk_identity_info_t *psk_identity = NULL;
+    if (avs_is_err(
+                avs_crypto_psk_identity_info_copy(&psk_identity, *in_value))) {
+        return -1;
+    }
+    assert(psk_identity);
+    assert(!out_resource->prev_ref);
+    assert(!out_resource->next_ref);
+    assert(type == SEC_KEY_AS_KEY_EXTERNAL || type == SEC_KEY_AS_KEY_OWNED);
+    out_resource->type = type;
+    out_resource->value.key.info = psk_identity->desc;
+    out_resource->value.key.heap_buf = psk_identity;
+    return 0;
+}
+
+int _anjay_sec_init_psk_key_resource(
+        sec_key_or_data_t *out_resource,
+        sec_key_or_data_type_t type,
+        const avs_crypto_psk_key_info_t *in_value) {
+    avs_crypto_psk_key_info_t *psk_key = NULL;
+    if (avs_is_err(avs_crypto_psk_key_info_copy(&psk_key, *in_value))) {
+        return -1;
+    }
+    assert(psk_key);
+    assert(!out_resource->prev_ref);
+    assert(!out_resource->next_ref);
+    assert(type == SEC_KEY_AS_KEY_EXTERNAL || type == SEC_KEY_AS_KEY_OWNED);
+    out_resource->type = type;
+    out_resource->value.key.info = psk_key->desc;
+    out_resource->value.key.heap_buf = psk_key;
+    return 0;
+}
+#    endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) ||             \
+              (defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) && \
+              defined(AVS_COMMONS_WITH_AVS_CRYPTO_PSK_ENGINE)) */
+
 void _anjay_sec_key_or_data_cleanup(sec_key_or_data_t *value,
                                     bool remove_from_engine) {
+    (void) remove_from_engine;
     if (!value->prev_ref && !value->next_ref) {
         switch (value->type) {
         case SEC_KEY_AS_DATA:
             memset(value->value.data.data, 0, value->value.data.capacity);
             _anjay_raw_buffer_clear(&value->value.data);
             break;
+#    if defined(ANJAY_WITH_SECURITY_STRUCTURED)
+        case SEC_KEY_AS_KEY_OWNED:
+            // fall-through
+        case SEC_KEY_AS_KEY_EXTERNAL:
+            avs_free(value->value.key.heap_buf);
+            break;
+#    endif /* defined(ANJAY_WITH_SECURITY_STRUCTURED) || \
+              defined(ANJAY_WITH_MODULE_SECURITY_ENGINE_SUPPORT) */
         default:
             AVS_UNREACHABLE("invalid value of sec_key_or_data_type_t");
         }
@@ -133,11 +194,10 @@ void _anjay_sec_destroy_instance_fields(sec_instance_t *instance,
     _anjay_sec_key_or_data_cleanup(&instance->private_cert_or_psk_key,
                                    remove_from_engine);
     _anjay_raw_buffer_clear(&instance->server_public_key);
-    _anjay_sec_key_or_data_cleanup(&instance->sms_key_params,
-                                   remove_from_engine);
-    _anjay_sec_key_or_data_cleanup(&instance->sms_secret_key,
-                                   remove_from_engine);
-    avs_free((char *) (intptr_t) instance->sms_number);
+#    ifdef ANJAY_WITH_LWM2M11
+    AVS_LIST_CLEAR(&instance->enabled_ciphersuites);
+    avs_free(instance->server_name_indication);
+#    endif // ANJAY_WITH_LWM2M11
 }
 
 void _anjay_sec_destroy_instances(AVS_LIST(sec_instance_t) *instances_ptr,
@@ -181,17 +241,15 @@ static int _anjay_sec_clone_instance(sec_instance_t *dest,
         return -1;
     }
 
-    sec_key_or_data_create_ref(&dest->sms_key_params, &src->sms_key_params);
-    sec_key_or_data_create_ref(&dest->sms_secret_key, &src->sms_secret_key);
-
-    dest->sms_number = NULL;
-    if (src->sms_number) {
-        dest->sms_number = avs_strdup(src->sms_number);
-        if (!dest->sms_number) {
-            security_log(ERROR, _("Cannot clone Server SMS Number resource"));
-            return -1;
-        }
+#    ifdef ANJAY_WITH_LWM2M11
+    dest->server_name_indication = NULL;
+    if (src->server_name_indication
+            && !(dest->server_name_indication =
+                         avs_strdup(src->server_name_indication))) {
+        security_log(ERROR, _("Cannot clone SNI resource"));
+        return -1;
     }
+#    endif // ANJAY_WITH_LWM2M11
 
     return 0;
 }

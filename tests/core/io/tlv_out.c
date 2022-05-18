@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -188,6 +181,38 @@ TEST_INT64(424242424242, "\xC8\x01\x08\x00\x00\x00\x62\xC6\xD1\xA9\xB2")
 TEST_INT64(42424242424242, "\xC8\x01\x08\x00\x00\x26\x95\xA9\xE6\x49\xB2")
 TEST_INT64(4242424242424242, "\xC8\x01\x08\x00\x0F\x12\x76\x5D\xF4\xC9\xB2")
 TEST_INT64(424242424242424242, "\xC8\x01\x08\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
+
+#ifdef ANJAY_WITH_LWM2M11
+#    define TEST_UINT64_IMPL(Name, Num, Data)                           \
+        AVS_UNIT_TEST(tlv_out, Name) {                                  \
+            TEST_ENV(32, &MAKE_INSTANCE_PATH(0, 0));                    \
+                                                                        \
+            AVS_UNIT_ASSERT_SUCCESS(_anjay_output_set_path(             \
+                    out, &MAKE_RESOURCE_PATH(0, 0, 1)));                \
+            AVS_UNIT_ASSERT_SUCCESS(_anjay_ret_u64_unlocked(out, Num)); \
+            AVS_UNIT_ASSERT_SUCCESS(_anjay_output_ctx_destroy(&out));   \
+            VERIFY_BYTES(Data);                                         \
+        }
+
+#    define TEST_UINT64(Num, Data) \
+        TEST_UINT64_IMPL(AVS_CONCAT(u64_, __LINE__), Num##ULL, Data)
+
+TEST_UINT64(42,
+            "\xC1\x01"
+            "\x2A")
+TEST_UINT64(4242,
+            "\xC2\x01"
+            "\x10\x92")
+TEST_UINT64(4294967295,
+            "\xC4\x01"
+            "\xFF\xFF\xFF\xFF")
+TEST_UINT64(4294967296,
+            "\xC8\x01\x08"
+            "\x00\x00\x00\x01\x00\x00\x00\x00")
+TEST_UINT64(18446744073709551615,
+            "\xC8\x01\x08"
+            "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
+#endif // ANJAY_WITH_LWM2M11
 
 #define TEST_DOUBLE_IMPL(Name, Num, Data)                                   \
     AVS_UNIT_TEST(tlv_out, Name) {                                          \

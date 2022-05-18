@@ -1,50 +1,43 @@
 #!/usr/bin/env python3
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 
+import os
 import sys
 
 assert sys.version_info >= (3, 5), "Python < 3.5 is unsupported"
 
-import argparse
-import binascii
-import collections
-import glob
-import os
-import re
-import socket
-import enum
-import select
-import logging
-
-from typing import List, Optional, Tuple, Mapping
-from prompt_toolkit.history import FileHistory
 
 sys.path = [os.path.join(os.path.dirname(os.path.abspath(__file__)), 'powercmd')] + sys.path
 
-import powercmd
 
 sys.path = [os.path.dirname(os.path.abspath(__file__))] + sys.path
 
-from tlv_shell import TLVBuilderShell
-
-from lwm2m import coap
-from lwm2m.tlv import TLV
-from lwm2m.messages import *
-from lwm2m.server import Lwm2mServer
 
 from lwm2m.coap.server import SecurityMode
+from lwm2m.server import Lwm2mServer
+from lwm2m.messages import *
+from lwm2m.tlv import TLV
+from lwm2m import coap
+from cbor_shell import CBORBuilderShell
+from tlv_shell import TLVBuilderShell
+import powercmd
+from prompt_toolkit.history import FileHistory
+from typing import List, Optional, Tuple, Mapping
+import logging
+import select
+import enum
+import socket
+import re
+import glob
+import collections
+import binascii
+import argparse
+
 
 REGISTER_PATH = '/rd/demo'
 DEFAULT_COAP_PORT = 5683
@@ -73,6 +66,7 @@ def make_response(req, code, content='', extra_opts=[], type=coap.Type.ACKNOWLED
                        options=([coap.ContentFormatOption.APPLICATION_OCTET_STREAM] if content else []) + extra_opts,
                        content=content)
 
+
 def _create_coap_server(port: int,
                         psk_identity: str = None,
                         psk_key: str = None,
@@ -81,6 +75,7 @@ def _create_coap_server(port: int,
                         crt_file: str = None,
                         key_file: str = None,
                         ipv6: bool = False,
+                        tcp: bool = False,
                         debug: bool = False,
                         reuse_port: bool = False,
                         connection_id: str = ''):
@@ -103,6 +98,8 @@ def _create_coap_server(port: int,
         port = DEFAULT_COAPS_PORT if use_dtls else DEFAULT_COAP_PORT
 
     if use_dtls:
+        if tcp:
+            raise RuntimeError('Only DTLS servers are supported')
         if use_psk:
             return coap.DtlsServer(psk_key=psk_key, psk_identity=psk_identity,
                                    listen_port=port, debug=debug, use_ipv6=ipv6,
@@ -116,6 +113,8 @@ def _create_coap_server(port: int,
             raise RuntimeError('Cannot use connection_id in NoSec mode')
 
         transport = coap.transport.Transport.UDP
+        if tcp:
+            transport = coap.transport.Transport.TCP
         return coap.Server(port, ipv6, reuse_port=reuse_port, transport=transport)
 
 
@@ -150,7 +149,7 @@ class CoapFileServer:
     def _read_file_chunk(self,
                          path: str,
                          offset: int,
-                         size: int) -> Tuple[bytes, bool]: # data, has_more
+                         size: int) -> Tuple[bytes, bool]:  # data, has_more
         file_path = self._path_to_filename(path)
         stat = os.stat(file_path)
 
@@ -266,7 +265,6 @@ class CoapFileServer:
 
         serv.send(res)
 
-
     def _create_server(self):
         serv = _create_coap_server(port=self.listen_port,
                                    psk_identity=self.psk_identity,
@@ -336,6 +334,7 @@ Recv = collections.namedtuple('Recv', ['msg'])
 
 NSH_HISTORY_FILE = os.path.join(os.path.expanduser('~'), '.nsh_history')
 
+
 class Lwm2mCmd(powercmd.Cmd):
     def set_prompt(self, extra_text=None):
         extra_text = ' %s' % (extra_text,) if extra_text else ''
@@ -354,6 +353,7 @@ class Lwm2mCmd(powercmd.Cmd):
         self.auto_reregister = True
         self.auto_update = True
         self.auto_ack = True
+
 
         self.history = []
 
@@ -380,7 +380,7 @@ class Lwm2mCmd(powercmd.Cmd):
         self.history = []
 
     def do_details(self,
-                    idx: int = 1):
+                   idx: int = 1):
         """
         Displays details of a recent message.
 
@@ -391,7 +391,7 @@ class Lwm2mCmd(powercmd.Cmd):
 
         for entry in reversed(self.history):
             if (isinstance(entry, Recv)
-                or isinstance(entry, Send)):
+                    or isinstance(entry, Send)):
                 idx -= 1
                 if idx <= 0:
                     print('\n*** %s ***' % (entry.__class__.__name__))
@@ -402,14 +402,15 @@ class Lwm2mCmd(powercmd.Cmd):
 
     def do_connect(self,
                    host: str = None,
-                   port: int = DEFAULT_COAP_PORT):
+                   port: int = DEFAULT_COAP_PORT,
+                   bind: int = 0):
         """
         Connects the socket to given HOST:PORT. Future packets will be sent to
         this address.
         """
         host = host or ('::1' if self.cmdline_args.ipv6 else '127.0.0.1')
         self.serv = None
-        self.serv = coap.Server(use_ipv6=self.cmdline_args.ipv6)
+        self.serv = coap.Server(use_ipv6=self.cmdline_args.ipv6, listen_port=bind)
         self.serv.connect_to_client((host, port))
         print('new remote endpoint: %s:%d' % (host, port))
 
@@ -419,7 +420,7 @@ class Lwm2mCmd(powercmd.Cmd):
         then the server will be able to receive packets from different (host, port),
         which may be useful for testing purposes.
         """
-        self.serv._raw_udp_socket.connect(('',0))
+        self.serv._raw_udp_socket.connect(('', 0))
 
     def do_listen(self,
                   port: int = None,
@@ -430,6 +431,7 @@ class Lwm2mCmd(powercmd.Cmd):
                   crt_file: str = None,
                   key_file: str = None,
                   ipv6: bool = None,
+                  tcp: bool = None,
                   debug: bool = None,
                   connection_id: str = ''):
         """
@@ -445,6 +447,7 @@ class Lwm2mCmd(powercmd.Cmd):
             psk_key = psk_key or self.cmdline_args.psk_key
             debug = debug or self.cmdline_args.debug
             ipv6 = ipv6 or self.cmdline_args.ipv6
+            tcp = tcp or self.cmdline_args.tcp
 
             coap_serv = _create_coap_server(port=port,
                                             psk_identity=psk_identity,
@@ -454,6 +457,7 @@ class Lwm2mCmd(powercmd.Cmd):
                                             crt_file=crt_file,
                                             key_file=key_file,
                                             ipv6=ipv6,
+                                            tcp=tcp,
                                             debug=debug,
                                             connection_id=connection_id)
             self.serv = Lwm2mServer(coap_serv)
@@ -622,10 +626,21 @@ class Lwm2mCmd(powercmd.Cmd):
         tlv_shell.cmdloop()
         tlv_shell.do_serialize()
 
+    def do_cbor(self):
+        """
+        Launch a CBOR sub-shell that facilitates creating CBOR payloads.
+        """
+        bracket_idx = self.prompt.index(']')
+        prompt = self.prompt[:bracket_idx] + '/CBOR' + self.prompt[bracket_idx:]
+
+        cbor_shell = CBORBuilderShell(prompt)
+        cbor_shell.cmdloop()
+        cbor_shell.do_serialize()
+
     def do_set(self,
-               auto_update: bool=None,
-               auto_reregister: bool=None,
-               auto_ack: bool=None):
+               auto_update: bool = None,
+               auto_reregister: bool = None,
+               auto_ack: bool = None):
         if auto_reregister is not None:
             self.auto_reregister = auto_reregister
             print('Auto register responses %s' % ('enabled' if self.auto_reregister else 'disabled',))
@@ -660,7 +675,7 @@ class Lwm2mCmd(powercmd.Cmd):
         import time
         time.sleep(timeout_s)
 
-    def do_recv(self, timeout_s: float=None):
+    def do_recv(self, timeout_s: float = None):
         """
         Waits for a next incoming message. If TIMEOUT_S is specified, the
         command will not wait longer than TIMEOUT_S if no messages are received.
@@ -685,6 +700,41 @@ class Lwm2mCmd(powercmd.Cmd):
             print('Expecting: %s' % (self.expected_message.summary()))
         else:
             print('Expecting: %s' % (str(self.expected_message),))
+
+    def prepare_bootstrap(self,
+                          uri,
+                          security_mode,
+                          psk_identity,
+                          client_cert_path,
+                          psk_key,
+                          client_private_key_path,
+                          server_cert_path):
+        if security_mode is None:
+            security_mode = {
+                'coap': SecurityMode.NoSec,
+                'coaps': SecurityMode.PreSharedKey
+            }[uri.split(':')[0]]
+
+        pubkey_or_identity = b''
+        if psk_identity:
+            pubkey_or_identity = psk_identity
+        elif client_cert_path:
+            with open(client_cert_path, 'rb') as f:
+                pubkey_or_identity = f.read()
+
+        privkey = b''
+        if psk_key:
+            privkey = psk_key
+        elif client_private_key_path:
+            with open(client_private_key_path, 'rb') as f:
+                privkey = f.read()
+
+        server_pubkey_or_identity = b''
+        if server_cert_path:
+            with open(server_cert_path, 'rb') as f:
+                server_pubkey_or_identity = f.read()
+
+        return security_mode, pubkey_or_identity, privkey, server_pubkey_or_identity
 
     def do_bootstrap(self,
                      uri: str,
@@ -722,58 +772,50 @@ class Lwm2mCmd(powercmd.Cmd):
         If FINISH is set to True, a Bootstap Finish message will be sent
         after setting up Security/Server instances.
         """
-        if security_mode is None:
-            security_mode = {
-                'coap': SecurityMode.NoSec,
-                'coaps': SecurityMode.PreSharedKey
-            }[uri.split(':')[0]]
 
         if ((psk_identity or psk_key)
                 and (client_cert_path or client_private_key_path or server_cert_path)):
             print('Cannot set both PSK and cert mode at the same time')
             return
 
-        pubkey_or_identity = b''
-        if psk_identity:
-            pubkey_or_identity = psk_identity
-        elif client_cert_path:
-            with open(client_cert_path, 'rb') as f:
-                pubkey_or_identity = f.read()
-
-        privkey = b''
-        if psk_key:
-            privkey = psk_key
-        elif client_private_key_path:
-            with open(client_private_key_path, 'rb') as f:
-                privkey = f.read()
-
-        server_pubkey_or_identity = b''
-        if server_cert_path:
-            with open(server_cert_path, 'rb') as f:
-                server_pubkey_or_identity = f.read()
+        bootstrap_vars = self.prepare_bootstrap(uri,
+                                                security_mode,
+                                                psk_identity,
+                                                client_cert_path,
+                                                psk_key,
+                                                client_private_key_path,
+                                                server_cert_path)
+        security_mode, pubkey_or_identity, privkey, server_pubkey_or_identity = bootstrap_vars
 
         security = TLV.make_instance(iid,
                                      [TLV.make_resource(0, uri),
-                                      TLV.make_resource(1, 1 if is_bootstrap else 0),
-                                      TLV.make_resource(2, security_mode.value),
+                                      TLV.make_resource(
+                                          1, 1 if is_bootstrap else 0),
+                                      TLV.make_resource(
+                                          2, security_mode.value),
                                       TLV.make_resource(3, pubkey_or_identity),
-                                      TLV.make_resource(4, server_pubkey_or_identity),
+                                      TLV.make_resource(
+                                          4, server_pubkey_or_identity),
                                       TLV.make_resource(5, privkey),
                                       TLV.make_resource(10, ssid),
                                       TLV.make_multires(16, enumerate(tls_ciphersuites))])
         server = TLV.make_instance(iid,
                                    [TLV.make_resource(0, ssid),
                                     TLV.make_resource(1, lifetime),
-                                    TLV.make_resource(6, 1 if notification_storing else 0),
+                                    TLV.make_resource(
+                                        6, 1 if notification_storing else 0),
                                     TLV.make_resource(7, binding)])
 
-        self._send(Lwm2mWrite('/0', security.serialize(), format=coap.ContentFormat.APPLICATION_LWM2M_TLV))
+        self._send(Lwm2mWrite('/0', security.serialize(),
+                   format=coap.ContentFormat.APPLICATION_LWM2M_TLV))
 
         if not is_bootstrap:
-            self._send(Lwm2mWrite('/1', server.serialize(), format=coap.ContentFormat.APPLICATION_LWM2M_TLV))
+            self._send(Lwm2mWrite('/1', server.serialize(),
+                       format=coap.ContentFormat.APPLICATION_LWM2M_TLV))
 
         if finish:
             self._send(Lwm2mBootstrapFinish())
+
 
     def do_write_file(self,
                       fname: str,
@@ -798,12 +840,11 @@ class Lwm2mCmd(powercmd.Cmd):
                     break
 
     def do_udp(self,
-               content : EscapedBytes):
+               content: EscapedBytes):
         if hasattr(self.serv.socket, 'py_socket'):
             self.serv.socket.py_socket.sendall(content)
         else:
             self.serv.socket.sendall(content)
-
 
     def do_file_server(self,
                        root_directory: str = '.',
@@ -837,10 +878,10 @@ class Lwm2mCmd(powercmd.Cmd):
         except KeyboardInterrupt:
             pass
 
-
     def emptyline(self):
         while self.try_read():
             pass
+
 
 def _make_command_handler(cls):
     """
@@ -944,9 +985,12 @@ if __name__ == '__main__':
     parser.add_argument('--listen', '-l',
                         type=int, const=-1, metavar='PORT', nargs='?',
                         help=('Immediately starts listening on specified CoAP port. '
+                              'Default UDP, can be TCP if --tcp is passed. '
                               'If PORT is not specified, default one is used (%s '
                               'for CoAP, %s for CoAP/(D)TLS)' % (DEFAULT_COAP_PORT,
                                                                  DEFAULT_COAPS_PORT)))
+    parser.add_argument('--tcp', '-t', default=False, action='store_true',
+                        help='Listen on TCP port')
     parser.add_argument('--psk-identity', '-i',
                         type=str, metavar='IDENTITY',
                         help='PSK identity to use for DTLS connection (literal string).')

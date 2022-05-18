@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Custom (D)TLS layers
 ====================
@@ -86,7 +79,8 @@ adjustments:
 
 * Additional ``decorate`` operation may be provided to support securing
   communication over a pre-existing unencrypted socket - this is currently used
-  by the commercial version of Anjay to provide security for the SMS transport.
+  by the SMS commercial feature of Anjay to provide security for the SMS
+  transport.
 
 List of functions to implement
 ------------------------------
@@ -102,8 +96,8 @@ configuration first:
 
 * Usually you should also disable
   ``AVS_COMMONS_WITH_AVS_CRYPTO_ADVANCED_FEATURES`` in ``avs_commons_config.h``.
-  If using the commercial version of Anjay, you will most likely want to disable
-  features related to OSCORE and EST.
+  You will most likely want to disable features related to OSCORE and EST if you
+  are using a version of Anjay that includes these commercial features.
 
   * If you need OSCORE or EST, you will need to implement advanced cryptographic
     functions related to AEAD, HKDF and processing various crypto-related file
@@ -126,9 +120,8 @@ Implementations of the following functions will need to be provided:
   ``_avs_net_create_udp_socket`` function described in :doc:`NetworkingAPI`.
 
 * ``_avs_net_create_ssl_socket`` - only required if the ``fw_update`` module
-  should support HTTPS transfers, or if support for CoAP over TCP is desired
-  (only available in the commercial version). Otherwise, it can be safely
-  implemented as ``return avs_errno(AVS_ENOTSUP);``.
+  should support HTTPS transfers, or if support for CoAP over TCP is desired.
+  Otherwise, it can be safely implemented as ``return avs_errno(AVS_ENOTSUP);``.
 
   .. snippet-source:: deps/avs_commons/src/net/avs_net_impl.h
 

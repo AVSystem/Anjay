@@ -1,17 +1,10 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Retransmissions, timeouts & response caching
 ============================================
@@ -278,8 +271,7 @@ covers most cases, there are also means to configure:
   custom ``anjay_fw_update_get_coap_tx_params_t`` handler `docs
   <../api/fw__update_8h.html#a50900e2aaff21e91df693795965136b2>`__),
 
-- in the commercial versions, there are also additional fields in
-  ``anjay_configuration_t`` that configure transmission parameters for non-UDP
-  transports.
+- additional fields in ``anjay_configuration_t`` that configure transmission
+  parameters for non-UDP transports.
 
 We recommend to refer to the doxygen documentation for more details.

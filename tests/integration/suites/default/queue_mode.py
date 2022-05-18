@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+# AVSystem Anjay LwM2M SDK
+# All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Licensed under the AVSystem-5-clause License.
+# See the attached LICENSE file for details.
 import time
 
 import framework.test_suite
@@ -82,3 +75,151 @@ class QueueModeBehaviour(retransmissions.RetransmissionTest.TestMixin,
         self.assertEqual(self.get_socket_count(), 1)
 
 
+class QueueModePreferenceIneffectiveForLwm2m10(QueueModeBehaviour):
+    def runTest(self):
+        self.communicate('set-queue-mode-preference PREFER_QUEUE_MODE')
+        self.communicate('send-update')
+        self.assertDemoUpdatesRegistration(self.servers[0])
+        self.assertDemoUpdatesRegistration(self.servers[1])
+        super().runTest()
+
+
+class ForceQueueMode(retransmissions.RetransmissionTest.TestMixin,
+                     framework.test_suite.Lwm2mSingleServerTest):
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+    def runTest(self):
+        self.communicate('set-queue-mode-preference FORCE_QUEUE_MODE')
+
+        # change is not applied until Update
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 1)
+
+        self.communicate('send-update')
+        self.assertDemoUpdatesRegistration()
+
+        # effectively queue mode, even though binding is "U"
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+
+class ForceOnlineMode(retransmissions.RetransmissionTest.TestMixin,
+                      framework.test_suite.Lwm2mSingleServerTest):
+    def setUp(self):
+        super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False)
+        self.assertDemoRegisters(self.serv, binding='UQ')
+
+    def runTest(self):
+        self.communicate('set-queue-mode-preference FORCE_ONLINE_MODE')
+        self.communicate('send-update')
+        self.assertDemoUpdatesRegistration()
+
+        # effectively online mode, even though binding is "UQ"
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 1)
+
+
+class Lwm2m11QueueMode(retransmissions.RetransmissionTest.TestMixin,
+                       framework.test_suite.Lwm2mDtlsSingleServerTest):
+    def setUp(self):
+        super().setUp(maximum_version='1.1')
+
+    def runTest(self):
+        # default: Prefer Online Mode, no queue mode
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 1)
+
+        # Force Online Mode, no queue mode
+        self.communicate('set-queue-mode-preference FORCE_ONLINE_MODE')
+        self.communicate('send-update')
+        self.assertDemoUpdatesRegistration()
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 1)
+
+        # Prefer Queue Mode, queue mode
+        self.communicate('set-queue-mode-preference PREFER_QUEUE_MODE')
+        self.communicate('send-update')
+        # enabling queue mode on 1.1, needs re-registration
+        self.assertDemoRegisters(self.serv, version='1.1', lwm2m11_queue_mode=True)
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+        # Force Queue Mode, queue mode
+        self.communicate('set-queue-mode-preference FORCE_QUEUE_MODE')
+        self.communicate('send-update')
+        self.assertDtlsReconnect(self.serv)
+        self.assertDemoUpdatesRegistration()
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+        # Prefer Online Mode again, no queue mode
+        self.communicate('set-queue-mode-preference PREFER_ONLINE_MODE')
+        self.communicate('send-update')
+        # disabling queue mode on 1.1, needs re-registration
+        self.assertDtlsReconnect(self.serv)
+        self.assertDemoRegisters(self.serv, version='1.1', lwm2m11_queue_mode=False)
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 1)
+
+
+class Lwm2m11UQBinding(retransmissions.RetransmissionTest.TestMixin,
+                       framework.test_suite.Lwm2mDtlsSingleServerTest):
+    def setUp(self):
+        # UQ binding is not LwM2M 1.1-compliant, but we support it anyway
+        super().setUp(extra_cmdline_args=['--binding=UQ'], auto_register=False, maximum_version='1.1')
+        self.assertDemoRegisters(self.serv, version='1.1', lwm2m11_queue_mode=True)
+
+    def runTest(self):
+        # default: Prefer Online Mode, queue mode
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+        # Prefer Queue Mode, queue mode
+        self.communicate('set-queue-mode-preference PREFER_QUEUE_MODE')
+        self.communicate('send-update')
+        self.assertDtlsReconnect(self.serv)
+        self.assertDemoUpdatesRegistration()
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+        # Force Queue Mode, queue mode
+        self.communicate('set-queue-mode-preference FORCE_QUEUE_MODE')
+        self.communicate('send-update')
+        self.assertDtlsReconnect(self.serv)
+        self.assertDemoUpdatesRegistration()
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 0)
+
+        # Force Online Mode, no queue mode
+        self.communicate('set-queue-mode-preference FORCE_ONLINE_MODE')
+        self.communicate('send-update')
+        # disabling queue mode on 1.1, needs re-registration
+        self.assertDtlsReconnect(self.serv)
+        self.assertDemoRegisters(self.serv, version='1.1', lwm2m11_queue_mode=False)
+        time.sleep(self.max_transmit_wait() - 2)
+        self.assertEqual(self.get_socket_count(), 1)
+        time.sleep(4)
+        self.assertEqual(self.get_socket_count(), 1)

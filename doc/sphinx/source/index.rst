@@ -1,20 +1,20 @@
 ..
    Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+   AVSystem Anjay LwM2M SDK
+   All rights reserved.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the AVSystem-5-clause License.
+   See the attached LICENSE file for details.
 
 Welcome to Anjay LwM2M library documentation!
 =============================================
+
+.. attention::
+
+   With release of Anjay 3.0, the `library's license terms have changed
+   <https://github.com/AVSystem/Anjay/blob/master/LICENSE>`_. Please make sure
+   that you have reviewed it before updating to the new major release. Previous
+   versions of Anjay remain with the old, Apache 2.0 license.
 
 Contents:
 
@@ -31,7 +31,7 @@ Contents:
    Tools
    PortingGuideForNonPOSIXPlatforms
    Migrating
-   Commercial_support
+   CommercialFeatures
 
 Links
 -----

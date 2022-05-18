@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include <anjay/anjay.h>
-#include <anjay/attr_storage.h>
 #include <anjay/security.h>
 #include <anjay/server.h>
 
@@ -74,7 +73,7 @@ static int test_resource_read(anjay_t *anjay,
     test_object_t *test = get_test_object(obj_ptr);
 
     // IID validity was checked by the `anjay_dm_list_instances_t` handler.
-    // If the Object Instance set does not change, or can only be modifed
+    // If the Object Instance set does not change, or can only be modified
     // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
     assert((size_t) iid < NUM_INSTANCES);
 
@@ -106,7 +105,7 @@ static int test_resource_write(anjay_t *anjay,
     test_object_t *test = get_test_object(obj_ptr);
 
     // IID validity was checked by the `anjay_dm_list_instances_t` handler.
-    // If the Object Instance set does not change, or can only be modifed
+    // If the Object Instance set does not change, or can only be modified
     // via LwM2M Create/Delete requests, it is safe to assume IID is correct.
     assert((size_t) iid < NUM_INSTANCES);
     struct test_instance *current_instance = &test->instances[iid];
@@ -210,8 +209,7 @@ int main(int argc, char *argv[]) {
 
     int result = 0;
 
-    if (anjay_attr_storage_install(anjay) || setup_security_object(anjay)
-            || setup_server_object(anjay)) {
+    if (setup_security_object(anjay) || setup_server_object(anjay)) {
         result = -1;
         goto cleanup;
     }

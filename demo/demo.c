@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifdef _WIN32
@@ -90,12 +83,28 @@ static int security_object_reload(anjay_demo_t *demo) {
         instance.server_uri = server->uri;
         if (instance.security_mode != ANJAY_SECURITY_EST
                 || server->is_bootstrap) {
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+            if (args->public_cert.desc.source != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                instance.public_cert = args->public_cert;
+            } else if (args->psk_identity.desc.source
+                       != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                instance.psk_identity = args->psk_identity;
+            } else
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
             {
                 instance.public_cert_or_psk_identity =
                         args->public_cert_or_psk_identity;
                 instance.public_cert_or_psk_identity_size =
                         args->public_cert_or_psk_identity_size;
             }
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+            if (args->private_key.desc.source != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                instance.private_key = args->private_key;
+            } else if (args->psk_key.desc.source
+                       != AVS_CRYPTO_DATA_SOURCE_EMPTY) {
+                instance.psk_key = args->psk_key;
+            } else
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
             {
                 instance.private_cert_or_psk_key =
                         args->private_cert_or_psk_key;
@@ -105,6 +114,9 @@ static int security_object_reload(anjay_demo_t *demo) {
         }
         instance.server_public_key = args->server_public_key;
         instance.server_public_key_size = args->server_public_key_size;
+#ifdef ANJAY_WITH_LWM2M11
+        instance.server_name_indication = server->sni;
+#endif // ANJAY_WITH_LWM2M11
 
         anjay_iid_t iid = server->security_iid;
         if (anjay_security_object_add_instance(demo->anjay, &instance, &iid)) {
@@ -131,6 +143,13 @@ static int server_object_reload(anjay_demo_t *demo) {
             .disable_timeout = -1,
             .binding = server->binding_mode,
             .notification_storing = true,
+#ifdef ANJAY_WITH_LWM2M11
+            .communication_retry_count = &server->retry_count,
+            .communication_retry_timer = &server->retry_timer,
+            .communication_sequence_retry_count = &server->sequence_retry_count,
+            .communication_sequence_delay_timer = &server->sequence_delay_timer,
+            .preferred_transport = '\0',
+#endif // ANJAY_WITH_LWM2M11
         };
         anjay_iid_t iid = server->server_iid;
         if (anjay_server_object_add_instance(demo->anjay, &instance, &iid)) {
@@ -164,7 +183,7 @@ static void demo_delete(anjay_demo_t *demo) {
 
 #if defined(AVS_COMMONS_WITH_AVS_PERSISTENCE) \
         && defined(AVS_COMMONS_STREAM_WITH_FILE)
-#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef ANJAY_WITH_ATTR_STORAGE
     if (demo->anjay && demo->attr_storage_file) {
         avs_stream_t *data = avs_stream_file_create(demo->attr_storage_file,
                                                     AVS_STREAM_FILE_WRITE);
@@ -175,7 +194,7 @@ static void demo_delete(anjay_demo_t *demo) {
         }
         avs_stream_cleanup(&data);
     }
-#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    endif // ANJAY_WITH_ATTR_STORAGE
 
     if (demo->anjay && demo->dm_persistence_file) {
         avs_stream_t *data = avs_stream_file_create(demo->dm_persistence_file,
@@ -296,6 +315,27 @@ static int add_access_entries(anjay_demo_t *demo,
 }
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
 
+static const char *derive_binding_mode_from_uri(const char *uri) {
+    static const struct {
+        const char *prefix;
+        const char *mode;
+    } mode_dict[] = {
+        { "coap+tcp://", "T" },
+        { "coaps+tcp://", "T" },
+        { "coap://", "U" },
+        { "coaps://", "U" },
+    };
+
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(mode_dict); i++) {
+        if (strncmp(mode_dict[i].prefix, uri, strlen(mode_dict[i].prefix))
+                == 0) {
+            return mode_dict[i].mode;
+        }
+    }
+
+    return "U";
+}
+
 static int get_single_instance(const anjay_dm_object_def_t **obj_ptr,
                                AVS_LIST(anjay_iid_t) *out) {
     (void) obj_ptr;
@@ -395,8 +435,15 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
             break;
         }
 
+        const char *derived_binding_mode =
+                derive_binding_mode_from_uri(entry->uri);
         if (entry->binding_mode == NULL) {
-            entry->binding_mode = "U";
+            entry->binding_mode = derived_binding_mode;
+        } else if (entry->binding_mode[0] != derived_binding_mode[0]
+                   && (strcmp(derived_binding_mode, "U"))) {
+            demo_log(ERROR,
+                     "Provided binding mode is incompatible with the URI");
+            return -1;
         }
     }
 
@@ -425,7 +472,26 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
             .ids = cmdline_args->default_ciphersuites,
             .num_ids = cmdline_args->default_ciphersuites_count
         },
+#ifdef ANJAY_WITH_LWM2M11
+        .lwm2m_version_config = &cmdline_args->lwm2m_version_config,
+        .rebuild_client_cert_chain = cmdline_args->rebuild_client_cert_chain,
+#endif // ANJAY_WITH_LWM2M11
     };
+
+#ifdef ANJAY_WITH_LWM2M11
+    if (cmdline_args->pkix_trust_store) {
+        struct stat st;
+        if (!stat(cmdline_args->pkix_trust_store, &st) && S_ISDIR(st.st_mode)) {
+            config.trust_store_certs =
+                    avs_crypto_certificate_chain_info_from_path(
+                            cmdline_args->pkix_trust_store);
+        } else {
+            config.trust_store_certs =
+                    avs_crypto_certificate_chain_info_from_file(
+                            cmdline_args->pkix_trust_store);
+        }
+    }
+#endif // ANJAY_WITH_LWM2M11
 
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
     const avs_net_security_info_t *fw_security_info_ptr = NULL;
@@ -436,18 +502,15 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 
     demo->connection_args = &cmdline_args->connection_args;
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
-#    ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
+#    ifdef ANJAY_WITH_ATTR_STORAGE
     demo->attr_storage_file = cmdline_args->attr_storage_file;
-#    endif // ANJAY_WITH_MODULE_ATTR_STORAGE
+#    endif // ANJAY_WITH_ATTR_STORAGE
 #    ifdef AVS_COMMONS_WITH_AVS_PERSISTENCE
     demo->dm_persistence_file = cmdline_args->dm_persistence_file;
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
 #endif     // AVS_COMMONS_STREAM_WITH_FILE
-    demo->anjay = anjay_new(&config);
+    { demo->anjay = anjay_new(&config); }
     if (!demo->anjay
-#ifdef ANJAY_WITH_MODULE_ATTR_STORAGE
-            || anjay_attr_storage_install(demo->anjay)
-#endif // ANJAY_WITH_MODULE_ATTR_STORAGE
 #ifdef ANJAY_WITH_MODULE_ACCESS_CONTROL
             || anjay_access_control_install(demo->anjay)
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
@@ -552,7 +615,13 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
                                 cmdline_args->fwu_tx_params_modified
                                         ? &cmdline_args->fwu_tx_params
                                         : NULL,
-                                cmdline_args->fw_update_delayed_result)) {
+                                cmdline_args->fw_update_delayed_result,
+                                cmdline_args->prefer_same_socket_downloads
+#    ifdef ANJAY_WITH_SEND
+                                ,
+                                cmdline_args->fw_update_use_send
+#    endif // ANJAY_WITH_SEND
+                                )) {
         return -1;
     }
 #endif // ANJAY_WITH_MODULE_FW_UPDATE
@@ -565,8 +634,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     }
 #endif // ANJAY_WITH_MODULE_ACCESS_CONTROL
 
-#if defined(ANJAY_WITH_MODULE_ATTR_STORAGE) \
-        && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#if defined(ANJAY_WITH_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
     if (cmdline_args->attr_storage_file) {
         avs_stream_t *data =
                 avs_stream_file_create(cmdline_args->attr_storage_file,
@@ -581,7 +649,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
         // no success log there, as Attribute Storage module logs it by itself
         avs_stream_cleanup(&data);
     }
-#endif // defined(ANJAY_WITH_MODULE_ATTR_STORAGE) &&
+#endif // defined(ANJAY_WITH_ATTR_STORAGE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
 
     reschedule_notify_time_dependent(demo);

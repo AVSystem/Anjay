@@ -143,6 +143,9 @@ static avs_error_t net_get_opt(avs_net_socket_t *sock_,
     case AVS_NET_SOCKET_OPT_INNER_MTU:
         out_option_value->mtu = 1464;
         return AVS_OK;
+    case AVS_NET_SOCKET_HAS_BUFFERED_DATA:
+        out_option_value->flag = false;
+        return AVS_OK;
     default:
         return avs_errno(AVS_ENOTSUP);
     }

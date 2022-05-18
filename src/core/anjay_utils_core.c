@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -229,6 +222,11 @@ static bool is_valid_lwm2m_1_0_binding_mode(const char *binding_mode) {
 
 static const anjay_binding_info_t BINDING_INFOS[] = {
     { 'U', ANJAY_SOCKET_TRANSPORT_UDP },
+    { 'S', ANJAY_SOCKET_TRANSPORT_SMS },
+#ifdef ANJAY_WITH_LWM2M11
+    { 'T', ANJAY_SOCKET_TRANSPORT_TCP },
+    { 'N', ANJAY_SOCKET_TRANSPORT_NIDD }
+#endif // ANJAY_WITH_LWM2M11
 };
 
 const anjay_binding_info_t *
@@ -243,9 +241,56 @@ _anjay_binding_info_by_transport(anjay_socket_transport_t transport) {
     return NULL;
 }
 
-bool anjay_binding_mode_valid(const char *binding_mode) {
-    return is_valid_lwm2m_1_0_binding_mode(binding_mode);
+#if defined(ANJAY_WITH_LWM2M11)
+const anjay_binding_info_t *_anjay_binding_info_by_letter(char letter) {
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(BINDING_INFOS); ++i) {
+        if (BINDING_INFOS[i].letter == letter) {
+            return &BINDING_INFOS[i];
+        }
+    }
+
+    return NULL;
 }
+#endif // defined(ANJAY_WITH_LWM2M11) || defined(ANJAY_WITH_CORE_PERSISTENCE)
+
+#ifdef ANJAY_WITH_LWM2M11
+static bool is_valid_lwm2m_1_1_binding_mode(const char *binding_mode) {
+    for (const char *p = binding_mode; *p; ++p) {
+        if (_anjay_binding_info_by_letter(*p) == NULL) {
+            anjay_log(DEBUG, _("unexpected character in binding mode: ") "%c",
+                      *p);
+            return false;
+        } else if (strchr(p + 1, *p)) {
+            anjay_log(DEBUG, _("duplicate character in binding mode: ") "%c",
+                      *p);
+            return false;
+        }
+    }
+
+    return true;
+}
+#endif // ANJAY_WITH_LWM2M11
+
+bool anjay_binding_mode_valid(const char *binding_mode) {
+    return is_valid_lwm2m_1_0_binding_mode(binding_mode)
+#ifdef ANJAY_WITH_LWM2M11
+           || is_valid_lwm2m_1_1_binding_mode(binding_mode)
+#endif // ANJAY_WITH_LWM2M11
+            ;
+}
+
+#ifdef ANJAY_WITH_LWM2M11
+const char *_anjay_lwm2m_version_as_string(anjay_lwm2m_version_t version) {
+    switch (version) {
+    case ANJAY_LWM2M_VERSION_1_0:
+        return "1.0";
+    case ANJAY_LWM2M_VERSION_1_1:
+        return "1.1";
+    }
+    AVS_UNREACHABLE("The switch statement above is supposed to be exhaustive");
+    return NULL;
+}
+#endif // ANJAY_WITH_LWM2M11
 
 bool _anjay_socket_is_online(avs_net_socket_t *socket) {
     if (!socket) {
@@ -299,13 +344,15 @@ avs_error_t _anjay_coap_add_query_options(avs_coap_options_t *opts,
     }
 
     (void) lwm2m11_queue_mode;
-
-    if (sms_msisdn
-            && avs_is_err((err = avs_coap_options_add_string_f(
-                                   opts, AVS_COAP_OPTION_URI_QUERY, "sms%s%s",
-                                   *sms_msisdn ? "=" : "", sms_msisdn)))) {
+#ifdef ANJAY_WITH_LWM2M11
+    if (lwm2m11_queue_mode
+            && avs_is_err((err = avs_coap_options_add_string(
+                                   opts, AVS_COAP_OPTION_URI_QUERY, "Q")))) {
         return err;
     }
+#endif // ANJAY_WITH_LWM2M11
+
+    (void) sms_msisdn;
 
     return AVS_OK;
 }
@@ -354,6 +401,29 @@ static const anjay_transport_info_t TRANSPORTS[] = {
         .default_port = "5684",
         .security = ANJAY_TRANSPORT_ENCRYPTED
     },
+    {
+        .transport = ANJAY_SOCKET_TRANSPORT_SMS,
+        .socket_type = NULL,
+        .uri_scheme = ANJAY_SMS_URI_SCHEME,
+        .default_port = "",
+        .security = ANJAY_TRANSPORT_SECURITY_UNDEFINED
+    },
+#ifdef ANJAY_WITH_LWM2M11
+    {
+        .transport = ANJAY_SOCKET_TRANSPORT_NIDD,
+        .socket_type = NULL,
+        .uri_scheme = "coap+nidd",
+        .default_port = "",
+        .security = ANJAY_TRANSPORT_NOSEC
+    },
+    {
+        .transport = ANJAY_SOCKET_TRANSPORT_NIDD,
+        .socket_type = NULL,
+        .uri_scheme = "coaps+nidd",
+        .default_port = "",
+        .security = ANJAY_TRANSPORT_ENCRYPTED
+    }
+#endif // ANJAY_WITH_LWM2M11
 };
 
 const anjay_transport_info_t *
@@ -503,6 +573,48 @@ try_security_instance_read_security(anjay_unlocked_t *anjay,
     return ANJAY_FOREACH_CONTINUE;
 }
 
+static int
+try_security_instance_get_coap_and_socket(anjay_unlocked_t *anjay,
+                                          security_or_socket_info_t *out_info,
+                                          anjay_ssid_t ssid,
+                                          anjay_iid_t security_iid,
+                                          const avs_url_t *url,
+                                          const avs_url_t *server_url) {
+    (void) security_iid;
+    const anjay_transport_info_t *transport_info =
+            _anjay_transport_info_by_uri_scheme(avs_url_protocol(url));
+    if (!transport_info
+            || !url_service_matches(server_url, url,
+                                    transport_info->default_port)) {
+        return ANJAY_FOREACH_CONTINUE;
+    }
+    int result = ANJAY_FOREACH_CONTINUE;
+    AVS_LIST(const anjay_socket_entry_t) socket_entries =
+            _anjay_collect_socket_entries(anjay);
+    AVS_LIST(const anjay_socket_entry_t) it;
+    AVS_LIST_FOREACH(it, socket_entries) {
+        if (it->ssid == ssid) {
+            anjay_connection_ref_t connection = {
+                .server = _anjay_servers_find_by_primary_socket(anjay,
+                                                                it->socket),
+                .conn_type = ANJAY_CONNECTION_PRIMARY
+            };
+            if (!connection.server) {
+                break;
+            }
+            out_info->socket_info.coap = _anjay_connection_get_coap(connection);
+            out_info->socket_info.socket = it->socket;
+            anjay_log(DEBUG,
+                      _("using coap context of SSID=") "%" PRIu16 _(
+                              " to conduct the download"),
+                      ssid);
+            result = ANJAY_FOREACH_BREAK;
+        }
+    }
+    AVS_LIST_CLEAR(&socket_entries);
+    return result;
+}
+
 static bool optional_strings_equal(const char *left, const char *right) {
     if (left && right) {
         return strcmp(left, right) == 0;
@@ -609,6 +721,73 @@ int anjay_security_config_from_dm(anjay_t *anjay_locked,
             _anjay_security_config_from_dm_unlocked(anjay, out_config, raw_url);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;
+}
+
+#ifdef ANJAY_WITH_LWM2M11
+const anjay_trust_store_t *
+_anjay_get_trust_store(anjay_unlocked_t *anjay,
+                       anjay_ssid_t for_ssid,
+                       anjay_security_mode_t security_mode) {
+    (void) for_ssid;
+    (void) security_mode;
+    if (_anjay_trust_store_valid(&anjay->initial_trust_store)) {
+        return &anjay->initial_trust_store;
+    }
+    return NULL;
+}
+
+anjay_security_config_t
+_anjay_security_config_pkix_unlocked(anjay_unlocked_t *anjay) {
+    avs_net_certificate_info_t cert_info;
+    memset(&cert_info, 0, sizeof(cert_info));
+    const anjay_trust_store_t *trust_store =
+            _anjay_get_trust_store(anjay, 0, ANJAY_SECURITY_CERTIFICATE);
+    if (trust_store) {
+        cert_info.server_cert_validation = true;
+        cert_info.ignore_system_trust_store = !trust_store->use_system_wide;
+        cert_info.trusted_certs =
+                avs_crypto_certificate_chain_info_from_list(trust_store->certs);
+        cert_info.cert_revocation_lists =
+                avs_crypto_cert_revocation_list_info_from_list(
+                        trust_store->crls);
+    }
+    return (anjay_security_config_t) {
+        .security_info = avs_net_security_info_from_certificates(cert_info),
+        .tls_ciphersuites = anjay->default_tls_ciphersuites,
+    };
+}
+
+anjay_security_config_t anjay_security_config_pkix(anjay_t *anjay_locked) {
+    avs_net_certificate_info_t cert_info = { 0 };
+    anjay_security_config_t result = {
+        .security_info = avs_net_security_info_from_certificates(cert_info)
+    };
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+    result = _anjay_security_config_pkix_unlocked(anjay);
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return result;
+}
+#endif // ANJAY_WITH_LWM2M11
+
+void _anjay_find_matching_coap_context_and_socket(
+        anjay_unlocked_t *anjay,
+        const char *raw_url,
+        avs_coap_ctx_t **out_coap,
+        avs_net_socket_t **out_socket) {
+    security_or_socket_info_t info;
+    memset(&info, 0, sizeof(info));
+    try_get_info_from_dm(anjay, raw_url, &info,
+                         try_security_instance_get_coap_and_socket);
+
+    if (!info.socket_info.coap) {
+        anjay_log(WARNING,
+                  _("Matching CoAP Context not found in data model for "
+                    "URL: ") "%s",
+                  raw_url);
+    }
+    assert(!!info.socket_info.coap == !!info.socket_info.socket);
+    *out_coap = info.socket_info.coap;
+    *out_socket = info.socket_info.socket;
 }
 
 static int map_str_conversion_result(const char *input, const char *endptr) {

@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -339,6 +332,18 @@ TEST_INT64(424242424242424242, "\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
 TEST_INT64_FAIL("\x00\x05\xE3\x36\x3C\xB3\x9E\xC9\xB2")
 
 #define TEST_UINT64(Num, Data) TEST_NUM(uint64_t, u64, Num##ULL, Data)
+
+#ifdef ANJAY_WITH_LWM2M11
+#    define TEST_UINT64_FAIL(...) TEST_NUM_FAIL(uint64_t, u64, __VA_ARGS__)
+
+TEST_UINT64_FAIL("")
+TEST_UINT64(42, "\x2A")
+TEST_UINT64_FAIL("\x06\x79\x32")
+TEST_UINT64(4294967295, "\xFF\xFF\xFF\xFF")
+TEST_UINT64_FAIL("\x01\x00\x00\x00\x00")
+TEST_UINT64(4294967296, "\x00\x00\x00\x01\x00\x00\x00\x00")
+TEST_UINT64(18446744073709551615, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF")
+#endif // ANJAY_WITH_LWM2M11
 
 #define TEST_DOUBLE(Num, Data) TEST_NUM(double, double, Num, Data)
 

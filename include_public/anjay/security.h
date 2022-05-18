@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_INCLUDE_ANJAY_SECURITY_H
@@ -47,16 +40,46 @@ typedef struct {
     /** Resource: Server Public Key */
     const uint8_t *server_public_key;
     size_t server_public_key_size;
-    /** Resource: SMS Security Mode */
-    anjay_sms_security_mode_t sms_security_mode;
-    /** Resource: SMS Binding Key Parameters */
-    const uint8_t *sms_key_parameters;
-    size_t sms_key_parameters_size;
-    /** Resource: SMS Binding Secret Key(s) */
-    const uint8_t *sms_secret_key;
-    size_t sms_secret_key_size;
-    /** Resource: LwM2M Server SMS Number */
-    const char *server_sms_number;
+#ifdef ANJAY_WITH_LWM2M11
+    /** Resource: Matching Type (NULL for not present) */
+    const uint8_t *matching_type;
+    /** Resource: SNI */
+    const char *server_name_indication;
+    /** Resource: Certificate Usage (NULL for not present) */
+    const uint8_t *certificate_usage;
+    /** Resource: DTLS/TLS Ciphersuite;
+     * Note: Passing a value with <c>num_ids == 0</c> (default) will cause the
+     * resource to be absent, resulting in a fallback to defaults. */
+    avs_net_socket_tls_ciphersuites_t ciphersuites;
+#endif // ANJAY_WITH_LWM2M11
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+    /** Resource: Public Key Or Identity;
+     * This is an alternative to the @p public_cert_or_psk_identity and
+     * @p psk_identity fields that may be used only if @p security_mode is
+     * either @ref ANJAY_SECURITY_CERTIFICATE or @ref ANJAY_SECURITY_EST; it is
+     * also an error to specify non-empty values for more than one of these
+     * fields at the same time. */
+    avs_crypto_certificate_chain_info_t public_cert;
+    /** Resource: Secret Key;
+     * This is an alternative to the @p private_cert_or_psk_key and @ref psk_key
+     * fields that may be used only if @p security_mode is either
+     * @ref ANJAY_SECURITY_CERTIFICATE or @ref ANJAY_SECURITY_EST; it is also an
+     * error to specify non-empty values for more than one of these fields at
+     * the same time. */
+    avs_crypto_private_key_info_t private_key;
+    /** Resource: Public Key Or Identity;
+     * This is an alternative to the @p public_cert_or_psk_identity and
+     * @ref public_cert fields that may be used only if @p security_mode is
+     * @ref ANJAY_SECURITY_PSK; it is also an error to specify non-empty values
+     * for more than one of these fields at the same time. */
+    avs_crypto_psk_identity_info_t psk_identity;
+    /** Resource: Secret Key;
+     * This is an alternative to the @p private_cert_or_psk_key and
+     * @ref private_key fields that may be used only if @p security_mode is
+     * @ref ANJAY_SECURITY_PSK; it is also an error to specify non-empty values
+     * for more than one of these fields at the same time. */
+    avs_crypto_psk_key_info_t psk_key;
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
 } anjay_security_instance_t;
 
 /**

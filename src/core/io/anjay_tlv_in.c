@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #include <anjay_init.h>
@@ -166,6 +159,24 @@ static int tlv_get_integer(anjay_unlocked_input_ctx_t *ctx, int64_t *value) {
     }
     return 0;
 }
+
+#    ifdef ANJAY_WITH_LWM2M11
+static int tlv_get_uint(anjay_unlocked_input_ctx_t *ctx, uint64_t *value) {
+    uint8_t bytes[8];
+    size_t bytes_read = 0;
+    int retval;
+    if ((retval = tlv_read_whole_entry(ctx, &bytes_read, bytes, sizeof(bytes)))
+            || !avs_is_power_of_2(bytes_read)) {
+        return retval ? retval : ANJAY_ERR_BAD_REQUEST;
+    }
+    *value = 0;
+    for (size_t i = 0; i < bytes_read; ++i) {
+        *value <<= 8;
+        *value += bytes[i];
+    }
+    return 0;
+}
+#    endif // ANJAY_WITH_LWM2M11
 
 static int tlv_get_double(anjay_unlocked_input_ctx_t *ctx, double *value) {
     union {
@@ -426,6 +437,9 @@ static const anjay_input_ctx_vtable_t TLV_IN_VTABLE = {
     .some_bytes = tlv_get_some_bytes,
     .string = tlv_get_string,
     .integer = tlv_get_integer,
+#    ifdef ANJAY_WITH_LWM2M11
+    .uint = tlv_get_uint,
+#    endif // ANJAY_WITH_LWM2M11
     .floating = tlv_get_double,
     .boolean = tlv_get_bool,
     .objlnk = tlv_get_objlnk,

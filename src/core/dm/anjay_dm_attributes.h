@@ -1,17 +1,10 @@
 /*
  * Copyright 2017-2022 AVSystem <avsystem@avsystem.com>
+ * AVSystem Anjay LwM2M SDK
+ * All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the AVSystem-5-clause License.
+ * See the attached LICENSE file for details.
  */
 
 #ifndef ANJAY_DM_ATTRIBUTES_H
@@ -88,7 +81,35 @@ typedef struct {
  */
 int _anjay_dm_effective_attrs(anjay_unlocked_t *anjay,
                               const anjay_dm_attrs_query_details_t *query,
-                              anjay_dm_internal_r_attrs_t *out);
+                              anjay_dm_r_attributes_t *out);
+
+/**
+ * Reads an integer resource value for some server instance.
+ * Designed to read values of Default Minimum/Maximum Period resources.
+ *
+ * @param anjay      ANJAY object to operate on.
+ * @param server_iid Server instance id to read value from.
+ * @param rid        Resource id.
+ * @param out        Result of the read.
+ * @return 0 on success, negative value in case of an error.
+ */
+int _anjay_read_period(anjay_unlocked_t *anjay,
+                       anjay_iid_t server_iid,
+                       anjay_rid_t rid,
+                       int32_t *out);
+
+/**
+ * If Minimum/Maximum Period attribute is not present, it sets it to the value
+ * of the Default Minimum/Maximum Period resource of the given server instance.
+ *
+ * @param anjay      ANJAY object to operate on.
+ * @param ssid       SSID of the server.
+ * @param out        Attributes to which te result values should be written.
+ * @return 0 on success, negative value in case of an error.
+ */
+int _anjay_dm_read_combined_server_attrs(anjay_unlocked_t *anjay,
+                                         anjay_ssid_t ssid,
+                                         anjay_dm_oi_attributes_t *out);
 
 VISIBILITY_PRIVATE_HEADER_END
 
