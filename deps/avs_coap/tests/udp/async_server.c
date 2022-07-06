@@ -12,6 +12,7 @@
 #if defined(AVS_UNIT_TESTING) && defined(WITH_AVS_COAP_UDP)
 
 #    include <avsystem/commons/avs_errno.h>
+#    include <avsystem/commons/avs_time.h>
 
 #    include <avsystem/coap/coap.h>
 
@@ -843,6 +844,134 @@ AVS_UNIT_TEST(udp_async_server, request_timeout) {
 #        undef REQUEST_PAYLOAD
 }
 
+AVS_UNIT_TEST(udp_async_server, short_exchange_update_time) {
+#        define REQUEST_PAYLOAD DATA_1KB "?"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *request = COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)),
+                                         BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD));
+    const test_msg_t *response =
+            COAP_MSG(ACK, CONTINUE, ID(0), TOKEN(nth_token(0)),
+                     BLOCK1_RES(0, 1024, true));
+
+    // First, assert that the exchange time is initially set to 5 mins
+    ASSERT_TRUE(avs_time_duration_equal(
+            avs_coap_get_exchange_max_time(env.coap_ctx),
+            avs_time_duration_from_scalar(5, AVS_TIME_MIN)));
+
+    // Second, we want to set some really short exchange time ...
+    avs_time_duration_t short_exchange_time =
+            avs_time_duration_from_scalar(5, AVS_TIME_MS);
+    avs_coap_set_exchange_max_time(env.coap_ctx, short_exchange_time);
+
+    // .. check if it is properly set
+    ASSERT_TRUE(avs_time_duration_equal(
+            avs_coap_get_exchange_max_time(env.coap_ctx), short_exchange_time));
+
+    expect_recv(&env, request);
+    expect_request_handler_call(&env, AVS_COAP_SERVER_REQUEST_PARTIAL_CONTENT,
+                                request, NULL, NULL);
+    expect_send(&env, response);
+
+    expect_has_buffered_data_check(&env, false);
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(
+            env.coap_ctx, test_accept_new_request, &env));
+
+    // a timeout job should be scheduled
+    ASSERT_TRUE(avs_time_duration_valid(avs_sched_time_to_next(env.sched)));
+
+    // the scheduler should call cancel handler
+    expect_request_handler_call(&env, AVS_COAP_SERVER_REQUEST_CLEANUP, NULL,
+                                NULL, NULL);
+
+    // despite waiting for only short period of time, with such short max
+    // exchange update time, the cancel handler will be called ..
+    _avs_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_MS));
+    avs_sched_run(env.sched);
+
+    // .. and we have no more tasks in out scheduler
+    ASSERT_FALSE(avs_time_duration_valid(avs_sched_time_to_next(env.sched)));
+#        undef REQUEST_PAYLOAD
+}
+
+AVS_UNIT_TEST(udp_async_server, long_exchange_update_time) {
+#        define REQUEST_PAYLOAD DATA_1KB "?"
+    test_env_t env __attribute__((cleanup(test_teardown))) =
+            test_setup_default();
+
+    const test_msg_t *requests[] = {
+        COAP_MSG(CON, GET, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_REQ(0, 1024, REQUEST_PAYLOAD)),
+        COAP_MSG(CON, GET, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_REQ(1, 1024, REQUEST_PAYLOAD)),
+    };
+    const test_msg_t *responses[] = {
+        COAP_MSG(ACK, CONTINUE, ID(0), TOKEN(nth_token(0)),
+                 BLOCK1_RES(0, 1024, true)),
+        COAP_MSG(ACK, CONTENT, ID(1), TOKEN(nth_token(1)),
+                 BLOCK1_AND_2_RES(1, 1024, 1024, REQUEST_PAYLOAD)),
+    };
+
+    test_payload_writer_args_t response_payload = {
+        .payload = REQUEST_PAYLOAD,
+        .payload_size = sizeof(REQUEST_PAYLOAD) - 1
+    };
+
+    expect_recv(&env, requests[0]);
+    expect_request_handler_call(&env, AVS_COAP_SERVER_REQUEST_PARTIAL_CONTENT,
+                                requests[0], NULL, NULL);
+    expect_send(&env, responses[0]);
+    expect_has_buffered_data_check(&env, false);
+
+    // the first part is the same as earlier
+
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(
+            env.coap_ctx, test_accept_new_request, &env));
+
+    // a timeout job should be scheduled
+    ASSERT_TRUE(avs_time_duration_valid(avs_sched_time_to_next(env.sched)));
+
+    // max exchange time is now long, so the exanchange has a lot of time after
+    // this clock advance
+    _avs_mock_clock_advance(avs_time_duration_from_scalar(10, AVS_TIME_MS));
+
+    // and the scheduler runs no cancel handler
+    avs_sched_run(env.sched);
+
+    // so the cancel handler is still scheduled
+    ASSERT_TRUE(avs_time_duration_valid(avs_sched_time_to_next(env.sched)));
+
+    // we get ready for recieving the next request
+    expect_recv(&env, requests[1]);
+    expect_request_handler_call(&env, AVS_COAP_SERVER_REQUEST_RECEIVED,
+                                requests[1],
+                                &(avs_coap_response_header_t) {
+                                    .code = responses[1]->response_header.code
+                                },
+                                &response_payload);
+    expect_send(&env, responses[1]);
+    expect_has_buffered_data_check(&env, false);
+
+    // Then we handle the second (and the last) request
+    ASSERT_OK(avs_coap_async_handle_incoming_packet(
+            env.coap_ctx, test_accept_new_request, &env));
+
+    ASSERT_TRUE(avs_time_duration_valid(avs_sched_time_to_next(env.sched)));
+
+    // timeout job should still be running
+    expect_request_handler_call(&env, AVS_COAP_SERVER_REQUEST_CLEANUP, NULL,
+                                NULL, NULL);
+
+    _avs_mock_clock_advance(avs_sched_time_to_next(env.sched));
+    avs_sched_run(env.sched);
+    _avs_mock_clock_advance(avs_sched_time_to_next(env.sched));
+    avs_sched_run(env.sched);
+
+    ASSERT_FALSE(avs_time_duration_valid(avs_sched_time_to_next(env.sched)));
+#        undef REQUEST_PAYLOAD
+}
+
 #        define INVALID_BLOCK1(Seq, Size, Payload) \
             .block1 = {                            \
                 .type = AVS_COAP_BLOCK1,           \
@@ -901,8 +1030,8 @@ AVS_UNIT_TEST(udp_async_server, duplicated_block_requests) {
     ASSERT_OK(avs_coap_async_handle_incoming_packet(
             env.coap_ctx, test_accept_new_request, &env));
 
-    // assert that the duplicated request will be treated as a new request, so
-    // it will not call the existing request handler
+    // assert that the duplicated request will be treated as a new request,
+    // so it will not call the existing request handler
     expect_recv(&env, request);
     expect_send(&env, error);
     expect_has_buffered_data_check(&env, false);

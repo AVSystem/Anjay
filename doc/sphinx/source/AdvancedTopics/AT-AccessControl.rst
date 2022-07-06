@@ -107,7 +107,7 @@ Object modules:
 
 .. snippet-source:: examples/tutorial/AT-AccessControl/src/main.c
 
-    int result;
+    int result = 0;
     if (anjay_access_control_install(anjay)
             || anjay_security_object_install(anjay)
             || anjay_server_object_install(anjay)) {
@@ -168,9 +168,13 @@ And finally, we are ready to set access lists:
 
 .. snippet-source:: examples/tutorial/AT-AccessControl/src/main.c
 
-    // Set LwM2M Create permission rights for SSID = 1, this will make SSID=1
-    // an exclusive owner of the Test Object
-    anjay_access_control_set_acl(anjay, 1234, ANJAY_ID_INVALID, 1,
+    // Make SSID = 1 the owner of the Test object
+    anjay_access_control_set_owner(anjay, 1234, ANJAY_ID_INVALID,
+                                   server_instance1.ssid, NULL);
+
+    // Set LwM2M Create permission rights for it as well
+    anjay_access_control_set_acl(anjay, 1234, ANJAY_ID_INVALID,
+                                 server_instance1.ssid,
                                  ANJAY_ACCESS_MASK_CREATE);
 
     // Allow both LwM2M Servers to read their Server Instances

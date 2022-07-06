@@ -309,6 +309,8 @@ expected by OpenSSL:
         }
         SSL_free(dummy_ssl);
         SSL_CTX_set_cipher_list(sock->ctx, cipher_list);
+        // NOTE: Configuring the set of supported new-style ciphersuites as defined
+        // for TLS 1.3 are not supported by this function.
         return AVS_OK;
     }
 
@@ -324,6 +326,27 @@ This is required for proper interoperability with some servers - a ciphersuite
 incompatible with the intended security mode might be selected, preventing the
 handshake from succeeding. This may especially occur if the server supports both
 PSK and certificate modes on the same port.
+
+.. _custom-tls-tls13-ciphersuites:
+
+.. note::
+
+    TLS 1.3 and DTLS 1.3 have introduced a new kind of ciphersuites, which no
+    longer include the key exchange algorithm and authentication mechanism as
+    part of the suite, with those being negotiated separately. Ciphersuites of
+    this kind can be used for **both** PSK and certificate modes.
+
+    Depending on the underlying (D)TLS implementation, these new-style
+    ciphersuites may need to be handled separately. For example in OpenSSL,
+    these are configured using the new `SSL_CTX_set_ciphersuites()
+    <https://www.openssl.org/docs/man3.0/man3/SSL_CTX_set_cipher_list.html>`_
+    function.
+
+    This is not illustrated in this tutorial due to low level of support for
+    TLS 1.3 and especially DTLS 1.3 in mainstream implementations at the time of
+    writing. Please refer to the `reference implementation
+    <https://github.com/AVSystem/avs_commons/blob/master/src/net/openssl/avs_openssl.c#L649>`_
+    for more information on how this can be implemented.
 
 Overriding the hostname used for SNI
 ------------------------------------

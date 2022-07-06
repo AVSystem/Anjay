@@ -590,7 +590,7 @@ try_security_instance_get_coap_and_socket(anjay_unlocked_t *anjay,
     }
     int result = ANJAY_FOREACH_CONTINUE;
     AVS_LIST(const anjay_socket_entry_t) socket_entries =
-            _anjay_collect_socket_entries(anjay);
+            _anjay_collect_socket_entries(anjay, /* include_offline = */ false);
     AVS_LIST(const anjay_socket_entry_t) it;
     AVS_LIST_FOREACH(it, socket_entries) {
         if (it->ssid == ssid) {

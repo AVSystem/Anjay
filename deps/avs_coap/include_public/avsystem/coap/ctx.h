@@ -152,6 +152,31 @@ size_t avs_coap_max_incoming_message_payload(avs_coap_ctx_t *ctx,
                                              uint8_t message_code);
 
 /**
+ * Default maximal time of the CoAP exchange.
+ *
+ * This is currently equal to 5 minutes.
+ */
+extern const avs_time_duration_t AVS_COAP_DEFAULT_EXCHANGE_MAX_TIME;
+
+/**
+ * Maximal time of the coap exchange getter.
+ *
+ * @param ctx CoAP context to operate on.
+ *
+ * @returns Maximal CoAP exchange time.
+ */
+avs_time_duration_t avs_coap_get_exchange_max_time(avs_coap_ctx_t *ctx);
+
+/**
+ * This function can be used to set the maximal time of the coap exchange.
+ *
+ * @param ctx  CoAP context to operate on.
+ * @param time New maximal CoAP exchange time.
+ */
+void avs_coap_set_exchange_max_time(avs_coap_ctx_t *ctx,
+                                    const avs_time_duration_t time);
+
+/**
  * <c>avs_error_t</c> category for values of type @ref avs_coap_error_t.
  */
 #define AVS_COAP_ERR_CATEGORY 22627 // 'acoap' on phone keypad

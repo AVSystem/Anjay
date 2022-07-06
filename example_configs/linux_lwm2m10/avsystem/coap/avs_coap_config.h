@@ -38,8 +38,7 @@
  * - @c avs_stream
  * - @c avs_utils
  * - @c avs_log (if @c WITH_AVS_COAP_LOGS is enabled)
- * - @c avs_persistence and @c avs_rbtree (if
- *   @c WITH_AVS_COAP_OBSERVE_PERSISTENCE is enabled)
+ * - @c avs_persistence (if @c WITH_AVS_COAP_OBSERVE_PERSISTENCE is enabled)
  * - @c avs_crypto (if @c WITH_AVS_COAP_OSCORE is enabled)
  *
  * In the repository, this file is provided as <c>avs_coap_config.h.in</c>,

@@ -481,3 +481,145 @@ void _anjay_connections_flush_notifications(anjay_connections_t *connections) {
         }
     }
 }
+
+typedef struct {
+    const avs_coap_udp_tx_params_t *tx_params;
+    anjay_transport_set_t transport_set;
+} update_server_instance_tx_params_args_t;
+
+static int update_server_instance_tx_params(anjay_unlocked_t *anjay,
+                                            anjay_server_info_t *server,
+                                            void *args_) {
+    (void) anjay;
+
+    update_server_instance_tx_params_args_t *args =
+            (update_server_instance_tx_params_args_t *) args_;
+
+    anjay_connection_type_t type;
+    ANJAY_CONNECTION_TYPE_FOREACH(type) {
+        anjay_server_connection_t *conn =
+                _anjay_connection_get(&server->connections, type);
+        if (conn->coap_ctx
+                && _anjay_socket_transport_included(args->transport_set,
+                                                    conn->transport)) {
+            avs_coap_udp_ctx_set_tx_params(conn->coap_ctx, args->tx_params);
+        }
+    }
+
+    return 0;
+}
+
+avs_error_t
+anjay_update_transport_tx_params(anjay_t *anjay_locked,
+                                 anjay_transport_set_t transport_set,
+                                 const avs_coap_udp_tx_params_t *tx_params) {
+    assert(anjay_locked);
+
+    if (!tx_params) {
+        anjay_log(ERROR, _("given transmission parameters are NULL"));
+        return avs_errno(AVS_EINVAL);
+    } else {
+        const char *error_message;
+        if (!avs_coap_udp_tx_params_valid(tx_params, &error_message)) {
+            assert(error_message);
+            anjay_log(ERROR,
+                      _("UDP transmission params validation failed with the "
+                        "following error message: ") "%s",
+                      error_message);
+            return avs_errno(AVS_EINVAL);
+        }
+    }
+
+    avs_error_t err = avs_errno(AVS_EINVAL);
+
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+
+#ifdef WITH_AVS_COAP_UDP
+    if (transport_set.udp) {
+        anjay->udp_tx_params = *tx_params;
+        err = AVS_OK;
+    }
+#endif // WITH_AVS_COAP_UDP
+
+    if (avs_is_err(err)) {
+        anjay_log(ERROR, _("no transport for which transmission parameters "
+                           "could be changed was given"));
+    } else {
+        _anjay_servers_foreach_active(
+                anjay, update_server_instance_tx_params,
+                &(update_server_instance_tx_params_args_t) {
+                    .tx_params = tx_params,
+                    .transport_set = transport_set
+                });
+    }
+
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return err;
+}
+
+typedef struct {
+    avs_time_duration_t exchange_update_timeout;
+    anjay_transport_set_t transport_set;
+} update_server_exchange_deadline_args_t;
+
+static int update_server_coap_exchange_timeout(anjay_unlocked_t *anjay,
+                                               anjay_server_info_t *server,
+                                               void *args_) {
+    (void) anjay;
+
+    update_server_exchange_deadline_args_t *args =
+            (update_server_exchange_deadline_args_t *) args_;
+
+    anjay_connection_type_t type;
+    ANJAY_CONNECTION_TYPE_FOREACH(type) {
+        anjay_server_connection_t *conn =
+                _anjay_connection_get(&server->connections, type);
+        if (conn->coap_ctx
+                && _anjay_socket_transport_included(args->transport_set,
+                                                    conn->transport)) {
+            avs_coap_set_exchange_max_time(conn->coap_ctx,
+                                           args->exchange_update_timeout);
+        }
+    }
+
+    return 0;
+}
+
+avs_error_t
+anjay_update_coap_exchange_timeout(anjay_t *anjay_locked,
+                                   anjay_transport_set_t transport_set,
+                                   avs_time_duration_t exchange_timeout) {
+    assert(anjay_locked);
+
+    avs_error_t err = avs_errno(AVS_EINVAL);
+
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+
+#ifdef WITH_AVS_COAP_UDP
+    if (transport_set.udp) {
+        anjay->udp_exchange_timeout = exchange_timeout;
+        err = AVS_OK;
+    }
+#endif // WITH_AVS_COAP_UDP
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    if (transport_set.tcp) {
+        anjay->tcp_exchange_timeout = exchange_timeout;
+        err = AVS_OK;
+    }
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+
+    if (avs_is_err(err)) {
+        anjay_log(ERROR, _("no transport for which exchange timeout could be "
+                           "changed was given"));
+    } else {
+        _anjay_servers_foreach_active(
+                anjay, update_server_coap_exchange_timeout,
+                &(update_server_exchange_deadline_args_t) {
+                    .exchange_update_timeout = exchange_timeout,
+                    .transport_set = transport_set
+                });
+    }
+
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+    return err;
+}

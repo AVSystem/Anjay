@@ -33,12 +33,10 @@ VISIBILITY_SOURCE_BEGIN
 
 static const char MAGIC_V0[] = { 'S', 'E', 'C', '\0' };
 static const char MAGIC_V1[] = { 'S', 'E', 'C', '\1' };
-#        ifdef ANJAY_WITH_LWM2M11
 static const char MAGIC_V2[] = { 'S', 'E', 'C', '\2' };
 static const char MAGIC_V3[] = { 'S', 'E', 'C', '\3' };
 static const char MAGIC_V4[] = { 'S', 'E', 'C', '\4' };
 static const char MAGIC_V5[] = { 'S', 'E', 'C', '\5' };
-#        endif // ANJAY_WITH_LWM2M11
 
 static avs_error_t handle_sized_v0_fields(avs_persistence_context_t *ctx,
                                           sec_instance_t *element) {
@@ -70,7 +68,6 @@ static avs_error_t handle_sized_v1_fields(avs_persistence_context_t *ctx,
     return err;
 }
 
-#        ifdef ANJAY_WITH_LWM2M11
 static avs_error_t handle_ciphersuite_entry(avs_persistence_context_t *ctx,
                                             void *element,
                                             void *user_data) {
@@ -88,34 +85,62 @@ static avs_error_t handle_ciphersuite_entry(avs_persistence_context_t *ctx,
 
 static avs_error_t handle_sized_v2_fields(avs_persistence_context_t *ctx,
                                           sec_instance_t *element) {
+    AVS_LIST(sec_cipher_instance_t) enabled_ciphersuites = NULL;
+    char *server_name_indication = NULL;
+#        ifdef ANJAY_WITH_LWM2M11
+    enabled_ciphersuites = element->enabled_ciphersuites;
+    server_name_indication = element->server_name_indication;
+#        endif // ANJAY_WITH_LWM2M11
     avs_error_t err;
     (void) (avs_is_err((err = avs_persistence_list(
-                                ctx, (void **) &element->enabled_ciphersuites,
-                                sizeof(*element->enabled_ciphersuites),
+                                ctx, (void **) &enabled_ciphersuites,
+                                sizeof(*enabled_ciphersuites),
                                 handle_ciphersuite_entry, NULL, avs_free)))
             || avs_is_err((err = avs_persistence_string(
-                                   ctx, &element->server_name_indication)))
+                                   ctx, &server_name_indication)))
             || avs_is_err((err = avs_persistence_bool(
                                    ctx, (bool *) &(bool) { false })))
             || avs_is_err((err = avs_persistence_u16(
                                    ctx, (uint16_t *) &(uint16_t) { 0 }))));
+#        ifdef ANJAY_WITH_LWM2M11
+    element->enabled_ciphersuites = enabled_ciphersuites;
+    element->server_name_indication = server_name_indication;
+#        else  // ANJAY_WITH_LWM2M11
+    (void) element;
+    AVS_LIST_CLEAR(&enabled_ciphersuites);
+    avs_free(server_name_indication);
+#        endif // ANJAY_WITH_LWM2M11
     return err;
 }
 
 static avs_error_t handle_sized_v3_fields(avs_persistence_context_t *ctx,
                                           sec_instance_t *element) {
+#        ifndef ANJAY_WITH_LWM2M11
+    (void) element;
+#        endif // ANJAY_WITH_LWM2M11
     avs_error_t err;
-    (void) (avs_is_err((err = avs_persistence_i8(ctx, &element->matching_type)))
-            || avs_is_err((err = avs_persistence_i8(
-                                   ctx, &element->certificate_usage))));
+    (void) (avs_is_err((err = avs_persistence_i8(ctx,
+#        ifdef ANJAY_WITH_LWM2M11
+                                                 &element->matching_type
+#        else  // ANJAY_WITH_LWM2M11
+                                                 &(int8_t) { -1 }
+#        endif // ANJAY_WITH_LWM2M11
+                                                 )))
+            || avs_is_err((err = avs_persistence_i8(ctx,
+#        ifdef ANJAY_WITH_LWM2M11
+                                                    &element->certificate_usage
+#        else  // ANJAY_WITH_LWM2M11
+                                                    &(int8_t) { -1 }
+#        endif // ANJAY_WITH_LWM2M11
+                                                    ))));
     return err;
 }
 
+#        ifdef ANJAY_WITH_LWM2M11
 static void reset_v3_fields(sec_instance_t *element) {
     element->matching_type = -1;
     element->certificate_usage = -1;
 }
-
 #        endif // ANJAY_WITH_LWM2M11
 
 #        if defined(ANJAY_WITH_SECURITY_STRUCTURED)
@@ -424,18 +449,19 @@ static avs_error_t handle_instance(avs_persistence_context_t *ctx,
         _anjay_sec_key_or_data_cleanup(sms_secret_key_ptr, false);
         avs_free(sms_number);
     }
-#        ifdef ANJAY_WITH_LWM2M11
     if (stream_version >= 2) {
         err = handle_sized_v2_fields(ctx, element);
     }
     if (avs_is_ok(err)) {
         if (stream_version >= 3) {
             err = handle_sized_v3_fields(ctx, element);
-        } else if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
+        }
+#        ifdef ANJAY_WITH_LWM2M11
+        else if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
             reset_v3_fields(element);
         }
-    }
 #        endif // ANJAY_WITH_LWM2M11
+    }
     return err;
 }
 
@@ -449,13 +475,8 @@ avs_error_t anjay_security_object_persist(anjay_t *anjay_locked,
     sec_repr_t *repr = sec_obj ? _anjay_sec_get(*sec_obj) : NULL;
     if (!repr) {
         err = avs_errno(AVS_EBADF);
-    } else if (avs_is_ok((err = avs_stream_write(out_stream,
-#        ifdef ANJAY_WITH_LWM2M11
-                                                 MAGIC_V5, sizeof(MAGIC_V5)
-#        else  // ANJAY_WITH_LWM2M11
-                                                 MAGIC_V0, sizeof(MAGIC_V0)
-#        endif // ANJAY_WITH_LWM2M11
-                                                         )))) {
+    } else if (avs_is_ok((err = avs_stream_write(out_stream, MAGIC_V5,
+                                                 sizeof(MAGIC_V5))))) {
         avs_persistence_context_t ctx =
                 avs_persistence_store_context_create(out_stream);
         err = avs_persistence_list(
@@ -463,13 +484,7 @@ avs_error_t anjay_security_object_persist(anjay_t *anjay_locked,
                 (AVS_LIST(void) *) (repr->in_transaction
                                             ? &repr->saved_instances
                                             : &repr->instances),
-                sizeof(sec_instance_t), handle_instance,
-                (void *) (intptr_t)
-#        ifdef ANJAY_WITH_LWM2M11
-                        5,
-#        else  // ANJAY_WITH_LWM2M11
-                        0,
-#        endif // ANJAY_WITH_LWM2M11
+                sizeof(sec_instance_t), handle_instance, (void *) (intptr_t) 5,
                 NULL);
         if (avs_is_ok(err)) {
             _anjay_sec_clear_modified(repr);
@@ -495,7 +510,6 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay_locked,
 
         AVS_STATIC_ASSERT(sizeof(MAGIC_V0) == sizeof(MAGIC_V1),
                           magic_size_v0_v1);
-#        ifdef ANJAY_WITH_LWM2M11
         AVS_STATIC_ASSERT(sizeof(MAGIC_V1) == sizeof(MAGIC_V2),
                           magic_size_v1_v2);
         AVS_STATIC_ASSERT(sizeof(MAGIC_V2) == sizeof(MAGIC_V3),
@@ -504,7 +518,6 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay_locked,
                           magic_size_v3_v4);
         AVS_STATIC_ASSERT(sizeof(MAGIC_V4) == sizeof(MAGIC_V5),
                           magic_size_v4_v5);
-#        endif // ANJAY_WITH_LWM2M11
         char magic_header[sizeof(MAGIC_V0)];
         int version = -1;
         if (avs_is_err(
@@ -516,7 +529,6 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay_locked,
             version = 0;
         } else if (!memcmp(magic_header, MAGIC_V1, sizeof(MAGIC_V1))) {
             version = 1;
-#        ifdef ANJAY_WITH_LWM2M11
         } else if (!memcmp(magic_header, MAGIC_V2, sizeof(MAGIC_V2))) {
             version = 2;
         } else if (!memcmp(magic_header, MAGIC_V3, sizeof(MAGIC_V3))) {
@@ -525,7 +537,6 @@ avs_error_t anjay_security_object_restore(anjay_t *anjay_locked,
             version = 4;
         } else if (!memcmp(magic_header, MAGIC_V5, sizeof(MAGIC_V5))) {
             version = 5;
-#        endif // ANJAY_WITH_LWM2M11
         } else {
             persistence_log(WARNING, _("Header magic constant mismatch"));
             err = avs_errno(AVS_EBADMSG);

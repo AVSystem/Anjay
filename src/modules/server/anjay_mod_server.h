@@ -39,51 +39,41 @@ typedef enum {
     SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER = 20,
     SERV_RES_PREFERRED_TRANSPORT = 22,
 #    ifdef ANJAY_WITH_SEND
-    SERV_RES_MUTE_SEND = 23
+    SERV_RES_MUTE_SEND = 23,
 #    endif // ANJAY_WITH_SEND
 #endif     // ANJAY_WITH_LWM2M11
+    _SERV_RES_COUNT
 } server_rid_t;
 
 typedef struct {
     /* mandatory resources */
     anjay_ssid_t ssid;
-    bool has_ssid;
     anjay_binding_mode_t binding;
-    bool has_binding;
     int32_t lifetime;
-    bool has_lifetime;
     int32_t default_min_period;
-    bool has_default_min_period;
     int32_t default_max_period;
-    bool has_default_max_period;
 #ifndef ANJAY_WITHOUT_DEREGISTER
     int32_t disable_timeout;
-    bool has_disable_timeout;
 #endif // ANJAY_WITHOUT_DEREGISTER
     bool notification_storing;
-    bool has_notification_storing;
 
     anjay_iid_t iid;
 
 #ifdef ANJAY_WITH_LWM2M11
     int64_t last_bootstrapped_timestamp;
-    bool has_last_bootstrapped_timestamp;
     uint8_t last_alert;
-    bool has_last_alert;
     bool bootstrap_on_registration_failure;
     uint32_t server_communication_retry_count;
-    bool has_server_communication_retry_count;
     uint32_t server_communication_retry_timer;
-    bool has_server_communication_retry_timer;
     uint32_t server_communication_sequence_retry_count;
-    bool has_server_communication_sequence_retry_count;
     uint32_t server_communication_sequence_delay_timer;
-    bool has_server_communication_sequence_delay_timer;
     char preferred_transport;
 #    ifdef ANJAY_WITH_SEND
     bool mute_send;
 #    endif // ANJAY_WITH_SEND
 #endif     // ANJAY_WITH_LWM2M11
+
+    bool present_resources[_SERV_RES_COUNT];
 } server_instance_t;
 
 typedef struct {

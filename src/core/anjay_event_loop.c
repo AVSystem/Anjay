@@ -97,7 +97,8 @@ static handle_sockets_result_t handle_sockets(event_loop_state_t *state) {
     bool sockets_ready = false;
 
     ANJAY_MUTEX_LOCK(anjay, state->anjay_locked);
-    entries = _anjay_collect_socket_entries(anjay);
+    entries =
+            _anjay_collect_socket_entries(anjay, /* include_offline = */ false);
 
 #    ifdef AVS_COMMONS_NET_POSIX_AVS_SOCKET_HAVE_POLL
     numsocks = AVS_LIST_SIZE(entries);

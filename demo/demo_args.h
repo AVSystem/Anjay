@@ -28,6 +28,7 @@ typedef struct access_entry {
 typedef struct cmdline_args {
     const char *endpoint_name;
     uint16_t udp_listen_port;
+    avs_net_ssl_version_t dtls_version;
     server_connection_args_t connection_args;
     const char *location_csv;
     time_t location_update_frequency_s;
@@ -65,6 +66,9 @@ typedef struct cmdline_args {
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #endif // AVS_COMMONS_STREAM_WITH_FILE
 
+#ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+    const char *provisioning_file;
+#endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
     avs_coap_udp_tx_params_t tx_params;
     avs_net_dtls_handshake_timeouts_t dtls_hs_tx_params;
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE

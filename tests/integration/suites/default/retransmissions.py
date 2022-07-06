@@ -11,7 +11,11 @@ import contextlib
 import time
 import socket
 
+from framework.lwm2m.coap.server import SecurityMode
 from framework.lwm2m_test import *
+from suites.default import bootstrap_client
+from suites.default.block_write import equal_chunk_splitter, packets_from_chunks, Block
+
 
 class RetransmissionTest:
     class TestMixin:
@@ -705,3 +709,228 @@ class ReplacedBootstrapServerReconnectTest(RetransmissionTest.TestMixin,
         # rehandshake should appear here
         self.assertDtlsReconnect(self.bootstrap_server, timeout_s=2*self.ACK_TIMEOUT + 1)
         self.assertIsInstance(self.bootstrap_server.recv(), Lwm2mRequestBootstrap)
+
+
+class ModifyingTxParams(RetransmissionTest.TestMixin, bootstrap_client.BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(minimum_version='1.0', maximum_version='1.1')
+
+    def runTest(self):
+        # The client will attempt Request Bootstrap as version 1.1 (with pct= option)
+        pkt1 = self.bootstrap_server.recv(timeout_s=self.max_transmit_wait())
+        pkt1_time = time.time()
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME,
+                                                  preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR),
+                            pkt1)
+
+        pkt2 = self.bootstrap_server.recv(timeout_s=self.max_transmit_wait())
+        pkt2_time = time.time()
+        self.assertMsgEqual(pkt1, pkt2)
+
+        pkt3 = self.bootstrap_server.recv(timeout_s=self.max_transmit_wait())
+        pkt3_time = time.time()
+        self.assertMsgEqual(pkt2, pkt3)
+
+        # check that it used the initial transmission params
+        self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
+        self.assertAlmostEqual(pkt3_time - pkt2_time, 2.0 * self.ACK_TIMEOUT, delta=0.5)
+
+        # Now let's change the transmission params
+        # ACK_TIMEOUT=5, ACK_RANDOM_FACTOR=1, MAX_RETRANSMIT=1, NSTART=1
+        self.communicate('set-tx-param udp 5 1 1 1')
+        self.ACK_TIMEOUT = 5.0
+        # Respond with an error so that the client falls back to 1.0
+        self.bootstrap_server.send(
+            Lwm2mErrorResponse.matching(pkt3)(code=coap.Code.RES_BAD_REQUEST))
+
+        # Transmission params should have changed,
+        # so check that the new ACK_TIMEOUT is in effect for the 1.0 attempt
+        pkt1 = self.bootstrap_server.recv(timeout_s=self.max_transmit_wait())
+        pkt1_time = time.time()
+        self.assertMsgEqual(Lwm2mRequestBootstrap(endpoint_name=DEMO_ENDPOINT_NAME), pkt1)
+
+        pkt2 = self.bootstrap_server.recv(timeout_s=self.max_transmit_wait())
+        pkt2_time = time.time()
+        self.assertMsgEqual(pkt1, pkt2)
+
+        self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
+
+        # Respond to Request Bootstrap
+        self.bootstrap_server.send(Lwm2mChanged.matching(pkt2)())
+        self.perform_typical_bootstrap(server_iid=1, security_iid=2,
+                                       server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port(),
+                                       bootstrap_request_timeout_s=-1)
+
+        # Client shall now register; check that it also uses the new transmission params
+        pkt1 = self.serv.recv(timeout_s=self.max_transmit_wait())
+        pkt1_time = time.time()
+        self.assertMsgEqual(Lwm2mRegister('/rd?lwm2m=1.1&ep=%s&lt=86400' % DEMO_ENDPOINT_NAME),
+                            pkt1)
+
+        pkt2 = self.serv.recv(timeout_s=self.max_transmit_wait())
+        pkt2_time = time.time()
+        self.assertMsgEqual(pkt1, pkt2)
+
+        self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
+
+        self.serv.send(Lwm2mCreated.matching(pkt2)(location=self.DEFAULT_REGISTER_ENDPOINT))
+
+        # check that downloads also use the new transmission params
+        dl_server = coap.Server()
+        try:
+            with tempfile.NamedTemporaryFile() as tmp:
+                self.communicate(
+                    'download coap://127.0.0.1:%d %s' % (dl_server.get_listen_port(), tmp.name))
+
+                pkt1 = dl_server.recv(timeout_s=self.max_transmit_wait())
+                pkt1_time = time.time()
+
+                pkt2 = dl_server.recv(timeout_s=self.max_transmit_wait())
+                pkt2_time = time.time()
+                self.assertMsgEqual(pkt1, pkt2)
+
+                self.assertAlmostEqual(pkt2_time - pkt1_time, self.ACK_TIMEOUT, delta=0.5)
+
+                dl_server.send(Lwm2mErrorResponse.matching(pkt2)(
+                    code=coap.Code.RES_NOT_FOUND).fill_placeholders())
+        finally:
+            dl_server.close()
+
+
+class ModifyingExchangeTimeout(RetransmissionTest.TestMixin, bootstrap_client.BootstrapTest.Test):
+    EXCHANGE_LIFETIME = 2.0
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap()
+
+        # change exchange lifetime to 2 seconds
+        self.communicate('set-coap-exchange-timeout udp %s' % (self.EXCHANGE_LIFETIME,))
+
+        # Create typical Server Object instance
+        server_entries_no_ssid = [TLV.make_resource(RID.Server.Lifetime, 86400),
+                                  TLV.make_resource(RID.Server.NotificationStoring, True),
+                                  TLV.make_resource(RID.Server.Binding, "U"),
+                                  TLV.make_resource(RID.Server.ServerCommunicationRetryCount, 1),
+                                  TLV.make_resource(RID.Server.ServerCommunicationRetryTimer, 0),
+                                  TLV.make_resource(
+                                      RID.Server.ServerCommunicationSequenceRetryCount, 1),
+                                  TLV.make_resource(
+                                      RID.Server.ServerCommunicationSequenceDelayTimer, 0)]
+        server_tlv = b''.join(entry.serialize() for entry in [
+            TLV.make_resource(RID.Server.ShortServerID, 1)] + server_entries_no_ssid)
+        # Create typical (corresponding) Security Object instance
+        security_tlv = b''.join(entry.serialize() for entry in [
+            TLV.make_resource(RID.Security.ServerURI,
+                              'coap://127.0.0.1:%d' % self.serv.get_listen_port()),
+            TLV.make_resource(RID.Security.Bootstrap, 0),
+            TLV.make_resource(RID.Security.Mode, SecurityMode.NoSec.value),
+            TLV.make_resource(RID.Security.ShortServerID, 1),
+            TLV.make_resource(RID.Security.PKOrIdentity, b''),
+            TLV.make_resource(RID.Security.SecretKey, b'')])
+
+        # Try sending that as Block
+        assert len(server_tlv) > 16
+        server_chunks = list(equal_chunk_splitter(16)(server_tlv))
+        packets = list(packets_from_chunks(server_chunks, path='/%d/%d' % (OID.Server, 1),
+                                           format=coap.ContentFormat.APPLICATION_LWM2M_TLV))
+
+        req = packets[0]
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(Lwm2mContinue.matching(req)(), self.bootstrap_server.recv())
+
+        # Wait for the exchange to time out
+        time.sleep(self.EXCHANGE_LIFETIME + 0.5)
+
+        # The second packet shall no longer match to any exchange
+        req = packets[1]
+        self.bootstrap_server.send(req)
+        self.assertMsgEqual(
+            Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
+            self.bootstrap_server.recv())
+
+        # That's tested, now bootstrap normally
+        self.write_instance(self.bootstrap_server, oid=OID.Server, iid=1, content=server_tlv)
+        self.write_instance(self.bootstrap_server, oid=OID.Security, iid=1, content=security_tlv)
+        self.perform_bootstrap_finish()
+
+        self.assertDemoRegisters()
+        self.wait_until_socket_count(1, timeout_s=2)
+
+        # Check that the new connection also uses the new exchange timeout
+        server_chunks = list(equal_chunk_splitter(16)(
+            b''.join(entry.serialize() for entry in server_entries_no_ssid)))
+        packets = list(packets_from_chunks(server_chunks, path='/%d/%d' % (OID.Server, 1),
+                                           format=coap.ContentFormat.APPLICATION_LWM2M_TLV))
+
+        req = packets[0]
+        self.serv.send(req)
+        self.assertMsgEqual(Lwm2mContinue.matching(req)(), self.serv.recv())
+
+        # Wait for the exchange to time out
+        time.sleep(self.EXCHANGE_LIFETIME + 0.5)
+
+        # The second packet shall no longer match to any exchange
+        req = packets[1]
+        self.serv.send(req)
+        self.assertMsgEqual(
+            Lwm2mErrorResponse.matching(req)(code=coap.Code.RES_REQUEST_ENTITY_INCOMPLETE),
+            self.serv.recv())
+
+
+class ModifyingDtlsHsTimers(RetransmissionTest.TestMixin, bootstrap_client.DtlsBootstrap.Test):
+    HANDSHAKE_TIMEOUT = 3
+
+    def setUp(self):
+        super().setUp(bootstrap_server=Lwm2mServer(
+            coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY)),
+            extra_cmdline_args=['--identity', str(binascii.hexlify(self.PSK_IDENTITY), 'ascii'),
+                                '--key', str(binascii.hexlify(self.PSK_KEY), 'ascii')],
+            legacy_server_initiated_bootstrap_allowed=False)
+
+    def runTest(self):
+        self.assertDemoRequestsBootstrap()
+
+        # change DTLS handshake timeouts
+        self.communicate(
+            'set-dtls-handshake-timeout %d %d' % (self.HANDSHAKE_TIMEOUT, self.HANDSHAKE_TIMEOUT))
+
+        self.perform_typical_bootstrap(server_iid=1, security_iid=2,
+                                       server_uri='coaps://127.0.0.1:%s' % (
+                                           self.serv.get_listen_port(),),
+                                       security_mode=SecurityMode.PreSharedKey,
+                                       secure_identity=self.PSK_IDENTITY, secure_key=self.PSK_KEY,
+                                       bootstrap_request_timeout_s=-1)
+
+        self.assertPktIsDtlsClientHello(self.serv._raw_udp_socket.recv(65536))
+        mgmt_hello_time = time.time()
+
+        self.assertPktIsDtlsClientHello(self.bootstrap_server._raw_udp_socket.recv(65536))
+        bootstrap_hello_time = time.time()
+
+        self.wait_until_socket_count(0, timeout_s=self.HANDSHAKE_TIMEOUT + 1)
+        everything_failed_time = time.time()
+
+        self.assertAlmostEqual(bootstrap_hello_time - mgmt_hello_time, self.HANDSHAKE_TIMEOUT,
+                               delta=0.5)
+        self.assertAlmostEqual(everything_failed_time - bootstrap_hello_time,
+                               self.HANDSHAKE_TIMEOUT, delta=0.5)
+
+        self.communicate('reconnect')
+        self.assertDemoRegisters()
+
+        # Change DTLS handshake timeouts again, but this time in offline mode
+        self.communicate('enter-offline')
+        self.wait_until_socket_count(0, timeout_s=5)
+        self.communicate('set-dtls-handshake-timeout %d %d' % (
+            self.HANDSHAKE_TIMEOUT, 2 * self.HANDSHAKE_TIMEOUT))
+        self.communicate('exit-offline')
+
+        self.assertPktIsDtlsClientHello(self.serv._raw_udp_socket.recv(65536))
+        first_hello_time = time.time()
+
+        # Second Client Hello shall come now
+        self.assertDtlsReconnect(timeout_s=self.HANDSHAKE_TIMEOUT + 2.0)
+        second_hello_time = time.time()
+
+        self.assertAlmostEqual(second_hello_time - first_hello_time, self.HANDSHAKE_TIMEOUT,
+                               delta=0.5)

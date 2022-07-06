@@ -89,14 +89,10 @@
 
 VISIBILITY_SOURCE_BEGIN
 
-static avs_time_monotonic_t get_exchange_deadline(void) {
-    // arbitrarily defined interval - if an exchange is not updated within
-    // that time, it is considered expired
-    const avs_time_duration_t MAX_EXCHANGE_UPDATE_INTERVAL =
-            avs_time_duration_from_scalar(5, AVS_TIME_MIN);
-
+static avs_time_monotonic_t get_exchange_deadline(avs_coap_ctx_t *ctx) {
+    const avs_coap_base_t *base = _avs_coap_get_base(ctx);
     return avs_time_monotonic_add(avs_time_monotonic_now(),
-                                  MAX_EXCHANGE_UPDATE_INTERVAL);
+                                  base->max_exchange_update_time);
 }
 
 typedef struct {
@@ -121,7 +117,8 @@ typedef struct {
 } server_exchange_create_args_t;
 
 static AVS_LIST(avs_coap_exchange_t)
-server_exchange_create(const server_exchange_create_args_t *args) {
+server_exchange_create(avs_coap_ctx_t *ctx,
+                       const server_exchange_create_args_t *args) {
     assert(avs_coap_code_is_response(args->response_code));
 
     // Add a few extra bytes for BLOCK1/2 options in case request/response
@@ -163,7 +160,7 @@ server_exchange_create(const server_exchange_create_args_t *args) {
                 .reliability_hint = args->reliability_hint,
                 .delivery_handler = args->delivery_handler,
                 .delivery_handler_arg = args->delivery_handler_arg,
-                .exchange_deadline = get_exchange_deadline(),
+                .exchange_deadline = get_exchange_deadline(ctx),
                 .request_code = args->request->code,
                 .request_key_options = _avs_coap_options_copy_request_key(
                         &args->request->options, request_key_options_buffer,
@@ -435,7 +432,8 @@ insert_server_exchange(avs_coap_ctx_t *ctx, avs_coap_exchange_t *new_exchange) {
 static AVS_LIST(avs_coap_exchange_t) *
 refresh_exchange(avs_coap_ctx_t *ctx,
                  AVS_LIST(avs_coap_exchange_t) *exchange_ptr) {
-    (*exchange_ptr)->by_type.server.exchange_deadline = get_exchange_deadline();
+    (*exchange_ptr)->by_type.server.exchange_deadline =
+            get_exchange_deadline(ctx);
     return insert_server_exchange(ctx, AVS_LIST_DETACH(exchange_ptr));
 }
 
@@ -481,7 +479,7 @@ avs_coap_exchange_id_t avs_coap_server_accept_async_request(
         .request_handler_arg = request_handler_arg
     };
     AVS_LIST(avs_coap_exchange_t) response_exchange =
-            server_exchange_create(&exchange_create_args);
+            server_exchange_create(ctx->coap_ctx, &exchange_create_args);
     if (!response_exchange) {
         return AVS_COAP_EXCHANGE_ID_INVALID;
     }
@@ -565,7 +563,7 @@ avs_coap_server_setup_async_response(avs_coap_request_ctx_t *ctx,
         .observe_option_value = observe_option_value
     };
     AVS_LIST(avs_coap_exchange_t) new_exchange =
-            server_exchange_create(&exchange_create_args);
+            server_exchange_create(ctx->coap_ctx, &exchange_create_args);
 
     if (!new_exchange) {
         return avs_errno(AVS_ENOMEM);
@@ -1343,7 +1341,7 @@ avs_coap_notify_async(avs_coap_ctx_t *ctx,
                                         : NULL
     };
     AVS_LIST(avs_coap_exchange_t) exchange =
-            server_exchange_create(&exchange_create_args);
+            server_exchange_create(ctx, &exchange_create_args);
     if (!exchange) {
         return avs_errno(AVS_ENOMEM);
     }

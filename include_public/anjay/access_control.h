@@ -94,6 +94,58 @@ int anjay_access_control_set_acl(anjay_t *anjay,
                                  anjay_ssid_t ssid,
                                  anjay_access_mask_t access_mask);
 
+/**
+ * Set the Access Control Owner for a given Object Instance.
+ *
+ * @param anjay         ANJAY object with the Access Control module installed
+ *
+ * @param target_oid    Object ID of the target Instance.
+ *
+ * @param target_iid    Target Object Instance ID, or <c>ANJAY_ID_INVALID</c>
+ *                      (i.e., MAX_ID==65535) to set an ACL referring to new
+ *                      instance creation.
+ *
+ * @param owner_ssid    SSID of the server which should become the Access
+ *                      Control Owner for the given Object Instance.
+ *                      <c>ANJAY_SSID_BOOTSTRAP</c> can be specified to signify
+ *                      that the ACL shall not be editable by any regular LwM2M
+ *                      Server.
+ *
+ * @param inout_acl_iid Setting related to the Instance ID of the Access Control
+ *                      Object Instance that governs the given target.
+ *                      @li If <c>NULL</c>, any existing instance governing the
+ *                          given target will be used if present, or a new
+ *                          instance with a first free Instance ID will be
+ *                          created.
+ *                      @li If non-<c>NULL</c> and <c>*inout_acl_iid ==
+ *                          ANJAY_ID_INVALID</c>, any existing instance
+ *                          governing the given target will be used if present,
+ *                          or a new instance with a first free Instance ID will
+ *                          be created, and <c>*inout_acl_iid</c> will be set to
+ *                          the Instance ID of the affected Access Control
+ *                          Object Instance upon a successful return from this
+ *                          function.
+ *                      @li If non-</c>NULL</c> and <c>*inout_acl_iid !=
+ *                          ANJAY_ID_INVALID</c>, a new instance with that ID
+ *                          will be created; an existing instance may also be
+ *                          used, but only if the instance governing the given
+ *                          target has the ID specified. If an instance
+ *                          governing the given target already exists and has a
+ *                          different Instance ID, or if an instance with the
+ *                          given ID, but governs a different target,
+ *                          <c>*inout_acl_iid</c> will be set to the ID of the
+ *                          conflicting instance and this function will return
+ *                          an error.
+ *
+ * @return 0 in case of success, negative value in case of an error (including
+ *         the case where target Object Instance does not exist).
+ */
+int anjay_access_control_set_owner(anjay_t *anjay,
+                                   anjay_oid_t target_oid,
+                                   anjay_iid_t target_iid,
+                                   anjay_ssid_t owner_ssid,
+                                   anjay_iid_t *inout_acl_iid);
+
 #ifdef __cplusplus
 }
 #endif

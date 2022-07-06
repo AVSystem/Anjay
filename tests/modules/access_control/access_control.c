@@ -37,19 +37,23 @@ static const anjay_dm_object_def_t *const TEST = &(
     }
 };
 
+#define ACCESS_CONTROL_TEST_INIT                                            \
+    DM_TEST_INIT_WITH_OBJECTS(&FAKE_SECURITY, &FAKE_SERVER, &TEST);         \
+                                                                            \
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay));           \
+                                                                            \
+    /* prevent sending Update, as that will fail in the test environment */ \
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);                                \
+    avs_sched_del(&anjay_unlocked->servers->next_action_handle);            \
+    ANJAY_MUTEX_UNLOCK(anjay);                                              \
+                                                                            \
+    anjay_sched_run(anjay)
+
 AVS_UNIT_TEST(access_control, set_acl) {
-    DM_TEST_INIT_WITH_OBJECTS(&FAKE_SECURITY, &FAKE_SERVER, &TEST);
+    ACCESS_CONTROL_TEST_INIT;
+
     const anjay_iid_t iid = 1;
     const anjay_ssid_t ssid = 1;
-
-    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_install(anjay));
-
-    // prevent sending Update, as that will fail in the test environment
-    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    avs_sched_del(&anjay_unlocked->servers->next_action_handle);
-    ANJAY_MUTEX_UNLOCK(anjay);
-
-    anjay_sched_run(anjay);
 
     {
         ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
@@ -142,6 +146,173 @@ AVS_UNIT_TEST(access_control, set_acl) {
         AVS_UNIT_ASSERT_EQUAL(inst->acl->mask, mask);
         ANJAY_MUTEX_UNLOCK(anjay);
     }
+
+    DM_TEST_FINISH;
+}
+
+AVS_UNIT_TEST(access_control, set_owner) {
+    ACCESS_CONTROL_TEST_INIT;
+
+    // SSID == 0 is invalid
+    AVS_UNIT_ASSERT_FAILED(anjay_access_control_set_owner(
+            anjay, TEST->oid, 1, ANJAY_SSID_ANY, NULL));
+
+    // Basic happy path
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &TEST, 0, (anjay_iid_t[]){ 1, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SERVER, 0,
+            (const anjay_iid_t[]) { 0, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SERVER, 0, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SERVER_SSID,
+                                                    ANJAY_DM_RES_R,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 0,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_access_control_set_owner(anjay, TEST->oid, 1, 1, NULL));
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    access_control_t *ac = _anjay_access_control_get(anjay_unlocked);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac->current.instances), 1);
+    AVS_LIST(access_control_instance_t) inst = ac->current.instances;
+    AVS_UNIT_ASSERT_EQUAL(inst->iid, 0);
+    AVS_UNIT_ASSERT_EQUAL(inst->owner, 1);
+    ANJAY_MUTEX_UNLOCK(anjay);
+
+    // Conflicting Access Control Object Instance ID
+    anjay_iid_t inout_acl_iid = 1;
+    AVS_UNIT_ASSERT_FAILED(anjay_access_control_set_owner(anjay, TEST->oid, 1,
+                                                          2, &inout_acl_iid));
+    AVS_UNIT_ASSERT_EQUAL(inout_acl_iid, 0);
+
+    // Validation failure: inexistent target
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &TEST, 0, (anjay_iid_t[]){ 1, ANJAY_ID_INVALID });
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_access_control_set_owner(anjay, TEST->oid, 2, 1, NULL));
+
+    // Happy path with reading of Access Control Object Instance ID
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &TEST, 0, (anjay_iid_t[]){ 1, 2, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SERVER, 0,
+            (const anjay_iid_t[]) { 0, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SERVER, 0, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SERVER_SSID,
+                                                    ANJAY_DM_RES_R,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 0,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    inout_acl_iid = ANJAY_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_set_owner(anjay, TEST->oid, 2,
+                                                           1, &inout_acl_iid));
+    AVS_UNIT_ASSERT_EQUAL(inout_acl_iid, 1);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    access_control_t *ac = _anjay_access_control_get(anjay_unlocked);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac->current.instances), 2);
+    ANJAY_MUTEX_UNLOCK(anjay);
+
+    // SSID validation error (existing target)
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SERVER, 0,
+            (const anjay_iid_t[]) { 0, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SERVER, 0, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SERVER_SSID,
+                                                    ANJAY_DM_RES_R,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 0,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_access_control_set_owner(anjay, TEST->oid, 2, 2, NULL));
+
+    // SSID validation error (new target)
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &TEST, 0, (anjay_iid_t[]){ 1, 2, 3, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SERVER, 0,
+            (const anjay_iid_t[]) { 0, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SERVER, 0, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SERVER_SSID,
+                                                    ANJAY_DM_RES_R,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 0,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    AVS_UNIT_ASSERT_FAILED(
+            anjay_access_control_set_owner(anjay, TEST->oid, 3, 2, NULL));
+
+    // No-op
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_set_owner(anjay, TEST->oid, 2,
+                                                           1, &inout_acl_iid));
+
+    // Changing owner to the Bootstrap Server
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_set_owner(
+            anjay, TEST->oid, 2, ANJAY_SSID_BOOTSTRAP, &inout_acl_iid));
+
+    // Happy path with setting of Access Control Object Instance ID
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &TEST, 0, (anjay_iid_t[]){ 1, 2, 21, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SERVER, 0,
+            (const anjay_iid_t[]) { 0, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SERVER, 0, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SERVER_SSID,
+                                                    ANJAY_DM_RES_R,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 0,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    inout_acl_iid = 37;
+    AVS_UNIT_ASSERT_SUCCESS(anjay_access_control_set_owner(anjay, TEST->oid, 21,
+                                                           1, &inout_acl_iid));
+    AVS_UNIT_ASSERT_EQUAL(inout_acl_iid, 37);
+    ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
+    access_control_t *ac = _anjay_access_control_get(anjay_unlocked);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(ac->current.instances), 3);
+    AVS_UNIT_ASSERT_EQUAL(ac->current.instances->iid, 0);
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_NEXT(ac->current.instances)->iid, 1);
+    AVS_UNIT_ASSERT_EQUAL(
+            AVS_LIST_NEXT(AVS_LIST_NEXT(ac->current.instances))->iid, 37);
+    ANJAY_MUTEX_UNLOCK(anjay);
+
+    // Attempting to reuse existing Access Control Object Instance ID
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &TEST, 0, (anjay_iid_t[]){ 1, 2, 21, 42, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &FAKE_SERVER, 0,
+            (const anjay_iid_t[]) { 0, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &FAKE_SERVER, 0, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { ANJAY_DM_RID_SERVER_SSID,
+                                                    ANJAY_DM_RES_R,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
+    _anjay_mock_dm_expect_resource_read(anjay, &FAKE_SERVER, 0,
+                                        ANJAY_DM_RID_SERVER_SSID,
+                                        ANJAY_ID_INVALID, 0,
+                                        ANJAY_MOCK_DM_INT(0, 1));
+    inout_acl_iid = 37;
+    AVS_UNIT_ASSERT_FAILED(anjay_access_control_set_owner(anjay, TEST->oid, 42,
+                                                          1, &inout_acl_iid));
+    AVS_UNIT_ASSERT_EQUAL(inout_acl_iid, 37);
 
     DM_TEST_FINISH;
 }

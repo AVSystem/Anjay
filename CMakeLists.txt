@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.0.0" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.1.0" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -115,12 +115,15 @@ option(WITH_THREAD_SAFETY "Enable guarding of all accesses to anjay_t with a mut
 ################# LIBRARIES ####################################################
 
 # avs_commons required components.
-set(AVS_COMMONS_COMPONENTS algorithm crypto list rbtree buffer net sched stream stream_net url utils compat_threading)
+set(AVS_COMMONS_COMPONENTS algorithm crypto list buffer net sched stream stream_net url utils compat_threading)
 if(WITH_HTTP_DOWNLOAD)
     list(APPEND AVS_COMMONS_COMPONENTS http)
 endif()
 if(WITH_AVS_PERSISTENCE)
     list(APPEND AVS_COMMONS_COMPONENTS persistence)
+endif()
+if(NOT DEFINED WITH_AVS_RBTREE OR WITH_AVS_RBTREE)
+    set(WITH_AVS_RBTREE ON CACHE INTERNAL "")
 endif()
 
 set(AVS_COMMONS_LIBRARIES)
@@ -317,6 +320,7 @@ option(WITH_MODULE_ipso_objects "Generic implementation of certain kinds of IPSO
 option(WITH_MODULE_security "Security object module" ON)
 option(WITH_MODULE_server "Server object module" ON)
 option(WITH_MODULE_fw_update "Firmware Update object module" ON)
+cmake_dependent_option(WITH_MODULE_factory_provisioning "Factory provisioning module" ON "WITH_BOOTSTRAP;WITH_CBOR" OFF)
 
 ################# CODE #########################################################
 
@@ -327,6 +331,7 @@ add_library(anjay
             include_public/anjay/core.h
             include_public/anjay/dm.h
             include_public/anjay/download.h
+            include_public/anjay/factory_provisioning.h
             include_public/anjay/fw_update.h
             include_public/anjay/io.h
             include_public/anjay/ipso_objects.h
@@ -459,6 +464,7 @@ add_library(anjay
             src/modules/access_control/anjay_access_control_persistence.c
             src/modules/access_control/anjay_mod_access_control.c
             src/modules/access_control/anjay_mod_access_control.h
+            src/modules/factory_provisioning/anjay_provisioning.c
             src/modules/fw_update/anjay_fw_update.c
             src/modules/ipso/anjay_ipso_3d_sensor.c
             src/modules/ipso/anjay_ipso_basic_sensor.c
@@ -515,6 +521,7 @@ set(ANJAY_WITH_OBSERVATION_STATUS "${WITH_OBSERVATION_STATUS}")
 set(ANJAY_WITH_OBSERVE "${WITH_OBSERVE}")
 set(ANJAY_WITH_THREAD_SAFETY "${WITH_THREAD_SAFETY}")
 set(ANJAY_WITH_TRACE_LOGS "${WITH_ANJAY_TRACE_LOGS}")
+set(ANJAY_WITH_MODULE_FACTORY_PROVISIONING "${WITH_MODULE_factory_provisioning}")
 
 set(ANJAY_WITH_CBOR "${WITH_CBOR}")
 set(ANJAY_WITH_LWM2M11 "${WITH_LWM2M11}")
@@ -837,6 +844,10 @@ if(WITH_MODULE_security)
 endif()
 if(WITH_MODULE_server)
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/server.h"
+            DESTINATION include/anjay)
+endif()
+if(WITH_MODULE_factory_provisioning)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include_public/anjay/factory_provisioning.h"
             DESTINATION include/anjay)
 endif()
 

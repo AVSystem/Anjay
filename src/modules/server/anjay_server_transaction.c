@@ -35,7 +35,7 @@ static int ssid_cmp(const void *a, const void *b, size_t size) {
                 (unsigned) (ServInstance)->iid AVS_VARARG_REST(__VA_ARGS__))
 
 static int validate_instance(server_instance_t *it) {
-    if (!it->has_ssid) {
+    if (!it->present_resources[SERV_RES_SSID]) {
         LOG_VALIDATION_FAILED(
                 it, _("missing mandatory 'Short Server ID' resource value"));
         return -1;
@@ -46,17 +46,18 @@ static int validate_instance(server_instance_t *it) {
                 it->ssid);
         return -1;
     }
-    if (!it->has_binding) {
+    if (!it->present_resources[SERV_RES_BINDING]) {
         LOG_VALIDATION_FAILED(it,
                               _("missing mandatory 'Binding' resource value"));
         return -1;
     }
-    if (!it->has_lifetime) {
+    if (!it->present_resources[SERV_RES_LIFETIME]) {
         LOG_VALIDATION_FAILED(it,
                               _("missing mandatory 'Lifetime' resource value"));
         return -1;
     }
-    if (!it->has_notification_storing) {
+    if (!it->present_resources
+                 [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE]) {
         LOG_VALIDATION_FAILED(it,
                               _("missing mandatory 'Notification Storing "
                                 "when disabled or offline' resource value"));
@@ -69,16 +70,19 @@ static int validate_instance(server_instance_t *it) {
                               it->lifetime);
         return -1;
     }
-    if (it->has_default_max_period && it->default_max_period <= 0) {
+    if (it->present_resources[SERV_RES_DEFAULT_MAX_PERIOD]
+            && it->default_max_period <= 0) {
         LOG_VALIDATION_FAILED(it, _("Default Max Period is non-positive"));
         return -1;
     }
-    if (it->has_default_min_period && it->default_min_period < 0) {
+    if (it->present_resources[SERV_RES_DEFAULT_MIN_PERIOD]
+            && it->default_min_period < 0) {
         LOG_VALIDATION_FAILED(it, _("Default Min Period is negative"));
         return -1;
     }
 #    ifndef ANJAY_WITHOUT_DEREGISTER
-    if (it->has_disable_timeout && it->disable_timeout < 0) {
+    if (it->present_resources[SERV_RES_DISABLE_TIMEOUT]
+            && it->disable_timeout < 0) {
         LOG_VALIDATION_FAILED(it, _("Disable Timeout is negative"));
         return -1;
     }
@@ -89,24 +93,25 @@ static int validate_instance(server_instance_t *it) {
         return -1;
     }
 #    ifdef ANJAY_WITH_LWM2M11
-    if (it->has_last_bootstrapped_timestamp
+    if (it->present_resources[SERV_RES_LAST_BOOTSTRAPPED]
             && it->last_bootstrapped_timestamp < 0) {
         LOG_VALIDATION_FAILED(it, _("Last Bootstrapped is negative"));
         return -1;
     }
-    if (it->preferred_transport
+    if (it->present_resources[SERV_RES_PREFERRED_TRANSPORT]
             && !_anjay_binding_info_by_letter(it->preferred_transport)) {
         LOG_VALIDATION_FAILED(it, _("Incorrect Preferred Transport: ") "%c",
                               it->preferred_transport);
         return -1;
     }
-    if (it->has_server_communication_retry_count
+    if (it->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT]
             && it->server_communication_retry_count == 0) {
         LOG_VALIDATION_FAILED(it,
                               _("Communication Retry Count cannot be zero"));
         return -1;
     }
-    if (it->has_server_communication_sequence_retry_count
+    if (it->present_resources
+                [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT]
             && it->server_communication_sequence_retry_count == 0) {
         LOG_VALIDATION_FAILED(
                 it, _("Communication Sequence Retry Count cannot be zero"));

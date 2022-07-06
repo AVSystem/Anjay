@@ -67,9 +67,9 @@ static inline bool _anjay_dm_implements_any_resource_instance_attrs_handlers(
 int _anjay_attr_storage_init(anjay_unlocked_t *anjay);
 void _anjay_attr_storage_cleanup(anjay_attr_storage_t *as);
 
-int _anjay_attr_storage_transaction_begin(anjay_unlocked_t *anjay);
-int _anjay_attr_storage_transaction_commit(anjay_unlocked_t *anjay);
-int _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay);
+avs_error_t _anjay_attr_storage_transaction_begin(anjay_unlocked_t *anjay);
+void _anjay_attr_storage_transaction_commit(anjay_unlocked_t *anjay);
+avs_error_t _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay);
 
 int _anjay_attr_storage_notify(anjay_unlocked_t *anjay,
                                anjay_notify_queue_t queue);

@@ -310,6 +310,22 @@ size_t avs_coap_max_incoming_message_payload(avs_coap_ctx_t *ctx,
             ctx, AVS_COAP_MAX_TOKEN_LENGTH, options, code);
 }
 
+const avs_time_duration_t AVS_COAP_DEFAULT_EXCHANGE_MAX_TIME = {
+    .seconds = 300,
+    .nanoseconds = 0
+};
+
+avs_time_duration_t avs_coap_get_exchange_max_time(avs_coap_ctx_t *ctx) {
+    const avs_coap_base_t *base = _avs_coap_get_base(ctx);
+    return base->max_exchange_update_time;
+}
+
+void avs_coap_set_exchange_max_time(avs_coap_ctx_t *ctx,
+                                    const avs_time_duration_t time) {
+    avs_coap_base_t *base = _avs_coap_get_base(ctx);
+    base->max_exchange_update_time = time;
+}
+
 #ifdef WITH_AVS_COAP_BLOCK
 static avs_error_t get_payload_chunk_size(avs_coap_ctx_t *ctx,
                                           uint8_t code,

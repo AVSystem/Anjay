@@ -16,10 +16,7 @@ from framework.lwm2m_test import *
 from framework import test_suite
 
 from suites.default.block_write import Block, equal_chunk_splitter
-
-UPDATE_STATE_IDLE = 0
-UPDATE_STATE_UPDATING = 3
-UPDATE_RESULT_SUCCESS = 1
+from suites.default.firmware_update import UpdateResult, UpdateState
 
 
 class FirmwareUpdateWithoutReboot(Block.Test):
@@ -44,11 +41,11 @@ class FirmwareUpdateWithoutReboot(Block.Test):
         self.read_log_until_match(regex=re.escape(b'*** FIRMWARE UPDATE:'), timeout_s=5)
 
         self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content.decode(),
-                         str(UPDATE_STATE_UPDATING))
+                         str(UpdateState.UPDATING))
 
-        self.communicate('set-fw-update-result ' + str(UPDATE_RESULT_SUCCESS))
+        self.communicate('set-fw-update-result ' + str(UpdateResult.SUCCESS))
 
         self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.State).content.decode(),
-                         str(UPDATE_STATE_IDLE))
+                         str(UpdateState.IDLE))
         self.assertEqual(self.read_path(self.serv, ResPath.FirmwareUpdate.UpdateResult).content,
-                         str(UPDATE_RESULT_SUCCESS).encode())
+                         str(UpdateResult.SUCCESS).encode())

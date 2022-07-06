@@ -118,9 +118,7 @@ typedef struct anjay_configuration {
     uint16_t udp_listen_port;
 
     /**
-     * DTLS version to use for communication. AVS_NET_SSL_VERSION_DEFAULT will
-     * be automatically mapped to AVS_NET_SSL_VERSION_TLSv1_2, which is the
-     * version mandated by LwM2M specification.
+     * DTLS version to use for communication.
      */
     avs_net_ssl_version_t dtls_version;
 
@@ -1538,6 +1536,55 @@ bool anjay_has_unsent_notifications(anjay_t *anjay, anjay_ssid_t ssid);
  */
 bool anjay_transport_has_unsent_notifications(
         anjay_t *anjay, anjay_transport_set_t transport_set);
+
+/**
+ * Changes transmission parameters for given transports.
+ *
+ * @param anjay         Anjay object to operate on.
+ *
+ * @param transport_set Set of transports for which parameters should be
+ *                      changed.
+ *
+ * @param tx_params     New transmission parameters.
+ *
+ * @returns AVS_OK in case of success (parameters have been changed for at least
+ *          one transport), or an error code.
+ */
+avs_error_t
+anjay_update_transport_tx_params(anjay_t *anjay,
+                                 anjay_transport_set_t transport_set,
+                                 const avs_coap_udp_tx_params_t *tx_params);
+
+/**
+ * Changes the CoAP exchange update timeout for given transports.
+ *
+ * @param anjay                   Anjay object to operate on.
+ *
+ * @param transport_set           Set of transport for which the exchange update
+ *                                timeout should be changed.
+ *
+ * @param exchange_update_timeout New exchange update timeout.
+ *
+ * @returns AVS_OK in case of success (update timeout has been changed for at
+ *          least one transport), or an error code.
+ */
+avs_error_t
+anjay_update_coap_exchange_timeout(anjay_t *anjay,
+                                   anjay_transport_set_t transport_set,
+                                   avs_time_duration_t exchange_timeout);
+
+/**
+ * Changes handshake timeouts for sockets that communicate using DTLS over UDP.
+ *
+ * @param anjay                   Anjay object to operate on.
+ *
+ * @param dtls_handshake_timeouts New DTLS handshake timeouts.
+ *
+ * @returns AVS_OK in case of success, or an error code.
+ */
+avs_error_t anjay_update_dtls_handshake_timeouts(
+        anjay_t *anjay,
+        avs_net_dtls_handshake_timeouts_t dtls_handshake_timeouts);
 
 #ifdef __cplusplus
 } /* extern "C" */

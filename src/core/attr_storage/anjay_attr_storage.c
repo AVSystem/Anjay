@@ -889,34 +889,29 @@ static void saved_state_reset(anjay_attr_storage_t *as) {
     avs_stream_membuf_fit(as->saved_state.persist_data);
 }
 
-int _anjay_attr_storage_transaction_begin(anjay_unlocked_t *anjay) {
+avs_error_t _anjay_attr_storage_transaction_begin(anjay_unlocked_t *anjay) {
     anjay->attr_storage.saved_state.modified_since_persist =
             anjay->attr_storage.modified_since_persist;
-    if (avs_is_err(_anjay_attr_storage_persist_inner(
-                &anjay->attr_storage,
-                anjay->attr_storage.saved_state.persist_data))) {
-        return ANJAY_ERR_INTERNAL;
-    }
-    return 0;
+    return _anjay_attr_storage_persist_inner(
+            &anjay->attr_storage, anjay->attr_storage.saved_state.persist_data);
 }
 
-int _anjay_attr_storage_transaction_commit(anjay_unlocked_t *anjay) {
+void _anjay_attr_storage_transaction_commit(anjay_unlocked_t *anjay) {
     saved_state_reset(&anjay->attr_storage);
-    return 0;
 }
 
-int _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay) {
-    int result = 0;
-    if (avs_is_err(_anjay_attr_storage_restore_inner(
-                anjay, anjay->attr_storage.saved_state.persist_data))) {
+avs_error_t _anjay_attr_storage_transaction_rollback(anjay_unlocked_t *anjay) {
+    avs_error_t err;
+    if (avs_is_err((err = _anjay_attr_storage_restore_inner(
+                            anjay,
+                            anjay->attr_storage.saved_state.persist_data)))) {
         anjay->attr_storage.modified_since_persist = true;
-        result = ANJAY_ERR_INTERNAL;
     } else {
         anjay->attr_storage.modified_since_persist =
                 anjay->attr_storage.saved_state.modified_since_persist;
     }
     saved_state_reset(&anjay->attr_storage);
-    return result;
+    return err;
 }
 
 static const anjay_dm_installed_object_t *

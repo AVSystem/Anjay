@@ -304,6 +304,44 @@ get_connection_type_def(anjay_socket_transport_t type) {
     }
 }
 
+static void update_exchange_timeout(anjay_server_info_t *server,
+                                    anjay_connection_type_t conn_type) {
+    anjay_server_connection_t *conn =
+            _anjay_connection_get(&server->connections, conn_type);
+    assert(conn->coap_ctx);
+    avs_time_duration_t exchange_max_time;
+    switch (conn->transport) {
+#ifdef WITH_AVS_COAP_UDP
+    case ANJAY_SOCKET_TRANSPORT_UDP:
+        exchange_max_time = server->anjay->udp_exchange_timeout;
+        break;
+#endif // WITH_AVS_COAP_UDP
+#if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    case ANJAY_SOCKET_TRANSPORT_TCP:
+        exchange_max_time = server->anjay->tcp_exchange_timeout;
+        break;
+#endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
+    default:
+        AVS_UNREACHABLE("Invalid connection type");
+        return;
+    }
+    avs_coap_set_exchange_max_time(conn->coap_ctx, exchange_max_time);
+}
+
+int _anjay_connection_ensure_coap_context(anjay_server_info_t *server,
+                                          anjay_connection_type_t conn_type) {
+    anjay_server_connection_t *conn =
+            _anjay_connection_get(&server->connections, conn_type);
+    const anjay_connection_type_definition_t *def =
+            get_connection_type_def(conn->transport);
+    assert(def);
+    int result = def->ensure_coap_context(server->anjay, conn);
+    if (!result) {
+        update_exchange_timeout(server, conn_type);
+    }
+    return result;
+}
+
 avs_error_t _anjay_server_connection_internal_bring_online(
         anjay_server_info_t *server,
         anjay_connection_type_t conn_type,
@@ -328,7 +366,7 @@ avs_error_t _anjay_server_connection_internal_bring_online(
     }
 
     avs_error_t err = avs_errno(AVS_ENOMEM);
-    if (def->ensure_coap_context(server->anjay, connection)
+    if (_anjay_connection_ensure_coap_context(server, conn_type)
             || avs_is_err((
                        err = def->connect_socket(server->anjay, connection)))) {
         connection->state = ANJAY_SERVER_CONNECTION_OFFLINE;

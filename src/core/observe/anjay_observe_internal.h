@@ -48,7 +48,7 @@ typedef struct {
 
     // List of observations (pointers to elements inside
     // anjay_observe_connection_entry_t::observations) that include "path"
-    AVS_LIST(AVS_RBTREE_ELEM(anjay_observation_t)) refs;
+    AVS_LIST(AVS_SORTED_SET_ELEM(anjay_observation_t)) refs;
 } anjay_observe_path_entry_t;
 
 typedef struct {
@@ -63,8 +63,8 @@ typedef struct {
 struct anjay_observe_connection_entry_struct {
     const anjay_connection_ref_t conn_ref;
 
-    AVS_RBTREE(anjay_observation_t) observations;
-    AVS_RBTREE(anjay_observe_path_entry_t) observed_paths;
+    AVS_SORTED_SET(anjay_observation_t) observations;
+    AVS_SORTED_SET(anjay_observe_path_entry_t) observed_paths;
     avs_sched_handle_t flush_task;
     avs_coap_exchange_id_t notify_exchange_id;
     anjay_observation_serialization_state_t serialization_state;
@@ -97,7 +97,7 @@ int _anjay_observe_path_entry_cmp(const void *left, const void *right);
 
 int _anjay_observe_add_to_observed_paths(
         anjay_observe_connection_entry_t *conn,
-        AVS_RBTREE_ELEM(anjay_observation_t) observation);
+        AVS_SORTED_SET_ELEM(anjay_observation_t) observation);
 
 int _anjay_observe_schedule_pmax_trigger(
         anjay_observe_connection_entry_t *conn_state,

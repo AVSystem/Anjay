@@ -94,13 +94,64 @@ static const anjay_security_instance_t BOOTSTRAP_INSTANCE = {
     .private_cert_or_psk_key = (const uint8_t *) BUFFERS[1],
     .private_cert_or_psk_key_size = sizeof(BUFFERS[1]),
     .server_public_key = (const uint8_t *) BUFFERS[2],
-    .server_public_key_size = sizeof(BUFFERS[1])
+    .server_public_key_size = sizeof(BUFFERS[2])
 };
 
 static void assert_raw_buffers_equal(const anjay_raw_buffer_t *a,
                                      const anjay_raw_buffer_t *b) {
     AVS_UNIT_ASSERT_EQUAL(a->size, b->size);
     AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(a->data, b->data, a->size);
+}
+
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+static const avs_crypto_security_info_union_t *
+get_actual_security_info(const avs_crypto_security_info_union_t *info) {
+    switch (info->source) {
+    case AVS_CRYPTO_DATA_SOURCE_ARRAY:
+        AVS_UNIT_ASSERT_EQUAL(info->info.array.element_count, 1);
+        AVS_UNIT_ASSERT_EQUAL(info->info.array.array_ptr[0].type, info->type);
+        return get_actual_security_info(&info->info.array.array_ptr[0]);
+    case AVS_CRYPTO_DATA_SOURCE_LIST:
+        AVS_UNIT_ASSERT_NOT_NULL(info->info.list.list_head);
+        AVS_UNIT_ASSERT_NULL(AVS_LIST_NEXT(info->info.list.list_head));
+        AVS_UNIT_ASSERT_EQUAL(info->info.list.list_head->type, info->type);
+        return get_actual_security_info(info->info.list.list_head);
+    default:
+        return info;
+    }
+}
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
+
+static void assert_sec_key_or_data_equal(const sec_key_or_data_t *a,
+                                         const sec_key_or_data_t *b) {
+    AVS_UNIT_ASSERT_EQUAL(a->type, b->type);
+    switch (a->type) {
+    case SEC_KEY_AS_DATA:
+        assert_raw_buffers_equal(&a->value.data, &b->value.data);
+        break;
+    case SEC_KEY_AS_KEY_EXTERNAL:
+    case SEC_KEY_AS_KEY_OWNED: {
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+        const avs_crypto_security_info_union_t *info_a =
+                get_actual_security_info(&a->value.key.info);
+        const avs_crypto_security_info_union_t *info_b =
+                get_actual_security_info(&b->value.key.info);
+        AVS_UNIT_ASSERT_EQUAL(info_a->type, info_b->type);
+        AVS_UNIT_ASSERT_EQUAL(info_a->source, AVS_CRYPTO_DATA_SOURCE_BUFFER);
+        AVS_UNIT_ASSERT_EQUAL(info_b->source, AVS_CRYPTO_DATA_SOURCE_BUFFER);
+        AVS_UNIT_ASSERT_NULL(info_a->info.buffer.password);
+        AVS_UNIT_ASSERT_NULL(info_b->info.buffer.password);
+        AVS_UNIT_ASSERT_EQUAL(info_a->info.buffer.buffer_size,
+                              info_b->info.buffer.buffer_size);
+        AVS_UNIT_ASSERT_EQUAL_BYTES_SIZED(info_a->info.buffer.buffer,
+                                          info_b->info.buffer.buffer,
+                                          info_a->info.buffer.buffer_size);
+#else  // ANJAY_WITH_SECURITY_STRUCTURED
+        AVS_UNIT_ASSERT_NULL("Unsupported sec_key_or_data_t type");
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
+        break;
+    }
+    }
 }
 
 static void assert_instances_equal(const sec_instance_t *a,
@@ -110,14 +161,10 @@ static void assert_instances_equal(const sec_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->is_bootstrap, b->is_bootstrap);
     AVS_UNIT_ASSERT_EQUAL((uint32_t) a->security_mode,
                           (uint32_t) b->security_mode);
-    AVS_UNIT_ASSERT_EQUAL(a->public_cert_or_psk_identity.type, SEC_KEY_AS_DATA);
-    AVS_UNIT_ASSERT_EQUAL(b->public_cert_or_psk_identity.type, SEC_KEY_AS_DATA);
-    assert_raw_buffers_equal(&a->public_cert_or_psk_identity.value.data,
-                             &b->public_cert_or_psk_identity.value.data);
-    AVS_UNIT_ASSERT_EQUAL(a->private_cert_or_psk_key.type, SEC_KEY_AS_DATA);
-    AVS_UNIT_ASSERT_EQUAL(b->private_cert_or_psk_key.type, SEC_KEY_AS_DATA);
-    assert_raw_buffers_equal(&a->private_cert_or_psk_key.value.data,
-                             &b->private_cert_or_psk_key.value.data);
+    assert_sec_key_or_data_equal(&a->public_cert_or_psk_identity,
+                                 &b->public_cert_or_psk_identity);
+    assert_sec_key_or_data_equal(&a->private_cert_or_psk_key,
+                                 &b->private_cert_or_psk_key);
     assert_raw_buffers_equal(&a->server_public_key, &b->server_public_key);
     AVS_UNIT_ASSERT_EQUAL(a->ssid, b->ssid);
     AVS_UNIT_ASSERT_EQUAL(a->holdoff_s, b->holdoff_s);
@@ -156,6 +203,38 @@ AVS_UNIT_TEST(security_persistence, basic_store_restore) {
     assert_objects_equal(_anjay_sec_get(env->stored),
                          _anjay_sec_get(env->restored));
 }
+
+#ifdef ANJAY_WITH_SECURITY_STRUCTURED
+AVS_UNIT_TEST(security_persistence, structured_store_restore) {
+    const anjay_security_instance_t BOOTSTRAP_INSTANCE_STRUCTURED = {
+        .ssid = 0,
+        .server_uri = "coap://at.ease/eating?well",
+        .bootstrap_server = true,
+        .security_mode = ANJAY_SECURITY_NOSEC,
+        .client_holdoff_s = -1,
+        .bootstrap_timeout_s = -1,
+        .public_cert = avs_crypto_certificate_chain_info_from_buffer(
+                BUFFERS[0], sizeof(BUFFERS[0])),
+        .private_key = avs_crypto_private_key_info_from_buffer(
+                BUFFERS[1], sizeof(BUFFERS[1]), NULL),
+        .server_public_key = (const uint8_t *) BUFFERS[2],
+        .server_public_key_size = sizeof(BUFFERS[2])
+    };
+
+    SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);
+    anjay_iid_t iid = ANJAY_ID_INVALID;
+    AVS_UNIT_ASSERT_SUCCESS(anjay_security_object_add_instance(
+            env->anjay_stored, &BOOTSTRAP_INSTANCE_STRUCTURED, &iid));
+    AVS_UNIT_ASSERT_TRUE(anjay_security_object_is_modified(env->anjay_stored));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_security_object_persist(env->anjay_stored, env->stream));
+    AVS_UNIT_ASSERT_FALSE(anjay_security_object_is_modified(env->anjay_stored));
+    AVS_UNIT_ASSERT_SUCCESS(
+            anjay_security_object_restore(env->anjay_restored, env->stream));
+    assert_objects_equal(_anjay_sec_get(env->stored),
+                         _anjay_sec_get(env->restored));
+}
+#endif // ANJAY_WITH_SECURITY_STRUCTURED
 
 AVS_UNIT_TEST(security_persistence, invalid_object_to_restore) {
     SCOPED_SECURITY_PERSISTENCE_TEST_ENV(env);

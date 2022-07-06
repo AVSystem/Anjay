@@ -31,3 +31,4 @@ Migrating from older versions
    Migrating/MigratingFromAnjay28
    Migrating/MigratingFromAnjay214
    Migrating/MigratingFromAnjay215
+   Migrating/MigratingFromAnjay30

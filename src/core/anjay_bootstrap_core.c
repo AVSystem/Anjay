@@ -389,6 +389,71 @@ static int bootstrap_write_impl(anjay_unlocked_t *anjay,
 #    endif // ANJAY_WITH_LWM2M11
 }
 
+#    ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+int _anjay_bootstrap_write_composite(anjay_unlocked_t *anjay,
+                                     anjay_unlocked_input_ctx_t *in_ctx) {
+    anjay_log(DEBUG, _("Bootstrap Write from CBOR context"));
+    cancel_client_initiated_bootstrap(anjay);
+    cancel_est_sren(anjay);
+    start_bootstrap_if_not_already_started(
+            anjay, (anjay_connection_ref_t) { NULL }, true);
+
+    int retval;
+    anjay_uri_path_t path;
+    while (!(retval = _anjay_input_get_path(in_ctx, &path, NULL))) {
+        if (!_anjay_uri_path_has(&path, ANJAY_ID_RID)) {
+            return ANJAY_ERR_BAD_REQUEST;
+        }
+
+        const anjay_dm_installed_object_t *obj =
+                _anjay_dm_find_object_by_oid(anjay, path.ids[ANJAY_ID_OID]);
+        if (!obj) {
+            anjay_log(DEBUG, _("Object not found: ") "%u",
+                      path.ids[ANJAY_ID_OID]);
+            return ANJAY_ERR_NOT_FOUND;
+        }
+
+        int ipresent =
+                _anjay_dm_instance_present(anjay, obj, path.ids[ANJAY_ID_IID]);
+        if (ipresent < 0) {
+            return ANJAY_ERR_BAD_REQUEST;
+        } else if (ipresent == 0
+                   && (retval = _anjay_dm_call_instance_create(
+                               anjay, obj, path.ids[ANJAY_ID_IID]))) {
+            return retval;
+        }
+
+        if ((retval = _anjay_dm_call_resource_write(
+                     anjay, obj, path.ids[ANJAY_ID_IID], path.ids[ANJAY_ID_RID],
+                     path.ids[ANJAY_ID_RIID], in_ctx))) {
+            return retval;
+        }
+
+        if ((retval = _anjay_notify_queue_resource_change(
+                     &anjay->bootstrap.notification_queue,
+                     path.ids[ANJAY_ID_OID],
+                     path.ids[ANJAY_ID_IID],
+                     path.ids[ANJAY_ID_RID]))) {
+            return retval;
+        }
+
+        if (path.ids[ANJAY_ID_OID] == ANJAY_DM_OID_SERVER
+                || path.ids[ANJAY_ID_OID] == ANJAY_DM_OID_SECURITY) {
+            if ((retval = update_last_bootstrapped_time(
+                         anjay, obj, path.ids[ANJAY_ID_IID]))) {
+                return retval;
+            }
+        }
+
+        if ((retval = _anjay_input_next_entry(in_ctx))) {
+            break;
+        }
+    }
+
+    return (retval == ANJAY_GET_PATH_END) ? 0 : retval;
+}
+#    endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+
 static int delete_instance(anjay_unlocked_t *anjay,
                            const anjay_dm_installed_object_t *obj,
                            anjay_iid_t iid) {
@@ -729,6 +794,39 @@ bool _anjay_bootstrap_scheduled(anjay_unlocked_t *anjay) {
 bool _anjay_bootstrap_in_progress(anjay_unlocked_t *anjay) {
     return anjay->bootstrap.in_progress;
 }
+
+#    if defined(ANJAY_WITH_MODULE_FACTORY_PROVISIONING)
+avs_error_t _anjay_bootstrap_delete_everything(anjay_unlocked_t *anjay) {
+    cancel_client_initiated_bootstrap(anjay);
+    delete_object_arg_t delete_arg = {
+        .skip_bootstrap = false,
+        .retval = 0
+    };
+    avs_error_t err = start_bootstrap_if_not_already_started(
+            anjay, (anjay_connection_ref_t) { NULL }, true);
+    if (avs_is_err(err)) {
+        return err;
+    }
+    if (_anjay_dm_foreach_object(anjay, delete_object, &delete_arg)
+            || delete_arg.retval) {
+        return avs_errno(AVS_EPROTO);
+    } else {
+        return AVS_OK;
+    }
+}
+
+int _anjay_bootstrap_finish(anjay_unlocked_t *anjay) {
+    int result = 0;
+    if (anjay->bootstrap.in_progress) {
+        (void) ((result = validate_bootstrap_configuration(
+                         anjay, (anjay_connection_ref_t) { NULL }))
+                || (result = bootstrap_finish_impl(
+                            anjay, (anjay_connection_ref_t) { NULL }, 0)));
+    }
+    return result;
+}
+#    endif /* defined(ANJAY_WITH_MODULE_BOOTSTRAPPER) || \
+              defined(ANJAY_WITH_MODULE_FACTORY_PROVISIONING) */
 
 #    ifdef ANJAY_WITH_LWM2M11
 static int bootstrap_read(anjay_connection_ref_t bootstrap_connection,

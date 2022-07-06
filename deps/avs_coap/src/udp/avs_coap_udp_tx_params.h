@@ -72,6 +72,10 @@ _avs_coap_udp_initial_retry_state(const avs_coap_udp_tx_params_t *tx_params,
     return AVS_OK;
 }
 
+#ifdef AVS_UNIT_TESTING
+#    include "../tests/udp/tx_params_mock.h"
+#endif // AVS_UNIT_TESTING
+
 static inline int
 _avs_coap_udp_update_retry_state(avs_coap_retry_state_t *retry_state) {
     retry_state->recv_timeout =
@@ -82,8 +86,8 @@ _avs_coap_udp_update_retry_state(avs_coap_retry_state_t *retry_state) {
 }
 
 /**
- * @returns true if all packets in a retransmission sequence were already sent,
- * false otherwise.
+ * @returns true if all packets in a retransmission sequence were already
+ * sent, false otherwise.
  */
 static inline bool
 _avs_coap_udp_all_retries_sent(const avs_coap_retry_state_t *retry_state,

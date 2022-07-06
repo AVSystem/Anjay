@@ -113,9 +113,7 @@ coap_msg__(uint8_t *buf, size_t buf_size, const struct coap_msg_args *args) {
         }
     }
 
-    if (args->uri_path) {
-        add_string_opts(&opts, AVS_COAP_OPTION_URI_PATH, args->uri_path);
-    }
+    add_string_opts(&opts, AVS_COAP_OPTION_URI_PATH, args->uri_path);
 
     if (args->accept) {
         ASSERT_OK(avs_coap_options_add_u16(&opts, AVS_COAP_OPTION_ACCEPT,

@@ -28,6 +28,15 @@ else:
     namedtuple = collections.namedtuple
 
 
+class Objlink:
+    def __init__(self, ObjID, ObjInstID):
+        self.ObjID = ObjID
+        self.ObjInstID = ObjInstID
+
+    def __str__(self):
+        return f'{self.ObjID}:{self.ObjInstID}'
+
+
 class SequentialMsgIdGenerator:
     def __init__(self, start_id):
         self.curr_id = start_id
@@ -60,6 +69,10 @@ def get_another_token(token):
     while other == token:
         other = random_stuff(8)
     return other
+
+
+def config_to_dict(config):
+    return eval(config)
 
 
 class OID:

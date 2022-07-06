@@ -59,6 +59,9 @@ class FirmwareUpdate:
         def set_check_marker(self, check_marker):
             self.check_marker = check_marker
 
+        def set_reset_machine(self, reset_machine):
+            self.reset_machine = reset_machine
+
         def set_expect_send_after_state_machine_reset(
                 self, expect_send_after_state_machine_reset):
             self.expect_send_after_state_machine_reset = expect_send_after_state_machine_reset
@@ -79,6 +82,7 @@ class FirmwareUpdate:
         def tearDown(self):
             auto_deregister = getattr(self, 'auto_deregister', True)
             check_marker = getattr(self, 'check_marker', False)
+            reset_machine = getattr(self, 'reset_machine', True)
             expect_send_after_state_machine_reset = getattr(self,
                                                             'expect_send_after_state_machine_reset',
                                                             False)
@@ -96,7 +100,7 @@ class FirmwareUpdate:
                         self.assertEqual(line, b"updated")
                     os.unlink(self.ANJAY_MARKER_FILE)
             finally:
-                if auto_deregister:
+                if reset_machine:
                     # reset the state machine
                     # Write /5/0/1 (Firmware URI)
                     req = Lwm2mWrite(ResPath.FirmwareUpdate.PackageURI, '')
@@ -150,6 +154,7 @@ class FirmwareUpdate:
         RESPONSE_DELAY = 0
         CHUNK_SIZE = sys.maxsize
         ETAGS = False
+        FW_PKG_OPTS = {}
 
         def get_firmware_uri(self):
             return 'http://127.0.0.1:%d%s' % (
@@ -162,10 +167,10 @@ class FirmwareUpdate:
                     with open(os.path.join(self.config.demo_path, self.config.demo_cmd), 'rb') as f:
                         firmware = f.read()
                         self._response_content = make_firmware_package(
-                            firmware)
+                            firmware, **self.FW_PKG_OPTS)
                 else:
                     self._response_content = make_firmware_package(
-                        self.FIRMWARE_SCRIPT_CONTENT)
+                        self.FIRMWARE_SCRIPT_CONTENT, **self.FW_PKG_OPTS)
                 self._response_cv.notify()
 
         def _create_server(self):
@@ -496,6 +501,7 @@ class FirmwareUpdatePackageTest(FirmwareUpdate.Test):
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def runTest(self):
         # Write /5/0/0 (Firmware): script content
@@ -518,6 +524,7 @@ class FirmwareUpdateUriTest(FirmwareUpdate.TestWithHttpServer):
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def runTest(self):
         self.provide_response()
@@ -535,6 +542,7 @@ class FirmwareUpdateStateChangeTest(FirmwareUpdate.TestWithHttpServer):
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def runTest(self):
         self.serv.set_timeout(timeout_s=1)
@@ -587,8 +595,6 @@ class FirmwareUpdateSendStateChangeTest(FirmwareUpdate.TestWithHttpServer):
     def setUp(self):
         super().setUp(minimum_version='1.1', maximum_version='1.1',
                       extra_cmdline_args=['--fw-update-use-send'])
-        self.set_check_marker(False)
-        self.set_auto_deregister(True)
         self.set_expect_send_after_state_machine_reset(True)
 
     def runTest(self):
@@ -804,6 +810,7 @@ class FirmwareUpdateHttpsResumptionTest(FirmwareUpdate.TestWithPartialDownloadAn
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def runTest(self):
         self.provide_response()
@@ -939,6 +946,7 @@ class FirmwareUpdateHttpsOfflineTest(FirmwareUpdate.TestWithPartialDownloadAndRe
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def runTest(self):
         self.provide_response()
@@ -978,6 +986,7 @@ class FirmwareUpdateHttpsTest(FirmwareUpdate.TestWithHttpsServer):
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def runTest(self):
         self.provide_response()
@@ -1140,6 +1149,7 @@ class FirmwareUpdateRestartWithDownloaded(FirmwareUpdate.Test):
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def runTest(self):
         # Write /5/0/0 (Firmware): script content
@@ -1660,6 +1670,7 @@ class FirmwareUpdateCoapTlsTest(
 
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
     def tearDown(self):
         try:
@@ -1688,6 +1699,7 @@ class FirmwareUpdateWeakEtagTest(FirmwareUpdate.TestWithHttpServer):
         super().setUp()
         self.set_check_marker(True)
         self.set_auto_deregister(False)
+        self.set_reset_machine(False)
 
         orig_end_headers = self.http_server.RequestHandlerClass.end_headers
 

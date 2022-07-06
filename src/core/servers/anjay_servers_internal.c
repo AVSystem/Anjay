@@ -133,36 +133,28 @@ static int add_socket_onto_list(AVS_LIST(anjay_socket_entry_t) *tail_ptr,
 }
 
 AVS_LIST(const anjay_socket_entry_t)
-_anjay_collect_socket_entries(anjay_unlocked_t *anjay) {
+_anjay_collect_socket_entries(anjay_unlocked_t *anjay, bool include_offline) {
     AVS_LIST(anjay_socket_entry_t) result = NULL;
     AVS_LIST(anjay_socket_entry_t) *tail_ptr = &result;
 
     anjay_connection_ref_t ref;
     AVS_LIST_FOREACH(ref.server, anjay->servers) {
-        if (!_anjay_server_active(ref.server)) {
-            continue;
-        }
-
         ref.conn_type = ANJAY_CONNECTION_PRIMARY;
         anjay_server_connection_t *conn = _anjay_get_server_connection(ref);
         assert(conn);
-        if (_anjay_connection_is_online(conn)) {
-            {
-                avs_net_socket_t *socket =
-                        _anjay_connection_internal_get_socket(conn);
-                if (socket
-                        && !add_socket_onto_list(
-                                   tail_ptr, socket, conn->transport,
-                                   ref.server->ssid,
-                                   ref.server->registration_info.queue_mode)) {
-                    AVS_LIST_ADVANCE_PTR(&tail_ptr);
-                }
+        avs_net_socket_t *socket = _anjay_connection_internal_get_socket(conn);
+        if (socket && (include_offline || _anjay_socket_is_online(socket))) {
+            if (!add_socket_onto_list(
+                        tail_ptr, socket, conn->transport, ref.server->ssid,
+                        ref.server->registration_info.queue_mode)) {
+                AVS_LIST_ADVANCE_PTR(&tail_ptr);
             }
         }
     }
 
 #ifdef ANJAY_WITH_DOWNLOADER
-    _anjay_downloader_get_sockets(&anjay->downloader, tail_ptr);
+    _anjay_downloader_get_sockets(&anjay->downloader, tail_ptr,
+                                  include_offline);
 #endif // ANJAY_WITH_DOWNLOADER
     return result;
 }
@@ -172,7 +164,8 @@ anjay_get_socket_entries(anjay_t *anjay_locked) {
     AVS_LIST(const anjay_socket_entry_t) result = NULL;
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
     AVS_LIST_CLEAR(&anjay->cached_public_sockets);
-    anjay->cached_public_sockets = _anjay_collect_socket_entries(anjay);
+    anjay->cached_public_sockets =
+            _anjay_collect_socket_entries(anjay, /* include_offline = */ false);
     result = anjay->cached_public_sockets;
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return result;

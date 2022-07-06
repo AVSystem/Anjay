@@ -72,7 +72,8 @@ avs_error_t _anjay_downloader_download(anjay_downloader_t *dl,
  * to @p out_socks.
  */
 int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
-                                  AVS_LIST(anjay_socket_entry_t) *out_socks);
+                                  AVS_LIST(anjay_socket_entry_t) *out_socks,
+                                  bool include_offline);
 
 /**
  * @returns @li 0 if @p socket was a downloaded socket and the incoming packet

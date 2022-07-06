@@ -183,7 +183,8 @@ find_ctx_ptr_by_socket(anjay_downloader_t *dl, avs_net_socket_t *socket) {
 }
 
 int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
-                                  AVS_LIST(anjay_socket_entry_t) *out_socks) {
+                                  AVS_LIST(anjay_socket_entry_t) *out_socks,
+                                  bool include_offline) {
     AVS_LIST(anjay_socket_entry_t) sockets = NULL;
     AVS_LIST(anjay_download_ctx_t) dl_ctx;
 
@@ -192,7 +193,7 @@ int _anjay_downloader_get_sockets(anjay_downloader_t *dl,
             continue;
         }
         avs_net_socket_t *socket = get_ctx_socket(dl_ctx);
-        if (_anjay_socket_is_online(socket)) {
+        if (socket && (include_offline || _anjay_socket_is_online(socket))) {
             AVS_LIST(anjay_socket_entry_t) elem =
                     AVS_LIST_NEW_ELEMENT(anjay_socket_entry_t);
             if (!elem) {

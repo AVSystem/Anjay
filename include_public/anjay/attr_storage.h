@@ -83,15 +83,7 @@ avs_error_t anjay_attr_storage_persist(anjay_t *anjay,
  * @param in_stream Stream to read from.
  * @returns AVS_OK in case of success, or an error code.
  *
- * <strong>NOTE:</strong> For historical reasons, this function behaves
- * differently than all other <c>*_restore()</c> functions - on failed
- * restoration, the storage is cleared, rather than left untouched.
- *
- * Relying on this behaviour is <strong>DEPRECATED</strong>. Future versions
- * of Anjay may change the semantics of this function so that it retains the
- * contents of Attribute Storage on failure. It is <strong>RECOMMENDED</strong>
- * that any new code involving this function is written to work properly with
- * both semantics.
+ * NOTE: if restorations fails, then the Attribute Storage will be untouched.
  */
 avs_error_t anjay_attr_storage_restore(anjay_t *anjay, avs_stream_t *in_stream);
 

@@ -121,11 +121,32 @@ class CleanupList(list):
 class Lwm2mDmOperations(Lwm2mAsserts):
     DEFAULT_OPERATION_TIMEOUT_S = 5
 
-    def _perform_action(self, server, request, expected_response, timeout_s=None):
+    class ResponseFilter:
+        def __init__(self, *filtered_types):
+            self.filtered_types = filtered_types
+            self.filtered_messages = []
+
+        def add_if_filtered(self, message):
+            if type(message) in self.filtered_types:
+                self.filtered_messages.append(message)
+                return True
+            return False
+
+    def _perform_action(self, server, request, expected_response, timeout_s=None, response_filter: ResponseFilter=None):
         server.send(request)
         if timeout_s is None:
             timeout_s = self.DEFAULT_OPERATION_TIMEOUT_S
+
+        begin = time.time()
         res = server.recv(timeout_s=timeout_s)
+
+        if response_filter is not None:
+            while response_filter.add_if_filtered(res):
+                timeout_left = timeout_s - (time.time() - begin)
+                if timeout_left < 0:
+                    self.fail('No appropriate response to action in %d seconds' % timeout_s)
+                res = server.recv(timeout_s=timeout_left)
+
         self.assertMsgEqual(expected_response, res)
         return res
 
@@ -346,6 +367,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                        minimum_version,
                        maximum_version,
                        fw_updated_marker_path,
+                       tls_version='TLSv1.2',
                        ciphersuites=(0xC030, 0xC0A8, 0xC0AE)):
         """
         Helper method for easy generation of demo executable arguments.
@@ -371,6 +393,8 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
                 '--security-mode', security_mode]
         if fw_updated_marker_path is not None:
             args += ['--fw-updated-marker-path', fw_updated_marker_path]
+        if tls_version is not None:
+            args += ['--tls-version', tls_version]
         if ciphersuites is not None:
             args += ['--ciphersuites', ','.join(map(hex, ciphersuites))]
 

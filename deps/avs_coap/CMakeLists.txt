@@ -58,7 +58,7 @@ if(WITH_AVS_COAP_STREAMING_API)
 endif()
 
 if(WITH_AVS_COAP_OBSERVE_PERSISTENCE)
-    list(APPEND AVS_COMMONS_REQUIRED_COMPONENTS avs_persistence avs_rbtree)
+    list(APPEND AVS_COMMONS_REQUIRED_COMPONENTS avs_persistence)
 endif()
 
 if(WITH_TEST)

@@ -44,6 +44,7 @@ IGNORE_PATTERNS = list(map(re.compile, [
     '^examples/',
     '__pycache__',
     '^tests/fuzz/test_cases/',
+    '^tools/provisioning-tool/configs/',
     '^valgrind_test\.supp$',
     'conditional_headers_whitelist\.json$',
     'deps/avs_coap',

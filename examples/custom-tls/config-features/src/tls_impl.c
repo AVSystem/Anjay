@@ -415,6 +415,8 @@ configure_ciphersuites(tls_socket_impl_t *sock,
     }
     SSL_free(dummy_ssl);
     SSL_CTX_set_cipher_list(sock->ctx, cipher_list);
+    // NOTE: Configuring the set of supported new-style ciphersuites as defined
+    // for TLS 1.3 are not supported by this function.
     return AVS_OK;
 }
 

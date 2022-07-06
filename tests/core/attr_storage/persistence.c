@@ -162,7 +162,7 @@ static const char PERSIST_TEST_DATA[] =
         /* greater than */ "\x3F\xF0\x00\x00\x00\x00\x00\x00"
            /* less than */ "\xBF\xF0\x00\x00\x00\x00\x00\x00"
                 /* step */ "\x7F\xF8\x00\x00\x00\x00\x00\x00"
-                /* edge */ PERSISTED_EDGE("\xFF") 
+                /* edge */ PERSISTED_EDGE("\xFF")
         "\x01"                              // confirmable
         "\x00\x07"                          // SSID 7
         "\x00\x00\x00\x01"                  // min period
@@ -636,11 +636,13 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_no_present_resources) {
             (const anjay_mock_dm_res_entry_t[]) { { 3, ANJAY_DM_RES_RW,
                                                     ANJAY_DM_RES_ABSENT },
                                                   ANJAY_MOCK_DM_RES_END });
+#ifdef ANJAY_WITH_LWM2M11
     _anjay_mock_dm_expect_list_resources(
             anjay, &OBJ42, 1, 0,
             (const anjay_mock_dm_res_entry_t[]) { { 3, ANJAY_DM_RES_RW,
                                                     ANJAY_DM_RES_ABSENT },
                                                   ANJAY_MOCK_DM_RES_END });
+#endif // ANJAY_WITH_LWM2M11
     _anjay_mock_dm_expect_list_instances(
             anjay, &OBJ517, 0, (const anjay_iid_t[]) { 516, ANJAY_ID_INVALID });
     _anjay_mock_dm_expect_list_resources(
@@ -648,11 +650,13 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_no_present_resources) {
             (const anjay_mock_dm_res_entry_t[]) { { 515, ANJAY_DM_RES_RW,
                                                     ANJAY_DM_RES_ABSENT },
                                                   ANJAY_MOCK_DM_RES_END });
+#ifdef ANJAY_WITH_LWM2M11
     _anjay_mock_dm_expect_list_resources(
             anjay, &OBJ517, 516, 0,
             (const anjay_mock_dm_res_entry_t[]) { { 515, ANJAY_DM_RES_RW,
                                                     ANJAY_DM_RES_ABSENT },
                                                   ANJAY_MOCK_DM_RES_END });
+#endif // ANJAY_WITH_LWM2M11
     AVS_UNIT_ASSERT_SUCCESS(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
@@ -705,24 +709,46 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_broken_stream) {
     INSTALL_FAKE_OBJECT(42);
     INSTALL_FAKE_OBJECT(517);
 
-    // this will be cleared
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     write_inst_attrs(anjay_unlocked, 517, 518, 519,
                      &(const anjay_dm_oi_attributes_t) {
                          .min_period = 520,
-                         .max_period = 521
+                         .max_period = 521,
+                         .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+                         .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
 #ifdef ANJAY_WITH_CON_ATTR
-                         ,
-                         .con = ANJAY_DM_CON_ATTR_NONE
+                         .con = ANJAY_DM_CON_ATTR_NONE,
 #endif // ANJAY_WITH_CON_ATTR
                      });
     ANJAY_MUTEX_UNLOCK(anjay);
+
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ517, 0, (const anjay_iid_t[]) { 518, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(anjay, &OBJ517, 518, 0,
+                                         (const anjay_mock_dm_res_entry_t[]) {
+                                                 ANJAY_MOCK_DM_RES_END });
 
     AVS_UNIT_ASSERT_FAILED(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    AVS_UNIT_ASSERT_NULL(anjay_unlocked->attr_storage.objects);
+    // Previously set attributes should remain untouched
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(anjay_unlocked->attr_storage.objects),
+                          1);
+    assert_object_equal(
+            anjay_unlocked->attr_storage.objects,
+            test_object_entry(
+                    517, NULL,
+                    test_instance_entry(
+                            518,
+                            test_default_attrs(519,
+                                               520,
+                                               521,
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+                                               ANJAY_DM_CON_ATTR_NONE),
+                            NULL),
+                    NULL));
     ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
@@ -784,24 +810,48 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_insane_data) {
     INSTALL_FAKE_OBJECT(42);
     INSTALL_FAKE_OBJECT(517);
 
-    // this will be cleared
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     write_inst_attrs(anjay_unlocked, 517, 518, 519,
                      &(const anjay_dm_oi_attributes_t) {
                          .min_period = 520,
-                         .max_period = 521
+                         .max_period = 521,
+                         .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+                         .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
 #ifdef ANJAY_WITH_CON_ATTR
-                         ,
-                         .con = ANJAY_DM_CON_ATTR_NONE
+                         .con = ANJAY_DM_CON_ATTR_NONE,
 #endif // ANJAY_WITH_CON_ATTR
                      });
     ANJAY_MUTEX_UNLOCK(anjay);
+
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ517, 0, (const anjay_iid_t[]) { 518, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(
+            anjay, &OBJ517, 518, 0,
+            (const anjay_mock_dm_res_entry_t[]) { { 519, ANJAY_DM_RES_RW,
+                                                    ANJAY_DM_RES_PRESENT },
+                                                  ANJAY_MOCK_DM_RES_END });
 
     AVS_UNIT_ASSERT_FAILED(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    AVS_UNIT_ASSERT_NULL(anjay_unlocked->attr_storage.objects);
+    // Previously set attributes should remain untouched
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(anjay_unlocked->attr_storage.objects),
+                          1);
+    assert_object_equal(
+            anjay_unlocked->attr_storage.objects,
+            test_object_entry(
+                    517, NULL,
+                    test_instance_entry(
+                            518,
+                            test_default_attrs(519,
+                                               520,
+                                               521,
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+                                               ANJAY_DM_CON_ATTR_NONE),
+                            NULL),
+                    NULL));
     ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }
@@ -918,24 +968,46 @@ AVS_UNIT_TEST(attr_storage_persistence, restore_duplicate_oid) {
     RESTORE_TEST_INIT(TEST_DATA_DUPLICATE_OID);
     INSTALL_FAKE_OBJECT(4);
 
-    // this will be cleared
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     write_inst_attrs(anjay_unlocked, 4, 5, 6,
                      &(const anjay_dm_oi_attributes_t) {
                          .min_period = 7,
-                         .max_period = 8
+                         .max_period = 8,
+                         .min_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
+                         .max_eval_period = ANJAY_ATTRIB_INTEGER_NONE,
 #ifdef ANJAY_WITH_CON_ATTR
-                         ,
-                         .con = ANJAY_DM_CON_ATTR_NONE
+                         .con = ANJAY_DM_CON_ATTR_NONE,
 #endif // ANJAY_WITH_CON_ATTR
                      });
     ANJAY_MUTEX_UNLOCK(anjay);
+
+    _anjay_mock_dm_expect_list_instances(
+            anjay, &OBJ4, 0, (const anjay_iid_t[]) { 5, ANJAY_ID_INVALID });
+    _anjay_mock_dm_expect_list_resources(anjay, &OBJ4, 5, 0,
+                                         (const anjay_mock_dm_res_entry_t[]) {
+                                                 ANJAY_MOCK_DM_RES_END });
 
     AVS_UNIT_ASSERT_FAILED(
             anjay_attr_storage_restore(anjay, (avs_stream_t *) &inbuf));
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
-    AVS_UNIT_ASSERT_NULL(anjay_unlocked->attr_storage.objects);
+    // Previously set attributes should remain untouched
+    AVS_UNIT_ASSERT_EQUAL(AVS_LIST_SIZE(anjay_unlocked->attr_storage.objects),
+                          1);
+    assert_object_equal(
+            anjay_unlocked->attr_storage.objects,
+            test_object_entry(
+                    4, NULL,
+                    test_instance_entry(
+                            5,
+                            test_default_attrs(6,
+                                               7,
+                                               8,
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+                                               ANJAY_ATTRIB_INTEGER_NONE,
+                                               ANJAY_DM_CON_ATTR_NONE),
+                            NULL),
+                    NULL));
     ANJAY_MUTEX_UNLOCK(anjay);
     PERSISTENCE_TEST_FINISH;
 }

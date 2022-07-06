@@ -951,9 +951,7 @@ avs_error_t _anjay_dm_transaction_begin(anjay_unlocked_t *anjay) {
     dm_log(TRACE, _("transaction_begin"));
     avs_error_t err = AVS_OK;
 #ifdef ANJAY_WITH_ATTR_STORAGE
-    if (_anjay_attr_storage_transaction_begin(anjay)) {
-        err = avs_errno(AVS_ENOMEM);
-    }
+    err = _anjay_attr_storage_transaction_begin(anjay);
 #endif // ANJAY_WITH_ATTR_STORAGE
     if (avs_is_ok(err)) {
         ++anjay->transaction_state.depth;
@@ -1048,9 +1046,9 @@ int _anjay_dm_transaction_finish_without_validation(anjay_unlocked_t *anjay,
     }
 #ifdef ANJAY_WITH_ATTR_STORAGE
     if (!final_result) {
-        final_result = _anjay_attr_storage_transaction_commit(anjay);
+        _anjay_attr_storage_transaction_commit(anjay);
     } else {
-        _anjay_attr_storage_transaction_rollback(anjay);
+        (void) _anjay_attr_storage_transaction_rollback(anjay);
     }
 #endif // ANJAY_WITH_ATTR_STORAGE
     return final_result;

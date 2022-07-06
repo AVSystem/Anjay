@@ -336,10 +336,30 @@ ways:
         case AVS_NET_SSL_VERSION_TLSv1_2:
             SSL_CTX_set_min_proto_version(sock->ctx, TLS1_2_VERSION);
             return AVS_OK;
+        case AVS_NET_SSL_VERSION_TLSv1_3:
+            SSL_CTX_set_min_proto_version(sock->ctx, TLS1_3_VERSION);
+            return AVS_OK;
         default:
             return avs_errno(AVS_ENOTSUP);
         }
     }
+
+.. note::
+
+    This implementation provides basic support for TLS 1.3. However, please note
+    that proper TLS 1.3 support may require additional adjustments, such as
+    :ref:`configuring ciphersuites differently <custom-tls-tls13-ciphersuites>`.
+    Depending on the underlying (D)TLS library, session resumption support may
+    also need to be implemented in a different way.
+
+    (D)TLS 1.3 support is not addressed thoroughly in this tutorial due to low
+    level of support for TLS 1.3 and especially DTLS 1.3 in mainstream
+    implementations at the time of writing. Please refer to the reference
+    implementations (`avs_mbedtls_socket.c
+    <https://github.com/AVSystem/avs_commons/blob/master/src/net/mbedtls/avs_mbedtls_socket.c>`__
+    and `avs_openssl.c
+    <https://github.com/AVSystem/avs_commons/blob/master/src/net/openssl/avs_openssl.c>`__)
+    for examples.
 
 Updates to the handshake process
 --------------------------------
@@ -545,7 +565,7 @@ Specifically, the following topics were not covered:
 * **DTLS Connection ID extension is not supported.** This is currently not
   supported in OpenSSL at all, which makes this topic infeasible to cover in
   this tutorial. Please take a look at the `avs_mbedtls_socket.c
-  <https://github.com/AVSystem/avs_commons/blob/master/src/net/mbedtls/avs_mbedtls_socket.c>`_
+  <https://github.com/AVSystem/avs_commons/blob/master/src/net/mbedtls/avs_mbedtls_socket.c>`__
   file in avs_commons to see how it can be implemented using Mbed TLS - the
   relevant parts of the code can be found by searching for usages of the
   ``use_connection_id`` field.
@@ -558,7 +578,7 @@ Specifically, the following topics were not covered:
   It is expected that if an alert code is received during the handshake
   procedure, the alert code shall be wrapped into an ``avs_error_t`` object
   using `avs_net_ssl_alert()
-  <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_socket.h#L368>`_
+  <https://github.com/AVSystem/avs_commons/blob/master/include_public/avsystem/commons/avs_socket.h#L358>`_
   and returned as a result from the ``connect`` operation. Alert handling may
   also be added to the ``receive`` operation as well.
 
@@ -577,7 +597,7 @@ Specifically, the following topics were not covered:
   :ref:`custom-tls-api-certificates-basic-limitations` sections of the
   :doc:`CustomTLS-CertificatesBasic` tutorial. Please take a look at the
   ``rebuild_client_cert_chain()`` functions in the `avs_mbedtls_socket.c
-  <https://github.com/AVSystem/avs_commons/blob/master/src/net/mbedtls/avs_mbedtls_socket.c#L1367>`__
+  <https://github.com/AVSystem/avs_commons/blob/master/src/net/mbedtls/avs_mbedtls_socket.c#L1380>`__
   and `avs_openssl.c
-  <https://github.com/AVSystem/avs_commons/blob/master/src/net/openssl/avs_openssl.c#L1039>`_
+  <https://github.com/AVSystem/avs_commons/blob/master/src/net/openssl/avs_openssl.c#L1148>`__
   files in avs_commons for examples on how to implement this feature if needed.

@@ -489,9 +489,12 @@ class DtlsBootstrap:
         # TLS_PSK_WITH_AES_256_CCM_8, supported by mbed TLS and OpenSSL, but not by pymbedtls
         UNSUPPORTED_CIPHER = 0xC0A9
 
-        def setUp(self):
-            super().setUp(servers=[Lwm2mServer(coap.DtlsServer(psk_key=self.PSK_KEY,
-                                                               psk_identity=self.PSK_IDENTITY))])
+        def setUp(self, **kwargs):
+            if 'servers' not in kwargs:
+                kwargs = kwargs.copy()
+                kwargs['servers'] = [Lwm2mServer(
+                    coap.DtlsServer(psk_key=self.PSK_KEY, psk_identity=self.PSK_IDENTITY))]
+            super().setUp(**kwargs)
 
 
 class DtlsTlsCiphersuitesSingleSupportedCipher(DtlsBootstrap.Test):
@@ -884,6 +887,35 @@ class BootstrapCheckOngoingRegistrationsWithLegacyServerInitiated(BootstrapTest.
         self.bootstrap_server.send(req)
         self.assertMsgEqual(Lwm2mDeleted.matching(req)(),
                             self.bootstrap_server.recv())
+        self.assertTrue(self.ongoing_registration_exists())
+
+    def tearDown(self):
+        super().tearDown(auto_deregister=False)
+
+
+class BootstrapCheckOngoingRegistrationsWithoutLegacyServerInitiated(BootstrapTest.Test):
+    def setUp(self):
+        super().setUp(maximum_version='1.1', legacy_server_initiated_bootstrap_allowed=False)
+
+    def runTest(self):
+        # Client-Initiated Bootstrap
+        self.assertDemoRequestsBootstrap(
+            preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
+        self.assertTrue(self.ongoing_registration_exists())
+        self.add_server(server_iid=1, security_iid=2,
+                        server_uri='coap://127.0.0.1:%d' % self.serv.get_listen_port())
+        self.perform_bootstrap_finish()
+
+        # Registration
+        pkt = self.assertDemoRegisters(version='1.1', respond=False)
+        self.assertTrue(self.ongoing_registration_exists())
+        self.serv.send(Lwm2mCreated.matching(pkt)(location='/rd/demo'))
+        self.assertFalse(self.ongoing_registration_exists())
+
+        # Server-Initiated Bootstrap
+        self.execute_resource(self.serv, OID.Server, 1, RID.Server.RequestBootstrapTrigger)
+        self.assertDemoRequestsBootstrap(
+            preferred_content_format=coap.ContentFormat.APPLICATION_LWM2M_SENML_CBOR)
         self.assertTrue(self.ongoing_registration_exists())
 
     def tearDown(self):

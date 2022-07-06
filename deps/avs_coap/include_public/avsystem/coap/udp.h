@@ -185,6 +185,30 @@ avs_coap_udp_ctx_create(avs_sched_t *sched,
 int avs_coap_udp_ctx_set_forced_incoming_mtu(avs_coap_ctx_t *ctx,
                                              size_t forced_incoming_mtu);
 
+/**
+ * Sets CoAP/UDP context transmission params.
+ *
+ * @param ctx    CoAP/UDP context to operate on.
+ * @param params New UDP transmission params. Passing <c>NULL</c>
+ *               will cause default transmission params to be set.
+ *
+ * @returns 0 on success, negative value if passed context is not
+ *          a CoAP/UDP one or transmission params are invalid.
+ */
+int avs_coap_udp_ctx_set_tx_params(avs_coap_ctx_t *ctx,
+                                   const avs_coap_udp_tx_params_t *tx_params);
+
+/**
+ * Gets CoAP/UDP context transmission params.
+ *
+ * @param ctx CoAP/UDP context to operate on.
+ *
+ * @returns UDP transmission params on success,
+ *          <c>NULL</c> on failure.
+ */
+const avs_coap_udp_tx_params_t *
+avs_coap_udp_ctx_get_tx_params(avs_coap_ctx_t *ctx);
+
 #endif // WITH_AVS_COAP_UDP
 
 #ifdef __cplusplus

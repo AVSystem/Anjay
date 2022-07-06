@@ -68,77 +68,36 @@ server_persistence_test_env_destroy(server_persistence_test_env_t **env) {
 static void assert_instances_equal(const server_instance_t *a,
                                    const server_instance_t *b) {
     AVS_UNIT_ASSERT_EQUAL(a->iid, b->iid);
-    AVS_UNIT_ASSERT_EQUAL(a->has_binding, b->has_binding);
-    if (a->has_binding) {
-        AVS_UNIT_ASSERT_EQUAL_STRING(a->binding.data, b->binding.data);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
-    if (a->has_ssid) {
-        AVS_UNIT_ASSERT_EQUAL(a->ssid, b->ssid);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_lifetime, b->has_lifetime);
-    if (a->has_lifetime) {
-        AVS_UNIT_ASSERT_EQUAL(a->lifetime, b->lifetime);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_default_min_period, b->has_default_min_period);
-    if (a->has_default_min_period) {
-        AVS_UNIT_ASSERT_EQUAL(a->default_min_period, b->default_min_period);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_default_max_period, b->has_default_max_period);
-    if (a->has_default_max_period) {
-        AVS_UNIT_ASSERT_EQUAL(a->default_max_period, b->default_max_period);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_disable_timeout, b->has_disable_timeout);
-    if (a->has_disable_timeout) {
-        AVS_UNIT_ASSERT_EQUAL(a->disable_timeout, b->disable_timeout);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_notification_storing,
-                          b->has_notification_storing);
-    if (a->has_notification_storing) {
-        AVS_UNIT_ASSERT_EQUAL(a->notification_storing, b->notification_storing);
-    }
+    AVS_UNIT_ASSERT_EQUAL_STRING(a->binding.data, b->binding.data);
+    AVS_UNIT_ASSERT_EQUAL(a->ssid, b->ssid);
+    AVS_UNIT_ASSERT_EQUAL(a->lifetime, b->lifetime);
+    AVS_UNIT_ASSERT_EQUAL(a->default_min_period, b->default_min_period);
+    AVS_UNIT_ASSERT_EQUAL(a->default_max_period, b->default_max_period);
+    AVS_UNIT_ASSERT_EQUAL(a->disable_timeout, b->disable_timeout);
+    AVS_UNIT_ASSERT_EQUAL(a->notification_storing, b->notification_storing);
 #ifdef ANJAY_WITH_LWM2M11
-    AVS_UNIT_ASSERT_EQUAL(a->has_last_alert, b->has_last_alert);
-    if (a->has_last_alert) {
-        AVS_UNIT_ASSERT_EQUAL(a->last_alert, b->last_alert);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_last_bootstrapped_timestamp,
-                          b->has_last_bootstrapped_timestamp);
-    if (a->has_last_bootstrapped_timestamp) {
-        AVS_UNIT_ASSERT_EQUAL(a->last_bootstrapped_timestamp,
-                              b->last_bootstrapped_timestamp);
-    }
+    AVS_UNIT_ASSERT_EQUAL(a->last_alert, b->last_alert);
+    AVS_UNIT_ASSERT_EQUAL(a->last_bootstrapped_timestamp,
+                          b->last_bootstrapped_timestamp);
     AVS_UNIT_ASSERT_EQUAL(a->bootstrap_on_registration_failure,
                           b->bootstrap_on_registration_failure);
-    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_retry_count,
-                          b->has_server_communication_retry_count);
-    if (a->has_server_communication_retry_count) {
-        AVS_UNIT_ASSERT_EQUAL(a->server_communication_retry_count,
-                              b->server_communication_retry_count);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_retry_timer,
-                          b->has_server_communication_retry_timer);
-    if (a->has_server_communication_retry_timer) {
-        AVS_UNIT_ASSERT_EQUAL(a->server_communication_retry_timer,
-                              b->server_communication_retry_timer);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_sequence_retry_count,
-                          b->has_server_communication_sequence_retry_count);
-    if (a->has_server_communication_sequence_retry_count) {
-        AVS_UNIT_ASSERT_EQUAL(a->server_communication_sequence_retry_count,
-                              b->server_communication_sequence_retry_count);
-    }
-    AVS_UNIT_ASSERT_EQUAL(a->has_server_communication_sequence_delay_timer,
-                          b->has_server_communication_sequence_delay_timer);
-    if (a->has_server_communication_sequence_delay_timer) {
-        AVS_UNIT_ASSERT_EQUAL(a->server_communication_sequence_delay_timer,
-                              b->server_communication_sequence_delay_timer);
-    }
+    AVS_UNIT_ASSERT_EQUAL(a->server_communication_retry_count,
+                          b->server_communication_retry_count);
+    AVS_UNIT_ASSERT_EQUAL(a->server_communication_retry_timer,
+                          b->server_communication_retry_timer);
+    AVS_UNIT_ASSERT_EQUAL(a->server_communication_sequence_retry_count,
+                          b->server_communication_sequence_retry_count);
+    AVS_UNIT_ASSERT_EQUAL(a->server_communication_sequence_delay_timer,
+                          b->server_communication_sequence_delay_timer);
     AVS_UNIT_ASSERT_EQUAL(a->preferred_transport, b->preferred_transport);
 #    ifdef ANJAY_WITH_SEND
     AVS_UNIT_ASSERT_EQUAL(a->mute_send, b->mute_send);
 #    endif // ANJAY_WITH_SEND
-#endif     // ANJAY_WITH_LWM2M11
+
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(a->present_resources); ++i) {
+        AVS_UNIT_ASSERT_EQUAL(a->present_resources[i], b->present_resources[i]);
+    }
+#endif // ANJAY_WITH_LWM2M11
 }
 
 AVS_UNIT_TEST(server_persistence, empty_store_restore) {
@@ -183,17 +142,28 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore_version_1) {
         .default_min_period = -1,
         .default_max_period = -1,
         .disable_timeout = -1,
-        .has_binding = true,
         .binding = {
             .data = "UQ",
         },
         .notification_storing = true,
-        .has_ssid = true,
-        .has_lifetime = true,
-        .has_notification_storing = true,
 #ifdef ANJAY_WITH_LWM2M11
-        .bootstrap_on_registration_failure = true
+        .bootstrap_on_registration_failure = true,
 #endif // ANJAY_WITH_LWM2M11
+        .present_resources = {
+            [SERV_RES_SSID] = true,
+            [SERV_RES_LIFETIME] = true,
+            [SERV_RES_DISABLE] = true,
+            [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE] = true,
+            [SERV_RES_BINDING] = true,
+            [SERV_RES_REGISTRATION_UPDATE_TRIGGER] = true,
+#ifdef ANJAY_WITH_LWM2M11
+            [SERV_RES_BOOTSTRAP_REQUEST_TRIGGER] = true,
+            [SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE] = true,
+#    ifdef ANJAY_WITH_SEND
+            [SERV_RES_MUTE_SEND] = true
+#    endif // ANJAY_WITH_SEND
+#endif     // ANJAY_WITH_LWM2M11
+        }
     };
     assert_instances_equal(&expected_server_instance,
                            env->restored_repr->instances);
@@ -228,15 +198,11 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
     AVS_UNIT_ASSERT_EQUAL(1, AVS_LIST_SIZE(env->restored_repr->instances));
     const server_instance_t expected_server_instance = {
         .iid = 1,
-        .has_binding = true,
         .binding = {
             .data = "UQ",
         },
-        .has_ssid = true,
         .ssid = 42,
-        .has_lifetime = true,
         .lifetime = 9001,
-        .has_notification_storing = true,
         .notification_storing = true,
 #ifdef ANJAY_WITH_LWM2M11
         .bootstrap_on_registration_failure = false,
@@ -244,11 +210,27 @@ AVS_UNIT_TEST(server_persistence, nonempty_store_restore) {
 #    ifdef ANJAY_WITH_SEND
         .mute_send = true,
 #    endif // ANJAY_WITH_SEND
-        .has_server_communication_sequence_retry_count = true,
         .server_communication_sequence_retry_count = 2,
-        .has_server_communication_sequence_delay_timer = true,
-        .server_communication_sequence_delay_timer = 10
+        .server_communication_sequence_delay_timer = 10,
 #endif // ANJAY_WITH_LWM2M11
+        .present_resources = {
+            [SERV_RES_SSID] = true,
+            [SERV_RES_LIFETIME] = true,
+            [SERV_RES_DISABLE] = true,
+            [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE] = true,
+            [SERV_RES_BINDING] = true,
+            [SERV_RES_REGISTRATION_UPDATE_TRIGGER] = true,
+#ifdef ANJAY_WITH_LWM2M11
+            [SERV_RES_BOOTSTRAP_REQUEST_TRIGGER] = true,
+            [SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE] = true,
+            [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT] = true,
+            [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER] = true,
+            [SERV_RES_PREFERRED_TRANSPORT] = true,
+#    ifdef ANJAY_WITH_SEND
+            [SERV_RES_MUTE_SEND] = true
+#    endif // ANJAY_WITH_SEND
+#endif     // ANJAY_WITH_LWM2M11
+        }
     };
     assert_instances_equal(&expected_server_instance,
                            env->restored_repr->instances);

@@ -159,7 +159,6 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
             ac1,
             _anjay_access_control_create_missing_ac_instance(
-                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj1->oid,
                         .iid = ANJAY_ID_INVALID
@@ -168,7 +167,6 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
             ac1,
             _anjay_access_control_create_missing_ac_instance(
-                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj2->oid,
                         .iid = ANJAY_ID_INVALID
@@ -177,7 +175,6 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
             ac2,
             _anjay_access_control_create_missing_ac_instance(
-                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj1->oid,
                         .iid = ANJAY_ID_INVALID
@@ -186,7 +183,6 @@ AVS_UNIT_TEST(access_control_persistence, normal_usage) {
     AVS_UNIT_ASSERT_SUCCESS(_anjay_access_control_add_instance(
             ac2,
             _anjay_access_control_create_missing_ac_instance(
-                    ANJAY_ACCESS_LIST_OWNER_BOOTSTRAP,
                     &(const acl_target_t) {
                         .oid = mock_obj2->oid,
                         .iid = ANJAY_ID_INVALID

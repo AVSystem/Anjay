@@ -47,7 +47,7 @@
 VISIBILITY_SOURCE_BEGIN
 
 #ifndef ANJAY_VERSION
-#    define ANJAY_VERSION "3.0.0"
+#    define ANJAY_VERSION "3.1.0"
 #endif // ANJAY_VERSION
 
 #ifdef ANJAY_WITH_LWM2M11
@@ -116,9 +116,6 @@ static int init_anjay(anjay_unlocked_t *anjay,
 #endif // ANJAY_WITH_BOOTSTRAP
 
     anjay->dtls_version = config->dtls_version;
-    if (anjay->dtls_version == AVS_NET_SSL_VERSION_DEFAULT) {
-        anjay->dtls_version = AVS_NET_SSL_VERSION_TLSv1_2;
-    }
 
     if (!config->endpoint_name) {
         anjay_log(ERROR, _("endpoint name must not be null"));
@@ -147,6 +144,7 @@ static int init_anjay(anjay_unlocked_t *anjay,
         anjay->udp_tx_params =
                 (avs_coap_udp_tx_params_t) ANJAY_COAP_DEFAULT_UDP_TX_PARAMS;
     }
+    anjay->udp_exchange_timeout = AVS_COAP_DEFAULT_EXCHANGE_MAX_TIME;
     if (config->msg_cache_size) {
         anjay->udp_response_cache =
                 avs_coap_udp_response_cache_create(config->msg_cache_size);
@@ -200,6 +198,7 @@ static int init_anjay(anjay_unlocked_t *anjay,
         anjay->coap_tcp_request_timeout =
                 ANJAY_DEFAULT_COAP_TCP_REQUEST_TIMEOUT;
     }
+    anjay->tcp_exchange_timeout = AVS_COAP_DEFAULT_EXCHANGE_MAX_TIME;
 #    endif // WITH_AVS_COAP_TCP
 #endif     // ANJAY_WITH_LWM2M11
 
@@ -1304,6 +1303,36 @@ avs_error_t _anjay_persistence_dm_r_attributes(avs_persistence_context_t *ctx,
 #endif /* (defined(ANJAY_WITH_CORE_PERSISTENCE) &&       \
           defined(ANJAY_WITH_OBSERVATION_ATTRIBUTES)) || \
           defined(ANJAY_WITH_ATTR_STORAGE) */
+
+avs_error_t anjay_update_dtls_handshake_timeouts(
+        anjay_t *anjay_locked,
+        avs_net_dtls_handshake_timeouts_t dtls_handshake_timeouts) {
+    avs_error_t err = avs_errno(AVS_EINVAL);
+
+    ANJAY_MUTEX_LOCK(anjay, anjay_locked);
+
+    anjay->udp_dtls_hs_tx_params = dtls_handshake_timeouts;
+
+    AVS_LIST(const anjay_socket_entry_t) socket_entries =
+            _anjay_collect_socket_entries(anjay, /* include_offline = */ true);
+
+    avs_net_socket_opt_value_t value;
+    value.dtls_handshake_timeouts = dtls_handshake_timeouts;
+
+    AVS_LIST_CLEAR(&socket_entries) {
+        if (socket_entries->transport == ANJAY_SOCKET_TRANSPORT_UDP) {
+            avs_net_socket_set_opt(socket_entries->socket,
+                                   AVS_NET_SOCKET_OPT_DTLS_HANDSHAKE_TIMEOUTS,
+                                   value);
+        }
+    }
+
+    err = AVS_OK;
+
+    ANJAY_MUTEX_UNLOCK(anjay_locked);
+
+    return err;
+}
 
 #ifdef ANJAY_TEST
 #    include "tests/core/anjay.c"

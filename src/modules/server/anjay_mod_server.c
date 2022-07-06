@@ -28,6 +28,92 @@
 
 VISIBILITY_SOURCE_BEGIN
 
+static const struct {
+    server_rid_t rid;
+    anjay_dm_resource_kind_t kind;
+} SERVER_RESOURCE_INFO[] = {
+    {
+        .rid = SERV_RES_SSID,
+        .kind = ANJAY_DM_RES_R
+    },
+    {
+        .rid = SERV_RES_LIFETIME,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_DEFAULT_MIN_PERIOD,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_DEFAULT_MAX_PERIOD,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_DISABLE,
+        .kind = ANJAY_DM_RES_E
+    },
+    {
+        .rid = SERV_RES_DISABLE_TIMEOUT,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_BINDING,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_REGISTRATION_UPDATE_TRIGGER,
+        .kind = ANJAY_DM_RES_E
+    },
+#    ifdef ANJAY_WITH_LWM2M11
+    {
+        .rid = SERV_RES_BOOTSTRAP_REQUEST_TRIGGER,
+        .kind = ANJAY_DM_RES_E
+    },
+    {
+        .rid = SERV_RES_TLS_DTLS_ALERT_CODE,
+        .kind = ANJAY_DM_RES_R
+    },
+    {
+        .rid = SERV_RES_LAST_BOOTSTRAPPED,
+        .kind = ANJAY_DM_RES_R
+    },
+    {
+        .rid = SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE,
+        .kind = ANJAY_DM_RES_R
+    },
+    {
+        .rid = SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER,
+        .kind = ANJAY_DM_RES_RW
+    },
+    {
+        .rid = SERV_RES_PREFERRED_TRANSPORT,
+        .kind = ANJAY_DM_RES_RW
+    },
+#        ifdef ANJAY_WITH_SEND
+    {
+        .rid = SERV_RES_MUTE_SEND,
+        .kind = ANJAY_DM_RES_RW
+    },
+#        endif // ANJAY_WITH_SEND
+#    endif     // ANJAY_WITH_LWM2M11
+};
+
 static inline server_instance_t *find_instance(server_repr_t *repr,
                                                anjay_iid_t iid) {
     if (!repr) {
@@ -105,60 +191,77 @@ static int add_instance(server_repr_t *repr,
             AVS_LIST_CLEAR(&new_instance);
             return -1;
         }
-        new_instance->has_binding = true;
+        new_instance->present_resources[SERV_RES_BINDING] = true;
     }
     new_instance->iid = *inout_iid;
-    new_instance->has_ssid = true;
+    new_instance->present_resources[SERV_RES_SSID] = true;
     new_instance->ssid = instance->ssid;
-    new_instance->has_lifetime = true;
+    new_instance->present_resources[SERV_RES_LIFETIME] = true;
     new_instance->lifetime = instance->lifetime;
-    new_instance->has_default_min_period = (instance->default_min_period >= 0);
-    if (new_instance->has_default_min_period) {
+    if (instance->default_min_period >= 0) {
+        new_instance->present_resources[SERV_RES_DEFAULT_MIN_PERIOD] = true;
         new_instance->default_min_period = instance->default_min_period;
     }
-    new_instance->has_default_max_period = (instance->default_max_period >= 0);
-    if (new_instance->has_default_max_period) {
+
+    if (instance->default_max_period >= 0) {
+        new_instance->present_resources[SERV_RES_DEFAULT_MAX_PERIOD] = true;
         new_instance->default_max_period = instance->default_max_period;
     }
 #    ifndef ANJAY_WITHOUT_DEREGISTER
-    new_instance->has_disable_timeout = (instance->disable_timeout >= 0);
-    if (new_instance->has_disable_timeout) {
+    new_instance->present_resources[SERV_RES_DISABLE] = true;
+    if (instance->disable_timeout >= 0) {
+        new_instance->present_resources[SERV_RES_DISABLE_TIMEOUT] = true;
         new_instance->disable_timeout = instance->disable_timeout;
     }
 #    endif // ANJAY_WITHOUT_DEREGISTER
-    new_instance->has_notification_storing = true;
+    new_instance->present_resources
+            [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE] = true;
     new_instance->notification_storing = instance->notification_storing;
+    new_instance->present_resources[SERV_RES_REGISTRATION_UPDATE_TRIGGER] =
+            true;
 #    ifdef ANJAY_WITH_LWM2M11
+#        ifdef ANJAY_WITH_BOOTSTRAP
+    new_instance->present_resources[SERV_RES_BOOTSTRAP_REQUEST_TRIGGER] = true;
+#        endif // ANJAY_WITH_BOOTSTRAP
     new_instance->bootstrap_on_registration_failure =
             instance->bootstrap_on_registration_failure
                     ? *instance->bootstrap_on_registration_failure
                     : true;
-    new_instance->has_server_communication_retry_count =
-            !!instance->communication_retry_count;
-    if (new_instance->has_server_communication_retry_count) {
+    new_instance
+            ->present_resources[SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE] =
+            true;
+    if (instance->communication_retry_count) {
+        new_instance
+                ->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT] =
+                true;
         new_instance->server_communication_retry_count =
                 *instance->communication_retry_count;
     }
-    new_instance->has_server_communication_retry_timer =
-            !!instance->communication_retry_timer;
-    if (new_instance->has_server_communication_retry_timer) {
+    if (instance->communication_retry_timer) {
+        new_instance
+                ->present_resources[SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER] =
+                true;
         new_instance->server_communication_retry_timer =
                 *instance->communication_retry_timer;
     }
-    new_instance->preferred_transport = instance->preferred_transport;
-    new_instance->has_server_communication_sequence_retry_count =
-            !!instance->communication_sequence_retry_count;
-    if (new_instance->has_server_communication_sequence_retry_count) {
+    if (instance->preferred_transport) {
+        new_instance->preferred_transport = instance->preferred_transport;
+        new_instance->present_resources[SERV_RES_PREFERRED_TRANSPORT] = true;
+    }
+    if (instance->communication_sequence_retry_count) {
+        new_instance->present_resources
+                [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT] = true;
         new_instance->server_communication_sequence_retry_count =
                 *instance->communication_sequence_retry_count;
     }
-    new_instance->has_server_communication_sequence_delay_timer =
-            !!instance->communication_sequence_delay_timer;
-    if (new_instance->has_server_communication_sequence_delay_timer) {
+    if (instance->communication_sequence_delay_timer) {
+        new_instance->present_resources
+                [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER] = true;
         new_instance->server_communication_sequence_delay_timer =
                 *instance->communication_sequence_delay_timer;
     }
 #        ifdef ANJAY_WITH_SEND
+    new_instance->present_resources[SERV_RES_MUTE_SEND] = true;
     new_instance->mute_send = instance->mute_send;
 #        endif // ANJAY_WITH_SEND
 #    endif     // ANJAY_WITH_LWM2M11
@@ -230,10 +333,9 @@ static int serv_instance_reset(anjay_unlocked_t *anjay,
     server_instance_t *inst = find_instance(_anjay_serv_get(obj_ptr), iid);
     assert(inst);
 
-    bool has_ssid = inst->has_ssid;
     anjay_ssid_t ssid = inst->ssid;
     _anjay_serv_reset_instance(inst);
-    inst->has_ssid = has_ssid;
+    inst->present_resources[SERV_RES_SSID] = true;
     inst->ssid = ssid;
     return 0;
 }
@@ -247,90 +349,16 @@ static int serv_list_resources(anjay_unlocked_t *anjay,
             find_instance(_anjay_serv_get(obj_ptr), iid);
     assert(inst);
 
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_SSID, ANJAY_DM_RES_R,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_LIFETIME, ANJAY_DM_RES_RW,
-                                inst->has_lifetime ? ANJAY_DM_RES_PRESENT
-                                                   : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DEFAULT_MIN_PERIOD,
-                                ANJAY_DM_RES_RW,
-                                inst->has_default_min_period
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DEFAULT_MAX_PERIOD,
-                                ANJAY_DM_RES_RW,
-                                inst->has_default_max_period
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-#    ifndef ANJAY_WITHOUT_DEREGISTER
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DISABLE, ANJAY_DM_RES_E,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_DISABLE_TIMEOUT, ANJAY_DM_RES_RW,
-                                inst->has_disable_timeout
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-#    endif // ANJAY_WITHOUT_DEREGISTER
-    _anjay_dm_emit_res_unlocked(
-            ctx, SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE,
-            ANJAY_DM_RES_RW, ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_BINDING, ANJAY_DM_RES_RW,
-                                inst->has_binding ? ANJAY_DM_RES_PRESENT
-                                                  : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_REGISTRATION_UPDATE_TRIGGER,
-                                ANJAY_DM_RES_E, ANJAY_DM_RES_PRESENT);
-#    ifdef ANJAY_WITH_LWM2M11
-#        ifdef ANJAY_WITH_BOOTSTRAP
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_BOOTSTRAP_REQUEST_TRIGGER,
-                                ANJAY_DM_RES_E,
-                                _anjay_bootstrap_server_exists(anjay)
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-#        endif // ANJAY_WITH_BOOTSTRAP
-    _anjay_dm_emit_res_unlocked(
-            ctx, SERV_RES_TLS_DTLS_ALERT_CODE, ANJAY_DM_RES_R,
-            inst->has_last_alert ? ANJAY_DM_RES_PRESENT : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_LAST_BOOTSTRAPPED, ANJAY_DM_RES_R,
-                                inst->has_last_bootstrapped_timestamp
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-#        ifdef ANJAY_WITH_BOOTSTRAP
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE,
-                                ANJAY_DM_RES_BS_RW, ANJAY_DM_RES_PRESENT);
-#        endif // ANJAY_WITH_BOOTSTRAP
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT,
-                                ANJAY_DM_RES_RW,
-                                inst->has_server_communication_retry_count
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER,
-                                ANJAY_DM_RES_RW,
-                                inst->has_server_communication_retry_timer
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(
-            ctx,
-            SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT,
-            ANJAY_DM_RES_RW,
-            inst->has_server_communication_sequence_retry_count
-                    ? ANJAY_DM_RES_PRESENT
-                    : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(
-            ctx,
-            SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER,
-            ANJAY_DM_RES_RW,
-            inst->has_server_communication_sequence_delay_timer
-                    ? ANJAY_DM_RES_PRESENT
-                    : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_PREFERRED_TRANSPORT,
-                                ANJAY_DM_RES_RW,
-                                inst->preferred_transport
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-#        ifdef ANJAY_WITH_SEND
-    _anjay_dm_emit_res_unlocked(ctx, SERV_RES_MUTE_SEND, ANJAY_DM_RES_RW,
-                                ANJAY_DM_RES_PRESENT);
-#        endif // ANJAY_WITH_SEND
-#    endif     // ANJAY_WITH_LWM2M11
+    for (size_t resource = 0; resource < AVS_ARRAY_SIZE(SERVER_RESOURCE_INFO);
+         resource++) {
+        anjay_rid_t rid = SERVER_RESOURCE_INFO[resource].rid;
+        _anjay_dm_emit_res_unlocked(ctx, rid,
+                                    SERVER_RESOURCE_INFO[resource].kind,
+                                    inst->present_resources[rid]
+                                            ? ANJAY_DM_RES_PRESENT
+                                            : ANJAY_DM_RES_ABSENT);
+    }
+
     return 0;
 }
 
@@ -422,112 +450,87 @@ static int serv_write(anjay_unlocked_t *anjay,
 
     switch ((server_rid_t) rid) {
     case SERV_RES_SSID:
-        if (!(retval = _anjay_serv_fetch_ssid(ctx, &inst->ssid))) {
-            inst->has_ssid = true;
-        }
-        return retval;
+        retval = _anjay_serv_fetch_ssid(ctx, &inst->ssid);
+        break;
     case SERV_RES_LIFETIME:
-        if (!(retval = _anjay_get_i32_unlocked(ctx, &inst->lifetime))) {
-            inst->has_lifetime = true;
-        }
-        return retval;
+        retval = _anjay_get_i32_unlocked(ctx, &inst->lifetime);
+        break;
     case SERV_RES_DEFAULT_MIN_PERIOD:
-        if (!(retval = _anjay_serv_fetch_validated_i32(
-                      ctx, 0, INT32_MAX, &inst->default_min_period))) {
-            inst->has_default_min_period = true;
-        }
-        return retval;
+        retval = _anjay_serv_fetch_validated_i32(ctx, 0, INT32_MAX,
+                                                 &inst->default_min_period);
+        break;
     case SERV_RES_DEFAULT_MAX_PERIOD:
-        if (!(retval = _anjay_serv_fetch_validated_i32(
-                      ctx, 1, INT32_MAX, &inst->default_max_period))) {
-            inst->has_default_max_period = true;
-        }
-        return retval;
+        retval = _anjay_serv_fetch_validated_i32(ctx, 1, INT32_MAX,
+                                                 &inst->default_max_period);
+        break;
 #    ifndef ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_DISABLE_TIMEOUT:
-        if (!(retval = _anjay_serv_fetch_validated_i32(
-                      ctx, 0, INT32_MAX, &inst->disable_timeout))) {
-            inst->has_disable_timeout = true;
-        }
-        return retval;
+        retval = _anjay_serv_fetch_validated_i32(ctx, 0, INT32_MAX,
+                                                 &inst->disable_timeout);
+        break;
 #    endif // ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_BINDING:
-        if (!(retval = _anjay_serv_fetch_binding(ctx, &inst->binding))) {
-            inst->has_binding = true;
-        }
-        return retval;
+        retval = _anjay_serv_fetch_binding(ctx, &inst->binding);
+        break;
     case SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE:
-        if (!(retval = _anjay_get_bool_unlocked(ctx,
-                                                &inst->notification_storing))) {
-            inst->has_notification_storing = true;
-        }
-        return retval;
+        retval = _anjay_get_bool_unlocked(ctx, &inst->notification_storing);
+        break;
 #    ifdef ANJAY_WITH_LWM2M11
     case SERV_RES_TLS_DTLS_ALERT_CODE: {
         uint32_t last_alert;
         if (!(retval = _anjay_get_u32_unlocked(ctx, &last_alert))) {
             inst->last_alert = (uint8_t) last_alert;
-            inst->has_last_alert = true;
         }
-        return retval;
+        break;
     }
     case SERV_RES_LAST_BOOTSTRAPPED:
-        if (!(retval = _anjay_get_i64_unlocked(
-                      ctx, &inst->last_bootstrapped_timestamp))) {
-            inst->has_last_bootstrapped_timestamp = true;
-        }
-        return retval;
+        retval = _anjay_get_i64_unlocked(ctx,
+                                         &inst->last_bootstrapped_timestamp);
+        break;
 #        ifdef ANJAY_WITH_BOOTSTRAP
     case SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE:
-        return _anjay_get_bool_unlocked(
+        retval = _anjay_get_bool_unlocked(
                 ctx, &inst->bootstrap_on_registration_failure);
+        break;
 #        endif // ANJAY_WITH_BOOTSTRAP
     case SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT:
         if (!(retval = _anjay_get_u32_unlocked(
-                      ctx, &inst->server_communication_retry_count))) {
-            inst->has_server_communication_retry_count = true;
-            if (inst->server_communication_retry_count == 0) {
-                server_log(ERROR,
-                           "Server Communication Retry Count cannot be 0");
-                retval = ANJAY_ERR_BAD_REQUEST;
-            }
+                      ctx, &inst->server_communication_retry_count))
+                && inst->server_communication_retry_count == 0) {
+            server_log(ERROR, "Server Communication Retry Count cannot be 0");
+            retval = ANJAY_ERR_BAD_REQUEST;
         }
-        return retval;
+        break;
     case SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER:
-        if (!(retval = _anjay_get_u32_unlocked(
-                      ctx, &inst->server_communication_retry_timer))) {
-            inst->has_server_communication_retry_timer = true;
-        }
-        return retval;
+        retval = _anjay_get_u32_unlocked(
+                ctx, &inst->server_communication_retry_timer);
+        break;
     case SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT:
         if (!(retval = _anjay_get_u32_unlocked(
-                      ctx, &inst->server_communication_sequence_retry_count))) {
-            inst->has_server_communication_sequence_retry_count = true;
-            if (inst->server_communication_sequence_retry_count == 0) {
-                server_log(ERROR,
-                           "Server Sequence Communication Retry Count cannot "
-                           "be 0");
-                retval = ANJAY_ERR_BAD_REQUEST;
-            }
+                      ctx, &inst->server_communication_sequence_retry_count))
+                && inst->server_communication_sequence_retry_count == 0) {
+            server_log(ERROR,
+                       "Server Sequence Communication Retry Count cannot be 0");
+            retval = ANJAY_ERR_BAD_REQUEST;
         }
-        return retval;
+        break;
     case SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER:
-        if (!(retval = _anjay_get_u32_unlocked(
-                      ctx, &inst->server_communication_sequence_delay_timer))) {
-            inst->has_server_communication_sequence_delay_timer = true;
-        }
-        return retval;
+        retval = _anjay_get_u32_unlocked(
+                ctx, &inst->server_communication_sequence_delay_timer);
+        break;
     case SERV_RES_PREFERRED_TRANSPORT: {
         char tmp[2];
         if (!(retval = _anjay_get_string_unlocked(ctx, tmp, sizeof(tmp)))) {
             inst->preferred_transport = tmp[0];
+        } else if (retval == ANJAY_BUFFER_TOO_SHORT) {
+            retval = ANJAY_ERR_BAD_REQUEST;
         }
-        return retval == ANJAY_BUFFER_TOO_SHORT ? ANJAY_ERR_BAD_REQUEST
-                                                : retval;
+        break;
     }
 #        ifdef ANJAY_WITH_SEND
     case SERV_RES_MUTE_SEND:
-        return _anjay_get_bool_unlocked(ctx, &inst->mute_send);
+        retval = _anjay_get_bool_unlocked(ctx, &inst->mute_send);
+        break;
 #        endif // ANJAY_WITH_SEND
 #    endif     // ANJAY_WITH_LWM2M11
     default:
@@ -535,6 +538,12 @@ static int serv_write(anjay_unlocked_t *anjay,
                 "Write called on unknown or non-read/writable Server resource");
         return ANJAY_ERR_METHOD_NOT_ALLOWED;
     }
+
+    if (!retval) {
+        inst->present_resources[rid] = true;
+    }
+
+    return retval;
 }
 
 static int serv_execute(anjay_unlocked_t *anjay,
@@ -552,7 +561,9 @@ static int serv_execute(anjay_unlocked_t *anjay,
 #    ifndef ANJAY_WITHOUT_DEREGISTER
     case SERV_RES_DISABLE: {
         avs_time_duration_t disable_timeout = avs_time_duration_from_scalar(
-                inst->has_disable_timeout ? inst->disable_timeout : 86400,
+                inst->present_resources[SERV_RES_DISABLE_TIMEOUT]
+                        ? inst->disable_timeout
+                        : 86400,
                 AVS_TIME_S);
         return _anjay_disable_server_with_timeout_unlocked(anjay, inst->ssid,
                                                            disable_timeout);

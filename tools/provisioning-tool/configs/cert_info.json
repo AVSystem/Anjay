@@ -1,0 +1,12 @@
+{
+    "countryName": "PL",
+    "stateOrProvinceName": "Malopolska",
+    "localityName": "Cracow",
+    "organizationName": "AVSystem",
+    "organizationUnitName": "Embedded",
+    "commonName": "Sample Cert",
+    "serialNumber": 0,
+    "validityOffsetInSeconds": 220752000,
+    "digest": "sha512",
+    "RSAKeyLen": 4096
+}

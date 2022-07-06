@@ -131,16 +131,20 @@ static avs_error_t connect_socket(anjay_unlocked_t *anjay,
         return err;
     }
 
-    if (avs_is_ok(avs_net_socket_get_local_port(
-                socket, connection->nontransient_state.last_local_port,
-                ANJAY_MAX_URL_PORT_SIZE))) {
-        anjay_log(DEBUG, _("bound to port ") "%s",
-                  connection->nontransient_state.last_local_port);
+    char local_port[sizeof(connection->nontransient_state.last_local_port)] =
+            "";
+    if (avs_is_ok(avs_net_socket_get_local_port(socket, local_port,
+                                                sizeof(local_port)))) {
+        anjay_log(DEBUG, _("bound to port ") "%s", local_port);
     } else {
         anjay_log(WARNING, _("could not store bound local port"));
-        connection->nontransient_state.last_local_port[0] = '\0';
+        local_port[0] = '\0';
     }
 
+    if (strcmp(local_port, connection->nontransient_state.last_local_port)
+            != 0) {
+        strcpy(connection->nontransient_state.last_local_port, local_port);
+    }
     return AVS_OK;
 }
 #endif /* defined(WITH_AVS_COAP_UDP) \

@@ -64,9 +64,20 @@ void _anjay_serv_reset_instance(server_instance_t *serv) {
     memset(serv, 0, sizeof(*serv));
     /* This is not a resource, therefore must be restored */
     serv->iid = iid;
+    serv->present_resources[SERV_RES_REGISTRATION_UPDATE_TRIGGER] = true;
+#    ifndef ANJAY_WITHOUT_DEREGISTER
+    serv->present_resources[SERV_RES_DISABLE] = true;
+#    endif // ANJAY_WITHOUT_DEREGISTER
 #    ifdef ANJAY_WITH_LWM2M11
     serv->bootstrap_on_registration_failure = true;
-#    endif // ANJAY_WITH_LWM2M11
+    serv->present_resources[SERV_RES_BOOTSTRAP_ON_REGISTRATION_FAILURE] = true;
+#        ifdef ANJAY_WITH_BOOTSTRAP
+    serv->present_resources[SERV_RES_BOOTSTRAP_REQUEST_TRIGGER] = true;
+#        endif // ANJAY_WITH_BOOTSTRAP
+#        ifdef ANJAY_WITH_SEND
+    serv->present_resources[SERV_RES_MUTE_SEND] = true;
+#        endif // ANJAY_WITH_SEND
+#    endif     // ANJAY_WITH_LWM2M11
 }
 
 #endif // ANJAY_WITH_MODULE_SERVER

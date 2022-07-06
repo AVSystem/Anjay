@@ -40,6 +40,16 @@
 
 VISIBILITY_SOURCE_BEGIN
 
+#    ifdef AVS_UNIT_TESTING
+__typeof__(_avs_coap_udp_initial_retry_state) *AVS_UNIT_MOCK(
+        _avs_coap_udp_initial_retry_state);
+
+void _avs_unit_mock_constructor_avs_coap_udp_initial_retry_state(void) {
+    avs_unit_mock_add__((avs_unit_mock_func_ptr *) &AVS_UNIT_MOCK(
+            _avs_coap_udp_initial_retry_state));
+}
+#    endif // AVS_UNIT_TESTING
+
 /**
  * Owning wrapper around an unconfirmed outgoing CoAP/UDP message.
  *
@@ -590,7 +600,10 @@ static void resume_next_unconfirmed(avs_coap_udp_ctx_t *ctx) {
 }
 
 static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
-    assert(current_nstart(ctx) <= ctx->tx_params.nstart);
+    // nothing can be resumed
+    if (current_nstart(ctx) >= ctx->tx_params.nstart) {
+        return;
+    }
 
     const size_t resumed_msgs = current_nstart(ctx);
     const size_t all_msgs = AVS_LIST_SIZE(ctx->unconfirmed_messages);
@@ -619,7 +632,6 @@ static void resume_unconfirmed_messages(avs_coap_udp_ctx_t *ctx) {
     while (current_nstart(ctx) < effective_nstart(ctx)) {
         resume_next_unconfirmed(ctx);
     }
-    assert(current_nstart(ctx) == effective_nstart(ctx));
 }
 
 static void try_cleanup_unconfirmed(avs_coap_udp_ctx_t *ctx,
@@ -853,10 +865,6 @@ retransmit_next_message_without_reschedule(avs_coap_udp_ctx_t *ctx) {
     unconfirmed->next_retransmit = next_retransmit;
     unconfirmed = AVS_LIST_DETACH(&ctx->unconfirmed_messages);
     AVS_LIST_INSERT(find_unconfirmed_insert_ptr(ctx, unconfirmed), unconfirmed);
-
-    assert(current_nstart(ctx)
-           == AVS_MIN(AVS_LIST_SIZE(ctx->unconfirmed_messages),
-                      ctx->tx_params.nstart));
 }
 
 static avs_time_monotonic_t coap_udp_on_timeout(avs_coap_ctx_t *ctx_) {
@@ -1292,15 +1300,11 @@ ack_request(avs_coap_udp_ctx_t *ctx,
     avs_coap_udp_unconfirmed_msg_t *unconfirmed =
             AVS_LIST_DETACH(unconfirmed_ptr);
     // disable further retransmissions
-    unconfirmed->retry_state.retry_count = ctx->tx_params.max_retransmit;
+    unconfirmed->retry_state.retry_count = UINT_MAX;
     unconfirmed->next_retransmit = next_retransmit;
 
     AVS_LIST_INSERT(find_unconfirmed_insert_ptr(ctx, unconfirmed), unconfirmed);
     reschedule_retransmission_job(ctx);
-
-    assert(current_nstart(ctx)
-           == AVS_MIN(AVS_LIST_SIZE(ctx->unconfirmed_messages),
-                      ctx->tx_params.nstart));
 }
 
 static avs_error_t handle_empty(avs_coap_udp_ctx_t *ctx,
@@ -1664,6 +1668,44 @@ int avs_coap_udp_ctx_set_forced_incoming_mtu(avs_coap_ctx_t *ctx,
 
     ((avs_coap_udp_ctx_t *) ctx)->forced_incoming_mtu = forced_incoming_mtu;
     return 0;
+}
+
+int avs_coap_udp_ctx_set_tx_params(avs_coap_ctx_t *ctx,
+                                   const avs_coap_udp_tx_params_t *tx_params) {
+    if (!ctx || ctx->vtable != &COAP_UDP_VTABLE) {
+        LOG(ERROR, _("avs_coap_udp_ctx_set_tx_params() called on a NULL or "
+                     "non-UDP context"));
+        return -1;
+    } else if (!tx_params) {
+        LOG(ERROR, _("given transmission parameters are NULL"));
+        return -1;
+    } else {
+        const char *error_message;
+        if (!avs_coap_udp_tx_params_valid(tx_params, &error_message)) {
+            assert(error_message);
+            LOG(ERROR,
+                _("UDP transmission params validation failed with the "
+                  "following error message: ") "%s",
+                error_message);
+            return -1;
+        }
+    }
+
+    avs_coap_udp_ctx_t *udp_ctx = (avs_coap_udp_ctx_t *) ctx;
+    udp_ctx->tx_params = *tx_params;
+
+    return 0;
+}
+
+const avs_coap_udp_tx_params_t *
+avs_coap_udp_ctx_get_tx_params(avs_coap_ctx_t *ctx) {
+    if (!ctx || ctx->vtable != &COAP_UDP_VTABLE) {
+        LOG(ERROR, _("avs_coap_udp_ctx_set_tx_params() called on a NULL or "
+                     "non-UDP context"));
+        return NULL;
+    }
+
+    return &((avs_coap_udp_ctx_t *) ctx)->tx_params;
 }
 
 #endif // WITH_AVS_COAP_UDP

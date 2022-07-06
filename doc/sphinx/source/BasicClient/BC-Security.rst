@@ -26,9 +26,6 @@ library will always read the necessary DTLS configuration from the data model.
              versions, but some REQUIRED cipher suites won't be supported and
              serious interoperability problems may arise.
 
-.. contents::
-   :local:
-
 Supported security modes
 ------------------------
 
@@ -53,17 +50,17 @@ given instance of the Security Object (``/0/*/2``). Supported values are:
   initialize payload encryption.
 
   Appropriate certificates need to be generated for both the LwM2M Client and
-  the LwM2M Server. Public certificates of both parties mutually available,
+  the LwM2M Server. Public certificates of both parties are mutually available,
   and each party also has access to its own corresponding private key.
 
   * In this mode, the *Public Key or Identity* (``/0/*/3``) Resource shall
-    contain the Client's own public certificate in binary, DER-encoded X.509
+    contain the Client's public certificate in binary, DER-encoded X.509
     format.
 
   * The *Server Public Key* (``/0/*/4``) Resource shall contain the Server's
     public certificate, also in binary, DER-encoded X.509 format.
 
-  * The *Secret Key* (``/0/*/5``) Resource shall contain the Client's own
+  * The *Secret Key* (``/0/*/5``) Resource shall contain the Client's
     private key, corresponding to the public key contained in the *Public Key or
     Identity* Resource. It needs to be in a format defined in
     `RFC 5958 <https://tools.ietf.org/html/rfc5958>`_ (also known as PKCS#8, the
@@ -75,16 +72,22 @@ given instance of the Security Object (``/0/*/2``). Supported values are:
   It is also verified that the certificate is issued for the same domain name
   that the Server URI points to and that it is signed by a trusted CA.
 
-* ``3`` - **NoSec mode** - In this mode, encryption and authentication is
+* ``3`` - **NoSec mode** - In this mode, encryption and authentication are
   disabled completely and the CoAP messages are passed in plain text over the
   network. It shall not be used in production environments, unless end-to-end
   security is provided on a lower layer (e.g. IPsec). It is also useful for
   development, testing and debugging purposes.
 
-The *Raw Public Key* and *Certificate with EST* modes described in the LwM2M
-specification are not currently supported.
+* ``4`` - **Certificate mode with EST** - In this mode, a certificate-based
+  methods of encryption and authentication are used along with *Enrollment
+  over Secure Transport* certificate management protocol. Support for this
+  security mode is available as a commercial feature in Anjay. For more information,
+  see the description in its :doc:`dedicated article<../CommercialFeatures/CF-EST>`.
 
-In this tutorial we will focus on enabling security using the PSK mode. If you
+The *Raw Public Key* mode described in the LwM2M specification is not currently
+supported. 
+
+In this tutorial, we will focus on enabling security using the PSK mode. If you
 are interested in using certificates, please refer to
 :doc:`../AdvancedTopics/AT-Certificates`.
 
@@ -228,7 +231,7 @@ Continuing the previous tutorial, we can modify ``setup_security_object()`` and
 Please note, that ``server_uri`` field changed too. Now there is ``coaps``
 URI scheme and port ``5684`` (default for secure CoAP).
 
-All remaining activities related to establishing secure communication channel
+All remaining activities related to establishing a secure communication channel
 with the LwM2M Server are performed automatically by Anjay.
 
 .. note::

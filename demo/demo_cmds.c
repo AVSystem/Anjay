@@ -51,7 +51,8 @@ static void cmd_send_update(anjay_demo_t *demo, const char *args_string) {
     } else if (ssid == ANJAY_SSID_ANY) {
         demo_log(INFO, "registration update scheduled for all servers");
     } else {
-        demo_log(INFO, "registration update scheduled for server %u", ssid);
+        demo_log(INFO, "registration update scheduled for server %" PRIu16,
+                 ssid);
     }
 }
 
@@ -68,7 +69,7 @@ static int parse_transports(const char *text,
     char *text_arg = text_copy;
     char *saveptr = NULL;
     const char *token = NULL;
-    while ((token = avs_strtok(text_arg, AVS_SPACES, &saveptr))) {
+    while ((token = avs_strtok(text_arg, AVS_SPACES ",", &saveptr))) {
         text_arg = NULL;
         if (!found) {
             memset(out_transport_set, 0, sizeof(*out_transport_set));
@@ -1121,8 +1122,67 @@ static void cmd_push_button_release(anjay_demo_t *demo,
 
     anjay_ipso_button_update(demo->anjay, iid, false);
 }
-
 #endif // ANJAY_WITH_MODULE_IPSO_OBJECTS
+
+static void cmd_set_tx_params(anjay_demo_t *demo, const char *args_string) {
+    avs_coap_udp_tx_params_t tx_params;
+    double ack_timeout_s;
+    char transport_str[16];
+    if (sscanf(args_string, " %15s %lf %lf %u %lu", transport_str,
+               &ack_timeout_s, &tx_params.ack_random_factor,
+               &tx_params.max_retransmit, &tx_params.nstart)
+            < 5) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    tx_params.ack_timeout =
+            avs_time_duration_from_fscalar(ack_timeout_s, AVS_TIME_S);
+
+    anjay_transport_set_t transport_set;
+    if (parse_transports(transport_str, &transport_set)) {
+        return;
+    }
+
+    anjay_update_transport_tx_params(demo->anjay, transport_set, &tx_params);
+}
+
+static void cmd_set_coap_exchange_timeout(anjay_demo_t *demo,
+                                          const char *args_string) {
+    double exchange_timeout_s;
+    char transport_str[16];
+    if (sscanf(args_string, " %15s %lf", transport_str, &exchange_timeout_s)
+            < 2) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    avs_time_duration_t exchange_timeout =
+            avs_time_duration_from_fscalar(exchange_timeout_s, AVS_TIME_S);
+
+    anjay_transport_set_t transport_set;
+    if (parse_transports(transport_str, &transport_set)) {
+        return;
+    }
+
+    anjay_update_coap_exchange_timeout(demo->anjay, transport_set,
+                                       exchange_timeout);
+}
+
+static void cmd_set_dtls_timeouts(anjay_demo_t *demo, const char *args_string) {
+    double min_timeout_s, max_timeout_s;
+    if (sscanf(args_string, "%lf %lf", &min_timeout_s, &max_timeout_s) < 2) {
+        demo_log(ERROR, "invalid format");
+        return;
+    }
+
+    avs_net_dtls_handshake_timeouts_t dtls_handshake_timeouts = {
+        .min = avs_time_duration_from_fscalar(min_timeout_s, AVS_TIME_S),
+        .max = avs_time_duration_from_fscalar(max_timeout_s, AVS_TIME_S)
+    };
+
+    anjay_update_dtls_handshake_timeouts(demo->anjay, dtls_handshake_timeouts);
+}
 
 static void cmd_help(anjay_demo_t *demo, const char *args_string);
 
@@ -1293,6 +1353,15 @@ static const struct cmd_handler_def COMMAND_HANDLERS[] = {
                 "postponed to be sent later for any server (if no arguments "
                 "specified), a given server (if numeric SSID argument given) "
                 "or a given set of transports (if transport names given)"),
+    CMD_HANDLER("set-tx-param", "transport ack_timeout ack_random_factor "
+                "max_retransmit nstart", cmd_set_tx_params,
+                "Sets transmission parameters for a given transport. Available "
+                "transports are sms, udp and nidd."),
+    CMD_HANDLER("set-coap-exchange-timeout", "transport timeout",
+                cmd_set_coap_exchange_timeout,
+                "Sets maximal length of the CoAP exchange."),
+    CMD_HANDLER("set-dtls-handshake-timeout", "min max", cmd_set_dtls_timeouts,
+                "Sets DTLS handshake timeouts for all of the used DTLS sockets."),
     CMD_HANDLER("help", "", cmd_help, "Prints this message")
     // clang-format on
 };

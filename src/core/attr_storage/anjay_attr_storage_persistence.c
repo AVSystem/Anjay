@@ -391,6 +391,7 @@ avs_error_t _anjay_attr_storage_restore_inner(anjay_unlocked_t *anjay,
     avs_persistence_context_t ctx = avs_persistence_restore_context_create(in);
     as_persistence_version_t version = (as_persistence_version_t) 0;
     avs_error_t err;
+
     if (avs_is_err((err = avs_persistence_magic_string(&ctx, MAGIC)))
             || avs_is_err((err = avs_persistence_version(
                                    &ctx, (uint8_t *) &version,
@@ -426,10 +427,20 @@ avs_error_t anjay_attr_storage_restore(anjay_t *anjay_locked,
                                        avs_stream_t *in) {
     avs_error_t err = avs_errno(AVS_EINVAL);
     ANJAY_MUTEX_LOCK(anjay, anjay_locked);
-    if (avs_is_ok((err = _anjay_attr_storage_restore_inner(anjay, in)))) {
-        as_log(INFO, _("Attribute Storage state restored"));
+    if (avs_is_ok((err = _anjay_attr_storage_transaction_begin(anjay)))) {
+        if (avs_is_ok((err = _anjay_attr_storage_restore_inner(anjay, in)))) {
+            _anjay_attr_storage_transaction_commit(anjay);
+            anjay->attr_storage.modified_since_persist = false;
+
+            as_log(INFO, _("Attribute Storage state restored"));
+        } else {
+            avs_error_t rollback_err =
+                    _anjay_attr_storage_transaction_rollback(anjay);
+            if (avs_is_err(rollback_err)) {
+                err = rollback_err;
+            }
+        }
     }
-    anjay->attr_storage.modified_since_persist = avs_is_err(err);
     ANJAY_MUTEX_UNLOCK(anjay_locked);
     return err;
 }

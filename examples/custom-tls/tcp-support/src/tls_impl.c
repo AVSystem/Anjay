@@ -432,6 +432,9 @@ static avs_error_t configure_tls_version(tls_socket_impl_t *sock,
     case AVS_NET_SSL_VERSION_TLSv1_2:
         SSL_CTX_set_min_proto_version(sock->ctx, TLS1_2_VERSION);
         return AVS_OK;
+    case AVS_NET_SSL_VERSION_TLSv1_3:
+        SSL_CTX_set_min_proto_version(sock->ctx, TLS1_3_VERSION);
+        return AVS_OK;
     default:
         return avs_errno(AVS_ENOTSUP);
     }
@@ -759,6 +762,8 @@ configure_ciphersuites(tls_socket_impl_t *sock,
     }
     SSL_free(dummy_ssl);
     SSL_CTX_set_cipher_list(sock->ctx, cipher_list);
+    // NOTE: Configuring the set of supported new-style ciphersuites as defined
+    // for TLS 1.3 are not supported by this function.
     return AVS_OK;
 }
 

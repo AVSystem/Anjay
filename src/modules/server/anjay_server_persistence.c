@@ -72,13 +72,22 @@ static avs_error_t handle_v0_v1_sized_fields(avs_persistence_context_t *ctx,
     assert(avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE);
     avs_error_t err;
     (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->iid)))
-            || avs_is_err((err = avs_persistence_bool(ctx, &element->has_ssid)))
-            || avs_is_err(
-                       (err = avs_persistence_bool(ctx, &element->has_binding)))
-            || avs_is_err((
-                       err = avs_persistence_bool(ctx, &element->has_lifetime)))
             || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->has_notification_storing)))
+                                   ctx,
+                                   &element->present_resources[SERV_RES_SSID])))
+            || avs_is_err(
+                       (err = avs_persistence_bool(
+                                ctx,
+                                &element->present_resources[SERV_RES_BINDING])))
+            || avs_is_err((
+                       err = avs_persistence_bool(
+                               ctx,
+                               &element->present_resources[SERV_RES_LIFETIME])))
+            || avs_is_err((
+                       err = avs_persistence_bool(
+                               ctx,
+                               &element->present_resources
+                                        [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE])))
             || avs_is_err((err = avs_persistence_u16(ctx, &element->ssid)))
             || avs_is_err((err = avs_persistence_u32(
                                    ctx, (uint32_t *) &element->lifetime)))
@@ -99,12 +108,16 @@ static avs_error_t handle_v0_v1_sized_fields(avs_persistence_context_t *ctx,
             || avs_is_err((err = avs_persistence_bool(
                                    ctx, &element->notification_storing))));
     if (avs_is_ok(err)) {
-        element->has_default_min_period = (element->default_min_period >= 0);
-        element->has_default_max_period = (element->default_max_period >= 0);
+        element->present_resources[SERV_RES_DEFAULT_MIN_PERIOD] =
+                (element->default_min_period >= 0);
+        element->present_resources[SERV_RES_DEFAULT_MAX_PERIOD] =
+                (element->default_max_period >= 0);
 #        ifndef ANJAY_WITHOUT_DEREGISTER
-        element->has_disable_timeout = (element->disable_timeout >= 0);
+        element->present_resources[SERV_RES_DISABLE_TIMEOUT] =
+                (element->disable_timeout >= 0);
 #        endif // ANJAY_WITHOUT_DEREGISTER
-        element->has_notification_storing = true;
+        element->present_resources
+                [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE] = true;
     }
     return err;
 }
@@ -113,23 +126,30 @@ static avs_error_t
 handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
                                server_instance_t *element) {
 #        ifndef ANJAY_WITH_LWM2M11
+    enum {
+        SERV_RES_TLS_DTLS_ALERT_CODE,
+        SERV_RES_LAST_BOOTSTRAPPED,
+        SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT,
+        SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER,
+        SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT,
+        SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER,
+        SERV_RES_PREFERRED_TRANSPORT,
+        _FAKE_RESOURCES_NUM
+    };
+
     (void) element;
     struct {
-        bool has_last_bootstrapped_timestamp;
         int64_t last_bootstrapped_timestamp;
-        bool has_last_alert;
         uint8_t last_alert;
         bool bootstrap_on_registration_failure;
-        bool has_server_communication_retry_count;
         uint32_t server_communication_retry_count;
-        bool has_server_communication_retry_timer;
         uint32_t server_communication_retry_timer;
-        bool has_server_communication_sequence_retry_count;
         uint32_t server_communication_sequence_retry_count;
-        bool has_server_communication_sequence_delay_timer;
         uint32_t server_communication_sequence_delay_timer;
         char preferred_transport;
         bool mute_send;
+
+        bool present_resources[_FAKE_RESOURCES_NUM];
     } dummy_element = {
         .bootstrap_on_registration_failure = true
     };
@@ -137,12 +157,13 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
 #        endif // ANJAY_WITH_LWM2M11
 
     avs_error_t err;
-    (void) (avs_is_err(
-                    (err = avs_persistence_bool(ctx, &element->has_last_alert)))
+    (void) (avs_is_err((err = avs_persistence_bool(
+                                ctx, &element->present_resources
+                                              [SERV_RES_TLS_DTLS_ALERT_CODE])))
             || avs_is_err((err = avs_persistence_u8(ctx, &element->last_alert)))
-            || avs_is_err((
-                       err = avs_persistence_bool(
-                               ctx, &element->has_last_bootstrapped_timestamp)))
+            || avs_is_err((err = avs_persistence_bool(
+                                   ctx, &element->present_resources
+                                                 [SERV_RES_LAST_BOOTSTRAPPED])))
             || avs_is_err((err = avs_persistence_i64(
                                    ctx, &element->last_bootstrapped_timestamp)))
             || avs_is_err(
@@ -152,21 +173,25 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
             || avs_is_err((
                        err = avs_persistence_bool(
                                ctx,
-                               &element->has_server_communication_retry_count)))
+                               &element->present_resources
+                                        [SERV_RES_SERVER_COMMUNICATION_RETRY_COUNT])))
             || avs_is_err((err = avs_persistence_u32(
                                    ctx,
                                    &element->server_communication_retry_count)))
             || avs_is_err((
                        err = avs_persistence_bool(
                                ctx,
-                               &element->has_server_communication_retry_timer)))
+                               &element->present_resources
+                                        [SERV_RES_SERVER_COMMUNICATION_RETRY_TIMER])))
             || avs_is_err((err = avs_persistence_u32(
                                    ctx,
+
                                    &element->server_communication_retry_timer)))
             || avs_is_err((
                        err = avs_persistence_bool(
                                ctx,
-                               &element->has_server_communication_sequence_retry_count)))
+                               &element->present_resources
+                                        [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_RETRY_COUNT])))
             || avs_is_err((
                        err = avs_persistence_u32(
                                ctx,
@@ -174,7 +199,8 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
             || avs_is_err((
                        err = avs_persistence_bool(
                                ctx,
-                               &element->has_server_communication_sequence_delay_timer)))
+                               &element->present_resources
+                                        [SERV_RES_SERVER_COMMUNICATION_SEQUENCE_DELAY_TIMER])))
             || avs_is_err((
                        err = avs_persistence_u32(
                                ctx,
@@ -189,6 +215,10 @@ handle_v2_lwm2m11_sized_fields(avs_persistence_context_t *ctx,
                                                       &(bool) { false }
 #        endif // ANJAY_WITH_SEND
                                                       ))));
+    if (avs_is_ok(err)) {
+        element->present_resources[SERV_RES_PREFERRED_TRANSPORT] =
+                !!element->preferred_transport;
+    }
     return err;
 #        undef element
 }
@@ -197,25 +227,39 @@ static avs_error_t handle_v2_sized_fields(avs_persistence_context_t *ctx,
                                           server_instance_t *element) {
     avs_error_t err;
     (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->iid)))
-            || avs_is_err((err = avs_persistence_bool(ctx, &element->has_ssid)))
+            || avs_is_err((err = avs_persistence_bool(
+                                   ctx,
+                                   &element->present_resources[SERV_RES_SSID])))
             || avs_is_err(
-                       (err = avs_persistence_bool(ctx, &element->has_binding)))
+                       (err = avs_persistence_bool(
+                                ctx,
+                                &element->present_resources[SERV_RES_BINDING])))
             || avs_is_err((
-                       err = avs_persistence_bool(ctx, &element->has_lifetime)))
-            || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->has_default_min_period)))
-            || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->has_default_max_period)))
+                       err = avs_persistence_bool(
+                               ctx,
+                               &element->present_resources[SERV_RES_LIFETIME])))
             || avs_is_err(
-                       (err = avs_persistence_bool(ctx,
-#        ifndef ANJAY_WITHOUT_DEREGISTER
-                                                   &element->has_disable_timeout
-#        else  // ANJAY_WITHOUT_DEREGISTER
-                                                   &(bool) { false }
-#        endif // ANJAY_WITHOUT_DEREGISTER
-                                                   )))
+                       (err = avs_persistence_bool(
+                                ctx, &element->present_resources
+                                              [SERV_RES_DEFAULT_MIN_PERIOD])))
+            || avs_is_err(
+                       (err = avs_persistence_bool(
+                                ctx, &element->present_resources
+                                              [SERV_RES_DEFAULT_MAX_PERIOD])))
             || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->has_notification_storing)))
+                                   ctx,
+#        ifndef ANJAY_WITHOUT_DEREGISTER
+                                   &element->present_resources
+                                            [SERV_RES_DISABLE_TIMEOUT]
+#        else  // ANJAY_WITHOUT_DEREGISTER
+                                   &(bool) { false }
+#        endif // ANJAY_WITHOUT_DEREGISTER
+                                   )))
+            || avs_is_err((
+                       err = avs_persistence_bool(
+                               ctx,
+                               &element->present_resources
+                                        [SERV_RES_NOTIFICATION_STORING_WHEN_DISABLED_OR_OFFLINE])))
             || avs_is_err((err = avs_persistence_u16(ctx, &element->ssid)))
             || avs_is_err((err = avs_persistence_u32(
                                    ctx, (uint32_t *) &element->lifetime)))

@@ -230,6 +230,9 @@ _anjay_connection_is_online(anjay_server_connection_t *connection) {
             _anjay_connection_internal_get_socket(connection));
 }
 
+int _anjay_connection_ensure_coap_context(anjay_server_info_t *server,
+                                          anjay_connection_type_t conn_type);
+
 avs_error_t _anjay_server_connection_internal_bring_online(
         anjay_server_info_t *server,
         anjay_connection_type_t conn_type,

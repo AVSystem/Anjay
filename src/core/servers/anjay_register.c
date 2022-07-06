@@ -371,18 +371,17 @@ get_binding_mode_for_version(anjay_server_info_t *server,
 }
 
 static int update_parameters_init(anjay_server_info_t *server,
+                                  anjay_lwm2m_version_t lwm2m_version,
                                   anjay_update_parameters_t *out_params) {
     memset(out_params, 0, sizeof(*out_params));
-    if (query_dm(server->anjay, server->registration_info.lwm2m_version,
-                 &out_params->dm)) {
+    if (query_dm(server->anjay, lwm2m_version, &out_params->dm)) {
         goto error;
     }
     if (get_server_lifetime(server->anjay, _anjay_server_ssid(server),
                             &out_params->lifetime_s)) {
         goto error;
     }
-    get_binding_mode_for_version(server,
-                                 server->registration_info.lwm2m_version,
+    get_binding_mode_for_version(server, lwm2m_version,
                                  &out_params->binding_mode);
     return 0;
 error:
@@ -607,7 +606,15 @@ handle_register_response(anjay_server_info_t *server,
             anjay_log(WARNING,
                       _("attempting to fall back to LwM2M version ") "%s",
                       _anjay_lwm2m_version_as_string(attempted_version));
-            register_with_version(server, attempted_version, move_params);
+            // NOTE: update_parameters format may differ slightly between
+            // LwM2M versions, so we need to rebuild them
+            update_parameters_cleanup(move_params);
+            if (update_parameters_init(server, attempted_version,
+                                       move_params)) {
+                result = ANJAY_REGISTRATION_ERROR_OTHER;
+            } else {
+                register_with_version(server, attempted_version, move_params);
+            }
         } else
 #endif // ANJAY_WITH_LWM2M11
         {
@@ -1050,7 +1057,8 @@ void _anjay_server_ensure_valid_registration(anjay_server_info_t *server) {
     assert(server->ssid != ANJAY_SSID_BOOTSTRAP);
 
     anjay_update_parameters_t new_params;
-    if (update_parameters_init(server, &new_params)) {
+    if (update_parameters_init(server, server->registration_info.lwm2m_version,
+                               &new_params)) {
         on_registration_update_result(server, &new_params,
                                       ANJAY_REGISTRATION_ERROR_OTHER,
                                       avs_errno(AVS_UNKNOWN_ERROR));
@@ -1241,13 +1249,13 @@ static size_t server_object_instances_count(anjay_unlocked_t *anjay) {
 }
 
 static bool server_state_stable(anjay_server_info_t *server) {
-    if (!_anjay_server_active(server)) {
-        return false;
-    } else if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
+    if (server->ssid == ANJAY_SSID_BOOTSTRAP) {
         // Bootstrap server connection is considered stable if it's in the idle
         // state waiting for 1.0-style Server-Initiated Bootstrap. That state
         // does not expire.
         return !_anjay_bootstrap_scheduled(server->anjay);
+    } else if (!_anjay_server_active(server)) {
+        return false;
     } else {
         // Management servers connections are considered stable when they have
         // a valid, non-expired registration.

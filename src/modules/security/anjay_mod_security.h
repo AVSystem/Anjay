@@ -41,12 +41,10 @@ typedef enum {
 #endif // ANJAY_WITH_LWM2M11
 } security_resource_t;
 
-#ifdef ANJAY_WITH_LWM2M11
 typedef struct {
     anjay_riid_t riid;
     uint32_t cipher_id;
 } sec_cipher_instance_t;
-#endif // ANJAY_WITH_LWM2M11
 
 typedef enum {
     SEC_KEY_AS_DATA,

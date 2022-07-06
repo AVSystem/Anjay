@@ -1,0 +1,21 @@
+{
+    OID.Security: {
+        1: {
+            RID.Security.ServerURI          : 'coaps://try-anjay.avsystem.com:5684',
+            RID.Security.Bootstrap          : False,
+            RID.Security.Mode               : 0,  # 0: PSK, 2: Cert, 3: NoSec
+            RID.Security.PKOrIdentity       : b'reg-test-psk-identity',
+            RID.Security.SecretKey          : b'3x@mpl3P5K53cr3tK3y',
+            RID.Security.ShortServerID      : 1
+        },
+    },
+
+    OID.Server: {
+        1: {
+            RID.Server.ShortServerID        : 1,
+            RID.Server.Lifetime             : 86400,
+            RID.Server.NotificationStoring  : False,
+            RID.Server.Binding              : 'U'
+        },
+    }
+}

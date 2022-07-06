@@ -248,7 +248,8 @@ static void teardown_simple() {
 
 static int handle_packet(void) {
     AVS_LIST(anjay_socket_entry_t) sock = NULL;
-    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay->downloader, &sock);
+    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay->downloader, &sock,
+                                  /* include_offline = */ false);
     if (!sock) {
         return -1;
     }
@@ -288,7 +289,8 @@ AVS_UNIT_TEST(downloader, empty_has_no_sockets) {
 
     AVS_LIST(anjay_socket_entry_t) socks = NULL;
     AVS_UNIT_ASSERT_SUCCESS(
-            _anjay_downloader_get_sockets(&ENV.anjay->downloader, &socks));
+            _anjay_downloader_get_sockets(&ENV.anjay->downloader, &socks,
+                                          /* include_offline = */ false));
     AVS_UNIT_ASSERT_NULL(socks);
 
     teardown();
@@ -299,7 +301,9 @@ static void assert_download_not_possible(anjay_downloader_t *dl,
     size_t num_downloads = 0;
 
     AVS_LIST(anjay_socket_entry_t) socks = NULL;
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_get_sockets(dl, &socks));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_get_sockets(dl, &socks,
+                                          /* include_offline = */ false));
     num_downloads = AVS_LIST_SIZE(socks);
     AVS_LIST_CLEAR(&socks);
 
@@ -311,7 +315,9 @@ static void assert_download_not_possible(anjay_downloader_t *dl,
     AVS_UNIT_ASSERT_EQUAL(err.code, AVS_EINVAL);
     AVS_UNIT_ASSERT_NULL(handle);
 
-    AVS_UNIT_ASSERT_SUCCESS(_anjay_downloader_get_sockets(dl, &socks));
+    AVS_UNIT_ASSERT_SUCCESS(
+            _anjay_downloader_get_sockets(dl, &socks,
+                                          /* include_offline = */ false));
     AVS_UNIT_ASSERT_EQUAL(num_downloads, AVS_LIST_SIZE(socks));
     AVS_LIST_CLEAR(&socks);
 }
@@ -820,7 +826,8 @@ AVS_UNIT_TEST(downloader, missing_separate_response) {
 
 static size_t num_downloads_in_progress(void) {
     AVS_LIST(anjay_socket_entry_t) sock = NULL;
-    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay->downloader, &sock);
+    _anjay_downloader_get_sockets(&SIMPLE_ENV.base->anjay->downloader, &sock,
+                                  /* include_offline = */ false);
     size_t result = AVS_LIST_SIZE(sock);
     AVS_LIST_CLEAR(&sock);
     return result;

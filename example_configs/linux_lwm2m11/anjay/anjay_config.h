@@ -507,6 +507,12 @@
 /* #undef ANJAY_WITH_MODULE_BOOTSTRAPPER */
 
 /**
+ * Enable factory provisioning module. Data provided during provisioning uses
+ * SenML CBOR format.
+ */
+#define ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+
+/**
  * Enable oscore module (implementation of the OSCORE object).
  *
  * IMPORTANT: Only available as part of the OSCORE commercial feature. Ignored

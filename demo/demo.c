@@ -49,6 +49,10 @@
 #include <anjay/security.h>
 #include <anjay/server.h>
 
+#ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+#    include <anjay/factory_provisioning.h>
+#endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+
 static int security_object_reload(anjay_demo_t *demo) {
     anjay_security_object_purge(demo->anjay);
     const server_connection_args_t *args = demo->connection_args;
@@ -450,7 +454,7 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
     anjay_configuration_t config = {
         .endpoint_name = cmdline_args->endpoint_name,
         .udp_listen_port = cmdline_args->udp_listen_port,
-        .dtls_version = AVS_NET_SSL_VERSION_TLSv1_2,
+        .dtls_version = cmdline_args->dtls_version,
         .in_buffer_size = (size_t) cmdline_args->inbuf_size,
         .out_buffer_size = (size_t) cmdline_args->outbuf_size,
         .msg_cache_size = (size_t) cmdline_args->msg_cache_size,
@@ -604,6 +608,27 @@ static int demo_init(anjay_demo_t *demo, cmdline_args_t *cmdline_args) {
 
     if (!dm_persistence_restored) {
         demo_reload_servers(demo);
+
+#ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+        if (cmdline_args->provisioning_file) {
+            avs_stream_t *data =
+                    avs_stream_file_create(cmdline_args->provisioning_file,
+                                           AVS_STREAM_FILE_READ);
+            avs_error_t err = AVS_OK;
+            if (!data) {
+                err = avs_errno(AVS_EIO);
+            } else {
+                err = anjay_factory_provision(demo->anjay, data);
+                avs_stream_cleanup(&data);
+            }
+            if (avs_is_err(err)) {
+                demo_log(ERROR, "Cannot provision client from file %s",
+                         cmdline_args->provisioning_file);
+                return -1;
+            }
+            demo_log(DEBUG, "Factory provisioning complete");
+        }
+#endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
     }
 
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE

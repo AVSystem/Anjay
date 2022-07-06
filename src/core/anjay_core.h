@@ -112,6 +112,7 @@ struct
 #ifdef WITH_AVS_COAP_UDP
     avs_coap_udp_response_cache_t *udp_response_cache;
     avs_coap_udp_tx_params_t udp_tx_params;
+    avs_time_duration_t udp_exchange_timeout;
 #endif
     avs_net_dtls_handshake_timeouts_t udp_dtls_hs_tx_params;
     avs_net_socket_tls_ciphersuites_t default_tls_ciphersuites;
@@ -119,6 +120,7 @@ struct
 #if defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
     size_t coap_tcp_max_options_size;
     avs_time_duration_t coap_tcp_request_timeout;
+    avs_time_duration_t tcp_exchange_timeout;
 #endif // defined(ANJAY_WITH_LWM2M11) && defined(WITH_AVS_COAP_TCP)
 
     anjay_scheduled_notify_t scheduled_notify;

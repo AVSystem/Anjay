@@ -70,8 +70,8 @@ consequences:
 
 Additionally, the behavior of ``anjay_attr_storage_restore()`` has been
 changed - from now on, this function fails if supplied source stream is
-empty. This change makes the function consistent with other
-``anjay_*_restore()`` APIs.
+invalid and the Attribute Storage remains untouched. This change makes the
+function consistent with other ``anjay_*_restore()`` APIs.
 
 Refactor of offline mode control API
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

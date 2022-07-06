@@ -29,21 +29,21 @@ static void assert_observe_consistency(anjay_t *anjay_locked) {
     AVS_LIST(anjay_observe_connection_entry_t) conn;
     AVS_LIST_FOREACH(conn, anjay->observe.connection_entries) {
         size_t path_refs_in_observations = 0;
-        AVS_RBTREE_ELEM(anjay_observation_t) observation;
-        AVS_RBTREE_FOREACH(observation, conn->observations) {
+        AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
+        AVS_SORTED_SET_FOREACH(observation, conn->observations) {
             path_refs_in_observations += observation->paths_count;
         }
 
         size_t path_refs = 0;
-        AVS_RBTREE_ELEM(anjay_observe_path_entry_t) path_entry;
-        AVS_RBTREE_FOREACH(path_entry, conn->observed_paths) {
-            AVS_LIST(AVS_RBTREE_ELEM(anjay_observation_t)) ref;
+        AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) path_entry;
+        AVS_SORTED_SET_FOREACH(path_entry, conn->observed_paths) {
+            AVS_LIST(AVS_SORTED_SET_ELEM(anjay_observation_t)) ref;
             AVS_LIST_FOREACH(ref, path_entry->refs) {
                 ++path_refs;
                 AVS_UNIT_ASSERT_NOT_NULL(ref);
                 AVS_UNIT_ASSERT_NOT_NULL(*ref);
-                AVS_UNIT_ASSERT_TRUE(AVS_RBTREE_FIND(conn->observations, *ref)
-                                     == *ref);
+                AVS_UNIT_ASSERT_TRUE(
+                        AVS_SORTED_SET_FIND(conn->observations, *ref) == *ref);
                 bool path_found = false;
                 for (size_t i = 0; i < (*ref)->paths_count; ++i) {
                     if (_anjay_uri_path_equal(&(*ref)->paths[i],
@@ -65,7 +65,7 @@ static void assert_observe_size(anjay_t *anjay_locked, size_t sz) {
     size_t result = 0;
     AVS_LIST(anjay_observe_connection_entry_t) conn;
     AVS_LIST_FOREACH(conn, anjay->observe.connection_entries) {
-        size_t local_size = AVS_RBTREE_SIZE(conn->observations);
+        size_t local_size = AVS_SORTED_SET_SIZE(conn->observations);
         AVS_UNIT_ASSERT_NOT_EQUAL(local_size, 0);
         result += local_size;
     }
@@ -97,9 +97,9 @@ static void assert_observe(anjay_t *anjay_locked,
                 .conn_type = ANJAY_CONNECTION_PRIMARY
             });
     AVS_UNIT_ASSERT_NOT_NULL(conn_ptr);
-    AVS_RBTREE_ELEM(anjay_observation_t) observation =
-            AVS_RBTREE_FIND((*conn_ptr)->observations,
-                            _anjay_observation_query(token));
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation =
+            AVS_SORTED_SET_FIND((*conn_ptr)->observations,
+                                _anjay_observation_query(token));
     AVS_UNIT_ASSERT_NOT_NULL(observation);
     AVS_UNIT_ASSERT_EQUAL(observation->paths_count, 1);
     AVS_UNIT_ASSERT_TRUE(_anjay_uri_path_equal(&observation->paths[0], uri));
@@ -781,16 +781,16 @@ static void notify_max_period_test(const char *con_notify_ack,
 
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     AVS_UNIT_ASSERT_EQUAL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->last_sent->timestamp.since_real_epoch.seconds,
             1010);
     AVS_UNIT_ASSERT_EQUAL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->last_confirmable.since_real_epoch.seconds,
             1000);
@@ -816,11 +816,11 @@ static void notify_max_period_test(const char *con_notify_ack,
     if (observe_size_after_ack) {
         ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
         AVS_UNIT_ASSERT_EQUAL(
-                AVS_RBTREE_FIRST(anjay_unlocked->observe.connection_entries
-                                         ->observations)
+                AVS_SORTED_SET_FIRST(anjay_unlocked->observe.connection_entries
+                                             ->observations)
                         ->last_confirmable.since_real_epoch.seconds,
-                AVS_RBTREE_FIRST(anjay_unlocked->observe.connection_entries
-                                         ->observations)
+                AVS_SORTED_SET_FIRST(anjay_unlocked->observe.connection_entries
+                                             ->observations)
                         ->last_sent->timestamp.since_real_epoch.seconds);
         ANJAY_MUTEX_UNLOCK(anjay);
 
@@ -919,7 +919,7 @@ AVS_UNIT_TEST(notify, min_period) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1136,7 +1136,7 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1152,7 +1152,7 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1173,7 +1173,7 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1189,7 +1189,7 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1210,7 +1210,7 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1226,7 +1226,7 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1247,7 +1247,7 @@ AVS_UNIT_TEST(notify, extremes) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1293,7 +1293,7 @@ AVS_UNIT_TEST(notify, greater_only) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1314,7 +1314,7 @@ AVS_UNIT_TEST(notify, greater_only) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1335,7 +1335,7 @@ AVS_UNIT_TEST(notify, greater_only) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1386,7 +1386,7 @@ AVS_UNIT_TEST(notify, less_only) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1402,7 +1402,7 @@ AVS_UNIT_TEST(notify, less_only) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1423,7 +1423,7 @@ AVS_UNIT_TEST(notify, less_only) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1444,7 +1444,7 @@ AVS_UNIT_TEST(notify, less_only) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1489,7 +1489,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1510,7 +1510,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1531,7 +1531,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1552,7 +1552,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1573,7 +1573,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1589,7 +1589,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1610,7 +1610,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1631,7 +1631,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);
@@ -1652,7 +1652,7 @@ AVS_UNIT_TEST(notify, step) {
     assert_observe_size(anjay, 1);
     ANJAY_MUTEX_LOCK(anjay_unlocked, anjay);
     AVS_UNIT_ASSERT_NOT_NULL(
-            AVS_RBTREE_FIRST(
+            AVS_SORTED_SET_FIRST(
                     anjay_unlocked->observe.connection_entries->observations)
                     ->notify_task);
     ANJAY_MUTEX_UNLOCK(anjay);

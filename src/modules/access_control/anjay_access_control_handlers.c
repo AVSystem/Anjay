@@ -14,10 +14,9 @@
 #    include <inttypes.h>
 #    include <string.h>
 
-#    include <avsystem/commons/avs_rbtree.h>
-
 #    include <anjay_modules/anjay_access_utils.h>
 #    include <anjay_modules/anjay_notify.h>
+#    include <avsystem/commons/avs_sorted_set.h>
 
 #    include "anjay_mod_access_control.h"
 
@@ -361,17 +360,19 @@ static int anjay_ssid_cmp(const void *left, const void *right) {
     return *(const anjay_ssid_t *) left - *(const anjay_ssid_t *) right;
 }
 
-static int add_ssid(AVS_RBTREE(anjay_ssid_t) ssids_list, anjay_ssid_t ssid) {
+static int add_ssid(AVS_SORTED_SET(anjay_ssid_t) ssids_list,
+                    anjay_ssid_t ssid) {
     // here it is actually more likely for the SSID to be already present
     // so we use find-then-insert logic to avoid unnecessary allocations
-    AVS_RBTREE_ELEM(anjay_ssid_t) elem = AVS_RBTREE_FIND(ssids_list, &ssid);
+    AVS_SORTED_SET_ELEM(anjay_ssid_t) elem =
+            AVS_SORTED_SET_FIND(ssids_list, &ssid);
     if (!elem) {
-        if (!(elem = AVS_RBTREE_ELEM_NEW(anjay_ssid_t))) {
+        if (!(elem = AVS_SORTED_SET_ELEM_NEW(anjay_ssid_t))) {
             ac_log(ERROR, _("out of memory"));
             return -1;
         }
         *elem = ssid;
-        if (AVS_RBTREE_INSERT(ssids_list, elem) != elem) {
+        if (AVS_SORTED_SET_INSERT(ssids_list, elem) != elem) {
             AVS_UNREACHABLE("Internal error: cannot add tree element");
         }
     }
@@ -397,9 +398,9 @@ static int ac_transaction_validate(anjay_unlocked_t *anjay, obj_ptr_t obj_ptr) {
     int result = 0;
     anjay_acl_ref_validation_ctx_t validation_ctx =
             _anjay_acl_ref_validation_ctx_new();
-    AVS_RBTREE(anjay_ssid_t) ssids_used = NULL;
+    AVS_SORTED_SET(anjay_ssid_t) ssids_used = NULL;
     if (access_control->needs_validation) {
-        if (!(ssids_used = AVS_RBTREE_NEW(anjay_ssid_t, anjay_ssid_cmp))) {
+        if (!(ssids_used = AVS_SORTED_SET_NEW(anjay_ssid_t, anjay_ssid_cmp))) {
             ac_log(ERROR, _("out of memory"));
             goto finish;
         }
@@ -426,7 +427,7 @@ static int ac_transaction_validate(anjay_unlocked_t *anjay, obj_ptr_t obj_ptr) {
                 }
             }
         }
-        AVS_RBTREE_DELETE(&ssids_used) {
+        AVS_SORTED_SET_DELETE(&ssids_used) {
             if (_anjay_access_control_validate_ssid(anjay, **ssids_used)) {
                 ac_log(WARNING,
                        _("Validation failed: invalid SSID: ") "%" PRIu16,
@@ -439,7 +440,7 @@ static int ac_transaction_validate(anjay_unlocked_t *anjay, obj_ptr_t obj_ptr) {
     }
 finish:
     _anjay_acl_ref_validation_ctx_cleanup(&validation_ctx);
-    AVS_RBTREE_DELETE(&ssids_used);
+    AVS_SORTED_SET_DELETE(&ssids_used);
     return result;
 }
 

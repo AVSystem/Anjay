@@ -89,6 +89,9 @@ struct avs_coap_base {
 
     avs_sched_t *sched;
 
+    /* Maximum allowed time between the CoAP exchange updates */
+    avs_time_duration_t max_exchange_update_time;
+
     /**
      * Scheduler job used to detect cases where the remote host lost interest
      * in a block-wise request before it completed, or to handle any
@@ -145,6 +148,8 @@ static inline void _avs_coap_base_init(avs_coap_base_t *base,
     base->in_buffer = in_buffer;
     base->out_buffer = out_buffer;
     base->sched = sched;
+    base->max_exchange_update_time = AVS_COAP_DEFAULT_EXCHANGE_MAX_TIME;
+
 #ifdef WITH_AVS_COAP_STREAMING_API
     _avs_coap_stream_init(&base->coap_stream, coap_ctx);
 #else  // WITH_AVS_COAP_STREAMING_API

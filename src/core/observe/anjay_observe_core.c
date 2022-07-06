@@ -86,7 +86,9 @@ static inline bool is_error_value(const anjay_observation_value_t *value) {
     return _anjay_observe_is_error_details(&value->details);
 }
 
-static void delete_value(AVS_LIST(anjay_observation_value_t) *value_ptr) {
+static void delete_value(anjay_unlocked_t *anjay,
+                         AVS_LIST(anjay_observation_value_t) *value_ptr) {
+    (void) anjay;
     assert(value_ptr && *value_ptr);
     if (!is_error_value(*value_ptr)) {
         for (size_t i = 0; i < (*value_ptr)->ref->paths_count; ++i) {
@@ -103,14 +105,15 @@ path_entry_query(const anjay_uri_path_t *path) {
     return AVS_CONTAINER_OF(path, anjay_observe_path_entry_t, path);
 }
 
-static AVS_RBTREE_ELEM(anjay_observe_path_entry_t)
+static AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t)
 find_or_create_observe_path_entry(anjay_observe_connection_entry_t *connection,
                                   const anjay_uri_path_t *path) {
-    AVS_RBTREE_ELEM(anjay_observe_path_entry_t) entry =
-            AVS_RBTREE_FIND(connection->observed_paths, path_entry_query(path));
+    AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) entry =
+            AVS_SORTED_SET_FIND(connection->observed_paths,
+                                path_entry_query(path));
     if (!entry) {
-        AVS_RBTREE_ELEM(anjay_observe_path_entry_t) new_entry =
-                AVS_RBTREE_ELEM_NEW(anjay_observe_path_entry_t);
+        AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) new_entry =
+                AVS_SORTED_SET_ELEM_NEW(anjay_observe_path_entry_t);
         if (!new_entry) {
             anjay_log(ERROR, _("out of memory"));
             return NULL;
@@ -118,28 +121,28 @@ find_or_create_observe_path_entry(anjay_observe_connection_entry_t *connection,
 
         memcpy((void *) (intptr_t) (const void *) &new_entry->path, path,
                sizeof(*path));
-        entry = AVS_RBTREE_INSERT(connection->observed_paths, new_entry);
+        entry = AVS_SORTED_SET_INSERT(connection->observed_paths, new_entry);
         assert(entry == new_entry);
     }
     return entry;
 }
 
-static int
-add_path_to_observed_paths(anjay_observe_connection_entry_t *conn,
-                           const anjay_uri_path_t *path,
-                           AVS_RBTREE_ELEM(anjay_observation_t) observation) {
-    AVS_RBTREE_ELEM(anjay_observe_path_entry_t) observed_path =
+static int add_path_to_observed_paths(
+        anjay_observe_connection_entry_t *conn,
+        const anjay_uri_path_t *path,
+        AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
+    AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) observed_path =
             find_or_create_observe_path_entry(conn, path);
     if (!observed_path) {
         return -1;
     }
-    AVS_LIST(AVS_RBTREE_ELEM(anjay_observation_t)) entry =
-            AVS_LIST_INSERT_NEW(AVS_RBTREE_ELEM(anjay_observation_t),
+    AVS_LIST(AVS_SORTED_SET_ELEM(anjay_observation_t)) entry =
+            AVS_LIST_INSERT_NEW(AVS_SORTED_SET_ELEM(anjay_observation_t),
                                 &observed_path->refs);
     if (!entry) {
         anjay_log(ERROR, _("out of memory"));
         if (!observed_path->refs) {
-            AVS_RBTREE_DELETE_ELEM(conn->observed_paths, &observed_path);
+            AVS_SORTED_SET_DELETE_ELEM(conn->observed_paths, &observed_path);
         }
         return -1;
     }
@@ -150,16 +153,17 @@ add_path_to_observed_paths(anjay_observe_connection_entry_t *conn,
 static void remove_path_from_observed_paths(
         anjay_observe_connection_entry_t *conn,
         const anjay_uri_path_t *path,
-        AVS_RBTREE_ELEM(anjay_observation_t) observation) {
-    AVS_RBTREE_ELEM(anjay_observe_path_entry_t) observed_path =
-            AVS_RBTREE_FIND(conn->observed_paths, path_entry_query(path));
+        AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
+    AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) observed_path =
+            AVS_SORTED_SET_FIND(conn->observed_paths, path_entry_query(path));
     assert(observed_path);
-    AVS_LIST(AVS_RBTREE_ELEM(anjay_observation_t)) *ref_ptr;
+    AVS_LIST(AVS_SORTED_SET_ELEM(anjay_observation_t)) *ref_ptr;
     AVS_LIST_FOREACH_PTR(ref_ptr, &observed_path->refs) {
         if (**ref_ptr == observation) {
             AVS_LIST_DELETE(ref_ptr);
             if (!observed_path->refs) {
-                AVS_RBTREE_DELETE_ELEM(conn->observed_paths, &observed_path);
+                AVS_SORTED_SET_DELETE_ELEM(conn->observed_paths,
+                                           &observed_path);
             }
             return;
         }
@@ -169,7 +173,7 @@ static void remove_path_from_observed_paths(
 
 int _anjay_observe_add_to_observed_paths(
         anjay_observe_connection_entry_t *conn,
-        AVS_RBTREE_ELEM(anjay_observation_t) observation) {
+        AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
     for (size_t i = 0; i < observation->paths_count; ++i) {
         int result = add_path_to_observed_paths(conn, &observation->paths[i],
                                                 observation);
@@ -184,9 +188,9 @@ int _anjay_observe_add_to_observed_paths(
     return 0;
 }
 
-static void
-remove_from_observed_paths(anjay_observe_connection_entry_t *conn,
-                           AVS_RBTREE_ELEM(anjay_observation_t) observation) {
+static void remove_from_observed_paths(
+        anjay_observe_connection_entry_t *conn,
+        AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
     for (size_t i = 0; i < observation->paths_count; ++i) {
         remove_path_from_observed_paths(conn, &observation->paths[i],
                                         observation);
@@ -195,9 +199,10 @@ remove_from_observed_paths(anjay_observe_connection_entry_t *conn,
 
 static void clear_observation(anjay_observe_connection_entry_t *connection,
                               anjay_observation_t *observation) {
+    anjay_unlocked_t *anjay = _anjay_from_server(connection->conn_ref.server);
     avs_sched_del(&observation->notify_task);
     while (observation->last_sent) {
-        delete_value(&observation->last_sent);
+        delete_value(anjay, &observation->last_sent);
     }
 
     if (observation->last_unsent) {
@@ -209,7 +214,7 @@ static void clear_observation(anjay_observe_connection_entry_t *connection,
             if ((*unsent_ptr)->ref != observation) {
                 server_last_unsent = *unsent_ptr;
             } else {
-                delete_value(unsent_ptr);
+                delete_value(anjay, unsent_ptr);
             }
         }
         connection->unsent_last = server_last_unsent;
@@ -219,26 +224,27 @@ static void clear_observation(anjay_observe_connection_entry_t *connection,
 
 static void
 detach_observation(anjay_observe_connection_entry_t *conn,
-                   AVS_RBTREE_ELEM(anjay_observation_t) observation) {
-    AVS_RBTREE_DETACH(conn->observations, observation);
+                   AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
+    AVS_SORTED_SET_DETACH(conn->observations, observation);
     remove_from_observed_paths(conn, observation);
 }
 
 void _anjay_observe_cleanup_connection(anjay_observe_connection_entry_t *conn) {
+    anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
     while (conn->unsent) {
-        delete_value(&conn->unsent);
+        delete_value(anjay, &conn->unsent);
     }
-    AVS_RBTREE_DELETE(&conn->observations) {
+    AVS_SORTED_SET_DELETE(&conn->observations) {
         remove_from_observed_paths(conn, *conn->observations);
         avs_sched_del(&(*conn->observations)->notify_task);
         if ((*conn->observations)->last_sent) {
-            delete_value(&(*conn->observations)->last_sent);
+            delete_value(anjay, &(*conn->observations)->last_sent);
         }
         assert(!(*conn->observations)->last_sent);
     }
     if (conn->observed_paths) {
-        assert(!AVS_RBTREE_FIRST(conn->observed_paths));
-        AVS_RBTREE_DELETE(&conn->observed_paths);
+        assert(!AVS_SORTED_SET_FIRST(conn->observed_paths));
+        AVS_SORTED_SET_DELETE(&conn->observed_paths);
     }
     if (conn->flush_task) {
         avs_sched_del(&conn->flush_task);
@@ -259,8 +265,8 @@ delete_connection(AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr) {
 
 static void delete_connection_if_empty(
         AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr) {
-    if (!AVS_RBTREE_FIRST((*conn_ptr)->observations)) {
-        assert(!AVS_RBTREE_FIRST((*conn_ptr)->observed_paths));
+    if (!AVS_SORTED_SET_FIRST((*conn_ptr)->observations)) {
+        assert(!AVS_SORTED_SET_FIRST((*conn_ptr)->observed_paths));
         assert(!(*conn_ptr)->unsent);
         assert(!(*conn_ptr)->unsent_last);
         delete_connection(conn_ptr);
@@ -448,7 +454,8 @@ detach_first_unsent_value(anjay_observe_connection_entry_t *conn_state) {
     return result;
 }
 
-static void drop_oldest_queued_notification(anjay_observe_state_t *observe) {
+static void drop_oldest_queued_notification(anjay_unlocked_t *anjay,
+                                            anjay_observe_state_t *observe) {
     AVS_LIST(anjay_observe_connection_entry_t) oldest =
             find_oldest_queued_notification(observe);
 
@@ -456,7 +463,7 @@ static void drop_oldest_queued_notification(anjay_observe_state_t *observe) {
                        "no queued notifications");
 
     anjay_observation_value_t *entry = detach_first_unsent_value(oldest);
-    delete_value(&entry);
+    delete_value(anjay, &entry);
 }
 
 static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
@@ -465,8 +472,8 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
                             const anjay_msg_details_t *details,
                             const avs_time_real_t *timestamp,
                             const anjay_batch_t *const *values) {
-    anjay_observe_state_t *observe =
-            &_anjay_from_server(conn_state->conn_ref.server)->observe;
+    anjay_unlocked_t *anjay = _anjay_from_server(conn_state->conn_ref.server);
+    anjay_observe_state_t *observe = &anjay->observe;
     if (is_observe_queue_full(observe)) {
         switch (observe->notify_queue_limit_mode) {
         case NOTIFY_QUEUE_UNLIMITED:
@@ -475,7 +482,7 @@ static int insert_new_value(anjay_observe_connection_entry_t *conn_state,
 
         case NOTIFY_QUEUE_DROP_OLDEST:
             assert(observe->notify_queue_limit != 0);
-            drop_oldest_queued_notification(observe);
+            drop_oldest_queued_notification(anjay, observe);
             break;
         }
     }
@@ -639,14 +646,15 @@ typedef struct {
     size_t count;
 } paths_arg_t;
 
-static AVS_RBTREE_ELEM(anjay_observation_t)
+static AVS_SORTED_SET_ELEM(anjay_observation_t)
 create_detached_observation(const avs_coap_token_t *token,
                             const anjay_request_t *request,
                             const paths_arg_t *paths) {
-    AVS_RBTREE_ELEM(anjay_observation_t) new_observation =
-            (AVS_RBTREE_ELEM(anjay_observation_t)) AVS_RBTREE_ELEM_NEW_BUFFER(
-                    offsetof(anjay_observation_t, paths)
-                    + paths->count * sizeof(const anjay_uri_path_t));
+    AVS_SORTED_SET_ELEM(anjay_observation_t) new_observation =
+            (AVS_SORTED_SET_ELEM(anjay_observation_t))
+                    AVS_SORTED_SET_ELEM_NEW_BUFFER(
+                            offsetof(anjay_observation_t, paths)
+                            + paths->count * sizeof(const anjay_uri_path_t));
     if (!new_observation) {
         anjay_log(ERROR, _("out of memory"));
         return NULL;
@@ -701,14 +709,14 @@ find_or_create_connection_state(anjay_connection_ref_t ref) {
             find_connection_state_insert_ptr(ref);
     if (!*conn_ptr || connection_ref_cmp(&(*conn_ptr)->conn_ref, &ref) != 0) {
         if (!AVS_LIST_INSERT_NEW(anjay_observe_connection_entry_t, conn_ptr)
-                || !((*conn_ptr)->observations = AVS_RBTREE_NEW(
+                || !((*conn_ptr)->observations = AVS_SORTED_SET_NEW(
                              anjay_observation_t, _anjay_observation_cmp))
-                || !((*conn_ptr)->observed_paths =
-                             AVS_RBTREE_NEW(anjay_observe_path_entry_t,
-                                            _anjay_observe_path_entry_cmp))) {
+                || !((*conn_ptr)->observed_paths = AVS_SORTED_SET_NEW(
+                             anjay_observe_path_entry_t,
+                             _anjay_observe_path_entry_cmp))) {
             anjay_log(ERROR, _("out of memory"));
             if (*conn_ptr) {
-                AVS_RBTREE_DELETE(&(*conn_ptr)->observations);
+                AVS_SORTED_SET_DELETE(&(*conn_ptr)->observations);
                 AVS_LIST_DELETE(conn_ptr);
             }
             return NULL;
@@ -723,10 +731,10 @@ find_or_create_connection_state(anjay_connection_ref_t ref) {
 
 static void
 delete_observation(AVS_LIST(anjay_observe_connection_entry_t) *conn_ptr,
-                   AVS_RBTREE_ELEM(anjay_observation_t) *observation_ptr) {
+                   AVS_SORTED_SET_ELEM(anjay_observation_t) *observation_ptr) {
     clear_observation(*conn_ptr, *observation_ptr);
     detach_observation(*conn_ptr, *observation_ptr);
-    AVS_RBTREE_ELEM_DELETE_DETACHED(observation_ptr);
+    AVS_SORTED_SET_ELEM_DELETE_DETACHED(observation_ptr);
     delete_connection_if_empty(conn_ptr);
 }
 
@@ -745,9 +753,9 @@ static void observe_remove_entry(anjay_connection_ref_t connection,
     assert(!avs_coap_exchange_id_valid((*conn_ptr)->notify_exchange_id));
     assert(!(*conn_ptr)->serialization_state.membuf_stream);
     assert(!(*conn_ptr)->serialization_state.out_ctx);
-    AVS_RBTREE_ELEM(anjay_observation_t) observation =
-            AVS_RBTREE_FIND((*conn_ptr)->observations,
-                            _anjay_observation_query(token));
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation =
+            AVS_SORTED_SET_FIND((*conn_ptr)->observations,
+                                _anjay_observation_query(token));
     if (observation) {
         delete_observation(conn_ptr, &observation);
     }
@@ -777,30 +785,30 @@ static int start_coap_observe(anjay_connection_ref_t connection,
 
 static int
 attach_new_observation(anjay_observe_connection_entry_t *conn_state,
-                       AVS_RBTREE_ELEM(anjay_observation_t) observation) {
-    AVS_RBTREE_INSERT(conn_state->observations, observation);
+                       AVS_SORTED_SET_ELEM(anjay_observation_t) observation) {
+    AVS_SORTED_SET_INSERT(conn_state->observations, observation);
     int result = _anjay_observe_add_to_observed_paths(conn_state, observation);
     if (result) {
-        AVS_RBTREE_DETACH(conn_state->observations, observation);
+        AVS_SORTED_SET_DETACH(conn_state->observations, observation);
     }
     return result;
 }
 
-static AVS_RBTREE_ELEM(anjay_observation_t)
+static AVS_SORTED_SET_ELEM(anjay_observation_t)
 put_entry_into_connection_state(const anjay_request_t *request,
                                 anjay_observe_connection_entry_t *conn_state,
                                 const paths_arg_t *paths) {
-    AVS_RBTREE_ELEM(anjay_observation_t) observation =
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation =
             create_detached_observation(&request->observe->token, request,
                                         paths);
     if (!observation) {
         return NULL;
     }
-    assert(!AVS_RBTREE_FIND(conn_state->observations, observation));
+    assert(!AVS_SORTED_SET_FIND(conn_state->observations, observation));
 
     if (attach_new_observation(conn_state, observation)) {
         clear_observation(conn_state, observation);
-        AVS_RBTREE_ELEM_DELETE_DETACHED(&observation);
+        AVS_SORTED_SET_ELEM_DELETE_DETACHED(&observation);
         return NULL;
     }
     return observation;
@@ -1082,7 +1090,7 @@ static int observe_handle(anjay_connection_ref_t ref,
     anjay_unlocked_t *anjay = _anjay_from_server(ref.server);
     const avs_time_real_t timestamp = avs_time_real_now();
 
-    AVS_RBTREE_ELEM(anjay_observation_t) observation = NULL;
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation = NULL;
     anjay_msg_details_t response_details;
     anjay_batch_t **batches = NULL;
     int send_result = -1;
@@ -1263,11 +1271,12 @@ static bool confirmable_required(const anjay_observe_connection_entry_t *conn) {
 }
 
 static void value_sent(anjay_observe_connection_entry_t *conn_state) {
+    anjay_unlocked_t *anjay = _anjay_from_server(conn_state->conn_ref.server);
     anjay_observation_value_t *sent = detach_first_unsent_value(conn_state);
     anjay_observation_t *observation = sent->ref;
     assert(AVS_LIST_SIZE(observation->last_sent) <= 1);
     if (observation->last_sent) {
-        delete_value(&observation->last_sent);
+        delete_value(anjay, &observation->last_sent);
     }
     observation->last_sent = sent;
 }
@@ -1290,17 +1299,18 @@ static bool notification_storing_enabled(anjay_connection_ref_t conn_ref) {
 }
 
 static void remove_all_unsent_values(anjay_observe_connection_entry_t *conn) {
+    anjay_unlocked_t *anjay = _anjay_from_server(conn->conn_ref.server);
     while (conn->unsent && !is_error_value(conn->unsent)) {
         AVS_LIST(anjay_observation_value_t) value =
                 detach_first_unsent_value(conn);
-        delete_value(&value);
+        delete_value(anjay, &value);
     }
 }
 
 static int schedule_all_triggers(anjay_observe_connection_entry_t *conn) {
     int result = 0;
-    AVS_RBTREE_ELEM(anjay_observation_t) observation;
-    AVS_RBTREE_FOREACH(observation, conn->observations) {
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
+    AVS_SORTED_SET_FOREACH(observation, conn->observations) {
         if (!observation->notify_task) {
             _anjay_update_ret(&result, _anjay_observe_schedule_pmax_trigger(
                                                conn, observation));
@@ -1315,8 +1325,8 @@ recalculate_conn_trigger_times(anjay_observe_connection_entry_t *conn) {
     avs_time_real_t real_now = avs_time_real_now();
     conn->next_trigger = AVS_TIME_REAL_INVALID;
     conn->next_pmax_trigger = AVS_TIME_REAL_INVALID;
-    AVS_RBTREE_ELEM(anjay_observation_t) observation;
-    AVS_RBTREE_FOREACH(observation, conn->observations) {
+    AVS_SORTED_SET_ELEM(anjay_observation_t) observation;
+    AVS_SORTED_SET_FOREACH(observation, conn->observations) {
         if (avs_time_real_valid(observation->next_pmax_trigger)
                 && !avs_time_real_before(conn->next_pmax_trigger,
                                          observation->next_pmax_trigger)) {
@@ -1486,6 +1496,7 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
     }
 
     anjay_connection_ref_t conn_ref = conn->conn_ref;
+    anjay_unlocked_t *anjay = _anjay_from_server(conn_ref.server);
     avs_coap_ctx_t *coap = _anjay_connection_get_coap(conn_ref);
     assert(coap);
 
@@ -1522,11 +1533,11 @@ static void flush_next_unsent(anjay_observe_connection_entry_t *conn) {
                                     },
                                     &response, conn->unsent->reliability_hint,
                                     payload_writer, conn,
-                                    handle_notify_delivery, conn)))
-                   && connection_exists(_anjay_from_server(conn_ref.server),
-                                        conn)) {
-            cleanup_serialization_state(&conn->serialization_state);
-            on_entry_flushed(conn, err);
+                                    handle_notify_delivery, conn)))) {
+            if (connection_exists(anjay, conn)) {
+                cleanup_serialization_state(&conn->serialization_state);
+                on_entry_flushed(conn, err);
+            }
         }
     }
     avs_coap_options_cleanup(&response.options);
@@ -1748,7 +1759,7 @@ static int notify_path_changed(anjay_observe_connection_entry_t *connection,
     int32_t period = get_oi_attributes(connection, path_entry).min_period;
     period = AVS_MAX(period, 0);
 
-    AVS_LIST(AVS_RBTREE_ELEM(anjay_observation_t)) ref;
+    AVS_LIST(AVS_SORTED_SET_ELEM(anjay_observation_t)) ref;
     AVS_LIST_FOREACH(ref, path_entry->refs) {
         assert(ref);
         assert(*ref);
@@ -1772,16 +1783,16 @@ observe_for_each_in_bounds(anjay_observe_connection_entry_t *connection,
                            observe_for_each_matching_clb_t *clb,
                            void *clb_arg) {
     int retval = 0;
-    AVS_RBTREE_ELEM(anjay_observe_path_entry_t) it =
-            AVS_RBTREE_LOWER_BOUND(connection->observed_paths,
-                                   path_entry_query(lower_bound));
-    AVS_RBTREE_ELEM(anjay_observe_path_entry_t) end =
-            AVS_RBTREE_UPPER_BOUND(connection->observed_paths,
-                                   path_entry_query(upper_bound));
+    AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) it =
+            AVS_SORTED_SET_LOWER_BOUND(connection->observed_paths,
+                                       path_entry_query(lower_bound));
+    AVS_SORTED_SET_ELEM(anjay_observe_path_entry_t) end =
+            AVS_SORTED_SET_UPPER_BOUND(connection->observed_paths,
+                                       path_entry_query(upper_bound));
     // if it == NULL, end must also be NULL
     assert(it || !end);
 
-    for (; it != end; it = AVS_RBTREE_ELEM_NEXT(it)) {
+    for (; it != end; it = AVS_SORTED_SET_ELEM_NEXT(it)) {
         assert(it);
         if ((retval = clb(connection, it, clb_arg))) {
             return retval;

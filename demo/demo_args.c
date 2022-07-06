@@ -79,6 +79,9 @@ static const cmdline_args_t DEFAULT_CMDLINE_ARGS = {
     .disable_legacy_server_initiated_bootstrap = false,
 #ifdef AVS_COMMONS_STREAM_WITH_FILE
 #endif // AVS_COMMONS_STREAM_WITH_FILE
+#ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+    .provisioning_file = NULL,
+#endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
     .tx_params = ANJAY_COAP_DEFAULT_UDP_TX_PARAMS,
     .dtls_hs_tx_params = ANJAY_DTLS_DEFAULT_UDP_HS_TX_PARAMS,
 #ifdef ANJAY_WITH_MODULE_FW_UPDATE
@@ -139,6 +142,42 @@ static int parse_security_mode(const char *mode_string,
     demo_log(ERROR, "unrecognized security mode %s (expected one of:%s)",
              mode_string, allowed_modes);
     return -1;
+}
+
+static int parse_tls_version(const char *str,
+                             avs_net_ssl_version_t *out_version) {
+    assert(str);
+    if (strcmp(str, "default") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_DEFAULT;
+        return 0;
+    } else if (strcmp(str, "SSLv23") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_SSLv2_OR_3;
+        return 0;
+    } else if (strcmp(str, "SSLv2") == 0 || strcmp(str, "SSLv2.0") == 0
+               || strcmp(str, "2.0") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_SSLv2;
+        return 0;
+    } else if (strcmp(str, "SSLv3") == 0 || strcmp(str, "SSLv3.0") == 0
+               || strcmp(str, "3.0") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_SSLv3;
+        return 0;
+    } else if (strcmp(str, "TLSv1") == 0 || strcmp(str, "TLSv1.0") == 0
+               || strcmp(str, "1.0") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_TLSv1;
+        return 0;
+    } else if (strcmp(str, "TLSv1.1") == 0 || strcmp(str, "1.1") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_TLSv1_1;
+        return 0;
+    } else if (strcmp(str, "TLSv1.2") == 0 || strcmp(str, "1.2") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_TLSv1_2;
+        return 0;
+    } else if (strcmp(str, "TLSv1.3") == 0 || strcmp(str, "1.3") == 0) {
+        *out_version = AVS_NET_SSL_VERSION_TLSv1_3;
+        return 0;
+    } else {
+        demo_log(ERROR, "Invalid TLS version: %s", str);
+        return -1;
+    }
 }
 
 static size_t get_screen_width(void) {
@@ -300,6 +339,10 @@ static void print_help(const struct option *options) {
           "store it at shutdown" },
 #endif // defined(ANJAY_WITH_ATTR_STORAGE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
+#ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+        { 'F', "PROVISIONING_FILE", NULL,
+          "File where factory provisioning data is contained." },
+#endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
         { 267, "ACK_RANDOM_FACTOR", "1.5",
           "Configures ACK_RANDOM_FACTOR (defined in RFC7252)" },
         { 268, "ACK_TIMEOUT", "2.0",
@@ -385,6 +428,8 @@ static void print_help(const struct option *options) {
           "details)" },
         { 308, NULL, NULL,
           "Provide key from ASCII string (see -k parameter for more details)" },
+        { 317, "VERSION", "TLS library default",
+          "Minimum (D)TLS version to use." },
     };
 
     const size_t screen_width = get_screen_width();
@@ -598,7 +643,8 @@ finish:
 }
 
 #ifdef ANJAY_WITH_LWM2M11
-static int parse_version(const char *str, anjay_lwm2m_version_t *out_version) {
+static int parse_lwm2m_version(const char *str,
+                               anjay_lwm2m_version_t *out_version) {
     assert(str);
     if (strcmp(str, "1.0") == 0) {
         *out_version = ANJAY_LWM2M_VERSION_1_0;
@@ -673,6 +719,9 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
 #if defined(ANJAY_WITH_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
         { "attribute-storage-persistence-file", required_argument, 0, 261 },
 #endif // defined(ANJAY_WITH_ATTR_STORAGE) && defined(AVS_COMMONS_STREAM_WITH_FILE)
+#ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+        { "factory-provisioning-file",     required_argument, 0, 'F' },
+#endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
         { "ack-random-factor",             required_argument, 0, 267 },
         { "ack-timeout",                   required_argument, 0, 268 },
         { "max-retransmit",                required_argument, 0, 269 },
@@ -715,6 +764,7 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
         { "alternative-logger",            no_argument,       0, 306 },
         { "identity-as-string",            required_argument, 0, 307 },
         { "key-as-string",                 required_argument, 0, 308 },
+        { "tls-version",                   required_argument, 0, 317 },
         { 0, 0, 0, 0 }
         // clang-format on
     };
@@ -995,14 +1045,14 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
 #ifdef ANJAY_WITH_LWM2M11
         case 'v':
-            if (parse_version(
+            if (parse_lwm2m_version(
                         optarg,
                         &parsed_args->lwm2m_version_config.minimum_version)) {
                 goto finish;
             }
             break;
         case 'V':
-            if (parse_version(
+            if (parse_lwm2m_version(
                         optarg,
                         &parsed_args->lwm2m_version_config.maximum_version)) {
                 goto finish;
@@ -1117,6 +1167,14 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             break;
 #endif // defined(ANJAY_WITH_ATTR_STORAGE) &&
        // defined(AVS_COMMONS_STREAM_WITH_FILE)
+#ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+        case 'F':
+            if (!optarg || strlen(optarg) < 1) {
+                goto finish;
+            }
+            parsed_args->provisioning_file = optarg;
+            break;
+#endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
         case 267:
             if (parse_double(optarg,
                              &parsed_args->tx_params.ack_random_factor)) {
@@ -1360,6 +1418,11 @@ int demo_parse_argv(cmdline_args_t *parsed_args, int argc, char *argv[]) {
             }
             break;
         }
+        case 317:
+            if (parse_tls_version(optarg, &parsed_args->dtls_version)) {
+                goto finish;
+            }
+            break;
         case 0:
             goto process;
         }
@@ -1380,6 +1443,9 @@ process:
 #        endif // _WIN32
                          )
 #    endif // AVS_COMMONS_WITH_AVS_PERSISTENCE
+#    ifdef ANJAY_WITH_MODULE_FACTORY_PROVISIONING
+            && !parsed_args->provisioning_file
+#    endif // ANJAY_WITH_MODULE_FACTORY_PROVISIONING
 #endif     // AVS_COMMONS_STREAM_WITH_FILE
     ) {
         demo_log(ERROR, "At least one LwM2M Server URI needs to be specified, "

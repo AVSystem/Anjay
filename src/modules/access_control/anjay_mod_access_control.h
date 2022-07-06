@@ -88,8 +88,7 @@ int _anjay_access_control_add_instance(
         anjay_notify_queue_t *out_dm_changes);
 
 AVS_LIST(access_control_instance_t)
-_anjay_access_control_create_missing_ac_instance(anjay_ssid_t owner,
-                                                 const acl_target_t *target);
+_anjay_access_control_create_missing_ac_instance(const acl_target_t *target);
 
 static inline bool _anjay_access_control_target_oid_valid(int32_t oid) {
     return oid >= 1 && oid != ANJAY_DM_OID_ACCESS_CONTROL && oid < UINT16_MAX;

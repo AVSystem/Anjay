@@ -504,7 +504,7 @@ _anjay_connection_transport(anjay_connection_ref_t conn_ref);
  * socket (if applicable) and all active download sockets (if applicable).
  */
 AVS_LIST(const anjay_socket_entry_t)
-_anjay_collect_socket_entries(anjay_unlocked_t *anjay);
+_anjay_collect_socket_entries(anjay_unlocked_t *anjay, bool include_offline);
 
 VISIBILITY_PRIVATE_HEADER_END
 
