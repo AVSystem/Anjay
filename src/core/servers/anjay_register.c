@@ -59,30 +59,6 @@ static void send_update_sched_job(avs_sched_t *sched, const void *ssid_ptr) {
     ANJAY_MUTEX_UNLOCK(anjay_locked);
 }
 
-/**
- * Returns the duration that we should reserve before expiration of lifetime for
- * performing the Update operation.
- */
-static avs_time_duration_t
-get_server_update_interval_margin(anjay_server_info_t *server) {
-    avs_time_duration_t half_lifetime = avs_time_duration_div(
-            avs_time_duration_from_scalar(
-                    server->registration_info.last_update_params.lifetime_s,
-                    AVS_TIME_S),
-            ANJAY_UPDATE_INTERVAL_MARGIN_FACTOR);
-    anjay_server_connection_t *connection =
-            _anjay_connection_get(&server->connections,
-                                  ANJAY_CONNECTION_PRIMARY);
-    avs_time_duration_t max_transmit_wait =
-            _anjay_max_transmit_wait_for_transport(server->anjay,
-                                                   connection->transport);
-    if (avs_time_duration_less(half_lifetime, max_transmit_wait)) {
-        return half_lifetime;
-    } else {
-        return max_transmit_wait;
-    }
-}
-
 static int schedule_update(anjay_server_info_t *server,
                            avs_time_duration_t delay) {
     anjay_log(DEBUG, _("scheduling update for SSID ") "%u" _(" after ") "%s",
@@ -98,8 +74,22 @@ static avs_time_real_t time_of_next_update(anjay_server_info_t *server) {
     if (!avs_time_real_valid(expire_time)) {
         return AVS_TIME_REAL_INVALID;
     }
+    avs_time_duration_t lifetime = avs_time_duration_from_scalar(
+            server->registration_info.last_update_params.lifetime_s,
+            AVS_TIME_S);
+    avs_time_duration_t half_lifetime =
+            avs_time_duration_div(lifetime,
+                                  ANJAY_UPDATE_INTERVAL_MARGIN_FACTOR);
+    anjay_server_connection_t *connection =
+            _anjay_connection_get(&server->connections,
+                                  ANJAY_CONNECTION_PRIMARY);
+    avs_time_duration_t max_transmit_wait =
+            _anjay_max_transmit_wait_for_transport(server->anjay,
+                                                   connection->transport);
     avs_time_duration_t interval_margin =
-            get_server_update_interval_margin(server);
+            avs_time_duration_less(half_lifetime, max_transmit_wait)
+                    ? half_lifetime
+                    : max_transmit_wait;
     return avs_time_real_add(expire_time,
                              avs_time_duration_mul(interval_margin, -1));
 }

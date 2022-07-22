@@ -636,6 +636,7 @@ get_handler(const anjay_dm_installed_object_t *obj_ptr,
     if (has_handler_unlocked(&(**obj_ptr)->handlers, handler_type)) {
         return &(**obj_ptr)->handlers;
     }
+    return NULL;
 #endif // ANJAY_WITH_THREAD_SAFETY
 }
 

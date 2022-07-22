@@ -34,7 +34,7 @@ class Objlink:
         self.ObjInstID = ObjInstID
 
     def __str__(self):
-        return f'{self.ObjID}:{self.ObjInstID}'
+        return '%d:%d' % (self.ObjID, self.ObjInstID)
 
 
 class SequentialMsgIdGenerator:

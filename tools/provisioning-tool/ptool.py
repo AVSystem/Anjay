@@ -19,9 +19,6 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--endpoint_cfg', type=str,
                         help='Configuration file containing device information to be loaded on the device',
                         required=True)
-    parser.add_argument('-d', '--device', type=str,
-                        help='Endpoint device info',
-                        required=True)
     parser.add_argument('-e', '--URN', type=str,
                         help='Endpoint name to use during registration',
                         required=False)

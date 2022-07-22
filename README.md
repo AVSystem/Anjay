@@ -18,6 +18,7 @@ The project has been created and is actively maintained by [AVSystem](https://ww
 - [Full documentation](https://AVSystem.github.io/Anjay-doc/)
 - [Tutorials](https://AVSystem.github.io/Anjay-doc/BasicClient.html)
 - [API docs](https://AVSystem.github.io/Anjay-doc/api/)
+- [Changelog](CHANGELOG.md)
 
 <!-- toc -->
 

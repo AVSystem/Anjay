@@ -687,6 +687,7 @@ class Lwm2mTest(unittest.TestCase, Lwm2mAsserts):
             demo_args += ['--lifetime', str(lifetime)]
 
         try:
+            self.demo_process = None
             self._start_dumpcap(server.get_listen_port()
                                 for server in all_servers)
 

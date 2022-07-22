@@ -88,6 +88,6 @@ ebd07be4f2a99e4f88435330b36fc617  include_public/anjay/fw_update.h
 e4153f643dad6a333675748eaabf7852  include_public/anjay/io.h
 b99edd4bfed8952b8125cec0da767b66  include_public/anjay/ipso_objects.h
 9769d3edf9ed026a4314a550bf64faa5  include_public/anjay/security.h
-291ffce4abb46f67151496fb3139158e  tests/integration/framework/test_utils.py
+d19627a56220f65d957404d82d1fe0fd  tests/integration/framework/test_utils.py
 9c2ac86951e278b0077c30c33b5b4e82  tools/provisioning-tool/factory_prov/factory_prov.py
-3ce455cd71eda34d09230c5df0249fa2  tools/provisioning-tool/ptool.py
+9143bcdc2f751bd5d02cac72c0ba82a8  tools/provisioning-tool/ptool.py

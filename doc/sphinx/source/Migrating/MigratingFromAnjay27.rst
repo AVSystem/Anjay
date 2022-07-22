@@ -113,6 +113,28 @@ recommended to initialize such structures with ``ANJAY_DM_OI_ATTRIBUTES_EMPTY``
 or ``ANJAY_DM_R_ATTRIBUTES_EMPTY`` constants, and then fill in the attributes
 you actually intend to set.
 
+Default (D)TLS version
+^^^^^^^^^^^^^^^^^^^^^^
+
+When the `anjay_configuration_t::dtls_version
+<../api/structanjay__configuration.html#ab32477e7370a36e02db5b7e7ccbdd89d>`_
+field is set to ``AVS_NET_SSL_VERSION_DEFAULT`` (which includes the case of
+zero-initialization), Anjay 3.0 and earlier automatically mapped this setting to
+``AVS_NET_SSL_VERSION_TLSv1_2`` to ensure that (D)TLS 1.2 is used as mandated by
+the LwM2M specification.
+
+This mapping has been removed in Anjay 3.1, which means that the default version
+configuration of the underlying (D)TLS library will be used. This has been done
+to automatically allow the use of newer protocols and deprecate old versions
+when the backend library is updated, without the need to update Anjay code.
+However, depending on the (D)TLS backend library used, this may lead to (D)TLS
+1.1 or earlier being used if the server does not properly negotiate a higher
+version. Please explicitly set ``dtls_version`` to
+``AVS_NET_SSL_VERSION_TLSv1_2`` if you want to disallow this.
+
+Please note that Mbed TLS 3.0 has dropped support for TLS 1.1 and earlier, so
+this change will not affect behavior with that library.
+
 Conditional compilation for structured security credential support
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

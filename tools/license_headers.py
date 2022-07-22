@@ -38,6 +38,7 @@ IGNORE_PATTERNS = list(map(re.compile, [
     '\.png$',
     '\.svg$',
     '^README\.Windows\.md$',
+    '^CHANGELOG\.md$',
     '^\.clang-format$',
     '^doc/sphinx/snippet_sources\.md5$',
     'example_configs/',
