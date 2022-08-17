@@ -119,7 +119,7 @@ file (``bootstrap/configs/basic``):
     {
         OID.Security: {
             1: {
-                RID.Security.ServerURI          : 'coaps://try-anjay.avsystem.com:5684',
+                RID.Security.ServerURI          : 'coaps://eu.iot.avsystem.cloud:5684',
                 RID.Security.Bootstrap          : False,
                 RID.Security.Mode               : 0,  # PSK
                 RID.Security.PKOrIdentity       : b'example-psk-identity',
@@ -144,7 +144,7 @@ primitive values::
     {
         0: {
             1: {
-                0: 'coaps://try-anjay.avsystem.com:5684',
+                0: 'coaps://eu.iot.avsystem.cloud:5684',
                 1: False,
                 2: 0,
                 3: b'example-psk-identity',
@@ -169,15 +169,15 @@ binary bootstrap information file::
 
     ~/projects/anjay/bootstrap$ ./generator.py -c configs/basic -o basic_config.dat
     ~/projects/anjay/bootstrap$ hexdump -C basic_config.dat
-    00000000  00 02 00 7b 00 00 00 00  5f 08 01 5c c8 00 23 63  |...{...._..\..#c|
-    00000010  6f 61 70 73 3a 2f 2f 74  72 79 2d 61 6e 6a 61 79  |oaps://try-anjay|
-    00000020  2e 61 76 73 79 73 74 65  6d 2e 63 6f 6d 3a 35 36  |.avsystem.com:56|
-    00000030  38 34 c1 01 00 c1 02 00  c8 03 14 65 78 61 6d 70  |84.........examp|
-    00000040  6c 65 2d 70 73 6b 2d 69  64 65 6e 74 69 74 79 c8  |le-psk-identity.|
-    00000050  05 13 33 78 40 6d 70 6c  33 50 35 4b 35 33 63 72  |..3x@mpl3P5K53cr|
-    00000060  33 74 4b 33 79 c1 0a 01  00 01 00 00 12 08 01 0f  |3tK3y...........|
-    00000070  c1 00 01 c4 01 00 01 51  80 c1 06 00 c1 07 55     |.......Q......U|
-    0000007f
+    00000000  00 02 00 7a 00 00 00 00  5e 08 01 5b c8 00 22 63  |...z....^..[.."c|
+    00000010  6f 61 70 73 3a 2f 2f 65  75 2e 69 6f 74 2e 61 76  |oaps://eu.iot.av|
+    00000020  73 79 73 74 65 6d 2e 63  6c 6f 75 64 3a 35 36 38  |system.cloud:568|
+    00000030  34 c1 01 00 c1 02 00 c8  03 14 65 78 61 6d 70 6c  |4.........exampl|
+    00000040  65 2d 70 73 6b 2d 69 64  65 6e 74 69 74 79 c8 05  |e-psk-identity..|
+    00000050  13 33 78 40 6d 70 6c 33  50 35 4b 35 33 63 72 33  |.3x@mpl3P5K53cr3|
+    00000060  74 4b 33 79 c1 0a 01 00  01 00 00 12 08 01 0f c1  |tK3y............|
+    00000070  00 01 c4 01 00 01 51 80  c1 06 00 c1 07 55        |......Q......U|
+    0000007e
 
 
 Example code

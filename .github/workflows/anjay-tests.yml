@@ -8,36 +8,6 @@
 name: Anjay tests
 on: [push]
 jobs:
-  ubuntu1604-compilers-test:
-    runs-on: ubuntu-latest
-    container: avsystemembedded/anjay-travis:ubuntu-16.04
-    env:
-      CC: ${{ matrix.CC }}
-      CXX: ${{ matrix.CXX }}
-    steps:
-      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
-      - uses: actions/checkout@v1
-        with:
-          submodules: recursive
-      - run: apt-get update
-      - run: apt-get -y install $CC $CXX
-      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
-      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
-      - run: env CC=gcc LC_ALL=C.UTF-8 make check
-    strategy:
-      matrix:
-        include:
-          - CC: gcc-4.9
-            CXX: g++
-          - CC: gcc-5
-            CXX: g++-5
-          - CC: clang-3.6
-            CXX: clang++-3.6
-          - CC: clang-3.7
-            CXX: clang++-3.7
-          - CC: clang-3.8
-            CXX: clang++-3.8
-
   ubuntu1804-compilers-test:
     runs-on: ubuntu-latest
     container: avsystemembedded/anjay-travis:ubuntu-18.04
@@ -57,9 +27,148 @@ jobs:
       - run: env CC=gcc LC_ALL=C.UTF-8 make -j
       - run: env CC=gcc LC_ALL=C.UTF-8 make check
     strategy:
+      fail-fast: false
       matrix:
         include:
           - CC: gcc-7
             CXX: g++
           - CC: clang-6.0
             CXX: clang++-6.0
+
+  ubuntu2004-compilers-test:
+    runs-on: ubuntu-latest
+    container: avsystemembedded/anjay-travis:ubuntu-20.04
+    env:
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+    steps:
+      # NOTE: workaround for https://github.com/actions/checkout/issues/760
+      - run: git config --global safe.directory '*'
+      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - run: apt-get update
+      - run: apt-get -y install $CC $CXX
+      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - CC: gcc-8
+            CXX: g++-8
+          - CC: gcc-9
+            CXX: g++-9
+          - CC: gcc-10
+            CXX: g++-10
+          - CC: clang-10
+            CXX: clang++-10
+
+  ubuntu2204-compilers-test:
+    runs-on: ubuntu-latest
+    container: avsystemembedded/anjay-travis:ubuntu-22.04
+    env:
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+      MEM_CHECK_TOOL: ${{ matrix.MEM_CHECK_TOOL }}
+    steps:
+      # NOTE: workaround for https://github.com/actions/checkout/issues/760
+      - run: git config --global safe.directory '*'
+      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - run: apt-get update
+      - run: apt-get -y install $CC $CXX
+      - run: ./devconfig $MEM_CHECK_TOOL --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - CC: gcc-11
+            CXX: g++-11
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: gcc-12
+            CXX: g++-12
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: clang-11
+            CXX: clang++-11
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: clang-12
+            CXX: clang++-12
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: clang-13
+            CXX: clang++-13
+            MEM_CHECK_TOOL: --with-valgrind
+          - CC: clang-14
+            CXX: clang++-14
+            MEM_CHECK_TOOL: --without-memcheck # NOTE: workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=1758782
+
+  fedora36-compilers-test:
+    runs-on: ubuntu-latest
+    container: avsystemembedded/anjay-travis:fedora-36
+    env:
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+      COMPILER_VERSION: ${{ matrix.COMPILER_VERSION }}
+    steps:
+      # NOTE: workaround for https://github.com/actions/checkout/issues/760
+      - run: git config --global safe.directory '*'
+      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - run: dnf update -y
+      - run: dnf install -y $COMPILER_VERSION
+      - run: ./devconfig --with-valgrind --without-analysis -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: env CC=gcc LC_ALL=C.UTF-8 make -j
+      - run: env CC=gcc LC_ALL=C.UTF-8 make check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - CC: gcc
+            CXX: g++
+            COMPILER_VERSION: gcc-12.0.1
+          - CC: gcc
+            CXX: g++
+            COMPILER_VERSION: gcc-12.1.1
+          - CC: clang
+            CXX: clang++
+            COMPILER_VERSION: clang-14.0.0
+
+  macOS-compilers-test:
+    runs-on: macos-11
+    env:
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+      COMPILER_VERSION: ${{ matrix.COMPILER_VERSION }}
+    steps:
+      # NOTE: v2 requires Git 2.18 for submodules, it's not present in the image
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - run: brew update && brew upgrade
+      # NOTE: latest known compatible versions are openssl@3--3.0.5 and mbedtls--3.2.1
+      - run: brew install openssl mbedtls $COMPILER_VERSION
+      - run: pip3 install sphinx sphinx-rtd-theme cbor2 aiocoap cryptography packaging requests
+      - run: env JAVA_HOME="$JAVA_HOME_17_X64" ./devconfig --with-asan --without-analysis --no-examples -DWITH_VALGRIND_TRACK_ORIGINS=OFF -DWITH_URL_CHECK=OFF
+      - run: LC_ALL=C.UTF-8 make -j
+      - run: LC_ALL=C.UTF-8 make check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - CC: gcc-11
+            CXX: g++-11
+            COMPILER_VERSION: gcc@11
+          - CC: gcc-12
+            CXX: g++-12
+            COMPILER_VERSION: gcc@12
+          - CC: cc
+            CXX: c++
+            COMPILER_VERSION: llvm

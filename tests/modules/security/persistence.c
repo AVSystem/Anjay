@@ -170,9 +170,9 @@ static void assert_instances_equal(const sec_instance_t *a,
     AVS_UNIT_ASSERT_EQUAL(a->holdoff_s, b->holdoff_s);
     AVS_UNIT_ASSERT_EQUAL(a->bs_timeout_s, b->bs_timeout_s);
 
-    AVS_UNIT_ASSERT_EQUAL(a->has_is_bootstrap, b->has_is_bootstrap);
-    AVS_UNIT_ASSERT_EQUAL(a->has_security_mode, b->has_security_mode);
-    AVS_UNIT_ASSERT_EQUAL(a->has_ssid, b->has_ssid);
+    for (size_t i = 0; i < AVS_ARRAY_SIZE(a->present_resources); ++i) {
+        AVS_UNIT_ASSERT_EQUAL(a->present_resources[i], b->present_resources[i]);
+    }
 }
 
 static void assert_objects_equal(const sec_repr_t *a, const sec_repr_t *b) {

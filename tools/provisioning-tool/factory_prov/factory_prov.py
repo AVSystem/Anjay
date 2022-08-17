@@ -24,7 +24,7 @@ SupportedSecMode = [
 
 class CoioteRegistration:
     def __init__(self, srv_info):
-        self.addr = srv_info.get('url', 'https://try-anjay.avsystem.com') + \
+        self.addr = srv_info.get('url', 'https://eu.iot.avsystem.cloud') + \
             ':' + \
             str(srv_info.get('port', 8087))
 

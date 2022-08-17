@@ -103,8 +103,13 @@ static handle_sockets_result_t handle_sockets(event_loop_state_t *state) {
 #    ifdef AVS_COMMONS_NET_POSIX_AVS_SOCKET_HAVE_POLL
     numsocks = AVS_LIST_SIZE(entries);
     if (numsocks != state->pollfds_size) {
-        struct pollfd *pollfds_new = (struct pollfd *) avs_realloc(
-                state->pollfds, numsocks * sizeof(*state->pollfds));
+        struct pollfd *pollfds_new = NULL;
+        if (!numsocks) {
+            avs_free(state->pollfds);
+        } else {
+            pollfds_new = (struct pollfd *) avs_realloc(
+                    state->pollfds, numsocks * sizeof(*state->pollfds));
+        }
         if (pollfds_new || !numsocks) {
             state->pollfds = pollfds_new;
             state->pollfds_size = numsocks;

@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
     // For simplicity, no LwM2M objects are installed. This application is
     // unable to handle any LwM2M traffic.
 
-    if (request_coap_download(anjay, "coaps://try-anjay.avsystem.com:5684/file",
+    if (request_coap_download(anjay, "coaps://eu.iot.avsystem.cloud:5684/file",
                               "psk_identity", "psk_key")) {
         result = -1;
         goto cleanup;

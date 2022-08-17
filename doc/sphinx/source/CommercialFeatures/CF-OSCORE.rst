@@ -136,7 +136,7 @@ Security Object Instance. The object link is realized by a proper setting
 
     anjay_security_instance_t security_instance = {
         .ssid = 1,
-        .server_uri = "coap://try-anjay.avsystem.com:5683",
+        .server_uri = "coap://eu.iot.avsystem.cloud:5683",
         .security_mode = ANJAY_SECURITY_NOSEC,
         .oscore_iid = &oscore_instance_id
     };
@@ -208,6 +208,6 @@ Anjay's pre-implemented objects. Let's reuse and extend
 .. important::
 
     OSCORE support in Coiote DM LwM2M Server is currently a **work in progress**. 
-    Provided example based on connection with Try-Anjay Server is only a demonstration
-    that **will not yet work** out of the box.
+    Provided example based on connection with EU Cloud Coiote DM instance is
+    only a demonstration that **will not yet work** out of the box.
 

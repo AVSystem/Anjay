@@ -574,7 +574,7 @@ functionalities will not work:
 * Suspending CoAP downloads when entering offline mode will not work; downloads
   will be aborted instead.
 * ``anjay_get_tx_bytes()`` and ``anjay_get_rx_bytes()`` APIs will not work.
-* ``WITHOUT_IP_STICKINESS`` compile-time flag cannot be enabled, which means
+* ``WITHOUT_IP_STICKINESS`` compile-time flag cannot be disabled, which means
   that when connecting to a server using a domain name, it is not guaranteed
   that subsequent connections will use the same IP address.
 

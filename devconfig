@@ -28,6 +28,7 @@ MODULE_STATIC_LIBS='ON'
 ANJAY_VERSION=$(git rev-parse --short HEAD)
 DTLS_BACKEND="mbedtls"
 WITH_STATIC_ANALYSIS='ON'
+WITH_EXAMPLES='ON'
 
 if valgrind --version >/dev/null 2>/dev/null; then
     WITH_VALGRIND=ON
@@ -90,6 +91,9 @@ while [ $# -gt 0 ]; do
         '--without-analysis')
             WITH_STATIC_ANALYSIS=OFF
             ;;
+        '--no-examples')
+            WITH_EXAMPLES=OFF
+            ;;
         '--tiny')
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_PK_OR_IDENTITY_SIZE=256"
             EXTRA_FLAGS[${#EXTRA_FLAGS[@]}]="-DMAX_SECRET_KEY_SIZE=128"
@@ -142,6 +146,7 @@ ${CMAKE_COMMAND} \
     -D WITH_STATIC_ANALYSIS=${WITH_STATIC_ANALYSIS} \
     -D DTLS_BACKEND="${DTLS_BACKEND}" \
     -D AVS_LOG_WITH_TRACE=ON \
+    -D WITH_EXAMPLES=${WITH_EXAMPLES} \
     -D CMAKE_C_FLAGS="${C_FLAGS} ${EXTRA_C_FLAGS}" \
     -D CMAKE_CXX_FLAGS="${EXTRA_C_FLAGS}" \
     -D ANJAY_VERSION="${ANJAY_VERSION}" \

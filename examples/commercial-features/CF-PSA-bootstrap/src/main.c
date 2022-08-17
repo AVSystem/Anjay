@@ -69,7 +69,7 @@ setup_security_object(anjay_t *anjay, const char *identity, const char *key) {
 
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
-        .server_uri = "coaps://try-anjay.avsystem.com:5694",
+        .server_uri = "coaps://eu.iot.avsystem.cloud:5694",
         .bootstrap_server = true,
         .security_mode = ANJAY_SECURITY_PSK,
         .public_cert_or_psk_identity = identity,

@@ -37,7 +37,7 @@ for key, value in cfg_vars.items():
     if type(value) == str:
         cfg_vars[key] = value.replace("-Wstrict-prototypes", "")
 
-library_dirs = []
+library_dirs = ['/usr/local/lib']
 include_dirs = [os.path.join(SCRIPT_DIR, 'src/pybind11/include/')]
 
 if 'MBEDTLS_ROOT_DIR' in os.environ:

@@ -138,7 +138,7 @@ Continuing the previous tutorial, we can modify ``setup_security_object()`` and
 
         anjay_security_instance_t security_instance = {
             .ssid = 1,
-            .server_uri = "coaps://try-anjay.avsystem.com:5684",
+            .server_uri = "coaps://eu.iot.avsystem.cloud:5684",
             .security_mode = ANJAY_SECURITY_PSK,
             .public_cert_or_psk_identity = (const uint8_t *) PSK_IDENTITY,
             .public_cert_or_psk_identity_size = strlen(PSK_IDENTITY),
@@ -236,10 +236,10 @@ with the LwM2M Server are performed automatically by Anjay.
 
 .. note::
 
-    For many LwM2M Servers, including the `Try Anjay platform
-    <https://www.avsystem.com/try-anjay/>`_, you will need to change server-side
-    configuration if you previously used NoSec connectivity for the same
-    endpoint name.
+    For many LwM2M Servers, including the `Coiote IoT Device Management platform
+    <https://www.avsystem.com/products/coiote-iot-device-management-platform/>`_,
+    you will need to change server-side configuration if you previously used
+    NoSec connectivity for the same endpoint name.
 
     The simplest solution might often be to remove the device entry completely
     and create it from scratch.

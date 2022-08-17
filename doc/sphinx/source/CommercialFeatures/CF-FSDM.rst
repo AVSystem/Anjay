@@ -100,7 +100,7 @@ Example of ``security.json``:
 
     {
         "2": {
-                "server_uri": "coaps://try-anjay.avsystem.com:5684",
+                "server_uri": "coaps://eu.iot.avsystem.cloud:5684",
                 "security_mode": "psk",
                 "pubkey_or_identity_hex": "6d7a2d737665746f766964",
                 "privkey_or_psk_hex": "737665746f76696431323334",

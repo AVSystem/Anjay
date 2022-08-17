@@ -60,10 +60,11 @@ and add instances of them. We modify the code from the
 :ref:`previous tutorial <anjay-hello-world>`.
 
 The first one will be ``setup_security_object()``. In this tutorial, we will use
-the Try Anjay platform as the hard-coded server URI. You can go to
-https://www.avsystem.com/try-anjay/ to create an account, and after logging in,
-add the device entry for your application. If you wish to use another server,
-then you must replace ``coap://try-anjay.avsystem.com:5683`` with a valid value.
+the Coiote IoT Device Management platform as the hard-coded server URI. You can
+go to https://www.avsystem.com/products/coiote-iot-device-management-platform/
+to create an account, and after logging in, add the device entry for your
+application. If you wish to use another server, then you must replace
+``coap://eu.iot.avsystem.cloud:5683`` with a valid value.
 
 For now, we will establish non-secure connection, a secure one will be described
 later.
@@ -81,7 +82,7 @@ later.
 
         const anjay_security_instance_t security_instance = {
             .ssid = 1,
-            .server_uri = "coap://try-anjay.avsystem.com:5683",
+            .server_uri = "coap://eu.iot.avsystem.cloud:5683",
             .security_mode = ANJAY_SECURITY_NOSEC
         };
 

@@ -74,7 +74,7 @@ endif()
 unset(_MISSING_PYTHON_MSG)
 
 add_custom_target(pymbedtls COMMAND
-                  python3 "${NSH_LWM2M_DIR}/pymbedtls/setup.py" install --install-lib ${PYMBEDTLS_MODULE_DIR})
+                  python3 -m pip install --target ${PYMBEDTLS_MODULE_DIR} "${NSH_LWM2M_DIR}/pymbedtls")
 
 set(WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 configure_file("run_tests.sh.in" "run_tests.sh")

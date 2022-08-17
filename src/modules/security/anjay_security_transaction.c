@@ -91,17 +91,17 @@ static int validate_instance(sec_instance_t *it) {
                               "missing mandatory 'Server URI' resource value");
         return -1;
     }
-    if (!it->has_is_bootstrap) {
+    if (!it->present_resources[SEC_RES_BOOTSTRAP_SERVER]) {
         LOG_VALIDATION_FAILED(
                 it, "missing mandatory 'Bootstrap Server' resource value");
         return -1;
     }
-    if (!it->has_security_mode) {
+    if (!it->present_resources[SEC_RES_SECURITY_MODE]) {
         LOG_VALIDATION_FAILED(
                 it, "missing mandatory 'Security Mode' resource value");
         return -1;
     }
-    if (!it->is_bootstrap && !it->has_ssid) {
+    if (!it->is_bootstrap && !it->present_resources[SEC_RES_SHORT_SERVER_ID]) {
         LOG_VALIDATION_FAILED(
                 it, "missing mandatory 'Short Server ID' resource value");
         return -1;

@@ -208,6 +208,7 @@ static int basic_sensor_resource_read(anjay_unlocked_t *anjay,
                                       anjay_riid_t riid,
                                       anjay_unlocked_output_ctx_t *ctx) {
     (void) anjay;
+    (void) riid;
 
     anjay_ipso_basic_sensor_t *obj = get_obj(&obj_ptr);
     assert(obj);

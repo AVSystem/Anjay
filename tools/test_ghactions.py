@@ -40,6 +40,14 @@ def enumerate_jobs(yaml):
             yield {'name': job_name, **job}
             continue
 
+        # jobs with no containers/images (e.g. 'macos-*' jobs) are not supported
+        if 'container' not in job:
+            continue
+
+        # fail-fast option is not supported
+        if 'fail-fast' in job['strategy']:
+            del job['strategy']['fail-fast']
+
         if job['strategy'].keys() != {'matrix'} or job['strategy']['matrix'].keys() != {'include'}:
             raise NotImplementedError('Unsupported strategy configuration')
 

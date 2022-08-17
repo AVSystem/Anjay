@@ -160,7 +160,7 @@ finish:
 static int initialize_objects_with_default_settings(anjay_t *anjay) {
     anjay_security_instance_t security_instance = {
         .bootstrap_server = true,
-        .server_uri = "coaps://try-anjay.avsystem.com:5694",
+        .server_uri = "coaps://eu.iot.avsystem.cloud:5694",
         .security_mode = ANJAY_SECURITY_EST,
         .public_cert = avs_crypto_certificate_chain_info_from_engine(
                 "pkcs11:token=MyToken;object=InitialClientCert;pin-value=1234"),

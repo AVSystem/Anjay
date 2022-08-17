@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     // LwM2M Server account with SSID = 1
     const anjay_security_instance_t security_instance1 = {
         .ssid = 1,
-        .server_uri = "coap://try-anjay.avsystem.com:5683",
+        .server_uri = "coap://eu.iot.avsystem.cloud:5683",
         .security_mode = ANJAY_SECURITY_NOSEC
     };
 

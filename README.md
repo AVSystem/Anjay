@@ -169,7 +169,7 @@ brew install cmake mbedtls
 
 ### Running the demo client
 
-For initial development and testing of LwM2M clients, we recommend using the [Try Anjay platform](https://www.avsystem.com/try-anjay/) where you can use the basic LwM2M server functionality for free.
+For initial development and testing of LwM2M clients, we recommend using the [Coiote IoT Device Management](https://www.avsystem.com/products/coiote-iot-device-management-platform/) where you can use the basic LwM2M server functionality for free.
 
 After setting up an account and adding the device entry, you can compile Anjay demo client and connect it to the platform by running:
 
@@ -180,13 +180,13 @@ git clone https://github.com/AVSystem/Anjay.git \
     && git submodule update --init \
     && cmake . \
     && make -j \
-    && ./output/bin/demo --endpoint-name $(hostname) --server-uri coap://try-anjay.avsystem.com:5683
+    && ./output/bin/demo --endpoint-name $(hostname) --server-uri coap://eu.iot.avsystem.cloud:5683
 ```
 <!-- compile_instruction_end -->
 
 **NOTE**: On some older systems like CentOS 7, you may need to use `cmake3` instead of `cmake`.
 
-**NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://avsystem.github.io/Anjay-doc/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Try Anjay platform, you will need to enter the endpoint name into the server UI first.
+**NOTE**: We strongly recommend replacing `$(hostname)` with some actual unique hostname. Please see the [documentation](https://avsystem.github.io/Anjay-doc/LwM2M.html#clients-and-servers) for information on preferred endpoint name formats. Note that with the Coiote IoT Device Management platform, you will need to enter the endpoint name into the server UI first.
 
 ### Detailed compilation guide
 
@@ -224,10 +224,10 @@ To start the demo client:
 
 ``` sh
 # uses plain CoAP
-./output/bin/demo --endpoint-name $(hostname) --server-uri coap://try-anjay.avsystem.com:5683
+./output/bin/demo --endpoint-name $(hostname) --server-uri coap://eu.iot.avsystem.cloud:5683
 
 # uses DTLS in PSK mode, with PSK identity "foo" and secret key "bar" (hex-encoded)
-./output/bin/demo --endpoint-name $(hostname) --server-uri coaps://try-anjay.avsystem.com:5684 --security-mode psk --identity 666f6f --key 626172
+./output/bin/demo --endpoint-name $(hostname) --server-uri coaps://eu.iot.avsystem.cloud:5684 --security-mode psk --identity 666f6f --key 626172
 ```
 
 **NOTE**: When establishing a DTLS connection, the URI MUST use "coaps://". In NoSec mode (default), the URI MUST use "<coap://>".
@@ -282,7 +282,7 @@ Then, you can launch the built image and run the demo client:
 
 ```
 docker run -it anjay
-./output/bin/demo -e $(hostname) -u coap://try-anjay.avsystem.com:5683
+./output/bin/demo -e $(hostname) -u coap://eu.iot.avsystem.cloud:5683
 ```
 
 ## Embedded operating systems ports

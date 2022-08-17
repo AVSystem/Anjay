@@ -24,7 +24,7 @@ static int setup_security_object(anjay_t *anjay) {
         .sms_key_parameters_size = strlen(PSK_IDENTITY),
         .sms_secret_key = (const uint8_t *) PSK_KEY,
         .sms_secret_key_size = strlen(PSK_KEY),
-        .server_name_indication = "try-anjay.avsystem.com"
+        .server_name_indication = "eu.iot.avsystem.cloud"
     };
 
     // Anjay will assign Instance ID automatically

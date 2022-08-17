@@ -241,7 +241,7 @@ Example run follows:
 
 ::
 
-    $ tests/integration/framework/sms/vmodem.py --host try-anjay.avsystem.com --port 5683
+    $ tests/integration/framework/sms/vmodem.py --host eu.iot.avsystem.cloud --port 5683
     2022-03-03 12:41:49 user root[19173] INFO Modem PTY: /dev/pts/5
 
 The scripts informs us that it has opened a virtual terminal at ``/dev/pts/5``.
@@ -288,7 +288,7 @@ fields explicitly related to the SMS binding.
             .sms_key_parameters_size = strlen(PSK_IDENTITY),
             .sms_secret_key = (const uint8_t *) PSK_KEY,
             .sms_secret_key_size = strlen(PSK_KEY),
-            .server_name_indication = "try-anjay.avsystem.com"
+            .server_name_indication = "eu.iot.avsystem.cloud"
         };
 
         // Anjay will assign Instance ID automatically
@@ -379,7 +379,7 @@ will be passed through another field, ``server_sms_number``, in MSISDN form.
 
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
-        .server_uri = "coap://try-anjay.avsystem.com:5683",
+        .server_uri = "coap://eu.iot.avsystem.cloud:5683",
         .security_mode = ANJAY_SECURITY_NOSEC,
         .sms_security_mode = ANJAY_SMS_SECURITY_NOSEC,
         .server_sms_number = "12125550178"

@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.6.0)
 
 project(anjay C)
-set(ANJAY_VERSION "3.1.1" CACHE STRING "Anjay library version")
+set(ANJAY_VERSION "3.1.2" CACHE STRING "Anjay library version")
 set(ANJAY_BINARY_VERSION 1.0.0)
 
 set(ANJAY_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -802,7 +802,10 @@ if(WITH_FIND_UNUSED_CODE)
     add_dependencies(check find_unused_code)
 endif()
 
-add_subdirectory(examples)
+option(WITH_EXAMPLES "Compile and test examples" ON)
+if(WITH_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 ################# INSTALL ######################################################
 

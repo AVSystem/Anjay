@@ -9,7 +9,7 @@
 static int setup_security_object(anjay_t *anjay) {
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
-        .server_uri = "coap://try-anjay.avsystem.com:5683",
+        .server_uri = "coap://eu.iot.avsystem.cloud:5683",
         .security_mode = ANJAY_SECURITY_NOSEC
     };
 

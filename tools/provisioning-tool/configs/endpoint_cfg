@@ -1,7 +1,7 @@
 {
     OID.Security: {
         1: {
-            RID.Security.ServerURI          : 'coaps://try-anjay.avsystem.com:5684',
+            RID.Security.ServerURI          : 'coaps://eu.iot.avsystem.cloud:5684',
             RID.Security.Bootstrap          : False,
             RID.Security.Mode               : 0,  # 0: PSK, 2: Cert, 3: NoSec
             RID.Security.PKOrIdentity       : b'reg-test-psk-identity',

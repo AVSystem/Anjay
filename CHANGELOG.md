@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.1.2 (August 24th, 2022)
+
+### Improvements
+
+- Reduced code size of the Security object implementation
+- Updated documentation, readme and examples to mention the new EU IoT Cloud platform
+- Migrated GitHub Actions tests to ubuntu-18.04, ubuntu-20.04, ubuntu-22.04, fedora-36 and macos-11
+
+### Bugfixes
+
+- Fixed various compilation warnings
+- Fixed dangerous usage of `avs_realloc()` in the event loop implementation
+
 ## 3.1.1 (July 22nd, 2022)
 
 ### Improvements

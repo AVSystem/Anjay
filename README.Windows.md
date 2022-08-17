@@ -48,7 +48,7 @@ make
 The demo application can be run from the MINGW shell just like on any other Unix system, e.g.:
 
 ```
-./output/bin/demo --endpoint-name $(hostname) --server-uri coap://try-anjay.avsystem.com:5683
+./output/bin/demo --endpoint-name $(hostname) --server-uri coap://eu.iot.avsystem.cloud:5683
 ```
 
 If you want to run the resulting application outside of the MINGW shell, you will likely need to copy the DLL dependencies, such as:

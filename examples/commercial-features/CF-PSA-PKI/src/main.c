@@ -27,7 +27,7 @@ static int setup_security_object(anjay_t *anjay) {
 
     const anjay_security_instance_t security_instance = {
         .ssid = 1,
-        .server_uri = "coaps://try-anjay.avsystem.com:5684",
+        .server_uri = "coaps://eu.iot.avsystem.cloud:5684",
         .security_mode = ANJAY_SECURITY_CERTIFICATE,
         .public_cert = avs_crypto_certificate_chain_info_from_engine(
                 CERTIFICATE_QUERY),

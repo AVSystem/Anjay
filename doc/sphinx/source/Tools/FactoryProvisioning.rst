@@ -70,7 +70,7 @@ Let's take a closer look:
 * `-s`, `--server` - This is a JSON file with server information needed for
   registration process. Those include:
 
-    * `url` - url of the Coiote Server, if missing a default value ``https://try-anjay.avsystem.com``
+    * `url` - url of the Coiote Server, if missing a default value ``https://eu.iot.avsystem.cloud``
       is used.
     * `port` - port number communication with the REST API, if missing a default value
       ``8087`` is used. Please note that this is not the port number used by the endpoint

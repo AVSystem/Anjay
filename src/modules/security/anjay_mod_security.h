@@ -39,7 +39,8 @@ typedef enum {
     SEC_RES_CERTIFICATE_USAGE = 15,
     SEC_RES_DTLS_TLS_CIPHERSUITE = 16,
 #endif // ANJAY_WITH_LWM2M11
-} security_resource_t;
+    _SEC_RES_COUNT
+} security_rid_t;
 
 typedef struct {
     anjay_riid_t riid;
@@ -107,16 +108,14 @@ typedef struct {
     int32_t holdoff_s;
     int32_t bs_timeout_s;
 
-    bool has_is_bootstrap;
-    bool has_security_mode;
-    bool has_ssid;
-
 #ifdef ANJAY_WITH_LWM2M11
     int8_t matching_type;
     char *server_name_indication;
     int8_t certificate_usage;
     AVS_LIST(sec_cipher_instance_t) enabled_ciphersuites;
 #endif // ANJAY_WITH_LWM2M11
+
+    bool present_resources[_SEC_RES_COUNT];
 } sec_instance_t;
 
 typedef struct {
@@ -136,6 +135,8 @@ static inline void _anjay_sec_mark_modified(sec_repr_t *repr) {
 static inline void _anjay_sec_clear_modified(sec_repr_t *repr) {
     repr->modified_since_persist = false;
 }
+
+void _anjay_sec_instance_update_resource_presence(sec_instance_t *inst);
 
 #define security_log(level, ...) _anjay_log(security, level, __VA_ARGS__)
 

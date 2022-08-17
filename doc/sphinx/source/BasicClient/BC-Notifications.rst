@@ -177,7 +177,7 @@ called from the main function to schedule the first run for simplicity.
 
         anjay_security_instance_t security_instance = {
             .ssid = 1,
-            .server_uri = "coaps://try-anjay.avsystem.com:5684",
+            .server_uri = "coaps://eu.iot.avsystem.cloud:5684",
             .security_mode = ANJAY_SECURITY_PSK,
             .public_cert_or_psk_identity = (const uint8_t *) PSK_IDENTITY,
             .public_cert_or_psk_identity_size = strlen(PSK_IDENTITY),

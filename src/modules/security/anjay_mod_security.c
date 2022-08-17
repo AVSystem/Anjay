@@ -26,6 +26,40 @@
 
 VISIBILITY_SOURCE_BEGIN
 
+static const security_rid_t SECURITY_RESOURCE_ID[] = {
+    SEC_RES_LWM2M_SERVER_URI,  SEC_RES_BOOTSTRAP_SERVER,
+    SEC_RES_SECURITY_MODE,     SEC_RES_PK_OR_IDENTITY,
+    SEC_RES_SERVER_PK,         SEC_RES_SECRET_KEY,
+    SEC_RES_SHORT_SERVER_ID,   SEC_RES_CLIENT_HOLD_OFF_TIME,
+    SEC_RES_BOOTSTRAP_TIMEOUT,
+#    ifdef ANJAY_WITH_LWM2M11
+    SEC_RES_MATCHING_TYPE,     SEC_RES_SNI,
+    SEC_RES_CERTIFICATE_USAGE, SEC_RES_DTLS_TLS_CIPHERSUITE,
+#    endif // ANJAY_WITH_LWM2M11
+};
+
+void _anjay_sec_instance_update_resource_presence(sec_instance_t *inst) {
+    // Sets presence of mandatory resources and updates presence of resources
+    // which presence is not persisted and depends on resource value
+    inst->present_resources[SEC_RES_LWM2M_SERVER_URI] = true;
+    inst->present_resources[SEC_RES_BOOTSTRAP_SERVER] = true;
+    inst->present_resources[SEC_RES_SECURITY_MODE] = true;
+    inst->present_resources[SEC_RES_PK_OR_IDENTITY] = true;
+    inst->present_resources[SEC_RES_SERVER_PK] = true;
+    inst->present_resources[SEC_RES_SECRET_KEY] = true;
+    inst->present_resources[SEC_RES_CLIENT_HOLD_OFF_TIME] =
+            (inst->holdoff_s >= 0);
+    inst->present_resources[SEC_RES_BOOTSTRAP_TIMEOUT] =
+            (inst->bs_timeout_s >= 0);
+#    ifdef ANJAY_WITH_LWM2M11
+    inst->present_resources[SEC_RES_MATCHING_TYPE] = (inst->matching_type >= 0);
+    inst->present_resources[SEC_RES_SNI] = !!inst->server_name_indication;
+    inst->present_resources[SEC_RES_CERTIFICATE_USAGE] =
+            (inst->certificate_usage >= 0);
+    inst->present_resources[SEC_RES_DTLS_TLS_CIPHERSUITE] = true;
+#    endif // ANJAY_WITH_LWM2M11
+}
+
 static inline sec_instance_t *find_instance(sec_repr_t *repr, anjay_iid_t iid) {
     if (!repr) {
         return NULL;
@@ -69,6 +103,7 @@ static void init_instance(sec_instance_t *instance, anjay_iid_t iid) {
     instance->matching_type = -1;
     instance->certificate_usage = -1;
 #    endif // ANJAY_WITH_LWM2M11
+    _anjay_sec_instance_update_resource_presence(instance);
 }
 
 static int add_instance(sec_repr_t *repr,
@@ -189,13 +224,9 @@ static int add_instance(sec_repr_t *repr,
         goto error;
     }
 
-    new_instance->has_is_bootstrap = true;
-    new_instance->has_security_mode = true;
-    if (new_instance->is_bootstrap) {
-        new_instance->has_ssid = false;
-    } else {
+    if (!new_instance->is_bootstrap) {
         new_instance->ssid = instance->ssid;
-        new_instance->has_ssid = true;
+        new_instance->present_resources[SEC_RES_SHORT_SERVER_ID] = true;
     }
 
 #    ifdef ANJAY_WITH_LWM2M11
@@ -235,6 +266,8 @@ static int add_instance(sec_repr_t *repr,
         AVS_LIST_INSERT(&new_instance->enabled_ciphersuites, cipher_instance);
     }
 #    endif // ANJAY_WITH_LWM2M11
+
+    _anjay_sec_instance_update_resource_presence(new_instance);
 
     AVS_LIST(sec_instance_t) *ptr;
     AVS_LIST_FOREACH_PTR(ptr, &repr->instances) {
@@ -287,42 +320,22 @@ static int sec_list_resources(anjay_unlocked_t *anjay,
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     assert(inst);
 
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_LWM2M_SERVER_URI, ANJAY_DM_RES_R,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_BOOTSTRAP_SERVER, ANJAY_DM_RES_R,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SECURITY_MODE, ANJAY_DM_RES_R,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_PK_OR_IDENTITY, ANJAY_DM_RES_R,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SERVER_PK, ANJAY_DM_RES_R,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SECRET_KEY, ANJAY_DM_RES_R,
-                                ANJAY_DM_RES_PRESENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SHORT_SERVER_ID, ANJAY_DM_RES_R,
-                                inst->has_ssid ? ANJAY_DM_RES_PRESENT
-                                               : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(
-            ctx, SEC_RES_CLIENT_HOLD_OFF_TIME, ANJAY_DM_RES_R,
-            inst->holdoff_s >= 0 ? ANJAY_DM_RES_PRESENT : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_BOOTSTRAP_TIMEOUT, ANJAY_DM_RES_R,
-                                inst->bs_timeout_s >= 0 ? ANJAY_DM_RES_PRESENT
-                                                        : ANJAY_DM_RES_ABSENT);
+    for (size_t resource = 0; resource < AVS_ARRAY_SIZE(SECURITY_RESOURCE_ID);
+         resource++) {
+        const anjay_rid_t rid = SECURITY_RESOURCE_ID[resource];
+        _anjay_dm_emit_res_unlocked(ctx, rid,
 #    ifdef ANJAY_WITH_LWM2M11
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_MATCHING_TYPE, ANJAY_DM_RES_R,
-                                inst->matching_type >= 0 ? ANJAY_DM_RES_PRESENT
-                                                         : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_SNI, ANJAY_DM_RES_R,
-                                inst->server_name_indication
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_CERTIFICATE_USAGE, ANJAY_DM_RES_R,
-                                inst->certificate_usage >= 0
-                                        ? ANJAY_DM_RES_PRESENT
-                                        : ANJAY_DM_RES_ABSENT);
-    _anjay_dm_emit_res_unlocked(ctx, SEC_RES_DTLS_TLS_CIPHERSUITE,
-                                ANJAY_DM_RES_RM, ANJAY_DM_RES_PRESENT);
+                                    rid != SEC_RES_DTLS_TLS_CIPHERSUITE
+                                            ? ANJAY_DM_RES_R
+                                            : ANJAY_DM_RES_RM,
+#    else
+                                    ANJAY_DM_RES_R,
 #    endif // ANJAY_WITH_LWM2M11
+                                    inst->present_resources[rid]
+                                            ? ANJAY_DM_RES_PRESENT
+                                            : ANJAY_DM_RES_ABSENT);
+    }
+
     return 0;
 }
 
@@ -408,7 +421,7 @@ static int sec_read(anjay_unlocked_t *anjay,
     const sec_instance_t *inst = find_instance(_anjay_sec_get(obj_ptr), iid);
     assert(inst);
 
-    switch ((security_resource_t) rid) {
+    switch ((security_rid_t) rid) {
     case SEC_RES_LWM2M_SERVER_URI:
         return _anjay_ret_string_unlocked(ctx, inst->server_uri);
     case SEC_RES_BOOTSTRAP_SERVER:
@@ -498,93 +511,96 @@ static int sec_write(anjay_unlocked_t *anjay,
 
     _anjay_sec_mark_modified(repr);
 
-    switch ((security_resource_t) rid) {
+    switch ((security_rid_t) rid) {
     case SEC_RES_LWM2M_SERVER_URI:
-        return _anjay_io_fetch_string(ctx, &inst->server_uri);
+        retval = _anjay_io_fetch_string(ctx, &inst->server_uri);
+        break;
     case SEC_RES_BOOTSTRAP_SERVER:
-        if (!(retval = _anjay_get_bool_unlocked(ctx, &inst->is_bootstrap))) {
-            inst->has_is_bootstrap = true;
-        }
-        return retval;
+        retval = _anjay_get_bool_unlocked(ctx, &inst->is_bootstrap);
+        break;
     case SEC_RES_SECURITY_MODE:
-        if (!(retval = _anjay_sec_fetch_security_mode(ctx,
-                                                      &inst->security_mode))) {
-            inst->has_security_mode = true;
-        }
-        return retval;
+        retval = _anjay_sec_fetch_security_mode(ctx, &inst->security_mode);
+        break;
     case SEC_RES_PK_OR_IDENTITY:
-        return fetch_sec_key_or_data(ctx, &inst->public_cert_or_psk_identity);
+        retval = fetch_sec_key_or_data(ctx, &inst->public_cert_or_psk_identity);
+        break;
     case SEC_RES_SERVER_PK:
-        return _anjay_io_fetch_bytes(ctx, &inst->server_public_key);
+        retval = _anjay_io_fetch_bytes(ctx, &inst->server_public_key);
+        break;
     case SEC_RES_SECRET_KEY:
-        return fetch_sec_key_or_data(ctx, &inst->private_cert_or_psk_key);
+        retval = fetch_sec_key_or_data(ctx, &inst->private_cert_or_psk_key);
+        break;
     case SEC_RES_SHORT_SERVER_ID:
-        if (!(retval = _anjay_sec_fetch_short_server_id(ctx, &inst->ssid))) {
-            inst->has_ssid = true;
-        }
-        return retval;
+        retval = _anjay_sec_fetch_short_server_id(ctx, &inst->ssid);
+        break;
     case SEC_RES_CLIENT_HOLD_OFF_TIME:
-        return _anjay_get_i32_unlocked(ctx, &inst->holdoff_s);
+        retval = _anjay_get_i32_unlocked(ctx, &inst->holdoff_s);
+        break;
     case SEC_RES_BOOTSTRAP_TIMEOUT:
-        return _anjay_get_i32_unlocked(ctx, &inst->bs_timeout_s);
+        retval = _anjay_get_i32_unlocked(ctx, &inst->bs_timeout_s);
+        break;
 #    ifdef ANJAY_WITH_LWM2M11
     case SEC_RES_MATCHING_TYPE: {
         uint32_t matching_type;
-        int result = _anjay_get_u32_unlocked(ctx, &matching_type);
-        if (result) {
-            return result;
+        if (!(retval = _anjay_get_u32_unlocked(ctx, &matching_type))) {
+            if (matching_type > 3) {
+                retval = ANJAY_ERR_BAD_REQUEST;
+            } else {
+                inst->matching_type = (int8_t) matching_type;
+            }
         }
-        if (matching_type > 3) { // range defined in the spec
-            return ANJAY_ERR_BAD_REQUEST;
-        }
-        inst->matching_type = (int8_t) matching_type;
-        return 0;
+        break;
     }
     case SEC_RES_SNI:
-        return _anjay_io_fetch_string(ctx, &inst->server_name_indication);
+        retval = _anjay_io_fetch_string(ctx, &inst->server_name_indication);
+        break;
     case SEC_RES_CERTIFICATE_USAGE: {
         uint32_t certificate_usage;
-        int result = _anjay_get_u32_unlocked(ctx, &certificate_usage);
-        if (result) {
-            return result;
+        if (!(retval = _anjay_get_u32_unlocked(ctx, &certificate_usage))) {
+            if (certificate_usage > 3) {
+                retval = ANJAY_ERR_BAD_REQUEST;
+            } else {
+                inst->certificate_usage = (int8_t) certificate_usage;
+            }
         }
-        if (certificate_usage > 3) { // range defined in the spec
-            return ANJAY_ERR_BAD_REQUEST;
-        }
-        inst->certificate_usage = (int8_t) certificate_usage;
-        return 0;
+        break;
     }
     case SEC_RES_DTLS_TLS_CIPHERSUITE: {
         uint32_t cipher_id;
-        int result = _anjay_get_u32_unlocked(ctx, &cipher_id);
-        if (result) {
-            return result;
+        if (!(retval = _anjay_get_u32_unlocked(ctx, &cipher_id))) {
+            if (cipher_id == 0) {
+                security_log(
+                        WARNING,
+                        _("TLS-NULL-WITH-NULL-NULL cipher is not allowed"));
+                retval = ANJAY_ERR_BAD_REQUEST;
+            } else if (cipher_id > UINT16_MAX) {
+                security_log(WARNING,
+                             _("Ciphersuite ID > 65535 is not allowed"));
+                retval = ANJAY_ERR_BAD_REQUEST;
+            } else {
+                AVS_LIST(sec_cipher_instance_t) cipher =
+                        find_or_create_cipher_instance(
+                                &inst->enabled_ciphersuites, riid);
+                if (!cipher) {
+                    retval = ANJAY_ERR_INTERNAL;
+                } else {
+                    cipher->cipher_id = cipher_id;
+                }
+            }
         }
-
-        if (cipher_id == 0) {
-            security_log(WARNING,
-                         _("TLS-NULL-WITH-NULL-NULL cipher is not allowed"));
-            return ANJAY_ERR_BAD_REQUEST;
-        } else if (cipher_id > UINT16_MAX) {
-            security_log(WARNING, _("Ciphersuite ID > 65535 is not allowed"));
-            return ANJAY_ERR_BAD_REQUEST;
-        }
-
-        AVS_LIST(sec_cipher_instance_t) cipher =
-                find_or_create_cipher_instance(&inst->enabled_ciphersuites,
-                                               riid);
-        if (!cipher) {
-            return ANJAY_ERR_INTERNAL;
-        } else {
-            cipher->cipher_id = cipher_id;
-            return 0;
-        }
+        break;
     }
 #    endif // ANJAY_WITH_LWM2M11
     default:
         AVS_UNREACHABLE("Write handler called on unknown Security resource");
         return ANJAY_ERR_NOT_FOUND;
     }
+
+    if (!retval) {
+        inst->present_resources[rid] = true;
+    }
+
+    return retval;
 }
 
 #    ifdef ANJAY_WITH_LWM2M11

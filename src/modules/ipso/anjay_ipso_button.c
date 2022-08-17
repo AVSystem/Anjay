@@ -119,6 +119,7 @@ static int ipso_button_resource_read(anjay_unlocked_t *anjay,
                                      anjay_riid_t riid,
                                      anjay_unlocked_output_ctx_t *ctx) {
     (void) anjay;
+    (void) riid;
 
     anjay_ipso_button_t *obj = get_obj(&obj_ptr);
     assert(obj);
@@ -151,6 +152,7 @@ static int ipso_button_resource_write(anjay_unlocked_t *anjay,
                                       anjay_riid_t riid,
                                       anjay_unlocked_input_ctx_t *ctx) {
     (void) anjay;
+    (void) riid;
 
     anjay_ipso_button_t *obj = get_obj(&obj_ptr);
     assert(obj);

@@ -43,10 +43,14 @@ static avs_error_t handle_sized_v0_fields(avs_persistence_context_t *ctx,
     avs_error_t err;
     (void) (avs_is_err((err = avs_persistence_u16(ctx, &element->iid)))
             || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->has_is_bootstrap)))
+                                   ctx, &element->present_resources
+                                                 [SEC_RES_BOOTSTRAP_SERVER])))
             || avs_is_err((err = avs_persistence_bool(
-                                   ctx, &element->has_security_mode)))
-            || avs_is_err((err = avs_persistence_bool(ctx, &element->has_ssid)))
+                                   ctx, &element->present_resources
+                                                 [SEC_RES_SECURITY_MODE])))
+            || avs_is_err((err = avs_persistence_bool(
+                                   ctx, &element->present_resources
+                                                 [SEC_RES_SHORT_SERVER_ID])))
             || avs_is_err((
                        err = avs_persistence_bool(ctx, &element->is_bootstrap)))
             || avs_is_err((err = avs_persistence_u16(ctx, &element->ssid)))
@@ -462,6 +466,11 @@ static avs_error_t handle_instance(avs_persistence_context_t *ctx,
         }
 #        endif // ANJAY_WITH_LWM2M11
     }
+
+    if (avs_persistence_direction(ctx) == AVS_PERSISTENCE_RESTORE) {
+        _anjay_sec_instance_update_resource_presence(element);
+    }
+
     return err;
 }
 
